@@ -340,6 +340,37 @@ def test_manager_rejects_non_canonical_mid_sized_freezes(tmp_path: Path) -> None
         )
 
 
+def test_manager_rejects_smaller_v1_split_geometry_drift(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    split_assignment = yaml.safe_load(split_path.read_text())
+    moved_family: dict | None = None
+    train_families = split_assignment["splits"]["train_long"]["families"]
+    for index, family in enumerate(train_families):
+        if family["family_id"] == "train-feature-2":
+            moved_family = train_families.pop(index)
+            break
+    if moved_family is None:
+        raise AssertionError("Expected train-feature-2 in smaller-v1 fixture")
+    split_assignment["splits"]["test_long"]["families"].append(moved_family)
+    _write_yaml(split_path, split_assignment)
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    for entry in manifest["variants"]:
+        if entry["family_id"] == "train-feature-2":
+            entry["split"] = "test_long"
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="signed-off smaller-v1 split geometry"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "smaller-v1-geometry-drift.db",
+        )
+
+
 def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path) -> None:
     _, split_path, manifest_path, _ = _fixture_files(tmp_path)
     manifest = yaml.safe_load(manifest_path.read_text())
@@ -1226,6 +1257,41 @@ def test_finish_run_requires_trusted_verify_result_fields_and_consistent_outcome
                 grading_manifest_ver=3,
                 codex_long_pass=False,
                 milestone_results={"m1": "true"},
+                snapshot_image_ref="snap-1",
+            )
+    finally:
+        manager.close()
+
+
+def test_finish_run_rejects_empty_milestone_results(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        scenario_id = "train-feature/v1"
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+
+        with pytest.raises(IntegrityError, match="requires non-empty milestone_results"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+                grading_manifest_ver=3,
+                codex_long_pass=False,
+                milestone_results={},
                 snapshot_image_ref="snap-1",
             )
     finally:

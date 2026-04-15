@@ -47,6 +47,12 @@ SCENARIO_TYPES = {
 MIN_CODEX_LONG_FAMILIES = 35
 FULL_PLAN_CODEX_LONG_FAMILIES = 55
 FULL_PLAN_MIN_FAMILIES_PER_TYPE = 6
+SMALLER_V1_SPLIT_FAMILY_COUNTS = {
+    "train_long": 20,
+    "val_long": 7,
+    "test_long": 6,
+    "public_dev": 2,
+}
 TRAINING_ELIGIBLE = {"bench_control", "train_long"}
 SEALABLE_POOLS = {"final_test", "test_long"}
 _ARTIFACT_RECOVERY = {
@@ -687,6 +693,21 @@ def load_codex_long_splits(
             "split_assignment.yaml total_families mismatch: "
             f"declared {declared_total_families}, loaded {total_families_loaded}"
         )
+    if declared_total_families == MIN_CODEX_LONG_FAMILIES:
+        smaller_v1_counts = {split_name: len(families) for split_name, families in splits.items()}
+        if smaller_v1_counts != SMALLER_V1_SPLIT_FAMILY_COUNTS:
+            rendered_actual = ", ".join(
+                f"{split_name}={smaller_v1_counts.get(split_name, 0)}"
+                for split_name in ("train_long", "val_long", "test_long", "public_dev")
+            )
+            rendered_expected = ", ".join(
+                f"{split_name}={count}"
+                for split_name, count in SMALLER_V1_SPLIT_FAMILY_COUNTS.items()
+            )
+            raise IntegrityError(
+                "The 35-family Codex-Long freeze must use the signed-off smaller-v1 split geometry: "
+                f"{rendered_expected}; got {rendered_actual}"
+            )
     if declared_total_families >= FULL_PLAN_CODEX_LONG_FAMILIES:
         missing_floor = {
             scenario_type: count
@@ -1295,6 +1316,11 @@ class DataPoolManager:
             if outcome != "crash" and not isinstance(milestone_results, dict):
                 raise IntegrityError(
                     "Codex-Long finish_run() requires milestone_results copied from Phase 3 "
+                    "verify_result.json for non-crash outcomes"
+                )
+            if outcome != "crash" and not milestone_results:
+                raise IntegrityError(
+                    "Codex-Long finish_run() requires non-empty milestone_results from Phase 3 "
                     "verify_result.json for non-crash outcomes"
                 )
             if isinstance(milestone_results, dict):
