@@ -104,6 +104,9 @@ def _valid_family_spec(
     return {
         "family_id": family_id,
         "scenario_type": scenario_type,
+        "repo_pattern": {
+            "base_image": "python:3.12@sha256:" + ("a" * 64),
+        },
         "grading_invariant": {
             "verifier_script": f"verifiers/{family_id}/verify.sh",
             "functional_checks": [
@@ -125,7 +128,26 @@ def _valid_family_spec(
         "shortcut_resistance": {
             "known_exploits_tested": ["exploit-a", "exploit-b", "exploit-c"],
         },
-        "variants": [{"variant_id": variant_id}],
+        "variants": [
+            {
+                "variant_id": variant_id,
+                "repo_source": "authored",
+                "env_dockerfile": f"variants/{variant_id}/Dockerfile",
+                "base_image_digest": "sha256:" + ("1" * 64),
+            },
+            {
+                "variant_id": "v2",
+                "repo_source": "authored",
+                "env_dockerfile": "variants/v2/Dockerfile",
+                "base_image_digest": "sha256:" + ("2" * 64),
+            },
+            {
+                "variant_id": "v3",
+                "repo_source": "authored",
+                "env_dockerfile": "variants/v3/Dockerfile",
+                "base_image_digest": "sha256:" + ("3" * 64),
+            },
+        ],
     }
 
 
@@ -529,6 +551,40 @@ def test_codex_long_task_spec_requires_canonical_scenario_id_and_image_digest() 
             scenario_type="feature_evolution",
             timeout_seconds=9000,
         )
+
+
+def test_task_spec_rejects_noncanonical_swe_bench_instance_id() -> None:
+    with pytest.raises(ValueError, match="scenario_id equal to instance_id"):
+        TaskSpec(
+            track="swe_bench",
+            pool_or_split="dev_bench",
+            scenario_id="django__django-11099",
+            instance_id="django__django-11100",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            timeout_seconds=7200,
+        )
+
+
+def test_task_spec_rejects_retry_like_dispatch_on_attempt_one() -> None:
+    for decision in ("retry", "rerun_needed", "regrade_needed"):
+        with pytest.raises(ValueError, match="requires attempt > 1"):
+            TaskSpec(
+                track="codex_long",
+                pool_or_split="train_long",
+                scenario_id="family-a/v1",
+                model_id="qwen3.5-27b",
+                harness="codex",
+                seed=1,
+                family_id="family-a",
+                variant_id="v1",
+                image_digest=None if decision == "regrade_needed" else "sha256:image",
+                scenario_type="feature_evolution",
+                dispatch_decision=decision,
+                regrade_snapshot_ref="snapshot-ref" if decision == "regrade_needed" else None,
+                timeout_seconds=9000,
+            )
 
 
 def test_verify_pre_grading_hashes_detects_verifier_drift(tmp_path: Path) -> None:
@@ -939,6 +995,51 @@ def test_validate_family_spec_rejects_variant_mismatch() -> None:
         validate_family_spec(task, family_spec)
 
 
+def test_validate_family_spec_rejects_missing_family_id() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec.pop("family_id")
+
+    with pytest.raises(ManifestMismatchError, match="non-empty family_id"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_unpinned_repo_base_image() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["repo_pattern"]["base_image"] = "python:3.12"
+
+    with pytest.raises(ManifestMismatchError, match="repo_pattern.base_image"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_too_few_variants() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["variants"] = family_spec["variants"][:2]
+
+    with pytest.raises(ManifestMismatchError, match="at least 3 variants"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_derived_variant_without_provenance() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["variants"][0]["repo_source"] = "derived:github.com/example/repo"
+
+    with pytest.raises(ManifestMismatchError, match="must define provenance"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_invalid_expected_final_state_shape() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["grading_invariant"]["expected_final_state"] = [{"a": "x", "b": "y"}]
+
+    with pytest.raises(ManifestMismatchError, match="single-entry mappings"):
+        validate_family_spec(task, family_spec)
+
+
 def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> None:
     events: list[str] = []
     config = _config(tmp_path)
@@ -956,8 +1057,8 @@ def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> No
     assert pool_manager.finish_calls[0]["codex_long_pass"] is True
     assert pool_manager.finish_calls[0]["milestone_results"] == {"m1": True}
     assert events == [
-        "flush:127.0.0.1:8000",
         "health:qwen3.5-27b",
+        "flush:127.0.0.1:8000",
         "pre-run:7",
         "before:family-a/v1",
         "setup:7",
@@ -994,7 +1095,7 @@ def test_execute_task_health_check_uses_served_model_surface_for_registry_key(tm
     result = asyncio.run(orchestrator.execute_task(task, pool_manager, manifest_state, config))
 
     assert result.outcome == "resolved"
-    assert events[1] == "health:qwen3.5-27b-served"
+    assert events[:2] == ["health:qwen3.5-27b-served", "flush:127.0.0.1:8000"]
 
 
 def test_execute_task_health_check_accepts_lora_adapter_surface_id(tmp_path: Path) -> None:
@@ -1019,7 +1120,7 @@ def test_execute_task_health_check_accepts_lora_adapter_surface_id(tmp_path: Pat
     result = asyncio.run(orchestrator.execute_task(task, pool_manager, manifest_state, config))
 
     assert result.outcome == "resolved"
-    assert events[1] == "health:codex-sft-all"
+    assert events[:2] == ["health:codex-sft-all", "flush:127.0.0.1:8000"]
 
 
 def test_execute_task_raises_duplicate_claim_before_running(tmp_path: Path) -> None:
@@ -1035,8 +1136,8 @@ def test_execute_task_raises_duplicate_claim_before_running(tmp_path: Path) -> N
 
     assert pool_manager.finish_calls == []
     assert events == [
-        "flush:127.0.0.1:8000",
         "health:qwen3.5-27b",
+        "flush:127.0.0.1:8000",
         "pre-run:3",
     ]
 

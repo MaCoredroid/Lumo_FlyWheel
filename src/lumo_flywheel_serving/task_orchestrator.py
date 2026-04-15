@@ -5,6 +5,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -16,7 +17,7 @@ from urllib.parse import quote
 
 import requests
 
-from .data_pool import _find_manifest_variant, load_codex_long_manifest, make_scenario_id, sha256_file
+from .data_pool import SCENARIO_TYPES, _find_manifest_variant, load_codex_long_manifest, make_scenario_id, sha256_file
 from .registry import ModelConfig, load_registry
 from .yaml_utils import load_yaml_file
 
@@ -40,6 +41,7 @@ _INFRASTRUCTURE_ERROR_PATTERNS = (
     "codex: internal error",
     "ConnectionRefusedError",
 )
+_PINNED_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$", re.IGNORECASE)
 
 
 class OrchestratorError(RuntimeError):
@@ -108,6 +110,11 @@ class TaskSpec:
             raise ValueError("timeout_seconds must be > 0")
         if self.track == "swe_bench" and not self.instance_id:
             object.__setattr__(self, "instance_id", self.scenario_id)
+        if self.track == "swe_bench" and self.instance_id != self.scenario_id:
+            raise ValueError(
+                "SWE-bench tasks must use scenario_id equal to instance_id; "
+                f"got scenario_id='{self.scenario_id}' instance_id='{self.instance_id}'"
+            )
         if self.track == "codex_long":
             missing = [
                 field_name
@@ -122,10 +129,19 @@ class TaskSpec:
                     "Codex-Long tasks must use canonical scenario_id "
                     f"'{expected_scenario_id}', got '{self.scenario_id}'"
                 )
+            if self.scenario_type not in SCENARIO_TYPES:
+                raise ValueError(
+                    f"Codex-Long tasks require scenario_type in {sorted(SCENARIO_TYPES)}; "
+                    f"got '{self.scenario_type}'"
+                )
             if self.dispatch_decision != "regrade_needed" and not self.image_digest:
                 raise ValueError(
                     "Codex-Long tasks require image_digest unless dispatch_decision='regrade_needed'"
                 )
+        if self.dispatch_decision in {"retry", "rerun_needed", "regrade_needed"} and self.attempt == 1:
+            raise ValueError(
+                f"dispatch_decision='{self.dispatch_decision}' requires attempt > 1"
+            )
         if self.dispatch_decision == "regrade_needed":
             if self.track != "codex_long":
                 raise ValueError("Only Codex-Long tasks may use dispatch_decision='regrade_needed'")
@@ -973,12 +989,24 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             )
         return value
 
+    def _require_pinned_digest(value: Any, *, field_name: str) -> str:
+        digest = _require_non_empty_string(value, field_name=field_name)
+        if not _PINNED_DIGEST_RE.fullmatch(digest):
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define {field_name} as a pinned sha256 digest",
+                affected_artifact="family_spec",
+            )
+        return digest
+
     expected_family_id = task.family_id or ""
     expected_variant_id = task.variant_id or ""
     expected_scenario_type = task.scenario_type or ""
 
-    family_id = family_spec.get("family_id")
-    if family_id is not None and family_id != expected_family_id:
+    family_id = _require_non_empty_string(
+        family_spec.get("family_id"),
+        field_name="family_id",
+    )
+    if family_id != expected_family_id:
         raise ManifestMismatchError(
             f"Family spec family_id mismatch for {task.scenario_id}: expected '{expected_family_id}', got '{family_id}'",
             affected_artifact="family_spec",
@@ -988,10 +1016,31 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
         family_spec.get("scenario_type"),
         field_name="scenario_type",
     )
+    if scenario_type not in SCENARIO_TYPES:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must use one of {sorted(SCENARIO_TYPES)} for scenario_type",
+            affected_artifact="family_spec",
+        )
     if scenario_type != expected_scenario_type:
         raise ManifestMismatchError(
             f"Family spec scenario_type mismatch for {task.scenario_id}: "
             f"expected '{expected_scenario_type}', got '{scenario_type}'",
+            affected_artifact="family_spec",
+        )
+
+    repo_pattern = family_spec.get("repo_pattern")
+    if not isinstance(repo_pattern, dict):
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define repo_pattern as a mapping",
+            affected_artifact="family_spec",
+        )
+    base_image = _require_non_empty_string(
+        repo_pattern.get("base_image"),
+        field_name="repo_pattern.base_image",
+    )
+    if "@sha256:" not in base_image:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must pin repo_pattern.base_image with @sha256:<digest>",
             affected_artifact="family_spec",
         )
 
@@ -1058,6 +1107,29 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
     if not isinstance(expected_final_state, list) or not expected_final_state:
         raise ManifestMismatchError(
             f"Family spec for {task.scenario_id} must define non-empty grading_invariant.expected_final_state",
+            affected_artifact="family_spec",
+        )
+    for index, expected_state in enumerate(expected_final_state):
+        if isinstance(expected_state, str):
+            _require_non_empty_string(
+                expected_state,
+                field_name=f"grading_invariant.expected_final_state[{index}]",
+            )
+            continue
+        if isinstance(expected_state, dict) and len(expected_state) == 1:
+            check_id, description = next(iter(expected_state.items()))
+            _require_non_empty_string(
+                check_id,
+                field_name=f"grading_invariant.expected_final_state[{index}] key",
+            )
+            _require_non_empty_string(
+                description,
+                field_name=f"grading_invariant.expected_final_state[{index}].{check_id}",
+            )
+            continue
+        raise ManifestMismatchError(
+            "Family spec grading_invariant.expected_final_state entries must be non-empty strings "
+            "or single-entry mappings",
             affected_artifact="family_spec",
         )
 
@@ -1133,9 +1205,9 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
         )
 
     variants = family_spec.get("variants")
-    if not isinstance(variants, list) or not variants:
+    if not isinstance(variants, list) or len(variants) < 3:
         raise ManifestMismatchError(
-            f"Family spec for {task.scenario_id} must define a non-empty variants list",
+            f"Family spec for {task.scenario_id} must define at least 3 variants",
             affected_artifact="family_spec",
         )
     variant_ids: set[str] = set()
@@ -1155,6 +1227,42 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 affected_artifact="family_spec",
             )
         variant_ids.add(variant_id)
+        _require_non_empty_string(
+            variant.get("env_dockerfile"),
+            field_name=f"variants[{index}].env_dockerfile",
+        )
+        _require_pinned_digest(
+            variant.get("base_image_digest"),
+            field_name=f"variants[{index}].base_image_digest",
+        )
+        repo_source = _require_non_empty_string(
+            variant.get("repo_source", "authored"),
+            field_name=f"variants[{index}].repo_source",
+        )
+        if repo_source.startswith("derived:"):
+            provenance = variant.get("provenance")
+            if not isinstance(provenance, dict):
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must define provenance for derived repos",
+                    affected_artifact="family_spec",
+                )
+            _require_non_empty_string(
+                provenance.get("source_repo"),
+                field_name=f"variants[{index}].provenance.source_repo",
+            )
+            _require_non_empty_string(
+                provenance.get("license"),
+                field_name=f"variants[{index}].provenance.license",
+            )
+            if not isinstance(provenance.get("redistribution_ok"), bool):
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must define boolean provenance.redistribution_ok",
+                    affected_artifact="family_spec",
+                )
+            _require_non_empty_string(
+                provenance.get("modification_notice"),
+                field_name=f"variants[{index}].provenance.modification_notice",
+            )
     if expected_variant_id not in variant_ids:
         raise ManifestMismatchError(
             f"Family spec for {task.scenario_id} does not declare variant_id '{expected_variant_id}'",
@@ -1258,7 +1366,6 @@ class TaskOrchestrator:
             return await self._execute_regrade_path(task, pool_manager, manifest_state, config)
 
         _model_entry, request_model_name = _resolve_task_model_reference(config.model_registry, task.model_id)
-        await self.hooks.flush_prefix_cache(config.vllm.client_host, config.vllm.port)
         await self.hooks.health_check(
             config.vllm.client_host,
             config.vllm.port,
@@ -1266,6 +1373,7 @@ class TaskOrchestrator:
             max_retries=config.execution.health_check_retries,
             retry_delay_seconds=config.execution.health_check_delay,
         )
+        await self.hooks.flush_prefix_cache(config.vllm.client_host, config.vllm.port)
 
         if task.track == "codex_long":
             manifest_state.reload()
