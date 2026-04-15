@@ -265,6 +265,45 @@ def test_load_codex_long_splits_and_public_dev_carve_out(tmp_path: Path) -> None
         manager.close()
 
 
+def test_manager_rejects_manifest_metadata_disagreement_with_split_assignment(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    for entry in manifest["variants"]:
+        if entry["family_id"] == "train-feature" and entry["variant_id"] == "v1":
+            entry["split"] = "val_long"
+            break
+    else:
+        raise AssertionError("Expected train-feature/v1 in manifest fixture")
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="split_assignment.yaml says split='train_long'"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "manifest-split-disagreement.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    for entry in manifest["variants"]:
+        if entry["family_id"] == "train-feature" and entry["variant_id"] == "v1":
+            entry["scenario_type"] = "migration_refactor"
+            break
+    else:
+        raise AssertionError("Expected train-feature/v1 in manifest fixture")
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="split_assignment.yaml says scenario_type='feature_evolution'"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "manifest-type-disagreement.db",
+        )
+
+
 def test_manager_rejects_codex_long_freezes_below_minimum_family_floor(tmp_path: Path) -> None:
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
 
@@ -667,6 +706,61 @@ freeze_date: 2026-06-02
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "duplicate-split-key.db",
+        )
+
+
+def test_manager_rejects_malformed_or_duplicate_swe_bench_pool_entries(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    pools = yaml.safe_load(pools_path.read_text())
+    pools["pools"]["dev_bench"]["tasks"][1]["instance_id"] = "dev-1"
+    _write_yaml(pools_path, pools)
+
+    with pytest.raises(IntegrityError, match="contains duplicate instance_id 'dev-1'"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "duplicate-dev-task.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    pools = yaml.safe_load(pools_path.read_text())
+    pools["pools"]["bench_control"]["tasks"][0].pop("instance_id")
+    _write_yaml(pools_path, pools)
+
+    with pytest.raises(IntegrityError, match="must include a non-empty instance_id"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "missing-instance-id.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    pools = yaml.safe_load(pools_path.read_text())
+    pools["pools"]["final_test"]["tasks"] = {"instance_id": "final-1"}
+    _write_yaml(pools_path, pools)
+
+    with pytest.raises(IntegrityError, match="must include a 'tasks' list"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "non-list-tasks.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    pools = yaml.safe_load(pools_path.read_text())
+    pools["pools"]["final_test"]["total"] = "two"
+    _write_yaml(pools_path, pools)
+
+    with pytest.raises(IntegrityError, match="must declare an integer total"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "non-integer-total.db",
         )
 
 

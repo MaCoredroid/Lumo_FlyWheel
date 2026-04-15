@@ -522,13 +522,30 @@ def load_swe_bench_pools(path: str | Path) -> tuple[dict[str, list[dict[str, Any
         pool = pools_raw.get(pool_name)
         if not isinstance(pool, dict):
             raise IntegrityError(f"Missing pool '{pool_name}' in swe_bench_pools.yaml")
-        tasks = list(pool.get("tasks", []))
-        declared_total = int(pool.get("total", len(tasks)))
+        tasks_raw = pool.get("tasks", [])
+        if not isinstance(tasks_raw, list):
+            raise IntegrityError(f"Pool '{pool_name}' must include a 'tasks' list")
+        tasks = list(tasks_raw)
+        try:
+            declared_total = int(pool.get("total", len(tasks)))
+        except (TypeError, ValueError) as exc:
+            raise IntegrityError(f"Pool '{pool_name}' must declare an integer total") from exc
         if declared_total != len(tasks):
             raise IntegrityError(
                 f"Pool '{pool_name}' declares total={declared_total} but contains {len(tasks)} task entries"
             )
-        pool_ids = {task["instance_id"] for task in tasks}
+        pool_ids: set[str] = set()
+        for task_index, task in enumerate(tasks):
+            if not isinstance(task, dict):
+                raise IntegrityError(f"Pool '{pool_name}' tasks[{task_index}] must be a mapping")
+            instance_id = task.get("instance_id")
+            if not isinstance(instance_id, str) or not instance_id.strip():
+                raise IntegrityError(
+                    f"Pool '{pool_name}' tasks[{task_index}] must include a non-empty instance_id"
+                )
+            if instance_id in pool_ids:
+                raise IntegrityError(f"Pool '{pool_name}' contains duplicate instance_id '{instance_id}'")
+            pool_ids.add(instance_id)
         overlap = seen_ids & pool_ids
         if overlap:
             raise IntegrityError(f"Pool '{pool_name}' overlaps prior pools: {sorted(overlap)}")
