@@ -1653,7 +1653,7 @@ def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
         manager.close()
 
 
-def test_claim_run_rejects_rerun_when_only_regrade_is_needed(tmp_path: Path) -> None:
+def test_claim_run_allows_new_attempt_when_only_regrade_is_needed(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
         scenario_id = "train-feature/v1"
@@ -1688,8 +1688,100 @@ def test_claim_run_rejects_rerun_when_only_regrade_is_needed(tmp_path: Path) -> 
             affected_variant_ids=["v1"],
         )
 
-        with pytest.raises(IntegrityError, match="requires regrading the retained snapshot"):
-            manager.claim_run(
+        assert manager.check_dispatch_eligible(
+            "codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.REGRADE_NEEDED
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            attempt=2,
+        )
+        runs = manager._query_runs("codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1)
+        assert [run.attempt for run in runs] == [1, 2]
+        assert runs[0].superseded_by == 2
+        assert runs[1].launch_manifest_ver == 3
+        assert runs[1].exec_state == "running"
+    finally:
+        manager.close()
+
+
+def test_regrade_attempt_preserves_prior_launch_manifest_provenance(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    db_path = tmp_path / "run_state.db"
+    scenario_id = "train-feature/v1"
+
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+        )
+        manager.finish_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            1,
+            "resolved",
+            grading_manifest_ver=3,
+            codex_long_pass=True,
+            milestone_results={"m1": True},
+            snapshot_image_ref="snap-1",
+        )
+        manager.invalidate_stale_runs(
+            family_id="train-feature",
+            new_manifest_version=4,
+            affected_artifact="verifier",
+            reason="trusted verifier fix",
+            affected_variant_ids=["v1"],
+            re_gate_required=True,
+        )
+    finally:
+        manager.close()
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["manifest_version"] = 4
+    manifest["change_log"].append(
+        {
+            "manifest_version": 4,
+            "date": "2026-06-20",
+            "change": "Second verifier fix for train-feature/v1",
+            "reason": "Trusted grading bugfix follow-up",
+            "affected_variants": ["train-feature/v1"],
+            "affected_hashes": ["verifier_hash"],
+            "re_gate_required": True,
+        }
+    )
+    _write_yaml(manifest_path, manifest)
+
+    reloaded = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert reloaded.check_dispatch_eligible(
+            "codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.REGRADE_NEEDED
+        with pytest.raises(IntegrityError, match="must preserve launch_manifest_ver=3"):
+            reloaded.claim_run(
                 "codex_long",
                 "train_long",
                 scenario_id,
@@ -1697,10 +1789,55 @@ def test_claim_run_rejects_rerun_when_only_regrade_is_needed(tmp_path: Path) -> 
                 "codex",
                 1,
                 attempt=2,
-                launch_manifest_ver=3,
+                launch_manifest_ver=4,
             )
+
+        assert reloaded.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            attempt=2,
+        )
+        reloaded.finish_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            2,
+            "resolved",
+            grading_manifest_ver=4,
+            codex_long_pass=True,
+            milestone_results={"m1": True},
+            snapshot_image_ref="snap-1",
+        )
+
+        runs = reloaded._query_runs("codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1)
+        assert runs[0].launch_manifest_ver == 3
+        assert runs[0].grading_manifest_ver == 3
+        assert runs[0].is_current is False
+        assert runs[0].re_gate_required is True
+        assert runs[1].launch_manifest_ver == 3
+        assert runs[1].grading_manifest_ver == 4
+        assert runs[1].is_current is True
+
+        count = reloaded.invalidate_stale_runs(
+            family_id="train-feature",
+            new_manifest_version=5,
+            affected_artifact="image",
+            reason="image refresh after regrade",
+            affected_variant_ids=["v1"],
+        )
+        assert count == 1
+        assert reloaded.check_dispatch_eligible(
+            "codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.RERUN_NEEDED
     finally:
-        manager.close()
+        reloaded.close()
 
 
 def test_regrade_downgrades_to_rerun_for_legacy_rows_missing_snapshot(tmp_path: Path) -> None:

@@ -1466,6 +1466,9 @@ class DataPoolManager:
         if attempt < 1:
             raise IntegrityError(f"Run attempt must be >= 1; got {attempt}")
         self._require_known_scenario(track, pool_or_split, scenario_id)
+        attempts = self._query_runs(track, pool_or_split, scenario_id, model_id, harness, seed)
+        latest: RunRecord | None = max(attempts, key=lambda run: run.attempt) if attempts else None
+        decision: DispatchDecision | None = None
         if track == "codex_long":
             env = self.codex_long_env_index[scenario_id]
             if family_id is not None and family_id != env.family_id:
@@ -1476,20 +1479,12 @@ class DataPoolManager:
                 raise IntegrityError(
                     f"Scenario '{scenario_id}' has scenario_type '{env.scenario_type}', not '{scenario_type}'"
                 )
-            if launch_manifest_ver is None:
-                raise IntegrityError("Codex-Long claim_run() requires launch_manifest_ver from benchmark_manifest.lock")
-            if launch_manifest_ver != self.manifest["manifest_version"]:
-                raise IntegrityError(
-                    f"Codex-Long claim_run() manifest_version mismatch for '{scenario_id}': "
-                    f"got {launch_manifest_ver}, current is {self.manifest['manifest_version']}"
-                )
             family_id = env.family_id
             scenario_type = env.scenario_type
-        attempts = self._query_runs(track, pool_or_split, scenario_id, model_id, harness, seed)
         if any(run.attempt == attempt for run in attempts):
             return False
         if attempts:
-            latest = max(attempts, key=lambda run: run.attempt)
+            assert latest is not None
             expected_attempt = latest.attempt + 1
             if attempt != expected_attempt:
                 raise IntegrityError(
@@ -1502,16 +1497,37 @@ class DataPoolManager:
                     f"Cannot claim attempt {attempt} for {track}/{pool_or_split}/{scenario_id}; "
                     f"dispatch state is {decision.value}"
                 )
-            if decision is DispatchDecision.REGRADE_NEEDED:
-                raise IntegrityError(
-                    f"Cannot claim attempt {attempt} for {track}/{pool_or_split}/{scenario_id}; "
-                    "the current state requires regrading the retained snapshot, not launching a new run"
-                )
         elif attempt != 1:
             raise IntegrityError(
                 f"Cannot claim first run for {track}/{pool_or_split}/{scenario_id} with attempt={attempt}; "
                 "initial attempt must be 1"
             )
+        if track == "codex_long":
+            current_manifest_version = self.manifest["manifest_version"]
+            if decision is DispatchDecision.REGRADE_NEEDED:
+                prior_launch_manifest_ver = latest.launch_manifest_ver if latest is not None else None
+                if prior_launch_manifest_ver is None:
+                    raise IntegrityError(
+                        f"Codex-Long regrade claim_run() requires the prior attempt for '{scenario_id}' "
+                        "to record launch_manifest_ver"
+                    )
+                if launch_manifest_ver is None:
+                    launch_manifest_ver = prior_launch_manifest_ver
+                elif launch_manifest_ver != prior_launch_manifest_ver:
+                    raise IntegrityError(
+                        f"Codex-Long regrade claim_run() must preserve launch_manifest_ver={prior_launch_manifest_ver} "
+                        f"for '{scenario_id}'; got {launch_manifest_ver}"
+                    )
+            else:
+                if launch_manifest_ver is None:
+                    raise IntegrityError(
+                        "Codex-Long claim_run() requires launch_manifest_ver from benchmark_manifest.lock"
+                    )
+                if launch_manifest_ver != current_manifest_version:
+                    raise IntegrityError(
+                        f"Codex-Long claim_run() manifest_version mismatch for '{scenario_id}': "
+                        f"got {launch_manifest_ver}, current is {current_manifest_version}"
+                    )
         with self.db.begin() as txn:
             result = txn.execute(
                 """
