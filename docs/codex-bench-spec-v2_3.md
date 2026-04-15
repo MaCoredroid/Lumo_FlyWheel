@@ -1272,7 +1272,7 @@ produces a smaller family count than planned. The decision is made now, not then
 | Sprint 3 (B1 eval — Test-Long)          | DGX Spark       | ~17–18      | $0            |
 | Sprint 3 (B2 eval — SWE Final-Test, core)| DGX Spark       | ~73         | $0            |
 | Sprint 3 (SWE-smith reference arm, opt.) | DGX Spark       | ~8          | $0            |
-| SWE-bench Docker eval                   | Any x86 machine | Parallel    | $0            |
+| SWE-bench Docker eval                   | Any arm64 machine | Parallel    | $0            |
 | **Subtotal (fixed, core — no optional items)** |            | **~112–117**| **~$400**     |
 | Sprint 0.5 (OPTIONAL serving opt.)      | DGX Spark       | 2           | ~$10–30       |
 | Sprint 3 (Phase 2b stretch, pre-killed) | DGX Spark       | 4–17        | $0            |
