@@ -257,6 +257,48 @@ def test_manager_requires_manifest_version(tmp_path: Path) -> None:
         )
 
 
+def test_manager_rejects_duplicate_yaml_keys_in_frozen_files(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    manifest_path.write_text(
+        manifest_path.read_text(encoding="utf-8")
+        + """
+freeze_date: 2026-06-02
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(IntegrityError, match="benchmark_manifest.lock must not contain duplicate YAML keys"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "duplicate-manifest-key.db",
+        )
+
+    split_dup_dir = tmp_path / "split-dup"
+    split_dup_dir.mkdir()
+    pools_path, split_path, manifest_path, _ = _fixture_files(split_dup_dir)
+    split_path.write_text(
+        split_path.read_text(encoding="utf-8")
+        + """
+freeze_date: 2026-06-02
+""",
+        encoding="utf-8",
+    )
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="split_assignment.yaml must not contain duplicate YAML keys"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "duplicate-split-key.db",
+        )
+
+
 def test_manager_rejects_non_positive_manifest_version(tmp_path: Path) -> None:
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
     manifest = yaml.safe_load(manifest_path.read_text())

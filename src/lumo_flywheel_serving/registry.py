@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
+from .yaml_utils import load_yaml_file
 
 
 @dataclass(frozen=True)
@@ -89,6 +89,12 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
 
 def load_registry(path: str | Path) -> dict[str, ModelConfig]:
     registry_path = Path(path)
-    raw = yaml.safe_load(registry_path.read_text())
+    raw = load_yaml_file(registry_path)
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"Registry {registry_path} must be a YAML mapping")
     models = raw.get("models", {})
+    if not isinstance(models, dict):
+        raise ValueError(f"Registry {registry_path} must define 'models' as a mapping")
     return {model_id: _model_from_mapping(model_id, mapping) for model_id, mapping in models.items()}

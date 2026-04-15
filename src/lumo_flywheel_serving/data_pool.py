@@ -12,7 +12,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Iterator
 
-import yaml
+from .yaml_utils import DuplicateKeyError, load_yaml_file
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +209,14 @@ def _require_iso_date(value: Any, *, field_name: str) -> str:
 
 
 def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
-    manifest = yaml.safe_load(Path(path).read_text()) or {}
+    try:
+        manifest = load_yaml_file(path) or {}
+    except DuplicateKeyError as exc:
+        raise IntegrityError(f"benchmark_manifest.lock must not contain duplicate YAML keys: {exc}") from exc
+    except ValueError as exc:
+        raise IntegrityError(str(exc)) from exc
+    if not isinstance(manifest, dict):
+        raise IntegrityError("benchmark_manifest.lock must be a YAML mapping")
     try:
         manifest["manifest_version"] = int(manifest["manifest_version"])
     except (KeyError, TypeError, ValueError) as exc:
@@ -334,7 +341,14 @@ def _find_manifest_variant(manifest: dict[str, Any], family_id: str, variant_id:
 
 
 def load_swe_bench_pools(path: str | Path) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
-    raw = yaml.safe_load(Path(path).read_text()) or {}
+    try:
+        raw = load_yaml_file(path) or {}
+    except DuplicateKeyError as exc:
+        raise IntegrityError(f"swe_bench_pools.yaml must not contain duplicate YAML keys: {exc}") from exc
+    except ValueError as exc:
+        raise IntegrityError(str(exc)) from exc
+    if not isinstance(raw, dict):
+        raise IntegrityError("swe_bench_pools.yaml must be a YAML mapping")
     upstream_commit = raw.get("upstream_commit")
     if not upstream_commit:
         raise IntegrityError("swe_bench_pools.yaml must record upstream_commit")
@@ -373,7 +387,14 @@ def load_codex_long_splits(
     split_assignment_path: str | Path,
     manifest_path: str | Path,
 ) -> tuple[dict[str, list[CodexLongFamily]], dict[str, CodexLongEnv]]:
-    assignment = yaml.safe_load(Path(split_assignment_path).read_text()) or {}
+    try:
+        assignment = load_yaml_file(split_assignment_path) or {}
+    except DuplicateKeyError as exc:
+        raise IntegrityError(f"split_assignment.yaml must not contain duplicate YAML keys: {exc}") from exc
+    except ValueError as exc:
+        raise IntegrityError(str(exc)) from exc
+    if not isinstance(assignment, dict):
+        raise IntegrityError("split_assignment.yaml must be a YAML mapping")
     manifest = load_codex_long_manifest(manifest_path)
 
     freeze_date = _require_iso_date(assignment.get("freeze_date"), field_name="split_assignment.yaml freeze_date")
@@ -674,7 +695,12 @@ class DataPoolManager:
     def _load_seed_config(path: Path | None) -> dict[str, Any]:
         if path is None or not path.exists():
             return json.loads(json.dumps(DEFAULT_SEED_CONFIG))
-        raw = yaml.safe_load(path.read_text()) or {}
+        try:
+            raw = load_yaml_file(path) or {}
+        except DuplicateKeyError as exc:
+            raise IntegrityError(f"seed_config.yaml must not contain duplicate YAML keys: {exc}") from exc
+        except ValueError as exc:
+            raise IntegrityError(str(exc)) from exc
         if not isinstance(raw, dict):
             raise IntegrityError("seed_config.yaml must be a mapping")
         return raw

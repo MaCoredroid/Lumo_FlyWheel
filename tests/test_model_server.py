@@ -1387,6 +1387,33 @@ models:
         load_registry(registry)
 
 
+def test_registry_rejects_duplicate_yaml_keys(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/first
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/second
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Duplicate YAML key 'qwen3.5-27b'"):
+        load_registry(registry)
+
+
 def test_registry_rejects_non_fp8_precision_baseline(tmp_path: Path) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(
