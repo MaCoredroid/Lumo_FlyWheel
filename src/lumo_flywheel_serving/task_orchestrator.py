@@ -632,6 +632,7 @@ def verify_pre_grading_hashes(
     image_digest_resolver: Callable[[str], str] = get_local_image_digest,
     verifiers_dir: str | Path = "verifiers",
     verifier_data_dir: str | Path = "verifier_data",
+    scenario_families_dir: str | Path | None = None,
 ) -> None:
     entry = find_manifest_entry(manifest, task.family_id or "", task.variant_id or "")
 
@@ -712,6 +713,22 @@ def verify_pre_grading_hashes(
             f"expected {entry['verifier_data_hash']}, got {verifier_data_hash}",
             affected_artifact="verifier_data",
         )
+
+    if scenario_families_dir is not None:
+        family_spec_path = Path(scenario_families_dir) / str(task.family_id) / "family.yaml"
+        try:
+            actual_family_spec_hash = _canonical_sha256(sha256_file(family_spec_path))
+        except FileNotFoundError as exc:
+            raise ManifestMismatchError(
+                f"Family spec missing for {task.scenario_id}: {family_spec_path}",
+                affected_artifact="family_spec",
+            ) from exc
+        if actual_family_spec_hash != _canonical_sha256(entry["family_spec_hash"]):
+            raise ManifestMismatchError(
+                f"Family spec hash mismatch for {task.scenario_id}: "
+                f"expected {entry['family_spec_hash']}, got {actual_family_spec_hash}",
+                affected_artifact="family_spec",
+            )
 
 
 def _get_prompt(task: TaskSpec) -> str:
@@ -900,6 +917,7 @@ def _call_verify_pre_grading_hashes(
     *,
     verifiers_dir: str | Path,
     verifier_data_dir: str | Path,
+    scenario_families_dir: str | Path,
 ) -> None:
     _call_with_supported_kwargs(
         verifier,
@@ -908,6 +926,7 @@ def _call_verify_pre_grading_hashes(
         grader_image_ref,
         verifiers_dir=verifiers_dir,
         verifier_data_dir=verifier_data_dir,
+        scenario_families_dir=scenario_families_dir,
     )
 
 
@@ -1049,6 +1068,7 @@ class TaskOrchestrator:
                     manifest_state.grader_image_ref,
                     verifiers_dir=config.paths.verifiers_dir,
                     verifier_data_dir=config.paths.verifier_data_dir,
+                    scenario_families_dir=config.paths.scenario_families_dir,
                 )
 
                 family_spec = _load_family_spec_with_configured_path(
@@ -1186,6 +1206,7 @@ class TaskOrchestrator:
                 manifest_state.grader_image_ref,
                 verifiers_dir=config.paths.verifiers_dir,
                 verifier_data_dir=config.paths.verifier_data_dir,
+                scenario_families_dir=config.paths.scenario_families_dir,
             )
             family_spec = _load_family_spec_with_configured_path(
                 self.hooks.load_family_spec,

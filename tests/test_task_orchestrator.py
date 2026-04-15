@@ -537,6 +537,60 @@ def test_verify_pre_grading_hashes_rejects_untracked_verifier_tree_files(tmp_pat
     assert exc_info.value.affected_artifact == "verifier"
 
 
+def test_verify_pre_grading_hashes_detects_family_spec_drift_when_configured(tmp_path: Path) -> None:
+    verifiers_dir = tmp_path / "verifiers" / "family-a"
+    verifier_data_dir = tmp_path / "verifier_data" / "family-a"
+    scenario_families_dir = tmp_path / "scenario_families" / "family-a"
+    milestones_dir = verifiers_dir / "milestones"
+    milestones_dir.mkdir(parents=True)
+    verifier_data_dir.mkdir(parents=True)
+    scenario_families_dir.mkdir(parents=True)
+
+    verify_path = verifiers_dir / "verify.sh"
+    verify_path.write_text("echo verify\n", encoding="utf-8")
+    (milestones_dir / "m1.sh").write_text("echo milestone\n", encoding="utf-8")
+    (verifier_data_dir / "golden.txt").write_text("golden\n", encoding="utf-8")
+    family_spec_path = scenario_families_dir / "family.yaml"
+    family_spec_path.write_text("grading_invariant:\n  functional_checks: []\n", encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "grader_image_digest": "sha256:grader",
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("echo verify\n"),
+                "family_spec_hash": _sha("grading_invariant:\n  functional_checks: []\n"),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_tree(verifier_data_dir),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    family_spec_path.write_text("grading_invariant:\n  functional_checks:\n    - command: pytest\n", encoding="utf-8")
+    task = _codex_long_task()
+
+    with pytest.raises(ManifestMismatchError, match="Family spec hash mismatch") as exc_info:
+        verify_pre_grading_hashes(
+            task,
+            manifest,
+            "sha256:grader",
+            image_digest_resolver=lambda image_ref: image_ref,
+            verifiers_dir=tmp_path / "verifiers",
+            verifier_data_dir=tmp_path / "verifier_data",
+            scenario_families_dir=tmp_path / "scenario_families",
+        )
+
+    assert exc_info.value.affected_artifact == "family_spec"
+
+
 def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> None:
     events: list[str] = []
     config = _config(tmp_path)
@@ -730,8 +784,8 @@ def test_execute_task_passes_configured_codex_long_artifact_paths_to_hooks(tmp_p
                 )
             ),
             verify_pre_grading=(
-                lambda task, manifest, grader_image_ref, *, verifiers_dir, verifier_data_dir: events.append(
-                    f"pre-grade-dirs:{verifiers_dir}:{verifier_data_dir}"
+                lambda task, manifest, grader_image_ref, *, verifiers_dir, verifier_data_dir, scenario_families_dir: events.append(
+                    f"pre-grade-dirs:{verifiers_dir}:{verifier_data_dir}:{scenario_families_dir}"
                 )
             ),
             load_family_spec_hook=(
@@ -750,7 +804,7 @@ def test_execute_task_passes_configured_codex_long_artifact_paths_to_hooks(tmp_p
     assert result.outcome == "resolved"
     assert f"pre-run-dir:{config.paths.scenario_families_dir}" in events
     assert (
-        f"pre-grade-dirs:{config.paths.verifiers_dir}:{config.paths.verifier_data_dir}" in events
+        f"pre-grade-dirs:{config.paths.verifiers_dir}:{config.paths.verifier_data_dir}:{config.paths.scenario_families_dir}" in events
     )
     assert f"family-spec-dir:{config.paths.scenario_families_dir}" in events
 
