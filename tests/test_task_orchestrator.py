@@ -117,6 +117,8 @@ def _valid_family_spec(
             "surfaces": ["tests", "application", "config"],
         },
         "grading_invariant": {
+            "type": "state_based",
+            "description": "Validate the final repository state using trusted checks.",
             "verifier_script": f"verifiers/{family_id}/verify.sh",
             "functional_checks": [
                 {
@@ -1030,6 +1032,30 @@ def test_validate_family_spec_rejects_unpinned_repo_base_image() -> None:
         validate_family_spec(task, family_spec)
 
 
+def test_validate_family_spec_rejects_malformed_repo_base_image_digest() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["repo_pattern"]["base_image"] = "python:3.12@sha256:not-a-real-digest"
+
+    with pytest.raises(ManifestMismatchError, match="repo_pattern.base_image"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_missing_state_based_grading_contract() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["grading_invariant"]["type"] = "patch_based"
+
+    with pytest.raises(ManifestMismatchError, match="grading_invariant.type"):
+        validate_family_spec(task, family_spec)
+
+    family_spec = _valid_family_spec()
+    family_spec["grading_invariant"].pop("description")
+
+    with pytest.raises(ManifestMismatchError, match="grading_invariant.description"):
+        validate_family_spec(task, family_spec)
+
+
 def test_validate_family_spec_rejects_too_few_variants() -> None:
     task = _codex_long_task()
     family_spec = _valid_family_spec()
@@ -1116,8 +1142,8 @@ def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> No
     assert pool_manager.finish_calls[0]["codex_long_pass"] is True
     assert pool_manager.finish_calls[0]["milestone_results"] == {"m1": True}
     assert events == [
-        "health:qwen3.5-27b",
         "flush:127.0.0.1:8000",
+        "health:qwen3.5-27b",
         "pre-run:7",
         "family-spec:family-a",
         "before:family-a/v1",
@@ -1156,7 +1182,7 @@ def test_execute_task_health_check_uses_served_model_surface_for_registry_key(tm
     result = asyncio.run(orchestrator.execute_task(task, pool_manager, manifest_state, config))
 
     assert result.outcome == "resolved"
-    assert events[:2] == ["health:qwen3.5-27b-served", "flush:127.0.0.1:8000"]
+    assert events[:2] == ["flush:127.0.0.1:8000", "health:qwen3.5-27b-served"]
 
 
 def test_execute_task_health_check_accepts_lora_adapter_surface_id(tmp_path: Path) -> None:
@@ -1181,7 +1207,7 @@ def test_execute_task_health_check_accepts_lora_adapter_surface_id(tmp_path: Pat
     result = asyncio.run(orchestrator.execute_task(task, pool_manager, manifest_state, config))
 
     assert result.outcome == "resolved"
-    assert events[:2] == ["health:codex-sft-all", "flush:127.0.0.1:8000"]
+    assert events[:2] == ["flush:127.0.0.1:8000", "health:codex-sft-all"]
 
 
 def test_execute_task_raises_duplicate_claim_before_running(tmp_path: Path) -> None:
@@ -1197,8 +1223,8 @@ def test_execute_task_raises_duplicate_claim_before_running(tmp_path: Path) -> N
 
     assert pool_manager.finish_calls == []
     assert events == [
-        "health:qwen3.5-27b",
         "flush:127.0.0.1:8000",
+        "health:qwen3.5-27b",
         "pre-run:3",
         "family-spec:family-a",
     ]
@@ -1245,8 +1271,8 @@ def test_execute_task_rejects_invalid_codex_long_family_spec_before_claim(tmp_pa
     assert pool_manager.claim_calls == []
     assert pool_manager.finish_calls == []
     assert events == [
-        "health:qwen3.5-27b",
         "flush:127.0.0.1:8000",
+        "health:qwen3.5-27b",
         "pre-run:3",
         "family-spec:family-a",
     ]

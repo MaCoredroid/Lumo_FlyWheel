@@ -42,6 +42,7 @@ _INFRASTRUCTURE_ERROR_PATTERNS = (
     "ConnectionRefusedError",
 )
 _PINNED_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$", re.IGNORECASE)
+_PINNED_IMAGE_RE = re.compile(r"^.+@sha256:[0-9a-f]{64}$", re.IGNORECASE)
 
 
 class OrchestratorError(RuntimeError):
@@ -1080,7 +1081,7 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
         repo_pattern.get("base_image"),
         field_name="repo_pattern.base_image",
     )
-    if "@sha256:" not in base_image:
+    if not _PINNED_IMAGE_RE.fullmatch(base_image):
         raise ManifestMismatchError(
             f"Family spec for {task.scenario_id} must pin repo_pattern.base_image with @sha256:<digest>",
             affected_artifact="family_spec",
@@ -1118,6 +1119,19 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"Family spec for {task.scenario_id} must define grading_invariant as a mapping",
             affected_artifact="family_spec",
         )
+    grading_type = _require_non_empty_string(
+        grading_invariant.get("type"),
+        field_name="grading_invariant.type",
+    )
+    if grading_type != "state_based":
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must set grading_invariant.type to 'state_based'",
+            affected_artifact="family_spec",
+        )
+    _require_non_empty_string(
+        grading_invariant.get("description"),
+        field_name="grading_invariant.description",
+    )
     verifier_script = _require_non_empty_string(
         grading_invariant.get("verifier_script"),
         field_name="grading_invariant.verifier_script",
@@ -1485,6 +1499,7 @@ class TaskOrchestrator:
             return await self._execute_regrade_path(task, pool_manager, manifest_state, config)
 
         _model_entry, request_model_name = _resolve_task_model_reference(config.model_registry, task.model_id)
+        await self.hooks.flush_prefix_cache(config.vllm.client_host, config.vllm.port)
         await self.hooks.health_check(
             config.vllm.client_host,
             config.vllm.port,
@@ -1492,7 +1507,6 @@ class TaskOrchestrator:
             max_retries=config.execution.health_check_retries,
             retry_delay_seconds=config.execution.health_check_delay,
         )
-        await self.hooks.flush_prefix_cache(config.vllm.client_host, config.vllm.port)
 
         if task.track == "codex_long":
             manifest_state.reload()
