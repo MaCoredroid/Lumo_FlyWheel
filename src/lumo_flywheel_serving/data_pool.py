@@ -176,6 +176,7 @@ class RunRecord:
     is_current: bool
     superseded_by: int | None
     recovery_action: str | None
+    required_manifest_ver: int | None
     snapshot_image_ref: str | None
     re_gate_required: bool
     codex_long_pass: bool | None
@@ -1005,6 +1006,7 @@ class DataPoolManager:
                 is_current INTEGER NOT NULL DEFAULT 1,
                 superseded_by INTEGER,
                 recovery_action TEXT,
+                required_manifest_ver INTEGER,
                 re_gate_required INTEGER DEFAULT 0,
                 snapshot_image_ref TEXT,
                 cl_pass INTEGER,
@@ -1060,6 +1062,12 @@ class DataPoolManager:
                 self.db.connection.execute(
                     f"ALTER TABLE gate4_outcome ADD COLUMN {column_name} INTEGER"
                 )
+        existing_run_columns = {
+            row["name"]
+            for row in self.db.execute("PRAGMA table_info(runs)").fetchall()
+        }
+        if "required_manifest_ver" not in existing_run_columns:
+            self.db.connection.execute("ALTER TABLE runs ADD COLUMN required_manifest_ver INTEGER")
         self.db.connection.commit()
 
     def _row_to_run_record(self, row: sqlite3.Row) -> RunRecord:
@@ -1085,6 +1093,7 @@ class DataPoolManager:
             is_current=bool(row["is_current"]),
             superseded_by=row["superseded_by"],
             recovery_action=row["recovery_action"],
+            required_manifest_ver=row["required_manifest_ver"],
             snapshot_image_ref=row["snapshot_image_ref"],
             re_gate_required=bool(row["re_gate_required"]),
             codex_long_pass=None if row["cl_pass"] is None else bool(row["cl_pass"]),
@@ -1512,6 +1521,17 @@ class DataPoolManager:
             )
         if track == "codex_long":
             current_manifest_version = self.manifest["manifest_version"]
+            required_manifest_ver = (
+                latest.required_manifest_ver
+                if latest is not None and not latest.is_current
+                else None
+            )
+            if required_manifest_ver is not None and required_manifest_ver != current_manifest_version:
+                raise IntegrityError(
+                    f"Codex-Long claim_run() for '{scenario_id}' requires benchmark_manifest.lock "
+                    f"manifest_version {required_manifest_ver}, but the loaded manifest is {current_manifest_version}. "
+                    "Reload the pool manager against the bumped frozen artifacts before retrying this run."
+                )
             if decision is DispatchDecision.REGRADE_NEEDED:
                 prior_launch_manifest_ver = latest.launch_manifest_ver if latest is not None else None
                 if prior_launch_manifest_ver is None:
@@ -1541,8 +1561,8 @@ class DataPoolManager:
                 """
                 INSERT OR IGNORE INTO runs
                     (track, pool_or_split, scenario_id, model_id, harness, seed, attempt,
-                     exec_state, started_at, launch_manifest_ver, family_id, scenario_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?)
+                     exec_state, started_at, launch_manifest_ver, family_id, scenario_type, required_manifest_ver)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, NULL)
                 """,
                 (
                     track,
@@ -1777,13 +1797,14 @@ class DataPoolManager:
             where_clauses.append("family_id = ?")
             where_params.append(family_id)
 
-        set_params = [recovery, int(re_gate_required)]
+        set_params = [recovery, new_manifest_version, int(re_gate_required)]
         with self.db.begin() as txn:
             result = txn.execute(
                 f"""
                 UPDATE runs
                 SET is_current = 0,
                     recovery_action = ?,
+                    required_manifest_ver = ?,
                     re_gate_required = ?
                 WHERE {' AND '.join(where_clauses)}
                 """,

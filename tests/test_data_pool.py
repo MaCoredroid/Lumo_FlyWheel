@@ -1654,10 +1654,18 @@ def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
         manager.close()
 
 
-def test_claim_run_allows_new_attempt_when_only_regrade_is_needed(tmp_path: Path) -> None:
-    manager, _ = _manager(tmp_path)
+def test_claim_run_requires_reloading_bumped_manifest_before_regrade(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    db_path = tmp_path / "run_state.db"
+    scenario_id = "train-feature/v1"
+
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
     try:
-        scenario_id = "train-feature/v1"
         assert manager.claim_run(
             "codex_long",
             "train_long",
@@ -1692,7 +1700,44 @@ def test_claim_run_allows_new_attempt_when_only_regrade_is_needed(tmp_path: Path
         assert manager.check_dispatch_eligible(
             "codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1
         ) is DispatchDecision.REGRADE_NEEDED
-        assert manager.claim_run(
+        runs = manager._query_runs("codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1)
+        assert runs[0].required_manifest_ver == 4
+        with pytest.raises(IntegrityError, match="requires benchmark_manifest.lock manifest_version 4"):
+            manager.claim_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                attempt=2,
+            )
+    finally:
+        manager.close()
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["manifest_version"] = 4
+    manifest["change_log"].append(
+        {
+            "manifest_version": 4,
+            "date": "2026-06-20",
+            "change": "Trusted verifier fix for train-feature/v1",
+            "reason": "Verifier bugfix",
+            "affected_variants": ["train-feature/v1"],
+            "affected_hashes": ["verifier_hash"],
+            "re_gate_required": False,
+        }
+    )
+    _write_yaml(manifest_path, manifest)
+
+    reloaded = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert reloaded.claim_run(
             "codex_long",
             "train_long",
             scenario_id,
@@ -1701,13 +1746,8 @@ def test_claim_run_allows_new_attempt_when_only_regrade_is_needed(tmp_path: Path
             1,
             attempt=2,
         )
-        runs = manager._query_runs("codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1)
-        assert [run.attempt for run in runs] == [1, 2]
-        assert runs[0].superseded_by == 2
-        assert runs[1].launch_manifest_ver == 3
-        assert runs[1].exec_state == "running"
     finally:
-        manager.close()
+        reloaded.close()
 
 
 def test_regrade_attempt_preserves_prior_launch_manifest_provenance(tmp_path: Path) -> None:
