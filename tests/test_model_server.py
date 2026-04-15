@@ -56,6 +56,86 @@ models:
     assert "--enable-log-requests" in command
 
 
+def test_build_run_command_includes_lora_adapter_flags(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    served_model_name: qwen3.5-27b
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.88
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+    max_lora_rank: 32
+    lora_modules:
+      codex-sft-all: /models/adapters/codex-sft-all
+      codex-dapo: /models/adapters/codex-dapo
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    cmd = server._build_run_command(
+        "qwen3.5-27b",
+        server.registry["qwen3.5-27b"],
+        enable_request_logging=False,
+        kv_cache_dtype="auto",
+        gpu_memory_utilization=0.88,
+        enforce_eager=False,
+    )
+    command = " ".join(cmd)
+
+    assert "--served-model-name qwen3.5-27b" in command
+    assert "--enable-lora" in command
+    assert "--max-lora-rank 32" in command
+    assert "--lora-modules codex-sft-all=/models/adapters/codex-sft-all codex-dapo=/models/adapters/codex-dapo" in command
+
+
+def test_build_run_command_rejects_lora_paths_outside_models_mount(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.88
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+    max_lora_rank: 32
+    lora_modules:
+      codex-sft-all: /tmp/adapters/codex-sft-all
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+
+    with pytest.raises(ValueError, match="under /models"):
+        server._build_run_command(
+            "qwen3.5-27b",
+            server.registry["qwen3.5-27b"],
+            enable_request_logging=False,
+            kv_cache_dtype="auto",
+            gpu_memory_utilization=0.88,
+            enforce_eager=False,
+        )
+
+
 def test_build_run_command_can_force_eager_mode(tmp_path: Path) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(

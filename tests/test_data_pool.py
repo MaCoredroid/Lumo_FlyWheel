@@ -31,7 +31,7 @@ def _write_yaml(path: Path, payload: dict) -> None:
 
 
 def _sha256(value: str) -> str:
-    return f"sha256:{value}"
+    return f"sha256:{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
 
 
 def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str]]]:
@@ -119,7 +119,7 @@ def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str
                 )
 
     _write_yaml(split_path, assignment)
-    split_hash = _sha256(hashlib.sha256(split_path.read_bytes()).hexdigest())
+    split_hash = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
     _write_yaml(
         manifest_path,
         {
@@ -193,6 +193,15 @@ def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path
     with pytest.raises(IntegrityError, match="family_spec_hash"):
         _find_manifest_variant(malformed_hash_manifest, malformed_hash_manifest["variants"][0]["family_id"], "v1")
 
+    malformed_prefixed_hash_manifest = yaml.safe_load(manifest_path.read_text())
+    malformed_prefixed_hash_manifest["variants"][0]["family_spec_hash"] = "sha256:not-a-real-digest"
+    with pytest.raises(IntegrityError, match="64-character sha256 hex digest"):
+        _find_manifest_variant(
+            malformed_prefixed_hash_manifest,
+            malformed_prefixed_hash_manifest["variants"][0]["family_id"],
+            "v1",
+        )
+
     # Sanity check that the split loader is actually using the frozen hash.
     split_path.write_text(split_path.read_text() + "\n# drift\n", encoding="utf-8")
     with pytest.raises(IntegrityError, match="hash mismatch"):
@@ -216,6 +225,21 @@ def test_manager_requires_manifest_version(tmp_path: Path) -> None:
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "broken-version.db",
+        )
+
+
+def test_manager_requires_prefixed_split_assignment_hash(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = hashlib.sha256(split_path.read_bytes()).hexdigest()
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="split_assignment_hash"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "bare-split-hash.db",
         )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -54,6 +55,7 @@ _ARTIFACT_RECOVERY = {
     "image": {"ver_column": "launch_manifest_ver", "recovery": "rerun_full"},
     "agents_md": {"ver_column": "launch_manifest_ver", "recovery": "rerun_full"},
 }
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 
 
 class IntegrityError(RuntimeError):
@@ -183,10 +185,12 @@ def _require_sha256_value(value: Any, *, field_name: str, allow_bare: bool = Fal
         raise IntegrityError(f"{field_name} must be a non-empty string")
     if value.startswith("sha256:"):
         digest = value.removeprefix("sha256:")
-        if not digest:
-            raise IntegrityError(f"{field_name} must include a non-empty sha256 digest")
+        if not _SHA256_HEX_RE.fullmatch(digest):
+            raise IntegrityError(f"{field_name} must include a 64-character sha256 hex digest")
         return digest
     if allow_bare:
+        if not _SHA256_HEX_RE.fullmatch(value):
+            raise IntegrityError(f"{field_name} must be recorded as a 64-character sha256 hex digest")
         return value
     raise IntegrityError(f"{field_name} must be recorded as a sha256 digest")
 
@@ -198,7 +202,7 @@ def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
     except (KeyError, TypeError, ValueError) as exc:
         raise IntegrityError("benchmark_manifest.lock must record an integer manifest_version") from exc
 
-    _require_sha256_value(manifest.get("split_assignment_hash"), field_name="split_assignment_hash", allow_bare=True)
+    _require_sha256_value(manifest.get("split_assignment_hash"), field_name="split_assignment_hash")
     _require_sha256_value(manifest.get("grader_image_digest"), field_name="grader_image_digest")
 
     change_log = manifest.get("change_log", [])
@@ -326,7 +330,6 @@ def load_codex_long_splits(
     expected_hash = _require_sha256_value(
         manifest.get("split_assignment_hash"),
         field_name="split_assignment_hash",
-        allow_bare=True,
     )
     if actual_hash != expected_hash:
         raise IntegrityError(

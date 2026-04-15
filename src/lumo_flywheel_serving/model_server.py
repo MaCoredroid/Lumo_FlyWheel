@@ -362,7 +362,7 @@ class ModelServer:
             "serve",
             str(config.local_path),
             "--served-model-name",
-            model_id,
+            config.served_model_name,
             "--host",
             "127.0.0.1",
             "--port",
@@ -384,6 +384,9 @@ class ModelServer:
             "--max-num-seqs",
             str(config.max_num_seqs),
         ]
+        if config.lora_modules:
+            vllm_args.extend(["--enable-lora", "--max-lora-rank", str(config.max_lora_rank), "--lora-modules"])
+            vllm_args.extend(self._format_lora_modules(config))
         if chat_template_path is not None:
             vllm_args.extend(["--chat-template", str(chat_template_path)])
         if enforce_eager:
@@ -476,6 +479,7 @@ class ModelServer:
         payload = {
             "timestamp": datetime.now(UTC).isoformat(),
             "model_id": model_id,
+            "served_model_name": config.served_model_name,
             "quantization": config.quantization,
             "kv_cache_dtype": kv_cache_dtype,
             "max_model_len": config.max_model_len,
@@ -484,6 +488,8 @@ class ModelServer:
             "wire_api": "responses",
             "dev_mode": True,
             "sleep_mode": self.use_sleep_mode,
+            "lora_modules": [name for name, _path in config.lora_modules],
+            "max_lora_rank": config.max_lora_rank,
             "launch_cmd": shlex.join(vllm_args),
         }
         encoded = json.dumps(payload)
@@ -498,12 +504,13 @@ class ModelServer:
             f"log_path = {str(log_path)!r}\n"
             "with open(log_path, 'a', encoding='utf-8') as handle:\n"
             "    handle.write(f\"[VLLM-INIT] timestamp={payload['timestamp']}\\n\")\n"
-            "    handle.write(f\"[VLLM-INIT] model_id={payload['model_id']} vllm_version={version} git_hash={git_hash}\\n\")\n"
+            "    handle.write(f\"[VLLM-INIT] model_id={payload['model_id']} served_model_name={payload['served_model_name']} vllm_version={version} git_hash={git_hash}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] quantization={payload['quantization']} kv_cache_dtype={payload['kv_cache_dtype']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] max_model_len={payload['max_model_len']} gpu_memory_utilization={payload['gpu_memory_utilization']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] enforce_eager={str(payload['enforce_eager']).lower()}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] wire_api={payload['wire_api']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] dev_mode={str(payload['dev_mode']).lower()} sleep_mode={'enabled' if payload['sleep_mode'] else 'disabled'}\\n\")\n"
+            "    handle.write(f\"[VLLM-INIT] lora_modules={','.join(payload['lora_modules']) or 'none'} max_lora_rank={payload['max_lora_rank']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] launch_cmd: {payload['launch_cmd']}\\n\")\n"
             "PY"
         )
@@ -522,6 +529,17 @@ class ModelServer:
         if config.quantization == "fp8" and config.kv_cache_dtype == "fp8_e5m2":
             return "auto"
         return config.kv_cache_dtype
+
+    @staticmethod
+    def _format_lora_modules(config: ModelConfig) -> list[str]:
+        formatted: list[str] = []
+        for adapter_name, adapter_path in config.lora_modules:
+            if not str(adapter_path).startswith("/models/"):
+                raise ValueError(
+                    f"LoRA adapter '{adapter_name}' must use a container path under /models; got {adapter_path}"
+                )
+            formatted.append(f"{adapter_name}={adapter_path}")
+        return formatted
 
     def _wait_ready(self, model_id: str, timeout_s: int = 900) -> None:
         deadline = time.time() + timeout_s
