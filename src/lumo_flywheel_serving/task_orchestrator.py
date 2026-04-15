@@ -1053,6 +1053,10 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"expected '{expected_scenario_type}', got '{scenario_type}'",
             affected_artifact="family_spec",
         )
+    _require_non_empty_string(
+        family_spec.get("description"),
+        field_name="description",
+    )
 
     repo_pattern = family_spec.get("repo_pattern")
     if not isinstance(repo_pattern, dict):
@@ -1060,6 +1064,18 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"Family spec for {task.scenario_id} must define repo_pattern as a mapping",
             affected_artifact="family_spec",
         )
+    _require_non_empty_string(
+        repo_pattern.get("language"),
+        field_name="repo_pattern.language",
+    )
+    _require_non_empty_string(
+        repo_pattern.get("framework"),
+        field_name="repo_pattern.framework",
+    )
+    _require_non_empty_string(
+        repo_pattern.get("structure"),
+        field_name="repo_pattern.structure",
+    )
     base_image = _require_non_empty_string(
         repo_pattern.get("base_image"),
         field_name="repo_pattern.base_image",
@@ -1068,6 +1084,32 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
         raise ManifestMismatchError(
             f"Family spec for {task.scenario_id} must pin repo_pattern.base_image with @sha256:<digest>",
             affected_artifact="family_spec",
+        )
+
+    breakage_class = family_spec.get("breakage_class")
+    if not isinstance(breakage_class, dict):
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define breakage_class as a mapping",
+            affected_artifact="family_spec",
+        )
+    _require_non_empty_string(
+        breakage_class.get("injection_method"),
+        field_name="breakage_class.injection_method",
+    )
+    _require_non_empty_string(
+        breakage_class.get("description"),
+        field_name="breakage_class.description",
+    )
+    breakage_surfaces = breakage_class.get("surfaces")
+    if not isinstance(breakage_surfaces, list) or not breakage_surfaces:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define non-empty breakage_class.surfaces",
+            affected_artifact="family_spec",
+        )
+    for index, surface in enumerate(breakage_surfaces):
+        _require_non_empty_string(
+            surface,
+            field_name=f"breakage_class.surfaces[{index}]",
         )
 
     grading_invariant = family_spec.get("grading_invariant")
@@ -1191,6 +1233,10 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 affected_artifact="family_spec",
             )
         seen_milestone_ids.add(milestone_id)
+        _require_non_empty_string(
+            milestone.get("description"),
+            field_name=f"milestones[{index}].description",
+        )
         expected_check_script = f"verifiers/{expected_family_id}/milestones/{milestone_id}.sh"
         check_script = _require_non_empty_string(
             milestone.get("check_script"),
@@ -1226,6 +1272,10 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"Family spec for {task.scenario_id} must define shortcut_resistance as a mapping",
             affected_artifact="family_spec",
         )
+    _require_non_empty_string(
+        shortcut_resistance.get("notes"),
+        field_name="shortcut_resistance.notes",
+    )
     known_exploits = shortcut_resistance.get("known_exploits_tested")
     if not isinstance(known_exploits, list) or len(known_exploits) < 3:
         raise ManifestMismatchError(
@@ -1261,6 +1311,10 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 affected_artifact="family_spec",
             )
         variant_ids.add(variant_id)
+        _require_non_empty_string(
+            variant.get("injected_breakage"),
+            field_name=f"variants[{index}].injected_breakage",
+        )
         _require_non_empty_string(
             variant.get("env_dockerfile"),
             field_name=f"variants[{index}].env_dockerfile",
@@ -1369,6 +1423,21 @@ def _load_family_spec_with_configured_path(
     )
 
 
+def _load_and_validate_family_spec(
+    loader: Callable[..., dict[str, Any]],
+    task: TaskSpec,
+    *,
+    scenario_families_dir: str | Path,
+) -> dict[str, Any]:
+    family_spec = _load_family_spec_with_configured_path(
+        loader,
+        task.family_id or "",
+        scenario_families_dir=scenario_families_dir,
+    )
+    validate_family_spec(task, family_spec)
+    return family_spec
+
+
 def _grading_dir_for_run(grading_root: str | Path, run_id: str) -> str:
     return str(Path(grading_root) / quote(run_id, safe=""))
 
@@ -1431,6 +1500,11 @@ class TaskOrchestrator:
                 self.hooks.verify_pre_run_hashes,
                 task,
                 manifest_state.manifest,
+                scenario_families_dir=config.paths.scenario_families_dir,
+            )
+            _load_and_validate_family_spec(
+                self.hooks.load_family_spec,
+                task,
                 scenario_families_dir=config.paths.scenario_families_dir,
             )
 
@@ -1496,12 +1570,11 @@ class TaskOrchestrator:
                     scenario_families_dir=config.paths.scenario_families_dir,
                 )
 
-                family_spec = _load_family_spec_with_configured_path(
+                family_spec = _load_and_validate_family_spec(
                     self.hooks.load_family_spec,
-                    task.family_id or "",
+                    task,
                     scenario_families_dir=config.paths.scenario_families_dir,
                 )
-                validate_family_spec(task, family_spec)
                 grading_dir = _grading_dir_for_run(config.paths.grading_dir, run_id)
                 await self.hooks.phase2_functional_checks(snapshot_ref, task, family_spec, grading_dir)
                 verify_result = await self.hooks.phase3_integrity_verification(
@@ -1634,12 +1707,11 @@ class TaskOrchestrator:
                 verifier_data_dir=config.paths.verifier_data_dir,
                 scenario_families_dir=config.paths.scenario_families_dir,
             )
-            family_spec = _load_family_spec_with_configured_path(
+            family_spec = _load_and_validate_family_spec(
                 self.hooks.load_family_spec,
-                task.family_id or "",
+                task,
                 scenario_families_dir=config.paths.scenario_families_dir,
             )
-            validate_family_spec(task, family_spec)
             await self.hooks.phase2_functional_checks(snapshot_ref, task, family_spec, grading_dir)
             verify_result = await self.hooks.phase3_integrity_verification(
                 snapshot_ref,

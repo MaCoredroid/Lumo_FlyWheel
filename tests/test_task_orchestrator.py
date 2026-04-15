@@ -104,8 +104,17 @@ def _valid_family_spec(
     return {
         "family_id": family_id,
         "scenario_type": scenario_type,
+        "description": "Representative Codex-Long fixture family.",
         "repo_pattern": {
+            "language": "python",
+            "framework": "pytest",
+            "structure": "A small testable repo rooted at /workspace.",
             "base_image": "python:3.12@sha256:" + ("a" * 64),
+        },
+        "breakage_class": {
+            "injection_method": "source_edit",
+            "description": "Inject a regression that requires a multi-file fix.",
+            "surfaces": ["tests", "application", "config"],
         },
         "grading_invariant": {
             "verifier_script": f"verifiers/{family_id}/verify.sh",
@@ -121,11 +130,13 @@ def _valid_family_spec(
         "milestones": [
             {
                 "id": "m1",
+                "description": "Primary repair milestone.",
                 "check_script": f"verifiers/{family_id}/milestones/m1.sh",
                 "partial_credit": 1.0,
             }
         ],
         "shortcut_resistance": {
+            "notes": "Trusted verifier checks detect spoofed functional success.",
             "known_exploits_tested": ["exploit-a", "exploit-b", "exploit-c"],
         },
         "difficulty_estimate": {
@@ -134,18 +145,21 @@ def _valid_family_spec(
         "variants": [
             {
                 "variant_id": variant_id,
+                "injected_breakage": "Break the main code path.",
                 "repo_source": "authored",
                 "env_dockerfile": f"variants/{variant_id}/Dockerfile",
                 "base_image_digest": "sha256:" + ("1" * 64),
             },
             {
                 "variant_id": "v2",
+                "injected_breakage": "Break the secondary code path.",
                 "repo_source": "authored",
                 "env_dockerfile": "variants/v2/Dockerfile",
                 "base_image_digest": "sha256:" + ("2" * 64),
             },
             {
                 "variant_id": "v3",
+                "injected_breakage": "Break the tertiary code path.",
                 "repo_source": "authored",
                 "env_dockerfile": "variants/v3/Dockerfile",
                 "base_image_digest": "sha256:" + ("3" * 64),
@@ -1076,6 +1090,15 @@ def test_validate_family_spec_rejects_invalid_expected_final_state_shape() -> No
         validate_family_spec(task, family_spec)
 
 
+def test_validate_family_spec_rejects_missing_breakage_class_fields() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["breakage_class"]["surfaces"] = []
+
+    with pytest.raises(ManifestMismatchError, match="breakage_class.surfaces"):
+        validate_family_spec(task, family_spec)
+
+
 def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> None:
     events: list[str] = []
     config = _config(tmp_path)
@@ -1096,6 +1119,7 @@ def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> No
         "health:qwen3.5-27b",
         "flush:127.0.0.1:8000",
         "pre-run:7",
+        "family-spec:family-a",
         "before:family-a/v1",
         "setup:7",
         "invoke",
@@ -1176,6 +1200,7 @@ def test_execute_task_raises_duplicate_claim_before_running(tmp_path: Path) -> N
         "health:qwen3.5-27b",
         "flush:127.0.0.1:8000",
         "pre-run:3",
+        "family-spec:family-a",
     ]
 
 
@@ -1198,6 +1223,33 @@ def test_execute_task_preserves_snapshot_on_manifest_mismatch(tmp_path: Path) ->
     assert pool_manager.finish_calls[0]["grading_manifest_ver"] == 3
     assert pool_manager.finish_calls[0]["snapshot_image_ref"] == "snapshot-ref"
     assert events[-2:] == ["after:family-a/v1", "rm:container-1:True"]
+
+
+def test_execute_task_rejects_invalid_codex_long_family_spec_before_claim(tmp_path: Path) -> None:
+    events: list[str] = []
+    config = _config(tmp_path)
+
+    def invalid_family_spec(family_id: str, **kwargs) -> dict:
+        spec = _valid_family_spec(family_id=family_id)
+        spec.pop("breakage_class")
+        return spec
+
+    hooks = _hooks(events, load_family_spec_hook=invalid_family_spec)
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([3])
+
+    with pytest.raises(ManifestMismatchError, match="breakage_class"):
+        asyncio.run(orchestrator.execute_task(_codex_long_task(), pool_manager, manifest_state, config))
+
+    assert pool_manager.claim_calls == []
+    assert pool_manager.finish_calls == []
+    assert events == [
+        "health:qwen3.5-27b",
+        "flush:127.0.0.1:8000",
+        "pre-run:3",
+        "family-spec:family-a",
+    ]
 
 
 def test_execute_task_regrade_path_uses_retained_snapshot(tmp_path: Path) -> None:
