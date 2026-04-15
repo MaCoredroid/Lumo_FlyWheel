@@ -1,0 +1,459 @@
+from __future__ import annotations
+
+import asyncio
+import hashlib
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from lumo_flywheel_serving.task_orchestrator import (
+    CacheFlushError,
+    CodexInstallConfig,
+    CodexResult,
+    ConfigError,
+    ContainerContext,
+    DuplicateClaimError,
+    ExecutionConfig,
+    GradingConfig,
+    ManifestMismatchError,
+    NetworkConfig,
+    OrchestratorConfig,
+    OrchestratorHooks,
+    PathsConfig,
+    TaskOrchestrator,
+    TaskSpec,
+    VllmConfig,
+    flush_prefix_cache,
+    generate_codex_config,
+    health_check,
+    sha256_tree,
+    verify_pre_grading_hashes,
+)
+
+
+def _sha(value: str) -> str:
+    return f"sha256:{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
+
+
+def _config(tmp_path: Path) -> OrchestratorConfig:
+    return OrchestratorConfig(
+        vllm=VllmConfig(bind_host="127.0.0.1", client_host="127.0.0.1", port=8000),
+        network=NetworkConfig(name="codex-bench-net", subnet="172.30.0.0/16", gateway="172.30.0.1", proxy_port=8001),
+        model_registry_path="model_registry.yaml",
+        model_registry={"qwen3.5-27b": {"max_model_len": 65536}},
+        paths=PathsConfig(
+            output_dir=str(tmp_path / "output"),
+            trajectory_dir=str(tmp_path / "output" / "trajectories"),
+            patch_dir=str(tmp_path / "output" / "patches"),
+            grading_dir=str(tmp_path / "grading"),
+            manifest_path=str(tmp_path / "benchmark_manifest.lock"),
+            scenario_families_dir=str(tmp_path / "scenario_families"),
+            verifiers_dir=str(tmp_path / "verifiers"),
+            verifier_data_dir=str(tmp_path / "verifier_data"),
+        ),
+        grading=GradingConfig(grader_image_tag="codex-long-grader", phase2_default_timeout=120, phase3_timeout=300),
+        execution=ExecutionConfig(swe_bench_timeout=7200, codex_long_timeout=9000, health_check_retries=3, health_check_delay=0.0),
+        codex=CodexInstallConfig(
+            binary_path="/usr/local/bin/codex",
+            node_modules_path="/usr/local/lib/node_modules/@openai/codex",
+            node_binary_path="/usr/local/bin/node",
+        ),
+    )
+
+
+def _codex_long_task(
+    *,
+    dispatch_decision: str = "proceed",
+    attempt: int = 1,
+    regrade_snapshot_ref: str | None = None,
+) -> TaskSpec:
+    return TaskSpec(
+        track="codex_long",
+        pool_or_split="train_long",
+        scenario_id="family-a/v1",
+        model_id="qwen3.5-27b",
+        harness="codex",
+        seed=1,
+        family_id="family-a",
+        variant_id="v1",
+        image_digest="sha256:image",
+        scenario_type="feature_evolution",
+        dispatch_decision=dispatch_decision,
+        attempt=attempt,
+        regrade_snapshot_ref=regrade_snapshot_ref,
+        timeout_seconds=9000,
+    )
+
+
+class _Response:
+    def __init__(self, status: int, payload: dict | None = None) -> None:
+        self.status = status
+        self._payload = payload or {}
+
+    def json(self) -> dict:
+        return self._payload
+
+
+@dataclass
+class _LatencyCapture:
+    events: list[str]
+
+    async def snapshot_before(self, task_id: str) -> None:
+        self.events.append(f"before:{task_id}")
+
+    async def snapshot_after(self, task_id: str) -> None:
+        self.events.append(f"after:{task_id}")
+
+
+class _PoolManager:
+    def __init__(self, *, claim_result: bool = True) -> None:
+        self.claim_result = claim_result
+        self.claim_calls: list[dict] = []
+        self.finish_calls: list[dict] = []
+
+    def claim_run(self, **kwargs):
+        self.claim_calls.append(kwargs)
+        return self.claim_result
+
+    def finish_run(self, **kwargs):
+        self.finish_calls.append(kwargs)
+
+
+class _ManifestState:
+    def __init__(self, versions: list[int]) -> None:
+        self._versions = list(versions)
+        self._index = 0
+        self.manifest: dict = {}
+        self.manifest_version = 0
+        self.grader_image_ref = ""
+
+    def reload(self) -> None:
+        version = self._versions[min(self._index, len(self._versions) - 1)]
+        self.manifest = {"manifest_version": version}
+        self.manifest_version = version
+        self.grader_image_ref = f"codex-long-grader@sha256:grader-{version}"
+        self._index += 1
+
+
+def _hooks(
+    events: list[str],
+    *,
+    verify_pre_run=None,
+    verify_pre_grading=None,
+    docker_image_exists=None,
+) -> OrchestratorHooks:
+    latency = _LatencyCapture(events)
+
+    async def setup_codex_long_container(task: TaskSpec, manifest: dict, config: OrchestratorConfig) -> ContainerContext:
+        events.append(f"setup:{manifest['manifest_version']}")
+        return ContainerContext(
+            container_id="container-1",
+            container_name="container-1",
+            workspace_path="/workspace",
+            track="codex_long",
+            family_id=task.family_id,
+            variant_id=task.variant_id,
+        )
+
+    async def setup_swe_bench_container(task: TaskSpec, config: OrchestratorConfig) -> ContainerContext:
+        raise AssertionError("SWE-bench path not expected in these tests")
+
+    async def invoke_codex(container: ContainerContext, task: TaskSpec, output_dir: str) -> CodexResult:
+        events.append("invoke")
+        return CodexResult(
+            trajectory_path=f"{output_dir}/trajectories/run.jsonl",
+            exit_code=0,
+            wall_time_seconds=12.5,
+            timed_out=False,
+            stderr="",
+        )
+
+    async def extract_swe_bench_patch(container: ContainerContext, output_dir: str, task: TaskSpec):
+        raise AssertionError("SWE-bench path not expected in these tests")
+
+    async def teardown_swe_bench_container(container: ContainerContext) -> None:
+        raise AssertionError("SWE-bench path not expected in these tests")
+
+    async def drive_swe_bench_eval(instance_id: str, patch_path: str, output_dir: str) -> str:
+        raise AssertionError("SWE-bench path not expected in these tests")
+
+    async def phase1_snapshot(container: ContainerContext, run_id: str) -> str:
+        events.append(f"snapshot:{run_id}")
+        return "snapshot-ref"
+
+    def load_family_spec(family_id: str) -> dict:
+        events.append(f"family-spec:{family_id}")
+        return {"grading_invariant": {"functional_checks": []}}
+
+    async def phase2(snapshot_ref: str, task: TaskSpec, family_spec: dict, grading_dir: str) -> None:
+        events.append(f"phase2:{snapshot_ref}")
+
+    async def phase3(snapshot_ref: str, task: TaskSpec, grading_dir: str, grader_image_ref: str) -> dict:
+        events.append(f"phase3:{grader_image_ref}")
+        return {"pass": True, "milestones": {"m1": True}}
+
+    async def cleanup_grading(grading_dir: str, snapshot_ref: str, retain_snapshot: bool) -> None:
+        events.append(f"cleanup:{retain_snapshot}")
+
+    async def docker_rm(container_id: str, force: bool) -> None:
+        events.append(f"rm:{container_id}:{force}")
+
+    async def flush(host: str, port: int) -> None:
+        events.append(f"flush:{host}:{port}")
+
+    async def check(host: str, port: int, expected_model: str, **kwargs) -> None:
+        events.append(f"health:{expected_model}")
+
+    def pre_run(task: TaskSpec, manifest: dict) -> None:
+        events.append(f"pre-run:{manifest['manifest_version']}")
+        if verify_pre_run is not None:
+            verify_pre_run(task, manifest)
+
+    def pre_grading(task: TaskSpec, manifest: dict, grader_image_ref: str) -> None:
+        events.append(f"pre-grade:{manifest['manifest_version']}")
+        if verify_pre_grading is not None:
+            verify_pre_grading(task, manifest, grader_image_ref)
+
+    async def image_exists(snapshot_ref: str) -> bool:
+        events.append(f"image-exists:{snapshot_ref}")
+        if docker_image_exists is not None:
+            return await docker_image_exists(snapshot_ref)
+        return True
+
+    return OrchestratorHooks(
+        latency_capture=latency,
+        setup_swe_bench_container=setup_swe_bench_container,
+        setup_codex_long_container=setup_codex_long_container,
+        invoke_codex=invoke_codex,
+        extract_swe_bench_patch=extract_swe_bench_patch,
+        teardown_swe_bench_container=teardown_swe_bench_container,
+        drive_swe_bench_eval=drive_swe_bench_eval,
+        phase1_snapshot=phase1_snapshot,
+        load_family_spec=load_family_spec,
+        phase2_functional_checks=phase2,
+        phase3_integrity_verification=phase3,
+        cleanup_grading=cleanup_grading,
+        docker_rm=docker_rm,
+        docker_image_exists=image_exists,
+        health_check=check,
+        flush_prefix_cache=flush,
+        verify_pre_run_hashes=pre_run,
+        verify_pre_grading_hashes=pre_grading,
+    )
+
+
+def test_generate_codex_config_uses_registry_context_window(tmp_path: Path) -> None:
+    task = _codex_long_task()
+    config_path = generate_codex_config(
+        task,
+        proxy_host="172.30.0.1",
+        proxy_port=8001,
+        model_registry={"qwen3.5-27b": {"max_model_len": 65536}},
+        config_root=tmp_path,
+    )
+
+    content = config_path.read_text(encoding="utf-8")
+    assert config_path == tmp_path / "family-a_v1" / "config.toml"
+    assert 'base_url               = "http://172.30.0.1:8001/v1"' in content
+    assert "model_context_window           = 65536" in content
+    assert "model_auto_compact_token_limit = 58982" in content
+    assert 'wire_api               = "responses"' in content
+
+
+def test_health_check_retries_until_expected_model_present() -> None:
+    calls: list[str] = []
+    responses = iter(
+        [
+            _Response(500),
+            _Response(200),
+            _Response(200, {"data": [{"id": "wrong-model"}]}),
+            _Response(200),
+            _Response(200, {"data": [{"id": "qwen3.5-27b"}]}),
+        ]
+    )
+
+    async def fake_get(url: str) -> _Response:
+        calls.append(url)
+        return next(responses)
+
+    asyncio.run(
+        health_check(
+            "127.0.0.1",
+            8000,
+            "qwen3.5-27b",
+            max_retries=3,
+            retry_delay_seconds=0.0,
+            http_get=fake_get,
+        )
+    )
+
+    assert calls == [
+        "http://127.0.0.1:8000/health",
+        "http://127.0.0.1:8000/health",
+        "http://127.0.0.1:8000/v1/models",
+        "http://127.0.0.1:8000/health",
+        "http://127.0.0.1:8000/v1/models",
+    ]
+
+
+def test_flush_prefix_cache_surfaces_dev_mode_misconfig() -> None:
+    async def fake_post(url: str) -> _Response:
+        return _Response(405)
+
+    with pytest.raises(ConfigError, match="VLLM_SERVER_DEV_MODE"):
+        asyncio.run(flush_prefix_cache("127.0.0.1", 8000, http_post=fake_post))
+
+
+def test_verify_pre_grading_hashes_detects_verifier_drift(tmp_path: Path) -> None:
+    verifiers_dir = tmp_path / "verifiers" / "family-a"
+    verifier_data_dir = tmp_path / "verifier_data" / "family-a"
+    milestones_dir = verifiers_dir / "milestones"
+    milestones_dir.mkdir(parents=True)
+    verifier_data_dir.mkdir(parents=True)
+
+    verify_path = verifiers_dir / "verify.sh"
+    verify_path.write_text("echo verify\n", encoding="utf-8")
+    milestone_path = milestones_dir / "m1.sh"
+    milestone_path.write_text("echo milestone\n", encoding="utf-8")
+    (verifier_data_dir / "golden.txt").write_text("golden\n", encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "grader_image_digest": "sha256:grader",
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("echo verify\n"),
+                "family_spec_hash": _sha("family"),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_tree(verifier_data_dir),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    verify_path.write_text("echo drifted\n", encoding="utf-8")
+    task = _codex_long_task()
+
+    with pytest.raises(ManifestMismatchError, match="Verifier hash mismatch") as exc_info:
+        verify_pre_grading_hashes(
+            task,
+            manifest,
+            "sha256:grader",
+            image_digest_resolver=lambda image_ref: image_ref,
+            verifiers_dir=tmp_path / "verifiers",
+            verifier_data_dir=tmp_path / "verifier_data",
+        )
+
+    assert exc_info.value.affected_artifact == "verifier"
+
+
+def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> None:
+    events: list[str] = []
+    config = _config(tmp_path)
+    hooks = _hooks(events)
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([7, 9])
+
+    result = asyncio.run(orchestrator.execute_task(_codex_long_task(), pool_manager, manifest_state, config))
+
+    assert result.outcome == "resolved"
+    assert pool_manager.claim_calls[0]["launch_manifest_ver"] == 7
+    assert pool_manager.finish_calls[0]["grading_manifest_ver"] == 9
+    assert pool_manager.finish_calls[0]["snapshot_image_ref"] == "snapshot-ref"
+    assert pool_manager.finish_calls[0]["codex_long_pass"] is True
+    assert pool_manager.finish_calls[0]["milestone_results"] == {"m1": True}
+    assert events == [
+        "flush:127.0.0.1:8000",
+        "health:qwen3.5-27b",
+        "pre-run:7",
+        "before:family-a/v1",
+        "setup:7",
+        "invoke",
+        "snapshot:family-a/v1/qwen3.5-27b/codex/seed1/attempt1",
+        "pre-grade:9",
+        "family-spec:family-a",
+        "phase2:snapshot-ref",
+        "phase3:codex-long-grader@sha256:grader-9",
+        "cleanup:True",
+        "after:family-a/v1",
+    ]
+
+
+def test_execute_task_raises_duplicate_claim_before_running(tmp_path: Path) -> None:
+    events: list[str] = []
+    config = _config(tmp_path)
+    hooks = _hooks(events)
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager(claim_result=False)
+    manifest_state = _ManifestState([3])
+
+    with pytest.raises(DuplicateClaimError):
+        asyncio.run(orchestrator.execute_task(_codex_long_task(), pool_manager, manifest_state, config))
+
+    assert pool_manager.finish_calls == []
+    assert events == [
+        "flush:127.0.0.1:8000",
+        "health:qwen3.5-27b",
+        "pre-run:3",
+    ]
+
+
+def test_execute_task_preserves_snapshot_on_manifest_mismatch(tmp_path: Path) -> None:
+    events: list[str] = []
+    config = _config(tmp_path)
+
+    def raise_mismatch(task: TaskSpec, manifest: dict, grader_image_ref: str) -> None:
+        raise ManifestMismatchError("verifier drift", affected_artifact="verifier")
+
+    hooks = _hooks(events, verify_pre_grading=raise_mismatch)
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([3, 5])
+
+    with pytest.raises(ManifestMismatchError):
+        asyncio.run(orchestrator.execute_task(_codex_long_task(), pool_manager, manifest_state, config))
+
+    assert pool_manager.finish_calls[0]["outcome"] == "crash"
+    assert pool_manager.finish_calls[0]["grading_manifest_ver"] == 3
+    assert pool_manager.finish_calls[0]["snapshot_image_ref"] == "snapshot-ref"
+    assert events[-1] == "after:family-a/v1"
+
+
+def test_execute_task_regrade_path_uses_retained_snapshot(tmp_path: Path) -> None:
+    events: list[str] = []
+    config = _config(tmp_path)
+    hooks = _hooks(events)
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([11])
+
+    result = asyncio.run(
+        orchestrator.execute_task(
+            _codex_long_task(dispatch_decision="regrade_needed", attempt=2, regrade_snapshot_ref="snapshot-ref"),
+            pool_manager,
+            manifest_state,
+            config,
+        )
+    )
+
+    assert result.outcome == "resolved"
+    assert pool_manager.claim_calls[0]["launch_manifest_ver"] is None
+    assert pool_manager.finish_calls[0]["grading_manifest_ver"] == 11
+    assert pool_manager.finish_calls[0]["snapshot_image_ref"] == "snapshot-ref"
+    assert events == [
+        "image-exists:snapshot-ref",
+        "pre-grade:11",
+        "family-spec:family-a",
+        "phase2:snapshot-ref",
+        "phase3:codex-long-grader@sha256:grader-11",
+        "cleanup:True",
+    ]
