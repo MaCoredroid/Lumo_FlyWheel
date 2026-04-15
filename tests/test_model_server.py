@@ -369,6 +369,7 @@ models:
 
     monkeypatch.setattr(server, "_ensure_image_present", lambda: None)
     monkeypatch.setattr(server, "stop", lambda missing_ok=False: None)
+    monkeypatch.setattr(server, "_recover_host_memory", lambda: None)
     monkeypatch.setattr(server, "_wait_vram_free", lambda timeout_s=120, required_utilization=None: None)
     monkeypatch.setattr(
         server,
@@ -413,6 +414,7 @@ models:
     monkeypatch.setattr(server, "_ensure_image_present", lambda: None)
     monkeypatch.setattr(server, "_reset_log", lambda model_id: events.append(f"reset:{model_id}"))
     monkeypatch.setattr(server, "stop", lambda missing_ok=False: events.append(f"stop:{missing_ok}"))
+    monkeypatch.setattr(server, "_recover_host_memory", lambda: events.append("recover"))
     monkeypatch.setattr(
         server,
         "_wait_vram_free",
@@ -430,7 +432,7 @@ models:
 
     server.start("qwen3.5-27b")
 
-    assert events[:4] == ["reset:qwen3.5-27b", "stop:True", "wait:120:0.9", "run"]
+    assert events[:5] == ["reset:qwen3.5-27b", "stop:True", "recover", "wait:120:0.9", "run"]
 
 
 def test_start_uses_valid_initial_kv_cache_dtype_for_fp8_checkpoints(
@@ -462,6 +464,7 @@ models:
     monkeypatch.setattr(server, "_ensure_image_present", lambda: None)
     monkeypatch.setattr(server, "_reset_log", lambda model_id: None)
     monkeypatch.setattr(server, "stop", lambda missing_ok=False: None)
+    monkeypatch.setattr(server, "_recover_host_memory", lambda: None)
     monkeypatch.setattr(server, "_wait_vram_free", lambda timeout_s=120, required_utilization=None: None)
     monkeypatch.setattr(
         server,
@@ -513,6 +516,7 @@ models:
     monkeypatch.setattr(server, "_ensure_image_present", lambda: None)
     monkeypatch.setattr(server, "_reset_log", lambda model_id: None)
     monkeypatch.setattr(server, "stop", lambda missing_ok=False: None)
+    monkeypatch.setattr(server, "_recover_host_memory", lambda: None)
     monkeypatch.setattr(
         server,
         "_wait_vram_free",
@@ -547,6 +551,111 @@ models:
 
     assert waits == [0.9, 0.88]
     assert launch_targets == [0.9, 0.88]
+
+
+def test_stop_runs_host_memory_recovery_when_container_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    events: list[str] = []
+
+    monkeypatch.setattr(
+        server,
+        "_run",
+        lambda cmd, capture_output=True, check=True: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+    monkeypatch.setattr(server, "_recover_host_memory", lambda: events.append("recover"))
+
+    server.stop(missing_ok=True)
+
+    assert events == ["recover"]
+
+
+def test_recover_host_memory_uses_configured_sudo_password(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    seen: list[list[str]] = []
+
+    monkeypatch.setenv("LUMO_SUDO_PASSWORD", "secret")
+
+    def fake_subprocess_run(
+        cmd: list[str], capture_output: bool, text: bool, check: bool, env: dict[str, str]
+    ) -> subprocess.CompletedProcess[str]:
+        seen.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.subprocess.run", fake_subprocess_run)
+
+    server._recover_host_memory()
+
+    assert seen
+    assert seen[0][:2] == ["bash", "-lc"]
+    assert "sudo -S bash -lc" in seen[0][2]
+
+
+def test_recover_host_memory_ignores_missing_sudo_credentials(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+
+    monkeypatch.delenv("LUMO_SUDO_PASSWORD", raising=False)
+    monkeypatch.setattr(
+        "lumo_flywheel_serving.model_server.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 1, stdout="", stderr="sudo: a password is required\n"
+        ),
+    )
+
+    server._recover_host_memory()
 
 
 def test_reset_log_uses_docker_fallback_for_root_owned_logs(

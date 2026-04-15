@@ -13,6 +13,16 @@ The project-local Codex provider config lives in `.codex/config.toml` and points
 
 The serving stack now builds a repo-owned image tagged `lumo-flywheel-vllm:26.01-py3-v0.19.0` from [docker/Dockerfile.nvidia-vllm](/home/mark/shared/lumoFlyWheel/docker/Dockerfile.nvidia-vllm), which is derived from the required NVIDIA base image `nvcr.io/nvidia/pytorch:26.01-py3`.
 
+## GB10 host cleanup
+
+`ModelServer.start()` and `ModelServer.stop()` now run the proven GB10 host-memory recovery sequence automatically before startup and after teardown:
+
+`sync; echo 3 > /proc/sys/vm/drop_caches; swapoff -a || true; swapon -a || true`
+
+By default the launcher tries `sudo -n` for that cleanup. If you want it to authenticate non-interactively in a fresh shell, export `LUMO_SUDO_PASSWORD` for the session before running `lumoserve` or `make smoke`.
+
+Set `LUMO_HOST_MEMORY_RECOVERY=0` to disable the automatic cleanup hook.
+
 ## Current machine status
 
 The launcher now auto-retries the Qwen 27B startup path with these machine-specific fallbacks when the GB10 host rejects the spec defaults:

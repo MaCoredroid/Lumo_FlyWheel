@@ -24,6 +24,7 @@ UNSUPPORTED_NVIDIA_SMI_GRACE_S = 20
 LOW_FREE_MEMORY_GRACE_RETRIES = 2
 LOW_FREE_MEMORY_GRACE_SLEEP_S = 45
 CUDA_MEMORY_RECOVERY_MARGIN_GIB = 1.0
+HOST_MEMORY_RECOVERY_COMMAND = "sync; echo 3 > /proc/sys/vm/drop_caches; swapoff -a || true; swapon -a || true"
 GPU_MEMORY_ERROR_RE = re.compile(
     r"Free memory on device cuda:\d+ \((?P<free>[0-9.]+)/(?P<total>[0-9.]+) GiB\)"
 )
@@ -60,6 +61,7 @@ class ModelServer:
         config = self.registry[model_id]
         self._reset_log(model_id)
         self.stop(missing_ok=True)
+        self._recover_host_memory()
         # A prior stop can return before GB10 unified-memory pressure fully drains.
         # Wait before the first launch attempt so fresh starts after a recent stop
         # do not immediately spiral through the low-VRAM fallback ladder.
@@ -134,12 +136,14 @@ class ModelServer:
         )
         if self.container_name not in result.stdout.splitlines():
             if missing_ok:
+                self._recover_host_memory()
                 return
             raise RuntimeError(f"Container {self.container_name} is not present")
 
         self._run(["docker", "stop", "-t", "30", self.container_name], capture_output=False, check=False)
         self._run(["docker", "rm", "-f", self.container_name], capture_output=False, check=False)
         self.current_model = None
+        self._recover_host_memory()
 
     def flush_prefix_cache(self) -> None:
         response = requests.post(
@@ -186,6 +190,47 @@ class ModelServer:
     @staticmethod
     def _request_headers() -> dict[str, str]:
         return {"Authorization": f"Bearer {ModelServer._api_key()}"}
+
+    def _recover_host_memory(self) -> None:
+        if os.environ.get("LUMO_HOST_MEMORY_RECOVERY", "1").lower() in {"0", "false", "no"}:
+            return
+
+        password = os.environ.get("LUMO_SUDO_PASSWORD")
+        if password:
+            command = (
+                f"printf '%s\\n' {shlex.quote(password)} | sudo -S "
+                + shlex.join(["bash", "-lc", HOST_MEMORY_RECOVERY_COMMAND])
+            )
+            result = subprocess.run(
+                ["bash", "-lc", command],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=os.environ.copy(),
+            )
+        else:
+            result = subprocess.run(
+                ["sudo", "-n", "bash", "-lc", HOST_MEMORY_RECOVERY_COMMAND],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=os.environ.copy(),
+            )
+
+        # Recovery is a best-effort machine hygiene step. Keep startup/teardown
+        # working when sudo is unavailable, but surface unexpected failures.
+        if result.returncode != 0:
+            stderr = (result.stderr or "").lower()
+            if "a password is required" in stderr or "password was provided" in stderr:
+                return
+            if "sudo:" in stderr and "permission" in stderr:
+                return
+            if "a terminal is required" in stderr:
+                return
+            raise RuntimeError(
+                "Host memory recovery failed before/after vLLM lifecycle event:\n"
+                f"{result.stdout}{result.stderr}"
+            )
 
     def _append_log_text(self, model_id: str, text: str) -> None:
         log_path = self.logs_path(model_id)
