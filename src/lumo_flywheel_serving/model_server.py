@@ -470,18 +470,37 @@ class ModelServer:
                     f"{log_path_text}"
                 )
             try:
-                response = requests.get(f"http://127.0.0.1:{self.port}/health", timeout=5)
+                response = requests.get(
+                    f"http://127.0.0.1:{self.port}/health",
+                    headers=self._request_headers(),
+                    timeout=5,
+                )
                 if response.status_code == 200:
+                    served_model_ids = self._served_model_ids()
+                    if model_id not in served_model_ids:
+                        time.sleep(5)
+                        continue
                     self._append_log_text(
                         model_id,
                         f"[VLLM-READY] cuda_graph_capture_time={time.time() - start:.1f}s\n"
-                        f"[VLLM-READY] /health 200 OK at {datetime.now(UTC).isoformat()}\n",
+                        f"[VLLM-READY] /health 200 OK at {datetime.now(UTC).isoformat()}\n"
+                        f"[VLLM-READY] served_models={','.join(served_model_ids)}\n",
                     )
                     return
-            except requests.RequestException:
+            except (requests.RequestException, ValueError, TypeError):
                 pass
             time.sleep(5)
         raise TimeoutError(f"vLLM not ready within {timeout_s}s")
+
+    def _served_model_ids(self) -> list[str]:
+        payload = self.models().json()
+        data = payload.get("data")
+        if not isinstance(data, list):
+            raise ValueError("vLLM /v1/models payload missing data list")
+        model_ids = [item["id"] for item in data if isinstance(item, dict) and isinstance(item.get("id"), str)]
+        if not model_ids:
+            raise ValueError("vLLM /v1/models returned no served model ids")
+        return model_ids
 
     def _cuda_mem_get_info_gib(self) -> tuple[float, float] | None:
         probe = self._run(
@@ -515,6 +534,7 @@ class ModelServer:
 
     def _wait_vram_free(self, timeout_s: int = 120, required_utilization: float | None = None) -> None:
         deadline = time.time() + timeout_s
+        last_snapshot: tuple[float, float] | None = None
         while time.time() < deadline:
             remaining_s = max(0.0, deadline - time.time())
             result = self._run(
@@ -529,6 +549,7 @@ class ModelServer:
                 lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
                 if lines == ["[Not Supported]"]:
                     memory_snapshot = self._cuda_mem_get_info_gib()
+                    last_snapshot = memory_snapshot
                     if memory_snapshot is None:
                         time.sleep(min(remaining_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
                         continue
@@ -539,6 +560,7 @@ class ModelServer:
                 pids = [line for line in lines if line != "[Not Supported]"]
                 if not pids:
                     memory_snapshot = self._cuda_mem_get_info_gib()
+                    last_snapshot = memory_snapshot
                     if memory_snapshot is None:
                         return
                     if self._has_required_free_memory(memory_snapshot, required_utilization):
@@ -547,6 +569,7 @@ class ModelServer:
                     continue
             else:
                 memory_snapshot = self._cuda_mem_get_info_gib()
+                last_snapshot = memory_snapshot
                 if memory_snapshot is None:
                     time.sleep(min(remaining_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
                     continue
@@ -555,6 +578,14 @@ class ModelServer:
                 time.sleep(min(remaining_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
                 continue
             time.sleep(2)
+        if last_snapshot is not None and not self._has_required_free_memory(last_snapshot, MIN_GPU_MEMORY_UTILIZATION):
+            free_gib, total_gib = last_snapshot or (0.0, 0.0)
+            minimum_required_gib = (total_gib * MIN_GPU_MEMORY_UTILIZATION) + CUDA_MEMORY_RECOVERY_MARGIN_GIB
+            raise RuntimeError(
+                "Timed out waiting for minimum free VRAM before vLLM launch: "
+                f"{free_gib:.2f}/{total_gib:.2f} GiB free; need at least {minimum_required_gib:.2f} GiB "
+                f"for gpu_memory_utilization>={MIN_GPU_MEMORY_UTILIZATION:.2f}."
+            )
 
     @staticmethod
     def _has_required_free_memory(

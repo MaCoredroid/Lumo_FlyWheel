@@ -281,6 +281,44 @@ models:
     assert sleeps == [5]
 
 
+def test_wait_vram_free_fails_fast_when_host_never_reaches_minimum_floor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    now = 0.0
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, stdout="[Not Supported]\n", stderr="")
+
+    def fake_sleep(seconds: float) -> None:
+        nonlocal now
+        now += seconds
+
+    monkeypatch.setattr(server, "_run", fake_run)
+    monkeypatch.setattr(server, "_cuda_mem_get_info_gib", lambda: (10.89, 117.51))
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", fake_sleep)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.time", lambda: now)
+
+    with pytest.raises(RuntimeError, match="Timed out waiting for minimum free VRAM"):
+        server._wait_vram_free(timeout_s=40, required_utilization=0.9)
+
+
 def test_start_resets_previous_log_before_retry_cycle(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(
@@ -474,6 +512,138 @@ models:
     assert response.json()["data"][0]["id"] == "qwen3.5-27b"
     assert captured["url"] == "http://127.0.0.1:8000/v1/models"
     assert captured["headers"] == {"Authorization": "Bearer test-token"}
+
+
+def test_wait_ready_requires_target_model_in_v1_models(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    now = 0.0
+    sleeps: list[float] = []
+    log_lines: list[str] = []
+    responses = iter(
+        [
+            {"health": 200, "models": {"data": [{"id": "bootstrap"}]}},
+            {"health": 200, "models": {"data": [{"id": "qwen3.5-27b"}]}},
+        ]
+    )
+
+    class Response:
+        def __init__(self, status_code: int = 200, payload: dict | None = None) -> None:
+            self.status_code = status_code
+            self._payload = payload or {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return self._payload
+
+    current = {"health": 200, "models": {"data": [{"id": "bootstrap"}]}}
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, stdout="running\n", stderr="")
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> Response:
+        nonlocal current
+        if url.endswith("/health"):
+            current = next(responses)
+            return Response(status_code=current["health"])
+        if url.endswith("/v1/models"):
+            return Response(payload=current["models"])
+        raise AssertionError(url)
+
+    def fake_sleep(seconds: float) -> None:
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    monkeypatch.setattr(server, "_run", fake_run)
+    monkeypatch.setattr(server, "_append_log_text", lambda model_id, text: log_lines.append(text))
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.requests.get", fake_get)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", fake_sleep)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.time", lambda: now)
+
+    server._wait_ready("qwen3.5-27b", timeout_s=15)
+
+    assert sleeps == [5]
+    assert "served_models=qwen3.5-27b" in log_lines[0]
+
+
+def test_wait_ready_times_out_when_target_model_never_appears(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    now = 0.0
+
+    class Response:
+        def __init__(self, status_code: int = 200, payload: dict | None = None) -> None:
+            self.status_code = status_code
+            self._payload = payload or {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return self._payload
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, stdout="running\n", stderr="")
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> Response:
+        if url.endswith("/health"):
+            return Response(status_code=200)
+        if url.endswith("/v1/models"):
+            return Response(payload={"data": [{"id": "wrong-model"}]})
+        raise AssertionError(url)
+
+    def fake_sleep(seconds: float) -> None:
+        nonlocal now
+        now += seconds
+
+    monkeypatch.setattr(server, "_run", fake_run)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.requests.get", fake_get)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", fake_sleep)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.time", lambda: now)
+
+    with pytest.raises(TimeoutError, match="not ready within 10s"):
+        server._wait_ready("qwen3.5-27b", timeout_s=10)
 
 
 def test_defaults_pin_repo_owned_nvidia_image() -> None:
