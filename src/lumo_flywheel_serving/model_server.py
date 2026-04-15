@@ -12,7 +12,10 @@ import requests
 
 from .registry import ModelConfig, load_registry
 
-DEFAULT_VLLM_IMAGE = "vllm/vllm-openai@sha256:d9a5c1c1614c959fde8d2a4d68449db184572528a6055afdd0caf1e66fb51504"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_VLLM_BASE_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
+DEFAULT_VLLM_IMAGE = "lumo-flywheel-vllm:26.01-py3-v0.19.0"
+DEFAULT_VLLM_DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
 
 
 class ModelServer:
@@ -42,6 +45,7 @@ class ModelServer:
 
     def start(self, model_id: str, enable_request_logging: bool = False) -> None:
         self.ensure_runtime_scaffolding()
+        self._ensure_image_present()
         config = self.registry[model_id]
         self.stop(missing_ok=True)
         kv_cache_dtype = config.kv_cache_dtype
@@ -202,6 +206,10 @@ class ModelServer:
             "host",
             "--ipc",
             "host",
+            "--ulimit",
+            "memlock=-1",
+            "--ulimit",
+            "stack=67108864",
             "--gpus",
             "all",
             "-e",
@@ -226,6 +234,17 @@ class ModelServer:
             "-lc",
             shell_cmd,
         ]
+
+    def _ensure_image_present(self) -> None:
+        inspect = self._run(["docker", "image", "inspect", self.image], check=False)
+        if inspect.returncode == 0:
+            return
+        if self.image != DEFAULT_VLLM_IMAGE:
+            return
+        raise RuntimeError(
+            f"Docker image {self.image!r} is not present locally. "
+            "Build it first with `lumoserve build-image` or `make bootstrap-runtime`."
+        )
 
     def _header_script(
         self,

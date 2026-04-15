@@ -3,12 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import requests
 
 from .metrics import parse_prometheus_text, resolve_metric_schema
-from .model_server import DEFAULT_VLLM_IMAGE, ModelServer
+from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .registry import load_registry
 
 
@@ -41,6 +42,20 @@ def _prepare_hf_runtime() -> None:
 def cmd_bootstrap_runtime(args: argparse.Namespace) -> int:
     for raw_path in (args.models_root, args.logs_root, args.triton_cache_root):
         Path(raw_path).mkdir(parents=True, exist_ok=True)
+    dockerfile = Path(args.dockerfile)
+    subprocess.run(
+        ["docker", "build", "-t", args.image, "-f", str(dockerfile), str(REPO_ROOT)],
+        check=True,
+    )
+    return 0
+
+
+def cmd_build_image(args: argparse.Namespace) -> int:
+    dockerfile = Path(args.dockerfile)
+    subprocess.run(
+        ["docker", "build", "-t", args.image, "-f", str(dockerfile), str(REPO_ROOT)],
+        check=True,
+    )
     return 0
 
 
@@ -183,6 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--registry", default="model_registry.yaml")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--image", default=DEFAULT_VLLM_IMAGE)
+    parser.add_argument("--dockerfile", default=str(DEFAULT_VLLM_DOCKERFILE))
     parser.add_argument("--container-name", default="lumo-vllm")
     parser.add_argument("--logs-root", default="/logs")
     parser.add_argument("--triton-cache-root", default="/tmp/triton_cache")
@@ -195,6 +211,9 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap.add_argument("--logs-root", default="/logs")
     bootstrap.add_argument("--triton-cache-root", default="/tmp/triton_cache")
     bootstrap.set_defaults(func=cmd_bootstrap_runtime)
+
+    build_image = subparsers.add_parser("build-image")
+    build_image.set_defaults(func=cmd_build_image)
 
     download = subparsers.add_parser("download-model")
     download.add_argument("model_id")

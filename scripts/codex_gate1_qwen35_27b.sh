@@ -17,5 +17,5 @@ python3 -m lumo_flywheel_serving.cli \
   --enable-request-logging
 
 codex exec --yolo --json \
-  "Inspect this repository with at least four sequential shell turns. Use exactly one shell call per turn in this order: \`pwd\`, \`ls\`, \`sed -n '1,40p' README.md\`, \`git status --short --branch\`. After the fourth tool result, answer with a single sentence summary of the repo and whether the working tree is clean." \
+  "Inspect this repository with exactly five sequential shell turns. Use exactly one shell call per turn in this order: \`pwd\`, \`ls\`, \`sed -n '1,40p' README.md\`, \`git status --short --branch\`, \`wc -l README.md\`. After the fifth tool result, answer with a single sentence summary of the repo and whether the working tree is clean." \
   | tee /logs/codex_gate1_qwen3.5-27b.jsonl

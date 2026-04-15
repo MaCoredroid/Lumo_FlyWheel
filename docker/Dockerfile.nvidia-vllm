@@ -1,0 +1,28 @@
+FROM nvcr.io/nvidia/pytorch:26.01-py3
+
+ARG VLLM_VERSION=0.19.0
+ARG VLLM_CUDA_WHEEL_URL=""
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --upgrade pip setuptools wheel \
+    && wheel_url="${VLLM_CUDA_WHEEL_URL:-https://github.com/vllm-project/vllm/releases/download/v${VLLM_VERSION}/vllm-${VLLM_VERSION}+cu130-cp38-abi3-manylinux_2_35_aarch64.whl}" \
+    && python3 -m pip install --no-cache-dir --no-deps "${wheel_url}"
+
+RUN python3 - <<'PY' > /tmp/vllm-requirements.txt
+from importlib.metadata import distribution
+
+from packaging.requirements import Requirement
+
+skip = {"torch", "torchaudio", "torchvision"}
+for raw_requirement in distribution("vllm").requires or []:
+    requirement = Requirement(raw_requirement)
+    if requirement.name.lower() in skip:
+        continue
+    print(str(requirement))
+PY
+
+RUN python3 -m pip install --no-cache-dir -r /tmp/vllm-requirements.txt \
+    && rm -f /tmp/vllm-requirements.txt

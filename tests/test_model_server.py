@@ -1,6 +1,14 @@
 from pathlib import Path
 
-from lumo_flywheel_serving.model_server import ModelServer
+import pytest
+
+from lumo_flywheel_serving.model_server import (
+    DEFAULT_VLLM_BASE_IMAGE,
+    DEFAULT_VLLM_DOCKERFILE,
+    DEFAULT_VLLM_IMAGE,
+    ModelServer,
+)
+from lumo_flywheel_serving.registry import load_registry
 
 
 def test_build_run_command_includes_required_flags(tmp_path: Path) -> None:
@@ -36,6 +44,8 @@ models:
     command = " ".join(cmd)
     assert "--network host" in command
     assert "--gpus all" in command
+    assert "--ulimit memlock=-1" in command
+    assert "--ulimit stack=67108864" in command
     assert "vllm serve /models/qwen3.5-27b-fp8" in command
     assert "--enable-prefix-caching" in command
     assert "--enable-chunked-prefill" in command
@@ -74,3 +84,27 @@ models:
     )
     command = " ".join(cmd)
     assert "--enforce-eager" in command
+
+
+def test_defaults_pin_repo_owned_nvidia_image() -> None:
+    assert DEFAULT_VLLM_BASE_IMAGE == "nvcr.io/nvidia/pytorch:26.01-py3"
+    assert DEFAULT_VLLM_IMAGE == "lumo-flywheel-vllm:26.01-py3-v0.19.0"
+    assert DEFAULT_VLLM_DOCKERFILE.name == "Dockerfile.nvidia-vllm"
+
+
+def test_registry_rejects_unresolved_placeholder_entries(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  comparison-slot:
+    hf_repo: ""
+    local_path: ""
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+    with pytest.raises(ValueError, match="missing local_path"):
+        load_registry(registry)

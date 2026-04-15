@@ -48,14 +48,5 @@ models:
     max_num_seqs: 4
     sprint0_gate: "Validate max_model_len before S2"
 
-  comparison-slot:
-    hf_repo: ""
-    local_path: ""
-    quantization: fp8
-    dtype: auto
-    kv_cache_dtype: fp8_e5m2
-    max_model_len: 131072
-    gpu_memory_utilization: 0.90
-    max_num_batched_tokens: 8192
-    max_num_seqs: 4
-    sprint0_gate: "Populate after Gates 1b and 6"
+  # comparison-slot remains intentionally absent until Sprint 0 resolves the
+  # actual fallback model after Gates 1b and 6. See LLD-01 §3.1.

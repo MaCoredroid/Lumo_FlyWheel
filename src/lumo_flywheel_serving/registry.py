@@ -24,11 +24,16 @@ class ModelConfig:
 
 
 def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
+    local_path = raw.get("local_path")
+    if not local_path:
+        raise ValueError(
+            f"Model {model_id} is missing local_path. Leave unresolved placeholders commented out until they are real models."
+        )
     return ModelConfig(
         model_id=model_id,
         hf_repo=raw.get("hf_repo", ""),
         hf_revision=raw.get("hf_revision"),
-        local_path=Path(raw["local_path"]),
+        local_path=Path(local_path),
         quantization=raw["quantization"],
         dtype=raw["dtype"],
         kv_cache_dtype=raw.get("kv_cache_dtype", "fp8_e5m2"),
