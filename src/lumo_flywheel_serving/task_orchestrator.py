@@ -15,7 +15,7 @@ from typing import Any, Awaitable, Callable, Protocol
 
 import requests
 
-from .data_pool import _find_manifest_variant, load_codex_long_manifest, sha256_file
+from .data_pool import _find_manifest_variant, load_codex_long_manifest, make_scenario_id, sha256_file
 from .registry import ModelConfig, load_registry
 from .yaml_utils import load_yaml_file
 
@@ -115,6 +115,16 @@ class TaskSpec:
             ]
             if missing:
                 raise ValueError(f"Codex-Long tasks require non-empty fields: {missing}")
+            expected_scenario_id = make_scenario_id(str(self.family_id), str(self.variant_id))
+            if self.scenario_id != expected_scenario_id:
+                raise ValueError(
+                    "Codex-Long tasks must use canonical scenario_id "
+                    f"'{expected_scenario_id}', got '{self.scenario_id}'"
+                )
+            if self.dispatch_decision != "regrade_needed" and not self.image_digest:
+                raise ValueError(
+                    "Codex-Long tasks require image_digest unless dispatch_decision='regrade_needed'"
+                )
         if self.dispatch_decision == "regrade_needed":
             if self.track != "codex_long":
                 raise ValueError("Only Codex-Long tasks may use dispatch_decision='regrade_needed'")
@@ -574,7 +584,8 @@ def verify_pre_grading_hashes(
             affected_artifact="grader_image",
         )
 
-    verifier_path = Path(verifiers_dir) / str(task.family_id) / "verify.sh"
+    family_verifier_dir = Path(verifiers_dir) / str(task.family_id)
+    verifier_path = family_verifier_dir / "verify.sh"
     actual_verifier_hash = _canonical_sha256(sha256_file(verifier_path))
     if actual_verifier_hash != _canonical_sha256(entry["verifier_hash"]):
         raise ManifestMismatchError(
@@ -584,8 +595,29 @@ def verify_pre_grading_hashes(
         )
 
     milestone_hashes = entry.get("milestone_hashes", {})
+    milestones_dir = family_verifier_dir / "milestones"
+    expected_milestone_files = {f"{milestone_id}.sh" for milestone_id in milestone_hashes}
+    actual_milestone_files = (
+        {path.name for path in milestones_dir.iterdir() if path.is_file()}
+        if milestones_dir.exists()
+        else set()
+    )
+    if actual_milestone_files != expected_milestone_files:
+        missing = sorted(expected_milestone_files - actual_milestone_files)
+        unexpected = sorted(actual_milestone_files - expected_milestone_files)
+        details: list[str] = []
+        if missing:
+            details.append(f"missing {missing}")
+        if unexpected:
+            details.append(f"unexpected {unexpected}")
+        rendered = ", ".join(details) if details else "layout mismatch"
+        raise ManifestMismatchError(
+            f"Milestone file set mismatch for {task.scenario_id}: {rendered}",
+            affected_artifact="milestone",
+        )
+
     for milestone_id, expected_hash in milestone_hashes.items():
-        milestone_path = Path(verifiers_dir) / str(task.family_id) / "milestones" / f"{milestone_id}.sh"
+        milestone_path = milestones_dir / f"{milestone_id}.sh"
         actual_hash = _canonical_sha256(sha256_file(milestone_path))
         if actual_hash != _canonical_sha256(expected_hash):
             raise ManifestMismatchError(
@@ -593,6 +625,26 @@ def verify_pre_grading_hashes(
                 f"expected {expected_hash}, got {actual_hash}",
                 affected_artifact="milestone",
             )
+
+    allowed_top_level_entries = {"verify.sh"}
+    if expected_milestone_files:
+        allowed_top_level_entries.add("milestones")
+    actual_top_level_entries = {path.name for path in family_verifier_dir.iterdir()}
+    unexpected_top_level_entries = sorted(actual_top_level_entries - allowed_top_level_entries)
+    if unexpected_top_level_entries:
+        raise ManifestMismatchError(
+            "Verifier tree contains untracked files for "
+            f"{task.scenario_id}: {unexpected_top_level_entries}",
+            affected_artifact="verifier",
+        )
+
+    unexpected_milestone_dirs = sorted(path.name for path in milestones_dir.iterdir() if path.is_dir()) if milestones_dir.exists() else []
+    if unexpected_milestone_dirs:
+        raise ManifestMismatchError(
+            "Milestones directory contains unexpected subdirectories for "
+            f"{task.scenario_id}: {unexpected_milestone_dirs}",
+            affected_artifact="milestone",
+        )
 
     verifier_data_hash = sha256_tree(Path(verifier_data_dir) / str(task.family_id))
     if verifier_data_hash != _canonical_sha256(entry["verifier_data_hash"]):

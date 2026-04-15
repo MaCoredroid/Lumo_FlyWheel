@@ -305,6 +305,37 @@ def test_flush_prefix_cache_surfaces_dev_mode_misconfig() -> None:
         asyncio.run(flush_prefix_cache("127.0.0.1", 8000, http_post=fake_post))
 
 
+def test_codex_long_task_spec_requires_canonical_scenario_id_and_image_digest() -> None:
+    with pytest.raises(ValueError, match="canonical scenario_id 'family-a/v1'"):
+        TaskSpec(
+            track="codex_long",
+            pool_or_split="train_long",
+            scenario_id="family-a-v1",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            family_id="family-a",
+            variant_id="v1",
+            image_digest="sha256:image",
+            scenario_type="feature_evolution",
+            timeout_seconds=9000,
+        )
+
+    with pytest.raises(ValueError, match="require image_digest"):
+        TaskSpec(
+            track="codex_long",
+            pool_or_split="train_long",
+            scenario_id="family-a/v1",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            family_id="family-a",
+            variant_id="v1",
+            scenario_type="feature_evolution",
+            timeout_seconds=9000,
+        )
+
+
 def test_verify_pre_grading_hashes_detects_verifier_drift(tmp_path: Path) -> None:
     verifiers_dir = tmp_path / "verifiers" / "family-a"
     verifier_data_dir = tmp_path / "verifier_data" / "family-a"
@@ -343,6 +374,55 @@ def test_verify_pre_grading_hashes_detects_verifier_drift(tmp_path: Path) -> Non
     task = _codex_long_task()
 
     with pytest.raises(ManifestMismatchError, match="Verifier hash mismatch") as exc_info:
+        verify_pre_grading_hashes(
+            task,
+            manifest,
+            "sha256:grader",
+            image_digest_resolver=lambda image_ref: image_ref,
+            verifiers_dir=tmp_path / "verifiers",
+            verifier_data_dir=tmp_path / "verifier_data",
+        )
+
+    assert exc_info.value.affected_artifact == "verifier"
+
+
+def test_verify_pre_grading_hashes_rejects_untracked_verifier_tree_files(tmp_path: Path) -> None:
+    verifiers_dir = tmp_path / "verifiers" / "family-a"
+    verifier_data_dir = tmp_path / "verifier_data" / "family-a"
+    milestones_dir = verifiers_dir / "milestones"
+    milestones_dir.mkdir(parents=True)
+    verifier_data_dir.mkdir(parents=True)
+
+    verify_path = verifiers_dir / "verify.sh"
+    verify_path.write_text("echo verify\n", encoding="utf-8")
+    (milestones_dir / "m1.sh").write_text("echo milestone\n", encoding="utf-8")
+    (verifier_data_dir / "golden.txt").write_text("golden\n", encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "grader_image_digest": "sha256:grader",
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("echo verify\n"),
+                "family_spec_hash": _sha("family"),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_tree(verifier_data_dir),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    (verifiers_dir / "helpers.sh").write_text("echo helper\n", encoding="utf-8")
+    task = _codex_long_task()
+
+    with pytest.raises(ManifestMismatchError, match="untracked files") as exc_info:
         verify_pre_grading_hashes(
             task,
             manifest,
