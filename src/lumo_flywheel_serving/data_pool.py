@@ -1286,6 +1286,8 @@ class DataPoolManager:
         if outcome not in {"resolved", "failed", "no_patch", "timeout", "crash"}:
             raise ValueError(f"Invalid outcome '{outcome}'")
         if track == "codex_long":
+            manifest_entry = self._get_manifest_entry_for_scenario(scenario_id)
+            expected_milestone_ids = set(manifest_entry["milestone_hashes"])
             if grading_manifest_ver is None:
                 raise IntegrityError("Codex-Long finish_run() requires grading_manifest_ver from benchmark_manifest.lock")
             if grading_manifest_ver != self.manifest["manifest_version"]:
@@ -1324,6 +1326,20 @@ class DataPoolManager:
                     "verify_result.json for non-crash outcomes"
                 )
             if isinstance(milestone_results, dict):
+                actual_milestone_ids = set(milestone_results)
+                if actual_milestone_ids != expected_milestone_ids:
+                    details: list[str] = []
+                    missing = sorted(expected_milestone_ids - actual_milestone_ids)
+                    unexpected = sorted(actual_milestone_ids - expected_milestone_ids)
+                    if missing:
+                        details.append(f"missing {missing}")
+                    if unexpected:
+                        details.append(f"unexpected {unexpected}")
+                    rendered = ", ".join(details) if details else "mismatch"
+                    raise IntegrityError(
+                        "Codex-Long finish_run() milestone_results must match manifest-locked milestone ids "
+                        f"for '{scenario_id}': {rendered}"
+                    )
                 for milestone_id, achieved in milestone_results.items():
                     if not isinstance(milestone_id, str) or not milestone_id.strip():
                         raise IntegrityError(

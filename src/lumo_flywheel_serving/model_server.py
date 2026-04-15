@@ -529,6 +529,10 @@ class ModelServer:
         return expected
 
     @staticmethod
+    def _served_model_surface_matches(expected_model_ids: set[str], served_model_ids: list[str]) -> bool:
+        return len(served_model_ids) == len(set(served_model_ids)) and set(served_model_ids) == expected_model_ids
+
+    @staticmethod
     def _request_model_name(config: ModelConfig) -> str:
         # When LoRA is enabled, Codex targets the adapter name rather than the
         # base served model id. Smoke tests should probe that surface directly.
@@ -584,7 +588,7 @@ class ModelServer:
                 )
                 if response.status_code == 200:
                     served_model_ids = self._served_model_ids()
-                    if not expected_model_ids.issubset(set(served_model_ids)):
+                    if not self._served_model_surface_matches(expected_model_ids, served_model_ids):
                         time.sleep(5)
                         continue
                     metrics_response = self.metrics()
@@ -616,7 +620,7 @@ class ModelServer:
         try:
             self.health()
             expected_model_ids = self._expected_served_model_ids(self.registry[model_id])
-            return expected_model_ids.issubset(set(self._served_model_ids()))
+            return self._served_model_surface_matches(expected_model_ids, self._served_model_ids())
         except (requests.RequestException, ValueError, TypeError):
             return False
 

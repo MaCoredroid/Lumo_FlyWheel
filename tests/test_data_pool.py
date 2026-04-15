@@ -1298,6 +1298,71 @@ def test_finish_run_rejects_empty_milestone_results(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_finish_run_rejects_milestone_results_that_drift_from_manifest(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        scenario_id = "train-feature/v1"
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        with pytest.raises(IntegrityError, match="missing \\['m1'\\], unexpected \\['m2'\\]"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+                grading_manifest_ver=3,
+                codex_long_pass=False,
+                milestone_results={"m2": False},
+                snapshot_image_ref="snap-1",
+            )
+
+        manager.db.execute("DELETE FROM runs")
+        manager.db.connection.commit()
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        with pytest.raises(IntegrityError, match="unexpected \\['m2'\\]"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+                grading_manifest_ver=3,
+                codex_long_pass=False,
+                milestone_results={"m1": True, "m2": False},
+                snapshot_image_ref="snap-1",
+            )
+    finally:
+        manager.close()
+
+
 def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
