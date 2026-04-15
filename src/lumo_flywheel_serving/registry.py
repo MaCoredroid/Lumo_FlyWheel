@@ -61,6 +61,11 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
             raise ValueError(f"Model {model_id} lora_modules adapter names must be non-empty strings")
         if not str(adapter_path):
             raise ValueError(f"Model {model_id} lora_modules[{adapter_name}] must be a non-empty path")
+        if adapter_name == served_model_name:
+            raise ValueError(
+                f"Model {model_id} lora_modules adapter '{adapter_name}' collides with served_model_name "
+                f"'{served_model_name}'"
+            )
     if lora_modules and raw.get("max_lora_rank") is None:
         raise ValueError(f"Model {model_id} must define max_lora_rank when lora_modules are configured")
     return ModelConfig(
