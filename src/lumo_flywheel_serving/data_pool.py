@@ -305,7 +305,12 @@ def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
             raise IntegrityError(
                 f"benchmark_manifest.lock change_log[{index}] re_gate_required must be a boolean"
             )
-    if manifest["manifest_version"] > 1:
+    if manifest["manifest_version"] == 1:
+        if seen_change_versions:
+            raise IntegrityError(
+                "benchmark_manifest.lock manifest_version 1 must not include post-freeze change_log entries"
+            )
+    else:
         expected_versions = set(range(2, manifest["manifest_version"] + 1))
         if seen_change_versions != expected_versions:
             missing_versions = sorted(expected_versions - seen_change_versions)

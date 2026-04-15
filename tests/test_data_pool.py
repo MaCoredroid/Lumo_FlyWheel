@@ -450,6 +450,21 @@ def test_manager_requires_change_log_entries_for_post_freeze_manifest_versions(t
         )
 
 
+def test_manager_rejects_change_log_entries_on_manifest_version_1(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["manifest_version"] = 1
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="manifest_version 1 must not include post-freeze change_log entries"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "manifest-v1-change-log.db",
+        )
+
+
 def test_manager_rejects_malformed_change_log_entries(tmp_path: Path) -> None:
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
     manifest = yaml.safe_load(manifest_path.read_text())

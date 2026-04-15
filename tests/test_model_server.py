@@ -1583,3 +1583,53 @@ models:
     )
     with pytest.raises(ValueError, match="kv_cache_dtype must be 'fp8_e5m2' or 'auto'"):
         load_registry(kv_registry)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "expected_error"),
+    [
+        ("max_model_len", "0", "max_model_len"),
+        ("gpu_memory_utilization", "1.0", "gpu_memory_utilization"),
+        ("max_num_batched_tokens", "0", "max_num_batched_tokens"),
+        ("max_num_seqs", "0", "max_num_seqs"),
+        ("max_lora_rank", "0", "max_lora_rank"),
+    ],
+)
+def test_registry_rejects_non_positive_or_out_of_range_launch_parameters(
+    tmp_path: Path, field_name: str, field_value: str, expected_error: str
+) -> None:
+    registry = tmp_path / f"{field_name}.yaml"
+    max_model_len = "131072"
+    gpu_memory_utilization = "0.9"
+    max_num_batched_tokens = "8192"
+    max_num_seqs = "4"
+    max_lora_rank = ""
+    lora_modules = ""
+    if field_name == "max_model_len":
+        max_model_len = field_value
+    elif field_name == "gpu_memory_utilization":
+        gpu_memory_utilization = field_value
+    elif field_name == "max_num_batched_tokens":
+        max_num_batched_tokens = field_value
+    elif field_name == "max_num_seqs":
+        max_num_seqs = field_value
+    elif field_name == "max_lora_rank":
+        max_lora_rank = f"\n    max_lora_rank: {field_value}"
+        lora_modules = "\n    lora_modules:\n      codex-sft-all: /models/adapters/codex-sft-all"
+    registry.write_text(
+        f"""
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: {max_model_len}
+    gpu_memory_utilization: {gpu_memory_utilization}
+    max_num_batched_tokens: {max_num_batched_tokens}
+    max_num_seqs: {max_num_seqs}{max_lora_rank}{lora_modules}
+"""
+    )
+
+    with pytest.raises(ValueError, match=expected_error):
+        load_registry(registry)

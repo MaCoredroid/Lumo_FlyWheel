@@ -68,6 +68,25 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
             )
     if lora_modules and raw.get("max_lora_rank") is None:
         raise ValueError(f"Model {model_id} must define max_lora_rank when lora_modules are configured")
+    max_model_len = int(raw["max_model_len"])
+    if max_model_len < 1:
+        raise ValueError(f"Model {model_id} max_model_len must be >= 1; got {max_model_len}")
+    gpu_memory_utilization = float(raw["gpu_memory_utilization"])
+    if not 0.0 < gpu_memory_utilization < 1.0:
+        raise ValueError(
+            f"Model {model_id} gpu_memory_utilization must be > 0.0 and < 1.0; got {gpu_memory_utilization}"
+        )
+    max_num_batched_tokens = int(raw.get("max_num_batched_tokens", 8192))
+    if max_num_batched_tokens < 1:
+        raise ValueError(f"Model {model_id} max_num_batched_tokens must be >= 1; got {max_num_batched_tokens}")
+    max_num_seqs = int(raw.get("max_num_seqs", 4))
+    if max_num_seqs < 1:
+        raise ValueError(f"Model {model_id} max_num_seqs must be >= 1; got {max_num_seqs}")
+    max_lora_rank = raw.get("max_lora_rank")
+    if max_lora_rank is not None:
+        max_lora_rank = int(max_lora_rank)
+        if max_lora_rank < 1:
+            raise ValueError(f"Model {model_id} max_lora_rank must be >= 1; got {max_lora_rank}")
     return ModelConfig(
         model_id=model_id,
         hf_repo=raw.get("hf_repo", ""),
@@ -77,12 +96,12 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
         quantization=quantization,
         dtype=dtype,
         kv_cache_dtype=kv_cache_dtype,
-        max_model_len=int(raw["max_model_len"]),
-        gpu_memory_utilization=float(raw["gpu_memory_utilization"]),
-        max_num_batched_tokens=int(raw.get("max_num_batched_tokens", 8192)),
-        max_num_seqs=int(raw.get("max_num_seqs", 4)),
+        max_model_len=max_model_len,
+        gpu_memory_utilization=gpu_memory_utilization,
+        max_num_batched_tokens=max_num_batched_tokens,
+        max_num_seqs=max_num_seqs,
         lora_modules=lora_modules,
-        max_lora_rank=None if raw.get("max_lora_rank") is None else int(raw["max_lora_rank"]),
+        max_lora_rank=max_lora_rank,
         sprint0_gate=raw.get("sprint0_gate"),
     )
 
