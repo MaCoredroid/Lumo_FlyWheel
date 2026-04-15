@@ -516,6 +516,7 @@ class ModelServer:
     def _wait_vram_free(self, timeout_s: int = 120, required_utilization: float | None = None) -> None:
         deadline = time.time() + timeout_s
         while time.time() < deadline:
+            remaining_s = max(0.0, deadline - time.time())
             result = self._run(
                 [
                     "nvidia-smi",
@@ -529,11 +530,11 @@ class ModelServer:
                 if lines == ["[Not Supported]"]:
                     memory_snapshot = self._cuda_mem_get_info_gib()
                     if memory_snapshot is None:
-                        time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
-                        return
+                        time.sleep(min(remaining_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
+                        continue
                     if self._has_required_free_memory(memory_snapshot, required_utilization):
                         return
-                    time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
+                    time.sleep(min(remaining_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
                     continue
                 pids = [line for line in lines if line != "[Not Supported]"]
                 if not pids:
@@ -547,11 +548,11 @@ class ModelServer:
             else:
                 memory_snapshot = self._cuda_mem_get_info_gib()
                 if memory_snapshot is None:
-                    time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
-                    return
+                    time.sleep(min(remaining_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
+                    continue
                 if self._has_required_free_memory(memory_snapshot, required_utilization):
                     return
-                time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
+                time.sleep(min(remaining_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
                 continue
             time.sleep(2)
 

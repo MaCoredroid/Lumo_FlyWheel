@@ -183,18 +183,67 @@ models:
 """
     )
     server = ModelServer(registry_path=registry)
+    now = 0.0
     sleeps: list[float] = []
 
     def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 0, stdout="[Not Supported]\n", stderr="")
 
+    def fake_sleep(seconds: float) -> None:
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
     monkeypatch.setattr(server, "_run", fake_run)
     monkeypatch.setattr(server, "_cuda_mem_get_info_gib", lambda: None)
-    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.time", lambda: now)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", fake_sleep)
 
     server._wait_vram_free(timeout_s=5)
 
     assert sleeps == [5]
+
+
+def test_wait_vram_free_retries_until_memory_probe_recovers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    now = 0.0
+    sleeps: list[float] = []
+    snapshots = iter([None, None, (110.0, 117.51)])
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, stdout="[Not Supported]\n", stderr="")
+
+    def fake_sleep(seconds: float) -> None:
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    monkeypatch.setattr(server, "_run", fake_run)
+    monkeypatch.setattr(server, "_cuda_mem_get_info_gib", lambda: next(snapshots))
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.time", lambda: now)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", fake_sleep)
+
+    server._wait_vram_free(timeout_s=50, required_utilization=0.9)
+
+    assert sleeps == [20, 20]
 
 
 def test_wait_vram_free_waits_for_cuda_memory_recovery_without_compute_pids(
