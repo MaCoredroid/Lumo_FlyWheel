@@ -31,6 +31,7 @@ from lumo_flywheel_serving.task_orchestrator import (
     generate_codex_config,
     health_check,
     sha256_tree,
+    verify_pre_run_hashes,
     verify_pre_grading_hashes,
 )
 
@@ -488,6 +489,45 @@ def test_verify_pre_grading_hashes_detects_verifier_drift(tmp_path: Path) -> Non
     assert exc_info.value.affected_artifact == "verifier"
 
 
+def test_verify_pre_grading_hashes_reports_missing_verify_script(tmp_path: Path) -> None:
+    verifier_data_dir = tmp_path / "verifier_data" / "family-a"
+    verifier_data_dir.mkdir(parents=True)
+    (verifier_data_dir / "golden.txt").write_text("golden\n", encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "grader_image_digest": _sha("grader"),
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("echo verify\n"),
+                "family_spec_hash": _sha("family"),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_tree(verifier_data_dir),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Verifier script missing") as exc_info:
+        verify_pre_grading_hashes(
+            _codex_long_task(),
+            manifest,
+            _sha("grader"),
+            image_digest_resolver=lambda image_ref: image_ref,
+            verifiers_dir=tmp_path / "verifiers",
+            verifier_data_dir=tmp_path / "verifier_data",
+        )
+
+    assert exc_info.value.affected_artifact == "verifier"
+
+
 def test_verify_pre_grading_hashes_rejects_untracked_verifier_tree_files(tmp_path: Path) -> None:
     verifiers_dir = tmp_path / "verifiers" / "family-a"
     verifier_data_dir = tmp_path / "verifier_data" / "family-a"
@@ -585,6 +625,80 @@ def test_verify_pre_grading_hashes_detects_family_spec_drift_when_configured(tmp
             image_digest_resolver=lambda image_ref: image_ref,
             verifiers_dir=tmp_path / "verifiers",
             verifier_data_dir=tmp_path / "verifier_data",
+            scenario_families_dir=tmp_path / "scenario_families",
+        )
+
+    assert exc_info.value.affected_artifact == "family_spec"
+
+
+def test_verify_pre_run_hashes_reports_missing_agents_md(tmp_path: Path) -> None:
+    scenario_families_dir = tmp_path / "scenario_families" / "family-a"
+    scenario_families_dir.mkdir(parents=True)
+    family_spec_path = scenario_families_dir / "family.yaml"
+    family_spec_path.write_text("grading_invariant:\n  functional_checks: []\n", encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("verify"),
+                "family_spec_hash": _sha("grading_invariant:\n  functional_checks: []\n"),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": _sha("data"),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="AGENTS.md missing") as exc_info:
+        verify_pre_run_hashes(
+            replace(_codex_long_task(), image_digest=_sha("image")),
+            manifest,
+            image_digest_resolver=lambda image_ref: image_ref,
+            agents_md_resolver=lambda image_ref: tmp_path / "missing" / "AGENTS.md",
+            scenario_families_dir=tmp_path / "scenario_families",
+        )
+
+    assert exc_info.value.affected_artifact == "agents_md"
+
+
+def test_verify_pre_run_hashes_reports_missing_family_spec(tmp_path: Path) -> None:
+    agents_md_path = tmp_path / "AGENTS.md"
+    agents_md_path.write_text("task description\n", encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("verify"),
+                "family_spec_hash": _sha("family"),
+                "agents_md_hash": _sha("task description\n"),
+                "verifier_data_hash": _sha("data"),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Family spec missing") as exc_info:
+        verify_pre_run_hashes(
+            replace(_codex_long_task(), image_digest=_sha("image")),
+            manifest,
+            image_digest_resolver=lambda image_ref: image_ref,
+            agents_md_resolver=lambda image_ref: agents_md_path,
             scenario_families_dir=tmp_path / "scenario_families",
         )
 

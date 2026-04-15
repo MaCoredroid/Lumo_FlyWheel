@@ -606,7 +606,13 @@ def verify_pre_run_hashes(
         )
 
     agents_md_path = agents_md_resolver(task.image_digest or "")
-    actual_agents_md_hash = _canonical_sha256(sha256_file(agents_md_path))
+    try:
+        actual_agents_md_hash = _canonical_sha256(sha256_file(agents_md_path))
+    except FileNotFoundError as exc:
+        raise ManifestMismatchError(
+            f"AGENTS.md missing for {task.scenario_id}: {agents_md_path}",
+            affected_artifact="agents_md",
+        ) from exc
     if actual_agents_md_hash != _canonical_sha256(entry["agents_md_hash"]):
         raise ManifestMismatchError(
             f"AGENTS.md hash mismatch for {task.scenario_id}: "
@@ -615,7 +621,13 @@ def verify_pre_run_hashes(
         )
 
     family_spec_path = Path(scenario_families_dir) / str(task.family_id) / "family.yaml"
-    actual_spec_hash = _canonical_sha256(sha256_file(family_spec_path))
+    try:
+        actual_spec_hash = _canonical_sha256(sha256_file(family_spec_path))
+    except FileNotFoundError as exc:
+        raise ManifestMismatchError(
+            f"Family spec missing for {task.scenario_id}: {family_spec_path}",
+            affected_artifact="family_spec",
+        ) from exc
     if actual_spec_hash != _canonical_sha256(entry["family_spec_hash"]):
         raise ManifestMismatchError(
             f"Family spec hash mismatch for {task.scenario_id}: "
@@ -646,7 +658,13 @@ def verify_pre_grading_hashes(
 
     family_verifier_dir = Path(verifiers_dir) / str(task.family_id)
     verifier_path = family_verifier_dir / "verify.sh"
-    actual_verifier_hash = _canonical_sha256(sha256_file(verifier_path))
+    try:
+        actual_verifier_hash = _canonical_sha256(sha256_file(verifier_path))
+    except FileNotFoundError as exc:
+        raise ManifestMismatchError(
+            f"Verifier script missing for {task.scenario_id}: {verifier_path}",
+            affected_artifact="verifier",
+        ) from exc
     if actual_verifier_hash != _canonical_sha256(entry["verifier_hash"]):
         raise ManifestMismatchError(
             f"Verifier hash mismatch for {task.scenario_id}: "
