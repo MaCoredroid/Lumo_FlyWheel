@@ -1079,6 +1079,159 @@ def test_finish_run_requires_snapshot_for_non_crash_codex_long_outcomes(tmp_path
         manager.close()
 
 
+def test_finish_run_requires_trusted_verify_result_fields_and_consistent_outcome(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        scenario_id = "train-feature/v1"
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        with pytest.raises(IntegrityError, match="requires codex_long_pass as a boolean"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+                grading_manifest_ver=3,
+                milestone_results={"m1": False},
+                snapshot_image_ref="snap-1",
+            )
+
+        manager.db.execute("DELETE FROM runs")
+        manager.db.connection.commit()
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        with pytest.raises(IntegrityError, match="requires milestone_results copied from Phase 3"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+                grading_manifest_ver=3,
+                codex_long_pass=False,
+                snapshot_image_ref="snap-1",
+            )
+
+        manager.db.execute("DELETE FROM runs")
+        manager.db.connection.commit()
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        with pytest.raises(IntegrityError, match="outcome='resolved' requires codex_long_pass=True"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "resolved",
+                grading_manifest_ver=3,
+                codex_long_pass=False,
+                milestone_results={"m1": True},
+                snapshot_image_ref="snap-1",
+            )
+
+        manager.db.execute("DELETE FROM runs")
+        manager.db.connection.commit()
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        with pytest.raises(IntegrityError, match="non-resolved outcomes must record codex_long_pass=False"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+                grading_manifest_ver=3,
+                codex_long_pass=True,
+                milestone_results={"m1": False},
+                snapshot_image_ref="snap-1",
+            )
+
+        manager.db.execute("DELETE FROM runs")
+        manager.db.connection.commit()
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        with pytest.raises(IntegrityError, match="milestone_results values must be booleans"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+                grading_manifest_ver=3,
+                codex_long_pass=False,
+                milestone_results={"m1": "true"},
+                snapshot_image_ref="snap-1",
+            )
+    finally:
+        manager.close()
+
+
 def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
@@ -1105,6 +1258,7 @@ def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
                 "resolved",
                 grading_manifest_ver=3,
                 codex_long_pass=True,
+                milestone_results={"m1": True},
                 snapshot_image_ref=snapshot,
             )
 
@@ -1165,6 +1319,7 @@ def test_regrade_downgrades_to_rerun_for_legacy_rows_missing_snapshot(tmp_path: 
             "resolved",
             grading_manifest_ver=3,
             codex_long_pass=True,
+            milestone_results={"m1": True},
             snapshot_image_ref="snap-1",
         )
         manager.db.execute(
@@ -1282,6 +1437,7 @@ def test_invalidation_marks_running_attempts_non_current_before_finish(tmp_path:
             "resolved",
             grading_manifest_ver=3,
             codex_long_pass=True,
+            milestone_results={"m1": True},
             snapshot_image_ref="snap-1",
         )
 
@@ -1437,6 +1593,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             trajectory_path="/tmp/train-feature-v1-s1.jsonl",
             grading_manifest_ver=3,
             codex_long_pass=True,
+            milestone_results={"m1": True},
             snapshot_image_ref="snap-v1-s1",
         )
         assert manager.claim_run(
@@ -1462,6 +1619,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             trajectory_path="/tmp/train-feature-v1-s2.jsonl",
             grading_manifest_ver=3,
             codex_long_pass=True,
+            milestone_results={"m1": True},
             snapshot_image_ref="snap-v1-s2",
         )
         assert manager.claim_run(
@@ -1486,6 +1644,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             "failed",
             grading_manifest_ver=3,
             codex_long_pass=False,
+            milestone_results={"m1": False},
             snapshot_image_ref="snap-v2-s1",
         )
 
@@ -1512,6 +1671,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             "resolved",
             grading_manifest_ver=3,
             codex_long_pass=True,
+            milestone_results={"m1": True},
             snapshot_image_ref="snap-swe-agent-v1-s1",
         )
 

@@ -1277,6 +1277,37 @@ class DataPoolManager:
                     "Codex-Long finish_run() requires snapshot_image_ref for non-crash outcomes so "
                     "Phase 2/3 grading can be re-run from the committed snapshot image"
                 )
+            if outcome != "crash" and not isinstance(codex_long_pass, bool):
+                raise IntegrityError(
+                    "Codex-Long finish_run() requires codex_long_pass as a boolean copied from "
+                    "Phase 3 verify_result.json for non-crash outcomes"
+                )
+            if outcome == "resolved" and codex_long_pass is not True:
+                raise IntegrityError(
+                    "Codex-Long finish_run() outcome='resolved' requires codex_long_pass=True from "
+                    "Phase 3 verify_result.json"
+                )
+            if outcome != "crash" and outcome != "resolved" and codex_long_pass is not False:
+                raise IntegrityError(
+                    "Codex-Long finish_run() non-resolved outcomes must record codex_long_pass=False "
+                    "from Phase 3 verify_result.json"
+                )
+            if outcome != "crash" and not isinstance(milestone_results, dict):
+                raise IntegrityError(
+                    "Codex-Long finish_run() requires milestone_results copied from Phase 3 "
+                    "verify_result.json for non-crash outcomes"
+                )
+            if isinstance(milestone_results, dict):
+                for milestone_id, achieved in milestone_results.items():
+                    if not isinstance(milestone_id, str) or not milestone_id.strip():
+                        raise IntegrityError(
+                            "Codex-Long finish_run() milestone_results keys must be non-empty strings"
+                        )
+                    if not isinstance(achieved, bool):
+                        raise IntegrityError(
+                            "Codex-Long finish_run() milestone_results values must be booleans from "
+                            "Phase 3 verify_result.json"
+                        )
         with self.db.begin() as txn:
             result = txn.execute(
                 """
