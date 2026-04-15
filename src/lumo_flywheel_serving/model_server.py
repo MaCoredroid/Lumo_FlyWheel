@@ -7,7 +7,7 @@ import shlex
 import subprocess
 import time
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import requests
 
@@ -553,7 +553,12 @@ class ModelServer:
     def _format_lora_modules(config: ModelConfig) -> list[str]:
         formatted: list[str] = []
         for adapter_name, adapter_path in config.lora_modules:
-            if not str(adapter_path).startswith("/models/"):
+            container_path = PurePosixPath(str(adapter_path))
+            if (
+                container_path.anchor != "/"
+                or any(part in {".", ".."} for part in container_path.parts)
+                or not str(container_path).startswith("/models/")
+            ):
                 raise ValueError(
                     f"LoRA adapter '{adapter_name}' must use a container path under /models; got {adapter_path}"
                 )

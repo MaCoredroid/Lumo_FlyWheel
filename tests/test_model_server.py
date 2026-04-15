@@ -10,7 +10,7 @@ from lumo_flywheel_serving.model_server import (
     DEFAULT_VLLM_IMAGE,
     ModelServer,
 )
-from lumo_flywheel_serving.registry import load_registry
+from lumo_flywheel_serving.registry import ModelConfig, load_registry
 
 
 VALID_METRICS_TEXT = "\n".join(
@@ -134,20 +134,11 @@ models:
       codex-sft-all: /tmp/adapters/codex-sft-all
 """
     )
-    server = ModelServer(
-        registry_path=registry,
-        logs_root=tmp_path / "logs",
-        triton_cache_root=tmp_path / "triton",
-    )
-
     with pytest.raises(ValueError, match="under /models"):
-        server._build_run_command(
-            "qwen3.5-27b",
-            server.registry["qwen3.5-27b"],
-            enable_request_logging=False,
-            kv_cache_dtype="auto",
-            gpu_memory_utilization=0.88,
-            enforce_eager=False,
+        ModelServer(
+            registry_path=registry,
+            logs_root=tmp_path / "logs",
+            triton_cache_root=tmp_path / "triton",
         )
 
 
@@ -1636,6 +1627,102 @@ models:
         load_registry(registry)
 
 
+def test_registry_rejects_non_normalized_models_mount_paths(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/../escape
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+
+    with pytest.raises(ValueError, match="normalized container path under /models"):
+        load_registry(registry)
+
+    lora_registry = tmp_path / "lora_model_registry.yaml"
+    lora_registry.write_text(
+        """
+models:
+  sprint3-qwen:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_lora_rank: 32
+    lora_modules:
+      codex-sft-all: /models/adapters/../escape
+"""
+    )
+
+    with pytest.raises(ValueError, match=r"lora_modules\[codex-sft-all\].*normalized container path under /models"):
+        load_registry(lora_registry)
+
+
+def test_registry_rejects_malformed_model_surface_ids(tmp_path: Path) -> None:
+    registry = tmp_path / "bad_model_id.yaml"
+    registry.write_text(
+        """
+models:
+  BadModel:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+
+    with pytest.raises(ValueError, match="Registry model_id must be a lowercase slug"):
+        load_registry(registry)
+
+    served_name_registry = tmp_path / "bad_served_name.yaml"
+    served_name_registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    served_model_name: " qwen3.5-27b "
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+
+    with pytest.raises(ValueError, match="served_model_name must not contain leading or trailing whitespace"):
+        load_registry(served_name_registry)
+
+    adapter_name_registry = tmp_path / "bad_adapter_name.yaml"
+    adapter_name_registry.write_text(
+        """
+models:
+  sprint3-qwen:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_lora_rank: 32
+    lora_modules:
+      codex/sft/all: /models/adapters/codex-sft-all
+"""
+    )
+
+    with pytest.raises(ValueError, match="adapter_name must be a lowercase slug"):
+        load_registry(adapter_name_registry)
+
+
 def test_registry_rejects_blank_served_model_name(tmp_path: Path) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(
@@ -1917,3 +2004,38 @@ models:
 
     with pytest.raises(ValueError, match=expected_error):
         load_registry(registry)
+
+
+def test_format_lora_modules_rejects_non_normalized_container_paths(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    config = ModelConfig(
+        model_id="qwen3.5-27b",
+        hf_repo="Qwen/Qwen3.5-27B-FP8",
+        local_path=Path("/models/qwen3.5-27b-fp8"),
+        served_model_name="qwen3.5-27b",
+        quantization="fp8",
+        dtype="auto",
+        kv_cache_dtype="fp8_e5m2",
+        max_model_len=131072,
+        gpu_memory_utilization=0.9,
+        max_num_batched_tokens=8192,
+        max_num_seqs=4,
+        max_lora_rank=32,
+        lora_modules=(("codex-sft-all", Path("/models/adapters/../escape")),),
+    )
+
+    with pytest.raises(ValueError, match="must use a container path under /models"):
+        server._format_lora_modules(config)

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .yaml_utils import load_yaml_file
 
 _HF_REVISION_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
+_MODEL_SURFACE_ID_RE = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
+_MODELS_ROOT = PurePosixPath("/models")
 
 
 @dataclass(frozen=True)
@@ -29,7 +31,39 @@ class ModelConfig:
     sprint0_gate: str | None = None
 
 
+def _require_model_surface_id(value: Any, *, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    if value != value.strip():
+        raise ValueError(f"{field_name} must not contain leading or trailing whitespace")
+    if not _MODEL_SURFACE_ID_RE.fullmatch(value):
+        raise ValueError(
+            f"{field_name} must be a lowercase slug using letters, digits, '.', '_' or '-'"
+        )
+    return value
+
+
+def _require_models_mount_path(value: Any, *, field_name: str) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    if value != value.strip():
+        raise ValueError(f"{field_name} must not contain leading or trailing whitespace")
+    container_path = PurePosixPath(value)
+    if container_path.anchor != "/":
+        raise ValueError(f"{field_name} must be an absolute container path under /models; got {value!r}")
+    if any(part in {".", ".."} for part in container_path.parts):
+        raise ValueError(f"{field_name} must be a normalized container path under /models; got {value!r}")
+    try:
+        relative = container_path.relative_to(_MODELS_ROOT)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a container path under /models; got {value!r}") from exc
+    if str(relative) in {"", "."}:
+        raise ValueError(f"{field_name} must point to a path beneath /models; got {value!r}")
+    return Path(str(container_path))
+
+
 def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
+    model_id = _require_model_surface_id(model_id, field_name="Registry model_id")
     local_path = raw.get("local_path")
     if not local_path:
         raise ValueError(
@@ -47,12 +81,12 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
             raise ValueError(
                 f"Model {model_id} hf_revision must be a 40-character git commit hash; got {hf_revision!r}"
             )
-    local_path_obj = Path(local_path)
-    if not str(local_path_obj).startswith("/models/"):
-        raise ValueError(f"Model {model_id} local_path must be a container path under /models; got {local_path_obj}")
+    local_path_obj = _require_models_mount_path(local_path, field_name=f"Model {model_id} local_path")
     served_model_name = raw.get("served_model_name", model_id)
-    if not isinstance(served_model_name, str) or not served_model_name.strip():
-        raise ValueError(f"Model {model_id} served_model_name must be a non-empty string")
+    served_model_name = _require_model_surface_id(
+        served_model_name,
+        field_name=f"Model {model_id} served_model_name",
+    )
     quantization = raw["quantization"]
     if quantization != "fp8":
         raise ValueError(f"Model {model_id} quantization must be 'fp8'; got {quantization!r}")
@@ -68,14 +102,19 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
     if not isinstance(lora_modules_raw, dict):
         raise ValueError(f"Model {model_id} lora_modules must be a mapping of adapter_name -> container_path")
     lora_modules = tuple(
-        (adapter_name, Path(adapter_path))
+        (
+            _require_model_surface_id(
+                adapter_name,
+                field_name=f"Model {model_id} lora_modules adapter_name",
+            ),
+            _require_models_mount_path(
+                adapter_path,
+                field_name=f"Model {model_id} lora_modules[{adapter_name}]",
+            ),
+        )
         for adapter_name, adapter_path in lora_modules_raw.items()
     )
-    for adapter_name, adapter_path in lora_modules:
-        if not isinstance(adapter_name, str) or not adapter_name.strip():
-            raise ValueError(f"Model {model_id} lora_modules adapter names must be non-empty strings")
-        if not str(adapter_path):
-            raise ValueError(f"Model {model_id} lora_modules[{adapter_name}] must be a non-empty path")
+    for adapter_name, _adapter_path in lora_modules:
         if adapter_name == served_model_name:
             raise ValueError(
                 f"Model {model_id} lora_modules adapter '{adapter_name}' collides with served_model_name "
