@@ -320,6 +320,26 @@ def test_manager_rejects_full_plan_when_a_scenario_type_falls_below_six_families
         )
 
 
+def test_manager_rejects_non_canonical_mid_sized_freezes(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["total_families"] = 40
+    _write_yaml(split_path, split_assignment)
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="signed-off freeze regimes"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "mid-sized-freeze.db",
+        )
+
+
 def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path) -> None:
     _, split_path, manifest_path, _ = _fixture_files(tmp_path)
     manifest = yaml.safe_load(manifest_path.read_text())
@@ -455,6 +475,48 @@ def test_manager_rejects_malformed_change_log_entries(tmp_path: Path) -> None:
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "missing-change-log-version.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["change_log"][1]["affected_variants"] = [
+        manifest["change_log"][1]["affected_variants"][0],
+        "missing-family/v9",
+    ]
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="references unknown scenario id 'missing-family/v9'"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "unknown-change-log-scenario.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["change_log"][1]["affected_hashes"] = ["verifier_hash", "verifier_hash"]
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="affected_hashes contains duplicate field 'verifier_hash'"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "duplicate-change-log-hash.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["change_log"][1]["affected_hashes"] = ["not_a_locked_hash"]
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="references unknown locked field 'not_a_locked_hash'"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "unknown-change-log-hash.db",
         )
 
 

@@ -60,6 +60,16 @@ _ARTIFACT_RECOVERY = {
 }
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_KNOWN_CHANGE_LOG_HASH_FIELDS = {
+    "split_assignment_hash",
+    "grader_image_digest",
+    "family_spec_hash",
+    "image_digest",
+    "verifier_hash",
+    "milestone_hashes",
+    "agents_md_hash",
+    "verifier_data_hash",
+}
 
 
 class IntegrityError(RuntimeError):
@@ -329,6 +339,37 @@ def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
         if scenario_id in seen_scenario_ids:
             raise IntegrityError(f"Variant '{scenario_id}' has multiple entries in benchmark_manifest.lock")
         seen_scenario_ids.add(scenario_id)
+
+    for index, entry in enumerate(change_log):
+        affected_variants = entry["affected_variants"]
+        seen_change_scenarios: set[str] = set()
+        for variant_index, scenario_id in enumerate(affected_variants):
+            if scenario_id in seen_change_scenarios:
+                raise IntegrityError(
+                    "benchmark_manifest.lock change_log"
+                    f"[{index}] affected_variants contains duplicate scenario id '{scenario_id}'"
+                )
+            seen_change_scenarios.add(scenario_id)
+            if scenario_id not in seen_scenario_ids:
+                raise IntegrityError(
+                    "benchmark_manifest.lock change_log"
+                    f"[{index}] affected_variants[{variant_index}] references unknown scenario id '{scenario_id}'"
+                )
+
+        affected_hashes = entry["affected_hashes"]
+        seen_hash_fields: set[str] = set()
+        for hash_index, field_name in enumerate(affected_hashes):
+            if field_name in seen_hash_fields:
+                raise IntegrityError(
+                    "benchmark_manifest.lock change_log"
+                    f"[{index}] affected_hashes contains duplicate field '{field_name}'"
+                )
+            seen_hash_fields.add(field_name)
+            if field_name not in _KNOWN_CHANGE_LOG_HASH_FIELDS:
+                raise IntegrityError(
+                    "benchmark_manifest.lock change_log"
+                    f"[{index}] affected_hashes[{hash_index}] references unknown locked field '{field_name}'"
+                )
     return manifest
 
 
@@ -498,6 +539,12 @@ def load_codex_long_splits(
             f"{MIN_CODEX_LONG_FAMILIES} for the minimum viable Codex-Long freeze; "
             f"got {declared_total_families}"
         )
+    if MIN_CODEX_LONG_FAMILIES < declared_total_families < FULL_PLAN_CODEX_LONG_FAMILIES:
+        raise IntegrityError(
+            "split_assignment.yaml total_families must use one of the signed-off freeze regimes: "
+            f"exactly {MIN_CODEX_LONG_FAMILIES} for the smaller-v1 path, or >= {FULL_PLAN_CODEX_LONG_FAMILIES} "
+            f"for the full plan; got {declared_total_families}"
+        )
 
     actual_hash = sha256_file(split_assignment_path)
     expected_hash = _require_sha256_value(
@@ -515,7 +562,7 @@ def load_codex_long_splits(
     env_index: dict[str, CodexLongEnv] = {}
     manifest_version = manifest["manifest_version"]
     total_families_loaded = 0
-    smaller_v1_public_dev_carve_out = declared_total_families <= 35
+    smaller_v1_public_dev_carve_out = declared_total_families == MIN_CODEX_LONG_FAMILIES
     family_type_counts = {scenario_type: 0 for scenario_type in SCENARIO_TYPES}
 
     split_mapping = assignment.get("splits")
@@ -650,7 +697,6 @@ def load_codex_long_splits(
                 f"{FULL_PLAN_MIN_FAMILIES_PER_TYPE} families per scenario type; "
                 f"below floor: {rendered}"
             )
-
     manifest_scenario_ids = {
         make_scenario_id(entry["family_id"], entry["variant_id"]) for entry in manifest["variants"]
     }
