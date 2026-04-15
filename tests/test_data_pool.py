@@ -1587,6 +1587,7 @@ def test_seal_enforcement_and_unseal(tmp_path: Path) -> None:
     try:
         assert manager.list_swe_bench_tasks("final_test") == []
         assert manager.list_codex_long_envs("test_long") == []
+        assert manager.list_families("test_long") == []
         assert manager.check_dispatch_eligible(
             "swe_bench", "final_test", "final-1", "qwen3.5-27b", "codex", 1
         ) is DispatchDecision.BLOCKED
@@ -1609,6 +1610,7 @@ def test_seal_enforcement_and_unseal(tmp_path: Path) -> None:
         manager.unseal("test_long", operator="benchmark_runner", reason="Sprint 3 B1 eval start")
         assert [task["instance_id"] for task in manager.list_swe_bench_tasks("final_test")] == ["final-1", "final-2"]
         assert len(manager.list_codex_long_envs("test_long")) == 6
+        assert len(manager.list_families("test_long")) == 6
         assert manager.claim_run("swe_bench", "final_test", "final-1", "qwen3.5-27b", "codex", 1)
         assert manager.claim_run(
             "codex_long",

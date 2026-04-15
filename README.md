@@ -7,7 +7,8 @@ Local vLLM serving layer implementation for the Lumo FlyWheel specs.
 1. `make venv`
 2. `make bootstrap-runtime`
 3. `make download-qwen35-27b`
-4. `make smoke`
+4. `make smoke` for the direct vLLM API smoke check
+5. `make gate1` for the signed-off Codex CLI Gate 1 run
 
 The project-local Codex provider config lives in `.codex/config.toml` and points Codex CLI at `http://127.0.0.1:8000/v1` with `wire_api = "responses"`.
 

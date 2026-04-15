@@ -104,10 +104,11 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
     assert cli.cmd_smoke_test(_args()) == 0
 
     output = json.loads(capsys.readouterr().out)
+    assert output["direct_api_smoke_status"] == "pass"
     assert output["prefix_cache_hits_delta"] == 3.0
     assert events == [
         "start:qwen3.5-27b",
-        "meta:qwen3.5-27b:{'gate1_responses_status': 'pass', 'metric_schema_variant': 'legacy_no_total', 'prefix_cache_hits_delta': 3.0}",
+        "meta:qwen3.5-27b:{'direct_api_smoke_status': 'pass', 'metric_schema_variant': 'legacy_no_total', 'prefix_cache_hits_delta': 3.0}",
         "flush",
         "stop:True",
     ]

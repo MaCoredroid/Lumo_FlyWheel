@@ -255,7 +255,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             )
         server.record_launch_metadata(
             args.model_id,
-            gate1_responses_status="pass",
+            direct_api_smoke_status="pass",
             metric_schema_variant=_metric_schema_variant(schema),
             prefix_cache_hits_delta=round(cache_hit_delta, 3),
         )
@@ -263,6 +263,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         print(
             json.dumps(
                 {
+                    "direct_api_smoke_status": "pass",
                     "health": health.status_code,
                     "models": models,
                     "schema": schema,

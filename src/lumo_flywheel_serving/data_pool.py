@@ -1542,6 +1542,9 @@ class DataPoolManager:
         families: list[CodexLongFamily] = []
         target_splits = [split] if split else ["train_long", "val_long", "test_long", "public_dev"]
         for split_name in target_splits:
+            if self._is_sealed(split_name):
+                logger.warning("Attempted to list families from sealed split '%s'", split_name)
+                continue
             for family in self.codex_long_splits.get(split_name, []):
                 if scenario_type and family.scenario_type != scenario_type:
                     continue
