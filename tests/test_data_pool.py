@@ -605,6 +605,15 @@ def test_invalidation_rejects_unknown_or_malformed_scope(tmp_path: Path) -> None
                 affected_variant_ids=["v1", "v1"],
             )
 
+        with pytest.raises(IntegrityError, match="empty affected_variant_ids scope"):
+            manager.invalidate_stale_runs(
+                family_id="train-feature",
+                new_manifest_version=4,
+                affected_artifact="verifier",
+                reason="bugfix",
+                affected_variant_ids=[],
+            )
+
         with pytest.raises(IntegrityError, match="non-empty variant ids"):
             manager.invalidate_stale_runs(
                 family_id="train-feature",

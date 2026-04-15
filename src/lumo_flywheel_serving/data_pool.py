@@ -1059,7 +1059,12 @@ class DataPoolManager:
         ]
         where_params: list[Any] = [new_manifest_version]
 
-        if affected_variant_ids:
+        if affected_variant_ids is not None:
+            if not affected_variant_ids:
+                raise IntegrityError(
+                    f"Family '{family_id}' received an empty affected_variant_ids scope; "
+                    "pass None for a family-wide invalidation or list the specific variants to invalidate"
+                )
             seen_variant_ids: set[str] = set()
             unknown_variant_ids: list[str] = []
             scenario_ids: list[str] = []
