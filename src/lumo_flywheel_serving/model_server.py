@@ -64,7 +64,7 @@ class ModelServer:
         # Wait before the first launch attempt so fresh starts after a recent stop
         # do not immediately spiral through the low-VRAM fallback ladder.
         self._wait_vram_free(timeout_s=120, required_utilization=config.gpu_memory_utilization)
-        kv_cache_dtype = config.kv_cache_dtype
+        kv_cache_dtype = self._initial_kv_cache_dtype(config)
         gpu_memory_utilization = config.gpu_memory_utilization
         enforce_eager = False
         low_memory_grace_retries = 0
@@ -85,13 +85,14 @@ class ModelServer:
                 break
             except RuntimeError as exc:
                 self.stop(missing_ok=True)
-                self._wait_vram_free(timeout_s=120, required_utilization=gpu_memory_utilization)
                 error_text = str(exc)
                 incompatible_fp8_kv = "fp8_e5m2 kv-cache is not supported with fp8 checkpoints."
                 insufficient_memory = "Free memory on device cuda:0"
                 fp8_cutlass_internal_error = "cutlass_scaled_mm"
+                retry_utilization = gpu_memory_utilization
                 if incompatible_fp8_kv in error_text and kv_cache_dtype != "auto":
                     kv_cache_dtype = "auto"
+                    self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                     continue
                 if insufficient_memory in error_text:
                     if self._should_retry_low_free_memory(
@@ -101,6 +102,7 @@ class ModelServer:
                     ):
                         low_memory_grace_retries += 1
                         time.sleep(LOW_FREE_MEMORY_GRACE_SLEEP_S)
+                        self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                         continue
                     next_gpu_memory_utilization = self._next_gpu_memory_utilization(
                         error_text,
@@ -109,9 +111,12 @@ class ModelServer:
                     if next_gpu_memory_utilization is not None:
                         low_memory_grace_retries = 0
                         gpu_memory_utilization = next_gpu_memory_utilization
+                        retry_utilization = next_gpu_memory_utilization
+                        self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                         continue
                 if fp8_cutlass_internal_error in error_text and not enforce_eager:
                     enforce_eager = True
+                    self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                     continue
                 raise
         self.current_model = model_id
@@ -450,6 +455,15 @@ class ModelServer:
         if config.hf_repo.lower().startswith("qwen/"):
             return QWEN_CHAT_TEMPLATE_CONTAINER_PATH
         return None
+
+    @staticmethod
+    def _initial_kv_cache_dtype(config: ModelConfig) -> str:
+        # vLLM 0.19.0 rejects fp8_e5m2 KV cache for fp8 checkpoints during
+        # engine init, so use a valid first-launch default instead of relying on
+        # a guaranteed crash-and-retry cycle.
+        if config.quantization == "fp8" and config.kv_cache_dtype == "fp8_e5m2":
+            return "auto"
+        return config.kv_cache_dtype
 
     def _wait_ready(self, model_id: str, timeout_s: int = 900) -> None:
         deadline = time.time() + timeout_s

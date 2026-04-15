@@ -90,6 +90,28 @@ models:
     assert "--enforce-eager" in command
 
 
+def test_fp8_checkpoints_default_initial_kv_cache_dtype_to_auto(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+
+    assert server._initial_kv_cache_dtype(server.registry["qwen3.5-27b"]) == "auto"
+
+
 def test_non_qwen_models_do_not_override_chat_template(tmp_path: Path) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(
@@ -409,6 +431,122 @@ models:
     server.start("qwen3.5-27b")
 
     assert events[:4] == ["reset:qwen3.5-27b", "stop:True", "wait:120:0.9", "run"]
+
+
+def test_start_uses_valid_initial_kv_cache_dtype_for_fp8_checkpoints(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    launched_kv_dtypes: list[str] = []
+
+    monkeypatch.setattr(server, "_ensure_image_present", lambda: None)
+    monkeypatch.setattr(server, "_reset_log", lambda model_id: None)
+    monkeypatch.setattr(server, "stop", lambda missing_ok=False: None)
+    monkeypatch.setattr(server, "_wait_vram_free", lambda timeout_s=120, required_utilization=None: None)
+    monkeypatch.setattr(
+        server,
+        "_build_run_command",
+        lambda model_id, config, enable_request_logging, kv_cache_dtype, gpu_memory_utilization, enforce_eager: (
+            launched_kv_dtypes.append(kv_cache_dtype) or ["docker", "run"]
+        ),
+    )
+    monkeypatch.setattr(
+        server,
+        "_run",
+        lambda cmd, capture_output=False, check=True: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+    monkeypatch.setattr(server, "_wait_ready", lambda model_id, timeout_s=900: None)
+
+    server.start("qwen3.5-27b")
+
+    assert launched_kv_dtypes == ["auto"]
+
+
+def test_start_waits_against_lowered_gpu_memory_target_before_retry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    waits: list[float | None] = []
+    launch_targets: list[float] = []
+    ready_attempts = 0
+
+    monkeypatch.setattr(server, "_ensure_image_present", lambda: None)
+    monkeypatch.setattr(server, "_reset_log", lambda model_id: None)
+    monkeypatch.setattr(server, "stop", lambda missing_ok=False: None)
+    monkeypatch.setattr(
+        server,
+        "_wait_vram_free",
+        lambda timeout_s=120, required_utilization=None: waits.append(required_utilization),
+    )
+    monkeypatch.setattr(
+        server,
+        "_build_run_command",
+        lambda model_id, config, enable_request_logging, kv_cache_dtype, gpu_memory_utilization, enforce_eager: (
+            launch_targets.append(gpu_memory_utilization) or ["docker", "run"]
+        ),
+    )
+    monkeypatch.setattr(
+        server,
+        "_run",
+        lambda cmd, capture_output=False, check=True: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+
+    def fake_wait_ready(model_id: str, timeout_s: int = 900) -> None:
+        nonlocal ready_attempts
+        ready_attempts += 1
+        if ready_attempts == 1:
+            raise RuntimeError(
+                "ValueError: Free memory on device cuda:0 (105.2/117.51 GiB) on startup "
+                "is less than desired GPU memory utilization (0.9, 105.76 GiB). "
+                "Decrease GPU memory utilization or reduce GPU memory used by other processes."
+            )
+
+    monkeypatch.setattr(server, "_wait_ready", fake_wait_ready)
+
+    server.start("qwen3.5-27b")
+
+    assert waits == [0.9, 0.88]
+    assert launch_targets == [0.9, 0.88]
 
 
 def test_reset_log_uses_docker_fallback_for_root_owned_logs(
