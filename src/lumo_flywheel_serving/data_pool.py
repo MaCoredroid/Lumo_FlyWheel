@@ -94,6 +94,33 @@ class CodexLongEnv:
     image_digest: str
 
 
+@dataclass(frozen=True)
+class CodexLongLaunchArtifacts:
+    scenario_id: str
+    family_id: str
+    variant_id: str
+    split: str
+    scenario_type: str
+    manifest_version: int
+    image_digest: str
+    agents_md_hash: str
+    family_spec_hash: str
+
+
+@dataclass(frozen=True)
+class CodexLongGradingArtifacts:
+    scenario_id: str
+    family_id: str
+    variant_id: str
+    split: str
+    scenario_type: str
+    manifest_version: int
+    grader_image_digest: str
+    verifier_hash: str
+    milestone_hashes: dict[str, str]
+    verifier_data_hash: str
+
+
 @dataclass
 class RunRecord:
     track: str
@@ -151,6 +178,40 @@ def sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
+def _require_sha256_value(value: Any, *, field_name: str, allow_bare: bool = False) -> str:
+    if not isinstance(value, str) or not value:
+        raise IntegrityError(f"{field_name} must be a non-empty string")
+    if value.startswith("sha256:"):
+        digest = value.removeprefix("sha256:")
+        if not digest:
+            raise IntegrityError(f"{field_name} must include a non-empty sha256 digest")
+        return digest
+    if allow_bare:
+        return value
+    raise IntegrityError(f"{field_name} must be recorded as a sha256 digest")
+
+
+def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
+    manifest = yaml.safe_load(Path(path).read_text()) or {}
+    try:
+        manifest["manifest_version"] = int(manifest["manifest_version"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise IntegrityError("benchmark_manifest.lock must record an integer manifest_version") from exc
+
+    _require_sha256_value(manifest.get("split_assignment_hash"), field_name="split_assignment_hash", allow_bare=True)
+    _require_sha256_value(manifest.get("grader_image_digest"), field_name="grader_image_digest")
+
+    change_log = manifest.get("change_log", [])
+    if not isinstance(change_log, list):
+        raise IntegrityError("benchmark_manifest.lock change_log must be a list")
+    manifest["change_log"] = change_log
+
+    variants = manifest.get("variants")
+    if not isinstance(variants, list):
+        raise IntegrityError("benchmark_manifest.lock must contain a 'variants' list")
+    return manifest
+
+
 def _find_manifest_variant(manifest: dict[str, Any], family_id: str, variant_id: str) -> dict[str, Any]:
     variants = manifest.get("variants")
     if not isinstance(variants, list):
@@ -191,6 +252,24 @@ def _find_manifest_variant(manifest: dict[str, Any], family_id: str, variant_id:
         if missing:
             raise IntegrityError(
                 f"Manifest entry for '{family_id}/{variant_id}' is missing required fields: {missing}"
+            )
+        _require_sha256_value(entry["image_digest"], field_name=f"{family_id}/{variant_id} image_digest")
+        _require_sha256_value(entry["verifier_hash"], field_name=f"{family_id}/{variant_id} verifier_hash")
+        _require_sha256_value(entry["family_spec_hash"], field_name=f"{family_id}/{variant_id} family_spec_hash")
+        _require_sha256_value(entry["agents_md_hash"], field_name=f"{family_id}/{variant_id} agents_md_hash")
+        _require_sha256_value(
+            entry["verifier_data_hash"],
+            field_name=f"{family_id}/{variant_id} verifier_data_hash",
+        )
+        milestone_hashes = entry["milestone_hashes"]
+        if not isinstance(milestone_hashes, dict) or not milestone_hashes:
+            raise IntegrityError(
+                f"Manifest entry for '{family_id}/{variant_id}' must include non-empty milestone_hashes"
+            )
+        for milestone_id, milestone_hash in milestone_hashes.items():
+            _require_sha256_value(
+                milestone_hash,
+                field_name=f"{family_id}/{variant_id} milestone_hashes[{milestone_id}]",
             )
         return entry
 
@@ -241,10 +320,14 @@ def load_codex_long_splits(
     manifest_path: str | Path,
 ) -> tuple[dict[str, list[CodexLongFamily]], dict[str, CodexLongEnv]]:
     assignment = yaml.safe_load(Path(split_assignment_path).read_text()) or {}
-    manifest = yaml.safe_load(Path(manifest_path).read_text()) or {}
+    manifest = load_codex_long_manifest(manifest_path)
 
     actual_hash = sha256_file(split_assignment_path)
-    expected_hash = manifest.get("split_assignment_hash")
+    expected_hash = _require_sha256_value(
+        manifest.get("split_assignment_hash"),
+        field_name="split_assignment_hash",
+        allow_bare=True,
+    )
     if actual_hash != expected_hash:
         raise IntegrityError(
             f"split_assignment.yaml hash mismatch: expected {expected_hash}, got {actual_hash}"
@@ -254,10 +337,7 @@ def load_codex_long_splits(
     all_scenario_ids: set[str] = set()
     splits: dict[str, list[CodexLongFamily]] = {}
     env_index: dict[str, CodexLongEnv] = {}
-    try:
-        manifest_version = int(manifest["manifest_version"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise IntegrityError("benchmark_manifest.lock must record an integer manifest_version") from exc
+    manifest_version = manifest["manifest_version"]
 
     split_mapping = assignment.get("splits")
     if not isinstance(split_mapping, dict):
@@ -448,11 +528,14 @@ class DataPoolManager:
         recover_running: bool = True,
     ) -> None:
         self.swe_bench_pools, self.swe_bench_metadata = load_swe_bench_pools(swe_bench_pools_path)
+        self.manifest = load_codex_long_manifest(manifest_path)
         self.codex_long_splits, self.codex_long_env_index = load_codex_long_splits(
             split_assignment_path=split_assignment_path,
             manifest_path=manifest_path,
         )
-        self.manifest = yaml.safe_load(Path(manifest_path).read_text()) or {}
+        self.manifest_variant_index = {
+            make_scenario_id(entry["family_id"], entry["variant_id"]): entry for entry in self.manifest["variants"]
+        }
         self.seed_config_path = Path(seed_config_path) if seed_config_path else None
         self.db = _Database(db_path)
         self._init_schema()
@@ -683,6 +766,41 @@ class DataPoolManager:
                 if family.family_id == family_id:
                     return family
         raise KeyError(f"Unknown family_id '{family_id}'")
+
+    def _get_manifest_entry_for_scenario(self, scenario_id: str) -> dict[str, Any]:
+        try:
+            return self.manifest_variant_index[scenario_id]
+        except KeyError as exc:
+            raise KeyError(f"Unknown scenario_id '{scenario_id}'") from exc
+
+    def get_codex_long_launch_artifacts(self, scenario_id: str) -> CodexLongLaunchArtifacts:
+        entry = self._get_manifest_entry_for_scenario(scenario_id)
+        return CodexLongLaunchArtifacts(
+            scenario_id=scenario_id,
+            family_id=entry["family_id"],
+            variant_id=entry["variant_id"],
+            split=entry["split"],
+            scenario_type=entry["scenario_type"],
+            manifest_version=self.manifest["manifest_version"],
+            image_digest=entry["image_digest"],
+            agents_md_hash=entry["agents_md_hash"],
+            family_spec_hash=entry["family_spec_hash"],
+        )
+
+    def get_codex_long_grading_artifacts(self, scenario_id: str) -> CodexLongGradingArtifacts:
+        entry = self._get_manifest_entry_for_scenario(scenario_id)
+        return CodexLongGradingArtifacts(
+            scenario_id=scenario_id,
+            family_id=entry["family_id"],
+            variant_id=entry["variant_id"],
+            split=entry["split"],
+            scenario_type=entry["scenario_type"],
+            manifest_version=self.manifest["manifest_version"],
+            grader_image_digest=self.manifest["grader_image_digest"],
+            verifier_hash=entry["verifier_hash"],
+            milestone_hashes=dict(entry["milestone_hashes"]),
+            verifier_data_hash=entry["verifier_data_hash"],
+        )
 
     def check_rule_1(self, splits: dict[str, list[CodexLongFamily]]) -> bool:
         test_long_family_count = len(splits.get("test_long", []))
@@ -1143,6 +1261,8 @@ class DataPoolManager:
 __all__ = [
     "CodexLongEnv",
     "CodexLongFamily",
+    "CodexLongGradingArtifacts",
+    "CodexLongLaunchArtifacts",
     "DataPoolManager",
     "DispatchDecision",
     "Gate4Outcome",
@@ -1150,6 +1270,7 @@ __all__ = [
     "RunRecord",
     "SealState",
     "TrainingAccessViolation",
+    "load_codex_long_manifest",
     "load_codex_long_splits",
     "load_swe_bench_pools",
     "make_scenario_id",

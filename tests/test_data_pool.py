@@ -7,6 +7,8 @@ import pytest
 import yaml
 
 from lumo_flywheel_serving.data_pool import (
+    CodexLongGradingArtifacts,
+    CodexLongLaunchArtifacts,
     DataPoolManager,
     DispatchDecision,
     IntegrityError,
@@ -26,6 +28,10 @@ SCENARIO_TYPES = [
 
 def _write_yaml(path: Path, payload: dict) -> None:
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+
+def _sha256(value: str) -> str:
+    return f"sha256:{value}"
 
 
 def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str]]]:
@@ -103,23 +109,25 @@ def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str
                         "variant_id": variant_id,
                         "split": split_name,
                         "scenario_type": scenario_type,
-                        "family_spec_hash": f"family-{family_id}",
-                        "image_digest": f"sha256:{family_id}-{variant_id}",
-                        "verifier_hash": f"verifier-{family_id}-{variant_id}",
-                        "milestone_hashes": {"m1": f"m1-{family_id}-{variant_id}"},
-                        "agents_md_hash": f"agents-{family_id}",
-                        "verifier_data_hash": f"data-{family_id}",
+                        "family_spec_hash": _sha256(f"family-{family_id}"),
+                        "image_digest": _sha256(f"{family_id}-{variant_id}"),
+                        "verifier_hash": _sha256(f"verifier-{family_id}-{variant_id}"),
+                        "milestone_hashes": {"m1": _sha256(f"m1-{family_id}-{variant_id}")},
+                        "agents_md_hash": _sha256(f"agents-{family_id}"),
+                        "verifier_data_hash": _sha256(f"data-{family_id}"),
                     }
                 )
 
     _write_yaml(split_path, assignment)
-    split_hash = hashlib.sha256(split_path.read_bytes()).hexdigest()
+    split_hash = _sha256(hashlib.sha256(split_path.read_bytes()).hexdigest())
     _write_yaml(
         manifest_path,
         {
             "manifest_version": 3,
             "split_assignment_hash": split_hash,
+            "grader_image_digest": _sha256("codex-long-grader"),
             "variants": manifest_variants,
+            "change_log": [],
         },
     )
     return pools_path, split_path, manifest_path, families_by_split
@@ -141,7 +149,7 @@ def test_load_codex_long_splits_and_public_dev_carve_out(tmp_path: Path) -> None
     try:
         assert manager.swe_bench_metadata["upstream_commit"] == "princeton-nlp/SWE-bench@abc1234"
         assert manager.b1_viable is False
-        assert manager.codex_long_env_index["train-feature/v1"].image_digest == "sha256:train-feature-v1"
+        assert manager.codex_long_env_index["train-feature/v1"].image_digest == _sha256("train-feature-v1")
         assert {family.family_id for family in manager.list_families("train_long")} == set(families_by_split["train_long"])
         assert len(manager.list_codex_long_envs("public_dev", exclude_finished=False)) == 2
     finally:
@@ -180,6 +188,11 @@ def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path
     with pytest.raises(IntegrityError, match="must contain a 'variants' list"):
         _find_manifest_variant(non_list_manifest, "train-feature", "v1")
 
+    malformed_hash_manifest = yaml.safe_load(manifest_path.read_text())
+    malformed_hash_manifest["variants"][0]["family_spec_hash"] = "not-a-digest"
+    with pytest.raises(IntegrityError, match="family_spec_hash"):
+        _find_manifest_variant(malformed_hash_manifest, malformed_hash_manifest["variants"][0]["family_id"], "v1")
+
     # Sanity check that the split loader is actually using the frozen hash.
     split_path.write_text(split_path.read_text() + "\n# drift\n", encoding="utf-8")
     with pytest.raises(IntegrityError, match="hash mismatch"):
@@ -203,6 +216,52 @@ def test_manager_requires_manifest_version(tmp_path: Path) -> None:
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "broken-version.db",
+        )
+
+
+def test_manager_requires_grader_digest_and_exposes_phase_artifacts(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        launch = manager.get_codex_long_launch_artifacts("train-feature/v1")
+        grading = manager.get_codex_long_grading_artifacts("train-feature/v1")
+
+        assert launch == CodexLongLaunchArtifacts(
+            scenario_id="train-feature/v1",
+            family_id="train-feature",
+            variant_id="v1",
+            split="train_long",
+            scenario_type="feature_evolution",
+            manifest_version=3,
+            image_digest=_sha256("train-feature-v1"),
+            agents_md_hash=_sha256("agents-train-feature"),
+            family_spec_hash=_sha256("family-train-feature"),
+        )
+        assert grading == CodexLongGradingArtifacts(
+            scenario_id="train-feature/v1",
+            family_id="train-feature",
+            variant_id="v1",
+            split="train_long",
+            scenario_type="feature_evolution",
+            manifest_version=3,
+            grader_image_digest=_sha256("codex-long-grader"),
+            verifier_hash=_sha256("verifier-train-feature-v1"),
+            milestone_hashes={"m1": _sha256("m1-train-feature-v1")},
+            verifier_data_hash=_sha256("data-train-feature"),
+        )
+    finally:
+        manager.close()
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest.pop("grader_image_digest")
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="grader_image_digest"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "broken-grader.db",
         )
 
 
