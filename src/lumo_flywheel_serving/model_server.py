@@ -183,6 +183,15 @@ class ModelServer:
     def logs_path(self, model_id: str) -> Path:
         return self.logs_root / f"vllm_{model_id}.log"
 
+    def record_launch_metadata(self, model_id: str, **metadata: str | float | int | bool) -> None:
+        if not metadata:
+            return
+        rendered = " ".join(
+            f"{key}={str(value).lower() if isinstance(value, bool) else value}"
+            for key, value in sorted(metadata.items())
+        )
+        self._append_log_text(model_id, f"[VLLM-META] {rendered}\n")
+
     @staticmethod
     def _api_key() -> str:
         return os.environ.get("VLLM_API_KEY") or "EMPTY"

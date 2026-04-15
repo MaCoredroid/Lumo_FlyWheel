@@ -165,6 +165,21 @@ def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path
     with pytest.raises(IntegrityError, match="missing required fields"):
         _find_manifest_variant(metadata_broken_manifest, metadata_broken_manifest["variants"][0]["family_id"], "v1")
 
+    duplicate_manifest = yaml.safe_load(manifest_path.read_text())
+    duplicate_manifest["variants"].append(dict(duplicate_manifest["variants"][0]))
+    with pytest.raises(IntegrityError, match="multiple entries"):
+        _find_manifest_variant(duplicate_manifest, duplicate_manifest["variants"][0]["family_id"], "v1")
+
+    malformed_manifest = yaml.safe_load(manifest_path.read_text())
+    malformed_manifest["variants"][0].pop("family_id")
+    with pytest.raises(IntegrityError, match="family_id and variant_id"):
+        _find_manifest_variant(malformed_manifest, "train-feature", "v1")
+
+    non_list_manifest = yaml.safe_load(manifest_path.read_text())
+    non_list_manifest["variants"] = {"broken": True}
+    with pytest.raises(IntegrityError, match="must contain a 'variants' list"):
+        _find_manifest_variant(non_list_manifest, "train-feature", "v1")
+
     # Sanity check that the split loader is actually using the frozen hash.
     split_path.write_text(split_path.read_text() + "\n# drift\n", encoding="utf-8")
     with pytest.raises(IntegrityError, match="hash mismatch"):
@@ -173,6 +188,21 @@ def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "broken.db",
+        )
+
+
+def test_manager_requires_manifest_version(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest.pop("manifest_version")
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="manifest_version"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "broken-version.db",
         )
 
 

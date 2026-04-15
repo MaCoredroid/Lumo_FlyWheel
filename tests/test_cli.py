@@ -38,6 +38,37 @@ def _args() -> argparse.Namespace:
     )
 
 
+def test_annotate_log_records_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    server = SimpleNamespace(
+        record_launch_metadata=lambda model_id, **metadata: seen.update({"model_id": model_id, "metadata": metadata})
+    )
+    monkeypatch.setattr(cli, "_server", lambda args: server)
+
+    args = _args()
+    args.entries = ["gate1_responses_status=pass", "metric_schema_variant=openmetrics_total"]
+
+    assert cli.cmd_annotate_log(args) == 0
+    assert seen == {
+        "model_id": "qwen3.5-27b",
+        "metadata": {
+            "gate1_responses_status": "pass",
+            "metric_schema_variant": "openmetrics_total",
+        },
+    }
+
+
+def test_annotate_log_rejects_invalid_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "_server", lambda args: SimpleNamespace(record_launch_metadata=lambda *a, **k: None))
+
+    args = _args()
+    args.entries = ["broken-entry"]
+
+    with pytest.raises(RuntimeError, match="Expected key=value"):
+        cli.cmd_annotate_log(args)
+
+
 def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     events: list[str] = []
     metrics_iter = iter(["before", "after"])
@@ -47,6 +78,7 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
         metrics=lambda: _Response(text=next(metrics_iter)),
+        record_launch_metadata=lambda model_id, **metadata: events.append(f"meta:{model_id}:{metadata}"),
         flush_prefix_cache=lambda: events.append("flush"),
         stop=lambda missing_ok=True: events.append(f"stop:{missing_ok}"),
     )
@@ -73,7 +105,12 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
 
     output = json.loads(capsys.readouterr().out)
     assert output["prefix_cache_hits_delta"] == 3.0
-    assert events == ["start:qwen3.5-27b", "flush", "stop:True"]
+    assert events == [
+        "start:qwen3.5-27b",
+        "meta:qwen3.5-27b:{'metric_schema_variant': 'legacy_no_total', 'prefix_cache_hits_delta': 3.0}",
+        "flush",
+        "stop:True",
+    ]
     assert len(requests_seen) == 3
     assert requests_seen[0]["url"].endswith("/v1/chat/completions")
     assert requests_seen[1]["url"].endswith("/v1/chat/completions")
@@ -92,6 +129,7 @@ def test_smoke_test_fails_when_prefix_cache_hits_do_not_increase(monkeypatch: py
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
         metrics=lambda: _Response(text="ignored"),
+        record_launch_metadata=lambda model_id, **metadata: events.append(f"meta:{model_id}:{metadata}"),
         flush_prefix_cache=lambda: events.append("flush"),
         stop=lambda missing_ok=True: events.append(f"stop:{missing_ok}"),
     )
@@ -118,6 +156,7 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
         metrics=lambda: _Response(text="ignored"),
+        record_launch_metadata=lambda model_id, **metadata: None,
         flush_prefix_cache=lambda: None,
         stop=lambda missing_ok=True: None,
     )

@@ -147,6 +147,39 @@ models:
     assert server._chat_template_container_path(server.registry["glm-4.7"]) is None
 
 
+def test_record_launch_metadata_appends_sorted_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    lines: list[str] = []
+    monkeypatch.setattr(server, "_append_log_text", lambda model_id, text: lines.append(f"{model_id}:{text}"))
+
+    server.record_launch_metadata(
+        "qwen3.5-27b",
+        metric_schema_variant="openmetrics_total",
+        gate1_responses_status="pass",
+        sleep_mode=False,
+    )
+
+    assert lines == [
+        "qwen3.5-27b:[VLLM-META] gate1_responses_status=pass metric_schema_variant=openmetrics_total sleep_mode=false\n"
+    ]
+
+
 def test_next_gpu_memory_utilization_uses_reported_free_memory() -> None:
     error_text = (
         "ValueError: Free memory on device cuda:0 (25.22/117.51 GiB) on startup "

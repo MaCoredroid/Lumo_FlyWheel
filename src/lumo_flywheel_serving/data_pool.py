@@ -152,24 +152,47 @@ def sha256_file(path: str | Path) -> str:
 
 
 def _find_manifest_variant(manifest: dict[str, Any], family_id: str, variant_id: str) -> dict[str, Any]:
-    for entry in manifest.get("variants", []):
-        if entry["family_id"] == family_id and entry["variant_id"] == variant_id:
-            required_fields = [
-                "split",
-                "scenario_type",
-                "image_digest",
-                "verifier_hash",
-                "family_spec_hash",
-                "agents_md_hash",
-                "verifier_data_hash",
-                "milestone_hashes",
-            ]
-            missing = [field for field in required_fields if field not in entry]
-            if missing:
-                raise IntegrityError(
-                    f"Manifest entry for '{family_id}/{variant_id}' is missing required fields: {missing}"
-                )
-            return entry
+    variants = manifest.get("variants")
+    if not isinstance(variants, list):
+        raise IntegrityError("benchmark_manifest.lock must contain a 'variants' list")
+
+    matches: list[dict[str, Any]] = []
+    for index, entry in enumerate(variants):
+        if not isinstance(entry, dict):
+            raise IntegrityError(f"Manifest variants[{index}] must be a mapping")
+
+        entry_family_id = entry.get("family_id")
+        entry_variant_id = entry.get("variant_id")
+        if not isinstance(entry_family_id, str) or not isinstance(entry_variant_id, str):
+            raise IntegrityError(
+                f"Manifest variants[{index}] must include string family_id and variant_id fields"
+            )
+
+        if entry_family_id == family_id and entry_variant_id == variant_id:
+            matches.append(entry)
+
+    if len(matches) > 1:
+        raise IntegrityError(
+            f"Variant '{family_id}/{variant_id}' has multiple entries in benchmark_manifest.lock"
+        )
+    if matches:
+        entry = matches[0]
+        required_fields = [
+            "split",
+            "scenario_type",
+            "image_digest",
+            "verifier_hash",
+            "family_spec_hash",
+            "agents_md_hash",
+            "verifier_data_hash",
+            "milestone_hashes",
+        ]
+        missing = [field for field in required_fields if field not in entry]
+        if missing:
+            raise IntegrityError(
+                f"Manifest entry for '{family_id}/{variant_id}' is missing required fields: {missing}"
+            )
+        return entry
 
     raise IntegrityError(
         f"Variant '{family_id}/{variant_id}' appears in split_assignment.yaml but has no entry in "
@@ -231,7 +254,10 @@ def load_codex_long_splits(
     all_scenario_ids: set[str] = set()
     splits: dict[str, list[CodexLongFamily]] = {}
     env_index: dict[str, CodexLongEnv] = {}
-    manifest_version = int(manifest["manifest_version"])
+    try:
+        manifest_version = int(manifest["manifest_version"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise IntegrityError("benchmark_manifest.lock must record an integer manifest_version") from exc
 
     split_mapping = assignment.get("splits")
     if not isinstance(split_mapping, dict):

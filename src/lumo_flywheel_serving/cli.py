@@ -70,6 +70,13 @@ def _auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {ModelServer._api_key()}"}
 
 
+def _metric_schema_variant(schema: dict[str, str]) -> str:
+    values = list(schema.values())
+    if values and all(key.endswith("_total") for key in values):
+        return "openmetrics_total"
+    return "legacy_no_total"
+
+
 def cmd_bootstrap_runtime(args: argparse.Namespace) -> int:
     for raw_path in (args.models_root, args.logs_root, args.triton_cache_root):
         Path(raw_path).mkdir(parents=True, exist_ok=True)
@@ -200,6 +207,11 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             raise RuntimeError(
                 "Expected prefix cache hits after repeated-prefix chat turns, but /metrics did not increase."
             )
+        server.record_launch_metadata(
+            args.model_id,
+            metric_schema_variant=_metric_schema_variant(schema),
+            prefix_cache_hits_delta=round(cache_hit_delta, 3),
+        )
         server.flush_prefix_cache()
         print(
             json.dumps(
@@ -224,6 +236,20 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
 def cmd_switch_model(args: argparse.Namespace) -> int:
     server = _server(args)
     server.switch_model(model_id=args.model_id, enable_request_logging=args.enable_request_logging)
+    return 0
+
+
+def cmd_annotate_log(args: argparse.Namespace) -> int:
+    server = _server(args)
+    metadata: dict[str, str] = {}
+    for raw_entry in args.entries:
+        if "=" not in raw_entry:
+            raise RuntimeError(f"Invalid metadata entry '{raw_entry}'. Expected key=value.")
+        key, value = raw_entry.split("=", 1)
+        if not key:
+            raise RuntimeError(f"Invalid metadata entry '{raw_entry}'. Metadata keys must be non-empty.")
+        metadata[key] = value
+    server.record_launch_metadata(args.model_id, **metadata)
     return 0
 
 
@@ -276,6 +302,11 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--enable-request-logging", action="store_true")
     smoke.add_argument("--keep-running", action="store_true")
     smoke.set_defaults(func=cmd_smoke_test)
+
+    annotate = subparsers.add_parser("annotate-log")
+    annotate.add_argument("model_id")
+    annotate.add_argument("entries", nargs="+")
+    annotate.set_defaults(func=cmd_annotate_log)
     return parser
 
 
