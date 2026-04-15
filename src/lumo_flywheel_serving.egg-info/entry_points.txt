@@ -1,2 +1,0 @@
-[console_scripts]
-lumoserve = lumo_flywheel_serving.cli:main
