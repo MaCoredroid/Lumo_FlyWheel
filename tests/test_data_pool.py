@@ -2365,6 +2365,89 @@ def test_gate4_outcome_reload_ignores_legacy_rows_missing_new_columns(
         reloaded.close()
 
 
+def test_manager_migrates_legacy_runs_table_before_querying_rows(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    db_path = tmp_path / "legacy-runs.db"
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE runs (
+                track TEXT NOT NULL,
+                pool_or_split TEXT NOT NULL,
+                scenario_id TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                harness TEXT NOT NULL,
+                seed INTEGER NOT NULL,
+                attempt INTEGER NOT NULL DEFAULT 1,
+                exec_state TEXT NOT NULL DEFAULT 'pending',
+                outcome TEXT,
+                started_at TEXT,
+                completed_at TEXT,
+                wall_time_s REAL,
+                trajectory_path TEXT,
+                PRIMARY KEY (track, pool_or_split, scenario_id, model_id, harness, seed, attempt)
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO runs (
+                track,
+                pool_or_split,
+                scenario_id,
+                model_id,
+                harness,
+                seed,
+                attempt,
+                exec_state,
+                outcome,
+                started_at,
+                completed_at,
+                wall_time_s,
+                trajectory_path
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "codex_long",
+                "train_long",
+                "train-feature/v1",
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "finished",
+                "resolved",
+                "2026-06-20T00:00:00+00:00",
+                "2026-06-20T00:10:00+00:00",
+                600.0,
+                "/tmp/train-feature-v1.jsonl",
+            ),
+        )
+
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        runs = manager._query_runs("codex_long", "train_long", "train-feature/v1", "qwen3.5-27b", "codex", 1)
+        assert len(runs) == 1
+        run = runs[0]
+        assert run.is_current is True
+        assert run.recovery_action is None
+        assert run.required_manifest_ver is None
+        assert run.snapshot_image_ref is None
+        assert run.re_gate_required is False
+        assert manager.check_dispatch_eligible(
+            "codex_long", "train_long", "train-feature/v1", "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.SKIP
+    finally:
+        manager.close()
+
+
 def test_gate4_outcome_requires_hld_diversity_fields_for_full_plan_proceed(tmp_path: Path) -> None:
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path, full_plan=True)
     manager = DataPoolManager(

@@ -983,7 +983,7 @@ class DataPoolManager:
         return list(range(1, self.assigned_seed_count(track, pool_or_split, model_id, harness) + 1))
 
     def _init_schema(self) -> None:
-        self.db.connection.executescript(
+        self.db.connection.execute(
             """
             CREATE TABLE IF NOT EXISTS runs (
                 track TEXT NOT NULL,
@@ -1016,7 +1016,32 @@ class DataPoolManager:
                 CHECK (outcome IN ('resolved', 'failed', 'no_patch', 'timeout', 'crash') OR outcome IS NULL),
                 CHECK (track IN ('swe_bench', 'codex_long')),
                 CHECK (harness IN ('codex', 'swe_agent'))
-            );
+            )
+            """
+        )
+        existing_run_columns = {
+            row["name"]
+            for row in self.db.execute("PRAGMA table_info(runs)").fetchall()
+        }
+        legacy_run_column_defs = {
+            "family_id": "TEXT",
+            "scenario_type": "TEXT",
+            "launch_manifest_ver": "INTEGER",
+            "grading_manifest_ver": "INTEGER",
+            "is_current": "INTEGER NOT NULL DEFAULT 1",
+            "superseded_by": "INTEGER",
+            "recovery_action": "TEXT",
+            "required_manifest_ver": "INTEGER",
+            "re_gate_required": "INTEGER DEFAULT 0",
+            "snapshot_image_ref": "TEXT",
+            "cl_pass": "INTEGER",
+            "milestone_json": "TEXT",
+        }
+        for column_name, column_def in legacy_run_column_defs.items():
+            if column_name not in existing_run_columns:
+                self.db.connection.execute(f"ALTER TABLE runs ADD COLUMN {column_name} {column_def}")
+        self.db.connection.executescript(
+            """
             CREATE INDEX IF NOT EXISTS idx_pool_exec ON runs(pool_or_split, exec_state);
             CREATE INDEX IF NOT EXISTS idx_pool_outcome ON runs(pool_or_split, outcome) WHERE outcome IS NOT NULL;
             CREATE INDEX IF NOT EXISTS idx_model ON runs(model_id, exec_state);
@@ -1062,12 +1087,6 @@ class DataPoolManager:
                 self.db.connection.execute(
                     f"ALTER TABLE gate4_outcome ADD COLUMN {column_name} INTEGER"
                 )
-        existing_run_columns = {
-            row["name"]
-            for row in self.db.execute("PRAGMA table_info(runs)").fetchall()
-        }
-        if "required_manifest_ver" not in existing_run_columns:
-            self.db.connection.execute("ALTER TABLE runs ADD COLUMN required_manifest_ver INTEGER")
         self.db.connection.commit()
 
     def _row_to_run_record(self, row: sqlite3.Row) -> RunRecord:
