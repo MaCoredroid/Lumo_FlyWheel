@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 import pytest
 import requests
@@ -101,8 +102,52 @@ def test_next_gpu_memory_utilization_keeps_legacy_steps_for_unparsed_errors() ->
     assert ModelServer._next_gpu_memory_utilization("Free memory on device cuda:0", current=0.65) == 0.6
 
 
+def test_low_free_memory_prefers_grace_retries_before_degrading() -> None:
+    error_text = (
+        "ValueError: Free memory on device cuda:0 (7.06/117.51 GiB) on startup "
+        "is less than desired GPU memory utilization (0.9, 105.76 GiB). "
+        "Decrease GPU memory utilization or reduce GPU memory used by other processes."
+    )
+    assert ModelServer._should_retry_low_free_memory(error_text, retries=0) is True
+    assert ModelServer._should_retry_low_free_memory(error_text, retries=1) is True
+    assert ModelServer._should_retry_low_free_memory(error_text, retries=2) is False
+
+
 def test_next_gpu_memory_utilization_stops_before_context_floor() -> None:
     assert ModelServer._next_gpu_memory_utilization("Free memory on device cuda:0", current=0.15) is None
+
+
+def test_wait_vram_free_uses_grace_period_when_nvidia_smi_is_unsupported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    sleeps: list[float] = []
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, stdout="[Not Supported]\n", stderr="")
+
+    monkeypatch.setattr(server, "_run", fake_run)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", lambda seconds: sleeps.append(seconds))
+
+    server._wait_vram_free(timeout_s=5)
+
+    assert sleeps == [5]
 
 
 def test_models_uses_auth_header(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

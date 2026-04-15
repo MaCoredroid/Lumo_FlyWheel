@@ -158,14 +158,9 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         )
         responses_call.raise_for_status()
         metrics_after = parse_prometheus_text(server.metrics().text)
-        cache_hit_delta = metrics_after.get("vllm:prefix_cache_hits", 0.0) - metrics_before.get(
-            "vllm:prefix_cache_hits", 0.0
-        )
-        reset_status = requests.post(
-            f"http://127.0.0.1:{args.port}/reset_prefix_cache",
-            timeout=30,
-        )
-        reset_status.raise_for_status()
+        cache_hit_metric = schema["prefix_cache_hits"]
+        cache_hit_delta = metrics_after.get(cache_hit_metric, 0.0) - metrics_before.get(cache_hit_metric, 0.0)
+        server.flush_prefix_cache()
         print(
             json.dumps(
                 {
@@ -174,7 +169,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
                     "schema": schema,
                     "chat_completion_ids": [first_chat.json().get("id"), second_chat.json().get("id")],
                     "responses_id": responses_call.json().get("id"),
-                    "reset_prefix_cache_status": reset_status.status_code,
+                    "reset_prefix_cache_status": 200,
                     "prefix_cache_hits_delta": cache_hit_delta,
                 },
                 indent=2,

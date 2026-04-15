@@ -3,7 +3,13 @@ from __future__ import annotations
 COUNTER_VARIANTS = {
     "prompt_tokens": ["vllm:prompt_tokens_total", "vllm:prompt_tokens"],
     "generation_tokens": ["vllm:generation_tokens_total", "vllm:generation_tokens"],
+    "prefix_cache_queries": ["vllm:prefix_cache_queries_total", "vllm:prefix_cache_queries"],
+    "prefix_cache_hits": ["vllm:prefix_cache_hits_total", "vllm:prefix_cache_hits"],
 }
+
+
+def _normalize_metric_key(key: str) -> str:
+    return key.split("{", 1)[0]
 
 
 def parse_prometheus_text(raw: str) -> dict[str, float]:
@@ -20,7 +26,8 @@ def parse_prometheus_text(raw: str) -> dict[str, float]:
             value = float(parts[-1])
         except ValueError:
             continue
-        metrics[key] = value
+        normalized_key = _normalize_metric_key(key)
+        metrics[normalized_key] = metrics.get(normalized_key, 0.0) + value
     return metrics
 
 
@@ -48,8 +55,8 @@ def compute_task_metrics(
     prompt_tokens = _required_delta(before, after, schema["prompt_tokens"])
     kv_computed_tokens = _required_delta(before, after, "vllm:request_prefill_kv_computed_tokens_sum")
     gen_tokens = _required_delta(before, after, schema["generation_tokens"])
-    cache_queries = _required_delta(before, after, "vllm:prefix_cache_queries")
-    cache_hits = _required_delta(before, after, "vllm:prefix_cache_hits")
+    cache_queries = _required_delta(before, after, schema["prefix_cache_queries"])
+    cache_hits = _required_delta(before, after, schema["prefix_cache_hits"])
     ttft_sum = _required_delta(before, after, "vllm:time_to_first_token_seconds_sum")
     ttft_count = _required_delta(before, after, "vllm:time_to_first_token_seconds_count")
     prefill_sum_s = _required_delta(before, after, "vllm:request_prefill_time_seconds_sum")

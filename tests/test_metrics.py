@@ -7,6 +7,7 @@ def test_parse_prometheus_text_and_schema_resolution() -> None:
 # HELP vllm:prompt_tokens Prompt tokens
 vllm:prompt_tokens 10
 vllm:generation_tokens_total 4
+vllm:prefix_cache_queries_total 2
 vllm:prefix_cache_hits 1
 """
     )
@@ -14,6 +15,33 @@ vllm:prefix_cache_hits 1
     assert resolve_metric_schema(metrics) == {
         "prompt_tokens": "vllm:prompt_tokens",
         "generation_tokens": "vllm:generation_tokens_total",
+        "prefix_cache_queries": "vllm:prefix_cache_queries_total",
+        "prefix_cache_hits": "vllm:prefix_cache_hits",
+    }
+
+
+def test_parse_prometheus_text_strips_labels_and_accumulates_series() -> None:
+    metrics = parse_prometheus_text(
+        """
+vllm:prompt_tokens_total{model_name="qwen3.5-27b",engine="0"} 10
+vllm:generation_tokens_total{model_name="qwen3.5-27b",engine="0"} 4
+vllm:prefix_cache_queries_total{model_name="qwen3.5-27b",engine="0"} 3
+vllm:prefix_cache_hits_total{model_name="qwen3.5-27b",engine="0"} 1
+vllm:request_prefill_time_seconds_sum{model_name="qwen3.5-27b",engine="0"} 2.5
+vllm:request_prefill_time_seconds_count{model_name="qwen3.5-27b",engine="0"} 3
+"""
+    )
+    assert metrics["vllm:prompt_tokens_total"] == 10
+    assert metrics["vllm:generation_tokens_total"] == 4
+    assert metrics["vllm:prefix_cache_queries_total"] == 3
+    assert metrics["vllm:prefix_cache_hits_total"] == 1
+    assert metrics["vllm:request_prefill_time_seconds_sum"] == 2.5
+    assert metrics["vllm:request_prefill_time_seconds_count"] == 3
+    assert resolve_metric_schema(metrics) == {
+        "prompt_tokens": "vllm:prompt_tokens_total",
+        "generation_tokens": "vllm:generation_tokens_total",
+        "prefix_cache_queries": "vllm:prefix_cache_queries_total",
+        "prefix_cache_hits": "vllm:prefix_cache_hits_total",
     }
 
 
@@ -46,6 +74,8 @@ def test_compute_task_metrics_uses_sum_deltas() -> None:
         schema={
             "prompt_tokens": "vllm:prompt_tokens_total",
             "generation_tokens": "vllm:generation_tokens_total",
+            "prefix_cache_queries": "vllm:prefix_cache_queries",
+            "prefix_cache_hits": "vllm:prefix_cache_hits",
         },
     )
     assert metrics["prompt_tokens"] == 60.0

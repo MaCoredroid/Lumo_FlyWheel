@@ -18,6 +18,9 @@ DEFAULT_VLLM_BASE_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_VLLM_IMAGE = "lumo-flywheel-vllm:26.01-py3-v0.19.0"
 DEFAULT_VLLM_DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
 MIN_GPU_MEMORY_UTILIZATION = 0.15
+UNSUPPORTED_NVIDIA_SMI_GRACE_S = 20
+LOW_FREE_MEMORY_GRACE_RETRIES = 2
+LOW_FREE_MEMORY_GRACE_SLEEP_S = 45
 GPU_MEMORY_ERROR_RE = re.compile(
     r"Free memory on device cuda:\d+ \((?P<free>[0-9.]+)/(?P<total>[0-9.]+) GiB\)"
 )
@@ -56,6 +59,7 @@ class ModelServer:
         kv_cache_dtype = config.kv_cache_dtype
         gpu_memory_utilization = config.gpu_memory_utilization
         enforce_eager = False
+        low_memory_grace_retries = 0
         while True:
             self._run(
                 self._build_run_command(
@@ -82,11 +86,16 @@ class ModelServer:
                     kv_cache_dtype = "auto"
                     continue
                 if insufficient_memory in error_text:
+                    if self._should_retry_low_free_memory(error_text, retries=low_memory_grace_retries):
+                        low_memory_grace_retries += 1
+                        time.sleep(LOW_FREE_MEMORY_GRACE_SLEEP_S)
+                        continue
                     next_gpu_memory_utilization = self._next_gpu_memory_utilization(
                         error_text,
                         current=gpu_memory_utilization,
                     )
                     if next_gpu_memory_utilization is not None:
+                        low_memory_grace_retries = 0
                         gpu_memory_utilization = next_gpu_memory_utilization
                         continue
                 if fp8_cutlass_internal_error in error_text and not enforce_eager:
@@ -188,11 +197,27 @@ class ModelServer:
         )
 
     @staticmethod
-    def _next_gpu_memory_utilization(error_text: str, current: float) -> float | None:
+    def _gpu_memory_snapshot(error_text: str) -> tuple[float, float] | None:
         match = GPU_MEMORY_ERROR_RE.search(error_text)
-        if match:
-            free_gib = float(match.group("free"))
-            total_gib = float(match.group("total"))
+        if match is None:
+            return None
+        return float(match.group("free")), float(match.group("total"))
+
+    @classmethod
+    def _should_retry_low_free_memory(cls, error_text: str, retries: int) -> bool:
+        if retries >= LOW_FREE_MEMORY_GRACE_RETRIES:
+            return False
+        snapshot = cls._gpu_memory_snapshot(error_text)
+        if snapshot is None:
+            return False
+        free_gib, total_gib = snapshot
+        return total_gib > 0 and (free_gib / total_gib) < 0.5
+
+    @staticmethod
+    def _next_gpu_memory_utilization(error_text: str, current: float) -> float | None:
+        snapshot = ModelServer._gpu_memory_snapshot(error_text)
+        if snapshot is not None:
+            free_gib, total_gib = snapshot
             usable_free_gib = max(0.0, free_gib - 1.0)
             candidate = max(MIN_GPU_MEMORY_UTILIZATION, int((usable_free_gib / total_gib) * 100) / 100)
             if candidate < current:
@@ -412,10 +437,15 @@ class ModelServer:
                 check=False,
             )
             if result.returncode == 0:
-                pids = [line.strip() for line in result.stdout.splitlines() if line.strip() and line.strip() != "[Not Supported]"]
+                lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+                if lines == ["[Not Supported]"]:
+                    time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
+                    return
+                pids = [line for line in lines if line != "[Not Supported]"]
                 if not pids:
                     return
             else:
+                time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
                 return
             time.sleep(2)
 
