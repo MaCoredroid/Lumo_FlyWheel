@@ -469,6 +469,44 @@ models:
         server._wait_vram_free(timeout_s=40, required_utilization=0.9)
 
 
+def test_wait_vram_free_rejects_persistent_busy_compute_pids_without_memory_probe(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    now = 0.0
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, stdout="1234\n", stderr="")
+
+    def fake_sleep(seconds: float) -> None:
+        nonlocal now
+        now += seconds
+
+    monkeypatch.setattr(server, "_run", fake_run)
+    monkeypatch.setattr(server, "_cuda_mem_get_info_gib", lambda: None)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", fake_sleep)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.time", lambda: now)
+
+    with pytest.raises(RuntimeError, match="active GPU compute processes"):
+        server._wait_vram_free(timeout_s=5, required_utilization=0.9)
+
+
 def test_start_resets_previous_log_before_retry_cycle(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(

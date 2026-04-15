@@ -653,6 +653,7 @@ class ModelServer:
     def _wait_vram_free(self, timeout_s: int = 120, required_utilization: float | None = None) -> None:
         deadline = time.time() + timeout_s
         last_snapshot: tuple[float, float] | None = None
+        last_busy_pids: list[str] = []
         while time.time() < deadline:
             remaining_s = max(0.0, deadline - time.time())
             result = self._run(
@@ -677,6 +678,7 @@ class ModelServer:
                     continue
                 pids = [line for line in lines if line != "[Not Supported]"]
                 if not pids:
+                    last_busy_pids = []
                     memory_snapshot = self._cuda_mem_get_info_gib()
                     last_snapshot = memory_snapshot
                     if memory_snapshot is None:
@@ -685,6 +687,8 @@ class ModelServer:
                         return
                     time.sleep(5)
                     continue
+                last_busy_pids = pids
+                last_snapshot = self._cuda_mem_get_info_gib()
             else:
                 memory_snapshot = self._cuda_mem_get_info_gib()
                 last_snapshot = memory_snapshot
@@ -696,6 +700,14 @@ class ModelServer:
                 time.sleep(min(remaining_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
                 continue
             time.sleep(2)
+        if last_busy_pids:
+            message = "Timed out waiting for active GPU compute processes to exit before vLLM launch"
+            if last_snapshot is not None:
+                free_gib, total_gib = last_snapshot
+                message += f": active PIDs {', '.join(last_busy_pids)}; last free VRAM {free_gib:.2f}/{total_gib:.2f} GiB"
+            else:
+                message += f": active PIDs {', '.join(last_busy_pids)}; VRAM probe unavailable"
+            raise RuntimeError(message)
         if last_snapshot is not None and not self._has_required_free_memory(last_snapshot, MIN_GPU_MEMORY_UTILIZATION):
             free_gib, total_gib = last_snapshot or (0.0, 0.0)
             minimum_required_gib = (total_gib * MIN_GPU_MEMORY_UTILIZATION) + CUDA_MEMORY_RECOVERY_MARGIN_GIB
