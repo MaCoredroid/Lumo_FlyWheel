@@ -15,6 +15,27 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_SEED_CONFIG: dict[str, Any] = {
+    "swe_bench": {
+        "dev_bench": {"default_seeds": 1},
+        "bench_control": {"default_seeds": 1, "max_seeds": 2},
+        "final_test": {
+            "default_seeds": 1,
+            "overrides": [
+                {"model": "qwen3.5-27b", "harness": "codex", "seeds": 3},
+                {"model": "codex-sft-all", "harness": "codex", "seeds": 3},
+                {"model": "*", "harness": "*", "seeds": 1},
+            ],
+        },
+    },
+    "codex_long": {
+        "train_long": {"default_seeds": 2, "max_seeds": 3},
+        "val_long": {"default_seeds": 1},
+        "test_long": {"default_seeds": 1, "max_seeds": 2},
+        "public_dev": {"default_seeds": 1},
+    },
+}
+
 SCENARIO_TYPES = {
     "feature_evolution",
     "migration_refactor",
@@ -375,11 +396,10 @@ class DataPoolManager:
             manifest_path=manifest_path,
         )
         self.manifest = yaml.safe_load(Path(manifest_path).read_text()) or {}
+        self.seed_config_path = Path(seed_config_path) if seed_config_path else None
         self.db = _Database(db_path)
         self._init_schema()
-        self.seed_config = (
-            yaml.safe_load(Path(seed_config_path).read_text()) if seed_config_path and Path(seed_config_path).exists() else {}
-        )
+        self.seed_config = self._load_seed_config(self.seed_config_path)
         self.seal_state = SealState(Path(db_path).with_suffix(".unseal_log.jsonl"))
         self.b1_viable = self.check_rule_1(self.codex_long_splits)
         self.gate4_outcome: Gate4Outcome | None = None
@@ -390,6 +410,53 @@ class DataPoolManager:
 
     def close(self) -> None:
         self.db.close()
+
+    @staticmethod
+    def _load_seed_config(path: Path | None) -> dict[str, Any]:
+        if path is None or not path.exists():
+            return json.loads(json.dumps(DEFAULT_SEED_CONFIG))
+        raw = yaml.safe_load(path.read_text()) or {}
+        if not isinstance(raw, dict):
+            raise IntegrityError("seed_config.yaml must be a mapping")
+        return raw
+
+    def reload_seed_config(self, seed_config_path: str | Path | None = None) -> dict[str, Any]:
+        if seed_config_path is not None:
+            self.seed_config_path = Path(seed_config_path)
+        self.seed_config = self._load_seed_config(self.seed_config_path)
+        return self.seed_config
+
+    def _seed_policy(self, track: str, pool_or_split: str) -> dict[str, Any]:
+        try:
+            policy = self.seed_config[track][pool_or_split]
+        except KeyError as exc:
+            raise KeyError(f"No seed policy configured for {track}/{pool_or_split}") from exc
+        if not isinstance(policy, dict):
+            raise IntegrityError(f"Seed policy for {track}/{pool_or_split} must be a mapping")
+        return policy
+
+    @staticmethod
+    def _override_matches(override: dict[str, Any], model_id: str, harness: str) -> bool:
+        return override.get("model", "*") in {"*", model_id} and override.get("harness", "*") in {"*", harness}
+
+    def assigned_seed_count(self, track: str, pool_or_split: str, model_id: str, harness: str) -> int:
+        policy = self._seed_policy(track, pool_or_split)
+        count = int(policy.get("default_seeds", 1))
+        for override in policy.get("overrides", []):
+            if not isinstance(override, dict):
+                raise IntegrityError(f"Seed override for {track}/{pool_or_split} must be a mapping")
+            if self._override_matches(override, model_id=model_id, harness=harness):
+                count = int(override["seeds"])
+                break
+        max_seeds = policy.get("max_seeds")
+        if max_seeds is not None:
+            count = min(count, int(max_seeds))
+        if count < 1:
+            raise IntegrityError(f"Seed policy for {track}/{pool_or_split} resolved to {count}; expected >= 1")
+        return count
+
+    def list_assigned_seeds(self, track: str, pool_or_split: str, model_id: str, harness: str) -> list[int]:
+        return list(range(1, self.assigned_seed_count(track, pool_or_split, model_id, harness) + 1))
 
     def _init_schema(self) -> None:
         self.db.connection.executescript(

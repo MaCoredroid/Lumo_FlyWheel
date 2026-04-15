@@ -495,3 +495,54 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
         assert labels["variant_id"] == "v1"
     finally:
         manager.close()
+
+
+def test_seed_assignment_defaults_follow_signed_off_policy(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        assert manager.list_assigned_seeds("swe_bench", "dev_bench", "qwen3.5-27b", "codex") == [1]
+        assert manager.list_assigned_seeds("swe_bench", "bench_control", "qwen3.5-27b", "codex") == [1]
+        assert manager.list_assigned_seeds("swe_bench", "final_test", "qwen3.5-27b", "codex") == [1, 2, 3]
+        assert manager.list_assigned_seeds("swe_bench", "final_test", "qwen3.5-27b", "swe_agent") == [1]
+        assert manager.list_assigned_seeds("codex_long", "train_long", "qwen3.5-27b", "codex") == [1, 2]
+        assert manager.list_assigned_seeds("codex_long", "test_long", "qwen3.5-27b", "codex") == [1]
+    finally:
+        manager.close()
+
+
+def test_seed_assignment_reload_supports_gate4_updates(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    seed_config_path = tmp_path / "seed_config.yaml"
+    _write_yaml(
+        seed_config_path,
+        {
+            "swe_bench": {
+                "dev_bench": {"default_seeds": 1},
+                "bench_control": {"default_seeds": 2, "max_seeds": 2},
+                "final_test": {
+                    "default_seeds": 1,
+                    "overrides": [
+                        {"model": "qwen3.5-27b", "harness": "codex", "seeds": 2},
+                        {"model": "*", "harness": "*", "seeds": 1},
+                    ],
+                },
+            },
+            "codex_long": {
+                "train_long": {"default_seeds": 3, "max_seeds": 3},
+                "val_long": {"default_seeds": 1},
+                "test_long": {"default_seeds": 2, "max_seeds": 2},
+                "public_dev": {"default_seeds": 1},
+            },
+        },
+    )
+    try:
+        assert manager.list_assigned_seeds("codex_long", "train_long", "qwen3.5-27b", "codex") == [1, 2]
+
+        manager.reload_seed_config(seed_config_path)
+
+        assert manager.list_assigned_seeds("swe_bench", "bench_control", "qwen3.5-27b", "codex") == [1, 2]
+        assert manager.list_assigned_seeds("swe_bench", "final_test", "qwen3.5-27b", "codex") == [1, 2]
+        assert manager.list_assigned_seeds("codex_long", "train_long", "qwen3.5-27b", "codex") == [1, 2, 3]
+        assert manager.list_assigned_seeds("codex_long", "test_long", "qwen3.5-27b", "codex") == [1, 2]
+    finally:
+        manager.close()
