@@ -1050,6 +1050,7 @@ class DataPoolManager:
         spec = _ARTIFACT_RECOVERY[affected_artifact]
         ver_column = spec["ver_column"]
         recovery = spec["recovery"]
+        family = self._get_family(family_id)
         where_clauses = [
             "track = 'codex_long'",
             f"{ver_column} < ?",
@@ -1059,7 +1060,25 @@ class DataPoolManager:
         where_params: list[Any] = [new_manifest_version]
 
         if affected_variant_ids:
-            scenario_ids = [make_scenario_id(family_id, variant_id) for variant_id in affected_variant_ids]
+            seen_variant_ids: set[str] = set()
+            unknown_variant_ids: list[str] = []
+            scenario_ids: list[str] = []
+            for variant_id in affected_variant_ids:
+                if not isinstance(variant_id, str) or not variant_id:
+                    raise IntegrityError("affected_variant_ids must contain non-empty variant ids")
+                if variant_id in seen_variant_ids:
+                    raise IntegrityError(
+                        f"affected_variant_ids contains duplicate variant_id '{variant_id}' for family '{family_id}'"
+                    )
+                seen_variant_ids.add(variant_id)
+                if variant_id not in family.variant_ids:
+                    unknown_variant_ids.append(variant_id)
+                    continue
+                scenario_ids.append(make_scenario_id(family_id, variant_id))
+            if unknown_variant_ids:
+                raise IntegrityError(
+                    f"Family '{family_id}' does not define affected_variant_ids {sorted(unknown_variant_ids)}"
+                )
             placeholders = ",".join("?" for _ in scenario_ids)
             where_clauses.append(f"scenario_id IN ({placeholders})")
             where_params.extend(scenario_ids)

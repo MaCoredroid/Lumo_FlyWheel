@@ -576,6 +576,47 @@ def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_invalidation_rejects_unknown_or_malformed_scope(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        with pytest.raises(KeyError, match="Unknown family_id 'missing-family'"):
+            manager.invalidate_stale_runs(
+                family_id="missing-family",
+                new_manifest_version=4,
+                affected_artifact="verifier",
+                reason="bugfix",
+            )
+
+        with pytest.raises(IntegrityError, match="does not define affected_variant_ids"):
+            manager.invalidate_stale_runs(
+                family_id="train-feature",
+                new_manifest_version=4,
+                affected_artifact="verifier",
+                reason="bugfix",
+                affected_variant_ids=["v3"],
+            )
+
+        with pytest.raises(IntegrityError, match="duplicate variant_id 'v1'"):
+            manager.invalidate_stale_runs(
+                family_id="train-feature",
+                new_manifest_version=4,
+                affected_artifact="verifier",
+                reason="bugfix",
+                affected_variant_ids=["v1", "v1"],
+            )
+
+        with pytest.raises(IntegrityError, match="non-empty variant ids"):
+            manager.invalidate_stale_runs(
+                family_id="train-feature",
+                new_manifest_version=4,
+                affected_artifact="verifier",
+                reason="bugfix",
+                affected_variant_ids=[""],
+            )
+    finally:
+        manager.close()
+
+
 def test_invalidation_marks_running_attempts_non_current_before_finish(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
