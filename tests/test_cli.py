@@ -107,7 +107,7 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
     assert output["prefix_cache_hits_delta"] == 3.0
     assert events == [
         "start:qwen3.5-27b",
-        "meta:qwen3.5-27b:{'metric_schema_variant': 'legacy_no_total', 'prefix_cache_hits_delta': 3.0}",
+        "meta:qwen3.5-27b:{'gate1_responses_status': 'pass', 'metric_schema_variant': 'legacy_no_total', 'prefix_cache_hits_delta': 3.0}",
         "flush",
         "stop:True",
     ]
@@ -179,3 +179,19 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert cli.cmd_smoke_test(_args()) == 0
     assert seen_headers == [{"Authorization": "Bearer custom-token"}] * 3
+
+
+def test_metric_schema_variant_detects_openmetrics_total() -> None:
+    assert cli._metric_schema_variant(
+        {
+            "prompt_tokens": "vllm:prompt_tokens_total",
+            "generation_tokens": "vllm:generation_tokens_total",
+            "prefix_cache_queries": "vllm:prefix_cache_queries_total",
+            "prefix_cache_hits": "vllm:prefix_cache_hits_total",
+            "kv_computed_tokens_sum": "vllm:request_prefill_kv_computed_tokens_sum",
+            "ttft_seconds_sum": "vllm:time_to_first_token_seconds_sum",
+            "ttft_seconds_count": "vllm:time_to_first_token_seconds_count",
+            "prefill_seconds_sum": "vllm:request_prefill_time_seconds_sum",
+            "decode_seconds_sum": "vllm:request_decode_time_seconds_sum",
+        }
+    ) == "openmetrics_total"

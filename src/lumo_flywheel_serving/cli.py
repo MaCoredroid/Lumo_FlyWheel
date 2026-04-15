@@ -71,7 +71,13 @@ def _auth_headers() -> dict[str, str]:
 
 
 def _metric_schema_variant(schema: dict[str, str]) -> str:
-    values = list(schema.values())
+    variant_keys = (
+        "prompt_tokens",
+        "generation_tokens",
+        "prefix_cache_queries",
+        "prefix_cache_hits",
+    )
+    values = [schema[key] for key in variant_keys if key in schema]
     if values and all(key.endswith("_total") for key in values):
         return "openmetrics_total"
     return "legacy_no_total"
@@ -209,6 +215,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             )
         server.record_launch_metadata(
             args.model_id,
+            gate1_responses_status="pass",
             metric_schema_variant=_metric_schema_variant(schema),
             prefix_cache_hits_delta=round(cache_hit_delta, 3),
         )
