@@ -366,6 +366,57 @@ def test_claim_finish_retry_and_superseded_by(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_claim_run_rejects_codex_long_metadata_drift(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        with pytest.raises(IntegrityError, match="belongs to split 'train_long'"):
+            manager.claim_run(
+                "codex_long",
+                "val_long",
+                "train-feature/v1",
+                "qwen3.5-27b",
+                "codex",
+                1,
+                launch_manifest_ver=3,
+            )
+
+        with pytest.raises(IntegrityError, match="belongs to family 'train-feature'"):
+            manager.claim_run(
+                "codex_long",
+                "train_long",
+                "train-feature/v1",
+                "qwen3.5-27b",
+                "codex",
+                1,
+                launch_manifest_ver=3,
+                family_id="wrong-family",
+            )
+
+        with pytest.raises(IntegrityError, match="scenario_type 'feature_evolution'"):
+            manager.claim_run(
+                "codex_long",
+                "train_long",
+                "train-feature/v1",
+                "qwen3.5-27b",
+                "codex",
+                1,
+                launch_manifest_ver=3,
+                scenario_type="migration_refactor",
+            )
+
+        with pytest.raises(IntegrityError, match="requires launch_manifest_ver"):
+            manager.claim_run(
+                "codex_long",
+                "train_long",
+                "train-feature/v1",
+                "qwen3.5-27b",
+                "codex",
+                1,
+            )
+    finally:
+        manager.close()
+
+
 def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:

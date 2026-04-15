@@ -83,6 +83,17 @@ def _metric_schema_variant(schema: dict[str, str]) -> str:
     return "legacy_no_total"
 
 
+def _smoke_request_model_name(server: object, model_id: str) -> str:
+    registry = getattr(server, "registry", None)
+    if registry is None:
+        return model_id
+    config = registry[model_id]
+    request_model_name = getattr(server, "_request_model_name", None)
+    if callable(request_model_name):
+        return request_model_name(config)
+    return getattr(config, "served_model_name", model_id)
+
+
 def cmd_bootstrap_runtime(args: argparse.Namespace) -> int:
     for raw_path in (args.models_root, args.logs_root, args.triton_cache_root):
         Path(raw_path).mkdir(parents=True, exist_ok=True)
@@ -163,12 +174,13 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
     server = _server(args)
     server.start(model_id=args.model_id, enable_request_logging=args.enable_request_logging)
     try:
+        request_model_name = _smoke_request_model_name(server, args.model_id)
         health = server.health()
         models = server.models().json()
         metrics_before = parse_prometheus_text(server.metrics().text)
         schema = resolve_metric_schema(metrics_before)
         first_chat_request = {
-            "model": args.model_id,
+            "model": request_model_name,
             "messages": _prefix_cache_probe_messages(),
             "max_tokens": 8,
             "temperature": 0,
@@ -183,7 +195,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         first_chat_payload = first_chat.json()
         first_reply = first_chat_payload["choices"][0]["message"]["content"].strip() or "OK"
         second_chat_request = {
-            "model": args.model_id,
+            "model": request_model_name,
             "messages": _prefix_cache_probe_messages(prior_reply=first_reply),
             "max_tokens": 8,
             "temperature": 0,
@@ -199,7 +211,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             f"http://127.0.0.1:{args.port}/v1/responses",
             headers=_auth_headers(),
             json={
-                "model": args.model_id,
+                "model": request_model_name,
                 "input": "Reply with the single token OK.",
                 "max_output_tokens": 8,
             },

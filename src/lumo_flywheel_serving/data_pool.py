@@ -878,6 +878,27 @@ class DataPoolManager:
         family_id: str | None = None,
         scenario_type: str | None = None,
     ) -> bool:
+        if track == "codex_long":
+            try:
+                env = self.codex_long_env_index[scenario_id]
+            except KeyError as exc:
+                raise IntegrityError(f"Unknown Codex-Long scenario_id '{scenario_id}'") from exc
+            if env.split != pool_or_split:
+                raise IntegrityError(
+                    f"Scenario '{scenario_id}' belongs to split '{env.split}', not '{pool_or_split}'"
+                )
+            if family_id is not None and family_id != env.family_id:
+                raise IntegrityError(
+                    f"Scenario '{scenario_id}' belongs to family '{env.family_id}', not '{family_id}'"
+                )
+            if scenario_type is not None and scenario_type != env.scenario_type:
+                raise IntegrityError(
+                    f"Scenario '{scenario_id}' has scenario_type '{env.scenario_type}', not '{scenario_type}'"
+                )
+            if launch_manifest_ver is None:
+                raise IntegrityError("Codex-Long claim_run() requires launch_manifest_ver from benchmark_manifest.lock")
+            family_id = env.family_id
+            scenario_type = env.scenario_type
         with self.db.begin() as txn:
             result = txn.execute(
                 """

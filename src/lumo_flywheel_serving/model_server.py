@@ -522,6 +522,20 @@ class ModelServer:
         return None
 
     @staticmethod
+    def _expected_served_model_ids(config: ModelConfig) -> set[str]:
+        expected = {config.served_model_name}
+        expected.update(adapter_name for adapter_name, _adapter_path in config.lora_modules)
+        return expected
+
+    @staticmethod
+    def _request_model_name(config: ModelConfig) -> str:
+        # When LoRA is enabled, Codex targets the adapter name rather than the
+        # base served model id. Smoke tests should probe that surface directly.
+        if config.lora_modules:
+            return config.lora_modules[0][0]
+        return config.served_model_name
+
+    @staticmethod
     def _initial_kv_cache_dtype(config: ModelConfig) -> str:
         # vLLM 0.19.0 rejects fp8_e5m2 KV cache for fp8 checkpoints during
         # engine init, so use a valid first-launch default instead of relying on
@@ -545,6 +559,8 @@ class ModelServer:
         deadline = time.time() + timeout_s
         log_path = self.logs_path(model_id)
         start = time.time()
+        config = self.registry[model_id]
+        expected_model_ids = self._expected_served_model_ids(config)
         while time.time() < deadline:
             inspect = self._run(
                 ["docker", "inspect", "-f", "{{.State.Status}}", self.container_name], check=False
@@ -567,13 +583,14 @@ class ModelServer:
                 )
                 if response.status_code == 200:
                     served_model_ids = self._served_model_ids()
-                    if model_id not in served_model_ids:
+                    if not expected_model_ids.issubset(set(served_model_ids)):
                         time.sleep(5)
                         continue
                     self._append_log_text(
                         model_id,
                         f"[VLLM-READY] cuda_graph_capture_time={time.time() - start:.1f}s\n"
                         f"[VLLM-READY] /health 200 OK at {datetime.now(UTC).isoformat()}\n"
+                        f"[VLLM-READY] expected_models={','.join(sorted(expected_model_ids))}\n"
                         f"[VLLM-READY] served_models={','.join(served_model_ids)}\n",
                     )
                     return
@@ -595,7 +612,8 @@ class ModelServer:
     def _is_serving_model(self, model_id: str) -> bool:
         try:
             self.health()
-            return model_id in self._served_model_ids()
+            expected_model_ids = self._expected_served_model_ids(self.registry[model_id])
+            return expected_model_ids.issubset(set(self._served_model_ids()))
         except (requests.RequestException, ValueError, TypeError):
             return False
 

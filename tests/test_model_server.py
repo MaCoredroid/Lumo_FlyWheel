@@ -1066,7 +1066,113 @@ models:
     server._wait_ready("qwen3.5-27b", timeout_s=15)
 
     assert sleeps == [5]
+    assert "expected_models=qwen3.5-27b" in log_lines[0]
     assert "served_models=qwen3.5-27b" in log_lines[0]
+
+
+def test_wait_ready_uses_served_model_name_override_and_lora_adapter_ids(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  sprint3-qwen:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    served_model_name: qwen3.5-27b
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.88
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+    max_lora_rank: 32
+    lora_modules:
+      codex-sft-all: /models/adapters/codex-sft-all
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    now = 0.0
+    sleeps: list[float] = []
+    log_lines: list[str] = []
+    responses = iter(
+        [
+            {"health": 200, "models": {"data": [{"id": "qwen3.5-27b"}]}},
+            {"health": 200, "models": {"data": [{"id": "qwen3.5-27b"}, {"id": "codex-sft-all"}]}},
+        ]
+    )
+
+    class Response:
+        def __init__(self, status_code: int = 200, payload: dict | None = None) -> None:
+            self.status_code = status_code
+            self._payload = payload or {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return self._payload
+
+    current = {"health": 200, "models": {"data": [{"id": "qwen3.5-27b"}]}}
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, stdout="running\n", stderr="")
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> Response:
+        nonlocal current
+        if url.endswith("/health"):
+            current = next(responses)
+            return Response(status_code=current["health"])
+        if url.endswith("/v1/models"):
+            return Response(payload=current["models"])
+        raise AssertionError(url)
+
+    def fake_sleep(seconds: float) -> None:
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    monkeypatch.setattr(server, "_run", fake_run)
+    monkeypatch.setattr(server, "_append_log_text", lambda model_id, text: log_lines.append(text))
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.requests.get", fake_get)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", fake_sleep)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.time", lambda: now)
+
+    server._wait_ready("sprint3-qwen", timeout_s=15)
+
+    assert sleeps == [5]
+    assert "expected_models=codex-sft-all,qwen3.5-27b" in log_lines[0]
+    assert "served_models=qwen3.5-27b,codex-sft-all" in log_lines[0]
+
+
+def test_is_serving_model_requires_all_expected_ids_for_lora(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  sprint3-qwen:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    served_model_name: qwen3.5-27b
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.88
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+    max_lora_rank: 32
+    lora_modules:
+      codex-sft-all: /models/adapters/codex-sft-all
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    monkeypatch.setattr(server, "health", lambda: None)
+    monkeypatch.setattr(server, "_served_model_ids", lambda: ["qwen3.5-27b"])
+
+    assert server._is_serving_model("sprint3-qwen") is False
 
 
 def test_wait_ready_times_out_when_target_model_never_appears(

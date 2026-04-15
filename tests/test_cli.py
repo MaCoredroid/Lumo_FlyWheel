@@ -181,6 +181,41 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
     assert seen_headers == [{"Authorization": "Bearer custom-token"}] * 3
 
 
+def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
+    server = SimpleNamespace(
+        registry={
+            "qwen3.5-27b": SimpleNamespace(
+                served_model_name="qwen3.5-27b-served",
+                lora_modules=(("codex-sft-all", "/models/adapters/codex-sft-all"),),
+            )
+        },
+        _request_model_name=lambda config: "codex-sft-all",
+        start=lambda model_id, enable_request_logging=False: None,
+        health=lambda: _Response(status_code=200),
+        models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b-served"}, {"id": "codex-sft-all"}]}),
+        metrics=lambda: _Response(text="ignored"),
+        record_launch_metadata=lambda model_id, **metadata: None,
+        flush_prefix_cache=lambda: None,
+        stop=lambda missing_ok=True: None,
+    )
+    seen_models: list[str] = []
+
+    def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
+        seen_models.append(json["model"])
+        if url.endswith("/v1/responses"):
+            return _Response(payload={"id": "resp-1"})
+        return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
+
+    metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
+    monkeypatch.setattr(cli, "_server", lambda args: server)
+    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    assert cli.cmd_smoke_test(_args()) == 0
+    assert seen_models == ["codex-sft-all", "codex-sft-all", "codex-sft-all"]
+
+
 def test_metric_schema_variant_detects_openmetrics_total() -> None:
     assert cli._metric_schema_variant(
         {
