@@ -578,8 +578,6 @@ def get_bridge_gateway_ip(network_name: str) -> str:
 
 
 def get_local_image_digest(image_ref: str) -> str:
-    if image_ref.startswith("sha256:"):
-        return image_ref
     digest = _cmd_output(
         [
             "docker",
@@ -628,7 +626,13 @@ def verify_pre_run_hashes(
     scenario_families_dir: str | Path = "scenario_families",
 ) -> None:
     entry = find_manifest_entry(manifest, task.family_id or "", task.variant_id or "")
-    actual_image_digest = _canonical_sha256(image_digest_resolver(task.image_digest or ""))
+    try:
+        actual_image_digest = _canonical_sha256(image_digest_resolver(task.image_digest or ""))
+    except (subprocess.CalledProcessError, FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise ManifestMismatchError(
+            f"Locked image missing for {task.scenario_id}: {task.image_digest}",
+            affected_artifact="image",
+        ) from exc
     if actual_image_digest != _canonical_sha256(entry["image_digest"]):
         raise ManifestMismatchError(
             f"Image digest mismatch for {task.scenario_id}: "
@@ -683,7 +687,13 @@ def verify_pre_grading_hashes(
 ) -> None:
     entry = find_manifest_entry(manifest, task.family_id or "", task.variant_id or "")
 
-    actual_grader_digest = _canonical_sha256(image_digest_resolver(grader_image_ref))
+    try:
+        actual_grader_digest = _canonical_sha256(image_digest_resolver(grader_image_ref))
+    except (subprocess.CalledProcessError, FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise ManifestMismatchError(
+            f"Grader image missing for {task.scenario_id}: {grader_image_ref}",
+            affected_artifact="grader_image",
+        ) from exc
     expected_grader_digest = _canonical_sha256(manifest["grader_image_digest"])
     if actual_grader_digest != expected_grader_digest:
         raise ManifestMismatchError(
@@ -954,6 +964,204 @@ def load_family_spec(family_id: str, scenario_families_dir: str | Path = "scenar
     return payload
 
 
+def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
+    def _require_non_empty_string(value: Any, *, field_name: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define non-empty {field_name}",
+                affected_artifact="family_spec",
+            )
+        return value
+
+    expected_family_id = task.family_id or ""
+    expected_variant_id = task.variant_id or ""
+    expected_scenario_type = task.scenario_type or ""
+
+    family_id = family_spec.get("family_id")
+    if family_id is not None and family_id != expected_family_id:
+        raise ManifestMismatchError(
+            f"Family spec family_id mismatch for {task.scenario_id}: expected '{expected_family_id}', got '{family_id}'",
+            affected_artifact="family_spec",
+        )
+
+    scenario_type = _require_non_empty_string(
+        family_spec.get("scenario_type"),
+        field_name="scenario_type",
+    )
+    if scenario_type != expected_scenario_type:
+        raise ManifestMismatchError(
+            f"Family spec scenario_type mismatch for {task.scenario_id}: "
+            f"expected '{expected_scenario_type}', got '{scenario_type}'",
+            affected_artifact="family_spec",
+        )
+
+    grading_invariant = family_spec.get("grading_invariant")
+    if not isinstance(grading_invariant, dict):
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define grading_invariant as a mapping",
+            affected_artifact="family_spec",
+        )
+    verifier_script = _require_non_empty_string(
+        grading_invariant.get("verifier_script"),
+        field_name="grading_invariant.verifier_script",
+    )
+    expected_verifier_script = f"verifiers/{expected_family_id}/verify.sh"
+    if verifier_script != expected_verifier_script:
+        raise ManifestMismatchError(
+            f"Family spec verifier_script mismatch for {task.scenario_id}: "
+            f"expected '{expected_verifier_script}', got '{verifier_script}'",
+            affected_artifact="family_spec",
+        )
+
+    functional_checks = grading_invariant.get("functional_checks")
+    if not isinstance(functional_checks, list) or not functional_checks:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define non-empty grading_invariant.functional_checks",
+            affected_artifact="family_spec",
+        )
+    seen_functional_check_ids: set[str] = set()
+    for index, check in enumerate(functional_checks):
+        if not isinstance(check, dict):
+            raise ManifestMismatchError(
+                f"Family spec functional_checks[{index}] for {task.scenario_id} must be a mapping",
+                affected_artifact="family_spec",
+            )
+        check_id = _require_non_empty_string(
+            check.get("id"),
+            field_name=f"grading_invariant.functional_checks[{index}].id",
+        )
+        if check_id in seen_functional_check_ids:
+            raise ManifestMismatchError(
+                f"Family spec functional_checks for {task.scenario_id} contains duplicate id '{check_id}'",
+                affected_artifact="family_spec",
+            )
+        seen_functional_check_ids.add(check_id)
+        _require_non_empty_string(
+            check.get("command"),
+            field_name=f"grading_invariant.functional_checks[{index}].command",
+        )
+        timeout_seconds = check.get("timeout_seconds")
+        try:
+            timeout_seconds = int(timeout_seconds)
+        except (TypeError, ValueError) as exc:
+            raise ManifestMismatchError(
+                f"Family spec functional_checks[{index}] for {task.scenario_id} must define integer timeout_seconds",
+                affected_artifact="family_spec",
+            ) from exc
+        if timeout_seconds <= 0:
+            raise ManifestMismatchError(
+                f"Family spec functional_checks[{index}] for {task.scenario_id} must use timeout_seconds > 0",
+                affected_artifact="family_spec",
+            )
+
+    expected_final_state = grading_invariant.get("expected_final_state")
+    if not isinstance(expected_final_state, list) or not expected_final_state:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define non-empty grading_invariant.expected_final_state",
+            affected_artifact="family_spec",
+        )
+
+    milestones = family_spec.get("milestones")
+    if not isinstance(milestones, list) or not milestones:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define a non-empty milestones list",
+            affected_artifact="family_spec",
+        )
+    partial_credit_total = 0.0
+    seen_milestone_ids: set[str] = set()
+    for index, milestone in enumerate(milestones):
+        if not isinstance(milestone, dict):
+            raise ManifestMismatchError(
+                f"Family spec milestones[{index}] for {task.scenario_id} must be a mapping",
+                affected_artifact="family_spec",
+            )
+        milestone_id = _require_non_empty_string(
+            milestone.get("id"),
+            field_name=f"milestones[{index}].id",
+        )
+        if milestone_id in seen_milestone_ids:
+            raise ManifestMismatchError(
+                f"Family spec milestones for {task.scenario_id} contains duplicate id '{milestone_id}'",
+                affected_artifact="family_spec",
+            )
+        seen_milestone_ids.add(milestone_id)
+        expected_check_script = f"verifiers/{expected_family_id}/milestones/{milestone_id}.sh"
+        check_script = _require_non_empty_string(
+            milestone.get("check_script"),
+            field_name=f"milestones[{index}].check_script",
+        )
+        if check_script != expected_check_script:
+            raise ManifestMismatchError(
+                f"Family spec milestone check_script mismatch for {task.scenario_id}/{milestone_id}: "
+                f"expected '{expected_check_script}', got '{check_script}'",
+                affected_artifact="family_spec",
+            )
+        partial_credit = milestone.get("partial_credit")
+        if not isinstance(partial_credit, (int, float)):
+            raise ManifestMismatchError(
+                f"Family spec milestones[{index}] for {task.scenario_id} must define numeric partial_credit",
+                affected_artifact="family_spec",
+            )
+        if partial_credit < 0:
+            raise ManifestMismatchError(
+                f"Family spec milestones[{index}] for {task.scenario_id} must use partial_credit >= 0",
+                affected_artifact="family_spec",
+            )
+        partial_credit_total += float(partial_credit)
+    if partial_credit_total > 1.0 + 1e-9:
+        raise ManifestMismatchError(
+            f"Family spec milestone partial_credit sum exceeds 1.0 for {task.scenario_id}: {partial_credit_total}",
+            affected_artifact="family_spec",
+        )
+
+    shortcut_resistance = family_spec.get("shortcut_resistance")
+    if not isinstance(shortcut_resistance, dict):
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define shortcut_resistance as a mapping",
+            affected_artifact="family_spec",
+        )
+    known_exploits = shortcut_resistance.get("known_exploits_tested")
+    if not isinstance(known_exploits, list) or len(known_exploits) < 3:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must list at least 3 known_exploits_tested entries",
+            affected_artifact="family_spec",
+        )
+    for index, exploit in enumerate(known_exploits):
+        _require_non_empty_string(
+            exploit,
+            field_name=f"shortcut_resistance.known_exploits_tested[{index}]",
+        )
+
+    variants = family_spec.get("variants")
+    if not isinstance(variants, list) or not variants:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define a non-empty variants list",
+            affected_artifact="family_spec",
+        )
+    variant_ids: set[str] = set()
+    for index, variant in enumerate(variants):
+        if not isinstance(variant, dict):
+            raise ManifestMismatchError(
+                f"Family spec variants[{index}] for {task.scenario_id} must be a mapping",
+                affected_artifact="family_spec",
+            )
+        variant_id = _require_non_empty_string(
+            variant.get("variant_id"),
+            field_name=f"variants[{index}].variant_id",
+        )
+        if variant_id in variant_ids:
+            raise ManifestMismatchError(
+                f"Family spec variants for {task.scenario_id} contains duplicate variant_id '{variant_id}'",
+                affected_artifact="family_spec",
+            )
+        variant_ids.add(variant_id)
+    if expected_variant_id not in variant_ids:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} does not declare variant_id '{expected_variant_id}'",
+            affected_artifact="family_spec",
+        )
+
+
 def _call_verify_pre_run_hashes(
     verifier: Callable[..., None],
     task: TaskSpec,
@@ -1136,6 +1344,7 @@ class TaskOrchestrator:
                     task.family_id or "",
                     scenario_families_dir=config.paths.scenario_families_dir,
                 )
+                validate_family_spec(task, family_spec)
                 grading_dir = _grading_dir_for_run(config.paths.grading_dir, run_id)
                 await self.hooks.phase2_functional_checks(snapshot_ref, task, family_spec, grading_dir)
                 verify_result = await self.hooks.phase3_integrity_verification(
@@ -1273,6 +1482,7 @@ class TaskOrchestrator:
                 task.family_id or "",
                 scenario_families_dir=config.paths.scenario_families_dir,
             )
+            validate_family_spec(task, family_spec)
             await self.hooks.phase2_functional_checks(snapshot_ref, task, family_spec, grading_dir)
             verify_result = await self.hooks.phase3_integrity_verification(
                 snapshot_ref,
@@ -1365,6 +1575,7 @@ __all__ = [
     "load_family_spec",
     "make_run_id",
     "sha256_tree",
+    "validate_family_spec",
     "verify_pre_grading_hashes",
     "verify_pre_run_hashes",
 ]

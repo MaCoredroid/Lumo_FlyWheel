@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import subprocess
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from lumo_flywheel_serving.task_orchestrator import (
     get_local_image_digest,
     health_check,
     sha256_tree,
+    validate_family_spec,
     verify_pre_grading_hashes,
     verify_pre_run_hashes,
 )
@@ -91,6 +93,40 @@ def _codex_long_task(
         regrade_snapshot_ref=regrade_snapshot_ref,
         timeout_seconds=9000,
     )
+
+
+def _valid_family_spec(
+    *,
+    family_id: str = "family-a",
+    scenario_type: str = "feature_evolution",
+    variant_id: str = "v1",
+) -> dict:
+    return {
+        "family_id": family_id,
+        "scenario_type": scenario_type,
+        "grading_invariant": {
+            "verifier_script": f"verifiers/{family_id}/verify.sh",
+            "functional_checks": [
+                {
+                    "id": "fc1",
+                    "command": "cd /workspace && pytest",
+                    "timeout_seconds": 120,
+                }
+            ],
+            "expected_final_state": ["workspace state validated"],
+        },
+        "milestones": [
+            {
+                "id": "m1",
+                "check_script": f"verifiers/{family_id}/milestones/m1.sh",
+                "partial_credit": 1.0,
+            }
+        ],
+        "shortcut_resistance": {
+            "known_exploits_tested": ["exploit-a", "exploit-b", "exploit-c"],
+        },
+        "variants": [{"variant_id": variant_id}],
+    }
 
 
 class _Response:
@@ -195,7 +231,7 @@ def _hooks(
         events.append(f"family-spec:{family_id}")
         if load_family_spec_hook is not None:
             return load_family_spec_hook(family_id, **kwargs)
-        return {"grading_invariant": {"functional_checks": []}}
+        return _valid_family_spec(family_id=family_id)
 
     async def phase2(snapshot_ref: str, task: TaskSpec, family_spec: dict, grading_dir: str) -> None:
         events.append(f"phase2:{snapshot_ref}")
@@ -846,6 +882,63 @@ def test_verify_pre_run_hashes_cleans_up_transient_agents_md_extract(tmp_path: P
     assert not transient_extract.exists()
 
 
+def test_verify_pre_run_hashes_reports_missing_locked_image(tmp_path: Path) -> None:
+    scenario_families_dir = tmp_path / "scenario_families" / "family-a"
+    scenario_families_dir.mkdir(parents=True)
+    family_spec_text = "grading_invariant:\n  functional_checks: []\n"
+    (scenario_families_dir / "family.yaml").write_text(family_spec_text, encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("verify"),
+                "family_spec_hash": _sha(family_spec_text),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": _sha("data"),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Locked image missing") as exc_info:
+        verify_pre_run_hashes(
+            replace(_codex_long_task(), image_digest=_sha("image")),
+            manifest,
+            image_digest_resolver=lambda image_ref: (_ for _ in ()).throw(
+                subprocess.CalledProcessError(1, ["docker", "image", "inspect", image_ref])
+            ),
+            agents_md_resolver=lambda image_ref: tmp_path / "AGENTS.md",
+            scenario_families_dir=tmp_path / "scenario_families",
+        )
+
+    assert exc_info.value.affected_artifact == "image"
+
+
+def test_validate_family_spec_rejects_missing_functional_checks() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["grading_invariant"]["functional_checks"] = []
+
+    with pytest.raises(ManifestMismatchError, match="functional_checks"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_variant_mismatch() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec(variant_id="other-variant")
+
+    with pytest.raises(ManifestMismatchError, match="does not declare variant_id 'v1'"):
+        validate_family_spec(task, family_spec)
+
+
 def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> None:
     events: list[str] = []
     config = _config(tmp_path)
@@ -1046,7 +1139,7 @@ def test_execute_task_passes_configured_codex_long_artifact_paths_to_hooks(tmp_p
             load_family_spec_hook=(
                 lambda family_id, *, scenario_families_dir: (
                     events.append(f"family-spec-dir:{scenario_families_dir}")
-                    or {"grading_invariant": {"functional_checks": []}}
+                    or _valid_family_spec(family_id=family_id)
                 )
             ),
         )
@@ -1113,3 +1206,25 @@ def test_get_local_image_digest_uses_local_image_id(monkeypatch: pytest.MonkeyPa
     )
 
     assert get_local_image_digest("codex-long-grader") == "sha256:local-image-id"
+
+
+def test_get_local_image_digest_inspects_sha256_refs_locally(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_cmd_output(command: list[str]) -> str:
+        commands.append(command)
+        return "sha256:local-image-id"
+
+    monkeypatch.setattr("lumo_flywheel_serving.task_orchestrator._cmd_output", fake_cmd_output)
+
+    assert get_local_image_digest("sha256:expected-image-id") == "sha256:local-image-id"
+    assert commands == [
+        [
+            "docker",
+            "image",
+            "inspect",
+            "sha256:expected-image-id",
+            "--format",
+            "{{.Id}}",
+        ]
+    ]
