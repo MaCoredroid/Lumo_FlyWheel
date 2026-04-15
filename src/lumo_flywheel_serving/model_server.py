@@ -180,8 +180,12 @@ class ModelServer:
         return self.logs_root / f"vllm_{model_id}.log"
 
     @staticmethod
+    def _api_key() -> str:
+        return os.environ.get("VLLM_API_KEY") or "EMPTY"
+
+    @staticmethod
     def _request_headers() -> dict[str, str]:
-        return {"Authorization": f"Bearer {os.environ.get('VLLM_API_KEY', 'EMPTY')}"}
+        return {"Authorization": f"Bearer {ModelServer._api_key()}"}
 
     def _append_log_text(self, model_id: str, text: str) -> None:
         log_path = self.logs_path(model_id)
@@ -376,7 +380,7 @@ class ModelServer:
             "-e",
             f"TRITON_CACHE_DIR={triton_cache_dir}",
             "-e",
-            "VLLM_API_KEY=EMPTY",
+            f"VLLM_API_KEY={self._api_key()}",
             "-e",
             f"VLLM_LOGGING_LEVEL={'DEBUG' if enable_request_logging else 'INFO'}",
             "-v",

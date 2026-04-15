@@ -110,3 +110,33 @@ def test_smoke_test_fails_when_prefix_cache_hits_do_not_increase(monkeypatch: py
         cli.cmd_smoke_test(_args())
 
     assert events == ["start:qwen3.5-27b", "stop:True"]
+
+
+def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    server = SimpleNamespace(
+        start=lambda model_id, enable_request_logging=False: None,
+        health=lambda: _Response(status_code=200),
+        models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
+        metrics=lambda: _Response(text="ignored"),
+        flush_prefix_cache=lambda: None,
+        stop=lambda missing_ok=True: None,
+    )
+    seen_headers: list[dict[str, str]] = []
+
+    def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
+        seen_headers.append(headers)
+        if url.endswith("/v1/responses"):
+            return _Response(payload={"id": "resp-1"})
+        return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
+
+    monkeypatch.setattr(cli, "_server", lambda args: server)
+    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: {"cache_hits": 0.0} if raw == "ignored" else {})
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(requests, "post", fake_post)
+    monkeypatch.setenv("VLLM_API_KEY", "custom-token")
+
+    metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
+    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
+
+    assert cli.cmd_smoke_test(_args()) == 0
+    assert seen_headers == [{"Authorization": "Bearer custom-token"}] * 3

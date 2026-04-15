@@ -66,6 +66,10 @@ def _prepare_hf_runtime() -> None:
         os.environ["HF_HOME"] = str(fallback)
 
 
+def _auth_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {ModelServer._api_key()}"}
+
+
 def cmd_bootstrap_runtime(args: argparse.Namespace) -> int:
     for raw_path in (args.models_root, args.logs_root, args.triton_cache_root):
         Path(raw_path).mkdir(parents=True, exist_ok=True)
@@ -158,7 +162,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         }
         first_chat = requests.post(
             f"http://127.0.0.1:{args.port}/v1/chat/completions",
-            headers={"Authorization": "Bearer EMPTY"},
+            headers=_auth_headers(),
             json=first_chat_request,
             timeout=180,
         )
@@ -173,14 +177,14 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         }
         second_chat = requests.post(
             f"http://127.0.0.1:{args.port}/v1/chat/completions",
-            headers={"Authorization": "Bearer EMPTY"},
+            headers=_auth_headers(),
             json=second_chat_request,
             timeout=180,
         )
         second_chat.raise_for_status()
         responses_call = requests.post(
             f"http://127.0.0.1:{args.port}/v1/responses",
-            headers={"Authorization": "Bearer EMPTY"},
+            headers=_auth_headers(),
             json={
                 "model": args.model_id,
                 "input": "Reply with the single token OK.",
