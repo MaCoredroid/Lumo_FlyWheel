@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import time
@@ -16,6 +17,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_VLLM_BASE_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_VLLM_IMAGE = "lumo-flywheel-vllm:26.01-py3-v0.19.0"
 DEFAULT_VLLM_DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
+MIN_GPU_MEMORY_UTILIZATION = 0.15
+GPU_MEMORY_ERROR_RE = re.compile(
+    r"Free memory on device cuda:\d+ \((?P<free>[0-9.]+)/(?P<total>[0-9.]+) GiB\)"
+)
 
 
 class ModelServer:
@@ -76,12 +81,14 @@ class ModelServer:
                 if incompatible_fp8_kv in error_text and kv_cache_dtype != "auto":
                     kv_cache_dtype = "auto"
                     continue
-                if insufficient_memory in error_text and gpu_memory_utilization > 0.85:
-                    gpu_memory_utilization = 0.85
-                    continue
-                if insufficient_memory in error_text and gpu_memory_utilization > 0.65:
-                    gpu_memory_utilization = 0.65
-                    continue
+                if insufficient_memory in error_text:
+                    next_gpu_memory_utilization = self._next_gpu_memory_utilization(
+                        error_text,
+                        current=gpu_memory_utilization,
+                    )
+                    if next_gpu_memory_utilization is not None:
+                        gpu_memory_utilization = next_gpu_memory_utilization
+                        continue
                 if fp8_cutlass_internal_error in error_text and not enforce_eager:
                     enforce_eager = True
                     continue
@@ -109,26 +116,96 @@ class ModelServer:
         self.current_model = None
 
     def flush_prefix_cache(self) -> None:
-        response = requests.post(f"http://127.0.0.1:{self.port}/reset_prefix_cache", timeout=10)
+        response = requests.post(
+            f"http://127.0.0.1:{self.port}/reset_prefix_cache",
+            headers=self._request_headers(),
+            timeout=10,
+        )
         response.raise_for_status()
 
     def health(self) -> requests.Response:
-        response = requests.get(f"http://127.0.0.1:{self.port}/health", timeout=5)
+        response = requests.get(
+            f"http://127.0.0.1:{self.port}/health",
+            headers=self._request_headers(),
+            timeout=5,
+        )
         response.raise_for_status()
         return response
 
     def models(self) -> requests.Response:
-        response = requests.get(f"http://127.0.0.1:{self.port}/v1/models", timeout=10)
+        response = requests.get(
+            f"http://127.0.0.1:{self.port}/v1/models",
+            headers=self._request_headers(),
+            timeout=10,
+        )
         response.raise_for_status()
         return response
 
     def metrics(self) -> requests.Response:
-        response = requests.get(f"http://127.0.0.1:{self.port}/metrics", timeout=10)
+        response = requests.get(
+            f"http://127.0.0.1:{self.port}/metrics",
+            headers=self._request_headers(),
+            timeout=10,
+        )
         response.raise_for_status()
         return response
 
     def logs_path(self, model_id: str) -> Path:
         return self.logs_root / f"vllm_{model_id}.log"
+
+    @staticmethod
+    def _request_headers() -> dict[str, str]:
+        return {"Authorization": f"Bearer {os.environ.get('VLLM_API_KEY', 'EMPTY')}"}
+
+    def _append_log_text(self, model_id: str, text: str) -> None:
+        log_path = self.logs_path(model_id)
+        try:
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(text)
+            return
+        except PermissionError:
+            pass
+
+        subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-i",
+                self.container_name,
+                "python3",
+                "-c",
+                (
+                    "import sys; from pathlib import Path; "
+                    "Path(sys.argv[1]).open('a', encoding='utf-8').write(sys.stdin.read())"
+                ),
+                str(log_path),
+            ],
+            input=text,
+            text=True,
+            check=False,
+            capture_output=True,
+            env=os.environ.copy(),
+        )
+
+    @staticmethod
+    def _next_gpu_memory_utilization(error_text: str, current: float) -> float | None:
+        match = GPU_MEMORY_ERROR_RE.search(error_text)
+        if match:
+            free_gib = float(match.group("free"))
+            total_gib = float(match.group("total"))
+            usable_free_gib = max(0.0, free_gib - 1.0)
+            candidate = max(MIN_GPU_MEMORY_UTILIZATION, int((usable_free_gib / total_gib) * 100) / 100)
+            if candidate < current:
+                return candidate
+
+        for fallback in (0.85, 0.65):
+            if current > fallback:
+                return fallback
+
+        stepped = round(current - 0.05, 2)
+        if stepped >= MIN_GPU_MEMORY_UTILIZATION:
+            return stepped
+        return None
 
     def _build_run_command(
         self,
@@ -312,11 +389,11 @@ class ModelServer:
             try:
                 response = requests.get(f"http://127.0.0.1:{self.port}/health", timeout=5)
                 if response.status_code == 200:
-                    with log_path.open("a", encoding="utf-8") as handle:
-                        handle.write(
-                            f"[VLLM-READY] cuda_graph_capture_time={time.time() - start:.1f}s\n"
-                            f"[VLLM-READY] /health 200 OK at {datetime.now(UTC).isoformat()}\n"
-                        )
+                    self._append_log_text(
+                        model_id,
+                        f"[VLLM-READY] cuda_graph_capture_time={time.time() - start:.1f}s\n"
+                        f"[VLLM-READY] /health 200 OK at {datetime.now(UTC).isoformat()}\n",
+                    )
                     return
             except requests.RequestException:
                 pass
