@@ -24,6 +24,7 @@ from lumo_flywheel_serving.task_orchestrator import (
     TaskOrchestrator,
     TaskSpec,
     VllmConfig,
+    _call_with_supported_kwargs,
     flush_prefix_cache,
     generate_codex_config,
     health_check,
@@ -142,6 +143,8 @@ def _hooks(
     verify_pre_run=None,
     verify_pre_grading=None,
     docker_image_exists=None,
+    load_family_spec_hook=None,
+    phase2_hook=None,
 ) -> OrchestratorHooks:
     latency = _LatencyCapture(events)
 
@@ -182,12 +185,16 @@ def _hooks(
         events.append(f"snapshot:{run_id}")
         return "snapshot-ref"
 
-    def load_family_spec(family_id: str) -> dict:
+    def load_family_spec(family_id: str, **kwargs) -> dict:
         events.append(f"family-spec:{family_id}")
+        if load_family_spec_hook is not None:
+            return load_family_spec_hook(family_id, **kwargs)
         return {"grading_invariant": {"functional_checks": []}}
 
     async def phase2(snapshot_ref: str, task: TaskSpec, family_spec: dict, grading_dir: str) -> None:
         events.append(f"phase2:{snapshot_ref}")
+        if phase2_hook is not None:
+            await phase2_hook(snapshot_ref, task, family_spec, grading_dir)
 
     async def phase3(snapshot_ref: str, task: TaskSpec, grading_dir: str, grader_image_ref: str) -> dict:
         events.append(f"phase3:{grader_image_ref}")
@@ -205,15 +212,15 @@ def _hooks(
     async def check(host: str, port: int, expected_model: str, **kwargs) -> None:
         events.append(f"health:{expected_model}")
 
-    def pre_run(task: TaskSpec, manifest: dict) -> None:
+    def pre_run(task: TaskSpec, manifest: dict, **kwargs) -> None:
         events.append(f"pre-run:{manifest['manifest_version']}")
         if verify_pre_run is not None:
-            verify_pre_run(task, manifest)
+            _call_with_supported_kwargs(verify_pre_run, task, manifest, **kwargs)
 
-    def pre_grading(task: TaskSpec, manifest: dict, grader_image_ref: str) -> None:
+    def pre_grading(task: TaskSpec, manifest: dict, grader_image_ref: str, **kwargs) -> None:
         events.append(f"pre-grade:{manifest['manifest_version']}")
         if verify_pre_grading is not None:
-            verify_pre_grading(task, manifest, grader_image_ref)
+            _call_with_supported_kwargs(verify_pre_grading, task, manifest, grader_image_ref, **kwargs)
 
     async def image_exists(snapshot_ref: str) -> bool:
         events.append(f"image-exists:{snapshot_ref}")
@@ -536,4 +543,66 @@ def test_execute_task_regrade_path_uses_retained_snapshot(tmp_path: Path) -> Non
         "phase2:snapshot-ref",
         "phase3:codex-long-grader@sha256:grader-11",
         "cleanup:True",
+    ]
+
+
+def test_execute_task_passes_configured_codex_long_artifact_paths_to_hooks(tmp_path: Path) -> None:
+    events: list[str] = []
+    config = _config(tmp_path)
+    orchestrator = TaskOrchestrator(
+        _hooks(
+            events,
+            verify_pre_run=(
+                lambda task, manifest, *, scenario_families_dir: events.append(
+                    f"pre-run-dir:{scenario_families_dir}"
+                )
+            ),
+            verify_pre_grading=(
+                lambda task, manifest, grader_image_ref, *, verifiers_dir, verifier_data_dir: events.append(
+                    f"pre-grade-dirs:{verifiers_dir}:{verifier_data_dir}"
+                )
+            ),
+            load_family_spec_hook=(
+                lambda family_id, *, scenario_families_dir: (
+                    events.append(f"family-spec-dir:{scenario_families_dir}")
+                    or {"grading_invariant": {"functional_checks": []}}
+                )
+            ),
+        )
+    )
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([7, 9])
+
+    result = asyncio.run(orchestrator.execute_task(_codex_long_task(), pool_manager, manifest_state, config))
+
+    assert result.outcome == "resolved"
+    assert f"pre-run-dir:{config.paths.scenario_families_dir}" in events
+    assert (
+        f"pre-grade-dirs:{config.paths.verifiers_dir}:{config.paths.verifier_data_dir}" in events
+    )
+    assert f"family-spec-dir:{config.paths.scenario_families_dir}" in events
+
+
+def test_execute_task_regrade_path_uses_configured_unique_grading_dir(tmp_path: Path) -> None:
+    events: list[str] = []
+    grading_dirs: list[str] = []
+    config = _config(tmp_path)
+
+    async def record_phase2(snapshot_ref: str, task: TaskSpec, family_spec: dict, grading_dir: str) -> None:
+        grading_dirs.append(grading_dir)
+
+    hooks = _hooks(events, phase2_hook=record_phase2)
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([11])
+    task = _codex_long_task(dispatch_decision="regrade_needed", attempt=2, regrade_snapshot_ref="snapshot-ref")
+
+    result = asyncio.run(orchestrator.execute_task(task, pool_manager, manifest_state, config))
+
+    assert result.outcome == "resolved"
+    assert grading_dirs == [
+        str(
+            Path(config.paths.grading_dir)
+            / "family-a_v1_qwen3.5-27b_codex_seed1_attempt2"
+        )
     ]

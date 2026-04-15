@@ -291,6 +291,21 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+def _call_with_supported_kwargs(func: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Any:
+    signature = inspect.signature(func)
+    parameters = signature.parameters.values()
+    accepts_var_kwargs = any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters)
+    if accepts_var_kwargs:
+        return func(*args, **kwargs)
+
+    supported_kwargs = {
+        key: value
+        for key, value in kwargs.items()
+        if key in signature.parameters
+    }
+    return func(*args, **supported_kwargs)
+
+
 def _response_status(response: Any) -> int | None:
     for attr_name in ("status", "status_code"):
         status = getattr(response, attr_name, None)
@@ -818,6 +833,57 @@ def load_family_spec(family_id: str, scenario_families_dir: str | Path = "scenar
     return payload
 
 
+def _call_verify_pre_run_hashes(
+    verifier: Callable[..., None],
+    task: TaskSpec,
+    manifest: dict[str, Any],
+    *,
+    scenario_families_dir: str | Path,
+) -> None:
+    _call_with_supported_kwargs(
+        verifier,
+        task,
+        manifest,
+        scenario_families_dir=scenario_families_dir,
+    )
+
+
+def _call_verify_pre_grading_hashes(
+    verifier: Callable[..., None],
+    task: TaskSpec,
+    manifest: dict[str, Any],
+    grader_image_ref: str,
+    *,
+    verifiers_dir: str | Path,
+    verifier_data_dir: str | Path,
+) -> None:
+    _call_with_supported_kwargs(
+        verifier,
+        task,
+        manifest,
+        grader_image_ref,
+        verifiers_dir=verifiers_dir,
+        verifier_data_dir=verifier_data_dir,
+    )
+
+
+def _load_family_spec_with_configured_path(
+    loader: Callable[..., dict[str, Any]],
+    family_id: str,
+    *,
+    scenario_families_dir: str | Path,
+) -> dict[str, Any]:
+    return _call_with_supported_kwargs(
+        loader,
+        family_id,
+        scenario_families_dir=scenario_families_dir,
+    )
+
+
+def _grading_dir_for_run(grading_root: str | Path, run_id: str) -> str:
+    return str(Path(grading_root) / run_id.replace("/", "_"))
+
+
 class ManifestState:
     def __init__(self, manifest_path: str | Path, grader_image_tag: str) -> None:
         self.manifest_path = str(manifest_path)
@@ -871,7 +937,12 @@ class TaskOrchestrator:
 
         if task.track == "codex_long":
             manifest_state.reload()
-            self.hooks.verify_pre_run_hashes(task, manifest_state.manifest)
+            _call_verify_pre_run_hashes(
+                self.hooks.verify_pre_run_hashes,
+                task,
+                manifest_state.manifest,
+                scenario_families_dir=config.paths.scenario_families_dir,
+            )
 
         claimed = pool_manager.claim_run(
             track=task.track,
@@ -926,10 +997,21 @@ class TaskOrchestrator:
                 container = None
 
                 manifest_state.reload()
-                self.hooks.verify_pre_grading_hashes(task, manifest_state.manifest, manifest_state.grader_image_ref)
+                _call_verify_pre_grading_hashes(
+                    self.hooks.verify_pre_grading_hashes,
+                    task,
+                    manifest_state.manifest,
+                    manifest_state.grader_image_ref,
+                    verifiers_dir=config.paths.verifiers_dir,
+                    verifier_data_dir=config.paths.verifier_data_dir,
+                )
 
-                family_spec = self.hooks.load_family_spec(task.family_id or "")
-                grading_dir = str(Path(config.paths.grading_dir) / run_id.replace("/", "_"))
+                family_spec = _load_family_spec_with_configured_path(
+                    self.hooks.load_family_spec,
+                    task.family_id or "",
+                    scenario_families_dir=config.paths.scenario_families_dir,
+                )
+                grading_dir = _grading_dir_for_run(config.paths.grading_dir, run_id)
                 await self.hooks.phase2_functional_checks(snapshot_ref, task, family_spec, grading_dir)
                 verify_result = await self.hooks.phase3_integrity_verification(
                     snapshot_ref,
@@ -1050,10 +1132,22 @@ class TaskOrchestrator:
                 f"Retained snapshot image '{snapshot_ref}' not found. Snapshot may have been pruned. Full rerun required."
             )
 
-        grading_dir = str(Path(config.paths.output_dir) / "grading" / task.scenario_id.replace("/", "_"))
+        run_id = make_run_id(task)
+        grading_dir = _grading_dir_for_run(config.paths.grading_dir, run_id)
         try:
-            self.hooks.verify_pre_grading_hashes(task, manifest_state.manifest, manifest_state.grader_image_ref)
-            family_spec = self.hooks.load_family_spec(task.family_id or "")
+            _call_verify_pre_grading_hashes(
+                self.hooks.verify_pre_grading_hashes,
+                task,
+                manifest_state.manifest,
+                manifest_state.grader_image_ref,
+                verifiers_dir=config.paths.verifiers_dir,
+                verifier_data_dir=config.paths.verifier_data_dir,
+            )
+            family_spec = _load_family_spec_with_configured_path(
+                self.hooks.load_family_spec,
+                task.family_id or "",
+                scenario_families_dir=config.paths.scenario_families_dir,
+            )
             await self.hooks.phase2_functional_checks(snapshot_ref, task, family_spec, grading_dir)
             verify_result = await self.hooks.phase3_integrity_verification(
                 snapshot_ref,
