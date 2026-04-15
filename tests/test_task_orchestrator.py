@@ -128,6 +128,9 @@ def _valid_family_spec(
         "shortcut_resistance": {
             "known_exploits_tested": ["exploit-a", "exploit-b", "exploit-c"],
         },
+        "difficulty_estimate": {
+            "target_solve_rate": "30-50%",
+        },
         "variants": [
             {
                 "variant_id": variant_id,
@@ -1022,12 +1025,45 @@ def test_validate_family_spec_rejects_too_few_variants() -> None:
         validate_family_spec(task, family_spec)
 
 
+def test_validate_family_spec_rejects_invalid_target_solve_rate() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["difficulty_estimate"]["target_solve_rate"] = "10-90%"
+
+    with pytest.raises(ManifestMismatchError, match="20-80% band"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_unknown_repo_source_mode() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["variants"][0]["repo_source"] = "mirrored"
+
+    with pytest.raises(ManifestMismatchError, match="repo_source"):
+        validate_family_spec(task, family_spec)
+
+
 def test_validate_family_spec_rejects_derived_variant_without_provenance() -> None:
     task = _codex_long_task()
     family_spec = _valid_family_spec()
     family_spec["variants"][0]["repo_source"] = "derived:github.com/example/repo"
 
     with pytest.raises(ManifestMismatchError, match="must define provenance"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_public_dev_variant_without_redistribution_rights() -> None:
+    task = replace(_codex_long_task(), pool_or_split="public_dev")
+    family_spec = _valid_family_spec()
+    family_spec["variants"][0]["repo_source"] = "derived:github.com/example/repo"
+    family_spec["variants"][0]["provenance"] = {
+        "source_repo": "https://github.com/example/repo",
+        "license": "MIT",
+        "redistribution_ok": False,
+        "modification_notice": "Derived fixture",
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Public-Dev"):
         validate_family_spec(task, family_spec)
 
 
@@ -1070,6 +1106,7 @@ def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> No
         "phase3:codex-long-grader",
         "cleanup:True",
         "after:family-a/v1",
+        "rm:container-1:True",
     ]
 
 
@@ -1160,7 +1197,7 @@ def test_execute_task_preserves_snapshot_on_manifest_mismatch(tmp_path: Path) ->
     assert pool_manager.finish_calls[0]["outcome"] == "crash"
     assert pool_manager.finish_calls[0]["grading_manifest_ver"] == 3
     assert pool_manager.finish_calls[0]["snapshot_image_ref"] == "snapshot-ref"
-    assert events[-1] == "after:family-a/v1"
+    assert events[-2:] == ["after:family-a/v1", "rm:container-1:True"]
 
 
 def test_execute_task_regrade_path_uses_retained_snapshot(tmp_path: Path) -> None:

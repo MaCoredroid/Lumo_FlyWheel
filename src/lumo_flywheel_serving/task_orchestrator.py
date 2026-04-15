@@ -998,6 +998,32 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             )
         return digest
 
+    def _require_target_solve_rate(value: Any) -> str:
+        solve_rate = _require_non_empty_string(
+            value,
+            field_name="difficulty_estimate.target_solve_rate",
+        )
+        match = re.fullmatch(r"\s*(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?\s*%\s*", solve_rate)
+        if not match:
+            raise ManifestMismatchError(
+                "Family spec for "
+                f"{task.scenario_id} must define difficulty_estimate.target_solve_rate as "
+                "a percentage or range such as '30-50%'",
+                affected_artifact="family_spec",
+            )
+        bounds = [int(group) for group in match.groups() if group is not None]
+        if len(bounds) == 2 and bounds[0] > bounds[1]:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define target_solve_rate with ascending bounds",
+                affected_artifact="family_spec",
+            )
+        if any(bound < 20 or bound > 80 for bound in bounds):
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must keep target_solve_rate within the signed-off 20-80% band",
+                affected_artifact="family_spec",
+            )
+        return solve_rate
+
     expected_family_id = task.family_id or ""
     expected_variant_id = task.variant_id or ""
     expected_scenario_type = task.scenario_type or ""
@@ -1133,6 +1159,14 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             affected_artifact="family_spec",
         )
 
+    difficulty_estimate = family_spec.get("difficulty_estimate")
+    if not isinstance(difficulty_estimate, dict):
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define difficulty_estimate as a mapping",
+            affected_artifact="family_spec",
+        )
+    _require_target_solve_rate(difficulty_estimate.get("target_solve_rate"))
+
     milestones = family_spec.get("milestones")
     if not isinstance(milestones, list) or not milestones:
         raise ManifestMismatchError(
@@ -1239,6 +1273,12 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             variant.get("repo_source", "authored"),
             field_name=f"variants[{index}].repo_source",
         )
+        if repo_source != "authored" and not repo_source.startswith("derived:"):
+            raise ManifestMismatchError(
+                f"Family spec variants[{index}] for {task.scenario_id} must use repo_source "
+                "equal to 'authored' or 'derived:<source_repo>'",
+                affected_artifact="family_spec",
+            )
         if repo_source.startswith("derived:"):
             provenance = variant.get("provenance")
             if not isinstance(provenance, dict):
@@ -1257,6 +1297,16 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             if not isinstance(provenance.get("redistribution_ok"), bool):
                 raise ManifestMismatchError(
                     f"Family spec variants[{index}] for {task.scenario_id} must define boolean provenance.redistribution_ok",
+                    affected_artifact="family_spec",
+                )
+            if (
+                variant_id == expected_variant_id
+                and task.pool_or_split == "public_dev"
+                and provenance["redistribution_ok"] is False
+            ):
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} cannot set "
+                    "provenance.redistribution_ok=false in Public-Dev",
                     affected_artifact="family_spec",
                 )
             _require_non_empty_string(
@@ -1434,7 +1484,6 @@ class TaskOrchestrator:
                     )
             else:
                 snapshot_ref = await self.hooks.phase1_snapshot(container, run_id)
-                container = None
 
                 manifest_state.reload()
                 _call_verify_pre_grading_hashes(
