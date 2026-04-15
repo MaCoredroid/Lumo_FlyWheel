@@ -1292,3 +1292,57 @@ models:
 
     with pytest.raises(ValueError, match="served_model_name"):
         load_registry(registry)
+
+
+def test_registry_rejects_non_fp8_precision_baseline(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B
+    local_path: /models/qwen3.5-27b
+    quantization: awq
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+
+    with pytest.raises(ValueError, match="quantization must be 'fp8'"):
+        load_registry(registry)
+
+
+def test_registry_rejects_non_auto_dtype_or_unknown_kv_cache_dtype(tmp_path: Path) -> None:
+    dtype_registry = tmp_path / "dtype_registry.yaml"
+    dtype_registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B
+    local_path: /models/qwen3.5-27b
+    quantization: fp8
+    dtype: bfloat16
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+    with pytest.raises(ValueError, match="dtype must be 'auto'"):
+        load_registry(dtype_registry)
+
+    kv_registry = tmp_path / "kv_registry.yaml"
+    kv_registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B
+    local_path: /models/qwen3.5-27b
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: bf16
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+    with pytest.raises(ValueError, match="kv_cache_dtype must be 'fp8_e5m2' or 'auto'"):
+        load_registry(kv_registry)

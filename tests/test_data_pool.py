@@ -129,6 +129,7 @@ def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str
         manifest_path,
         {
             "manifest_version": 3,
+            "freeze_date": "2026-06-01",
             "split_assignment_hash": split_hash,
             "grader_image_digest": _sha256("codex-long-grader"),
             "variants": manifest_variants,
@@ -256,6 +257,21 @@ def test_manager_requires_manifest_version(tmp_path: Path) -> None:
         )
 
 
+def test_manager_requires_manifest_freeze_date(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest.pop("freeze_date")
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="freeze_date"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "missing-manifest-freeze-date.db",
+        )
+
+
 def test_manager_requires_split_assignment_freeze_metadata(tmp_path: Path) -> None:
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
 
@@ -341,6 +357,34 @@ def test_manager_rejects_total_family_mismatch_and_duplicate_variant_ids(tmp_pat
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "duplicate-variant-ids.db",
+        )
+
+
+def test_manager_rejects_manifest_variants_outside_frozen_split_assignment(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["variants"].append(
+        {
+            "family_id": "orphan-family",
+            "variant_id": "v1",
+            "split": "train_long",
+            "scenario_type": "feature_evolution",
+            "family_spec_hash": _sha256("family-orphan-family"),
+            "image_digest": _sha256("orphan-family-v1"),
+            "verifier_hash": _sha256("verifier-orphan-family-v1"),
+            "milestone_hashes": {"m1": _sha256("m1-orphan-family-v1")},
+            "agents_md_hash": _sha256("agents-orphan-family"),
+            "verifier_data_hash": _sha256("data-orphan-family"),
+        }
+    )
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="not present in split_assignment.yaml"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "orphan-manifest-variant.db",
         )
 
 

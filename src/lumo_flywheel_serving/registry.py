@@ -38,6 +38,17 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
     served_model_name = raw.get("served_model_name", model_id)
     if not isinstance(served_model_name, str) or not served_model_name.strip():
         raise ValueError(f"Model {model_id} served_model_name must be a non-empty string")
+    quantization = raw["quantization"]
+    if quantization != "fp8":
+        raise ValueError(f"Model {model_id} quantization must be 'fp8'; got {quantization!r}")
+    dtype = raw["dtype"]
+    if dtype != "auto":
+        raise ValueError(f"Model {model_id} dtype must be 'auto'; got {dtype!r}")
+    kv_cache_dtype = raw.get("kv_cache_dtype", "fp8_e5m2")
+    if kv_cache_dtype not in {"fp8_e5m2", "auto"}:
+        raise ValueError(
+            f"Model {model_id} kv_cache_dtype must be 'fp8_e5m2' or 'auto'; got {kv_cache_dtype!r}"
+        )
     lora_modules_raw = raw.get("lora_modules", {})
     if not isinstance(lora_modules_raw, dict):
         raise ValueError(f"Model {model_id} lora_modules must be a mapping of adapter_name -> container_path")
@@ -58,9 +69,9 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
         hf_revision=raw.get("hf_revision"),
         local_path=local_path_obj,
         served_model_name=served_model_name,
-        quantization=raw["quantization"],
-        dtype=raw["dtype"],
-        kv_cache_dtype=raw.get("kv_cache_dtype", "fp8_e5m2"),
+        quantization=quantization,
+        dtype=dtype,
+        kv_cache_dtype=kv_cache_dtype,
         max_model_len=int(raw["max_model_len"]),
         gpu_memory_utilization=float(raw["gpu_memory_utilization"]),
         max_num_batched_tokens=int(raw.get("max_num_batched_tokens", 8192)),

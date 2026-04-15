@@ -201,6 +201,9 @@ def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
         manifest["manifest_version"] = int(manifest["manifest_version"])
     except (KeyError, TypeError, ValueError) as exc:
         raise IntegrityError("benchmark_manifest.lock must record an integer manifest_version") from exc
+    freeze_date = manifest.get("freeze_date")
+    if not isinstance(freeze_date, str) or not freeze_date.strip():
+        raise IntegrityError("benchmark_manifest.lock must record a non-empty freeze_date")
 
     _require_sha256_value(manifest.get("split_assignment_hash"), field_name="split_assignment_hash")
     _require_sha256_value(manifest.get("grader_image_digest"), field_name="grader_image_digest")
@@ -213,6 +216,20 @@ def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
     variants = manifest.get("variants")
     if not isinstance(variants, list):
         raise IntegrityError("benchmark_manifest.lock must contain a 'variants' list")
+    seen_scenario_ids: set[str] = set()
+    for index, entry in enumerate(variants):
+        if not isinstance(entry, dict):
+            raise IntegrityError(f"Manifest variants[{index}] must be a mapping")
+        family_id = entry.get("family_id")
+        variant_id = entry.get("variant_id")
+        if not isinstance(family_id, str) or not isinstance(variant_id, str):
+            raise IntegrityError(
+                f"Manifest variants[{index}] must include string family_id and variant_id fields"
+            )
+        scenario_id = make_scenario_id(family_id, variant_id)
+        if scenario_id in seen_scenario_ids:
+            raise IntegrityError(f"Variant '{scenario_id}' has multiple entries in benchmark_manifest.lock")
+        seen_scenario_ids.add(scenario_id)
     return manifest
 
 
@@ -406,7 +423,7 @@ def load_codex_long_splits(
             if not isinstance(scenario_type, str) or not scenario_type:
                 raise IntegrityError(f"Family '{family_id}' must include a non-empty scenario_type")
             if scenario_type not in SCENARIO_TYPES:
-                raise ValueError(f"Family '{family_id}' has unknown scenario_type '{scenario_type}'")
+                raise IntegrityError(f"Family '{family_id}' has unknown scenario_type '{scenario_type}'")
 
             variant_ids_raw = family.get("variant_ids", [])
             if not isinstance(variant_ids_raw, list):
@@ -491,6 +508,16 @@ def load_codex_long_splits(
         raise IntegrityError(
             "split_assignment.yaml total_families mismatch: "
             f"declared {declared_total_families}, loaded {total_families_loaded}"
+        )
+
+    manifest_scenario_ids = {
+        make_scenario_id(entry["family_id"], entry["variant_id"]) for entry in manifest["variants"]
+    }
+    extra_manifest_scenarios = sorted(manifest_scenario_ids - all_scenario_ids)
+    if extra_manifest_scenarios:
+        raise IntegrityError(
+            "benchmark_manifest.lock contains variants that are not present in split_assignment.yaml: "
+            f"{extra_manifest_scenarios}"
         )
 
     return splits, env_index
