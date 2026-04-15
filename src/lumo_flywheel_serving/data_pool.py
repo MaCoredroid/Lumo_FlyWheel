@@ -53,6 +53,15 @@ SMALLER_V1_SPLIT_FAMILY_COUNTS = {
     "test_long": 6,
     "public_dev": 2,
 }
+GATE4_PILOT_FAMILY_COUNT = 5
+GATE4_SCENARIO_TYPE_COUNT = len(SCENARIO_TYPES)
+GATE4_PROCEED_MIN_MATCHED_IDS = 50
+GATE4_PROCEED_MIN_CODEX_TRACES = 80
+GATE4_PROCEED_MIN_MATCHED_FAMILIES = 8
+GATE4_MIN_PILOT_FAMILIES_IN_TARGET_RANGE = 4
+GATE4_MIN_MATCHED_FAMILY_SCENARIO_TYPES = 4
+SMALLER_V1_B2_MIN_CODEX_TRACES = 50
+SMALLER_V1_B2_MAX_WALL_CLOCK_DAYS = 25.0
 TRAINING_ELIGIBLE = {"bench_control", "train_long"}
 SEALABLE_POOLS = {"final_test", "test_long"}
 _ARTIFACT_RECOVERY = {
@@ -181,6 +190,8 @@ class Gate4Outcome:
     projected_wall_clock_days: float
     projected_matched_ids: int
     projected_matched_families: int
+    pilot_families_in_target_range: int
+    matched_family_scenario_types: int
     b2_viable: bool
     gate4_decision: str
     recorded_at: str
@@ -1011,6 +1022,8 @@ class DataPoolManager:
                 projected_wall_clock_days REAL NOT NULL,
                 projected_matched_ids INTEGER NOT NULL,
                 projected_matched_families INTEGER NOT NULL,
+                pilot_families_in_target_range INTEGER,
+                matched_family_scenario_types INTEGER,
                 b2_viable INTEGER NOT NULL,
                 gate4_decision TEXT NOT NULL CHECK (gate4_decision IN ('PROCEED', 'ADJUST', 'KILL')),
                 recorded_at TEXT NOT NULL
@@ -1032,6 +1045,15 @@ class DataPoolManager:
             AND r.attempt = latest.max_attempt;
             """
         )
+        existing_gate4_columns = {
+            row["name"]
+            for row in self.db.execute("PRAGMA table_info(gate4_outcome)").fetchall()
+        }
+        for column_name in ("pilot_families_in_target_range", "matched_family_scenario_types"):
+            if column_name not in existing_gate4_columns:
+                self.db.connection.execute(
+                    f"ALTER TABLE gate4_outcome ADD COLUMN {column_name} INTEGER"
+                )
         self.db.connection.commit()
 
     def _row_to_run_record(self, row: sqlite3.Row) -> RunRecord:
@@ -1081,10 +1103,70 @@ class DataPoolManager:
             "projected_wall_clock_days": outcome.projected_wall_clock_days,
             "projected_matched_ids": outcome.projected_matched_ids,
             "projected_matched_families": outcome.projected_matched_families,
+            "pilot_families_in_target_range": outcome.pilot_families_in_target_range,
+            "matched_family_scenario_types": outcome.matched_family_scenario_types,
         }
         for field_name, value in numeric_fields.items():
             if value < 0:
                 raise IntegrityError(f"Gate 4 outcome {field_name} must be >= 0; got {value}")
+        if outcome.pilot_families_in_target_range > GATE4_PILOT_FAMILY_COUNT:
+            raise IntegrityError(
+                "Gate 4 outcome pilot_families_in_target_range must be <= "
+                f"{GATE4_PILOT_FAMILY_COUNT}; got {outcome.pilot_families_in_target_range}"
+            )
+        if outcome.matched_family_scenario_types > GATE4_SCENARIO_TYPE_COUNT:
+            raise IntegrityError(
+                "Gate 4 outcome matched_family_scenario_types must be <= "
+                f"{GATE4_SCENARIO_TYPE_COUNT}; got {outcome.matched_family_scenario_types}"
+            )
+        if not self.b1_viable and outcome.b1_viable:
+            raise IntegrityError(
+                "Gate 4 outcome cannot report b1_viable=True when Rule 1 already dropped B1 "
+                f"for a {outcome.total_families}-family freeze"
+            )
+        if outcome.total_families == MIN_CODEX_LONG_FAMILIES:
+            expected_b2_viable = (
+                outcome.projected_codex_traces >= SMALLER_V1_B2_MIN_CODEX_TRACES
+                and outcome.projected_wall_clock_days <= SMALLER_V1_B2_MAX_WALL_CLOCK_DAYS
+            )
+            if outcome.b2_viable != expected_b2_viable:
+                raise IntegrityError(
+                    "Gate 4 outcome b2_viable must match the pre-registered 35-family B2-only rule "
+                    f"(traces >= {SMALLER_V1_B2_MIN_CODEX_TRACES} and wall-clock <= "
+                    f"{SMALLER_V1_B2_MAX_WALL_CLOCK_DAYS} days)"
+                )
+            expected_decision = "PROCEED" if expected_b2_viable else "KILL"
+            if outcome.gate4_decision != expected_decision:
+                raise IntegrityError(
+                    "Gate 4 outcome gate4_decision must match the pre-registered 35-family B2-only rule "
+                    f"({expected_decision} expected, got {outcome.gate4_decision})"
+                )
+        elif outcome.gate4_decision == "PROCEED":
+            if outcome.projected_matched_ids < GATE4_PROCEED_MIN_MATCHED_IDS:
+                raise IntegrityError(
+                    "Gate 4 outcome gate4_decision='PROCEED' requires projected_matched_ids >= "
+                    f"{GATE4_PROCEED_MIN_MATCHED_IDS}"
+                )
+            if outcome.projected_codex_traces < GATE4_PROCEED_MIN_CODEX_TRACES:
+                raise IntegrityError(
+                    "Gate 4 outcome gate4_decision='PROCEED' requires projected_codex_traces >= "
+                    f"{GATE4_PROCEED_MIN_CODEX_TRACES}"
+                )
+            if outcome.projected_matched_families < GATE4_PROCEED_MIN_MATCHED_FAMILIES:
+                raise IntegrityError(
+                    "Gate 4 outcome gate4_decision='PROCEED' requires projected_matched_families >= "
+                    f"{GATE4_PROCEED_MIN_MATCHED_FAMILIES}"
+                )
+            if outcome.pilot_families_in_target_range < GATE4_MIN_PILOT_FAMILIES_IN_TARGET_RANGE:
+                raise IntegrityError(
+                    "Gate 4 outcome gate4_decision='PROCEED' requires at least "
+                    f"{GATE4_MIN_PILOT_FAMILIES_IN_TARGET_RANGE} pilot families in the 20-80% solve band"
+                )
+            if outcome.matched_family_scenario_types < GATE4_MIN_MATCHED_FAMILY_SCENARIO_TYPES:
+                raise IntegrityError(
+                    "Gate 4 outcome gate4_decision='PROCEED' requires at least "
+                    f"{GATE4_MIN_MATCHED_FAMILY_SCENARIO_TYPES} scenario types contributing matched families"
+                )
         try:
             datetime.fromisoformat(outcome.recorded_at)
         except ValueError as exc:
@@ -1095,7 +1177,9 @@ class DataPoolManager:
         row = self.db.execute(
             """
             SELECT total_families, b1_viable, projected_codex_traces, projected_wall_clock_days,
-                   projected_matched_ids, projected_matched_families, b2_viable, gate4_decision, recorded_at
+                   projected_matched_ids, projected_matched_families,
+                   pilot_families_in_target_range, matched_family_scenario_types,
+                   b2_viable, gate4_decision, recorded_at
             FROM gate4_outcome
             WHERE singleton = 1
             """
@@ -1109,6 +1193,8 @@ class DataPoolManager:
             projected_wall_clock_days=float(row["projected_wall_clock_days"]),
             projected_matched_ids=int(row["projected_matched_ids"]),
             projected_matched_families=int(row["projected_matched_families"]),
+            pilot_families_in_target_range=int(row["pilot_families_in_target_range"]),
+            matched_family_scenario_types=int(row["matched_family_scenario_types"]),
             b2_viable=bool(row["b2_viable"]),
             gate4_decision=row["gate4_decision"],
             recorded_at=row["recorded_at"],
@@ -1127,9 +1213,10 @@ class DataPoolManager:
                 INSERT INTO gate4_outcome (
                     singleton, total_families, b1_viable, projected_codex_traces,
                     projected_wall_clock_days, projected_matched_ids, projected_matched_families,
+                    pilot_families_in_target_range, matched_family_scenario_types,
                     b2_viable, gate4_decision, recorded_at
                 )
-                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(singleton) DO UPDATE SET
                     total_families = excluded.total_families,
                     b1_viable = excluded.b1_viable,
@@ -1137,6 +1224,8 @@ class DataPoolManager:
                     projected_wall_clock_days = excluded.projected_wall_clock_days,
                     projected_matched_ids = excluded.projected_matched_ids,
                     projected_matched_families = excluded.projected_matched_families,
+                    pilot_families_in_target_range = excluded.pilot_families_in_target_range,
+                    matched_family_scenario_types = excluded.matched_family_scenario_types,
                     b2_viable = excluded.b2_viable,
                     gate4_decision = excluded.gate4_decision,
                     recorded_at = excluded.recorded_at
@@ -1148,6 +1237,8 @@ class DataPoolManager:
                     persisted.projected_wall_clock_days,
                     persisted.projected_matched_ids,
                     persisted.projected_matched_families,
+                    persisted.pilot_families_in_target_range,
+                    persisted.matched_family_scenario_types,
                     int(persisted.b2_viable),
                     persisted.gate4_decision,
                     persisted.recorded_at,

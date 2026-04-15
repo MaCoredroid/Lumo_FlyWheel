@@ -1983,6 +1983,8 @@ def test_gate4_outcome_persists_and_overwrites_across_manager_restart(tmp_path: 
             projected_wall_clock_days=24.5,
             projected_matched_ids=31,
             projected_matched_families=6,
+            pilot_families_in_target_range=3,
+            matched_family_scenario_types=3,
             b2_viable=True,
             gate4_decision="PROCEED",
             recorded_at="2026-06-20T00:00:00+00:00",
@@ -1997,8 +1999,10 @@ def test_gate4_outcome_persists_and_overwrites_across_manager_restart(tmp_path: 
             projected_wall_clock_days=26.0,
             projected_matched_ids=28,
             projected_matched_families=5,
+            pilot_families_in_target_range=2,
+            matched_family_scenario_types=2,
             b2_viable=False,
-            gate4_decision="ADJUST",
+            gate4_decision="KILL",
             recorded_at="2026-06-21T00:00:00+00:00",
         )
         assert manager.record_gate4_outcome(updated) == updated
@@ -2030,6 +2034,8 @@ def test_gate4_outcome_validation_and_stale_reload_behavior(tmp_path: Path, capl
                     projected_wall_clock_days=30.0,
                     projected_matched_ids=50,
                     projected_matched_families=8,
+                    pilot_families_in_target_range=4,
+                    matched_family_scenario_types=4,
                     b2_viable=True,
                     gate4_decision="PROCEED",
                     recorded_at="2026-06-20T00:00:00+00:00",
@@ -2045,8 +2051,44 @@ def test_gate4_outcome_validation_and_stale_reload_behavior(tmp_path: Path, capl
                     projected_wall_clock_days=24.5,
                     projected_matched_ids=31,
                     projected_matched_families=6,
+                    pilot_families_in_target_range=3,
+                    matched_family_scenario_types=3,
                     b2_viable=True,
                     gate4_decision="MAYBE",
+                    recorded_at="2026-06-20T00:00:00+00:00",
+                )
+            )
+
+        with pytest.raises(IntegrityError, match="cannot report b1_viable=True when Rule 1 already dropped B1"):
+            manager.record_gate4_outcome(
+                Gate4Outcome(
+                    total_families=35,
+                    b1_viable=True,
+                    projected_codex_traces=52,
+                    projected_wall_clock_days=24.5,
+                    projected_matched_ids=31,
+                    projected_matched_families=6,
+                    pilot_families_in_target_range=3,
+                    matched_family_scenario_types=3,
+                    b2_viable=True,
+                    gate4_decision="PROCEED",
+                    recorded_at="2026-06-20T00:00:00+00:00",
+                )
+            )
+
+        with pytest.raises(IntegrityError, match="b2_viable must match the pre-registered 35-family B2-only rule"):
+            manager.record_gate4_outcome(
+                Gate4Outcome(
+                    total_families=35,
+                    b1_viable=False,
+                    projected_codex_traces=47,
+                    projected_wall_clock_days=26.0,
+                    projected_matched_ids=28,
+                    projected_matched_families=5,
+                    pilot_families_in_target_range=2,
+                    matched_family_scenario_types=2,
+                    b2_viable=True,
+                    gate4_decision="PROCEED",
                     recorded_at="2026-06-20T00:00:00+00:00",
                 )
             )
@@ -2070,6 +2112,8 @@ def test_gate4_outcome_validation_and_stale_reload_behavior(tmp_path: Path, capl
                 projected_wall_clock_days=24.5,
                 projected_matched_ids=31,
                 projected_matched_families=6,
+                pilot_families_in_target_range=3,
+                matched_family_scenario_types=3,
                 b2_viable=True,
                 gate4_decision="PROCEED",
                 recorded_at="2026-06-20T00:00:00+00:00",
@@ -2093,6 +2137,67 @@ def test_gate4_outcome_validation_and_stale_reload_behavior(tmp_path: Path, capl
         assert "Ignoring stale or malformed persisted Gate 4 outcome metadata" in caplog.text
     finally:
         reloaded.close()
+
+
+def test_gate4_outcome_requires_hld_diversity_fields_for_full_plan_proceed(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path, full_plan=True)
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=tmp_path / "full-plan-gate4.db",
+    )
+    try:
+        with pytest.raises(IntegrityError, match="pilot families in the 20-80% solve band"):
+            manager.record_gate4_outcome(
+                Gate4Outcome(
+                    total_families=55,
+                    b1_viable=True,
+                    projected_codex_traces=85,
+                    projected_wall_clock_days=31.0,
+                    projected_matched_ids=55,
+                    projected_matched_families=9,
+                    pilot_families_in_target_range=3,
+                    matched_family_scenario_types=4,
+                    b2_viable=True,
+                    gate4_decision="PROCEED",
+                    recorded_at="2026-06-20T00:00:00+00:00",
+                )
+            )
+
+        with pytest.raises(IntegrityError, match="scenario types contributing matched families"):
+            manager.record_gate4_outcome(
+                Gate4Outcome(
+                    total_families=55,
+                    b1_viable=True,
+                    projected_codex_traces=85,
+                    projected_wall_clock_days=31.0,
+                    projected_matched_ids=55,
+                    projected_matched_families=9,
+                    pilot_families_in_target_range=4,
+                    matched_family_scenario_types=3,
+                    b2_viable=True,
+                    gate4_decision="PROCEED",
+                    recorded_at="2026-06-20T00:00:00+00:00",
+                )
+            )
+
+        outcome = Gate4Outcome(
+            total_families=55,
+            b1_viable=True,
+            projected_codex_traces=85,
+            projected_wall_clock_days=31.0,
+            projected_matched_ids=55,
+            projected_matched_families=9,
+            pilot_families_in_target_range=4,
+            matched_family_scenario_types=4,
+            b2_viable=True,
+            gate4_decision="PROCEED",
+            recorded_at="2026-06-20T00:00:00+00:00",
+        )
+        assert manager.record_gate4_outcome(outcome) == outcome
+    finally:
+        manager.close()
 
 
 def test_training_access_progress_family_summary_and_matching(tmp_path: Path) -> None:
