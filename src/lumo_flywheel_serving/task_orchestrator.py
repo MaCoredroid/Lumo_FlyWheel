@@ -330,6 +330,14 @@ def _canonical_sha256(value: str) -> str:
     return f"sha256:{value}"
 
 
+def _vllm_api_key() -> str:
+    return os.environ.get("VLLM_API_KEY") or "EMPTY"
+
+
+def _vllm_request_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {_vllm_api_key()}"}
+
+
 def write_text(path: str | Path, content: str) -> None:
     path_obj = Path(path)
     path_obj.parent.mkdir(parents=True, exist_ok=True)
@@ -354,12 +362,12 @@ def sha256_tree(root: str | Path) -> str:
     return f"sha256:{hasher.hexdigest()}"
 
 
-def _sync_http_get(url: str) -> requests.Response:
-    return requests.get(url, timeout=10)
+def _sync_http_get(url: str, *, headers: dict[str, str] | None = None) -> requests.Response:
+    return requests.get(url, headers=headers, timeout=10)
 
 
-def _sync_http_post(url: str) -> requests.Response:
-    return requests.post(url, timeout=10)
+def _sync_http_post(url: str, *, headers: dict[str, str] | None = None) -> requests.Response:
+    return requests.post(url, headers=headers, timeout=10)
 
 
 async def health_check(
@@ -371,14 +379,27 @@ async def health_check(
     http_get: Callable[[str], Any] | None = None,
 ) -> None:
     getter = http_get or _sync_http_get
+    headers = _vllm_request_headers()
     for attempt in range(max_retries):
         try:
-            health_resp = await _maybe_await(getter(f"http://{vllm_host}:{vllm_port}/health"))
+            health_resp = await _maybe_await(
+                _call_with_supported_kwargs(
+                    getter,
+                    f"http://{vllm_host}:{vllm_port}/health",
+                    headers=headers,
+                )
+            )
             health_status = _response_status(health_resp)
             if health_status != 200:
                 raise HealthCheckError(f"/health returned {health_status}")
 
-            models_resp = await _maybe_await(getter(f"http://{vllm_host}:{vllm_port}/v1/models"))
+            models_resp = await _maybe_await(
+                _call_with_supported_kwargs(
+                    getter,
+                    f"http://{vllm_host}:{vllm_port}/v1/models",
+                    headers=headers,
+                )
+            )
             models_status = _response_status(models_resp)
             if models_status != 200:
                 raise HealthCheckError(f"/v1/models returned {models_status}")
@@ -410,7 +431,13 @@ async def flush_prefix_cache(
     http_post: Callable[[str], Any] | None = None,
 ) -> None:
     poster = http_post or _sync_http_post
-    response = await _maybe_await(poster(f"http://{vllm_host}:{vllm_port}/reset_prefix_cache"))
+    response = await _maybe_await(
+        _call_with_supported_kwargs(
+            poster,
+            f"http://{vllm_host}:{vllm_port}/reset_prefix_cache",
+            headers=_vllm_request_headers(),
+        )
+    )
     status = _response_status(response)
     if status == 405:
         raise ConfigError(
@@ -556,7 +583,7 @@ def get_local_image_digest(image_ref: str) -> str:
             "inspect",
             image_ref,
             "--format",
-            "{{index .RepoDigests 0}}",
+            "{{.Id}}",
         ]
     )
     return _canonical_sha256(digest)
@@ -977,7 +1004,7 @@ class ManifestState:
     def reload(self) -> None:
         self.manifest = load_codex_long_manifest(self.manifest_path)
         self.manifest_version = int(self.manifest["manifest_version"])
-        self.grader_image_ref = f"{self.grader_image_tag}@{self.manifest['grader_image_digest']}"
+        self.grader_image_ref = self.grader_image_tag
         logger.info("Manifest loaded: version %s", self.manifest_version)
 
 

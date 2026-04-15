@@ -16,6 +16,7 @@ from lumo_flywheel_serving.task_orchestrator import (
     DuplicateClaimError,
     ExecutionConfig,
     GradingConfig,
+    ManifestState,
     ManifestMismatchError,
     NetworkConfig,
     OrchestratorConfig,
@@ -29,6 +30,7 @@ from lumo_flywheel_serving.task_orchestrator import (
     _call_with_supported_kwargs,
     flush_prefix_cache,
     generate_codex_config,
+    get_local_image_digest,
     health_check,
     sha256_tree,
     verify_pre_run_hashes,
@@ -136,7 +138,7 @@ class _ManifestState:
         version = self._versions[min(self._index, len(self._versions) - 1)]
         self.manifest = {"manifest_version": version}
         self.manifest_version = version
-        self.grader_image_ref = f"codex-long-grader@sha256:grader-{version}"
+        self.grader_image_ref = "codex-long-grader"
         self._index += 1
 
 
@@ -400,12 +402,56 @@ def test_health_check_retries_until_expected_model_present() -> None:
     ]
 
 
+def test_health_check_sends_vllm_auth_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[tuple[str, dict[str, str] | None]] = []
+
+    async def fake_get(url: str, *, headers: dict[str, str] | None = None) -> _Response:
+        captured.append((url, headers))
+        if url.endswith("/health"):
+            return _Response(200)
+        return _Response(200, {"data": [{"id": "qwen3.5-27b"}]})
+
+    monkeypatch.setenv("VLLM_API_KEY", "test-token")
+
+    asyncio.run(
+        health_check(
+            "127.0.0.1",
+            8000,
+            "qwen3.5-27b",
+            max_retries=1,
+            retry_delay_seconds=0.0,
+            http_get=fake_get,
+        )
+    )
+
+    assert captured == [
+        ("http://127.0.0.1:8000/health", {"Authorization": "Bearer test-token"}),
+        ("http://127.0.0.1:8000/v1/models", {"Authorization": "Bearer test-token"}),
+    ]
+
+
 def test_flush_prefix_cache_surfaces_dev_mode_misconfig() -> None:
     async def fake_post(url: str) -> _Response:
         return _Response(405)
 
     with pytest.raises(ConfigError, match="VLLM_SERVER_DEV_MODE"):
         asyncio.run(flush_prefix_cache("127.0.0.1", 8000, http_post=fake_post))
+
+
+def test_flush_prefix_cache_sends_vllm_auth_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[tuple[str, dict[str, str] | None]] = []
+
+    async def fake_post(url: str, *, headers: dict[str, str] | None = None) -> _Response:
+        captured.append((url, headers))
+        return _Response(200)
+
+    monkeypatch.setenv("VLLM_API_KEY", "test-token")
+
+    asyncio.run(flush_prefix_cache("127.0.0.1", 8000, http_post=fake_post))
+
+    assert captured == [
+        ("http://127.0.0.1:8000/reset_prefix_cache", {"Authorization": "Bearer test-token"})
+    ]
 
 
 def test_codex_long_task_spec_requires_canonical_scenario_id_and_image_digest() -> None:
@@ -732,7 +778,7 @@ def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> No
         "pre-grade:9",
         "family-spec:family-a",
         "phase2:snapshot-ref",
-        "phase3:codex-long-grader@sha256:grader-9",
+        "phase3:codex-long-grader",
         "cleanup:True",
         "after:family-a/v1",
     ]
@@ -854,7 +900,7 @@ def test_execute_task_regrade_path_uses_retained_snapshot(tmp_path: Path) -> Non
         "pre-grade:11",
         "family-spec:family-a",
         "phase2:snapshot-ref",
-        "phase3:codex-long-grader@sha256:grader-11",
+        "phase3:codex-long-grader",
         "cleanup:True",
     ]
 
@@ -946,3 +992,29 @@ def test_execute_task_regrade_path_uses_configured_unique_grading_dir(tmp_path: 
             / "family-a%2Fv1%2Fqwen3.5-27b%2Fcodex%2Fseed1%2Fattempt2"
         )
     ]
+
+
+def test_manifest_state_uses_local_grader_tag_as_runtime_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path = tmp_path / "benchmark_manifest.lock"
+    manifest_path.write_text("manifest_version: 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "lumo_flywheel_serving.task_orchestrator.load_codex_long_manifest",
+        lambda path: {"manifest_version": 4, "grader_image_digest": "sha256:grader"},
+    )
+
+    state = ManifestState(manifest_path, grader_image_tag="codex-long-grader")
+
+    assert state.manifest_version == 4
+    assert state.grader_image_ref == "codex-long-grader"
+
+
+def test_get_local_image_digest_uses_local_image_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "lumo_flywheel_serving.task_orchestrator._cmd_output",
+        lambda command: "sha256:local-image-id",
+    )
+
+    assert get_local_image_digest("codex-long-grader") == "sha256:local-image-id"
