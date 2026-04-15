@@ -983,6 +983,8 @@ class DataPoolManager:
         family_id: str | None = None,
         scenario_type: str | None = None,
     ) -> bool:
+        if self._is_sealed(pool_or_split):
+            raise IntegrityError(f"Cannot claim run for sealed pool/split '{pool_or_split}'")
         if track == "codex_long":
             try:
                 env = self.codex_long_env_index[scenario_id]

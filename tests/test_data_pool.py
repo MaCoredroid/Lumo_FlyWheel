@@ -827,11 +827,37 @@ def test_seal_enforcement_and_unseal(tmp_path: Path) -> None:
         assert manager.check_dispatch_eligible(
             "swe_bench", "final_test", "final-1", "qwen3.5-27b", "codex", 1
         ) is DispatchDecision.BLOCKED
+        with pytest.raises(IntegrityError, match="sealed pool/split 'final_test'"):
+            manager.claim_run("swe_bench", "final_test", "final-1", "qwen3.5-27b", "codex", 1)
+        with pytest.raises(IntegrityError, match="sealed pool/split 'test_long'"):
+            manager.claim_run(
+                "codex_long",
+                "test_long",
+                "test-cross/v1",
+                "qwen3.5-27b",
+                "codex",
+                1,
+                launch_manifest_ver=3,
+                family_id="test-cross",
+                scenario_type="cross_layer_changes",
+            )
 
         manager.unseal("final_test", operator="benchmark_runner", reason="Sprint 3 B2 eval start")
         manager.unseal("test_long", operator="benchmark_runner", reason="Sprint 3 B1 eval start")
         assert [task["instance_id"] for task in manager.list_swe_bench_tasks("final_test")] == ["final-1", "final-2"]
         assert len(manager.list_codex_long_envs("test_long")) == 5
+        assert manager.claim_run("swe_bench", "final_test", "final-1", "qwen3.5-27b", "codex", 1)
+        assert manager.claim_run(
+            "codex_long",
+            "test_long",
+            "test-cross/v1",
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="test-cross",
+            scenario_type="cross_layer_changes",
+        )
         assert len(manager.seal_state.unseal_log) == 2
     finally:
         manager.close()

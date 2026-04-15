@@ -88,7 +88,7 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
     def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
         requests_seen.append({"url": url, "json": json})
         if url.endswith("/v1/responses"):
-            return _Response(payload={"id": "resp-1"})
+            return _Response(payload={"id": f"resp-{len(requests_seen) - 2}"})
         if len(requests_seen) == 1:
             return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
         return _Response(payload={"id": "chat-2", "choices": [{"message": {"content": "OK"}}]})
@@ -111,13 +111,16 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
         "flush",
         "stop:True",
     ]
-    assert len(requests_seen) == 3
+    assert len(requests_seen) == 4
     assert requests_seen[0]["url"].endswith("/v1/chat/completions")
     assert requests_seen[1]["url"].endswith("/v1/chat/completions")
     assert requests_seen[2]["url"].endswith("/v1/responses")
+    assert requests_seen[3]["url"].endswith("/v1/responses")
     second_messages = requests_seen[1]["json"]["messages"]
     assert second_messages[2] == {"role": "assistant", "content": "OK"}
     assert second_messages[3]["role"] == "user"
+    assert requests_seen[3]["json"]["previous_response_id"] == "resp-1"
+    assert output["responses_ids"] == ["resp-1", "resp-2"]
 
 
 def test_smoke_test_fails_when_prefix_cache_hits_do_not_increase(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -136,7 +139,8 @@ def test_smoke_test_fails_when_prefix_cache_hits_do_not_increase(monkeypatch: py
 
     def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
         if url.endswith("/v1/responses"):
-            return _Response(payload={"id": "resp-1"})
+            response_id = "resp-1" if "previous_response_id" not in json else "resp-2"
+            return _Response(payload={"id": response_id})
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
@@ -165,7 +169,8 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
     def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
         seen_headers.append(headers)
         if url.endswith("/v1/responses"):
-            return _Response(payload={"id": "resp-1"})
+            response_id = "resp-1" if "previous_response_id" not in json else "resp-2"
+            return _Response(payload={"id": response_id})
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
@@ -178,7 +183,7 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
 
     assert cli.cmd_smoke_test(_args()) == 0
-    assert seen_headers == [{"Authorization": "Bearer custom-token"}] * 3
+    assert seen_headers == [{"Authorization": "Bearer custom-token"}] * 4
 
 
 def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -203,7 +208,8 @@ def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: 
     def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
         seen_models.append(json["model"])
         if url.endswith("/v1/responses"):
-            return _Response(payload={"id": "resp-1"})
+            response_id = "resp-1" if "previous_response_id" not in json else "resp-2"
+            return _Response(payload={"id": response_id})
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
     metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
@@ -213,7 +219,33 @@ def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: 
     monkeypatch.setattr(requests, "post", fake_post)
 
     assert cli.cmd_smoke_test(_args()) == 0
-    assert seen_models == ["codex-sft-all", "codex-sft-all", "codex-sft-all"]
+    assert seen_models == ["codex-sft-all", "codex-sft-all", "codex-sft-all", "codex-sft-all"]
+
+
+def test_smoke_test_requires_responses_follow_up_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    server = SimpleNamespace(
+        start=lambda model_id, enable_request_logging=False: None,
+        health=lambda: _Response(status_code=200),
+        models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
+        metrics=lambda: _Response(text="ignored"),
+        record_launch_metadata=lambda model_id, **metadata: None,
+        flush_prefix_cache=lambda: None,
+        stop=lambda missing_ok=True: None,
+    )
+
+    def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
+        if url.endswith("/v1/responses"):
+            return _Response(payload={})
+        return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
+
+    metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
+    monkeypatch.setattr(cli, "_server", lambda args: server)
+    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(RuntimeError, match="did not return a response id"):
+        cli.cmd_smoke_test(_args())
 
 
 def test_metric_schema_variant_detects_openmetrics_total() -> None:

@@ -40,6 +40,24 @@ def _prefix_cache_probe_messages(prior_reply: str | None = None) -> list[dict[st
     return messages
 
 
+def _responses_probe_request(model: str, prompt: str, previous_response_id: str | None = None) -> dict[str, object]:
+    request: dict[str, object] = {
+        "model": model,
+        "input": prompt,
+        "max_output_tokens": 8,
+    }
+    if previous_response_id is not None:
+        request["previous_response_id"] = previous_response_id
+    return request
+
+
+def _response_id(payload: dict[str, object]) -> str:
+    response_id = payload.get("id")
+    if not isinstance(response_id, str) or not response_id.strip():
+        raise RuntimeError("Responses API smoke probe did not return a response id")
+    return response_id
+
+
 def _load_env_file(path: str | None) -> None:
     if not path:
         return
@@ -207,17 +225,27 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             timeout=180,
         )
         second_chat.raise_for_status()
-        responses_call = requests.post(
+        first_responses_call = requests.post(
             f"http://127.0.0.1:{args.port}/v1/responses",
             headers=_auth_headers(),
-            json={
-                "model": request_model_name,
-                "input": "Reply with the single token OK.",
-                "max_output_tokens": 8,
-            },
+            json=_responses_probe_request(request_model_name, "Reply with the single token OK."),
             timeout=180,
         )
-        responses_call.raise_for_status()
+        first_responses_call.raise_for_status()
+        first_responses_payload = first_responses_call.json()
+        first_response_id = _response_id(first_responses_payload)
+        second_responses_call = requests.post(
+            f"http://127.0.0.1:{args.port}/v1/responses",
+            headers=_auth_headers(),
+            json=_responses_probe_request(
+                request_model_name,
+                "Reply with the single token OK again.",
+                previous_response_id=first_response_id,
+            ),
+            timeout=180,
+        )
+        second_responses_call.raise_for_status()
+        second_response_id = _response_id(second_responses_call.json())
         metrics_after = parse_prometheus_text(server.metrics().text)
         cache_hit_metric = schema["prefix_cache_hits"]
         cache_hit_delta = metrics_after.get(cache_hit_metric, 0.0) - metrics_before.get(cache_hit_metric, 0.0)
@@ -239,7 +267,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
                     "models": models,
                     "schema": schema,
                     "chat_completion_ids": [first_chat_payload.get("id"), second_chat.json().get("id")],
-                    "responses_id": responses_call.json().get("id"),
+                    "responses_ids": [first_response_id, second_response_id],
                     "reset_prefix_cache_status": 200,
                     "prefix_cache_hits_delta": cache_hit_delta,
                 },
