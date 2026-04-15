@@ -586,6 +586,7 @@ class ModelServer:
                     if not expected_model_ids.issubset(set(served_model_ids)):
                         time.sleep(5)
                         continue
+                    self.metrics()
                     self._append_log_text(
                         model_id,
                         f"[VLLM-READY] cuda_graph_capture_time={time.time() - start:.1f}s\n"

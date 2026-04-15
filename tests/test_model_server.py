@@ -1050,6 +1050,8 @@ models:
             return Response(status_code=current["health"])
         if url.endswith("/v1/models"):
             return Response(payload=current["models"])
+        if url.endswith("/metrics"):
+            return Response()
         raise AssertionError(url)
 
     def fake_sleep(seconds: float) -> None:
@@ -1127,6 +1129,8 @@ models:
             return Response(status_code=current["health"])
         if url.endswith("/v1/models"):
             return Response(payload=current["models"])
+        if url.endswith("/metrics"):
+            return Response()
         raise AssertionError(url)
 
     def fake_sleep(seconds: float) -> None:
@@ -1216,6 +1220,8 @@ models:
             return Response(status_code=200)
         if url.endswith("/v1/models"):
             return Response(payload={"data": [{"id": "wrong-model"}]})
+        if url.endswith("/metrics"):
+            return Response()
         raise AssertionError(url)
 
     def fake_sleep(seconds: float) -> None:
@@ -1229,6 +1235,70 @@ models:
 
     with pytest.raises(TimeoutError, match="not ready within 10s"):
         server._wait_ready("qwen3.5-27b", timeout_s=10)
+
+
+def test_wait_ready_requires_metrics_endpoint_before_success(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+    now = 0.0
+    sleeps: list[float] = []
+    metric_status_codes = iter([404, 200])
+
+    class Response:
+        def __init__(self, status_code: int = 200, payload: dict | None = None) -> None:
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.text = "# HELP vllm:prompt_tokens\n"
+
+        def raise_for_status(self) -> None:
+            if self.status_code >= 400:
+                raise requests.HTTPError(f"{self.status_code} error")
+
+        def json(self) -> dict:
+            return self._payload
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, stdout="running\n", stderr="")
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> Response:
+        if url.endswith("/health"):
+            return Response(status_code=200)
+        if url.endswith("/v1/models"):
+            return Response(payload={"data": [{"id": "qwen3.5-27b"}]})
+        if url.endswith("/metrics"):
+            return Response(status_code=next(metric_status_codes))
+        raise AssertionError(url)
+
+    def fake_sleep(seconds: float) -> None:
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    monkeypatch.setattr(server, "_run", fake_run)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.requests.get", fake_get)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.sleep", fake_sleep)
+    monkeypatch.setattr("lumo_flywheel_serving.model_server.time.time", lambda: now)
+
+    server._wait_ready("qwen3.5-27b", timeout_s=15)
+
+    assert sleeps == [5]
 
 
 def test_defaults_pin_repo_owned_nvidia_image() -> None:

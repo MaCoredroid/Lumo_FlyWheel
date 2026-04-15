@@ -291,6 +291,25 @@ def test_manager_requires_split_assignment_freeze_metadata(tmp_path: Path) -> No
         )
 
 
+def test_manager_rejects_freeze_date_mismatch_between_manifest_and_split_assignment(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["freeze_date"] = "2026-06-02"
+    _write_yaml(split_path, split_assignment)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="freeze_date='2026-06-02'"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "freeze-date-mismatch.db",
+        )
+
+
 def test_manager_requires_prefixed_split_assignment_hash(tmp_path: Path) -> None:
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
     manifest = yaml.safe_load(manifest_path.read_text())

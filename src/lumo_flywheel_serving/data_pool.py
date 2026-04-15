@@ -366,6 +366,13 @@ def load_codex_long_splits(
     freeze_date = assignment.get("freeze_date")
     if not isinstance(freeze_date, str) or not freeze_date.strip():
         raise IntegrityError("split_assignment.yaml must record a non-empty freeze_date")
+    manifest_freeze_date = manifest["freeze_date"]
+    if freeze_date != manifest_freeze_date:
+        raise IntegrityError(
+            "Frozen benchmark metadata disagreement: "
+            f"split_assignment.yaml freeze_date='{freeze_date}', "
+            f"benchmark_manifest.lock freeze_date='{manifest_freeze_date}'"
+        )
     try:
         assignment["seed"] = int(assignment["seed"])
     except (KeyError, TypeError, ValueError) as exc:
