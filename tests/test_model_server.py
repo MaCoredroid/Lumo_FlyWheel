@@ -104,13 +104,22 @@ def test_next_gpu_memory_utilization_keeps_legacy_steps_for_unparsed_errors() ->
 
 def test_low_free_memory_prefers_grace_retries_before_degrading() -> None:
     error_text = (
-        "ValueError: Free memory on device cuda:0 (7.06/117.51 GiB) on startup "
+        "ValueError: Free memory on device cuda:0 (25.06/117.51 GiB) on startup "
         "is less than desired GPU memory utilization (0.9, 105.76 GiB). "
         "Decrease GPU memory utilization or reduce GPU memory used by other processes."
     )
-    assert ModelServer._should_retry_low_free_memory(error_text, retries=0) is True
-    assert ModelServer._should_retry_low_free_memory(error_text, retries=1) is True
-    assert ModelServer._should_retry_low_free_memory(error_text, retries=2) is False
+    assert ModelServer._should_retry_low_free_memory(error_text, retries=0, current=0.9) is True
+    assert ModelServer._should_retry_low_free_memory(error_text, retries=1, current=0.9) is True
+    assert ModelServer._should_retry_low_free_memory(error_text, retries=2, current=0.9) is False
+
+
+def test_low_free_memory_skips_grace_when_even_minimum_floor_cannot_fit() -> None:
+    error_text = (
+        "ValueError: Free memory on device cuda:0 (7.06/117.51 GiB) on startup "
+        "is less than desired GPU memory utilization (0.15, 17.63 GiB). "
+        "Decrease GPU memory utilization or reduce GPU memory used by other processes."
+    )
+    assert ModelServer._should_retry_low_free_memory(error_text, retries=0, current=0.15) is False
 
 
 def test_next_gpu_memory_utilization_stops_before_context_floor() -> None:
@@ -148,6 +157,107 @@ models:
     server._wait_vram_free(timeout_s=5)
 
     assert sleeps == [5]
+
+
+def test_start_resets_previous_log_before_retry_cycle(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    log_path = server.logs_path("qwen3.5-27b")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("stale log text", encoding="utf-8")
+
+    monkeypatch.setattr(server, "_ensure_image_present", lambda: None)
+    monkeypatch.setattr(server, "stop", lambda missing_ok=False: None)
+    monkeypatch.setattr(
+        server,
+        "_run",
+        lambda cmd, capture_output=False, check=True: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+
+    def fake_wait_ready(model_id: str, timeout_s: int = 900) -> None:
+        assert log_path.read_text(encoding="utf-8") == ""
+
+    monkeypatch.setattr(server, "_wait_ready", fake_wait_ready)
+
+    server.start("qwen3.5-27b")
+
+
+def test_reset_log_uses_docker_fallback_for_root_owned_logs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        image="lumo-flywheel-vllm:test",
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    log_path = server.logs_path("qwen3.5-27b")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    captured: dict[str, object] = {}
+
+    def fake_write_text(*args: object, **kwargs: object) -> str:
+        raise PermissionError("root owned")
+
+    def fake_subprocess_run(
+        cmd: list[str], check: bool, capture_output: bool, text: bool, env: dict[str, str]
+    ) -> subprocess.CompletedProcess[str]:
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(Path, "write_text", fake_write_text)
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+
+    server._reset_log("qwen3.5-27b")
+
+    assert captured["cmd"] == [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{server.logs_root}:{server.logs_root}",
+        "--entrypoint",
+        "python3",
+        "lumo-flywheel-vllm:test",
+        "-c",
+        "import sys; from pathlib import Path; Path(sys.argv[1]).write_text('', encoding='utf-8')",
+        str(log_path),
+    ]
 
 
 def test_models_uses_auth_header(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

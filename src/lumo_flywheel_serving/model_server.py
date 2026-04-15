@@ -55,6 +55,7 @@ class ModelServer:
         self.ensure_runtime_scaffolding()
         self._ensure_image_present()
         config = self.registry[model_id]
+        self._reset_log(model_id)
         self.stop(missing_ok=True)
         kv_cache_dtype = config.kv_cache_dtype
         gpu_memory_utilization = config.gpu_memory_utilization
@@ -86,7 +87,11 @@ class ModelServer:
                     kv_cache_dtype = "auto"
                     continue
                 if insufficient_memory in error_text:
-                    if self._should_retry_low_free_memory(error_text, retries=low_memory_grace_retries):
+                    if self._should_retry_low_free_memory(
+                        error_text,
+                        retries=low_memory_grace_retries,
+                        current=gpu_memory_utilization,
+                    ):
                         low_memory_grace_retries += 1
                         time.sleep(LOW_FREE_MEMORY_GRACE_SLEEP_S)
                         continue
@@ -196,6 +201,35 @@ class ModelServer:
             env=os.environ.copy(),
         )
 
+    def _reset_log(self, model_id: str) -> None:
+        log_path = self.logs_path(model_id)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            log_path.write_text("", encoding="utf-8")
+            return
+        except PermissionError:
+            pass
+
+        subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{self.logs_root}:{self.logs_root}",
+                "--entrypoint",
+                "python3",
+                self.image,
+                "-c",
+                "import sys; from pathlib import Path; Path(sys.argv[1]).write_text('', encoding='utf-8')",
+                str(log_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=os.environ.copy(),
+        )
+
     @staticmethod
     def _gpu_memory_snapshot(error_text: str) -> tuple[float, float] | None:
         match = GPU_MEMORY_ERROR_RE.search(error_text)
@@ -204,14 +238,20 @@ class ModelServer:
         return float(match.group("free")), float(match.group("total"))
 
     @classmethod
-    def _should_retry_low_free_memory(cls, error_text: str, retries: int) -> bool:
+    def _should_retry_low_free_memory(cls, error_text: str, retries: int, current: float) -> bool:
         if retries >= LOW_FREE_MEMORY_GRACE_RETRIES:
             return False
         snapshot = cls._gpu_memory_snapshot(error_text)
         if snapshot is None:
             return False
         free_gib, total_gib = snapshot
-        return total_gib > 0 and (free_gib / total_gib) < 0.5
+        if total_gib <= 0:
+            return False
+        # If the host cannot satisfy even the minimum viable utilization floor,
+        # extra grace sleeps cannot change the launcher decision.
+        if free_gib < (total_gib * MIN_GPU_MEMORY_UTILIZATION):
+            return False
+        return (free_gib / total_gib) < 0.5
 
     @staticmethod
     def _next_gpu_memory_utilization(error_text: str, current: float) -> float | None:
