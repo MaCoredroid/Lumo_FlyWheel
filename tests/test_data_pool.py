@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -2262,6 +2263,54 @@ def test_gate4_outcome_validation_and_stale_reload_behavior(tmp_path: Path, capl
     full_plan_dir = tmp_path / "full-plan"
     full_plan_dir.mkdir()
     pools_path, split_path, manifest_path, _ = _fixture_files(full_plan_dir, full_plan=True)
+    caplog.clear()
+    reloaded = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert reloaded.gate4_outcome is None
+        assert "Ignoring stale or malformed persisted Gate 4 outcome metadata" in caplog.text
+    finally:
+        reloaded.close()
+
+
+def test_gate4_outcome_reload_ignores_legacy_rows_missing_new_columns(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    db_path = tmp_path / "legacy-gate4.db"
+
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    manager.close()
+
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO gate4_outcome (
+                singleton,
+                total_families,
+                b1_viable,
+                projected_codex_traces,
+                projected_wall_clock_days,
+                projected_matched_ids,
+                projected_matched_families,
+                b2_viable,
+                gate4_decision,
+                recorded_at
+            )
+            VALUES (1, 35, 0, 52, 24.5, 31, 6, 1, 'PROCEED', '2026-06-20T00:00:00+00:00')
+            """
+        )
+
     caplog.clear()
     reloaded = DataPoolManager(
         swe_bench_pools_path=pools_path,

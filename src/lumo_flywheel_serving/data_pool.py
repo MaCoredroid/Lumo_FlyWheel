@@ -197,6 +197,12 @@ class Gate4Outcome:
     recorded_at: str
 
 
+def _require_gate4_bool(value: Any, *, field_name: str) -> bool:
+    if value in (0, 1, False, True):
+        return bool(value)
+    raise IntegrityError(f"Gate 4 outcome {field_name} must be stored as 0/1 or bool; got {value!r}")
+
+
 def _utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -1167,9 +1173,11 @@ class DataPoolManager:
                     "Gate 4 outcome gate4_decision='PROCEED' requires at least "
                     f"{GATE4_MIN_MATCHED_FAMILY_SCENARIO_TYPES} scenario types contributing matched families"
                 )
+        if not isinstance(outcome.recorded_at, str) or not outcome.recorded_at.strip():
+            raise IntegrityError("Gate 4 outcome recorded_at must be a non-empty ISO-8601 timestamp")
         try:
             datetime.fromisoformat(outcome.recorded_at)
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             raise IntegrityError("Gate 4 outcome recorded_at must be a valid ISO-8601 timestamp") from exc
         return outcome
 
@@ -1186,22 +1194,22 @@ class DataPoolManager:
         ).fetchone()
         if row is None:
             return None
-        outcome = Gate4Outcome(
-            total_families=int(row["total_families"]),
-            b1_viable=bool(row["b1_viable"]),
-            projected_codex_traces=int(row["projected_codex_traces"]),
-            projected_wall_clock_days=float(row["projected_wall_clock_days"]),
-            projected_matched_ids=int(row["projected_matched_ids"]),
-            projected_matched_families=int(row["projected_matched_families"]),
-            pilot_families_in_target_range=int(row["pilot_families_in_target_range"]),
-            matched_family_scenario_types=int(row["matched_family_scenario_types"]),
-            b2_viable=bool(row["b2_viable"]),
-            gate4_decision=row["gate4_decision"],
-            recorded_at=row["recorded_at"],
-        )
         try:
+            outcome = Gate4Outcome(
+                total_families=int(row["total_families"]),
+                b1_viable=_require_gate4_bool(row["b1_viable"], field_name="b1_viable"),
+                projected_codex_traces=int(row["projected_codex_traces"]),
+                projected_wall_clock_days=float(row["projected_wall_clock_days"]),
+                projected_matched_ids=int(row["projected_matched_ids"]),
+                projected_matched_families=int(row["projected_matched_families"]),
+                pilot_families_in_target_range=int(row["pilot_families_in_target_range"]),
+                matched_family_scenario_types=int(row["matched_family_scenario_types"]),
+                b2_viable=_require_gate4_bool(row["b2_viable"], field_name="b2_viable"),
+                gate4_decision=row["gate4_decision"],
+                recorded_at=row["recorded_at"],
+            )
             return self._coerce_gate4_outcome(outcome)
-        except IntegrityError:
+        except (IntegrityError, TypeError, ValueError):
             logger.warning("Ignoring stale or malformed persisted Gate 4 outcome metadata", exc_info=True)
             return None
 
