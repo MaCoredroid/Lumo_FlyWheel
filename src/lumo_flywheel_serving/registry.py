@@ -32,6 +32,12 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
         raise ValueError(
             f"Model {model_id} is missing local_path. Leave unresolved placeholders commented out until they are real models."
         )
+    local_path_obj = Path(local_path)
+    if not str(local_path_obj).startswith("/models/"):
+        raise ValueError(f"Model {model_id} local_path must be a container path under /models; got {local_path_obj}")
+    served_model_name = raw.get("served_model_name", model_id)
+    if not isinstance(served_model_name, str) or not served_model_name.strip():
+        raise ValueError(f"Model {model_id} served_model_name must be a non-empty string")
     lora_modules_raw = raw.get("lora_modules", {})
     if not isinstance(lora_modules_raw, dict):
         raise ValueError(f"Model {model_id} lora_modules must be a mapping of adapter_name -> container_path")
@@ -39,14 +45,19 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
         (adapter_name, Path(adapter_path))
         for adapter_name, adapter_path in lora_modules_raw.items()
     )
+    for adapter_name, adapter_path in lora_modules:
+        if not isinstance(adapter_name, str) or not adapter_name.strip():
+            raise ValueError(f"Model {model_id} lora_modules adapter names must be non-empty strings")
+        if not str(adapter_path):
+            raise ValueError(f"Model {model_id} lora_modules[{adapter_name}] must be a non-empty path")
     if lora_modules and raw.get("max_lora_rank") is None:
         raise ValueError(f"Model {model_id} must define max_lora_rank when lora_modules are configured")
     return ModelConfig(
         model_id=model_id,
         hf_repo=raw.get("hf_repo", ""),
         hf_revision=raw.get("hf_revision"),
-        local_path=Path(local_path),
-        served_model_name=raw.get("served_model_name", model_id),
+        local_path=local_path_obj,
+        served_model_name=served_model_name,
         quantization=raw["quantization"],
         dtype=raw["dtype"],
         kv_cache_dtype=raw.get("kv_cache_dtype", "fp8_e5m2"),

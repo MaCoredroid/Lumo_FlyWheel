@@ -1253,3 +1253,42 @@ models:
     )
     with pytest.raises(ValueError, match="missing local_path"):
         load_registry(registry)
+
+
+def test_registry_rejects_local_paths_outside_models_mount(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /srv/models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+
+    with pytest.raises(ValueError, match="under /models"):
+        load_registry(registry)
+
+
+def test_registry_rejects_blank_served_model_name(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    served_model_name: ""
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+
+    with pytest.raises(ValueError, match="served_model_name"):
+        load_registry(registry)

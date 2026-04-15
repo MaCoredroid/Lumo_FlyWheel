@@ -193,6 +193,29 @@ def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path
     with pytest.raises(IntegrityError, match="family_spec_hash"):
         _find_manifest_variant(malformed_hash_manifest, malformed_hash_manifest["variants"][0]["family_id"], "v1")
 
+    empty_split_manifest = yaml.safe_load(manifest_path.read_text())
+    empty_split_manifest["variants"][0]["split"] = ""
+    with pytest.raises(IntegrityError, match="non-empty split"):
+        _find_manifest_variant(empty_split_manifest, empty_split_manifest["variants"][0]["family_id"], "v1")
+
+    bad_scenario_type_manifest = yaml.safe_load(manifest_path.read_text())
+    bad_scenario_type_manifest["variants"][0]["scenario_type"] = "unknown_type"
+    with pytest.raises(IntegrityError, match="unknown scenario_type"):
+        _find_manifest_variant(
+            bad_scenario_type_manifest,
+            bad_scenario_type_manifest["variants"][0]["family_id"],
+            "v1",
+        )
+
+    bad_milestone_id_manifest = yaml.safe_load(manifest_path.read_text())
+    bad_milestone_id_manifest["variants"][0]["milestone_hashes"] = {"": _sha256("m1")}
+    with pytest.raises(IntegrityError, match="milestone_hashes keys"):
+        _find_manifest_variant(
+            bad_milestone_id_manifest,
+            bad_milestone_id_manifest["variants"][0]["family_id"],
+            "v1",
+        )
+
     malformed_prefixed_hash_manifest = yaml.safe_load(manifest_path.read_text())
     malformed_prefixed_hash_manifest["variants"][0]["family_spec_hash"] = "sha256:not-a-real-digest"
     with pytest.raises(IntegrityError, match="64-character sha256 hex digest"):
@@ -338,7 +361,7 @@ def test_claim_finish_retry_and_superseded_by(tmp_path: Path) -> None:
             "codex",
             1,
             attempt=2,
-            launch_manifest_ver=4,
+            launch_manifest_ver=3,
             family_id="train-feature",
             scenario_type="feature_evolution",
         )
@@ -354,7 +377,7 @@ def test_claim_finish_retry_and_superseded_by(tmp_path: Path) -> None:
             1,
             2,
             "resolved",
-            grading_manifest_ver=4,
+            grading_manifest_ver=3,
             codex_long_pass=True,
             milestone_results={"m1": True},
             snapshot_image_ref="codex-long-snapshot/train-feature/v1",
@@ -369,6 +392,17 @@ def test_claim_finish_retry_and_superseded_by(tmp_path: Path) -> None:
 def test_claim_run_rejects_codex_long_metadata_drift(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
+        with pytest.raises(IntegrityError, match="manifest_version mismatch"):
+            manager.claim_run(
+                "codex_long",
+                "train_long",
+                "train-feature/v1",
+                "qwen3.5-27b",
+                "codex",
+                1,
+                launch_manifest_ver=2,
+            )
+
         with pytest.raises(IntegrityError, match="belongs to split 'train_long'"):
             manager.claim_run(
                 "codex_long",
@@ -412,6 +446,71 @@ def test_claim_run_rejects_codex_long_metadata_drift(tmp_path: Path) -> None:
                 "qwen3.5-27b",
                 "codex",
                 1,
+            )
+    finally:
+        manager.close()
+
+
+def test_finish_run_rejects_missing_or_stale_grading_manifest_version(tmp_path: Path) -> None:
+    missing_case = tmp_path / "missing"
+    missing_case.mkdir()
+    manager, _ = _manager(missing_case)
+    try:
+        scenario_id = "train-feature/v1"
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+
+        with pytest.raises(IntegrityError, match="requires grading_manifest_ver"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+            )
+    finally:
+        manager.close()
+
+    stale_case = tmp_path / "stale"
+    stale_case.mkdir()
+    manager, _ = _manager(stale_case)
+    try:
+        scenario_id = "train-feature/v1"
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+
+        with pytest.raises(IntegrityError, match="manifest_version mismatch"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "failed",
+                grading_manifest_ver=2,
             )
     finally:
         manager.close()
@@ -629,7 +728,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             "codex",
             1,
             attempt=2,
-            launch_manifest_ver=4,
+            launch_manifest_ver=3,
             family_id="train-feature",
             scenario_type="feature_evolution",
         )
@@ -643,7 +742,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             2,
             "resolved",
             trajectory_path="/tmp/train-feature-v1-s1.jsonl",
-            grading_manifest_ver=4,
+            grading_manifest_ver=3,
             codex_long_pass=True,
             snapshot_image_ref="snap-v1-s1",
         )
@@ -654,7 +753,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             "qwen3.5-27b",
             "codex",
             2,
-            launch_manifest_ver=4,
+            launch_manifest_ver=3,
             family_id="train-feature",
             scenario_type="feature_evolution",
         )
@@ -668,7 +767,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             1,
             "resolved",
             trajectory_path="/tmp/train-feature-v1-s2.jsonl",
-            grading_manifest_ver=4,
+            grading_manifest_ver=3,
             codex_long_pass=True,
             snapshot_image_ref="snap-v1-s2",
         )
@@ -679,7 +778,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             "qwen3.5-27b",
             "codex",
             1,
-            launch_manifest_ver=4,
+            launch_manifest_ver=3,
             family_id="train-feature",
             scenario_type="feature_evolution",
         )
@@ -692,7 +791,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             1,
             1,
             "failed",
-            grading_manifest_ver=4,
+            grading_manifest_ver=3,
             codex_long_pass=False,
         )
 
@@ -704,7 +803,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             "qwen3.5-27b",
             "swe_agent",
             1,
-            launch_manifest_ver=4,
+            launch_manifest_ver=3,
             family_id="train-feature",
             scenario_type="feature_evolution",
         )
@@ -717,7 +816,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             1,
             1,
             "resolved",
-            grading_manifest_ver=4,
+            grading_manifest_ver=3,
             codex_long_pass=True,
         )
 

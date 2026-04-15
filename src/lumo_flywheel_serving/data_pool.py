@@ -257,6 +257,22 @@ def _find_manifest_variant(manifest: dict[str, Any], family_id: str, variant_id:
             raise IntegrityError(
                 f"Manifest entry for '{family_id}/{variant_id}' is missing required fields: {missing}"
             )
+        split = entry["split"]
+        if not isinstance(split, str) or not split:
+            raise IntegrityError(f"Manifest entry for '{family_id}/{variant_id}' must include a non-empty split")
+        if split not in {"train_long", "val_long", "test_long", "public_dev"}:
+            raise IntegrityError(
+                f"Manifest entry for '{family_id}/{variant_id}' has unknown split '{split}'"
+            )
+        scenario_type = entry["scenario_type"]
+        if not isinstance(scenario_type, str) or not scenario_type:
+            raise IntegrityError(
+                f"Manifest entry for '{family_id}/{variant_id}' must include a non-empty scenario_type"
+            )
+        if scenario_type not in SCENARIO_TYPES:
+            raise IntegrityError(
+                f"Manifest entry for '{family_id}/{variant_id}' has unknown scenario_type '{scenario_type}'"
+            )
         _require_sha256_value(entry["image_digest"], field_name=f"{family_id}/{variant_id} image_digest")
         _require_sha256_value(entry["verifier_hash"], field_name=f"{family_id}/{variant_id} verifier_hash")
         _require_sha256_value(entry["family_spec_hash"], field_name=f"{family_id}/{variant_id} family_spec_hash")
@@ -271,6 +287,10 @@ def _find_manifest_variant(manifest: dict[str, Any], family_id: str, variant_id:
                 f"Manifest entry for '{family_id}/{variant_id}' must include non-empty milestone_hashes"
             )
         for milestone_id, milestone_hash in milestone_hashes.items():
+            if not isinstance(milestone_id, str) or not milestone_id:
+                raise IntegrityError(
+                    f"Manifest entry for '{family_id}/{variant_id}' milestone_hashes keys must be non-empty strings"
+                )
             _require_sha256_value(
                 milestone_hash,
                 field_name=f"{family_id}/{variant_id} milestone_hashes[{milestone_id}]",
@@ -897,6 +917,11 @@ class DataPoolManager:
                 )
             if launch_manifest_ver is None:
                 raise IntegrityError("Codex-Long claim_run() requires launch_manifest_ver from benchmark_manifest.lock")
+            if launch_manifest_ver != self.manifest["manifest_version"]:
+                raise IntegrityError(
+                    f"Codex-Long claim_run() manifest_version mismatch for '{scenario_id}': "
+                    f"got {launch_manifest_ver}, current is {self.manifest['manifest_version']}"
+                )
             family_id = env.family_id
             scenario_type = env.scenario_type
         with self.db.begin() as txn:
@@ -962,6 +987,14 @@ class DataPoolManager:
     ) -> None:
         if outcome not in {"resolved", "failed", "no_patch", "timeout", "crash"}:
             raise ValueError(f"Invalid outcome '{outcome}'")
+        if track == "codex_long":
+            if grading_manifest_ver is None:
+                raise IntegrityError("Codex-Long finish_run() requires grading_manifest_ver from benchmark_manifest.lock")
+            if grading_manifest_ver != self.manifest["manifest_version"]:
+                raise IntegrityError(
+                    f"Codex-Long finish_run() manifest_version mismatch for '{scenario_id}': "
+                    f"got {grading_manifest_ver}, current is {self.manifest['manifest_version']}"
+                )
         with self.db.begin() as txn:
             result = txn.execute(
                 """
