@@ -11,6 +11,7 @@ from lumo_flywheel_serving.data_pool import (
     CodexLongLaunchArtifacts,
     DataPoolManager,
     DispatchDecision,
+    Gate4Outcome,
     IntegrityError,
     TrainingAccessViolation,
     _find_manifest_variant,
@@ -1960,6 +1961,136 @@ def test_unseal_state_persists_across_manager_restart(tmp_path: Path) -> None:
         assert [task["instance_id"] for task in reloaded.list_swe_bench_tasks("final_test")] == ["final-1", "final-2"]
         assert len(reloaded.list_codex_long_envs("test_long")) == 6
         assert len(reloaded.seal_state.unseal_log) == 2
+    finally:
+        reloaded.close()
+
+
+def test_gate4_outcome_persists_and_overwrites_across_manager_restart(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    db_path = tmp_path / "run_state.db"
+
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        initial = Gate4Outcome(
+            total_families=35,
+            b1_viable=False,
+            projected_codex_traces=52,
+            projected_wall_clock_days=24.5,
+            projected_matched_ids=31,
+            projected_matched_families=6,
+            b2_viable=True,
+            gate4_decision="PROCEED",
+            recorded_at="2026-06-20T00:00:00+00:00",
+        )
+        assert manager.record_gate4_outcome(initial) == initial
+        assert manager.gate4_outcome == initial
+
+        updated = Gate4Outcome(
+            total_families=35,
+            b1_viable=False,
+            projected_codex_traces=47,
+            projected_wall_clock_days=26.0,
+            projected_matched_ids=28,
+            projected_matched_families=5,
+            b2_viable=False,
+            gate4_decision="ADJUST",
+            recorded_at="2026-06-21T00:00:00+00:00",
+        )
+        assert manager.record_gate4_outcome(updated) == updated
+        assert manager.gate4_outcome == updated
+    finally:
+        manager.close()
+
+    reloaded = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert reloaded.gate4_outcome == updated
+    finally:
+        reloaded.close()
+
+
+def test_gate4_outcome_validation_and_stale_reload_behavior(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        with pytest.raises(IntegrityError, match="total_families must match the loaded Codex-Long freeze"):
+            manager.record_gate4_outcome(
+                Gate4Outcome(
+                    total_families=55,
+                    b1_viable=True,
+                    projected_codex_traces=80,
+                    projected_wall_clock_days=30.0,
+                    projected_matched_ids=50,
+                    projected_matched_families=8,
+                    b2_viable=True,
+                    gate4_decision="PROCEED",
+                    recorded_at="2026-06-20T00:00:00+00:00",
+                )
+            )
+
+        with pytest.raises(IntegrityError, match="gate4_decision must be one of"):
+            manager.record_gate4_outcome(
+                Gate4Outcome(
+                    total_families=35,
+                    b1_viable=False,
+                    projected_codex_traces=52,
+                    projected_wall_clock_days=24.5,
+                    projected_matched_ids=31,
+                    projected_matched_families=6,
+                    b2_viable=True,
+                    gate4_decision="MAYBE",
+                    recorded_at="2026-06-20T00:00:00+00:00",
+                )
+            )
+    finally:
+        manager.close()
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    db_path = tmp_path / "stale-gate4.db"
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        manager.record_gate4_outcome(
+            Gate4Outcome(
+                total_families=35,
+                b1_viable=False,
+                projected_codex_traces=52,
+                projected_wall_clock_days=24.5,
+                projected_matched_ids=31,
+                projected_matched_families=6,
+                b2_viable=True,
+                gate4_decision="PROCEED",
+                recorded_at="2026-06-20T00:00:00+00:00",
+            )
+        )
+    finally:
+        manager.close()
+
+    full_plan_dir = tmp_path / "full-plan"
+    full_plan_dir.mkdir()
+    pools_path, split_path, manifest_path, _ = _fixture_files(full_plan_dir, full_plan=True)
+    caplog.clear()
+    reloaded = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert reloaded.gate4_outcome is None
+        assert "Ignoring stale or malformed persisted Gate 4 outcome metadata" in caplog.text
     finally:
         reloaded.close()
 

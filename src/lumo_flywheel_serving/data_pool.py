@@ -903,7 +903,7 @@ class DataPoolManager:
         self.seed_config = self._load_seed_config(self.seed_config_path)
         self.seal_state = SealState(Path(db_path).with_suffix(".unseal_log.jsonl"))
         self.b1_viable = self.check_rule_1(self.codex_long_splits)
-        self.gate4_outcome: Gate4Outcome | None = None
+        self.gate4_outcome = self._load_gate4_outcome()
         if recover_running:
             self.recovered_runs = self.recover_from_crash()
         else:
@@ -1003,6 +1003,18 @@ class DataPoolManager:
             CREATE INDEX IF NOT EXISTS idx_model ON runs(model_id, exec_state);
             CREATE INDEX IF NOT EXISTS idx_family ON runs(family_id) WHERE family_id IS NOT NULL;
             CREATE INDEX IF NOT EXISTS idx_current ON runs(is_current) WHERE is_current = 1;
+            CREATE TABLE IF NOT EXISTS gate4_outcome (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                total_families INTEGER NOT NULL,
+                b1_viable INTEGER NOT NULL,
+                projected_codex_traces INTEGER NOT NULL,
+                projected_wall_clock_days REAL NOT NULL,
+                projected_matched_ids INTEGER NOT NULL,
+                projected_matched_families INTEGER NOT NULL,
+                b2_viable INTEGER NOT NULL,
+                gate4_decision TEXT NOT NULL CHECK (gate4_decision IN ('PROCEED', 'ADJUST', 'KILL')),
+                recorded_at TEXT NOT NULL
+            );
             CREATE VIEW IF NOT EXISTS latest_runs AS
             SELECT r.*
             FROM runs r
@@ -1050,6 +1062,99 @@ class DataPoolManager:
             codex_long_pass=None if row["cl_pass"] is None else bool(row["cl_pass"]),
             milestone_results=json.loads(milestone_json) if milestone_json else None,
         )
+
+    def _current_total_families(self) -> int:
+        return sum(len(families) for families in self.codex_long_splits.values())
+
+    def _coerce_gate4_outcome(self, outcome: Gate4Outcome) -> Gate4Outcome:
+        if outcome.total_families != self._current_total_families():
+            raise IntegrityError(
+                "Gate 4 outcome total_families must match the loaded Codex-Long freeze; "
+                f"got {outcome.total_families}, expected {self._current_total_families()}"
+            )
+        if outcome.gate4_decision not in {"PROCEED", "ADJUST", "KILL"}:
+            raise IntegrityError(
+                "Gate 4 outcome gate4_decision must be one of 'PROCEED', 'ADJUST', or 'KILL'"
+            )
+        numeric_fields = {
+            "projected_codex_traces": outcome.projected_codex_traces,
+            "projected_wall_clock_days": outcome.projected_wall_clock_days,
+            "projected_matched_ids": outcome.projected_matched_ids,
+            "projected_matched_families": outcome.projected_matched_families,
+        }
+        for field_name, value in numeric_fields.items():
+            if value < 0:
+                raise IntegrityError(f"Gate 4 outcome {field_name} must be >= 0; got {value}")
+        try:
+            datetime.fromisoformat(outcome.recorded_at)
+        except ValueError as exc:
+            raise IntegrityError("Gate 4 outcome recorded_at must be a valid ISO-8601 timestamp") from exc
+        return outcome
+
+    def _load_gate4_outcome(self) -> Gate4Outcome | None:
+        row = self.db.execute(
+            """
+            SELECT total_families, b1_viable, projected_codex_traces, projected_wall_clock_days,
+                   projected_matched_ids, projected_matched_families, b2_viable, gate4_decision, recorded_at
+            FROM gate4_outcome
+            WHERE singleton = 1
+            """
+        ).fetchone()
+        if row is None:
+            return None
+        outcome = Gate4Outcome(
+            total_families=int(row["total_families"]),
+            b1_viable=bool(row["b1_viable"]),
+            projected_codex_traces=int(row["projected_codex_traces"]),
+            projected_wall_clock_days=float(row["projected_wall_clock_days"]),
+            projected_matched_ids=int(row["projected_matched_ids"]),
+            projected_matched_families=int(row["projected_matched_families"]),
+            b2_viable=bool(row["b2_viable"]),
+            gate4_decision=row["gate4_decision"],
+            recorded_at=row["recorded_at"],
+        )
+        try:
+            return self._coerce_gate4_outcome(outcome)
+        except IntegrityError:
+            logger.warning("Ignoring stale or malformed persisted Gate 4 outcome metadata", exc_info=True)
+            return None
+
+    def record_gate4_outcome(self, outcome: Gate4Outcome) -> Gate4Outcome:
+        persisted = self._coerce_gate4_outcome(outcome)
+        with self.db.begin() as txn:
+            txn.execute(
+                """
+                INSERT INTO gate4_outcome (
+                    singleton, total_families, b1_viable, projected_codex_traces,
+                    projected_wall_clock_days, projected_matched_ids, projected_matched_families,
+                    b2_viable, gate4_decision, recorded_at
+                )
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(singleton) DO UPDATE SET
+                    total_families = excluded.total_families,
+                    b1_viable = excluded.b1_viable,
+                    projected_codex_traces = excluded.projected_codex_traces,
+                    projected_wall_clock_days = excluded.projected_wall_clock_days,
+                    projected_matched_ids = excluded.projected_matched_ids,
+                    projected_matched_families = excluded.projected_matched_families,
+                    b2_viable = excluded.b2_viable,
+                    gate4_decision = excluded.gate4_decision,
+                    recorded_at = excluded.recorded_at
+                """,
+                (
+                    persisted.total_families,
+                    int(persisted.b1_viable),
+                    persisted.projected_codex_traces,
+                    persisted.projected_wall_clock_days,
+                    persisted.projected_matched_ids,
+                    persisted.projected_matched_families,
+                    int(persisted.b2_viable),
+                    persisted.gate4_decision,
+                    persisted.recorded_at,
+                ),
+            )
+        self.gate4_outcome = persisted
+        return persisted
 
     def _query_runs(
         self,
