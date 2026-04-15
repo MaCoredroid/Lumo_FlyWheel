@@ -350,6 +350,10 @@ def find_manifest_entry(manifest: dict[str, Any], family_id: str, variant_id: st
 
 def sha256_tree(root: str | Path) -> str:
     root_path = Path(root)
+    if not root_path.exists():
+        raise FileNotFoundError(f"Directory does not exist: {root_path}")
+    if not root_path.is_dir():
+        raise NotADirectoryError(f"Expected directory tree, got: {root_path}")
     import hashlib
 
     hasher = hashlib.sha256()
@@ -551,7 +555,7 @@ def get_codex_harness_mounts(
 
 def get_codex_harness_env(task: TaskSpec) -> dict[str, str]:
     return {
-        "VLLM_API_KEY": "EMPTY",
+        "VLLM_API_KEY": _vllm_api_key(),
         "CODEX_SEED": str(task.seed),
     }
 
@@ -634,12 +638,16 @@ def verify_pre_run_hashes(
 
     agents_md_path = agents_md_resolver(task.image_digest or "")
     try:
-        actual_agents_md_hash = _canonical_sha256(sha256_file(agents_md_path))
-    except FileNotFoundError as exc:
-        raise ManifestMismatchError(
-            f"AGENTS.md missing for {task.scenario_id}: {agents_md_path}",
-            affected_artifact="agents_md",
-        ) from exc
+        try:
+            actual_agents_md_hash = _canonical_sha256(sha256_file(agents_md_path))
+        except FileNotFoundError as exc:
+            raise ManifestMismatchError(
+                f"AGENTS.md missing for {task.scenario_id}: {agents_md_path}",
+                affected_artifact="agents_md",
+            ) from exc
+    finally:
+        if agents_md_path.name == "AGENTS.md" and agents_md_path.parent.name.startswith("codex-bench-agents-"):
+            shutil.rmtree(agents_md_path.parent, ignore_errors=True)
     if actual_agents_md_hash != _canonical_sha256(entry["agents_md_hash"]):
         raise ManifestMismatchError(
             f"AGENTS.md hash mismatch for {task.scenario_id}: "
@@ -751,7 +759,14 @@ def verify_pre_grading_hashes(
             affected_artifact="milestone",
         )
 
-    verifier_data_hash = sha256_tree(Path(verifier_data_dir) / str(task.family_id))
+    verifier_data_path = Path(verifier_data_dir) / str(task.family_id)
+    try:
+        verifier_data_hash = sha256_tree(verifier_data_path)
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        raise ManifestMismatchError(
+            f"Verifier data missing for {task.scenario_id}: {verifier_data_path}",
+            affected_artifact="verifier_data",
+        ) from exc
     if verifier_data_hash != _canonical_sha256(entry["verifier_data_hash"]):
         raise ManifestMismatchError(
             f"Verifier data hash mismatch for {task.scenario_id}: "

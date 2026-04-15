@@ -30,11 +30,12 @@ from lumo_flywheel_serving.task_orchestrator import (
     _call_with_supported_kwargs,
     flush_prefix_cache,
     generate_codex_config,
+    get_codex_harness_env,
     get_local_image_digest,
     health_check,
     sha256_tree,
-    verify_pre_run_hashes,
     verify_pre_grading_hashes,
+    verify_pre_run_hashes,
 )
 
 
@@ -454,6 +455,15 @@ def test_flush_prefix_cache_sends_vllm_auth_header(monkeypatch: pytest.MonkeyPat
     ]
 
 
+def test_get_codex_harness_env_uses_current_vllm_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VLLM_API_KEY", "runtime-token")
+
+    assert get_codex_harness_env(_codex_long_task()) == {
+        "VLLM_API_KEY": "runtime-token",
+        "CODEX_SEED": "1",
+    }
+
+
 def test_codex_long_task_spec_requires_canonical_scenario_id_and_image_digest() -> None:
     with pytest.raises(ValueError, match="canonical scenario_id 'family-a/v1'"):
         TaskSpec(
@@ -572,6 +582,49 @@ def test_verify_pre_grading_hashes_reports_missing_verify_script(tmp_path: Path)
         )
 
     assert exc_info.value.affected_artifact == "verifier"
+
+
+def test_verify_pre_grading_hashes_reports_missing_verifier_data_dir(tmp_path: Path) -> None:
+    verifiers_dir = tmp_path / "verifiers" / "family-a"
+    milestones_dir = verifiers_dir / "milestones"
+    milestones_dir.mkdir(parents=True)
+
+    verify_path = verifiers_dir / "verify.sh"
+    verify_path.write_text("echo verify\n", encoding="utf-8")
+    (milestones_dir / "m1.sh").write_text("echo milestone\n", encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "grader_image_digest": _sha("grader"),
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("echo verify\n"),
+                "family_spec_hash": _sha("family"),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": _sha("data"),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Verifier data missing") as exc_info:
+        verify_pre_grading_hashes(
+            _codex_long_task(),
+            manifest,
+            _sha("grader"),
+            image_digest_resolver=lambda image_ref: image_ref,
+            verifiers_dir=tmp_path / "verifiers",
+            verifier_data_dir=tmp_path / "verifier_data",
+        )
+
+    assert exc_info.value.affected_artifact == "verifier_data"
 
 
 def test_verify_pre_grading_hashes_rejects_untracked_verifier_tree_files(tmp_path: Path) -> None:
@@ -749,6 +802,48 @@ def test_verify_pre_run_hashes_reports_missing_family_spec(tmp_path: Path) -> No
         )
 
     assert exc_info.value.affected_artifact == "family_spec"
+
+
+def test_verify_pre_run_hashes_cleans_up_transient_agents_md_extract(tmp_path: Path) -> None:
+    scenario_families_dir = tmp_path / "scenario_families" / "family-a"
+    scenario_families_dir.mkdir(parents=True)
+    family_spec_text = "grading_invariant:\n  functional_checks: []\n"
+    (scenario_families_dir / "family.yaml").write_text(family_spec_text, encoding="utf-8")
+
+    transient_extract = tmp_path / "codex-bench-agents-temp"
+    agents_md_path = transient_extract / "AGENTS.md"
+    transient_extract.mkdir()
+    agents_md_path.write_text("task description\n", encoding="utf-8")
+
+    manifest = {
+        "manifest_version": 4,
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("verify"),
+                "family_spec_hash": _sha(family_spec_text),
+                "agents_md_hash": _sha("task description\n"),
+                "verifier_data_hash": _sha("data"),
+                "milestone_hashes": {
+                    "m1": _sha("echo milestone\n"),
+                },
+            }
+        ],
+    }
+
+    verify_pre_run_hashes(
+        replace(_codex_long_task(), image_digest=_sha("image")),
+        manifest,
+        image_digest_resolver=lambda image_ref: image_ref,
+        agents_md_resolver=lambda image_ref: agents_md_path,
+        scenario_families_dir=tmp_path / "scenario_families",
+    )
+
+    assert not transient_extract.exists()
 
 
 def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> None:
