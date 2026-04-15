@@ -611,7 +611,14 @@ class ModelServer:
         data = payload.get("data")
         if not isinstance(data, list):
             raise ValueError("vLLM /v1/models payload missing data list")
-        model_ids = [item["id"] for item in data if isinstance(item, dict) and isinstance(item.get("id"), str)]
+        model_ids: list[str] = []
+        for index, item in enumerate(data):
+            if not isinstance(item, dict):
+                raise ValueError(f"vLLM /v1/models data[{index}] must be an object with a string id")
+            model_id = item.get("id")
+            if not isinstance(model_id, str) or not model_id.strip():
+                raise ValueError(f"vLLM /v1/models data[{index}] must include a non-empty string id")
+            model_ids.append(model_id)
         if not model_ids:
             raise ValueError("vLLM /v1/models returned no served model ids")
         return model_ids

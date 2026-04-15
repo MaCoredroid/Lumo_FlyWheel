@@ -398,6 +398,16 @@ def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path
     with pytest.raises(IntegrityError, match="family_id and variant_id"):
         _find_manifest_variant(malformed_manifest, "train-feature", "v1")
 
+    slashy_family_manifest = yaml.safe_load(manifest_path.read_text())
+    slashy_family_manifest["variants"][0]["family_id"] = "train/feature"
+    with pytest.raises(IntegrityError, match="family_id must be kebab-case"):
+        _find_manifest_variant(slashy_family_manifest, "train/feature", "v1")
+
+    slashy_variant_manifest = yaml.safe_load(manifest_path.read_text())
+    slashy_variant_manifest["variants"][0]["variant_id"] = "v1/redo"
+    with pytest.raises(IntegrityError, match="variant_id must be a slash-free lowercase slug"):
+        _find_manifest_variant(slashy_variant_manifest, slashy_variant_manifest["variants"][0]["family_id"], "v1/redo")
+
     non_list_manifest = yaml.safe_load(manifest_path.read_text())
     non_list_manifest["variants"] = {"broken": True}
     with pytest.raises(IntegrityError, match="must contain a 'variants' list"):
@@ -448,6 +458,57 @@ def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "broken.db",
+        )
+
+
+def test_manager_rejects_non_canonical_family_and_variant_ids(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["splits"]["train_long"]["families"][0]["family_id"] = "train/feature"
+    _write_yaml(split_path, split_assignment)
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["variants"][0]["family_id"] = "train/feature"
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="family_id must be kebab-case"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "bad-family-id.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["splits"]["train_long"]["families"][0]["variant_ids"][0] = "v1/redo"
+    _write_yaml(split_path, split_assignment)
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="variant_ids\\[0\\]"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "bad-variant-id.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["variants"][0]["variant_id"] = "v1/redo"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="Manifest variants\\[0\\] variant_id"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "bad-variant-id-manifest.db",
         )
 
 

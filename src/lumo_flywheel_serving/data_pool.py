@@ -66,6 +66,8 @@ _ARTIFACT_RECOVERY = {
 }
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_FAMILY_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_VARIANT_ID_RE = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
 _KNOWN_CHANGE_LOG_HASH_FIELDS = {
     "split_assignment_hash",
     "grader_image_digest",
@@ -233,6 +235,22 @@ def _require_non_empty_string(value: Any, *, field_name: str) -> str:
     return value
 
 
+def _require_family_id(value: Any, *, field_name: str) -> str:
+    family_id = _require_non_empty_string(value, field_name=field_name)
+    if not _FAMILY_ID_RE.fullmatch(family_id):
+        raise IntegrityError(f"{field_name} must be kebab-case and must not contain '/'")
+    return family_id
+
+
+def _require_variant_id(value: Any, *, field_name: str) -> str:
+    variant_id = _require_non_empty_string(value, field_name=field_name)
+    if not _VARIANT_ID_RE.fullmatch(variant_id):
+        raise IntegrityError(
+            f"{field_name} must be a slash-free lowercase slug using letters, digits, '.', '_' or '-'"
+        )
+    return variant_id
+
+
 def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
     try:
         manifest = load_yaml_file(path) or {}
@@ -342,10 +360,12 @@ def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
             raise IntegrityError(f"Manifest variants[{index}] must be a mapping")
         family_id = entry.get("family_id")
         variant_id = entry.get("variant_id")
-        if not isinstance(family_id, str) or not isinstance(variant_id, str):
+        if family_id is None or variant_id is None:
             raise IntegrityError(
                 f"Manifest variants[{index}] must include string family_id and variant_id fields"
             )
+        family_id = _require_family_id(family_id, field_name=f"Manifest variants[{index}] family_id")
+        variant_id = _require_variant_id(variant_id, field_name=f"Manifest variants[{index}] variant_id")
         scenario_id = make_scenario_id(family_id, variant_id)
         if scenario_id in seen_scenario_ids:
             raise IntegrityError(f"Variant '{scenario_id}' has multiple entries in benchmark_manifest.lock")
@@ -396,10 +416,18 @@ def _find_manifest_variant(manifest: dict[str, Any], family_id: str, variant_id:
 
         entry_family_id = entry.get("family_id")
         entry_variant_id = entry.get("variant_id")
-        if not isinstance(entry_family_id, str) or not isinstance(entry_variant_id, str):
+        if entry_family_id is None or entry_variant_id is None:
             raise IntegrityError(
                 f"Manifest variants[{index}] must include string family_id and variant_id fields"
             )
+        entry_family_id = _require_family_id(
+            entry_family_id,
+            field_name=f"Manifest variants[{index}] family_id",
+        )
+        entry_variant_id = _require_variant_id(
+            entry_variant_id,
+            field_name=f"Manifest variants[{index}] variant_id",
+        )
 
         if entry_family_id == family_id and entry_variant_id == variant_id:
             matches.append(entry)
@@ -593,11 +621,10 @@ def load_codex_long_splits(
                 raise IntegrityError(
                     f"split_assignment.yaml split '{split_name}' families[{family_index}] must be a mapping"
                 )
-            family_id = family.get("family_id")
-            if not isinstance(family_id, str) or not family_id:
-                raise IntegrityError(
-                    f"split_assignment.yaml split '{split_name}' families[{family_index}] must include a non-empty family_id"
-                )
+            family_id = _require_family_id(
+                family.get("family_id"),
+                field_name=f"split_assignment.yaml split '{split_name}' families[{family_index}] family_id",
+            )
             if family_id in all_family_ids:
                 raise IntegrityError(f"Family '{family_id}' appears in multiple splits")
             all_family_ids.add(family_id)
@@ -615,9 +642,11 @@ def load_codex_long_splits(
                 raise IntegrityError(f"Family '{family_id}' must define at least one variant_id")
             variant_ids_list: list[str] = []
             seen_variant_ids: set[str] = set()
-            for variant_id in variant_ids_raw:
-                if not isinstance(variant_id, str) or not variant_id:
-                    raise IntegrityError(f"Family '{family_id}' variant_ids must contain non-empty strings")
+            for variant_index, variant_id in enumerate(variant_ids_raw):
+                variant_id = _require_variant_id(
+                    variant_id,
+                    field_name=f"Family '{family_id}' variant_ids[{variant_index}]",
+                )
                 if variant_id in seen_variant_ids:
                     raise IntegrityError(f"Family '{family_id}' contains duplicate variant_id '{variant_id}'")
                 seen_variant_ids.add(variant_id)
