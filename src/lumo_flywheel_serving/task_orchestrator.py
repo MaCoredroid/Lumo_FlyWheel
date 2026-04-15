@@ -421,11 +421,54 @@ async def flush_prefix_cache(
         raise CacheFlushError(f"/reset_prefix_cache returned {status}")
 
 
-def _registry_entry(model_registry: dict[str, Any], model_id: str) -> dict[str, Any] | ModelConfig:
-    try:
-        return model_registry[model_id]
-    except KeyError as exc:
-        raise ConfigError(f"Model '{model_id}' not found in model registry") from exc
+def _entry_served_model_name(model_entry: dict[str, Any] | ModelConfig, *, fallback: str) -> str:
+    if isinstance(model_entry, ModelConfig):
+        return model_entry.served_model_name
+    if isinstance(model_entry, dict):
+        value = model_entry.get("served_model_name")
+        if isinstance(value, str) and value.strip():
+            return value
+    return fallback
+
+
+def _entry_lora_adapter_names(model_entry: dict[str, Any] | ModelConfig) -> tuple[str, ...]:
+    if isinstance(model_entry, ModelConfig):
+        return tuple(adapter_name for adapter_name, _adapter_path in model_entry.lora_modules)
+    if isinstance(model_entry, dict):
+        raw_lora_modules = model_entry.get("lora_modules", {})
+        if isinstance(raw_lora_modules, dict):
+            return tuple(
+                adapter_name
+                for adapter_name in raw_lora_modules
+                if isinstance(adapter_name, str) and adapter_name.strip()
+            )
+    return ()
+
+
+def _resolve_task_model_reference(
+    model_registry: dict[str, Any],
+    model_id: str,
+) -> tuple[dict[str, Any] | ModelConfig, str]:
+    if model_id in model_registry:
+        model_entry = model_registry[model_id]
+        return model_entry, _entry_served_model_name(model_entry, fallback=model_id)
+
+    matches: list[tuple[dict[str, Any] | ModelConfig, str]] = []
+    for registry_key, model_entry in model_registry.items():
+        served_model_name = _entry_served_model_name(model_entry, fallback=registry_key)
+        exposed_ids = {served_model_name, *_entry_lora_adapter_names(model_entry)}
+        if model_id in exposed_ids:
+            matches.append((model_entry, model_id))
+
+    if len(matches) > 1:
+        raise ConfigError(
+            f"Model surface id '{model_id}' is ambiguous across multiple registry entries"
+        )
+    if matches:
+        return matches[0]
+    raise ConfigError(
+        f"Model '{model_id}' not found in model registry keys or exposed serving surface ids"
+    )
 
 
 def generate_codex_config(
@@ -438,7 +481,7 @@ def generate_codex_config(
     task_slug = quote(make_run_id(task), safe="")
     config_dir = Path(config_root) / task_slug
     config_path = config_dir / "config.toml"
-    model_entry = _registry_entry(model_registry, task.model_id)
+    model_entry, request_model_name = _resolve_task_model_reference(model_registry, task.model_id)
     if isinstance(model_entry, ModelConfig):
         context_window = model_entry.max_model_len
     else:
@@ -446,7 +489,7 @@ def generate_codex_config(
     compact_limit = int(context_window * 0.9)
     proxy_url = f"http://{proxy_host}:{proxy_port}/v1"
     content = (
-        f'model          = "{task.model_id}"\n'
+        f'model          = "{request_model_name}"\n'
         'model_provider = "localvllm"\n\n'
         f"model_context_window           = {context_window}\n"
         f"model_auto_compact_token_limit = {compact_limit}\n\n"
@@ -927,11 +970,12 @@ class TaskOrchestrator:
         if task.dispatch_decision == "regrade_needed":
             return await self._execute_regrade_path(task, pool_manager, manifest_state, config)
 
+        _model_entry, request_model_name = _resolve_task_model_reference(config.model_registry, task.model_id)
         await self.hooks.flush_prefix_cache(config.vllm.client_host, config.vllm.port)
         await self.hooks.health_check(
             config.vllm.client_host,
             config.vllm.port,
-            task.model_id,
+            request_model_name,
             max_retries=config.execution.health_check_retries,
             retry_delay_seconds=config.execution.health_check_delay,
         )

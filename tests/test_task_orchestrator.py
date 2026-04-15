@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -308,6 +308,51 @@ def test_generate_codex_config_is_unique_per_task_identity(tmp_path: Path) -> No
     assert first_path != second_path
 
 
+def test_generate_codex_config_uses_served_model_surface_for_registry_key(tmp_path: Path) -> None:
+    task = _codex_long_task()
+    task = replace(task, model_id="sprint3-qwen")
+
+    config_path = generate_codex_config(
+        task,
+        proxy_host="172.30.0.1",
+        proxy_port=8001,
+        model_registry={
+            "sprint3-qwen": {
+                "max_model_len": 65536,
+                "served_model_name": "qwen3.5-27b-served",
+                "lora_modules": {"codex-sft-all": "/models/adapters/codex-sft-all"},
+            }
+        },
+        config_root=tmp_path,
+    )
+
+    content = config_path.read_text(encoding="utf-8")
+    assert 'model          = "qwen3.5-27b-served"' in content
+
+
+def test_generate_codex_config_accepts_lora_adapter_surface_id(tmp_path: Path) -> None:
+    task = _codex_long_task()
+    task = replace(task, model_id="codex-sft-all")
+
+    config_path = generate_codex_config(
+        task,
+        proxy_host="172.30.0.1",
+        proxy_port=8001,
+        model_registry={
+            "sprint3-qwen": {
+                "max_model_len": 65536,
+                "served_model_name": "qwen3.5-27b-served",
+                "lora_modules": {"codex-sft-all": "/models/adapters/codex-sft-all"},
+            }
+        },
+        config_root=tmp_path,
+    )
+
+    content = config_path.read_text(encoding="utf-8")
+    assert 'model          = "codex-sft-all"' in content
+    assert "model_context_window           = 65536" in content
+
+
 def test_grading_dir_for_run_avoids_component_boundary_collisions(tmp_path: Path) -> None:
     first_run_id = "family-a/v1_qwen3.5-27b/codex/seed1/attempt1"
     second_run_id = "family-a/v1/qwen3.5-27b_codex/seed1/attempt1"
@@ -523,6 +568,56 @@ def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> No
         "cleanup:True",
         "after:family-a/v1",
     ]
+
+
+def test_execute_task_health_check_uses_served_model_surface_for_registry_key(tmp_path: Path) -> None:
+    events: list[str] = []
+    hooks = _hooks(events)
+    base_config = _config(tmp_path)
+    config = replace(
+        base_config,
+        model_registry={
+            "sprint3-qwen": {
+                "max_model_len": 65536,
+                "served_model_name": "qwen3.5-27b-served",
+                "lora_modules": {"codex-sft-all": "/models/adapters/codex-sft-all"},
+            }
+        },
+    )
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([7, 9])
+
+    task = replace(_codex_long_task(), model_id="sprint3-qwen")
+    result = asyncio.run(orchestrator.execute_task(task, pool_manager, manifest_state, config))
+
+    assert result.outcome == "resolved"
+    assert events[1] == "health:qwen3.5-27b-served"
+
+
+def test_execute_task_health_check_accepts_lora_adapter_surface_id(tmp_path: Path) -> None:
+    events: list[str] = []
+    hooks = _hooks(events)
+    base_config = _config(tmp_path)
+    config = replace(
+        base_config,
+        model_registry={
+            "sprint3-qwen": {
+                "max_model_len": 65536,
+                "served_model_name": "qwen3.5-27b-served",
+                "lora_modules": {"codex-sft-all": "/models/adapters/codex-sft-all"},
+            }
+        },
+    )
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([7, 9])
+
+    task = replace(_codex_long_task(), model_id="codex-sft-all")
+    result = asyncio.run(orchestrator.execute_task(task, pool_manager, manifest_state, config))
+
+    assert result.outcome == "resolved"
+    assert events[1] == "health:codex-sft-all"
 
 
 def test_execute_task_raises_duplicate_claim_before_running(tmp_path: Path) -> None:
