@@ -22,8 +22,10 @@ from lumo_flywheel_serving.task_orchestrator import (
     OrchestratorHooks,
     PathsConfig,
     TaskOrchestrator,
+    TaskDispatchError,
     TaskSpec,
     VllmConfig,
+    _grading_dir_for_run,
     _call_with_supported_kwargs,
     flush_prefix_cache,
     generate_codex_config,
@@ -261,11 +263,59 @@ def test_generate_codex_config_uses_registry_context_window(tmp_path: Path) -> N
     )
 
     content = config_path.read_text(encoding="utf-8")
-    assert config_path == tmp_path / "family-a_v1" / "config.toml"
+    assert config_path == (
+        tmp_path
+        / "family-a%2Fv1%2Fqwen3.5-27b%2Fcodex%2Fseed1%2Fattempt1"
+        / "config.toml"
+    )
     assert 'base_url               = "http://172.30.0.1:8001/v1"' in content
     assert "model_context_window           = 65536" in content
     assert "model_auto_compact_token_limit = 58982" in content
     assert 'wire_api               = "responses"' in content
+
+
+def test_generate_codex_config_is_unique_per_task_identity(tmp_path: Path) -> None:
+    first = _codex_long_task()
+    second = TaskSpec(
+        track="codex_long",
+        pool_or_split="train_long",
+        scenario_id="family-a/v1_qwen3.5-27b",
+        model_id="codex",
+        harness="codex",
+        seed=1,
+        family_id="family-a",
+        variant_id="v1_qwen3.5-27b",
+        image_digest="sha256:image",
+        scenario_type="feature_evolution",
+        timeout_seconds=9000,
+    )
+
+    first_path = generate_codex_config(
+        first,
+        proxy_host="172.30.0.1",
+        proxy_port=8001,
+        model_registry={"qwen3.5-27b": {"max_model_len": 65536}, "codex": {"max_model_len": 32768}},
+        config_root=tmp_path,
+    )
+    second_path = generate_codex_config(
+        second,
+        proxy_host="172.30.0.1",
+        proxy_port=8001,
+        model_registry={"qwen3.5-27b": {"max_model_len": 65536}, "codex": {"max_model_len": 32768}},
+        config_root=tmp_path,
+    )
+
+    assert first_path != second_path
+
+
+def test_grading_dir_for_run_avoids_component_boundary_collisions(tmp_path: Path) -> None:
+    first_run_id = "family-a/v1_qwen3.5-27b/codex/seed1/attempt1"
+    second_run_id = "family-a/v1/qwen3.5-27b_codex/seed1/attempt1"
+
+    first_dir = _grading_dir_for_run(tmp_path, first_run_id)
+    second_dir = _grading_dir_for_run(tmp_path, second_run_id)
+
+    assert first_dir != second_dir
 
 
 def test_health_check_retries_until_expected_model_present() -> None:
@@ -546,6 +596,33 @@ def test_execute_task_regrade_path_uses_retained_snapshot(tmp_path: Path) -> Non
     ]
 
 
+def test_execute_task_regrade_path_checks_snapshot_before_claiming(tmp_path: Path) -> None:
+    events: list[str] = []
+    config = _config(tmp_path)
+
+    async def image_missing(snapshot_ref: str) -> bool:
+        return False
+
+    hooks = _hooks(events, docker_image_exists=image_missing)
+    orchestrator = TaskOrchestrator(hooks)
+    pool_manager = _PoolManager()
+    manifest_state = _ManifestState([11])
+
+    with pytest.raises(TaskDispatchError, match="Snapshot may have been pruned|Full rerun required"):
+        asyncio.run(
+            orchestrator.execute_task(
+                _codex_long_task(dispatch_decision="regrade_needed", attempt=2, regrade_snapshot_ref="snapshot-ref"),
+                pool_manager,
+                manifest_state,
+                config,
+            )
+        )
+
+    assert pool_manager.claim_calls == []
+    assert pool_manager.finish_calls == []
+    assert events == ["image-exists:snapshot-ref"]
+
+
 def test_execute_task_passes_configured_codex_long_artifact_paths_to_hooks(tmp_path: Path) -> None:
     events: list[str] = []
     config = _config(tmp_path)
@@ -603,6 +680,6 @@ def test_execute_task_regrade_path_uses_configured_unique_grading_dir(tmp_path: 
     assert grading_dirs == [
         str(
             Path(config.paths.grading_dir)
-            / "family-a_v1_qwen3.5-27b_codex_seed1_attempt2"
+            / "family-a%2Fv1%2Fqwen3.5-27b%2Fcodex%2Fseed1%2Fattempt2"
         )
     ]

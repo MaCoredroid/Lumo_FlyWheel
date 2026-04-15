@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Protocol
+from urllib.parse import quote
 
 import requests
 
@@ -434,8 +435,8 @@ def generate_codex_config(
     model_registry: dict[str, Any],
     config_root: str | Path = "/tmp/codex-bench/configs",
 ) -> Path:
-    scenario_slug = task.scenario_id.replace("/", "_")
-    config_dir = Path(config_root) / scenario_slug
+    task_slug = quote(make_run_id(task), safe="")
+    config_dir = Path(config_root) / task_slug
     config_path = config_dir / "config.toml"
     model_entry = _registry_entry(model_registry, task.model_id)
     if isinstance(model_entry, ModelConfig):
@@ -881,7 +882,7 @@ def _load_family_spec_with_configured_path(
 
 
 def _grading_dir_for_run(grading_root: str | Path, run_id: str) -> str:
-    return str(Path(grading_root) / run_id.replace("/", "_"))
+    return str(Path(grading_root) / quote(run_id, safe=""))
 
 
 class ManifestState:
@@ -1104,6 +1105,15 @@ class TaskOrchestrator:
         config: OrchestratorConfig,
     ) -> RunResult:
         manifest_state.reload()
+        snapshot_ref = task.regrade_snapshot_ref
+        if not snapshot_ref:
+            raise TaskDispatchError(
+                f"Regrade requested for {task.scenario_id} but no snapshot_image_ref is available. Cannot regrade."
+            )
+        if not await self.hooks.docker_image_exists(snapshot_ref):
+            raise TaskDispatchError(
+                f"Retained snapshot image '{snapshot_ref}' not found. Snapshot may have been pruned. Full rerun required."
+            )
         claimed = pool_manager.claim_run(
             track=task.track,
             pool_or_split=task.pool_or_split,
@@ -1120,16 +1130,6 @@ class TaskOrchestrator:
             raise DuplicateClaimError(
                 f"Run slot already claimed for {task.scenario_id} "
                 f"model={task.model_id} seed={task.seed} attempt={task.attempt}."
-            )
-
-        snapshot_ref = task.regrade_snapshot_ref
-        if not snapshot_ref:
-            raise TaskDispatchError(
-                f"Regrade requested for {task.scenario_id} but no snapshot_image_ref is available. Cannot regrade."
-            )
-        if not await self.hooks.docker_image_exists(snapshot_ref):
-            raise TaskDispatchError(
-                f"Retained snapshot image '{snapshot_ref}' not found. Snapshot may have been pruned. Full rerun required."
             )
 
         run_id = make_run_id(task)
