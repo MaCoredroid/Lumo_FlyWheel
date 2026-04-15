@@ -1387,6 +1387,37 @@ models:
         load_registry(registry)
 
 
+def test_registry_rejects_duplicate_exposed_model_ids_across_models(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  base-qwen:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    served_model_name: qwen3.5-27b
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+  lora-qwen:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    served_model_name: qwen3.5-27b-sprint3
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.88
+    max_lora_rank: 32
+    lora_modules:
+      qwen3.5-27b: /models/adapters/codex-sft-all
+"""
+    )
+
+    with pytest.raises(ValueError, match="globally unique"):
+        load_registry(registry)
+
+
 def test_registry_rejects_duplicate_yaml_keys(tmp_path: Path) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(

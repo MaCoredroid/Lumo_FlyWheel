@@ -87,6 +87,10 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
     )
 
 
+def _exposed_model_ids(config: ModelConfig) -> tuple[str, ...]:
+    return (config.served_model_name, *(adapter_name for adapter_name, _adapter_path in config.lora_modules))
+
+
 def load_registry(path: str | Path) -> dict[str, ModelConfig]:
     registry_path = Path(path)
     raw = load_yaml_file(registry_path)
@@ -97,4 +101,16 @@ def load_registry(path: str | Path) -> dict[str, ModelConfig]:
     models = raw.get("models", {})
     if not isinstance(models, dict):
         raise ValueError(f"Registry {registry_path} must define 'models' as a mapping")
-    return {model_id: _model_from_mapping(model_id, mapping) for model_id, mapping in models.items()}
+    registry = {model_id: _model_from_mapping(model_id, mapping) for model_id, mapping in models.items()}
+
+    exposed_ids: dict[str, str] = {}
+    for model_id, config in registry.items():
+        for exposed_id in _exposed_model_ids(config):
+            owner = exposed_ids.get(exposed_id)
+            if owner is not None:
+                raise ValueError(
+                    f"Registry model id collision: exposed model id '{exposed_id}' is declared by both "
+                    f"'{owner}' and '{model_id}'. served_model_name and LoRA adapter names must be globally unique."
+                )
+            exposed_ids[exposed_id] = model_id
+    return registry

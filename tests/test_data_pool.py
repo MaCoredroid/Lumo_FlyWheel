@@ -907,10 +907,43 @@ def test_finish_run_rejects_missing_or_stale_grading_manifest_version(tmp_path: 
         manager.close()
 
 
+def test_finish_run_requires_snapshot_for_non_crash_codex_long_outcomes(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        scenario_id = "train-feature/v1"
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+
+        with pytest.raises(IntegrityError, match="requires snapshot_image_ref"):
+            manager.finish_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                1,
+                "resolved",
+                grading_manifest_ver=3,
+                codex_long_pass=True,
+            )
+    finally:
+        manager.close()
+
+
 def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
-        for scenario_id, snapshot in [("train-feature/v1", "snap-1"), ("train-feature/v2", None)]:
+        for scenario_id, snapshot in [("train-feature/v1", "snap-1"), ("train-feature/v2", "snap-2")]:
             assert manager.claim_run(
                 "codex_long",
                 "train_long",
@@ -962,6 +995,60 @@ def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
         assert count == 1
         assert manager.check_dispatch_eligible(
             "codex_long", "train_long", "train-feature/v2", "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.RERUN_NEEDED
+    finally:
+        manager.close()
+
+
+def test_regrade_downgrades_to_rerun_for_legacy_rows_missing_snapshot(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        scenario_id = "train-feature/v1"
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        manager.finish_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            1,
+            "resolved",
+            grading_manifest_ver=3,
+            codex_long_pass=True,
+            snapshot_image_ref="snap-1",
+        )
+        manager.db.execute(
+            """
+            UPDATE runs
+            SET snapshot_image_ref = NULL
+            WHERE track = 'codex_long' AND pool_or_split = 'train_long' AND scenario_id = ?
+              AND model_id = 'qwen3.5-27b' AND harness = 'codex' AND seed = 1 AND attempt = 1
+            """,
+            (scenario_id,),
+        )
+        manager.db.connection.commit()
+
+        count = manager.invalidate_stale_runs(
+            family_id="train-feature",
+            new_manifest_version=4,
+            affected_artifact="verifier",
+            reason="legacy run missing retained snapshot",
+            affected_variant_ids=["v1"],
+        )
+        assert count == 1
+        assert manager.check_dispatch_eligible(
+            "codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1
         ) is DispatchDecision.RERUN_NEEDED
     finally:
         manager.close()
@@ -1260,6 +1347,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             "failed",
             grading_manifest_ver=3,
             codex_long_pass=False,
+            snapshot_image_ref="snap-v2-s1",
         )
 
         # Matching SWE-Agent success on just one scenario_id.
@@ -1285,6 +1373,7 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
             "resolved",
             grading_manifest_ver=3,
             codex_long_pass=True,
+            snapshot_image_ref="snap-swe-agent-v1-s1",
         )
 
         swe_runs = manager.list_training_eligible_runs("swe_bench", "qwen3.5-27b", "codex")

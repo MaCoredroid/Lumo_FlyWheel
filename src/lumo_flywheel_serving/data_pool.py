@@ -1145,6 +1145,11 @@ class DataPoolManager:
                     f"Codex-Long finish_run() manifest_version mismatch for '{scenario_id}': "
                     f"got {grading_manifest_ver}, current is {self.manifest['manifest_version']}"
                 )
+            if outcome != "crash" and (not isinstance(snapshot_image_ref, str) or not snapshot_image_ref.strip()):
+                raise IntegrityError(
+                    "Codex-Long finish_run() requires snapshot_image_ref for non-crash outcomes so "
+                    "Phase 2/3 grading can be re-run from the committed snapshot image"
+                )
         with self.db.begin() as txn:
             result = txn.execute(
                 """
