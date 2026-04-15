@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumo-flywheel-serving"
+version = "0.1.0"
+description = "Local vLLM serving layer tooling for Lumo FlyWheel"
+requires-python = ">=3.12"
+dependencies = [
+  "huggingface_hub>=0.32.0",
+  "PyYAML>=6.0.1",
+  "requests>=2.32.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+]
+
+[project.scripts]
+lumoserve = "lumo_flywheel_serving.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -12,6 +12,8 @@ Thumbs.db
 # Python caches
 __pycache__/
 *.pyc
+.pytest_cache/
+.venv/
 
 # Logs
 *.log

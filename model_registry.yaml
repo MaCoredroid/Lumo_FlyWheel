@@ -1,0 +1,61 @@
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    hf_revision: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.90
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+
+  qwen3.5-35b-a3b:
+    hf_repo: Qwen/Qwen3.5-35B-A3B-FP8
+    hf_revision: 0b2752837483aa34b3db6e83e151b150c0e00e49
+    local_path: /models/qwen3.5-35b-a3b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.92
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+
+  qwen3-coder-next-80b-a3b:
+    hf_repo: Qwen/Qwen3-Coder-Next-80B-A3B
+    local_path: /models/qwen3-coder-next-80b-a3b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.93
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+    sprint0_gate: "Confirm upstream FP8 checkpoint identity before Dev-Bench"
+
+  qwen3.5-122b-a10b:
+    hf_repo: Qwen/Qwen3.5-122B-A10B-FP8
+    hf_revision: fb53b9f3bdaab287c597d4e943783153ec527e06
+    local_path: /models/qwen3.5-122b-a10b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 65536
+    gpu_memory_utilization: 0.95
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+    sprint0_gate: "Validate max_model_len before S2"
+
+  comparison-slot:
+    hf_repo: ""
+    local_path: ""
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.90
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+    sprint0_gate: "Populate after Gates 1b and 6"
