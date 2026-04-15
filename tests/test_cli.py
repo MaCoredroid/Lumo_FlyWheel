@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -247,6 +248,35 @@ def test_smoke_test_requires_responses_follow_up_id(monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(RuntimeError, match="did not return a response id"):
         cli.cmd_smoke_test(_args())
+
+
+def test_download_model_rejects_unpinned_hf_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3-coder-next-80b-a3b:
+    hf_repo: Qwen/Qwen3-Coder-Next-80B-A3B
+    local_path: /models/qwen3-coder-next-80b-a3b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.93
+    sprint0_gate: "Confirm upstream FP8 checkpoint identity before Dev-Bench"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HF_TOKEN", "test-token")
+
+    args = _args()
+    args.registry = str(registry)
+    args.model_id = "qwen3-coder-next-80b-a3b"
+    args.env_file = None
+
+    with pytest.raises(RuntimeError, match="missing hf_revision"):
+        cli.cmd_download_model(args)
 
 
 def test_metric_schema_variant_detects_openmetrics_total() -> None:

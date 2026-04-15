@@ -213,6 +213,7 @@ def _fixture_files(tmp_path: Path, *, full_plan: bool = False) -> tuple[Path, Pa
         {
             "manifest_version": 3,
             "freeze_date": "2026-06-01",
+            "generator": "scripts/generate_manifest.sh v1.0",
             "split_assignment_hash": split_hash,
             "grader_image_digest": _sha256("codex-long-grader"),
             "variants": manifest_variants,
@@ -696,6 +697,21 @@ def test_manager_requires_manifest_freeze_date(tmp_path: Path) -> None:
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "missing-manifest-freeze-date.db",
+        )
+
+
+def test_manager_requires_manifest_generator(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest.pop("generator")
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="benchmark_manifest.lock generator"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "missing-manifest-generator.db",
         )
 
 

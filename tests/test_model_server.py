@@ -1756,6 +1756,84 @@ models:
         load_registry(registry)
 
 
+def test_registry_allows_missing_hf_revision_for_local_serving_configs(tmp_path: Path) -> None:
+    registry = tmp_path / "missing_revision.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+
+    registry_data = load_registry(registry)
+    assert registry_data["qwen3.5-27b"].hf_revision is None
+
+    gated_registry = tmp_path / "gated_missing_revision.yaml"
+    gated_registry.write_text(
+        """
+models:
+  qwen3-coder-next-80b-a3b:
+    hf_repo: Qwen/Qwen3-Coder-Next-80B-A3B
+    local_path: /models/qwen3-coder-next-80b-a3b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.93
+    sprint0_gate: "Confirm upstream FP8 checkpoint identity before Dev-Bench"
+"""
+    )
+
+    registry_data = load_registry(gated_registry)
+    assert registry_data["qwen3-coder-next-80b-a3b"].hf_revision is None
+    assert registry_data["qwen3-coder-next-80b-a3b"].sprint0_gate == (
+        "Confirm upstream FP8 checkpoint identity before Dev-Bench"
+    )
+
+
+def test_registry_rejects_malformed_hf_revision_and_blank_sprint0_gate(tmp_path: Path) -> None:
+    bad_revision_registry = tmp_path / "bad_revision.yaml"
+    bad_revision_registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    hf_revision: latest
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+"""
+    )
+
+    with pytest.raises(ValueError, match="40-character git commit hash"):
+        load_registry(bad_revision_registry)
+
+    blank_gate_registry = tmp_path / "blank_gate.yaml"
+    blank_gate_registry.write_text(
+        """
+models:
+  qwen3-coder-next-80b-a3b:
+    hf_repo: Qwen/Qwen3-Coder-Next-80B-A3B
+    local_path: /models/qwen3-coder-next-80b-a3b-fp8
+    quantization: fp8
+    dtype: auto
+    max_model_len: 131072
+    gpu_memory_utilization: 0.93
+    sprint0_gate: ""
+"""
+    )
+
+    with pytest.raises(ValueError, match="sprint0_gate must be a non-empty string"):
+        load_registry(blank_gate_registry)
+
+
 def test_registry_rejects_non_auto_dtype_or_unknown_kv_cache_dtype(tmp_path: Path) -> None:
     dtype_registry = tmp_path / "dtype_registry.yaml"
     dtype_registry.write_text(

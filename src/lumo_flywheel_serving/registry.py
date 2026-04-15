@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .yaml_utils import load_yaml_file
+
+_HF_REVISION_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -32,6 +35,18 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
         raise ValueError(
             f"Model {model_id} is missing local_path. Leave unresolved placeholders commented out until they are real models."
         )
+    sprint0_gate = raw.get("sprint0_gate")
+    if sprint0_gate is not None and (not isinstance(sprint0_gate, str) or not sprint0_gate.strip()):
+        raise ValueError(f"Model {model_id} sprint0_gate must be a non-empty string when present")
+    hf_repo = raw.get("hf_repo", "")
+    if hf_repo and not isinstance(hf_repo, str):
+        raise ValueError(f"Model {model_id} hf_repo must be a string when present")
+    hf_revision = raw.get("hf_revision")
+    if hf_revision is not None:
+        if not isinstance(hf_revision, str) or not _HF_REVISION_RE.fullmatch(hf_revision):
+            raise ValueError(
+                f"Model {model_id} hf_revision must be a 40-character git commit hash; got {hf_revision!r}"
+            )
     local_path_obj = Path(local_path)
     if not str(local_path_obj).startswith("/models/"):
         raise ValueError(f"Model {model_id} local_path must be a container path under /models; got {local_path_obj}")
@@ -89,8 +104,8 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
             raise ValueError(f"Model {model_id} max_lora_rank must be >= 1; got {max_lora_rank}")
     return ModelConfig(
         model_id=model_id,
-        hf_repo=raw.get("hf_repo", ""),
-        hf_revision=raw.get("hf_revision"),
+        hf_repo=hf_repo,
+        hf_revision=hf_revision,
         local_path=local_path_obj,
         served_model_name=served_model_name,
         quantization=quantization,
@@ -102,7 +117,7 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
         max_num_seqs=max_num_seqs,
         lora_modules=lora_modules,
         max_lora_rank=max_lora_rank,
-        sprint0_gate=raw.get("sprint0_gate"),
+        sprint0_gate=sprint0_gate,
     )
 
 

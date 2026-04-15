@@ -267,6 +267,7 @@ def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
     if manifest["manifest_version"] < 1:
         raise IntegrityError("benchmark_manifest.lock manifest_version must be >= 1")
     _require_iso_date(manifest.get("freeze_date"), field_name="benchmark_manifest.lock freeze_date")
+    _require_non_empty_string(manifest.get("generator"), field_name="benchmark_manifest.lock generator")
 
     _require_sha256_value(manifest.get("split_assignment_hash"), field_name="split_assignment_hash")
     _require_sha256_value(manifest.get("grader_image_digest"), field_name="grader_image_digest")

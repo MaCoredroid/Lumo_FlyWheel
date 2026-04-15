@@ -141,6 +141,11 @@ def cmd_download_model(args: argparse.Namespace) -> int:
     config = registry[args.model_id]
     if not config.hf_repo:
         raise RuntimeError(f"Model {args.model_id} does not have an hf_repo entry yet")
+    if not config.hf_revision:
+        raise RuntimeError(
+            f"Model {args.model_id} is missing hf_revision. Refuse to download an unpinned checkpoint; "
+            "confirm the upstream commit and update model_registry.yaml first."
+        )
     token = os.environ.get("HF_TOKEN")
     if not token:
         raise RuntimeError("HF_TOKEN is required to download models")
