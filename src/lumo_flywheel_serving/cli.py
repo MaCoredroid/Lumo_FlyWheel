@@ -13,6 +13,33 @@ from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServ
 from .registry import load_registry
 
 
+def _prefix_cache_probe_messages(prior_reply: str | None = None) -> list[dict[str, str]]:
+    # Keep the shared prefix long enough to populate cache blocks between turns.
+    shared_prefix = " ".join(["cacheprobe"] * 2048)
+    messages: list[dict[str, str]] = [
+        {
+            "role": "system",
+            "content": "You are concise. Reply with the single token OK.",
+        },
+        {
+            "role": "user",
+            "content": (
+                "Reference context follows. Do not quote it back.\n"
+                f"{shared_prefix}\n\n"
+                "Reply with the single token OK."
+            ),
+        },
+    ]
+    if prior_reply is not None:
+        messages.extend(
+            [
+                {"role": "assistant", "content": prior_reply},
+                {"role": "user", "content": "Using the same reference context, reply with the single token OK again."},
+            ]
+        )
+    return messages
+
+
 def _load_env_file(path: str | None) -> None:
     if not path:
         return
@@ -123,26 +150,31 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         models = server.models().json()
         metrics_before = parse_prometheus_text(server.metrics().text)
         schema = resolve_metric_schema(metrics_before)
-        chat_request = {
+        first_chat_request = {
             "model": args.model_id,
-            "messages": [
-                {"role": "system", "content": "You are concise. Reply with the single token OK."},
-                {"role": "user", "content": "Reply with the single token OK."},
-            ],
+            "messages": _prefix_cache_probe_messages(),
             "max_tokens": 8,
             "temperature": 0,
         }
         first_chat = requests.post(
             f"http://127.0.0.1:{args.port}/v1/chat/completions",
             headers={"Authorization": "Bearer EMPTY"},
-            json=chat_request,
+            json=first_chat_request,
             timeout=180,
         )
         first_chat.raise_for_status()
+        first_chat_payload = first_chat.json()
+        first_reply = first_chat_payload["choices"][0]["message"]["content"].strip() or "OK"
+        second_chat_request = {
+            "model": args.model_id,
+            "messages": _prefix_cache_probe_messages(prior_reply=first_reply),
+            "max_tokens": 8,
+            "temperature": 0,
+        }
         second_chat = requests.post(
             f"http://127.0.0.1:{args.port}/v1/chat/completions",
             headers={"Authorization": "Bearer EMPTY"},
-            json=chat_request,
+            json=second_chat_request,
             timeout=180,
         )
         second_chat.raise_for_status()
@@ -160,6 +192,10 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         metrics_after = parse_prometheus_text(server.metrics().text)
         cache_hit_metric = schema["prefix_cache_hits"]
         cache_hit_delta = metrics_after.get(cache_hit_metric, 0.0) - metrics_before.get(cache_hit_metric, 0.0)
+        if cache_hit_delta <= 0:
+            raise RuntimeError(
+                "Expected prefix cache hits after repeated-prefix chat turns, but /metrics did not increase."
+            )
         server.flush_prefix_cache()
         print(
             json.dumps(
@@ -167,7 +203,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
                     "health": health.status_code,
                     "models": models,
                     "schema": schema,
-                    "chat_completion_ids": [first_chat.json().get("id"), second_chat.json().get("id")],
+                    "chat_completion_ids": [first_chat_payload.get("id"), second_chat.json().get("id")],
                     "responses_id": responses_call.json().get("id"),
                     "reset_prefix_cache_status": 200,
                     "prefix_cache_hits_delta": cache_hit_delta,
