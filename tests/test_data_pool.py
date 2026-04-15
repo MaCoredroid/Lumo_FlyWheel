@@ -87,7 +87,12 @@ def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str
         "public_dev": ["public-feature", "public-migration"],
     }
 
-    assignment = {"splits": {}}
+    assignment = {
+        "freeze_date": "2026-06-01",
+        "seed": 42,
+        "total_families": sum(len(family_ids) for family_ids in families_by_split.values()),
+        "splits": {},
+    }
     manifest_variants: list[dict] = []
     for split_name, family_ids in families_by_split.items():
         assignment["splits"][split_name] = {"families": []}
@@ -251,6 +256,25 @@ def test_manager_requires_manifest_version(tmp_path: Path) -> None:
         )
 
 
+def test_manager_requires_split_assignment_freeze_metadata(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment.pop("freeze_date")
+    _write_yaml(split_path, split_assignment)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="freeze_date"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "missing-freeze-date.db",
+        )
+
+
 def test_manager_requires_prefixed_split_assignment_hash(tmp_path: Path) -> None:
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
     manifest = yaml.safe_load(manifest_path.read_text())
@@ -263,6 +287,60 @@ def test_manager_requires_prefixed_split_assignment_hash(tmp_path: Path) -> None
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "bare-split-hash.db",
+        )
+
+
+def test_public_dev_type_carve_out_is_only_allowed_on_smaller_v1_path(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["total_families"] = 55
+    _write_yaml(split_path, split_assignment)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="Split 'public_dev' is missing scenario types"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "public-dev-full-plan.db",
+        )
+
+
+def test_manager_rejects_total_family_mismatch_and_duplicate_variant_ids(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["total_families"] = 30
+    _write_yaml(split_path, split_assignment)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="total_families mismatch"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "family-count-mismatch.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["splits"]["train_long"]["families"][0]["variant_ids"] = ["v1", "v1"]
+    split_assignment["splits"]["train_long"]["families"][0]["variant_count"] = 2
+    _write_yaml(split_path, split_assignment)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="duplicate variant_id 'v1'"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "duplicate-variant-ids.db",
         )
 
 

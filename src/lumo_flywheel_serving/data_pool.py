@@ -346,6 +346,18 @@ def load_codex_long_splits(
     assignment = yaml.safe_load(Path(split_assignment_path).read_text()) or {}
     manifest = load_codex_long_manifest(manifest_path)
 
+    freeze_date = assignment.get("freeze_date")
+    if not isinstance(freeze_date, str) or not freeze_date.strip():
+        raise IntegrityError("split_assignment.yaml must record a non-empty freeze_date")
+    try:
+        assignment["seed"] = int(assignment["seed"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise IntegrityError("split_assignment.yaml must record an integer seed") from exc
+    try:
+        declared_total_families = int(assignment["total_families"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise IntegrityError("split_assignment.yaml must record an integer total_families") from exc
+
     actual_hash = sha256_file(split_assignment_path)
     expected_hash = _require_sha256_value(
         manifest.get("split_assignment_hash"),
@@ -361,6 +373,8 @@ def load_codex_long_splits(
     splits: dict[str, list[CodexLongFamily]] = {}
     env_index: dict[str, CodexLongEnv] = {}
     manifest_version = manifest["manifest_version"]
+    total_families_loaded = 0
+    smaller_v1_public_dev_carve_out = declared_total_families <= 35
 
     split_mapping = assignment.get("splits")
     if not isinstance(split_mapping, dict):
@@ -370,19 +384,49 @@ def load_codex_long_splits(
         split_data = split_mapping.get(split_name)
         if not isinstance(split_data, dict):
             raise IntegrityError(f"split_assignment.yaml is missing split '{split_name}'")
+        families_raw = split_data.get("families", [])
+        if not isinstance(families_raw, list):
+            raise IntegrityError(f"split_assignment.yaml split '{split_name}' must include a 'families' list")
         families: list[CodexLongFamily] = []
-        for family in split_data.get("families", []):
-            family_id = family["family_id"]
+        for family_index, family in enumerate(families_raw):
+            if not isinstance(family, dict):
+                raise IntegrityError(
+                    f"split_assignment.yaml split '{split_name}' families[{family_index}] must be a mapping"
+                )
+            family_id = family.get("family_id")
+            if not isinstance(family_id, str) or not family_id:
+                raise IntegrityError(
+                    f"split_assignment.yaml split '{split_name}' families[{family_index}] must include a non-empty family_id"
+                )
             if family_id in all_family_ids:
                 raise IntegrityError(f"Family '{family_id}' appears in multiple splits")
             all_family_ids.add(family_id)
 
-            scenario_type = family["scenario_type"]
+            scenario_type = family.get("scenario_type")
+            if not isinstance(scenario_type, str) or not scenario_type:
+                raise IntegrityError(f"Family '{family_id}' must include a non-empty scenario_type")
             if scenario_type not in SCENARIO_TYPES:
                 raise ValueError(f"Family '{family_id}' has unknown scenario_type '{scenario_type}'")
 
-            variant_ids = tuple(family.get("variant_ids", []))
-            variant_count = int(family["variant_count"])
+            variant_ids_raw = family.get("variant_ids", [])
+            if not isinstance(variant_ids_raw, list):
+                raise IntegrityError(f"Family '{family_id}' variant_ids must be a list")
+            if not variant_ids_raw:
+                raise IntegrityError(f"Family '{family_id}' must define at least one variant_id")
+            variant_ids_list: list[str] = []
+            seen_variant_ids: set[str] = set()
+            for variant_id in variant_ids_raw:
+                if not isinstance(variant_id, str) or not variant_id:
+                    raise IntegrityError(f"Family '{family_id}' variant_ids must contain non-empty strings")
+                if variant_id in seen_variant_ids:
+                    raise IntegrityError(f"Family '{family_id}' contains duplicate variant_id '{variant_id}'")
+                seen_variant_ids.add(variant_id)
+                variant_ids_list.append(variant_id)
+            variant_ids = tuple(variant_ids_list)
+            try:
+                variant_count = int(family["variant_count"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise IntegrityError(f"Family '{family_id}' must declare an integer variant_count") from exc
             if variant_count != len(variant_ids):
                 raise IntegrityError(
                     f"Family '{family_id}' declares variant_count={variant_count} but lists {len(variant_ids)} variants"
@@ -398,6 +442,7 @@ def load_codex_long_splits(
                     manifest_version=manifest_version,
                 )
             )
+            total_families_loaded += 1
 
             for variant_id in variant_ids:
                 scenario_id = make_scenario_id(family_id, variant_id)
@@ -432,7 +477,7 @@ def load_codex_long_splits(
         types_present = {family.scenario_type for family in families}
         missing_types = SCENARIO_TYPES - types_present
         if missing_types:
-            if split_name == "public_dev" and len(families) < 5:
+            if split_name == "public_dev" and smaller_v1_public_dev_carve_out and len(families) < len(SCENARIO_TYPES):
                 logger.warning(
                     "Public-Dev has only %s families; missing scenario types: %s",
                     len(families),
@@ -441,6 +486,12 @@ def load_codex_long_splits(
             else:
                 raise IntegrityError(f"Split '{split_name}' is missing scenario types: {sorted(missing_types)}")
         splits[split_name] = families
+
+    if total_families_loaded != declared_total_families:
+        raise IntegrityError(
+            "split_assignment.yaml total_families mismatch: "
+            f"declared {declared_total_families}, loaded {total_families_loaded}"
+        )
 
     return splits, env_index
 
