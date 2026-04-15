@@ -124,7 +124,7 @@ class ModelServer:
         self.current_model = model_id
 
     def switch_model(self, model_id: str, enable_request_logging: bool = False) -> None:
-        if self.use_sleep_mode and self.current_model == model_id:
+        if self.use_sleep_mode and self.current_model == model_id and self._is_serving_model(model_id):
             return
         self.stop(missing_ok=True)
         self._wait_vram_free(timeout_s=120, required_utilization=self.registry[model_id].gpu_memory_utilization)
@@ -564,6 +564,13 @@ class ModelServer:
         if not model_ids:
             raise ValueError("vLLM /v1/models returned no served model ids")
         return model_ids
+
+    def _is_serving_model(self, model_id: str) -> bool:
+        try:
+            self.health()
+            return model_id in self._served_model_ids()
+        except (requests.RequestException, ValueError, TypeError):
+            return False
 
     def _cuda_mem_get_info_gib(self) -> tuple[float, float] | None:
         probe = self._run(

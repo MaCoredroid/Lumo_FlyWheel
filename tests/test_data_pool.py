@@ -313,6 +313,58 @@ def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_invalidation_marks_running_attempts_non_current_before_finish(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        scenario_id = "train-feature/v1"
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+
+        count = manager.invalidate_stale_runs(
+            family_id="train-feature",
+            new_manifest_version=4,
+            affected_artifact="image",
+            reason="image refresh during in-flight run",
+            affected_variant_ids=["v1"],
+        )
+        assert count == 1
+        assert manager.check_dispatch_eligible(
+            "codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.DUPLICATE
+
+        manager.finish_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            1,
+            "resolved",
+            grading_manifest_ver=3,
+            codex_long_pass=True,
+            snapshot_image_ref="snap-1",
+        )
+
+        latest = manager._query_runs("codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1)[0]
+        assert latest.is_current is False
+        assert latest.recovery_action == "rerun_full"
+        assert manager.check_dispatch_eligible(
+            "codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.RERUN_NEEDED
+    finally:
+        manager.close()
+
+
 def test_seal_enforcement_and_unseal(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:

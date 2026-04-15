@@ -816,7 +816,7 @@ class DataPoolManager:
             "track = 'codex_long'",
             f"{ver_column} < ?",
             "is_current = 1",
-            "exec_state = 'finished'",
+            "exec_state IN ('running', 'finished')",
         ]
         where_params: list[Any] = [new_manifest_version]
 

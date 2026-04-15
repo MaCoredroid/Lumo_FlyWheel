@@ -553,6 +553,89 @@ models:
     assert launch_targets == [0.9, 0.88]
 
 
+def test_switch_model_restarts_when_sleep_mode_state_is_stale(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry, use_sleep_mode=True)
+    server.current_model = "qwen3.5-27b"
+    events: list[str] = []
+
+    monkeypatch.setattr(server, "_is_serving_model", lambda model_id: False)
+    monkeypatch.setattr(server, "stop", lambda missing_ok=False: events.append(f"stop:{missing_ok}"))
+    monkeypatch.setattr(
+        server,
+        "_wait_vram_free",
+        lambda timeout_s=120, required_utilization=None: events.append(
+            f"wait:{timeout_s}:{required_utilization}"
+        ),
+    )
+    monkeypatch.setattr(
+        server,
+        "start",
+        lambda model_id, enable_request_logging=False: events.append(
+            f"start:{model_id}:{enable_request_logging}"
+        ),
+    )
+
+    server.switch_model("qwen3.5-27b", enable_request_logging=True)
+
+    assert events == ["stop:True", "wait:120:0.9", "start:qwen3.5-27b:True"]
+
+
+def test_switch_model_keeps_sleep_mode_fast_path_when_model_is_healthy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry, use_sleep_mode=True)
+    server.current_model = "qwen3.5-27b"
+    events: list[str] = []
+
+    monkeypatch.setattr(server, "_is_serving_model", lambda model_id: True)
+    monkeypatch.setattr(server, "stop", lambda missing_ok=False: events.append(f"stop:{missing_ok}"))
+    monkeypatch.setattr(
+        server,
+        "start",
+        lambda model_id, enable_request_logging=False: events.append(
+            f"start:{model_id}:{enable_request_logging}"
+        ),
+    )
+
+    server.switch_model("qwen3.5-27b", enable_request_logging=True)
+
+    assert events == []
+
+
 def test_stop_runs_host_memory_recovery_when_container_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
