@@ -413,6 +413,38 @@ def test_seal_enforcement_and_unseal(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_unseal_state_persists_across_manager_restart(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    db_path = tmp_path / "run_state.db"
+
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        manager.unseal("final_test", operator="benchmark_runner", reason="Sprint 3 B2 eval start")
+        manager.unseal("test_long", operator="benchmark_runner", reason="Sprint 3 B1 eval start")
+    finally:
+        manager.close()
+
+    reloaded = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert reloaded.seal_state.is_sealed("final_test") is False
+        assert reloaded.seal_state.is_sealed("test_long") is False
+        assert [task["instance_id"] for task in reloaded.list_swe_bench_tasks("final_test")] == ["final-1", "final-2"]
+        assert len(reloaded.list_codex_long_envs("test_long")) == 5
+        assert len(reloaded.seal_state.unseal_log) == 2
+    finally:
+        reloaded.close()
+
+
 def test_training_access_progress_family_summary_and_matching(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
@@ -580,6 +612,60 @@ def test_training_access_progress_family_summary_and_matching(tmp_path: Path) ->
         assert labels["training_eligible"] is True
         assert labels["family_id"] == "train-feature"
         assert labels["variant_id"] == "v1"
+    finally:
+        manager.close()
+
+
+def test_retryable_crashes_remain_in_listing_filters(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        assert manager.claim_run("swe_bench", "dev_bench", "dev-1", "qwen3.5-27b", "codex", 1)
+        manager.finish_run("swe_bench", "dev_bench", "dev-1", "qwen3.5-27b", "codex", 1, 1, "crash")
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            "train-feature/v1",
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+            family_id="train-feature",
+            scenario_type="feature_evolution",
+        )
+        manager.finish_run(
+            "codex_long",
+            "train_long",
+            "train-feature/v1",
+            "qwen3.5-27b",
+            "codex",
+            1,
+            1,
+            "crash",
+            grading_manifest_ver=3,
+        )
+
+        swe_tasks = manager.list_swe_bench_tasks(
+            "dev_bench",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+        )
+        codex_envs = manager.list_codex_long_envs(
+            "train_long",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+        )
+
+        assert [task["instance_id"] for task in swe_tasks] == ["dev-1", "dev-2"]
+        assert "train-feature/v1" in [env.scenario_id for env in codex_envs]
+        assert manager.check_dispatch_eligible(
+            "swe_bench", "dev_bench", "dev-1", "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.RETRY
+        assert manager.check_dispatch_eligible(
+            "codex_long", "train_long", "train-feature/v1", "qwen3.5-27b", "codex", 1
+        ) is DispatchDecision.RETRY
     finally:
         manager.close()
 

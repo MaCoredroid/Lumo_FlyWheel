@@ -375,6 +375,7 @@ class SealState:
         self._sealed = {name: True for name in SEALABLE_POOLS}
         self._unseal_log: list[dict[str, str]] = []
         self._persist_path = Path(persist_path) if persist_path else None
+        self._load_persisted_unseal_events()
 
     def is_sealed(self, pool_or_split: str) -> bool:
         return self._sealed.get(pool_or_split, False)
@@ -406,6 +407,34 @@ class SealState:
         self._persist_path.parent.mkdir(parents=True, exist_ok=True)
         with self._persist_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, sort_keys=True) + "\n")
+
+    def _load_persisted_unseal_events(self) -> None:
+        if self._persist_path is None or not self._persist_path.exists():
+            return
+        for line_number, line in enumerate(self._persist_path.read_text(encoding="utf-8").splitlines(), start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                event = json.loads(stripped)
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Ignoring malformed unseal log entry at %s line %s",
+                    self._persist_path,
+                    line_number,
+                )
+                continue
+            pool_or_split = event.get("pool_or_split")
+            if pool_or_split not in self._sealed:
+                logger.warning(
+                    "Ignoring unseal log entry with unknown pool_or_split=%r at %s line %s",
+                    pool_or_split,
+                    self._persist_path,
+                    line_number,
+                )
+                continue
+            self._sealed[pool_or_split] = False
+            self._unseal_log.append(event)
 
 
 class DataPoolManager:
@@ -635,6 +664,14 @@ class DataPoolManager:
 
     def _is_sealed(self, pool_or_split: str) -> bool:
         return self.seal_state.is_sealed(pool_or_split)
+
+    @staticmethod
+    def _counts_as_finished_for_listing(run: RunRecord) -> bool:
+        if run.exec_state != "finished":
+            return False
+        if run.outcome == "crash" and run.attempt < 2:
+            return False
+        return True
 
     def _get_envs_for_split(self, split: str) -> list[CodexLongEnv]:
         scenario_ids = [make_scenario_id(f.family_id, variant_id) for f in self.codex_long_splits.get(split, []) for variant_id in f.variant_ids]
@@ -915,7 +952,7 @@ class DataPoolManager:
             finished_ids = {
                 run.scenario_id
                 for run in self._query_latest_current_runs("swe_bench", pool, model_id=model_id, harness=harness)
-                if run.exec_state == "finished" and run.seed == seed
+                if self._counts_as_finished_for_listing(run) and run.seed == seed
             }
             tasks = [task for task in tasks if task["instance_id"] not in finished_ids]
         return tasks
@@ -942,7 +979,7 @@ class DataPoolManager:
             finished_ids = {
                 run.scenario_id
                 for run in self._query_latest_current_runs("codex_long", split, model_id=model_id, harness=harness)
-                if run.exec_state == "finished" and run.seed == seed
+                if self._counts_as_finished_for_listing(run) and run.seed == seed
             }
             envs = [env for env in envs if env.scenario_id not in finished_ids]
         return envs
