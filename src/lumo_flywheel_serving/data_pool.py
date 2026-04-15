@@ -44,6 +44,9 @@ SCENARIO_TYPES = {
     "investigate_then_fix",
     "cross_layer_changes",
 }
+MIN_CODEX_LONG_FAMILIES = 35
+FULL_PLAN_CODEX_LONG_FAMILIES = 55
+FULL_PLAN_MIN_FAMILIES_PER_TYPE = 6
 TRAINING_ELIGIBLE = {"bench_control", "train_long"}
 SEALABLE_POOLS = {"final_test", "test_long"}
 _ARTIFACT_RECOVERY = {
@@ -413,6 +416,12 @@ def load_codex_long_splits(
         declared_total_families = int(assignment["total_families"])
     except (KeyError, TypeError, ValueError) as exc:
         raise IntegrityError("split_assignment.yaml must record an integer total_families") from exc
+    if declared_total_families < MIN_CODEX_LONG_FAMILIES:
+        raise IntegrityError(
+            "split_assignment.yaml total_families must be >= "
+            f"{MIN_CODEX_LONG_FAMILIES} for the minimum viable Codex-Long freeze; "
+            f"got {declared_total_families}"
+        )
 
     actual_hash = sha256_file(split_assignment_path)
     expected_hash = _require_sha256_value(
@@ -431,6 +440,7 @@ def load_codex_long_splits(
     manifest_version = manifest["manifest_version"]
     total_families_loaded = 0
     smaller_v1_public_dev_carve_out = declared_total_families <= 35
+    family_type_counts = {scenario_type: 0 for scenario_type in SCENARIO_TYPES}
 
     split_mapping = assignment.get("splits")
     if not isinstance(split_mapping, dict):
@@ -499,6 +509,7 @@ def load_codex_long_splits(
                 )
             )
             total_families_loaded += 1
+            family_type_counts[scenario_type] += 1
 
             for variant_id in variant_ids:
                 scenario_id = make_scenario_id(family_id, variant_id)
@@ -548,6 +559,21 @@ def load_codex_long_splits(
             "split_assignment.yaml total_families mismatch: "
             f"declared {declared_total_families}, loaded {total_families_loaded}"
         )
+    if declared_total_families >= FULL_PLAN_CODEX_LONG_FAMILIES:
+        missing_floor = {
+            scenario_type: count
+            for scenario_type, count in family_type_counts.items()
+            if count < FULL_PLAN_MIN_FAMILIES_PER_TYPE
+        }
+        if missing_floor:
+            rendered = ", ".join(
+                f"{scenario_type}={count}" for scenario_type, count in sorted(missing_floor.items())
+            )
+            raise IntegrityError(
+                "Frozen full-plan benchmark must include at least "
+                f"{FULL_PLAN_MIN_FAMILIES_PER_TYPE} families per scenario type; "
+                f"below floor: {rendered}"
+            )
 
     manifest_scenario_ids = {
         make_scenario_id(entry["family_id"], entry["variant_id"]) for entry in manifest["variants"]

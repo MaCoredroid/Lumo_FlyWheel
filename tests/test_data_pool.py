@@ -24,6 +24,13 @@ SCENARIO_TYPES = [
     "investigate_then_fix",
     "cross_layer_changes",
 ]
+TYPE_SUFFIXES = {
+    "feature_evolution": "feature",
+    "migration_refactor": "migration",
+    "build_ci_breakage": "build",
+    "investigate_then_fix": "investigate",
+    "cross_layer_changes": "cross",
+}
 
 
 def _write_yaml(path: Path, payload: dict) -> None:
@@ -34,7 +41,103 @@ def _sha256(value: str) -> str:
     return f"sha256:{hashlib.sha256(value.encode('utf-8')).hexdigest()}"
 
 
-def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str]]]:
+def _family_specs(prefix: str, counts_by_type: list[tuple[str, int]]) -> list[tuple[str, str]]:
+    families: list[tuple[str, str]] = []
+    for scenario_type, count in counts_by_type:
+        suffix = TYPE_SUFFIXES[scenario_type]
+        for index in range(count):
+            family_id = f"{prefix}-{suffix}" if index == 0 else f"{prefix}-{suffix}-{index + 1}"
+            families.append((family_id, scenario_type))
+    return families
+
+
+def _fixture_family_specs(full_plan: bool = False) -> dict[str, list[tuple[str, str]]]:
+    if full_plan:
+        return {
+            "train_long": _family_specs(
+                "train",
+                [
+                    ("feature_evolution", 7),
+                    ("migration_refactor", 7),
+                    ("build_ci_breakage", 6),
+                    ("investigate_then_fix", 5),
+                    ("cross_layer_changes", 5),
+                ],
+            ),
+            "val_long": _family_specs(
+                "val",
+                [
+                    ("feature_evolution", 2),
+                    ("migration_refactor", 2),
+                    ("build_ci_breakage", 2),
+                    ("investigate_then_fix", 2),
+                    ("cross_layer_changes", 2),
+                ],
+            ),
+            "test_long": _family_specs(
+                "test",
+                [
+                    ("feature_evolution", 2),
+                    ("migration_refactor", 2),
+                    ("build_ci_breakage", 2),
+                    ("investigate_then_fix", 2),
+                    ("cross_layer_changes", 2),
+                ],
+            ),
+            "public_dev": _family_specs(
+                "public",
+                [
+                    ("feature_evolution", 1),
+                    ("migration_refactor", 1),
+                    ("build_ci_breakage", 1),
+                    ("investigate_then_fix", 1),
+                    ("cross_layer_changes", 1),
+                ],
+            ),
+        }
+
+    return {
+        "train_long": _family_specs(
+            "train",
+            [
+                ("feature_evolution", 4),
+                ("migration_refactor", 4),
+                ("build_ci_breakage", 4),
+                ("investigate_then_fix", 4),
+                ("cross_layer_changes", 4),
+            ],
+        ),
+        "val_long": _family_specs(
+            "val",
+            [
+                ("feature_evolution", 2),
+                ("migration_refactor", 2),
+                ("build_ci_breakage", 1),
+                ("investigate_then_fix", 1),
+                ("cross_layer_changes", 1),
+            ],
+        ),
+        "test_long": _family_specs(
+            "test",
+            [
+                ("feature_evolution", 2),
+                ("migration_refactor", 1),
+                ("build_ci_breakage", 1),
+                ("investigate_then_fix", 1),
+                ("cross_layer_changes", 1),
+            ],
+        ),
+        "public_dev": _family_specs(
+            "public",
+            [
+                ("feature_evolution", 1),
+                ("migration_refactor", 1),
+            ],
+        ),
+    }
+
+
+def _fixture_files(tmp_path: Path, *, full_plan: bool = False) -> tuple[Path, Path, Path, dict[str, list[str]]]:
     pools_path = tmp_path / "swe_bench_pools.yaml"
     split_path = tmp_path / "split_assignment.yaml"
     manifest_path = tmp_path / "benchmark_manifest.lock"
@@ -62,29 +165,10 @@ def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str
         },
     )
 
+    family_specs_by_split = _fixture_family_specs(full_plan=full_plan)
     families_by_split = {
-        "train_long": [
-            "train-feature",
-            "train-migration",
-            "train-build",
-            "train-investigate",
-            "train-cross",
-        ],
-        "val_long": [
-            "val-feature",
-            "val-migration",
-            "val-build",
-            "val-investigate",
-            "val-cross",
-        ],
-        "test_long": [
-            "test-feature",
-            "test-migration",
-            "test-build",
-            "test-investigate",
-            "test-cross",
-        ],
-        "public_dev": ["public-feature", "public-migration"],
+        split_name: [family_id for family_id, _scenario_type in family_specs]
+        for split_name, family_specs in family_specs_by_split.items()
     }
 
     assignment = {
@@ -94,10 +178,9 @@ def _fixture_files(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, list[str
         "splits": {},
     }
     manifest_variants: list[dict] = []
-    for split_name, family_ids in families_by_split.items():
+    for split_name, family_specs in family_specs_by_split.items():
         assignment["splits"][split_name] = {"families": []}
-        for index, family_id in enumerate(family_ids):
-            scenario_type = SCENARIO_TYPES[index % len(SCENARIO_TYPES)]
+        for family_id, scenario_type in family_specs:
             variant_ids = ["v1", "v2"] if family_id == "train-feature" else ["v1"]
             assignment["splits"][split_name]["families"].append(
                 {
@@ -160,6 +243,62 @@ def test_load_codex_long_splits_and_public_dev_carve_out(tmp_path: Path) -> None
         assert len(manager.list_codex_long_envs("public_dev", exclude_finished=False)) == 2
     finally:
         manager.close()
+
+
+def test_manager_rejects_codex_long_freezes_below_minimum_family_floor(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["total_families"] = 34
+    _write_yaml(split_path, split_assignment)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="minimum viable Codex-Long freeze"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "below-minimum-family-floor.db",
+        )
+
+
+def test_manager_rejects_full_plan_when_a_scenario_type_falls_below_six_families(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path, full_plan=True)
+
+    split_assignment = yaml.safe_load(split_path.read_text())
+    scenario_rewrites = {
+        ("train_long", "train-cross-2"): "feature_evolution",
+        ("train_long", "train-cross-3"): "feature_evolution",
+        ("train_long", "train-cross-4"): "feature_evolution",
+        ("train_long", "train-cross-5"): "feature_evolution",
+        ("val_long", "val-cross"): "feature_evolution",
+    }
+    for split_name, family_id in scenario_rewrites:
+        for family in split_assignment["splits"][split_name]["families"]:
+            if family["family_id"] == family_id:
+                family["scenario_type"] = scenario_rewrites[(split_name, family_id)]
+                break
+        else:
+            raise AssertionError(f"Family {split_name}/{family_id} not found in fixture")
+    _write_yaml(split_path, split_assignment)
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    for entry in manifest["variants"]:
+        rewritten = scenario_rewrites.get((entry["split"], entry["family_id"]))
+        if rewritten is not None:
+            entry["scenario_type"] = rewritten
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="at least 6 families per scenario type"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "full-plan-type-floor.db",
+        )
 
 
 def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path) -> None:
@@ -437,9 +576,30 @@ def test_manager_rejects_total_family_mismatch_and_duplicate_variant_ids(tmp_pat
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
 
     split_assignment = yaml.safe_load(split_path.read_text())
-    split_assignment["total_families"] = 30
+    split_assignment["splits"]["public_dev"]["families"].append(
+        {
+            "family_id": "public-build",
+            "scenario_type": "build_ci_breakage",
+            "variant_ids": ["v1"],
+            "variant_count": 1,
+        }
+    )
     _write_yaml(split_path, split_assignment)
     manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["variants"].append(
+        {
+            "family_id": "public-build",
+            "variant_id": "v1",
+            "split": "public_dev",
+            "scenario_type": "build_ci_breakage",
+            "family_spec_hash": _sha256("family-public-build"),
+            "image_digest": _sha256("public-build-v1"),
+            "verifier_hash": _sha256("verifier-public-build-v1"),
+            "milestone_hashes": {"m1": _sha256("m1-public-build-v1")},
+            "agents_md_hash": _sha256("agents-public-build"),
+            "verifier_data_hash": _sha256("data-public-build"),
+        }
+    )
     manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
     _write_yaml(manifest_path, manifest)
 
@@ -935,7 +1095,7 @@ def test_seal_enforcement_and_unseal(tmp_path: Path) -> None:
         manager.unseal("final_test", operator="benchmark_runner", reason="Sprint 3 B2 eval start")
         manager.unseal("test_long", operator="benchmark_runner", reason="Sprint 3 B1 eval start")
         assert [task["instance_id"] for task in manager.list_swe_bench_tasks("final_test")] == ["final-1", "final-2"]
-        assert len(manager.list_codex_long_envs("test_long")) == 5
+        assert len(manager.list_codex_long_envs("test_long")) == 6
         assert manager.claim_run("swe_bench", "final_test", "final-1", "qwen3.5-27b", "codex", 1)
         assert manager.claim_run(
             "codex_long",
@@ -979,7 +1139,7 @@ def test_unseal_state_persists_across_manager_restart(tmp_path: Path) -> None:
         assert reloaded.seal_state.is_sealed("final_test") is False
         assert reloaded.seal_state.is_sealed("test_long") is False
         assert [task["instance_id"] for task in reloaded.list_swe_bench_tasks("final_test")] == ["final-1", "final-2"]
-        assert len(reloaded.list_codex_long_envs("test_long")) == 5
+        assert len(reloaded.list_codex_long_envs("test_long")) == 6
         assert len(reloaded.seal_state.unseal_log) == 2
     finally:
         reloaded.close()
