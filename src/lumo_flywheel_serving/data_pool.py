@@ -56,6 +56,7 @@ _ARTIFACT_RECOVERY = {
     "agents_md": {"ver_column": "launch_manifest_ver", "recovery": "rerun_full"},
 }
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class IntegrityError(RuntimeError):
@@ -195,15 +196,27 @@ def _require_sha256_value(value: Any, *, field_name: str, allow_bare: bool = Fal
     raise IntegrityError(f"{field_name} must be recorded as a sha256 digest")
 
 
+def _require_iso_date(value: Any, *, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise IntegrityError(f"{field_name} must record a non-empty freeze date")
+    if not _ISO_DATE_RE.fullmatch(value):
+        raise IntegrityError(f"{field_name} must use ISO date format YYYY-MM-DD")
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError as exc:
+        raise IntegrityError(f"{field_name} must use a real calendar date in YYYY-MM-DD format") from exc
+    return value
+
+
 def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
     manifest = yaml.safe_load(Path(path).read_text()) or {}
     try:
         manifest["manifest_version"] = int(manifest["manifest_version"])
     except (KeyError, TypeError, ValueError) as exc:
         raise IntegrityError("benchmark_manifest.lock must record an integer manifest_version") from exc
-    freeze_date = manifest.get("freeze_date")
-    if not isinstance(freeze_date, str) or not freeze_date.strip():
-        raise IntegrityError("benchmark_manifest.lock must record a non-empty freeze_date")
+    if manifest["manifest_version"] < 1:
+        raise IntegrityError("benchmark_manifest.lock manifest_version must be >= 1")
+    _require_iso_date(manifest.get("freeze_date"), field_name="benchmark_manifest.lock freeze_date")
 
     _require_sha256_value(manifest.get("split_assignment_hash"), field_name="split_assignment_hash")
     _require_sha256_value(manifest.get("grader_image_digest"), field_name="grader_image_digest")
@@ -363,9 +376,7 @@ def load_codex_long_splits(
     assignment = yaml.safe_load(Path(split_assignment_path).read_text()) or {}
     manifest = load_codex_long_manifest(manifest_path)
 
-    freeze_date = assignment.get("freeze_date")
-    if not isinstance(freeze_date, str) or not freeze_date.strip():
-        raise IntegrityError("split_assignment.yaml must record a non-empty freeze_date")
+    freeze_date = _require_iso_date(assignment.get("freeze_date"), field_name="split_assignment.yaml freeze_date")
     manifest_freeze_date = manifest["freeze_date"]
     if freeze_date != manifest_freeze_date:
         raise IntegrityError(

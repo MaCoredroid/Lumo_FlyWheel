@@ -51,7 +51,12 @@ def resolve_metric_schema(metrics_snapshot: dict[str, float]) -> dict[str, str]:
 def _required_delta(before: dict[str, float], after: dict[str, float], key: str) -> float:
     if key not in before or key not in after:
         raise RuntimeError(f"Expected metric '{key}' not found in both /metrics snapshots")
-    return after[key] - before[key]
+    delta = after[key] - before[key]
+    if delta < 0:
+        raise RuntimeError(
+            f"Metric '{key}' decreased between /metrics snapshots; counters likely reset or the server restarted mid-task."
+        )
+    return delta
 
 
 def compute_task_metrics(

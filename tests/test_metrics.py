@@ -113,3 +113,40 @@ def test_compute_task_metrics_uses_sum_deltas() -> None:
     assert metrics["prefill_throughput_tps"] == 12.0
     assert metrics["decode_throughput_tps"] == 18.0
     assert round(metrics["cache_hit_rate_pct"] or 0.0, 2) == round(5.0 / 6.0 * 100, 2)
+
+
+def test_compute_task_metrics_rejects_counter_resets() -> None:
+    before = {
+        "vllm:prompt_tokens_total": 100.0,
+        "vllm:generation_tokens_total": 40.0,
+        "vllm:request_prefill_kv_computed_tokens_sum": 80.0,
+        "vllm:prefix_cache_queries_total": 10.0,
+        "vllm:prefix_cache_hits_total": 5.0,
+        "vllm:time_to_first_token_seconds_sum": 2.0,
+        "vllm:time_to_first_token_seconds_count": 4.0,
+        "vllm:request_prefill_time_seconds_sum": 3.0,
+        "vllm:request_decode_time_seconds_sum": 2.0,
+    }
+    after = dict(before)
+    after["vllm:request_decode_time_seconds_sum"] = 1.0
+
+    try:
+        compute_task_metrics(
+            before=before,
+            after=after,
+            schema={
+                "prompt_tokens": "vllm:prompt_tokens_total",
+                "generation_tokens": "vllm:generation_tokens_total",
+                "prefix_cache_queries": "vllm:prefix_cache_queries_total",
+                "prefix_cache_hits": "vllm:prefix_cache_hits_total",
+                "kv_computed_tokens_sum": "vllm:request_prefill_kv_computed_tokens_sum",
+                "ttft_seconds_sum": "vllm:time_to_first_token_seconds_sum",
+                "ttft_seconds_count": "vllm:time_to_first_token_seconds_count",
+                "prefill_seconds_sum": "vllm:request_prefill_time_seconds_sum",
+                "decode_seconds_sum": "vllm:request_decode_time_seconds_sum",
+            },
+        )
+    except RuntimeError as exc:
+        assert "decreased between /metrics snapshots" in str(exc)
+    else:
+        raise AssertionError("Expected compute_task_metrics() to reject counter resets")

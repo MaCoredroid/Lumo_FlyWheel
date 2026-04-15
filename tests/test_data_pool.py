@@ -257,6 +257,21 @@ def test_manager_requires_manifest_version(tmp_path: Path) -> None:
         )
 
 
+def test_manager_rejects_non_positive_manifest_version(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["manifest_version"] = 0
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="manifest_version must be >= 1"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "non-positive-version.db",
+        )
+
+
 def test_manager_requires_manifest_freeze_date(tmp_path: Path) -> None:
     pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
     manifest = yaml.safe_load(manifest_path.read_text())
@@ -269,6 +284,39 @@ def test_manager_requires_manifest_freeze_date(tmp_path: Path) -> None:
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "missing-manifest-freeze-date.db",
+        )
+
+
+def test_manager_requires_iso_freeze_dates(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["freeze_date"] = "June 1, 2026"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="YYYY-MM-DD"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "bad-manifest-freeze-date.db",
+        )
+
+    split_case = tmp_path / "split-case"
+    split_case.mkdir()
+    pools_path, split_path, manifest_path, _ = _fixture_files(split_case)
+    split_assignment = yaml.safe_load(split_path.read_text())
+    split_assignment["freeze_date"] = "tomorrow"
+    _write_yaml(split_path, split_assignment)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["split_assignment_hash"] = f"sha256:{hashlib.sha256(split_path.read_bytes()).hexdigest()}"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="YYYY-MM-DD"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "bad-split-freeze-date.db",
         )
 
 
