@@ -11,6 +11,7 @@ from pathlib import Path
 
 import requests
 
+from .metrics import parse_prometheus_text, resolve_metric_schema
 from .registry import ModelConfig, load_registry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -586,7 +587,8 @@ class ModelServer:
                     if not expected_model_ids.issubset(set(served_model_ids)):
                         time.sleep(5)
                         continue
-                    self.metrics()
+                    metrics_response = self.metrics()
+                    resolve_metric_schema(parse_prometheus_text(metrics_response.text))
                     self._append_log_text(
                         model_id,
                         f"[VLLM-READY] cuda_graph_capture_time={time.time() - start:.1f}s\n"
@@ -595,7 +597,7 @@ class ModelServer:
                         f"[VLLM-READY] served_models={','.join(served_model_ids)}\n",
                     )
                     return
-            except (requests.RequestException, ValueError, TypeError):
+            except (requests.RequestException, RuntimeError, ValueError, TypeError):
                 pass
             time.sleep(5)
         raise TimeoutError(f"vLLM not ready within {timeout_s}s")

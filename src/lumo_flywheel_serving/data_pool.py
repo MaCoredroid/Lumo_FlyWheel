@@ -211,6 +211,12 @@ def _require_iso_date(value: Any, *, field_name: str) -> str:
     return value
 
 
+def _require_non_empty_string(value: Any, *, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise IntegrityError(f"{field_name} must be a non-empty string")
+    return value
+
+
 def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
     try:
         manifest = load_yaml_file(path) or {}
@@ -234,6 +240,76 @@ def load_codex_long_manifest(path: str | Path) -> dict[str, Any]:
     change_log = manifest.get("change_log", [])
     if not isinstance(change_log, list):
         raise IntegrityError("benchmark_manifest.lock change_log must be a list")
+    seen_change_versions: set[int] = set()
+    for index, entry in enumerate(change_log):
+        if not isinstance(entry, dict):
+            raise IntegrityError(f"benchmark_manifest.lock change_log[{index}] must be a mapping")
+        try:
+            change_version = int(entry["manifest_version"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise IntegrityError(
+                f"benchmark_manifest.lock change_log[{index}] must record an integer manifest_version"
+            ) from exc
+        if change_version < 2:
+            raise IntegrityError(
+                f"benchmark_manifest.lock change_log[{index}] manifest_version must be >= 2"
+            )
+        if change_version in seen_change_versions:
+            raise IntegrityError(
+                f"benchmark_manifest.lock change_log contains duplicate manifest_version {change_version}"
+            )
+        seen_change_versions.add(change_version)
+        _require_iso_date(entry.get("date"), field_name=f"benchmark_manifest.lock change_log[{index}] date")
+        _require_non_empty_string(
+            entry.get("change"),
+            field_name=f"benchmark_manifest.lock change_log[{index}] change",
+        )
+        _require_non_empty_string(
+            entry.get("reason"),
+            field_name=f"benchmark_manifest.lock change_log[{index}] reason",
+        )
+        affected_variants = entry.get("affected_variants")
+        if not isinstance(affected_variants, list) or not affected_variants:
+            raise IntegrityError(
+                f"benchmark_manifest.lock change_log[{index}] affected_variants must be a non-empty list"
+            )
+        for variant_index, scenario_id in enumerate(affected_variants):
+            if not isinstance(scenario_id, str) or not scenario_id.strip():
+                raise IntegrityError(
+                    "benchmark_manifest.lock change_log"
+                    f"[{index}] affected_variants[{variant_index}] must be a non-empty scenario id"
+                )
+        affected_hashes = entry.get("affected_hashes")
+        if not isinstance(affected_hashes, list) or not affected_hashes:
+            raise IntegrityError(
+                f"benchmark_manifest.lock change_log[{index}] affected_hashes must be a non-empty list"
+            )
+        for hash_index, field_name in enumerate(affected_hashes):
+            if not isinstance(field_name, str) or not field_name.strip():
+                raise IntegrityError(
+                    "benchmark_manifest.lock change_log"
+                    f"[{index}] affected_hashes[{hash_index}] must be a non-empty string"
+                )
+        re_gate_required = entry.get("re_gate_required")
+        if not isinstance(re_gate_required, bool):
+            raise IntegrityError(
+                f"benchmark_manifest.lock change_log[{index}] re_gate_required must be a boolean"
+            )
+    if manifest["manifest_version"] > 1:
+        expected_versions = set(range(2, manifest["manifest_version"] + 1))
+        if seen_change_versions != expected_versions:
+            missing_versions = sorted(expected_versions - seen_change_versions)
+            extra_versions = sorted(seen_change_versions - expected_versions)
+            details: list[str] = []
+            if missing_versions:
+                details.append(f"missing versions {missing_versions}")
+            if extra_versions:
+                details.append(f"unexpected versions {extra_versions}")
+            rendered = ", ".join(details) if details else "inconsistent version coverage"
+            raise IntegrityError(
+                "benchmark_manifest.lock change_log must document every post-freeze manifest_version bump; "
+                f"{rendered}"
+            )
     manifest["change_log"] = change_log
 
     variants = manifest.get("variants")

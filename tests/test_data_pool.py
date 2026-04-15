@@ -216,7 +216,26 @@ def _fixture_files(tmp_path: Path, *, full_plan: bool = False) -> tuple[Path, Pa
             "split_assignment_hash": split_hash,
             "grader_image_digest": _sha256("codex-long-grader"),
             "variants": manifest_variants,
-            "change_log": [],
+            "change_log": [
+                {
+                    "manifest_version": 2,
+                    "date": "2026-06-10",
+                    "change": "Added train-feature/v2 after Gate 4 review",
+                    "reason": "Expand low-yield family",
+                    "affected_variants": ["train-feature/v2"],
+                    "affected_hashes": ["image_digest", "agents_md_hash"],
+                    "re_gate_required": False,
+                },
+                {
+                    "manifest_version": 3,
+                    "date": "2026-06-15",
+                    "change": "Fixed train-feature verifier false negative",
+                    "reason": "Trusted grading bugfix",
+                    "affected_variants": ["train-feature/v1", "train-feature/v2"],
+                    "affected_hashes": ["verifier_hash", "family_spec_hash"],
+                    "re_gate_required": True,
+                },
+            ],
         },
     )
     return pools_path, split_path, manifest_path, families_by_split
@@ -393,6 +412,49 @@ def test_manager_requires_manifest_version(tmp_path: Path) -> None:
             split_assignment_path=split_path,
             manifest_path=manifest_path,
             db_path=tmp_path / "broken-version.db",
+        )
+
+
+def test_manager_requires_change_log_entries_for_post_freeze_manifest_versions(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["change_log"] = []
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="document every post-freeze manifest_version bump"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "missing-change-log.db",
+        )
+
+
+def test_manager_rejects_malformed_change_log_entries(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["change_log"][1]["re_gate_required"] = "yes"
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="re_gate_required must be a boolean"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "bad-change-log-boolean.db",
+        )
+
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["change_log"] = manifest["change_log"][:-1]
+    _write_yaml(manifest_path, manifest)
+
+    with pytest.raises(IntegrityError, match="missing versions \\[3\\]"):
+        DataPoolManager(
+            swe_bench_pools_path=pools_path,
+            split_assignment_path=split_path,
+            manifest_path=manifest_path,
+            db_path=tmp_path / "missing-change-log-version.db",
         )
 
 
