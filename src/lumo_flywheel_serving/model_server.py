@@ -17,10 +17,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_VLLM_BASE_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_VLLM_IMAGE = "lumo-flywheel-vllm:26.01-py3-v0.19.0"
 DEFAULT_VLLM_DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
+QWEN_CHAT_TEMPLATE_HOST_PATH = REPO_ROOT / "docker" / "chat_templates" / "qwen3-openai-codex.jinja"
+QWEN_CHAT_TEMPLATE_CONTAINER_PATH = Path("/opt/lumo/chat_templates/qwen3-openai-codex.jinja")
 MIN_GPU_MEMORY_UTILIZATION = 0.15
 UNSUPPORTED_NVIDIA_SMI_GRACE_S = 20
 LOW_FREE_MEMORY_GRACE_RETRIES = 2
 LOW_FREE_MEMORY_GRACE_SLEEP_S = 45
+CUDA_MEMORY_RECOVERY_MARGIN_GIB = 1.0
 GPU_MEMORY_ERROR_RE = re.compile(
     r"Free memory on device cuda:\d+ \((?P<free>[0-9.]+)/(?P<total>[0-9.]+) GiB\)"
 )
@@ -57,6 +60,10 @@ class ModelServer:
         config = self.registry[model_id]
         self._reset_log(model_id)
         self.stop(missing_ok=True)
+        # A prior stop can return before GB10 unified-memory pressure fully drains.
+        # Wait before the first launch attempt so fresh starts after a recent stop
+        # do not immediately spiral through the low-VRAM fallback ladder.
+        self._wait_vram_free(timeout_s=120, required_utilization=config.gpu_memory_utilization)
         kv_cache_dtype = config.kv_cache_dtype
         gpu_memory_utilization = config.gpu_memory_utilization
         enforce_eager = False
@@ -78,7 +85,7 @@ class ModelServer:
                 break
             except RuntimeError as exc:
                 self.stop(missing_ok=True)
-                self._wait_vram_free(timeout_s=120)
+                self._wait_vram_free(timeout_s=120, required_utilization=gpu_memory_utilization)
                 error_text = str(exc)
                 incompatible_fp8_kv = "fp8_e5m2 kv-cache is not supported with fp8 checkpoints."
                 insufficient_memory = "Free memory on device cuda:0"
@@ -113,7 +120,7 @@ class ModelServer:
         if self.use_sleep_mode and self.current_model == model_id:
             return
         self.stop(missing_ok=True)
-        self._wait_vram_free(timeout_s=120)
+        self._wait_vram_free(timeout_s=120, required_utilization=self.registry[model_id].gpu_memory_utilization)
         self.start(model_id=model_id, enable_request_logging=enable_request_logging)
 
     def stop(self, missing_ok: bool = False) -> None:
@@ -285,6 +292,7 @@ class ModelServer:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         triton_cache_dir = self.triton_cache_root / model_id
         triton_cache_dir.mkdir(parents=True, exist_ok=True)
+        chat_template_path = self._chat_template_container_path(config)
 
         vllm_args = [
             "vllm",
@@ -313,6 +321,8 @@ class ModelServer:
             "--max-num-seqs",
             str(config.max_num_seqs),
         ]
+        if chat_template_path is not None:
+            vllm_args.extend(["--chat-template", str(chat_template_path)])
         if enforce_eager:
             vllm_args.append("--enforce-eager")
         if self.use_sleep_mode:
@@ -370,6 +380,8 @@ class ModelServer:
             f"{self.logs_root}:{self.logs_root}",
             "-v",
             f"{self.triton_cache_root}:{self.triton_cache_root}",
+            "-v",
+            f"{QWEN_CHAT_TEMPLATE_HOST_PATH}:{QWEN_CHAT_TEMPLATE_CONTAINER_PATH}:ro",
             "--entrypoint",
             "bash",
             self.image,
@@ -433,6 +445,12 @@ class ModelServer:
             "PY"
         )
 
+    @staticmethod
+    def _chat_template_container_path(config: ModelConfig) -> Path | None:
+        if config.hf_repo.lower().startswith("qwen/"):
+            return QWEN_CHAT_TEMPLATE_CONTAINER_PATH
+        return None
+
     def _wait_ready(self, model_id: str, timeout_s: int = 900) -> None:
         deadline = time.time() + timeout_s
         log_path = self.logs_path(model_id)
@@ -465,7 +483,37 @@ class ModelServer:
             time.sleep(5)
         raise TimeoutError(f"vLLM not ready within {timeout_s}s")
 
-    def _wait_vram_free(self, timeout_s: int = 120) -> None:
+    def _cuda_mem_get_info_gib(self) -> tuple[float, float] | None:
+        probe = self._run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--gpus",
+                "all",
+                "--entrypoint",
+                "python3",
+                self.image,
+                "-c",
+                (
+                    "import torch; "
+                    "free, total = torch.cuda.mem_get_info(); "
+                    "print(f'{free / 1024**3:.2f} {total / 1024**3:.2f}')"
+                ),
+            ],
+            check=False,
+        )
+        if probe.returncode != 0:
+            return None
+        parts = probe.stdout.strip().split()
+        if len(parts) != 2:
+            return None
+        try:
+            return float(parts[0]), float(parts[1])
+        except ValueError:
+            return None
+
+    def _wait_vram_free(self, timeout_s: int = 120, required_utilization: float | None = None) -> None:
         deadline = time.time() + timeout_s
         while time.time() < deadline:
             result = self._run(
@@ -479,15 +527,46 @@ class ModelServer:
             if result.returncode == 0:
                 lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
                 if lines == ["[Not Supported]"]:
+                    memory_snapshot = self._cuda_mem_get_info_gib()
+                    if memory_snapshot is None:
+                        time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
+                        return
+                    if self._has_required_free_memory(memory_snapshot, required_utilization):
+                        return
                     time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
-                    return
+                    continue
                 pids = [line for line in lines if line != "[Not Supported]"]
                 if not pids:
-                    return
+                    memory_snapshot = self._cuda_mem_get_info_gib()
+                    if memory_snapshot is None:
+                        return
+                    if self._has_required_free_memory(memory_snapshot, required_utilization):
+                        return
+                    time.sleep(5)
+                    continue
             else:
+                memory_snapshot = self._cuda_mem_get_info_gib()
+                if memory_snapshot is None:
+                    time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
+                    return
+                if self._has_required_free_memory(memory_snapshot, required_utilization):
+                    return
                 time.sleep(min(timeout_s, UNSUPPORTED_NVIDIA_SMI_GRACE_S))
-                return
+                continue
             time.sleep(2)
+
+    @staticmethod
+    def _has_required_free_memory(
+        snapshot: tuple[float, float] | None, required_utilization: float | None
+    ) -> bool:
+        if snapshot is None:
+            return False
+        free_gib, total_gib = snapshot
+        if total_gib <= 0:
+            return True
+        target_utilization = required_utilization if required_utilization is not None else MIN_GPU_MEMORY_UTILIZATION
+        required_free_gib = (total_gib * target_utilization) + CUDA_MEMORY_RECOVERY_MARGIN_GIB
+        return free_gib >= required_free_gib
 
     @staticmethod
     def _run(
