@@ -1094,6 +1094,29 @@ class DataPoolManager:
         ).fetchall()
         return [self._row_to_run_record(row) for row in rows]
 
+    def _require_known_scenario(self, track: str, pool_or_split: str, scenario_id: str) -> None:
+        if track == "codex_long":
+            try:
+                env = self.codex_long_env_index[scenario_id]
+            except KeyError as exc:
+                raise IntegrityError(f"Unknown Codex-Long scenario_id '{scenario_id}'") from exc
+            if env.split != pool_or_split:
+                raise IntegrityError(
+                    f"Scenario '{scenario_id}' belongs to split '{env.split}', not '{pool_or_split}'"
+                )
+            return
+        if track == "swe_bench":
+            try:
+                tasks = self.swe_bench_pools[pool_or_split]
+            except KeyError as exc:
+                raise IntegrityError(f"Unknown SWE-bench pool '{pool_or_split}'") from exc
+            if scenario_id not in {task["instance_id"] for task in tasks}:
+                raise IntegrityError(
+                    f"Unknown SWE-bench task '{scenario_id}' for pool '{pool_or_split}'"
+                )
+            return
+        raise IntegrityError(f"Unknown track '{track}'")
+
     def _is_sealed(self, pool_or_split: str) -> bool:
         return self.seal_state.is_sealed(pool_or_split)
 
@@ -1187,6 +1210,7 @@ class DataPoolManager:
     ) -> DispatchDecision:
         if self._is_sealed(pool_or_split):
             return DispatchDecision.BLOCKED
+        self._require_known_scenario(track, pool_or_split, scenario_id)
 
         attempts = self._query_runs(track, pool_or_split, scenario_id, model_id, harness, seed)
         if not attempts:
@@ -1226,15 +1250,11 @@ class DataPoolManager:
     ) -> bool:
         if self._is_sealed(pool_or_split):
             raise IntegrityError(f"Cannot claim run for sealed pool/split '{pool_or_split}'")
+        if attempt < 1:
+            raise IntegrityError(f"Run attempt must be >= 1; got {attempt}")
+        self._require_known_scenario(track, pool_or_split, scenario_id)
         if track == "codex_long":
-            try:
-                env = self.codex_long_env_index[scenario_id]
-            except KeyError as exc:
-                raise IntegrityError(f"Unknown Codex-Long scenario_id '{scenario_id}'") from exc
-            if env.split != pool_or_split:
-                raise IntegrityError(
-                    f"Scenario '{scenario_id}' belongs to split '{env.split}', not '{pool_or_split}'"
-                )
+            env = self.codex_long_env_index[scenario_id]
             if family_id is not None and family_id != env.family_id:
                 raise IntegrityError(
                     f"Scenario '{scenario_id}' belongs to family '{env.family_id}', not '{family_id}'"
@@ -1252,6 +1272,33 @@ class DataPoolManager:
                 )
             family_id = env.family_id
             scenario_type = env.scenario_type
+        attempts = self._query_runs(track, pool_or_split, scenario_id, model_id, harness, seed)
+        if any(run.attempt == attempt for run in attempts):
+            return False
+        if attempts:
+            latest = max(attempts, key=lambda run: run.attempt)
+            expected_attempt = latest.attempt + 1
+            if attempt != expected_attempt:
+                raise IntegrityError(
+                    f"Cannot claim attempt {attempt} for {track}/{pool_or_split}/{scenario_id}; "
+                    f"next allowed attempt is {expected_attempt}"
+                )
+            decision = self.check_dispatch_eligible(track, pool_or_split, scenario_id, model_id, harness, seed)
+            if decision in {DispatchDecision.SKIP, DispatchDecision.DUPLICATE, DispatchDecision.BLOCKED}:
+                raise IntegrityError(
+                    f"Cannot claim attempt {attempt} for {track}/{pool_or_split}/{scenario_id}; "
+                    f"dispatch state is {decision.value}"
+                )
+            if decision is DispatchDecision.REGRADE_NEEDED:
+                raise IntegrityError(
+                    f"Cannot claim attempt {attempt} for {track}/{pool_or_split}/{scenario_id}; "
+                    "the current state requires regrading the retained snapshot, not launching a new run"
+                )
+        elif attempt != 1:
+            raise IntegrityError(
+                f"Cannot claim first run for {track}/{pool_or_split}/{scenario_id} with attempt={attempt}; "
+                "initial attempt must be 1"
+            )
         with self.db.begin() as txn:
             result = txn.execute(
                 """
@@ -1276,6 +1323,23 @@ class DataPoolManager:
             )
             claimed = result.rowcount == 1
             if claimed and attempt > 1:
+                txn.execute(
+                    """
+                    UPDATE runs
+                    SET is_current = 0
+                    WHERE track = ? AND pool_or_split = ? AND scenario_id = ? AND model_id = ? AND harness = ? AND seed = ?
+                      AND attempt < ?
+                    """,
+                    (
+                        track,
+                        pool_or_split,
+                        scenario_id,
+                        model_id,
+                        harness,
+                        seed,
+                        attempt,
+                    ),
+                )
                 txn.execute(
                     """
                     UPDATE runs

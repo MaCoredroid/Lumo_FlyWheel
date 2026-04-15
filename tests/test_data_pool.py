@@ -1004,6 +1004,7 @@ def test_claim_finish_retry_and_superseded_by(tmp_path: Path) -> None:
             scenario_type="feature_evolution",
         )
         runs = manager._query_runs("codex_long", "train_long", scenario_id, "qwen3.5-27b", "codex", 1)
+        assert runs[0].is_current is False
         assert runs[0].superseded_by == 2
 
         manager.finish_run(
@@ -1084,6 +1085,62 @@ def test_claim_run_rejects_codex_long_metadata_drift(tmp_path: Path) -> None:
                 "qwen3.5-27b",
                 "codex",
                 1,
+            )
+    finally:
+        manager.close()
+
+
+def test_claim_run_rejects_invalid_attempt_transitions(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        scenario_id = "train-feature/v1"
+
+        with pytest.raises(IntegrityError, match="initial attempt must be 1"):
+            manager.claim_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                attempt=2,
+                launch_manifest_ver=3,
+            )
+
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+        )
+        manager.finish_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            1,
+            "resolved",
+            grading_manifest_ver=3,
+            codex_long_pass=True,
+            milestone_results={"m1": True},
+            snapshot_image_ref="snap-1",
+        )
+
+        with pytest.raises(IntegrityError, match="dispatch state is skip"):
+            manager.claim_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                attempt=2,
+                launch_manifest_ver=3,
             )
     finally:
         manager.close()
@@ -1501,6 +1558,56 @@ def test_invalidation_distinguishes_regrade_and_rerun(tmp_path: Path) -> None:
         manager.close()
 
 
+def test_claim_run_rejects_rerun_when_only_regrade_is_needed(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        scenario_id = "train-feature/v1"
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+        )
+        manager.finish_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            1,
+            "resolved",
+            grading_manifest_ver=3,
+            codex_long_pass=True,
+            milestone_results={"m1": True},
+            snapshot_image_ref="snap-1",
+        )
+        manager.invalidate_stale_runs(
+            family_id="train-feature",
+            new_manifest_version=4,
+            affected_artifact="verifier",
+            reason="trusted verifier fix",
+            affected_variant_ids=["v1"],
+        )
+
+        with pytest.raises(IntegrityError, match="requires regrading the retained snapshot"):
+            manager.claim_run(
+                "codex_long",
+                "train_long",
+                scenario_id,
+                "qwen3.5-27b",
+                "codex",
+                1,
+                attempt=2,
+                launch_manifest_ver=3,
+            )
+    finally:
+        manager.close()
+
+
 def test_regrade_downgrades_to_rerun_for_legacy_rows_missing_snapshot(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
@@ -1701,6 +1808,32 @@ def test_seal_enforcement_and_unseal(tmp_path: Path) -> None:
             scenario_type="cross_layer_changes",
         )
         assert len(manager.seal_state.unseal_log) == 2
+    finally:
+        manager.close()
+
+
+def test_dispatch_and_claim_reject_unknown_swe_bench_tasks(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    try:
+        with pytest.raises(IntegrityError, match="Unknown SWE-bench task 'not-a-task'"):
+            manager.check_dispatch_eligible(
+                "swe_bench",
+                "dev_bench",
+                "not-a-task",
+                "qwen3.5-27b",
+                "codex",
+                1,
+            )
+
+        with pytest.raises(IntegrityError, match="Unknown SWE-bench task 'not-a-task'"):
+            manager.claim_run(
+                "swe_bench",
+                "dev_bench",
+                "not-a-task",
+                "qwen3.5-27b",
+                "codex",
+                1,
+            )
     finally:
         manager.close()
 
