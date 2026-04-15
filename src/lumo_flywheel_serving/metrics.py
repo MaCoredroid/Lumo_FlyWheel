@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-COUNTER_VARIANTS = {
+REQUIRED_METRIC_VARIANTS = {
     "prompt_tokens": ["vllm:prompt_tokens_total", "vllm:prompt_tokens"],
     "generation_tokens": ["vllm:generation_tokens_total", "vllm:generation_tokens"],
     "prefix_cache_queries": ["vllm:prefix_cache_queries_total", "vllm:prefix_cache_queries"],
     "prefix_cache_hits": ["vllm:prefix_cache_hits_total", "vllm:prefix_cache_hits"],
+    "kv_computed_tokens_sum": ["vllm:request_prefill_kv_computed_tokens_sum"],
+    "ttft_seconds_sum": ["vllm:time_to_first_token_seconds_sum"],
+    "ttft_seconds_count": ["vllm:time_to_first_token_seconds_count"],
+    "prefill_seconds_sum": ["vllm:request_prefill_time_seconds_sum"],
+    "decode_seconds_sum": ["vllm:request_decode_time_seconds_sum"],
 }
 
 
@@ -33,7 +38,7 @@ def parse_prometheus_text(raw: str) -> dict[str, float]:
 
 def resolve_metric_schema(metrics_snapshot: dict[str, float]) -> dict[str, str]:
     resolved: dict[str, str] = {}
-    for logical_name, candidates in COUNTER_VARIANTS.items():
+    for logical_name, candidates in REQUIRED_METRIC_VARIANTS.items():
         found = next((candidate for candidate in candidates if candidate in metrics_snapshot), None)
         if found is None:
             raise RuntimeError(
@@ -53,14 +58,14 @@ def compute_task_metrics(
     before: dict[str, float], after: dict[str, float], schema: dict[str, str]
 ) -> dict[str, float | None]:
     prompt_tokens = _required_delta(before, after, schema["prompt_tokens"])
-    kv_computed_tokens = _required_delta(before, after, "vllm:request_prefill_kv_computed_tokens_sum")
+    kv_computed_tokens = _required_delta(before, after, schema["kv_computed_tokens_sum"])
     gen_tokens = _required_delta(before, after, schema["generation_tokens"])
     cache_queries = _required_delta(before, after, schema["prefix_cache_queries"])
     cache_hits = _required_delta(before, after, schema["prefix_cache_hits"])
-    ttft_sum = _required_delta(before, after, "vllm:time_to_first_token_seconds_sum")
-    ttft_count = _required_delta(before, after, "vllm:time_to_first_token_seconds_count")
-    prefill_sum_s = _required_delta(before, after, "vllm:request_prefill_time_seconds_sum")
-    decode_sum_s = _required_delta(before, after, "vllm:request_decode_time_seconds_sum")
+    ttft_sum = _required_delta(before, after, schema["ttft_seconds_sum"])
+    ttft_count = _required_delta(before, after, schema["ttft_seconds_count"])
+    prefill_sum_s = _required_delta(before, after, schema["prefill_seconds_sum"])
+    decode_sum_s = _required_delta(before, after, schema["decode_seconds_sum"])
 
     return {
         "ttft_ms": (ttft_sum / ttft_count * 1000) if ttft_count > 0 else None,

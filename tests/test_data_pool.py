@@ -160,6 +160,11 @@ def test_find_manifest_variant_raises_on_missing_entry_and_fields(tmp_path: Path
     with pytest.raises(IntegrityError, match="missing required fields"):
         _find_manifest_variant(broken_manifest, broken_manifest["variants"][0]["family_id"], "v1")
 
+    metadata_broken_manifest = yaml.safe_load(manifest_path.read_text())
+    metadata_broken_manifest["variants"][0].pop("split")
+    with pytest.raises(IntegrityError, match="missing required fields"):
+        _find_manifest_variant(metadata_broken_manifest, metadata_broken_manifest["variants"][0]["family_id"], "v1")
+
     # Sanity check that the split loader is actually using the frozen hash.
     split_path.write_text(split_path.read_text() + "\n# drift\n", encoding="utf-8")
     with pytest.raises(IntegrityError, match="hash mismatch"):

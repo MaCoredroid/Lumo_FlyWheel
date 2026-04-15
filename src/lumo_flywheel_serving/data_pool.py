@@ -155,6 +155,8 @@ def _find_manifest_variant(manifest: dict[str, Any], family_id: str, variant_id:
     for entry in manifest.get("variants", []):
         if entry["family_id"] == family_id and entry["variant_id"] == variant_id:
             required_fields = [
+                "split",
+                "scenario_type",
                 "image_digest",
                 "verifier_hash",
                 "family_spec_hash",
