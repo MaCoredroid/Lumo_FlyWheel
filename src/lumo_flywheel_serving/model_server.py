@@ -15,6 +15,7 @@ from .metrics import parse_prometheus_text, resolve_metric_schema
 from .registry import ModelConfig, load_registry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+LOCAL_RUNTIME_ENV_FILENAME = ".lumo.local.env"
 DEFAULT_VLLM_BASE_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_VLLM_IMAGE = "lumo-flywheel-vllm:26.01-py3-v0.19.0"
 DEFAULT_VLLM_DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
@@ -29,6 +30,7 @@ HOST_MEMORY_RECOVERY_COMMAND = "sync; echo 3 > /proc/sys/vm/drop_caches; swapoff
 GPU_MEMORY_ERROR_RE = re.compile(
     r"Free memory on device cuda:\d+ \((?P<free>[0-9.]+)/(?P<total>[0-9.]+) GiB\)"
 )
+LOCAL_ENV_ASSIGNMENT_RE = re.compile(r"^(?:export\s+)?(?P<key>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$")
 
 
 class ModelServer:
@@ -43,7 +45,8 @@ class ModelServer:
         use_sleep_mode: bool = False,
     ) -> None:
         self.registry_path = Path(registry_path)
-        self.registry = load_registry(registry_path)
+        self._load_local_runtime_env()
+        self.registry = load_registry(self.registry_path)
         self.port = port
         self.image = image
         self.container_name = container_name
@@ -55,6 +58,42 @@ class ModelServer:
     def ensure_runtime_scaffolding(self) -> None:
         for path in (Path("/models"), self.logs_root, self.triton_cache_root):
             path.mkdir(parents=True, exist_ok=True)
+
+    def _load_local_runtime_env(self) -> None:
+        for env_path in self._local_runtime_env_candidates():
+            if not env_path.is_file():
+                continue
+            for line_number, raw_line in enumerate(env_path.read_text(encoding="utf-8").splitlines(), start=1):
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                match = LOCAL_ENV_ASSIGNMENT_RE.fullmatch(line)
+                if match is None:
+                    raise RuntimeError(f"Invalid local runtime env line in {env_path}:{line_number}")
+                key = match.group("key")
+                if key in os.environ:
+                    continue
+                os.environ[key] = self._parse_local_runtime_env_value(match.group("value"))
+            return
+
+    def _local_runtime_env_candidates(self) -> tuple[Path, ...]:
+        candidates: list[Path] = []
+        override = os.environ.get("LUMO_LOCAL_RUNTIME_ENV")
+        if override:
+            candidates.append(Path(override))
+        registry_candidate = self.registry_path.resolve().parent / LOCAL_RUNTIME_ENV_FILENAME
+        candidates.append(registry_candidate)
+        repo_candidate = REPO_ROOT / LOCAL_RUNTIME_ENV_FILENAME
+        if repo_candidate not in candidates:
+            candidates.append(repo_candidate)
+        return tuple(candidates)
+
+    @staticmethod
+    def _parse_local_runtime_env_value(raw_value: str) -> str:
+        value = raw_value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            return value[1:-1]
+        return value
 
     def start(self, model_id: str, enable_request_logging: bool = False) -> None:
         self.ensure_runtime_scaffolding()

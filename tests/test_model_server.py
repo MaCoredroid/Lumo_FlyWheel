@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import subprocess
 
@@ -896,6 +897,56 @@ models:
     )
 
     server._recover_host_memory()
+
+
+def test_model_server_loads_local_runtime_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    (tmp_path / ".lumo.local.env").write_text("export LUMO_SUDO_PASSWORD='from-file'\n", encoding="utf-8")
+    monkeypatch.delenv("LUMO_SUDO_PASSWORD", raising=False)
+
+    ModelServer(registry_path=registry)
+
+    assert os.environ["LUMO_SUDO_PASSWORD"] == "from-file"
+
+
+def test_model_server_does_not_override_existing_runtime_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    (tmp_path / ".lumo.local.env").write_text("export LUMO_SUDO_PASSWORD='from-file'\n", encoding="utf-8")
+    monkeypatch.setenv("LUMO_SUDO_PASSWORD", "from-env")
+
+    ModelServer(registry_path=registry)
+
+    assert os.environ["LUMO_SUDO_PASSWORD"] == "from-env"
 
 
 def test_reset_log_uses_docker_fallback_for_root_owned_logs(
