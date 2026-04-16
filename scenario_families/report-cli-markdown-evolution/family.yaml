@@ -19,8 +19,8 @@ breakage_class:
 grading_invariant:
   type: hybrid
   description: Legacy variants are graded by trusted Phase 3 file inspections plus
-    the Phase 2 command result, while release-readiness additionally runs bundled
-    hidden-test slices and release-quality asset checks in Phase 3.
+    the Phase 2 command result, while inventory-ops and release-readiness additionally
+    run bundled hidden-test slices and richer authored asset checks in Phase 3.
   verifier_script: verifiers/report-cli-markdown-evolution/verify.sh
   functional_checks:
   - id: pytest_suite
@@ -41,20 +41,26 @@ milestones:
 - id: m1_cli_markdown
   description: CLI accepts --format markdown
   check_script: verifiers/report-cli-markdown-evolution/milestones/m1_cli_markdown.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.2
 - id: m2_renderer_markdown
   description: Markdown renderer exists and is wired in
   check_script: verifiers/report-cli-markdown-evolution/milestones/m2_renderer_markdown.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.35
 - id: m3_docs_updated
   description: Usage docs mention the Markdown workflow
   check_script: verifiers/report-cli-markdown-evolution/milestones/m3_docs_updated.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.45
 shortcut_resistance:
   notes: Phase 3 always checks trusted Phase 2 pytest results and test-file integrity.
-    The release-readiness variant additionally ships oracle patches, hidden tests,
-    red-team exploits, and a mutation report so the richer bundle can be validated
-    without upgrading the sibling legacy variants yet.
+    Inventory-ops and release-readiness additionally ship oracle patches, hidden
+    tests, red-team exploits, and mutation evidence so the richer path can be
+    validated without forcing incident-triage off the legacy helper path yet.
   known_exploits_tested:
   - Delete docs assertions from the pytest suite
   - Stub the CLI to always print a canned Markdown string
@@ -70,10 +76,49 @@ difficulty_estimate:
 variants:
 - variant_id: inventory-ops
   repo_source: authored
+  tier: small-investigative
+  surfaces:
+  - cli
+  - renderer
+  - service
+  - docs
   injected_breakage: Tests now require a Markdown mode plus updated usage docs, but
-    the repo still only supports JSON rendering.
+    the repo still only supports JSON rendering and the dormant watchlist follow-up
+    path is not threaded through the shared summary layer.
   env_dockerfile: variants/inventory-ops/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/report-cli-markdown-evolution/inventory-ops/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_cli_markdown:
+      - test_example_based.py::test_cli_accepts_markdown_flag
+      - test_example_based.py::test_markdown_uses_handoff_headers
+      m2_renderer_markdown:
+      - test_example_based.py::test_markdown_sections_table_preserves_every_runtime_row
+      - test_example_based.py::test_markdown_owner_totals_sort_desc_then_name
+      - test_differential_oracle.py::test_round1_markdown_matches_differential_fixtures
+      - test_property_based.py::test_markdown_rendering_is_deterministic
+      - test_property_based.py::test_sections_table_row_count_matches_input
+      - test_property_based.py::test_owner_totals_cover_all_runtime_owners
+      - test_property_based.py::test_owner_totals_are_sorted_desc_then_name
+      - test_regression_guard.py::test_include_known_owners_flag_is_opt_in
+      - test_regression_guard.py::test_duplicate_owner_rows_are_preserved_in_sections_contract
+      m3_docs_updated:
+      - test_example_based.py::test_usage_doc_mentions_markdown_command
+      - test_example_based.py::test_json_output_still_matches_runtime_sections
+      - test_followup.py::test_service_can_include_watchlist_owners_when_requested
+      - test_followup.py::test_cli_markdown_keeps_watchlist_visible_for_empty_queue
+      - test_followup.py::test_zero_item_wording_uses_plural_when_watchlist_is_visible
+      - test_mutation_kills.py::test_format_queue_count_uses_plural_for_zero
+      - test_mutation_kills.py::test_watchlist_rows_do_not_replace_real_totals
+      - test_mutation_kills.py::test_owner_totals_tie_break_owner_name
+  red_team:
+    path: verifier_data/report-cli-markdown-evolution/inventory-ops/red_team
+    exploits_required: 6
 - variant_id: incident-triage
   repo_source: authored
   injected_breakage: Tests now require a Markdown mode plus updated usage docs, but
@@ -99,6 +144,30 @@ variants:
   hidden_tests:
     path: verifier_data/report-cli-markdown-evolution/release-readiness/hidden_tests
     entrypoint: test_example_based.py
+    milestone_map:
+      m1_cli_markdown:
+      - test_example_based.py::test_cli_accepts_markdown_flag
+      - test_example_based.py::test_registry_exposes_markdown
+      - test_example_based.py::test_markdown_renderer_comes_from_registry
+      m2_renderer_markdown:
+      - test_example_based.py::test_renderer_emits_title_heading
+      - test_example_based.py::test_renderer_emits_owner_totals_section
+      - test_example_based.py::test_renderer_emits_sections_section
+      - test_example_based.py::test_renderer_preserves_all_owners_in_sections_table
+      - test_example_based.py::test_owner_totals_sum_correctly_in_markdown
+      - test_differential_oracle.py
+      - test_property_based.py::test_markdown_sections_table_columns_match_rows
+      - test_property_based.py::test_markdown_owner_totals_table_columns_match_rows
+      - test_property_based.py::test_markdown_idempotent
+      - test_property_based.py::test_all_owners_from_sections_appear_in_totals
+      - test_regression_guard.py
+      m3_docs_updated:
+      - test_example_based.py::test_docs_renderers_mentions_markdown
+      - test_example_based.py::test_docs_usage_mentions_markdown
+      - test_example_based.py::test_json_output_unchanged
+      - test_property_based.py::test_zero_count_owner_renders_with_plural
+      - test_followup.py
+      - test_mutation_kills.py
   red_team:
     path: verifier_data/report-cli-markdown-evolution/release-readiness/red_team
     exploits_required: 6

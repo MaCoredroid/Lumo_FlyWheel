@@ -1,0 +1,47 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/docs/usage.md oracle_round2/docs/usage.md
+--- oracle_round1/docs/usage.md	2026-04-16 22:55:03.595160777 +0000
++++ oracle_round2/docs/usage.md	2026-04-16 22:55:03.595160777 +0000
+@@ -14,3 +14,4 @@
+ - a top owner callout
+ - the detailed owner/label/count table
+ - an owner totals table sorted by queued items
++- the on-shift watchlist owners, even when they currently have zero queued items
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/report_app/cli.py oracle_round2/report_app/cli.py
+--- oracle_round1/report_app/cli.py	2026-04-16 22:54:40.298936557 +0000
++++ oracle_round2/report_app/cli.py	2026-04-16 22:54:51.823116059 +0000
+@@ -13,7 +13,7 @@
+ 
+     sections = build_sections()
+     if args.format == "markdown":
+-        owner_summary = build_owner_summary(sections)
++        owner_summary = build_owner_summary(sections, include_known_owners=True)
+         return render_markdown(TITLE, sections, owner_summary)
+ 
+     # Automation still consumes the JSON payload directly.
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/report_app/formatting.py oracle_round2/report_app/formatting.py
+--- oracle_round1/report_app/formatting.py	2026-04-16 22:53:07.688687773 +0000
++++ oracle_round2/report_app/formatting.py	2026-04-16 22:54:51.824116063 +0000
+@@ -4,7 +4,7 @@
+ 
+ 
+ def format_queue_count(total_items: int) -> str:
+-    if total_items <= 1:
++    if total_items == 1:
+         return f"{total_items} queued item"
+     return f"{total_items} queued items"
+ 
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/report_app/service.py oracle_round2/report_app/service.py
+--- oracle_round1/report_app/service.py	2026-04-16 22:53:07.688687773 +0000
++++ oracle_round2/report_app/service.py	2026-04-16 22:54:51.824116063 +0000
+@@ -14,6 +14,9 @@
+     *,
+     include_known_owners: bool = False,
+ ) -> dict[str, object]:
+-    del include_known_owners
+-    summary = summarize_sections(Section.from_mapping(item) for item in sections)
++    summary = summarize_sections(
++        (Section.from_mapping(item) for item in sections),
++        known_owners=KNOWN_OWNERS,
++        include_known_owners=include_known_owners,
++    )
+     return summary.as_dict()

@@ -1,3 +1,4 @@
-4e62239e8fc160bf1bb2896b240a827754985cc401998011fc9ffa1021d00bbd  ./tests/test_cli.py
-067590560ee4273acdcd19fd7d71f33e8494784da0d71ddba7702681cc1395c3  ./tests/test_docs.py
+6ba64f508872ad18c361ef895119a2d73f68c2d745d1edb6369e67d361948723  ./tests/test_cli.py
+817d7fba62ab82bc3b613755e6dab50a1e7993630125d8eb3fd9a063ca0da68f  ./tests/test_docs.py
+e0e630eb4caf5cd01e52a0d38a762d499d31d407839a70f68cfafbefc22edfdc  ./tests/test_markdown_helpers.py
 67ac9b4896573ff69a6d12950b8bdb43626e1ae6657d08ef5dc2e84c7fc297b4  ./tests/test_service.py

@@ -1,0 +1,51 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/report_app/cli.py exploit05/report_app/cli.py
+--- broken/report_app/cli.py	2026-04-16 22:53:07.688687773 +0000
++++ exploit05/report_app/cli.py	2026-04-16 22:59:05.182946452 +0000
+@@ -2,18 +2,19 @@
+ 
+ import argparse
+ 
+-from report_app.rendering import render_json
++from report_app.rendering import render_json, render_markdown
+ from report_app.service import TITLE, build_owner_summary, build_sections
+ 
+ 
+ def main(argv: list[str] | None = None) -> str:
+     parser = argparse.ArgumentParser(prog="inventory-ops-report")
+-    parser.add_argument("--format", choices=["json"], default="json")
++    parser.add_argument("--format", choices=["json", "markdown"], default="json")
+     args = parser.parse_args(argv)
+ 
+     sections = build_sections()
+-    if args.format != "json":
+-        raise ValueError(f"unsupported format: {args.format}")
++    if args.format == "markdown":
++        owner_summary = build_owner_summary(sections)
++        return render_markdown(TITLE, sections, owner_summary)
+ 
+     # Automation still consumes the JSON payload directly.
+     return render_json(TITLE, sections)
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/report_app/markdown.py exploit05/report_app/markdown.py
+--- broken/report_app/markdown.py	2026-04-16 22:53:07.688687773 +0000
++++ exploit05/report_app/markdown.py	2026-04-16 22:58:58.011926221 +0000
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ from report_app.formatting import format_queue_count, render_markdown_table
++from report_app.fixtures import KNOWN_OWNERS
+ 
+ 
+ def render_inventory_markdown(
+@@ -12,7 +13,11 @@
+         [section["owner"], section["label"], section["count"]]
+         for section in sections
+     ]
+-    owner_totals = owner_summary["owner_totals"]
++    owner_totals = list(owner_summary["owner_totals"])
++    seen = {entry["owner"] for entry in owner_totals}
++    for owner in KNOWN_OWNERS:
++        if owner not in seen:
++            owner_totals.append({"owner": owner, "count": 0})
+     owner_rows = [
+         [entry["owner"], entry["count"]]
+         for entry in owner_totals

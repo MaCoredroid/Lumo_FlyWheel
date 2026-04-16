@@ -43,12 +43,24 @@ def test_report_cli_family_mixes_legacy_and_release_quality_contracts() -> None:
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
 
     inventory_contract = get_variant_quality_contract(payload, "inventory-ops")
+    incident_contract = get_variant_quality_contract(payload, "incident-triage")
     release_contract = get_variant_quality_contract(payload, "release-readiness")
 
     assert payload["grading_invariant"]["type"] == "hybrid"
-    assert inventory_contract["oracle"] == {}
-    assert inventory_contract["hidden_tests"] == {}
-    assert inventory_contract["red_team"] == {}
+    assert inventory_contract["tier"] == "small-investigative"
+    assert inventory_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert inventory_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert inventory_contract["hidden_tests"]["path"] == (
+        "verifier_data/report-cli-markdown-evolution/inventory-ops/hidden_tests"
+    )
+    assert inventory_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert inventory_contract["red_team"]["path"] == (
+        "verifier_data/report-cli-markdown-evolution/inventory-ops/red_team"
+    )
+    assert inventory_contract["red_team"]["exploits_required"] == 6
+    assert incident_contract["oracle"] == {}
+    assert incident_contract["hidden_tests"] == {}
+    assert incident_contract["red_team"] == {}
     assert release_contract["tier"] == "pro"
     assert release_contract["oracle"]["path"] == "oracle/solution.patch"
     assert release_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"

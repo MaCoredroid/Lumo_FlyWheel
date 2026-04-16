@@ -1,0 +1,38 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/report_app/cli.py exploit06/report_app/cli.py
+--- broken/report_app/cli.py	2026-04-16 22:53:07.688687773 +0000
++++ exploit06/report_app/cli.py	2026-04-16 22:58:58.011926221 +0000
+@@ -2,18 +2,30 @@
+ 
+ import argparse
+ 
+-from report_app.rendering import render_json
++from report_app.rendering import render_json, render_markdown
+ from report_app.service import TITLE, build_owner_summary, build_sections
+ 
+ 
+ def main(argv: list[str] | None = None) -> str:
+     parser = argparse.ArgumentParser(prog="inventory-ops-report")
+-    parser.add_argument("--format", choices=["json"], default="json")
++    parser.add_argument("--format", choices=["json", "markdown"], default="json")
+     args = parser.parse_args(argv)
+ 
+     sections = build_sections()
+-    if args.format != "json":
+-        raise ValueError(f"unsupported format: {args.format}")
++    if args.format == "markdown":
++        owner_summary = {
++            "section_count": len(sections),
++            "total_items": sum(int(section["count"]) for section in sections),
++            "top_owner": {
++                "owner": str(sections[0]["owner"]),
++                "count": int(sections[0]["count"]),
++            } if sections else None,
++            "owner_totals": [
++                {"owner": str(section["owner"]), "count": int(section["count"])}
++                for section in sections
++            ],
++        }
++        return render_markdown(TITLE, sections, owner_summary)
+ 
+     # Automation still consumes the JSON payload directly.
+     return render_json(TITLE, sections)

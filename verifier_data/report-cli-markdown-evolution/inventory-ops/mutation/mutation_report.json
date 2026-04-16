@@ -1,0 +1,102 @@
+{
+  "mutation_tool": "manual_curated",
+  "target_modules": [
+    "report_app/cli.py",
+    "report_app/formatting.py",
+    "report_app/service.py",
+    "report_app/summaries.py"
+  ],
+  "mutants_generated": 12,
+  "mutants_killed": 12,
+  "mutants_survived": 0,
+  "mutants_errored": 0,
+  "mutation_score": 1.0,
+  "floor": 0.85,
+  "eligible_for_freeze": true,
+  "results": [
+    {
+      "id": "io_mut01_cli_json_only",
+      "target_file": "report_app/cli.py",
+      "description": "Keep argparse choices at json-only",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_cli_accepts_markdown_flag"
+    },
+    {
+      "id": "io_mut02_cli_markdown_ignores_summary",
+      "target_file": "report_app/cli.py",
+      "description": "Markdown branch skips build_owner_summary and hardcodes a single owner",
+      "outcome": "killed",
+      "expected_killer": "differential + property tests"
+    },
+    {
+      "id": "io_mut03_zero_is_singular",
+      "target_file": "report_app/formatting.py",
+      "description": "Pluralization uses singular form for zero",
+      "outcome": "killed",
+      "expected_killer": "test_followup.py::test_zero_item_wording_uses_plural_when_watchlist_is_visible"
+    },
+    {
+      "id": "io_mut04_table_drops_padding",
+      "target_file": "report_app/formatting.py",
+      "description": "Markdown table ignores data-driven column widths",
+      "outcome": "killed",
+      "expected_killer": "differential fixtures"
+    },
+    {
+      "id": "io_mut05_known_owners_flag_ignored",
+      "target_file": "report_app/service.py",
+      "description": "build_owner_summary never forwards include_known_owners",
+      "outcome": "killed",
+      "expected_killer": "test_followup.py::test_service_can_include_watchlist_owners_when_requested"
+    },
+    {
+      "id": "io_mut06_known_owners_always_on",
+      "target_file": "report_app/service.py",
+      "description": "build_owner_summary always includes the watchlist, even when opt-in is false",
+      "outcome": "killed",
+      "expected_killer": "test_regression_guard.py::test_include_known_owners_flag_is_opt_in"
+    },
+    {
+      "id": "io_mut07_top_owner_last_row",
+      "target_file": "report_app/summaries.py",
+      "description": "top_owner points at the last owner total instead of the first",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_markdown_owner_totals_sort_desc_then_name"
+    },
+    {
+      "id": "io_mut08_sort_ascending",
+      "target_file": "report_app/summaries.py",
+      "description": "owner totals sort ascending by count",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_owner_totals_are_sorted_desc_then_name"
+    },
+    {
+      "id": "io_mut09_drop_duplicate_rows",
+      "target_file": "report_app/summaries.py",
+      "description": "section_count collapses duplicate owners instead of counting rows",
+      "outcome": "killed",
+      "expected_killer": "test_regression_guard.py::test_duplicate_owner_rows_are_preserved_in_sections_contract"
+    },
+    {
+      "id": "io_mut10_watchlist_counts_replace_real_totals",
+      "target_file": "report_app/service.py",
+      "description": "watchlist owners overwrite live totals",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_watchlist_rows_do_not_replace_real_totals"
+    },
+    {
+      "id": "io_mut11_tie_break_reverse_name",
+      "target_file": "report_app/summaries.py",
+      "description": "equal totals sort by owner descending",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_owner_totals_tie_break_owner_name"
+    },
+    {
+      "id": "io_mut12_json_shape_regression",
+      "target_file": "report_app/cli.py",
+      "description": "JSON branch drops the title field",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_json_output_still_matches_runtime_sections"
+    }
+  ]
+}

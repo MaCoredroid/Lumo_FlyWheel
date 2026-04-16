@@ -1,0 +1,60 @@
+[
+  {
+    "name": "baseline",
+    "sections": [
+      {
+        "owner": "Mae",
+        "label": "blocked-picks",
+        "count": 4
+      },
+      {
+        "owner": "Noah",
+        "label": "late-recounts",
+        "count": 2
+      },
+      {
+        "owner": "Mae",
+        "label": "cycle-counts",
+        "count": 1
+      }
+    ],
+    "expected_markdown": "# Inventory Ops Report\n\n3 sections covering 7 queued items.\nTop owner: Mae with 5 queued items.\n\n## Sections\n| Owner | Label         | Count |\n| ----- | ------------- | ----- |\n| Mae   | blocked-picks | 4     |\n| Noah  | late-recounts | 2     |\n| Mae   | cycle-counts  | 1     |\n\n## Owner Totals\n| Owner | Total Items |\n| ----- | ----------- |\n| Mae   | 5           |\n| Noah  | 2           |"
+  },
+  {
+    "name": "tie_break",
+    "sections": [
+      {
+        "owner": "Jules",
+        "label": "stale-pages",
+        "count": 3
+      },
+      {
+        "owner": "Ivy",
+        "label": "escalations",
+        "count": 3
+      },
+      {
+        "owner": "Jules",
+        "label": "queue-audits",
+        "count": 1
+      }
+    ],
+    "expected_markdown": "# Inventory Ops Report\n\n3 sections covering 7 queued items.\nTop owner: Jules with 4 queued items.\n\n## Sections\n| Owner | Label        | Count |\n| ----- | ------------ | ----- |\n| Jules | stale-pages  | 3     |\n| Ivy   | escalations  | 3     |\n| Jules | queue-audits | 1     |\n\n## Owner Totals\n| Owner | Total Items |\n| ----- | ----------- |\n| Jules | 4           |\n| Ivy   | 3           |"
+  },
+  {
+    "name": "wide_label",
+    "sections": [
+      {
+        "owner": "Nia",
+        "label": "returns-awaiting-bin-audit",
+        "count": 5
+      },
+      {
+        "owner": "Omar",
+        "label": "dock-holds",
+        "count": 2
+      }
+    ],
+    "expected_markdown": "# Inventory Ops Report\n\n2 sections covering 7 queued items.\nTop owner: Nia with 5 queued items.\n\n## Sections\n| Owner | Label                      | Count |\n| ----- | -------------------------- | ----- |\n| Nia   | returns-awaiting-bin-audit | 5     |\n| Omar  | dock-holds                 | 2     |\n\n## Owner Totals\n| Owner | Total Items |\n| ----- | ----------- |\n| Nia   | 5           |\n| Omar  | 2           |"
+  }
+]

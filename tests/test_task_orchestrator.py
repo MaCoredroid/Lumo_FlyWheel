@@ -1820,9 +1820,9 @@ def test_validate_family_spec_rejects_interactive_asset_path_traversal() -> None
         validate_family_spec(_codex_long_task(), family_spec)
 
 
-def test_validate_family_spec_rejects_non_variant_scoped_milestone_map_entries() -> None:
+def test_validate_family_spec_rejects_unknown_milestone_map_entries() -> None:
     family_spec = _modern_family_spec()
-    family_spec["variants"][0]["hidden_tests"]["milestone_map"]["m2"] = [
+    family_spec["variants"][0]["hidden_tests"]["milestone_map"]["m4"] = [
         "tests/hidden/test_property.py::test_property_contract"
     ]
 
@@ -2389,7 +2389,7 @@ def test_verify_pre_grading_hashes_rejects_non_executable_milestone_helper(tmp_p
         )
 
 
-def test_report_cli_family_spec_accepts_mixed_legacy_and_release_variants() -> None:
+def test_report_cli_family_spec_accepts_mixed_rich_and_legacy_variants() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     family_path = (
         repo_root
@@ -2410,6 +2410,23 @@ def test_report_cli_family_spec_accepts_mixed_legacy_and_release_variants() -> N
             family_id="report-cli-markdown-evolution",
             variant_id="inventory-ops",
             image_digest="sha256:" + ("1" * 64),
+            scenario_type="feature_evolution",
+            timeout_seconds=9000,
+        ),
+        family_spec,
+    )
+
+    validate_family_spec(
+        TaskSpec(
+            track="codex_long",
+            pool_or_split="train_long",
+            scenario_id="report-cli-markdown-evolution/incident-triage",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            family_id="report-cli-markdown-evolution",
+            variant_id="incident-triage",
+            image_digest="sha256:" + ("9" * 64),
             scenario_type="feature_evolution",
             timeout_seconds=9000,
         ),

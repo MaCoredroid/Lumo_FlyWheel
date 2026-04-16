@@ -1,0 +1,47 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/docs/usage.md oracle_round1/docs/usage.md
+--- broken/docs/usage.md	2026-04-16 22:53:07.687687769 +0000
++++ oracle_round1/docs/usage.md	2026-04-16 22:55:03.595160777 +0000
+@@ -3,7 +3,14 @@
+ Run the local report tool with:
+ 
+ ```bash
+-python -m report_app.cli
++python -m report_app.cli --format json
++python -m report_app.cli --format markdown
+ ```
+ 
+-The CLI currently prints JSON for automation jobs.
++Use `--format json` for automation jobs and `--format markdown` for shift
++handoff reviews. The Markdown output includes:
++
++- a one-line queue summary
++- a top owner callout
++- the detailed owner/label/count table
++- an owner totals table sorted by queued items
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/report_app/cli.py oracle_round1/report_app/cli.py
+--- broken/report_app/cli.py	2026-04-16 22:53:07.688687773 +0000
++++ oracle_round1/report_app/cli.py	2026-04-16 22:54:40.298936557 +0000
+@@ -2,18 +2,19 @@
+ 
+ import argparse
+ 
+-from report_app.rendering import render_json
++from report_app.rendering import render_json, render_markdown
+ from report_app.service import TITLE, build_owner_summary, build_sections
+ 
+ 
+ def main(argv: list[str] | None = None) -> str:
+     parser = argparse.ArgumentParser(prog="inventory-ops-report")
+-    parser.add_argument("--format", choices=["json"], default="json")
++    parser.add_argument("--format", choices=["json", "markdown"], default="json")
+     args = parser.parse_args(argv)
+ 
+     sections = build_sections()
+-    if args.format != "json":
+-        raise ValueError(f"unsupported format: {args.format}")
++    if args.format == "markdown":
++        owner_summary = build_owner_summary(sections)
++        return render_markdown(TITLE, sections, owner_summary)
+ 
+     # Automation still consumes the JSON payload directly.
+     return render_json(TITLE, sections)

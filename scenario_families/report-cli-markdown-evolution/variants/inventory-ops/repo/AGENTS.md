@@ -1,17 +1,3 @@
-Inventory Ops Report needs a Markdown mode for its local report CLI.
+Inventory Ops uses this repo to publish a queue handoff during shift change, but operators still only get JSON even though the handoff doc now assumes a Markdown view.
 
-The repo already supports JSON output, but the new tests expect
-`--format markdown` to produce a readable heading, a summary line showing
-how many sections and queued items are represented, and an owner table
-that preserves every owner/label/count row returned by `build_sections()`.
-Inventory Ops handoff now also needs an owner totals rollup in the
-Markdown output so repeated owner rows are easy to scan during queue
-handoff. The owner totals should be derived from the runtime sections,
-sorted by queued items descending with owner name as the tie-breaker, and
-the Markdown handoff should call out the busiest owner so the queue lead
-can scan the summary before reading the detailed table.
-Keep the JSON path working, add the Markdown renderer, and update
-`docs/usage.md` so the documented commands and output description match
-the code.
-
-Do not remove or rewrite the existing tests.
+There is already some groundwork in the codebase for the handoff layout, and the failing tests are the fastest way to see what never got finished. Complete the Markdown path, keep the existing JSON behavior working, and make sure the docs describe what the CLI actually supports.

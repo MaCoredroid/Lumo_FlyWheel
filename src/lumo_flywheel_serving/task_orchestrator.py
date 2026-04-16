@@ -646,16 +646,20 @@ def resolve_milestone_test_nodes(
         raw_nodes = milestone.get("test_nodes")
         if raw_nodes == "variant_scoped":
             if not isinstance(milestone_map, dict):
-                raise ValueError(
-                    f"Family '{family_id}' milestone '{milestone_id}' requires hidden_tests.milestone_map "
-                    f"for variant '{variant_id}'"
-                )
+                if isinstance(hidden_tests, dict) and hidden_tests:
+                    raise ValueError(
+                        f"Family '{family_id}' milestone '{milestone_id}' requires hidden_tests.milestone_map "
+                        f"for variant '{variant_id}'"
+                    )
+                continue
             raw_nodes = milestone_map.get(milestone_id)
             if raw_nodes is None:
                 raise ValueError(
                     f"Family '{family_id}' milestone '{milestone_id}' is missing hidden_tests.milestone_map "
                     f"for variant '{variant_id}'"
                 )
+        elif raw_nodes is None and isinstance(milestone_map, dict) and milestone_id in milestone_map:
+            raw_nodes = milestone_map[milestone_id]
         if raw_nodes is None:
             continue
         if isinstance(raw_nodes, str):
@@ -2381,12 +2385,12 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                                 f"[{node_index}]"
                             ),
                         )
-                unexpected_milestone_ids = sorted(milestone_map_ids - variant_scoped_milestone_ids)
+                unexpected_milestone_ids = sorted(milestone_map_ids - seen_milestone_ids)
                 if unexpected_milestone_ids:
                     raise ManifestMismatchError(
                         f"Family spec variants[{index}] for {task.scenario_id} must only define "
-                        "hidden_tests.milestone_map entries for milestones with "
-                        f"test_nodes='variant_scoped'; unexpected {unexpected_milestone_ids}",
+                        "hidden_tests.milestone_map entries for declared milestones; "
+                        f"unexpected {unexpected_milestone_ids}",
                         affected_artifact="family_spec",
                     )
 

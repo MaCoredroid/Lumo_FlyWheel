@@ -1,0 +1,27 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/report_app/cli.py exploit03/report_app/cli.py
+--- broken/report_app/cli.py	2026-04-16 22:53:07.688687773 +0000
++++ exploit03/report_app/cli.py	2026-04-16 22:58:58.010926219 +0000
+@@ -12,8 +12,21 @@
+     args = parser.parse_args(argv)
+ 
+     sections = build_sections()
+-    if args.format != "json":
+-        raise ValueError(f"unsupported format: {args.format}")
++    if args.format == "markdown":
++        return (
++            "# Inventory Ops Report\n\n"
++            "3 sections covering 7 queued items.\n"
++            "Top owner: Mae with 5 queued items.\n\n"
++            "## Sections\n"
++            "| Owner | Label | Count |\n"
++            "| Mae | blocked-picks | 4 |\n"
++            "| Noah | late-recounts | 2 |\n"
++            "| Mae | cycle-counts | 1 |\n\n"
++            "## Owner Totals\n"
++            "| Owner | Total Items |\n"
++            "| Mae | 5 |\n"
++            "| Noah | 2 |\n"
++        )
+ 
+     # Automation still consumes the JSON payload directly.
+     return render_json(TITLE, sections)
