@@ -727,6 +727,11 @@ def verify_pre_grading_hashes(
             f"Verifier script missing for {task.scenario_id}: {verifier_path}",
             affected_artifact="verifier",
         ) from exc
+    if not os.access(verifier_path, os.X_OK):
+        raise ManifestMismatchError(
+            f"Verifier script is not executable for {task.scenario_id}: {verifier_path}",
+            affected_artifact="verifier",
+        )
     if actual_verifier_hash != _canonical_sha256(entry["verifier_hash"]):
         raise ManifestMismatchError(
             f"Verifier hash mismatch for {task.scenario_id}: "
@@ -758,6 +763,11 @@ def verify_pre_grading_hashes(
 
     for milestone_id, expected_hash in milestone_hashes.items():
         milestone_path = milestones_dir / f"{milestone_id}.sh"
+        if not os.access(milestone_path, os.X_OK):
+            raise ManifestMismatchError(
+                f"Milestone helper is not executable for {task.scenario_id}/{milestone_id}: {milestone_path}",
+                affected_artifact="milestone",
+            )
         actual_hash = _canonical_sha256(sha256_file(milestone_path))
         if actual_hash != _canonical_sha256(expected_hash):
             raise ManifestMismatchError(

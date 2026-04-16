@@ -44,3 +44,74 @@ def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:
 
     with pytest.raises(AssetPackError, match="Test checksum drift"):
         validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_rejects_non_isolated_pytest_command(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    family_yaml = (
+        repo_copy
+        / "scenario_families"
+        / "report-cli-markdown-evolution"
+        / "family.yaml"
+    )
+    family_yaml.write_text(
+        family_yaml.read_text(encoding="utf-8").replace(
+            "python -I -m pytest -q",
+            "python -m pytest -q",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssetPackError, match="isolated pytest invocation"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_rejects_non_isolated_ci_runner(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    ci_runner = (
+        repo_copy
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "inventory-gate"
+        / "repo"
+        / "scripts"
+        / "run_ci.py"
+    )
+    ci_runner.write_text(
+        ci_runner.read_text(encoding="utf-8").replace(
+            '[sys.executable, "-I", "-m", "pytest", "-q"]',
+            '[sys.executable, "-m", "pytest", "-q"]',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssetPackError, match="invoke pytest in isolated mode"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_allows_verify_sh_to_execute_milestone_helpers(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        'source /verifier/milestones/m1_markdown_rendered.sh',
+        'bash /verifier/milestones/m1_markdown_rendered.sh',
+        1,
+    )
+    verify_text = verify_text.replace(
+        'source /verifier/milestones/m2_usage_doc_updated.sh',
+        '. /verifier/milestones/m2_usage_doc_updated.sh',
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    summary = validate_authored_asset_pack(repo_copy)
+
+    assert summary.family_count == 5

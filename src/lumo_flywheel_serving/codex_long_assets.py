@@ -34,6 +34,22 @@ def _checksum_manifest_for_dir(directory: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _uses_isolated_pytest(command: str) -> bool:
+    return "pytest" not in command or "-I -m pytest" in command or "-Im pytest" in command
+
+
+def _verify_references_milestone_helper(verify_text: str, milestone_id: str) -> bool:
+    helper_path = f"/verifier/milestones/{milestone_id}.sh"
+    allowed_invocations = (
+        f"source {helper_path}",
+        f". {helper_path}",
+        f"bash {helper_path}",
+        f"sh {helper_path}",
+        helper_path,
+    )
+    return any(invocation in verify_text for invocation in allowed_invocations)
+
+
 def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
     root = Path(repo_root).resolve()
     scenario_families_dir = root / "scenario_families"
@@ -74,6 +90,19 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
         family_ids.append(family_id)
         scenario_types_seen.add(scenario_type)
 
+        grading = family_spec.get("grading_invariant")
+        if not isinstance(grading, dict):
+            raise AssetPackError(f"grading_invariant must be a mapping: {family_spec_path}")
+        functional_checks = grading.get("functional_checks")
+        if not isinstance(functional_checks, list):
+            raise AssetPackError(f"functional_checks must be a list: {family_spec_path}")
+        for check in functional_checks:
+            command = str(check.get("command", ""))
+            if not _uses_isolated_pytest(command):
+                raise AssetPackError(
+                    f"Functional check must use isolated pytest invocation to resist local shadowing: {family_spec_path}"
+                )
+
         variants = family_spec.get("variants")
         if not isinstance(variants, list):
             raise AssetPackError(f"Family variants must be a list: {family_spec_path}")
@@ -101,9 +130,9 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                 raise AssetPackError(f"Missing milestone helper: {milestone_path}")
             if not os.access(milestone_path, os.X_OK):
                 raise AssetPackError(f"Milestone helper is not executable: {milestone_path}")
-            if f"source /verifier/milestones/{milestone_id}.sh" not in verify_text:
+            if not _verify_references_milestone_helper(verify_text, milestone_id):
                 raise AssetPackError(
-                    f"verify.sh does not source milestone helper '{milestone_id}' for family '{family_id}'"
+                    f"verify.sh does not source or execute milestone helper '{milestone_id}' for family '{family_id}'"
                 )
 
         expectations_path = verifier_data_dir / family_id / "variant_expectations.json"
@@ -163,6 +192,14 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
             tests_dir = repo_dir / "tests"
             if not tests_dir.exists():
                 raise AssetPackError(f"Missing tests/ tree for variant '{family_id}/{variant_id}'")
+
+            ci_runner_path = repo_dir / "scripts" / "run_ci.py"
+            if ci_runner_path.exists():
+                ci_runner_text = ci_runner_path.read_text(encoding="utf-8")
+                if '"-I"' not in ci_runner_text or '"pytest"' not in ci_runner_text:
+                    raise AssetPackError(
+                        f"Repo CI runner must invoke pytest in isolated mode for '{family_id}/{variant_id}'"
+                    )
 
             if variant_id not in expected_variants:
                 raise AssetPackError(

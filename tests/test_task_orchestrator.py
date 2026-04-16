@@ -618,8 +618,10 @@ def test_verify_pre_grading_hashes_detects_verifier_drift(tmp_path: Path) -> Non
 
     verify_path = verifiers_dir / "verify.sh"
     verify_path.write_text("echo verify\n", encoding="utf-8")
+    verify_path.chmod(0o755)
     milestone_path = milestones_dir / "m1.sh"
     milestone_path.write_text("echo milestone\n", encoding="utf-8")
+    milestone_path.chmod(0o755)
     (verifier_data_dir / "golden.txt").write_text("golden\n", encoding="utf-8")
 
     manifest = {
@@ -705,7 +707,9 @@ def test_verify_pre_grading_hashes_reports_missing_verifier_data_dir(tmp_path: P
 
     verify_path = verifiers_dir / "verify.sh"
     verify_path.write_text("echo verify\n", encoding="utf-8")
+    verify_path.chmod(0o755)
     (milestones_dir / "m1.sh").write_text("echo milestone\n", encoding="utf-8")
+    (milestones_dir / "m1.sh").chmod(0o755)
 
     manifest = {
         "manifest_version": 4,
@@ -750,7 +754,9 @@ def test_verify_pre_grading_hashes_rejects_untracked_verifier_tree_files(tmp_pat
 
     verify_path = verifiers_dir / "verify.sh"
     verify_path.write_text("echo verify\n", encoding="utf-8")
+    verify_path.chmod(0o755)
     (milestones_dir / "m1.sh").write_text("echo milestone\n", encoding="utf-8")
+    (milestones_dir / "m1.sh").chmod(0o755)
     (verifier_data_dir / "golden.txt").write_text("golden\n", encoding="utf-8")
 
     manifest = {
@@ -801,7 +807,9 @@ def test_verify_pre_grading_hashes_detects_family_spec_drift_when_configured(tmp
 
     verify_path = verifiers_dir / "verify.sh"
     verify_path.write_text("echo verify\n", encoding="utf-8")
+    verify_path.chmod(0o755)
     (milestones_dir / "m1.sh").write_text("echo milestone\n", encoding="utf-8")
+    (milestones_dir / "m1.sh").chmod(0o755)
     (verifier_data_dir / "golden.txt").write_text("golden\n", encoding="utf-8")
     family_spec_path = scenario_families_dir / "family.yaml"
     family_spec_path.write_text("grading_invariant:\n  functional_checks: []\n", encoding="utf-8")
@@ -1481,3 +1489,95 @@ def test_get_local_image_digest_inspects_sha256_refs_locally(monkeypatch: pytest
             "{{.Id}}",
         ]
     ]
+
+
+def test_verify_pre_grading_hashes_rejects_non_executable_verify_script(tmp_path: Path) -> None:
+    task = _codex_long_task()
+    verifiers_dir = tmp_path / "verifiers"
+    verifier_data_dir = tmp_path / "verifier_data"
+    family_dir = verifiers_dir / "family-a"
+    milestones_dir = family_dir / "milestones"
+    milestones_dir.mkdir(parents=True)
+    verify_path = family_dir / "verify.sh"
+    verify_path.write_text("#!/bin/bash\necho ok\n", encoding="utf-8")
+    verify_path.chmod(0o644)
+    milestone_path = milestones_dir / "m1.sh"
+    milestone_path.write_text("#!/bin/bash\necho milestone\n", encoding="utf-8")
+    milestone_path.chmod(0o755)
+    data_dir = verifier_data_dir / "family-a"
+    data_dir.mkdir(parents=True)
+    (data_dir / "variant_expectations.json").write_text('{"variants": {}}', encoding="utf-8")
+
+    manifest = {
+        "grader_image_digest": _sha("grader"),
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha(verify_path.read_text(encoding="utf-8")),
+                "family_spec_hash": _sha("family-spec"),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_tree(data_dir),
+                "milestone_hashes": {"m1": _sha(milestone_path.read_text(encoding="utf-8"))},
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Verifier script is not executable"):
+        verify_pre_grading_hashes(
+            task,
+            manifest,
+            "grader-image",
+            image_digest_resolver=lambda _ref: _sha("grader"),
+            verifiers_dir=verifiers_dir,
+            verifier_data_dir=verifier_data_dir,
+        )
+
+
+def test_verify_pre_grading_hashes_rejects_non_executable_milestone_helper(tmp_path: Path) -> None:
+    task = _codex_long_task()
+    verifiers_dir = tmp_path / "verifiers"
+    verifier_data_dir = tmp_path / "verifier_data"
+    family_dir = verifiers_dir / "family-a"
+    milestones_dir = family_dir / "milestones"
+    milestones_dir.mkdir(parents=True)
+    verify_path = family_dir / "verify.sh"
+    verify_path.write_text("#!/bin/bash\necho ok\n", encoding="utf-8")
+    verify_path.chmod(0o755)
+    milestone_path = milestones_dir / "m1.sh"
+    milestone_path.write_text("#!/bin/bash\necho milestone\n", encoding="utf-8")
+    milestone_path.chmod(0o644)
+    data_dir = verifier_data_dir / "family-a"
+    data_dir.mkdir(parents=True)
+    (data_dir / "variant_expectations.json").write_text('{"variants": {}}', encoding="utf-8")
+
+    manifest = {
+        "grader_image_digest": _sha("grader"),
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha(verify_path.read_text(encoding="utf-8")),
+                "family_spec_hash": _sha("family-spec"),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_tree(data_dir),
+                "milestone_hashes": {"m1": _sha(milestone_path.read_text(encoding="utf-8"))},
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Milestone helper is not executable"):
+        verify_pre_grading_hashes(
+            task,
+            manifest,
+            "grader-image",
+            image_digest_resolver=lambda _ref: _sha("grader"),
+            verifiers_dir=verifiers_dir,
+            verifier_data_dir=verifier_data_dir,
+        )
