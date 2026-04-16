@@ -156,7 +156,11 @@ def _valid_family_spec(
         ],
         "shortcut_resistance": {
             "notes": "Trusted verifier checks detect spoofed functional success.",
-            "known_exploits_tested": ["exploit-a", "exploit-b", "exploit-c"],
+            "known_exploits_tested": [
+                "Delete failing tests",
+                "Shadow pytest to exit 0 without running the real suite",
+                "Monkeypatch the legacy helper to stop raising",
+            ],
         },
         "difficulty_estimate": {
             "target_solve_rate": "30-50%",
@@ -1126,6 +1130,19 @@ def test_validate_family_spec_rejects_invalid_target_solve_rate() -> None:
     family_spec["difficulty_estimate"]["target_solve_rate"] = "10-90%"
 
     with pytest.raises(ManifestMismatchError, match="20-80% band"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_requires_spoofed_functional_success_exploit() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["shortcut_resistance"]["known_exploits_tested"] = [
+        "Delete failing tests",
+        "Monkeypatch the legacy helper to stop raising",
+        "Downgrade back to the original version",
+    ]
+
+    with pytest.raises(ManifestMismatchError, match="spoofed functional-check success"):
         validate_family_spec(task, family_spec)
 
 

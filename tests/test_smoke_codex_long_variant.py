@@ -5,6 +5,8 @@ import importlib.util
 from pathlib import Path
 import subprocess
 
+import pytest
+
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "smoke_codex_long_variant.py"
 SPEC = importlib.util.spec_from_file_location("smoke_codex_long_variant_test", SCRIPT_PATH)
@@ -100,3 +102,24 @@ def test_functional_run_enforces_timeout_and_records_timeout_exit_code(
     assert any(command[:3] == ["docker", "rm", "-f"] for command, _kwargs in calls[1:])
     assert (functional_dir / "pytest_suite_exit_code").read_text(encoding="utf-8") == "124\n"
     assert "timed out after 45s" in (functional_dir / "pytest_suite_output.log").read_text(encoding="utf-8")
+
+
+def test_assert_verify_expectations_checks_shortcut_detection() -> None:
+    SMOKE._assert_verify_expectations(
+        family="report-cli-markdown-evolution",
+        variant="inventory-ops",
+        verify_result={"pass": False, "shortcut_detected": True},
+        expect="fail",
+        expect_shortcut_detected="true",
+    )
+
+
+def test_assert_verify_expectations_rejects_shortcut_detection_mismatch() -> None:
+    with pytest.raises(SystemExit, match="shortcut_detected=True"):
+        SMOKE._assert_verify_expectations(
+            family="report-cli-markdown-evolution",
+            variant="inventory-ops",
+            verify_result={"pass": False, "shortcut_detected": False},
+            expect="fail",
+            expect_shortcut_detected="true",
+        )

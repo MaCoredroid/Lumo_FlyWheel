@@ -145,6 +145,33 @@ def _functional_run(
         )
 
 
+def _assert_verify_expectations(
+    *,
+    family: str,
+    variant: str,
+    verify_result: dict[str, object],
+    expect: str,
+    expect_shortcut_detected: str,
+) -> None:
+    expected_pass = expect == "pass"
+    actual_pass = bool(verify_result.get("pass"))
+    if actual_pass != expected_pass:
+        raise SystemExit(
+            f"expected Phase 3 pass={expected_pass} for {family}/{variant}, got {verify_result.get('pass')}"
+        )
+
+    if expect_shortcut_detected == "ignore":
+        return
+
+    expected_shortcut = expect_shortcut_detected == "true"
+    actual_shortcut = bool(verify_result.get("shortcut_detected"))
+    if actual_shortcut != expected_shortcut:
+        raise SystemExit(
+            "expected Phase 3 shortcut_detected="
+            f"{expected_shortcut} for {family}/{variant}, got {verify_result.get('shortcut_detected')}"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build and smoke a Codex-Long variant through Phase 2/3 grading.")
     parser.add_argument("--family", required=True, help="Family id under scenario_families/")
@@ -157,6 +184,12 @@ def main() -> int:
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--grader-image", default="codex-long-grader-local")
     parser.add_argument("--expect", choices=("pass", "fail"), default="fail")
+    parser.add_argument(
+        "--expect-shortcut-detected",
+        choices=("ignore", "true", "false"),
+        default="ignore",
+        help="Optional assertion on verify_result.shortcut_detected for anti-spoof smoke cases.",
+    )
     parser.add_argument("--keep-artifacts", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -246,14 +279,18 @@ def main() -> int:
         if not result_path.exists():
             raise SystemExit("Phase 3 did not produce verify_result.json")
         verify_result = json.loads(result_path.read_text(encoding="utf-8"))
-        expected_pass = args.expect == "pass"
-        if bool(verify_result.get("pass")) != expected_pass:
+        try:
+            _assert_verify_expectations(
+                family=args.family,
+                variant=args.variant,
+                verify_result=verify_result,
+                expect=args.expect,
+                expect_shortcut_detected=args.expect_shortcut_detected,
+            )
+        except SystemExit:
             print(verify.stdout)
             print(verify.stderr)
-            raise SystemExit(
-                f"expected Phase 3 pass={expected_pass} for {args.family}/{args.variant}, "
-                f"got {verify_result.get('pass')}"
-            )
+            raise
 
         payload = {
             "family": args.family,

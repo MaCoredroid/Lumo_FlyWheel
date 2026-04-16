@@ -164,10 +164,47 @@ def _verify_references_functional_check_result(
         rf"\$\(\s*<\s*{path_pattern}\s*\)",
         rf"\bgrep\b[^\n]*{path_pattern}",
     )
-    return any(
-        re.search(pattern, normalized_verify) or any(re.search(pattern, helper_text) for helper_text in normalized_helpers)
-        for pattern in read_patterns
+    function_pattern = re.compile(
+        r"(^|\n)\s*(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{(?P<body>.*?)\n\s*\}",
+        flags=re.DOTALL,
     )
+
+    def reader_functions(text: str) -> set[str]:
+        names: set[str] = set()
+        for match in function_pattern.finditer(text):
+            body = match.group("body")
+            if any(re.search(pattern, body) for pattern in read_patterns):
+                names.add(match.group(2))
+        return names
+
+    def gated_function_call(function_name: str) -> bool:
+        negative_gate = re.search(
+            rf"""
+            if\s+!\s*{re.escape(function_name)}\b[^\n]*;\s*then
+            (?:(?!\nfi\b).)*?
+            \badd_error\b
+            """,
+            normalized_verify,
+            flags=re.DOTALL | re.VERBOSE,
+        ) is not None
+        positive_else_gate = re.search(
+            rf"""
+            if\s+{re.escape(function_name)}\b[^\n]*;\s*then
+            (?:(?!\nfi\b).)*?
+            \n\s*else\b
+            (?:(?!\nfi\b).)*?
+            \badd_error\b
+            """,
+            normalized_verify,
+            flags=re.DOTALL | re.VERBOSE,
+        ) is not None
+        return negative_gate or positive_else_gate
+
+    reader_function_names = reader_functions(normalized_verify)
+    for helper_text in normalized_helpers:
+        reader_function_names.update(reader_functions(helper_text))
+
+    return any(gated_function_call(function_name) for function_name in reader_function_names)
 
 
 def _repo_source_files(repo_dir: Path) -> list[Path]:

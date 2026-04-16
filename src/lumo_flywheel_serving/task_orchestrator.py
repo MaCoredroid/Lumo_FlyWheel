@@ -1064,6 +1064,27 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
         )
         return any(marker in combined for marker in (*explicit_phase2_markers, *test_runner_markers))
 
+    def _is_spoofed_functional_success_exploit(exploit: str) -> bool:
+        combined = exploit.lower()
+        strong_markers = (
+            "spoofed functional success",
+            "functional success",
+            "shadow pytest",
+            "shadow npm",
+            "shadow cargo",
+            "shadow go test",
+            "shadow gradle",
+            "shadow mvn",
+            "shadow test runner",
+            "exit 0 without",
+        )
+        if any(marker in combined for marker in strong_markers):
+            return True
+        return "shadow" in combined and any(
+            runner in combined
+            for runner in ("pytest", "npm", "cargo", "go test", "gradle", "mvn", "test suite")
+        )
+
     expected_family_id = task.family_id or ""
     expected_variant_id = task.variant_id or ""
     expected_scenario_type = task.scenario_type or ""
@@ -1365,10 +1386,22 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"Family spec for {task.scenario_id} must list at least 3 known_exploits_tested entries",
             affected_artifact="family_spec",
         )
+    has_spoofed_functional_success = False
     for index, exploit in enumerate(known_exploits):
-        _require_non_empty_string(
+        exploit_text = _require_non_empty_string(
             exploit,
             field_name=f"shortcut_resistance.known_exploits_tested[{index}]",
+        )
+        has_spoofed_functional_success = (
+            has_spoofed_functional_success
+            or _is_spoofed_functional_success_exploit(exploit_text)
+        )
+    if not has_spoofed_functional_success:
+        raise ManifestMismatchError(
+            "Family spec for "
+            f"{task.scenario_id} must explicitly cover spoofed functional-check success "
+            "in shortcut_resistance.known_exploits_tested",
+            affected_artifact="family_spec",
         )
 
     variants = family_spec.get("variants")

@@ -293,6 +293,30 @@ def test_validate_authored_pack_rejects_dead_string_functional_check_reference(t
         validate_authored_asset_pack(repo_copy)
 
 
+def test_validate_authored_pack_rejects_unused_functional_check_reader(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        '        check_phase2_pytest_suite() {\n'
+        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '        }\n',
+        '        check_phase2_pytest_suite() {\n'
+        '          return 0\n'
+        '        }\n'
+        '        check_unused_pytest_suite() {\n'
+        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '        }\n',
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="must consume the trusted functional check result"):
+        validate_authored_asset_pack(repo_copy)
+
+
 def test_validate_authored_pack_requires_multi_step_milestones(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT, repo_copy)
