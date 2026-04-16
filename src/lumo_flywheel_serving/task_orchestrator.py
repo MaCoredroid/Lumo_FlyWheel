@@ -464,6 +464,35 @@ def _normalize_declared_verifier_data_path(
     return Path(*normalized_parts).as_posix()
 
 
+def _normalize_declared_variant_asset_path(
+    value: str,
+    *,
+    family_id: str,
+    variant_id: str,
+) -> str:
+    rendered = _render_variant_path_template(value, family_id=family_id, variant_id=variant_id).strip()
+    if not rendered:
+        raise ValueError("path must be non-empty")
+    if re.search(r"<[^>]+>", rendered):
+        raise ValueError(f"path contains an unsupported template placeholder: {rendered}")
+
+    candidate = Path(rendered)
+    if candidate.is_absolute():
+        raise ValueError(f"path must be relative to the variant root: {rendered}")
+
+    normalized_parts: list[str] = []
+    for part in candidate.parts:
+        if not part or part == ".":
+            continue
+        if part == "..":
+            raise ValueError(f"path must not escape the variant root: {rendered}")
+        normalized_parts.append(part)
+
+    if not normalized_parts:
+        raise ValueError("path must resolve to a file under the variant root")
+    return Path(*normalized_parts).as_posix()
+
+
 def _merged_mapping(defaults: Any, override: Any) -> dict[str, Any]:
     merged: dict[str, Any] = {}
     if isinstance(defaults, dict):
@@ -1392,6 +1421,21 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 affected_artifact="family_spec",
             ) from exc
 
+    def _require_variant_relative_asset_path(value: Any, *, field_name: str) -> str:
+        path = _require_non_empty_string(value, field_name=field_name)
+        try:
+            return _normalize_declared_variant_asset_path(
+                path,
+                family_id=expected_family_id,
+                variant_id=expected_variant_id,
+            )
+        except ValueError as exc:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define {field_name} as a variant-relative path "
+                f"without unsupported placeholders or '..' segments: {exc}",
+                affected_artifact="family_spec",
+            ) from exc
+
     def _is_phase2_only_invariant(check_id: str, description: str) -> bool:
         combined = f"{check_id} {description}".lower()
         explicit_phase2_markers = (
@@ -1990,13 +2034,18 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                     f"Family spec variants[{index}] for {task.scenario_id} must define oracle as a mapping",
                     affected_artifact="family_spec",
                 )
-            _require_non_empty_string(
+            _require_variant_relative_asset_path(
                 oracle.get("path"),
                 field_name=f"variants[{index}].oracle.path",
             )
             for optional_field in ("followup_path", "source_commit"):
                 if optional_field in oracle:
-                    _require_non_empty_string(
+                    validator = (
+                        _require_variant_relative_asset_path
+                        if optional_field == "followup_path"
+                        else _require_non_empty_string
+                    )
+                    validator(
                         oracle.get(optional_field),
                         field_name=f"variants[{index}].oracle.{optional_field}",
                     )

@@ -13,6 +13,7 @@ from .data_pool import MIN_CODEX_LONG_FAMILIES, SCENARIO_TYPES
 from .task_orchestrator import (
     ManifestMismatchError,
     TaskSpec,
+    _normalize_declared_variant_asset_path,
     _render_variant_path_template,
     collect_declared_verifier_data_paths,
     get_variant_quality_contract,
@@ -631,8 +632,18 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                     raw_path = oracle.get(key)
                     if raw_path is None:
                         continue
-                    oracle_path = variant_dir / str(raw_path)
-                    if not oracle_path.exists():
+                    try:
+                        normalized_path = _normalize_declared_variant_asset_path(
+                            str(raw_path),
+                            family_id=family_id,
+                            variant_id=variant_id,
+                        )
+                    except ValueError as exc:
+                        raise AssetPackError(
+                            f"Invalid oracle asset '{key}' for '{family_id}/{variant_id}': {exc}"
+                        ) from exc
+                    oracle_path = variant_dir / normalized_path
+                    if not oracle_path.is_file():
                         raise AssetPackError(
                             f"Missing oracle asset '{key}' for '{family_id}/{variant_id}': {oracle_path}"
                         )
