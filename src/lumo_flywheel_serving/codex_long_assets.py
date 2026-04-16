@@ -12,6 +12,8 @@ from pathlib import Path
 from .data_pool import MIN_CODEX_LONG_FAMILIES, SCENARIO_TYPES
 from .task_orchestrator import (
     TaskSpec,
+    _render_variant_path_template,
+    collect_declared_verifier_data_paths,
     get_variant_quality_contract,
     resolve_milestone_test_nodes,
     validate_family_spec,
@@ -577,12 +579,24 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                         f"for '{family_id}/{variant_id}'"
                     )
 
+            declared_verifier_data_paths = collect_declared_verifier_data_paths(task, family_spec)
+            for rel_path in declared_verifier_data_paths:
+                resolved_path = root / rel_path
+                if not resolved_path.exists():
+                    raise AssetPackError(
+                        f"Missing declared verifier_data asset for '{family_id}/{variant_id}': {resolved_path}"
+                    )
+
             contract = get_variant_quality_contract(family_spec, variant_id)
             hidden_tests = contract.get("hidden_tests")
             if isinstance(hidden_tests, dict) and hidden_tests:
                 hidden_tests_path = hidden_tests.get("path")
                 if isinstance(hidden_tests_path, str) and hidden_tests_path.strip():
-                    hidden_tests_dir = root / hidden_tests_path
+                    hidden_tests_dir = root / _render_variant_path_template(
+                        hidden_tests_path,
+                        family_id=family_id,
+                        variant_id=variant_id,
+                    )
                     if not hidden_tests_dir.exists():
                         raise AssetPackError(
                             f"Missing hidden_tests directory for '{family_id}/{variant_id}': {hidden_tests_dir}"
@@ -623,7 +637,11 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
             if isinstance(red_team, dict) and red_team:
                 red_team_path = red_team.get("path")
                 if isinstance(red_team_path, str) and red_team_path.strip():
-                    red_team_dir = root / red_team_path
+                    red_team_dir = root / _render_variant_path_template(
+                        red_team_path,
+                        family_id=family_id,
+                        variant_id=variant_id,
+                    )
                     if not red_team_dir.exists():
                         raise AssetPackError(
                             f"Missing red_team directory for '{family_id}/{variant_id}': {red_team_dir}"
@@ -637,7 +655,11 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
             if isinstance(calibration, dict) and calibration:
                 calibration_path = calibration.get("path")
                 if isinstance(calibration_path, str) and calibration_path.strip():
-                    resolved_path = root / calibration_path
+                    resolved_path = root / _render_variant_path_template(
+                        calibration_path,
+                        family_id=family_id,
+                        variant_id=variant_id,
+                    )
                     if not resolved_path.exists():
                         raise AssetPackError(
                             f"Missing calibration asset for '{family_id}/{variant_id}': {resolved_path}"

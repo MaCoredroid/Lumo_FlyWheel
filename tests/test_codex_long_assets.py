@@ -498,6 +498,9 @@ def test_validate_authored_pack_accepts_modern_variant_quality_assets(tmp_path: 
         (hidden_tests_dir / "test_property.py").write_text("def test_markdown_property():\n    pass\n", encoding="utf-8")
         (hidden_tests_dir / "test_followup.py").write_text("def test_followup_round():\n    pass\n", encoding="utf-8")
         (red_team_dir / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        (
+            repo_copy / "verifier_data" / "report-cli-markdown-evolution" / variant_id / "calibration.json"
+        ).write_text('{"eligible_for_freeze": false}\n', encoding="utf-8")
         (variant_dir / "oracle" / "solution.patch").write_text("diff --git a/x b/x\n", encoding="utf-8")
         (variant_dir / "oracle" / "solution_followup.patch").write_text("diff --git a/y b/y\n", encoding="utf-8")
 
@@ -507,3 +510,200 @@ def test_validate_authored_pack_accepts_modern_variant_quality_assets(tmp_path: 
     summary = validate_authored_asset_pack(repo_copy)
 
     assert summary.family_count == 5
+
+
+def test_validate_authored_pack_accepts_family_level_template_quality_assets(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
+    payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
+    payload["grading_invariant"]["type"] = "hybrid"
+    payload["grading_invariant"]["functional_checks"] = [
+        {
+            "id": "hidden_round1",
+            "command": "/grader/venv/bin/python -m pytest /verifier_data/hidden_tests -q",
+            "description": "Run hidden tests from the trusted grader image",
+            "timeout_seconds": 180,
+        }
+    ]
+    payload["grading_invariant"]["expected_final_state"] = [
+        {"oracle_parity_check": "Agent output matches the trusted oracle on hidden fixtures."}
+    ]
+    payload["milestones"] = [
+        {
+            "id": "m1_cli_markdown",
+            "description": "CLI hidden tests pass",
+            "test_nodes": "variant_scoped",
+            "partial_credit": 0.2,
+            "pass_rule": "all",
+        },
+        {
+            "id": "m2_renderer_markdown",
+            "description": "Renderer property tests pass",
+            "test_nodes": ["tests/hidden/test_property.py::test_markdown_property"],
+            "partial_credit": 0.35,
+            "pass_rule": "all",
+        },
+        {
+            "id": "m3_docs_updated",
+            "description": "Follow-up hidden tests pass",
+            "test_nodes": "variant_scoped",
+            "partial_credit": 0.45,
+            "pass_rule": "any",
+        },
+    ]
+    payload["hidden_tests"] = {
+        "path": "verifier_data/report-cli-markdown-evolution/<variant_id>/hidden_tests",
+        "entrypoint": "test_example.py",
+    }
+    payload["red_team"] = {
+        "path": "verifier_data/report-cli-markdown-evolution/<variant_id>/red_team",
+        "exploits_required": 5,
+    }
+    payload["calibration"] = {
+        "path": "verifier_data/report-cli-markdown-evolution/<variant_id>/calibration.json",
+    }
+    payload["shortcut_resistance"] = {
+        "generated_from": "verifier_data/report-cli-markdown-evolution/<variant_id>/red_team/",
+        "min_exploits": 5,
+        "mutation_score_floor": 0.85,
+    }
+    payload["difficulty_estimate"] = {
+        "evidence_path": "verifier_data/report-cli-markdown-evolution/<variant_id>/calibration.json",
+    }
+
+    for variant in payload["variants"]:
+        variant_id = variant["variant_id"]
+        variant["tier"] = "standard"
+        variant["surfaces"] = ["cli", "renderer", "docs"]
+        variant["oracle"] = {
+            "path": "oracle/solution.patch",
+            "followup_path": "oracle/solution_followup.patch",
+            "source_commit": "abc1234",
+        }
+        variant["hidden_tests"] = {
+            "milestone_map": {
+                "m1_cli_markdown": ["tests/hidden/test_example.py::test_cli_markdown"],
+                "m3_docs_updated": ["tests/hidden/test_followup.py::*"],
+            },
+        }
+
+        variant_dir = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "variants" / variant_id
+        hidden_tests_dir = repo_copy / "verifier_data" / "report-cli-markdown-evolution" / variant_id / "hidden_tests"
+        red_team_dir = repo_copy / "verifier_data" / "report-cli-markdown-evolution" / variant_id / "red_team"
+        hidden_tests_dir.mkdir(parents=True, exist_ok=True)
+        red_team_dir.mkdir(parents=True, exist_ok=True)
+        (variant_dir / "oracle").mkdir(parents=True, exist_ok=True)
+
+        (hidden_tests_dir / "test_example.py").write_text("def test_cli_markdown():\n    pass\n", encoding="utf-8")
+        (hidden_tests_dir / "test_property.py").write_text("def test_markdown_property():\n    pass\n", encoding="utf-8")
+        (hidden_tests_dir / "test_followup.py").write_text("def test_followup_round():\n    pass\n", encoding="utf-8")
+        (red_team_dir / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        (
+            repo_copy / "verifier_data" / "report-cli-markdown-evolution" / variant_id / "calibration.json"
+        ).write_text('{"eligible_for_freeze": false}\n', encoding="utf-8")
+        (variant_dir / "oracle" / "solution.patch").write_text("diff --git a/x b/x\n", encoding="utf-8")
+        (variant_dir / "oracle" / "solution_followup.patch").write_text("diff --git a/y b/y\n", encoding="utf-8")
+
+    family_yaml.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    (repo_copy / "verifier_data" / "report-cli-markdown-evolution" / "variant_expectations.json").unlink()
+
+    summary = validate_authored_asset_pack(repo_copy)
+
+    assert summary.family_count == 5
+
+
+def test_validate_authored_pack_rejects_missing_declared_template_evidence_asset(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
+    payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
+    payload["grading_invariant"]["type"] = "hybrid"
+    payload["grading_invariant"]["functional_checks"] = [
+        {
+            "id": "hidden_round1",
+            "command": "/grader/venv/bin/python -m pytest /verifier_data/hidden_tests -q",
+            "description": "Run hidden tests from the trusted grader image",
+            "timeout_seconds": 180,
+        }
+    ]
+    payload["grading_invariant"]["expected_final_state"] = [
+        {"oracle_parity_check": "Agent output matches the trusted oracle on hidden fixtures."}
+    ]
+    payload["milestones"] = [
+        {
+            "id": "m1_cli_markdown",
+            "description": "CLI hidden tests pass",
+            "test_nodes": "variant_scoped",
+            "partial_credit": 0.2,
+            "pass_rule": "all",
+        },
+        {
+            "id": "m2_renderer_markdown",
+            "description": "Renderer property tests pass",
+            "test_nodes": ["tests/hidden/test_property.py::test_markdown_property"],
+            "partial_credit": 0.35,
+            "pass_rule": "all",
+        },
+        {
+            "id": "m3_docs_updated",
+            "description": "Follow-up hidden tests pass",
+            "test_nodes": "variant_scoped",
+            "partial_credit": 0.45,
+            "pass_rule": "any",
+        },
+    ]
+    payload["hidden_tests"] = {
+        "path": "verifier_data/report-cli-markdown-evolution/<variant_id>/hidden_tests",
+        "entrypoint": "test_example.py",
+    }
+    payload["shortcut_resistance"] = {
+        "generated_from": "verifier_data/report-cli-markdown-evolution/<variant_id>/red_team/",
+        "min_exploits": 5,
+        "mutation_score_floor": 0.85,
+    }
+    payload["difficulty_estimate"] = {
+        "evidence_path": "verifier_data/report-cli-markdown-evolution/<variant_id>/calibration.json",
+    }
+
+    for variant in payload["variants"]:
+        variant_id = variant["variant_id"]
+        variant["tier"] = "standard"
+        variant["surfaces"] = ["cli", "renderer", "docs"]
+        variant["oracle"] = {
+            "path": "oracle/solution.patch",
+            "followup_path": "oracle/solution_followup.patch",
+            "source_commit": "abc1234",
+        }
+        variant["hidden_tests"] = {
+            "milestone_map": {
+                "m1_cli_markdown": ["tests/hidden/test_example.py::test_cli_markdown"],
+                "m3_docs_updated": ["tests/hidden/test_followup.py::*"],
+            },
+        }
+
+        variant_dir = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "variants" / variant_id
+        hidden_tests_dir = repo_copy / "verifier_data" / "report-cli-markdown-evolution" / variant_id / "hidden_tests"
+        red_team_dir = repo_copy / "verifier_data" / "report-cli-markdown-evolution" / variant_id / "red_team"
+        hidden_tests_dir.mkdir(parents=True, exist_ok=True)
+        red_team_dir.mkdir(parents=True, exist_ok=True)
+        (variant_dir / "oracle").mkdir(parents=True, exist_ok=True)
+
+        (hidden_tests_dir / "test_example.py").write_text("def test_cli_markdown():\n    pass\n", encoding="utf-8")
+        (hidden_tests_dir / "test_property.py").write_text("def test_markdown_property():\n    pass\n", encoding="utf-8")
+        (hidden_tests_dir / "test_followup.py").write_text("def test_followup_round():\n    pass\n", encoding="utf-8")
+        (red_team_dir / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        if variant_id != "inventory-ops":
+            (
+                repo_copy / "verifier_data" / "report-cli-markdown-evolution" / variant_id / "calibration.json"
+            ).write_text('{"eligible_for_freeze": false}\n', encoding="utf-8")
+        (variant_dir / "oracle" / "solution.patch").write_text("diff --git a/x b/x\n", encoding="utf-8")
+        (variant_dir / "oracle" / "solution_followup.patch").write_text("diff --git a/y b/y\n", encoding="utf-8")
+
+    family_yaml.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    (repo_copy / "verifier_data" / "report-cli-markdown-evolution" / "variant_expectations.json").unlink()
+
+    with pytest.raises(AssetPackError, match="Missing declared verifier_data asset"):
+        validate_authored_asset_pack(repo_copy)

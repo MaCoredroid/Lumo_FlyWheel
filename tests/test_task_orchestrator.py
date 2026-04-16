@@ -1134,6 +1134,106 @@ def test_verify_pre_grading_hashes_hashes_declared_variant_asset_subset(tmp_path
     )
 
 
+def test_verify_pre_grading_hashes_accepts_family_level_template_asset_paths(tmp_path: Path) -> None:
+    verifiers_dir = tmp_path / "verifiers" / "family-a"
+    verifier_data_root = tmp_path / "verifier_data"
+    scenario_families_dir = tmp_path / "scenario_families" / "family-a"
+    verifier_data_dir = verifier_data_root / "family-a" / "v1"
+    scenario_families_dir.mkdir(parents=True)
+    (verifier_data_dir / "hidden_tests").mkdir(parents=True)
+    (verifier_data_dir / "red_team").mkdir(parents=True)
+    verifiers_dir.mkdir(parents=True)
+
+    verify_path = verifiers_dir / "verify.sh"
+    verify_path.write_text("echo verify\n", encoding="utf-8")
+    verify_path.chmod(0o755)
+    (verifier_data_dir / "hidden_tests" / "test_example.py").write_text("def test_round_one_green():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "hidden_tests" / "test_followup.py").write_text("def test_round_two_green():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "red_team" / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (verifier_data_dir / "followup").mkdir(parents=True)
+    (verifier_data_dir / "followup" / "brief.md").write_text("follow up\n", encoding="utf-8")
+    (verifier_data_dir / "calibration.json").write_text('{"eligible_for_freeze": false}\n', encoding="utf-8")
+
+    family_spec = _modern_family_spec()
+    family_spec["hidden_tests"] = {
+        "path": "verifier_data/family-a/<variant_id>/hidden_tests",
+        "entrypoint": "test_example.py",
+    }
+    family_spec["red_team"] = {
+        "path": "verifier_data/family-a/<variant_id>/red_team",
+        "exploits_required": 6,
+    }
+    family_spec["calibration"] = {
+        "path": "verifier_data/family-a/<variant_id>/calibration.json",
+    }
+    family_spec["shortcut_resistance"] = {
+        "generated_from": "verifier_data/family-a/<variant_id>/red_team/",
+        "min_exploits": 5,
+        "mutation_score_floor": 0.85,
+    }
+    family_spec["difficulty_estimate"] = {
+        "evidence_path": "verifier_data/family-a/<variant_id>/calibration.json",
+    }
+    family_spec["variants"][0]["hidden_tests"] = {
+        "milestone_map": {
+            "m1": ["tests/hidden/test_example.py::test_round_one_green"],
+            "m3": ["tests/hidden/test_followup.py::*"],
+        },
+    }
+    family_spec["variants"][0].pop("red_team")
+    family_spec["variants"][0].pop("calibration")
+
+    family_spec_text = yaml.safe_dump(family_spec, sort_keys=False)
+    (scenario_families_dir / "family.yaml").write_text(family_spec_text, encoding="utf-8")
+
+    from lumo_flywheel_serving.task_orchestrator import milestone_contract_hash, sha256_path_set
+
+    manifest = {
+        "manifest_version": 4,
+        "grader_image_digest": _sha("grader"),
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("echo verify\n"),
+                "family_spec_hash": _sha(family_spec_text),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_path_set(
+                    [
+                        "verifier_data/family-a/v1/hidden_tests",
+                        "verifier_data/family-a/v1/red_team",
+                        "verifier_data/family-a/v1/calibration.json",
+                        "verifier_data/family-a/v1/followup/brief.md",
+                    ],
+                    repo_root=tmp_path,
+                ),
+                "milestone_hashes": {
+                    milestone_id: milestone_contract_hash(
+                        family_spec,
+                        family_id="family-a",
+                        variant_id="v1",
+                        milestone_id=milestone_id,
+                    )
+                    for milestone_id in ("m1", "m2", "m3")
+                },
+            }
+        ],
+    }
+
+    verify_pre_grading_hashes(
+        _codex_long_task(),
+        manifest,
+        _sha("grader"),
+        image_digest_resolver=lambda image_ref: image_ref,
+        verifiers_dir=tmp_path / "verifiers",
+        verifier_data_dir=verifier_data_root,
+        scenario_families_dir=tmp_path / "scenario_families",
+    )
+
+
 def test_verify_pre_run_hashes_reports_missing_agents_md(tmp_path: Path) -> None:
     scenario_families_dir = tmp_path / "scenario_families" / "family-a"
     scenario_families_dir.mkdir(parents=True)
