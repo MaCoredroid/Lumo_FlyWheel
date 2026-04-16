@@ -528,6 +528,35 @@ def _normalize_hidden_test_node_path(test_node: str) -> str:
     return candidate.as_posix()
 
 
+def _normalize_interactive_asset_path(
+    value: str,
+    *,
+    family_id: str,
+    variant_id: str,
+) -> str:
+    rendered = _render_variant_path_template(value, family_id=family_id, variant_id=variant_id).strip()
+    if not rendered:
+        raise ValueError("path must be non-empty")
+    if re.search(r"<[^>]+>", rendered):
+        raise ValueError(f"path contains an unsupported template placeholder: {rendered}")
+
+    candidate = Path(rendered)
+    if candidate.is_absolute():
+        raise ValueError(f"path must be relative to repo/ or verifier_data/: {rendered}")
+
+    normalized_parts: list[str] = []
+    for part in candidate.parts:
+        if not part or part == ".":
+            continue
+        if part == "..":
+            raise ValueError(f"path must not escape repo/ or verifier_data/: {rendered}")
+        normalized_parts.append(part)
+
+    if len(normalized_parts) < 2 or normalized_parts[0] not in {"repo", "verifier_data"}:
+        raise ValueError(f"path must resolve under repo/ or verifier_data/: {rendered}")
+    return Path(*normalized_parts).as_posix()
+
+
 def _merged_mapping(defaults: Any, override: Any) -> dict[str, Any]:
     merged: dict[str, Any] = {}
     if isinstance(defaults, dict):
@@ -688,8 +717,20 @@ def collect_declared_verifier_data_paths(task: TaskSpec, family_spec: dict[str, 
                 round_cfg = interactive.get(f"round_{round_index}")
                 if not isinstance(round_cfg, dict):
                     continue
-                maybe_add(round_cfg.get("brief_source"))
-                maybe_add(round_cfg.get("grader_between_rounds"))
+                for field_name in ("brief_source", "grader_between_rounds"):
+                    raw_path = round_cfg.get(field_name)
+                    if not isinstance(raw_path, str) or not raw_path.strip():
+                        continue
+                    try:
+                        normalized = _normalize_interactive_asset_path(
+                            raw_path,
+                            family_id=family_id,
+                            variant_id=variant_id,
+                        )
+                    except ValueError:
+                        continue
+                    if normalized.startswith("verifier_data/"):
+                        paths.add(normalized)
 
     return tuple(sorted(paths))
 
@@ -1149,6 +1190,37 @@ def verify_pre_grading_hashes(
                         affected_artifact="verifier_data",
                     )
 
+        interactive = family_spec.get("interactive")
+        if isinstance(interactive, dict):
+            rounds = interactive.get("rounds")
+            if isinstance(rounds, int) and rounds > 0:
+                for round_index in range(1, rounds + 1):
+                    round_cfg = interactive.get(f"round_{round_index}")
+                    if not isinstance(round_cfg, dict):
+                        continue
+                    for field_name in ("brief_source", "grader_between_rounds"):
+                        raw_path = round_cfg.get(field_name)
+                        if not isinstance(raw_path, str) or not raw_path.strip():
+                            continue
+                        normalized_path = _normalize_interactive_asset_path(
+                            raw_path,
+                            family_id=str(task.family_id or ""),
+                            variant_id=str(task.variant_id or ""),
+                        )
+                        resolved_path = (
+                            variant_root / normalized_path
+                            if normalized_path.startswith("repo/")
+                            else repo_root / normalized_path
+                        )
+                        if not resolved_path.is_file():
+                            raise ManifestMismatchError(
+                                f"Interactive asset '{field_name}' must resolve to a file for "
+                                f"{task.scenario_id}: {resolved_path}",
+                                affected_artifact=(
+                                    "family_spec" if normalized_path.startswith("repo/") else "verifier_data"
+                                ),
+                            )
+
     family_verifier_dir = Path(verifiers_dir) / str(task.family_id)
     verifier_path = family_verifier_dir / "verify.sh"
     try:
@@ -1588,6 +1660,21 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             ) from exc
         return node
 
+    def _require_interactive_asset_path(value: Any, *, field_name: str) -> str:
+        path = _require_non_empty_string(value, field_name=field_name)
+        try:
+            return _normalize_interactive_asset_path(
+                path,
+                family_id=expected_family_id,
+                variant_id=expected_variant_id,
+            )
+        except ValueError as exc:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define {field_name} as a repo/ or verifier_data/ "
+                f"path without unsupported placeholders or '..' segments: {exc}",
+                affected_artifact="family_spec",
+            ) from exc
+
     def _is_phase2_only_invariant(check_id: str, description: str) -> bool:
         combined = f"{check_id} {description}".lower()
         explicit_phase2_markers = (
@@ -1885,21 +1972,16 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                     f"Family spec for {task.scenario_id} must define interactive.{round_key} as a mapping",
                     affected_artifact="family_spec",
                 )
-            _require_non_empty_string(
+            _require_interactive_asset_path(
                 round_cfg.get("brief_source"),
                 field_name=f"interactive.{round_key}.brief_source",
             )
             grader_between_rounds = round_cfg.get("grader_between_rounds")
             if grader_between_rounds is not None:
-                grader_between_rounds = _require_non_empty_string(
+                _require_interactive_asset_path(
                     grader_between_rounds,
                     field_name=f"interactive.{round_key}.grader_between_rounds",
                 )
-                if grader_between_rounds.startswith(("verifier_data/", "./verifier_data/", "../")) or "<" in grader_between_rounds:
-                    _require_declared_verifier_data_path(
-                        grader_between_rounds,
-                        field_name=f"interactive.{round_key}.grader_between_rounds",
-                    )
             inject_timing = round_cfg.get("inject_timing")
             if inject_timing is not None:
                 _require_non_empty_string(
@@ -2056,7 +2138,7 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 affected_artifact="family_spec",
             )
     else:
-        _require_declared_verifier_data_path(
+        generated_from = _require_declared_verifier_data_path(
             shortcut_resistance.get("generated_from"),
             field_name="shortcut_resistance.generated_from",
         )
@@ -2074,6 +2156,11 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 "in the interval (0, 1]",
                 affected_artifact="family_spec",
             )
+    generated_shortcut_source = (
+        shortcut_resistance.get("generated_from")
+        if isinstance(shortcut_resistance, dict)
+        else None
+    )
 
     variants = family_spec.get("variants")
     if not isinstance(variants, list) or len(variants) < 3:
@@ -2280,6 +2367,21 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                     "as an integer >= 1 when present",
                     affected_artifact="family_spec",
                 )
+            if generated_shortcut_source is not None and variant_id == expected_variant_id:
+                normalized_generated_from = _require_declared_verifier_data_path(
+                    generated_shortcut_source,
+                    field_name="shortcut_resistance.generated_from",
+                )
+                normalized_red_team_path = _require_declared_verifier_data_path(
+                    red_team.get("path"),
+                    field_name=f"variants[{index}].red_team.path",
+                )
+                if normalized_generated_from != normalized_red_team_path:
+                    raise ManifestMismatchError(
+                        f"Family spec for {task.scenario_id} must align shortcut_resistance.generated_from "
+                        f"with variants[{index}].red_team.path for upgraded richer-asset families",
+                        affected_artifact="family_spec",
+                    )
 
         calibration = contract.get("calibration")
         if calibration:
@@ -2292,6 +2394,21 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 calibration.get("path"),
                 field_name=f"variants[{index}].calibration.path",
             )
+            if "evidence_path" in difficulty_estimate and variant_id == expected_variant_id:
+                normalized_evidence_path = _require_declared_verifier_data_path(
+                    difficulty_estimate.get("evidence_path"),
+                    field_name="difficulty_estimate.evidence_path",
+                )
+                normalized_calibration_path = _require_declared_verifier_data_path(
+                    calibration.get("path"),
+                    field_name=f"variants[{index}].calibration.path",
+                )
+                if normalized_evidence_path != normalized_calibration_path:
+                    raise ManifestMismatchError(
+                        f"Family spec for {task.scenario_id} must align difficulty_estimate.evidence_path "
+                        f"with variants[{index}].calibration.path for upgraded richer-asset families",
+                        affected_artifact="family_spec",
+                    )
     if expected_variant_id not in variant_ids:
         raise ManifestMismatchError(
             f"Family spec for {task.scenario_id} does not declare variant_id '{expected_variant_id}'",

@@ -16,6 +16,7 @@ from .task_orchestrator import (
     _normalize_declared_variant_asset_path,
     _normalize_hidden_test_node_path,
     _normalize_hidden_tests_relative_path,
+    _normalize_interactive_asset_path,
     _render_variant_path_template,
     collect_declared_verifier_data_paths,
     get_variant_quality_contract,
@@ -687,6 +688,39 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                             f"Calibration asset must resolve to a file for '{family_id}/{variant_id}': "
                             f"{resolved_path}"
                         )
+
+            interactive = family_spec.get("interactive")
+            if isinstance(interactive, dict):
+                rounds = interactive.get("rounds")
+                if isinstance(rounds, int) and rounds > 0:
+                    for round_index in range(1, rounds + 1):
+                        round_cfg = interactive.get(f"round_{round_index}")
+                        if not isinstance(round_cfg, dict):
+                            continue
+                        for field_name in ("brief_source", "grader_between_rounds"):
+                            raw_path = round_cfg.get(field_name)
+                            if not isinstance(raw_path, str) or not raw_path.strip():
+                                continue
+                            try:
+                                normalized_path = _normalize_interactive_asset_path(
+                                    raw_path,
+                                    family_id=family_id,
+                                    variant_id=variant_id,
+                                )
+                            except ValueError as exc:
+                                raise AssetPackError(
+                                    f"Invalid interactive asset '{field_name}' for '{family_id}/{variant_id}': {exc}"
+                                ) from exc
+                            resolved_path = (
+                                variant_dir / normalized_path
+                                if normalized_path.startswith("repo/")
+                                else root / normalized_path
+                            )
+                            if not resolved_path.is_file():
+                                raise AssetPackError(
+                                    f"Interactive asset '{field_name}' must resolve to a file for "
+                                    f"'{family_id}/{variant_id}': {resolved_path}"
+                                )
 
             if legacy_expectations:
                 if variant_id not in legacy_expectations:
