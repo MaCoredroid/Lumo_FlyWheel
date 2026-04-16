@@ -180,6 +180,7 @@ The canonical entry point is `vllm serve` (not `python -m vllm.entrypoints.opena
 
 ```bash
 VLLM_SERVER_DEV_MODE=1 \
+VLLM_ENABLE_RESPONSES_API_STORE=1 \
 TOKENIZERS_PARALLELISM=false \
 TRITON_CACHE_DIR=/tmp/triton_cache/${MODEL_ID} \
 vllm serve $MODEL_PATH \
@@ -200,6 +201,8 @@ vllm serve $MODEL_PATH \
 
 > **`VLLM_SERVER_DEV_MODE=1`** activates `/reset_prefix_cache`. Server is bound to `127.0.0.1` only; never expose dev-mode endpoints externally.
 
+> **`VLLM_ENABLE_RESPONSES_API_STORE=1`** is required for Responses API follow-up chaining via `previous_response_id`. Without the store enabled, `/v1/responses` can return an initial response id but fail turn 2+ lookups with `404 Response with id ... not found`.
+
 > **CUDA graphs are active by default** (`--enforce-eager` not set). Graph capture at startup adds 30–90s but improves steady-state decode throughput.
 
 > **vLLM V1:** Chunked prefill is always enabled by the scheduler regardless of the flag. `--enable-chunked-prefill` is included for V0 compatibility and is harmless in V1.
@@ -219,6 +222,7 @@ vllm serve $MODEL_PATH \
 
 ```bash
 VLLM_SERVER_DEV_MODE=1          # Required: activates /reset_prefix_cache
+VLLM_ENABLE_RESPONSES_API_STORE=1  # Required: persists response ids for follow-up /v1/responses turns
 TOKENIZERS_PARALLELISM=false    # Suppress parallelism warnings
 TRITON_CACHE_DIR=/tmp/triton_cache/${MODEL_ID}   # ARM64: isolate Triton cache per model
 ```
@@ -648,6 +652,7 @@ Every vLLM startup writes a structured header to the log. Required for reproduci
 [VLLM-INIT] quantization=fp8  kv_cache_dtype=fp8_e5m2
 [VLLM-INIT] max_model_len=131072  gpu_memory_utilization=0.90
 [VLLM-INIT] wire_api=responses  (Gate 1 Responses multi-turn: [pass|vllm-mitigation|codex-mitigation|escalated] — set at Sprint 0)
+[VLLM-INIT] responses_api_store=true
 [VLLM-INIT] dev_mode=true  sleep_mode=[enabled|disabled]
 [VLLM-INIT] launch_cmd: vllm serve /models/qwen3.5-27b-fp8 --served-model-name qwen3.5-27b ...
 [VLLM-READY] cuda_graph_capture_time=47.3s
@@ -684,6 +689,7 @@ Every vLLM startup writes a structured header to the log. Required for reproduci
 ### Codex CLI Wiring — Gate 1 (P0 blocker)
 
 - [ ] **5-turn `codex exec --yolo --json` session completes against local vLLM with `wire_api = "responses"`**
+- [ ] `VLLM_ENABLE_RESPONSES_API_STORE=1` set in the live launcher path before running Gate 1
 - [ ] Capture raw HTTP request bodies on turns 2+ (mitmproxy or vLLM debug logs) to establish baseline
 - [ ] Confirm turns 2+ succeed with no 400 errors
 - [ ] If turns 2+ fail: inspect response body to determine root cause — vLLM schema rejection (vllm#33089) vs Codex serialization gap (codex#12230) vs both

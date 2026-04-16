@@ -14,6 +14,8 @@ The project-local Codex provider config lives in `.codex/config.toml` and points
 
 The serving stack now builds a repo-owned image tagged `lumo-flywheel-vllm:26.01-py3-v0.19.0` from [docker/Dockerfile.nvidia-vllm](/home/mark/shared/lumoFlyWheel/docker/Dockerfile.nvidia-vllm), which is derived from the required NVIDIA base image `nvcr.io/nvidia/pytorch:26.01-py3`.
 
+The official launcher path now also sets `VLLM_ENABLE_RESPONSES_API_STORE=1`, which is required for live Responses `previous_response_id` follow-up persistence. `make smoke` verifies that contract directly by chaining a second `/v1/responses` request off the first response id.
+
 ## Codex-Long authored pack
 
 The repo now includes an initial authored Codex-Long scenario pack under [scenario_families](/home/mark/shared/lumoFlyWheel/scenario_families), [verifiers](/home/mark/shared/lumoFlyWheel/verifiers), and [verifier_data](/home/mark/shared/lumoFlyWheel/verifier_data). It is intentionally an initial real pack, not a frozen benchmark release: the repo does not yet meet the signed-off 35-family freeze floor from LLD-13, so `split_assignment.yaml` and `benchmark_manifest.lock` are intentionally absent.

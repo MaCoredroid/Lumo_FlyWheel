@@ -19,6 +19,7 @@ LOCAL_RUNTIME_ENV_FILENAME = ".lumo.local.env"
 DEFAULT_VLLM_BASE_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_VLLM_IMAGE = "lumo-flywheel-vllm:26.01-py3-v0.19.0"
 DEFAULT_VLLM_DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
+VLLM_ENABLE_RESPONSES_API_STORE = "1"
 QWEN_CHAT_TEMPLATE_HOST_PATH = REPO_ROOT / "docker" / "chat_templates" / "qwen3-openai-codex.jinja"
 QWEN_CHAT_TEMPLATE_CONTAINER_PATH = Path("/opt/lumo/chat_templates/qwen3-openai-codex.jinja")
 MIN_GPU_MEMORY_UTILIZATION = 0.15
@@ -473,6 +474,8 @@ class ModelServer:
             "-e",
             "VLLM_SERVER_DEV_MODE=1",
             "-e",
+            f"VLLM_ENABLE_RESPONSES_API_STORE={VLLM_ENABLE_RESPONSES_API_STORE}",
+            "-e",
             "TOKENIZERS_PARALLELISM=false",
             "-e",
             f"TRITON_CACHE_DIR={triton_cache_dir}",
@@ -526,6 +529,7 @@ class ModelServer:
             "gpu_memory_utilization": gpu_memory_utilization,
             "enforce_eager": enforce_eager,
             "wire_api": "responses",
+            "responses_api_store": VLLM_ENABLE_RESPONSES_API_STORE == "1",
             "dev_mode": True,
             "sleep_mode": self.use_sleep_mode,
             "lora_modules": [name for name, _path in config.lora_modules],
@@ -549,6 +553,7 @@ class ModelServer:
             "    handle.write(f\"[VLLM-INIT] max_model_len={payload['max_model_len']} gpu_memory_utilization={payload['gpu_memory_utilization']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] enforce_eager={str(payload['enforce_eager']).lower()}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] wire_api={payload['wire_api']}\\n\")\n"
+            "    handle.write(f\"[VLLM-INIT] responses_api_store={str(payload['responses_api_store']).lower()}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] dev_mode={str(payload['dev_mode']).lower()} sleep_mode={'enabled' if payload['sleep_mode'] else 'disabled'}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] lora_modules={','.join(payload['lora_modules']) or 'none'} max_lora_rank={payload['max_lora_rank']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] launch_cmd: {payload['launch_cmd']}\\n\")\n"

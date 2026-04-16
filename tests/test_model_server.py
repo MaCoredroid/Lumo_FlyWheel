@@ -70,6 +70,7 @@ models:
     assert "--enable-prefix-caching" in command
     assert "--enable-chunked-prefill" in command
     assert "--enable-log-requests" in command
+    assert "VLLM_ENABLE_RESPONSES_API_STORE=1" in command
 
 
 def test_build_run_command_includes_lora_adapter_flags(tmp_path: Path) -> None:
@@ -1086,6 +1087,7 @@ models:
     )
 
     assert "VLLM_API_KEY=test-token" in cmd
+    assert "VLLM_ENABLE_RESPONSES_API_STORE=1" in cmd
 
 
 def test_wait_ready_requires_target_model_in_v1_models(
