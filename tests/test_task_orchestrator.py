@@ -139,7 +139,19 @@ def _valid_family_spec(
                 "id": "m1",
                 "description": "Primary repair milestone.",
                 "check_script": f"verifiers/{family_id}/milestones/m1.sh",
-                "partial_credit": 1.0,
+                "partial_credit": 0.2,
+            },
+            {
+                "id": "m2",
+                "description": "Secondary repair milestone.",
+                "check_script": f"verifiers/{family_id}/milestones/m2.sh",
+                "partial_credit": 0.3,
+            },
+            {
+                "id": "m3",
+                "description": "Final repair milestone.",
+                "check_script": f"verifiers/{family_id}/milestones/m3.sh",
+                "partial_credit": 0.5,
             }
         ],
         "shortcut_resistance": {
@@ -1179,17 +1191,32 @@ def test_validate_family_spec_rejects_non_monotonic_milestone_partial_credit() -
             "id": "m1",
             "description": "First milestone",
             "check_script": "verifiers/family-a/milestones/m1.sh",
-            "partial_credit": 0.6,
+            "partial_credit": 0.3,
         },
         {
             "id": "m2",
             "description": "Second milestone",
             "check_script": "verifiers/family-a/milestones/m2.sh",
-            "partial_credit": 0.4,
+            "partial_credit": 0.2,
+        },
+        {
+            "id": "m3",
+            "description": "Third milestone",
+            "check_script": "verifiers/family-a/milestones/m3.sh",
+            "partial_credit": 0.5,
         },
     ]
 
     with pytest.raises(ManifestMismatchError, match="monotonically non-decreasing"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_too_few_milestones() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["milestones"] = family_spec["milestones"][:2]
+
+    with pytest.raises(ManifestMismatchError, match="at least 3 milestones"):
         validate_family_spec(task, family_spec)
 
 
@@ -1199,6 +1226,15 @@ def test_validate_family_spec_rejects_missing_breakage_class_fields() -> None:
     family_spec["breakage_class"]["surfaces"] = []
 
     with pytest.raises(ManifestMismatchError, match="breakage_class.surfaces"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_too_few_breakage_surfaces() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["breakage_class"]["surfaces"] = ["tests", "application"]
+
+    with pytest.raises(ManifestMismatchError, match="at least 3 breakage_class.surfaces"):
         validate_family_spec(task, family_spec)
 
 

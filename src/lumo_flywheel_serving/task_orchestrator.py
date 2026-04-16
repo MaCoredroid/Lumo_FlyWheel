@@ -1146,6 +1146,11 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"Family spec for {task.scenario_id} must define non-empty breakage_class.surfaces",
             affected_artifact="family_spec",
         )
+    if len(breakage_surfaces) < 3:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define at least 3 breakage_class.surfaces",
+            affected_artifact="family_spec",
+        )
     for index, surface in enumerate(breakage_surfaces):
         _require_non_empty_string(
             surface,
@@ -1278,6 +1283,11 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
     if not isinstance(milestones, list) or not milestones:
         raise ManifestMismatchError(
             f"Family spec for {task.scenario_id} must define a non-empty milestones list",
+            affected_artifact="family_spec",
+        )
+    if len(milestones) < 3:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define at least 3 milestones",
             affected_artifact="family_spec",
         )
     partial_credit_total = 0.0

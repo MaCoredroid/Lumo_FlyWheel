@@ -201,6 +201,28 @@ def test_validate_authored_pack_rejects_shadowed_milestone_helper(tmp_path: Path
         validate_authored_asset_pack(repo_copy)
 
 
+def test_validate_authored_pack_rejects_milestone_helper_called_without_gating_result(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        'if check_m1_cli_markdown "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then\n'
+        "  write_result '.milestones.m1_cli_markdown = true'\n"
+        "else\n"
+        '  add_error "CLI still does not expose markdown output"\n'
+        "fi\n",
+        'check_m1_cli_markdown "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"\n'
+        "write_result '.milestones.m1_cli_markdown = true'\n",
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="source and invoke milestone helper 'm1_cli_markdown'"):
+        validate_authored_asset_pack(repo_copy)
+
+
 def test_validate_authored_pack_rejects_missing_functional_check_result_consumption(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT, repo_copy)

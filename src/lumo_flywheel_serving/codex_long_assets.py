@@ -123,11 +123,30 @@ def _verify_references_milestone_helper(
     helper_function_pattern = rf"(^|\n)\s*(?:function\s+)?{re.escape(helper_function)}\s*\("
     helper_defines_check = re.search(helper_function_pattern, normalized_helper) is not None
     helper_is_shadowed = re.search(helper_function_pattern, normalized_verify) is not None
+    helper_result_is_gated = re.search(
+        rf"""
+        if\s+{re.escape(helper_function)}\b[^\n]*;\s*then
+        (?:(?!\nfi\b).)*?
+        write_result\s+['"]\.milestones\.{re.escape(milestone_id)}\s*=\s*true['"]
+        (?:(?!\nfi\b).)*?
+        \n\s*else\b
+        (?:(?!\nfi\b).)*?
+        \badd_error\b
+        """,
+        normalized_verify,
+        flags=re.DOTALL | re.VERBOSE,
+    ) is not None
     helper_is_invoked = re.search(
         rf"\b{re.escape(helper_function)}\b",
         normalized_verify,
     ) is not None
-    return helper_is_sourced and helper_defines_check and helper_is_invoked and not helper_is_shadowed
+    return (
+        helper_is_sourced
+        and helper_defines_check
+        and helper_is_invoked
+        and helper_result_is_gated
+        and not helper_is_shadowed
+    )
 
 
 def _verify_references_functional_check_result(
