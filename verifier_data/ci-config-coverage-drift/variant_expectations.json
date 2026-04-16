@@ -1,0 +1,34 @@
+{
+  "variants": {
+    "inventory-gate": {
+      "checksum_file": "test_checksums/inventory-gate.sha256",
+      "m1_file": "pyproject.toml",
+      "m1_pattern": "package = \"ci_app\"",
+      "m2_file": ".github/workflows/ci.yml",
+      "m2_forbidden_pattern": "inventory_gate_legacy",
+      "m2_required_pattern": "make ci",
+      "project_name": "inventory-gate-ci",
+      "project_name_pattern": "name = \"inventory-gate-ci\""
+    },
+    "payments-gate": {
+      "checksum_file": "test_checksums/payments-gate.sha256",
+      "m1_file": "pyproject.toml",
+      "m1_pattern": "package = \"ci_app\"",
+      "m2_file": ".github/workflows/ci.yml",
+      "m2_forbidden_pattern": "payments_gate_legacy",
+      "m2_required_pattern": "make ci",
+      "project_name": "payments-gate-ci",
+      "project_name_pattern": "name = \"payments-gate-ci\""
+    },
+    "search-gate": {
+      "checksum_file": "test_checksums/search-gate.sha256",
+      "m1_file": "pyproject.toml",
+      "m1_pattern": "package = \"ci_app\"",
+      "m2_file": ".github/workflows/ci.yml",
+      "m2_forbidden_pattern": "search_gate_legacy",
+      "m2_required_pattern": "make ci",
+      "project_name": "search-gate-ci",
+      "project_name_pattern": "name = \"search-gate-ci\""
+    }
+  }
+}

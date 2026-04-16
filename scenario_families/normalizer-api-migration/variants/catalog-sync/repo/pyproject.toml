@@ -1,0 +1,5 @@
+[project]
+name = "catalog-sync-normalizer"
+version = "0.1.0"
+description = "catalog sync normalization flow"
+requires-python = ">=3.12"

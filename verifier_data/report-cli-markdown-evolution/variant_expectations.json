@@ -1,0 +1,37 @@
+{
+  "variants": {
+    "incident-triage": {
+      "checksum_file": "test_checksums/incident-triage.sha256",
+      "m1_file": "report_app/cli.py",
+      "m1_pattern": "\"markdown\"",
+      "m2_file": "report_app/rendering.py",
+      "m2_pattern": "def render_markdown",
+      "m3_file": "docs/usage.md",
+      "m3_pattern": "--format markdown",
+      "project_name": "incident-triage-report",
+      "project_name_pattern": "name = \"incident-triage-report\""
+    },
+    "inventory-ops": {
+      "checksum_file": "test_checksums/inventory-ops.sha256",
+      "m1_file": "report_app/cli.py",
+      "m1_pattern": "\"markdown\"",
+      "m2_file": "report_app/rendering.py",
+      "m2_pattern": "def render_markdown",
+      "m3_file": "docs/usage.md",
+      "m3_pattern": "--format markdown",
+      "project_name": "inventory-ops-report",
+      "project_name_pattern": "name = \"inventory-ops-report\""
+    },
+    "release-readiness": {
+      "checksum_file": "test_checksums/release-readiness.sha256",
+      "m1_file": "report_app/cli.py",
+      "m1_pattern": "\"markdown\"",
+      "m2_file": "report_app/rendering.py",
+      "m2_pattern": "def render_markdown",
+      "m3_file": "docs/usage.md",
+      "m3_pattern": "--format markdown",
+      "project_name": "release-readiness-report",
+      "project_name_pattern": "name = \"release-readiness-report\""
+    }
+  }
+}

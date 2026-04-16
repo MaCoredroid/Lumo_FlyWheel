@@ -1,0 +1,5 @@
+[project]
+name = "incident-triage-report"
+version = "0.1.0"
+description = "Incident Triage Report report renderer"
+requires-python = ">=3.12"

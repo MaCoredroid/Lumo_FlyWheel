@@ -1,0 +1,34 @@
+{
+  "variants": {
+    "alert-routing": {
+      "checksum_file": "test_checksums/alert-routing.sha256",
+      "m1_forbidden_pattern": "legacy_rules",
+      "m1_glob": "norm_app",
+      "m2_file_a": "norm_app/assembler.py",
+      "m2_file_b": "norm_app/router.py",
+      "m2_pattern": "build_rule_plan",
+      "project_name": "alert-routing-normalizer",
+      "project_name_pattern": "name = \"alert-routing-normalizer\""
+    },
+    "billing-ledger": {
+      "checksum_file": "test_checksums/billing-ledger.sha256",
+      "m1_forbidden_pattern": "legacy_rules",
+      "m1_glob": "norm_app",
+      "m2_file_a": "norm_app/assembler.py",
+      "m2_file_b": "norm_app/router.py",
+      "m2_pattern": "build_rule_plan",
+      "project_name": "billing-ledger-normalizer",
+      "project_name_pattern": "name = \"billing-ledger-normalizer\""
+    },
+    "catalog-sync": {
+      "checksum_file": "test_checksums/catalog-sync.sha256",
+      "m1_forbidden_pattern": "legacy_rules",
+      "m1_glob": "norm_app",
+      "m2_file_a": "norm_app/assembler.py",
+      "m2_file_b": "norm_app/router.py",
+      "m2_pattern": "build_rule_plan",
+      "project_name": "catalog-sync-normalizer",
+      "project_name_pattern": "name = \"catalog-sync-normalizer\""
+    }
+  }
+}

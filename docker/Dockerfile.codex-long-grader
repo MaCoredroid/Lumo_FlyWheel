@@ -1,0 +1,7 @@
+FROM debian:bookworm-slim@sha256:0d49f9bc3af362aa0921b14b2f5c612a902ab6f7c2cac8d7026ade96fd0b9f6c
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash coreutils grep jq sed ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT ["/bin/bash"]

@@ -1,0 +1,5 @@
+[project]
+name = "alert-routing-normalizer"
+version = "0.1.0"
+description = "alert routing normalization flow"
+requires-python = ">=3.12"

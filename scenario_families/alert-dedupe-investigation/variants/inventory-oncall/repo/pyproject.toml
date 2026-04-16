@@ -1,0 +1,5 @@
+[project]
+name = "inventory-oncall-alerts"
+version = "0.1.0"
+description = "inventory on-call alert investigation fixture"
+requires-python = ">=3.12"

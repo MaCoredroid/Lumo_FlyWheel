@@ -1,0 +1,31 @@
+{
+  "variants": {
+    "inventory-oncall": {
+      "checksum_file": "test_checksums/inventory-oncall.sha256",
+      "m1_file": "investigate_app/dedupe.py",
+      "m1_pattern": "window_start",
+      "m2_file": "investigate_app/dedupe.py",
+      "m2_pattern": "environment",
+      "project_name": "inventory-oncall-alerts",
+      "project_name_pattern": "name = \"inventory-oncall-alerts\""
+    },
+    "payments-oncall": {
+      "checksum_file": "test_checksums/payments-oncall.sha256",
+      "m1_file": "investigate_app/dedupe.py",
+      "m1_pattern": "window_start",
+      "m2_file": "investigate_app/dedupe.py",
+      "m2_pattern": "environment",
+      "project_name": "payments-oncall-alerts",
+      "project_name_pattern": "name = \"payments-oncall-alerts\""
+    },
+    "search-oncall": {
+      "checksum_file": "test_checksums/search-oncall.sha256",
+      "m1_file": "investigate_app/dedupe.py",
+      "m1_pattern": "window_start",
+      "m2_file": "investigate_app/dedupe.py",
+      "m2_pattern": "environment",
+      "project_name": "search-oncall-alerts",
+      "project_name_pattern": "name = \"search-oncall-alerts\""
+    }
+  }
+}

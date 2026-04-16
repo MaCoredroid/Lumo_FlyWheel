@@ -14,6 +14,12 @@ The project-local Codex provider config lives in `.codex/config.toml` and points
 
 The serving stack now builds a repo-owned image tagged `lumo-flywheel-vllm:26.01-py3-v0.19.0` from [docker/Dockerfile.nvidia-vllm](/home/mark/shared/lumoFlyWheel/docker/Dockerfile.nvidia-vllm), which is derived from the required NVIDIA base image `nvcr.io/nvidia/pytorch:26.01-py3`.
 
+## Codex-Long authored pack
+
+The repo now includes an initial authored Codex-Long scenario pack under [scenario_families](/home/mark/shared/lumoFlyWheel/scenario_families), [verifiers](/home/mark/shared/lumoFlyWheel/verifiers), and [verifier_data](/home/mark/shared/lumoFlyWheel/verifier_data). It is intentionally an initial real pack, not a frozen benchmark release: the repo does not yet meet the signed-off 35-family freeze floor from LLD-13, so `split_assignment.yaml` and `benchmark_manifest.lock` are intentionally absent.
+
+Use `.venv/bin/python scripts/validate_codex_long_assets.py` for structural validation and `.venv/bin/python scripts/smoke_codex_long_variant.py --family <family_id> --variant <variant_id> --expect fail` to run a variant through the build plus Phase 2/Phase 3 grading path on its broken state. The smoke script also accepts `--repo-override <dir>` so later red-team rounds can run candidate fixes through the same path without editing the committed assets.
+
 ## GB10 host cleanup
 
 `ModelServer.start()` and `ModelServer.stop()` now run the proven GB10 host-memory recovery sequence automatically before startup and after teardown:

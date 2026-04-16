@@ -1,0 +1,5 @@
+[project]
+name = "project-board-sync"
+version = "0.1.0"
+description = "project board cross-layer sync fixture"
+requires-python = ">=3.12"

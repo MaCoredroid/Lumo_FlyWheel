@@ -1,0 +1,5 @@
+[project]
+name = "billing-ledger-normalizer"
+version = "0.1.0"
+description = "billing ledger normalization flow"
+requires-python = ">=3.12"

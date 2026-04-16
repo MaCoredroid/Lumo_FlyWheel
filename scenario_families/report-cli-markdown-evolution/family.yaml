@@ -1,0 +1,76 @@
+family_id: report-cli-markdown-evolution
+scenario_type: feature_evolution
+description: Add a Markdown output mode to a local Python reporting CLI and update
+  the docs to match.
+repo_pattern:
+  language: python
+  framework: pytest
+  structure: Small Python repos rooted at /workspace with source files, docs/config,
+    and pytest coverage.
+  base_image: python:3.12-bookworm@sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+breakage_class:
+  injection_method: spec_delta_tests
+  description: Tests now require a Markdown mode plus updated usage docs, but the
+    repo still only supports JSON rendering.
+  surfaces:
+  - cli
+  - renderer
+  - docs
+grading_invariant:
+  type: state_based
+  description: Final state is graded by trusted Phase 3 file inspections plus the
+    Phase 2 command result.
+  verifier_script: verifiers/report-cli-markdown-evolution/verify.sh
+  functional_checks:
+  - id: pytest_suite
+    command: cd /workspace && python -m pytest -q
+    description: Run the report CLI test suite
+    timeout_seconds: 120
+  expected_final_state:
+  - cli_markdown_check: The CLI accepts --format markdown.
+  - renderer_check: A Markdown renderer exists and is wired in.
+  - docs_check: Usage docs mention the Markdown command.
+  - test_suite_check: The pytest suite passes from Phase 2.
+milestones:
+- id: m1_cli_markdown
+  description: CLI accepts --format markdown
+  check_script: verifiers/report-cli-markdown-evolution/milestones/m1_cli_markdown.sh
+  partial_credit: 0.2
+- id: m2_renderer_markdown
+  description: Markdown renderer exists and is wired in
+  check_script: verifiers/report-cli-markdown-evolution/milestones/m2_renderer_markdown.sh
+  partial_credit: 0.35
+- id: m3_docs_updated
+  description: Usage docs mention the Markdown workflow
+  check_script: verifiers/report-cli-markdown-evolution/milestones/m3_docs_updated.sh
+  partial_credit: 0.45
+shortcut_resistance:
+  notes: Phase 3 checks the CLI source, renderer source, and docs text directly while
+    test-file checksums catch test deletion or edits.
+  known_exploits_tested:
+  - Delete docs assertions from the pytest suite
+  - Stub the CLI to always print a canned Markdown string
+  - Shadow pytest to exit 0 without exercising the renderer
+difficulty_estimate:
+  target_solve_rate: 35-55%
+  rationale: Requires coordinated CLI, renderer, and docs changes with clear regression
+    tests.
+variants:
+- variant_id: inventory-ops
+  repo_source: authored
+  injected_breakage: Tests now require a Markdown mode plus updated usage docs, but
+    the repo still only supports JSON rendering.
+  env_dockerfile: variants/inventory-ops/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+- variant_id: incident-triage
+  repo_source: authored
+  injected_breakage: Tests now require a Markdown mode plus updated usage docs, but
+    the repo still only supports JSON rendering.
+  env_dockerfile: variants/incident-triage/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+- variant_id: release-readiness
+  repo_source: authored
+  injected_breakage: Tests now require a Markdown mode plus updated usage docs, but
+    the repo still only supports JSON rendering.
+  env_dockerfile: variants/release-readiness/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3

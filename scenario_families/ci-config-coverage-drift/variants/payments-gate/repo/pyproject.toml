@@ -1,0 +1,9 @@
+[project]
+name = "payments-gate-ci"
+version = "0.1.0"
+description = "payments gate CI smoke project"
+requires-python = ">=3.12"
+
+[tool.lumo_ci]
+package = "payments_gate_legacy"
+workflow = ".github/workflows/ci.yml"

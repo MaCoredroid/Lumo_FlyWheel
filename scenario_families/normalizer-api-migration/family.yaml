@@ -1,0 +1,75 @@
+family_id: normalizer-api-migration
+scenario_type: migration_refactor
+description: Migrate a Python codebase off a removed legacy planning helper and onto
+  a dataclass-based RulePlan v2 API.
+repo_pattern:
+  language: python
+  framework: pytest
+  structure: Small Python repos rooted at /workspace with source files, docs/config,
+    and pytest coverage.
+  base_image: python:3.12-bookworm@sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+breakage_class:
+  injection_method: api_swap
+  description: The deprecated legacy builder now raises, and the repo must be migrated
+    to rules_v2.build_rule_plan().
+  surfaces:
+  - imports
+  - call_sites
+  - cli_preview
+grading_invariant:
+  type: state_based
+  description: Final state is graded by trusted Phase 3 file inspections plus the
+    Phase 2 command result.
+  verifier_script: verifiers/normalizer-api-migration/verify.sh
+  functional_checks:
+  - id: pytest_suite
+    command: cd /workspace && python -m pytest -q
+    description: Run the normalization preview test suite
+    timeout_seconds: 120
+  expected_final_state:
+  - legacy_import_check: No legacy_rules imports remain in the package.
+  - ruleplan_usage_check: RulePlan v2 helpers are used in the assembler and router.
+  - test_suite_check: The pytest suite passes from Phase 2.
+milestones:
+- id: m1_legacy_imports_removed
+  description: Removed legacy_rules imports
+  check_script: verifiers/normalizer-api-migration/milestones/m1_legacy_imports_removed.sh
+  partial_credit: 0.25
+- id: m2_ruleplan_v2_used
+  description: Assembler and router use RulePlan v2
+  check_script: verifiers/normalizer-api-migration/milestones/m2_ruleplan_v2_used.sh
+  partial_credit: 0.35
+- id: m3_tests_passing
+  description: Pytest suite passes
+  check_script: verifiers/normalizer-api-migration/milestones/m3_tests_passing.sh
+  partial_credit: 0.4
+shortcut_resistance:
+  notes: Trusted greps reject stale legacy imports and require RulePlan v2 symbols
+    even if Phase 2 were spoofed.
+  known_exploits_tested:
+  - Shadow pytest to exit 0
+  - Monkeypatch the legacy helper to stop raising
+  - Delete the contract test that checks the new import path
+difficulty_estimate:
+  target_solve_rate: 30-50%
+  rationale: Requires a repo-wide import migration plus adapting the call-site field
+    names.
+variants:
+- variant_id: alert-routing
+  repo_source: authored
+  injected_breakage: The deprecated legacy builder now raises, and the repo must be
+    migrated to rules_v2.build_rule_plan().
+  env_dockerfile: variants/alert-routing/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+- variant_id: billing-ledger
+  repo_source: authored
+  injected_breakage: The deprecated legacy builder now raises, and the repo must be
+    migrated to rules_v2.build_rule_plan().
+  env_dockerfile: variants/billing-ledger/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+- variant_id: catalog-sync
+  repo_source: authored
+  injected_breakage: The deprecated legacy builder now raises, and the repo must be
+    migrated to rules_v2.build_rule_plan().
+  env_dockerfile: variants/catalog-sync/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3

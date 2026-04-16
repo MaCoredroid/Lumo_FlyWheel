@@ -1,0 +1,75 @@
+family_id: ci-config-coverage-drift
+scenario_type: build_ci_breakage
+description: Repair a Python repo whose local CI contract drifted after a package
+  rename.
+repo_pattern:
+  language: python
+  framework: pytest
+  structure: Small Python repos rooted at /workspace with source files, docs/config,
+    and pytest coverage.
+  base_image: python:3.12-bookworm@sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+breakage_class:
+  injection_method: config_drift
+  description: The package was renamed to ci_app, but pyproject and CI workflow files
+    still point at the old package token.
+  surfaces:
+  - pyproject
+  - workflow
+  - make_ci_contract
+grading_invariant:
+  type: state_based
+  description: Final state is graded by trusted Phase 3 file inspections plus the
+    Phase 2 command result.
+  verifier_script: verifiers/ci-config-coverage-drift/verify.sh
+  functional_checks:
+  - id: make_ci
+    command: cd /workspace && make ci
+    description: Run the repo's local CI command
+    timeout_seconds: 120
+  expected_final_state:
+  - pyproject_check: tool.lumo_ci.package points at ci_app.
+  - workflow_check: The workflow calls make ci or ci_app, not the legacy package.
+  - test_suite_check: The local make ci contract passes from Phase 2.
+milestones:
+- id: m1_pyproject_synced
+  description: pyproject points at ci_app
+  check_script: verifiers/ci-config-coverage-drift/milestones/m1_pyproject_synced.sh
+  partial_credit: 0.25
+- id: m2_workflow_synced
+  description: CI workflow matches the local contract
+  check_script: verifiers/ci-config-coverage-drift/milestones/m2_workflow_synced.sh
+  partial_credit: 0.35
+- id: m3_ci_passing
+  description: make ci passes
+  check_script: verifiers/ci-config-coverage-drift/milestones/m3_ci_passing.sh
+  partial_credit: 0.4
+shortcut_resistance:
+  notes: Phase 3 checks the config and workflow files directly while checksum manifests
+    stop test deletion.
+  known_exploits_tested:
+  - Delete tests and keep make ci empty
+  - Hardcode scripts/run_ci.py to return 0
+  - Shadow pytest to claim success without fixing the config drift
+difficulty_estimate:
+  target_solve_rate: 25-45%
+  rationale: Requires understanding the CI contract across config, workflow, and helper-script
+    layers.
+variants:
+- variant_id: inventory-gate
+  repo_source: authored
+  injected_breakage: The package was renamed to ci_app, but pyproject and CI workflow
+    files still point at the old package token.
+  env_dockerfile: variants/inventory-gate/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+- variant_id: payments-gate
+  repo_source: authored
+  injected_breakage: The package was renamed to ci_app, but pyproject and CI workflow
+    files still point at the old package token.
+  env_dockerfile: variants/payments-gate/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+- variant_id: search-gate
+  repo_source: authored
+  injected_breakage: The package was renamed to ci_app, but pyproject and CI workflow
+    files still point at the old package token.
+  env_dockerfile: variants/search-gate/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3

@@ -1,0 +1,5 @@
+[project]
+name = "inventory-ops-report"
+version = "0.1.0"
+description = "Inventory Ops Report report renderer"
+requires-python = ">=3.12"

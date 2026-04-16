@@ -1,0 +1,74 @@
+family_id: alert-dedupe-investigation
+scenario_type: investigate_then_fix
+description: Investigate a failing alert-stream integration test using log evidence
+  and repair the dedupe key.
+repo_pattern:
+  language: python
+  framework: pytest
+  structure: Small Python repos rooted at /workspace with source files, docs/config,
+    and pytest coverage.
+  base_image: python:3.12-bookworm@sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+breakage_class:
+  injection_method: logic_regression
+  description: A simplified dedupe fingerprint ignores window and environment fields,
+    causing distinct incidents to merge.
+  surfaces:
+  - log_analysis
+  - dedupe_key
+  - integration_tests
+grading_invariant:
+  type: state_based
+  description: Final state is graded by trusted Phase 3 file inspections plus the
+    Phase 2 command result.
+  verifier_script: verifiers/alert-dedupe-investigation/verify.sh
+  functional_checks:
+  - id: pytest_suite
+    command: cd /workspace && python -m pytest -q
+    description: Run the alert-stream integration tests
+    timeout_seconds: 120
+  expected_final_state:
+  - fingerprint_check: The dedupe fingerprint includes environment and window_start.
+  - test_suite_check: The pytest suite passes from Phase 2.
+milestones:
+- id: m1_window_key_used
+  description: Fingerprint includes the time window
+  check_script: verifiers/alert-dedupe-investigation/milestones/m1_window_key_used.sh
+  partial_credit: 0.3
+- id: m2_environment_key_used
+  description: Fingerprint includes the environment
+  check_script: verifiers/alert-dedupe-investigation/milestones/m2_environment_key_used.sh
+  partial_credit: 0.3
+- id: m3_tests_passing
+  description: Pytest suite passes
+  check_script: verifiers/alert-dedupe-investigation/milestones/m3_tests_passing.sh
+  partial_credit: 0.4
+shortcut_resistance:
+  notes: Phase 3 inspects the dedupe source for the required fields and uses test
+    checksums to catch deleted integration coverage.
+  known_exploits_tested:
+  - Delete the failing integration test
+  - Shadow pytest to report success
+  - Return a canned dedupe result without fixing the source key
+difficulty_estimate:
+  target_solve_rate: 30-50%
+  rationale: Starts from logs and failing tests, then requires a targeted logic fix
+    in the reducer.
+variants:
+- variant_id: payments-oncall
+  repo_source: authored
+  injected_breakage: A simplified dedupe fingerprint ignores window and environment
+    fields, causing distinct incidents to merge.
+  env_dockerfile: variants/payments-oncall/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+- variant_id: search-oncall
+  repo_source: authored
+  injected_breakage: A simplified dedupe fingerprint ignores window and environment
+    fields, causing distinct incidents to merge.
+  env_dockerfile: variants/search-oncall/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+- variant_id: inventory-oncall
+  repo_source: authored
+  injected_breakage: A simplified dedupe fingerprint ignores window and environment
+    fields, causing distinct incidents to merge.
+  env_dockerfile: variants/inventory-oncall/Dockerfile
+  base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
