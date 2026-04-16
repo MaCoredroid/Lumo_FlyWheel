@@ -34,15 +34,21 @@ def test_markdown_output_renders_runtime_sections_and_summary(
     assert "| Owner | Label | Count |" in output
     for section in fake_sections:
         assert f"| {section['owner']} | {section['label']} | {section['count']} |" in output
+    assert "## Owner Summary" in output
+    assert "Top owner: Jules with 5 queued items" in output
     assert "## Owner Totals" in output
     assert "| Owner | Total Items |" in output
-    assert re.search(r"\| Jules \| 5 \|", output)
-    assert re.search(r"\| Ivy \| 1 \|", output)
+    jules_row = re.search(r"\| Jules \| 5 \|", output)
+    ivy_row = re.search(r"\| Ivy \| 1 \|", output)
+    assert jules_row
+    assert ivy_row
+    assert jules_row.start() < ivy_row.start()
 
 
 def test_markdown_output_includes_owner_rollup_for_runtime_records() -> None:
     output = cli_module.main(["--format", "markdown"])
 
     assert "3 sections covering 7 queued items" in output
+    assert "Top owner: Mae with 5 queued items" in output
     assert "| Mae | 5 |" in output
     assert "| Noah | 2 |" in output

@@ -3,6 +3,12 @@ the dedupe logic was simplified.
 
 Read `logs/failure.log`, reproduce the problem through the tests, and fix the
 dedupe key so alerts are collapsed by the correct time window and environment.
-The code should preserve distinct incidents instead of merging them together.
+The raw evidence mixes aliases like `Production`/`prod` and second-level
+timestamps, so normalize the environment and minute window before building
+the dedupe key. The collapsed incidents should still be useful to the
+on-call handoff: keep the canonical environment and minute window on each
+merged record, and surface both `occurrence_count` and `last_seen_at` so
+the grouped incidents show how many raw alerts were folded together and
+when the latest one arrived.
 
 Do not delete the failing integration coverage.
