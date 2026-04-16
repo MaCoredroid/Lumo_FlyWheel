@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from lumo_flywheel_serving.codex_long_assets import AssetPackError, validate_authored_asset_pack
 
@@ -180,6 +181,26 @@ def test_validate_authored_pack_rejects_comment_only_milestone_invocation(tmp_pa
         validate_authored_asset_pack(repo_copy)
 
 
+def test_validate_authored_pack_rejects_shadowed_milestone_helper(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        'source /verifier/milestones/m1_cli_markdown.sh\n',
+        'source /verifier/milestones/m1_cli_markdown.sh\n'
+        'check_m1_cli_markdown() {\n'
+        '  return 0\n'
+        '}\n',
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="source and invoke milestone helper 'm1_cli_markdown'"):
+        validate_authored_asset_pack(repo_copy)
+
+
 def test_validate_authored_pack_rejects_missing_functional_check_result_consumption(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT, repo_copy)
@@ -225,4 +246,93 @@ def test_validate_authored_pack_rejects_comment_only_functional_check_consumptio
     verify_path.write_text(verify_text, encoding="utf-8")
 
     with pytest.raises(AssetPackError, match="must consume the trusted functional check result"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_rejects_dead_string_functional_check_reference(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        '        check_phase2_pytest_suite() {\n'
+        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '        }\n',
+        '        check_phase2_pytest_suite() {\n'
+        '          printf "%s\\n" "pytest_suite_exit_code"\n'
+        '          return 0\n'
+        '        }\n',
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="must consume the trusted functional check result"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_requires_multi_step_milestones(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    family_yaml = repo_copy / "scenario_families" / "owner-field-cross-layer" / "family.yaml"
+    payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
+    payload["milestones"] = payload["milestones"][:2]
+    family_yaml.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="at least 3 milestones"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_requires_multiple_breakage_surfaces(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    family_yaml = repo_copy / "scenario_families" / "owner-field-cross-layer" / "family.yaml"
+    payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
+    payload["breakage_class"]["surfaces"] = ["store_layer"]
+    family_yaml.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="at least 3 breakage surfaces"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_rejects_shallow_cross_layer_variant_layout(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    docs_path = (
+        repo_copy
+        / "scenario_families"
+        / "owner-field-cross-layer"
+        / "variants"
+        / "project-board"
+        / "repo"
+        / "docs"
+        / "cli.md"
+    )
+    docs_path.unlink()
+
+    with pytest.raises(AssetPackError, match="cross-layer coverage"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_rejects_shallow_ci_variant_layout(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    workflow_path = (
+        repo_copy
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "inventory-gate"
+        / "repo"
+        / ".github"
+        / "workflows"
+        / "ci.yml"
+    )
+    workflow_path.unlink()
+
+    with pytest.raises(AssetPackError, match="CI drift coverage"):
         validate_authored_asset_pack(repo_copy)

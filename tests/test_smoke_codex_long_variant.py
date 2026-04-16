@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 from pathlib import Path
+import subprocess
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "smoke_codex_long_variant.py"
@@ -66,3 +67,36 @@ def test_ensure_grader_image_rebuilds_when_label_is_missing(monkeypatch, tmp_pat
         str(tmp_path),
     ]
     assert kwargs == {}
+
+
+def test_functional_run_enforces_timeout_and_records_timeout_exit_code(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    functional_dir = tmp_path / "functional"
+    functional_dir.mkdir()
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(command: list[str], **kwargs):
+        calls.append((command, kwargs))
+        if command[:2] == ["docker", "run"]:
+            raise subprocess.TimeoutExpired(command, timeout=45)
+        return None
+
+    monkeypatch.setattr(SMOKE, "_run", fake_run)
+
+    SMOKE._functional_run(
+        "codex-long-smoke-report-cli-markdown-evolution-inventory-ops",
+        functional_dir,
+        "pytest_suite",
+        "cd /workspace && pytest -q",
+        45,
+    )
+
+    run_command, run_kwargs = calls[0]
+    assert run_command[:6] == ["docker", "run", "--name", run_command[3], "--rm", "--network"]
+    assert run_command[6] == "none"
+    assert run_kwargs["timeout"] == 45
+    assert any(command[:3] == ["docker", "rm", "-f"] for command, _kwargs in calls[1:])
+    assert (functional_dir / "pytest_suite_exit_code").read_text(encoding="utf-8") == "124\n"
+    assert "timed out after 45s" in (functional_dir / "pytest_suite_output.log").read_text(encoding="utf-8")

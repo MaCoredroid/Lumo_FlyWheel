@@ -14,13 +14,21 @@ from lumo_flywheel_serving.yaml_utils import load_yaml_file
 GRADER_DOCKERFILE_LABEL = "org.lumo.codex_long_grader_dockerfile_sha"
 
 
-def _run(command: list[str], *, cwd: Path | None = None, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
+def _run(
+    command: list[str],
+    *,
+    cwd: Path | None = None,
+    check: bool = True,
+    capture: bool = False,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
         cwd=cwd,
         check=check,
         text=True,
         capture_output=capture,
+        timeout=timeout,
     )
 
 
@@ -98,23 +106,43 @@ def _prepare_build_context(variant_dir: Path, repo_override: Path | None) -> tup
     return temp_dir, True
 
 
-def _functional_run(image_ref: str, functional_dir: Path, check_id: str, command: str) -> None:
+def _functional_run(
+    image_ref: str,
+    functional_dir: Path,
+    check_id: str,
+    command: str,
+    timeout_seconds: int,
+) -> None:
+    container_name = f"codex-long-functional-{hashlib.sha256(f'{image_ref}:{check_id}'.encode('utf-8')).hexdigest()[:12]}"
     shell_command = f"{command} > /functional/{check_id}_output.log 2>&1; echo $? > /functional/{check_id}_exit_code"
-    _run(
-        [
-            "docker",
-            "run",
-            "--rm",
-            "--network",
-            "none",
-            "-v",
-            f"{functional_dir}:/functional",
-            image_ref,
-            "sh",
-            "-lc",
-            shell_command,
-        ]
-    )
+    try:
+        _run(
+            [
+                "docker",
+                "run",
+                "--name",
+                container_name,
+                "--rm",
+                "--network",
+                "none",
+                "-v",
+                f"{functional_dir}:/functional",
+                image_ref,
+                "sh",
+                "-lc",
+                shell_command,
+            ],
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        _run(["docker", "rm", "-f", container_name], check=False)
+        (functional_dir / f"{check_id}_exit_code").write_text("124\n", encoding="utf-8")
+        output_log = functional_dir / f"{check_id}_output.log"
+        existing = output_log.read_text(encoding="utf-8") if output_log.exists() else ""
+        output_log.write_text(
+            existing + f"\nfunctional check timed out after {timeout_seconds}s\n",
+            encoding="utf-8",
+        )
 
 
 def main() -> int:
@@ -172,11 +200,17 @@ def main() -> int:
         )
 
         for check in functional_checks:
+            timeout_seconds = int(check["timeout_seconds"])
+            if timeout_seconds <= 0:
+                raise SystemExit(
+                    f"functional check '{check['id']}' for family '{args.family}' must declare timeout_seconds > 0"
+                )
             _functional_run(
                 image_ref,
                 functional_dir,
                 str(check["id"]),
                 str(check["command"]),
+                timeout_seconds,
             )
 
         _run(["docker", "create", "--name", extract_container, image_ref, "true"])

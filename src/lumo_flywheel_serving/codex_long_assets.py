@@ -120,15 +120,14 @@ def _verify_references_milestone_helper(
     )
     helper_function = f"check_{milestone_id}"
     helper_is_sourced = any(invocation in normalized_verify for invocation in allowed_invocations)
-    helper_defines_check = re.search(
-        rf"(^|\n)\s*(?:function\s+)?{re.escape(helper_function)}\s*\(",
-        normalized_helper,
-    ) is not None
+    helper_function_pattern = rf"(^|\n)\s*(?:function\s+)?{re.escape(helper_function)}\s*\("
+    helper_defines_check = re.search(helper_function_pattern, normalized_helper) is not None
+    helper_is_shadowed = re.search(helper_function_pattern, normalized_verify) is not None
     helper_is_invoked = re.search(
         rf"\b{re.escape(helper_function)}\b",
         normalized_verify,
     ) is not None
-    return helper_is_sourced and helper_defines_check and helper_is_invoked
+    return helper_is_sourced and helper_defines_check and helper_is_invoked and not helper_is_shadowed
 
 
 def _verify_references_functional_check_result(
@@ -139,7 +138,88 @@ def _verify_references_functional_check_result(
     needle = f"{check_id}_exit_code"
     normalized_verify = _strip_shell_comments(verify_text)
     normalized_helpers = [_strip_shell_comments(helper_text) for helper_text in helper_texts]
-    return needle in normalized_verify or any(needle in helper_text for helper_text in normalized_helpers)
+    path_pattern = rf'"[^"\n]*{re.escape(needle)}"'
+    read_patterns = (
+        rf"\bcat\s+{path_pattern}",
+        rf"\bread\s+[A-Za-z_][A-Za-z0-9_]*\s*<\s*{path_pattern}",
+        rf"\$\(\s*<\s*{path_pattern}\s*\)",
+        rf"\bgrep\b[^\n]*{path_pattern}",
+    )
+    return any(
+        re.search(pattern, normalized_verify) or any(re.search(pattern, helper_text) for helper_text in normalized_helpers)
+        for pattern in read_patterns
+    )
+
+
+def _repo_source_files(repo_dir: Path) -> list[Path]:
+    source_suffixes = {".py", ".js", ".ts", ".tsx", ".go", ".rs", ".java"}
+    files: list[Path] = []
+    for path in repo_dir.rglob("*"):
+        if not path.is_file() or path.suffix not in source_suffixes:
+            continue
+        rel = path.relative_to(repo_dir)
+        if rel.parts and rel.parts[0] == "tests":
+            continue
+        files.append(path)
+    return files
+
+
+def _validate_variant_complexity(
+    *,
+    family_id: str,
+    variant_id: str,
+    scenario_type: str,
+    repo_dir: Path,
+) -> None:
+    source_files = _repo_source_files(repo_dir)
+    docs_files = [path for path in repo_dir.rglob("*") if path.is_file() and "docs" in path.relative_to(repo_dir).parts]
+    test_files = [path for path in (repo_dir / "tests").rglob("*") if path.is_file()]
+    workflow_files = [
+        path
+        for path in (repo_dir / ".github" / "workflows").rglob("*")
+        if path.is_file()
+    ]
+    logs_files = [path for path in (repo_dir / "logs").rglob("*") if path.is_file()]
+    config_files = [path for path in (repo_dir / "config").rglob("*") if path.is_file()]
+
+    if scenario_type in {"feature_evolution", "migration_refactor", "cross_layer_changes"} and len(source_files) < 3:
+        raise AssetPackError(
+            f"Variant '{family_id}/{variant_id}' is too shallow for scenario_type='{scenario_type}': "
+            "expected at least 3 non-test source files"
+        )
+    if scenario_type in {"feature_evolution", "migration_refactor", "investigate_then_fix", "cross_layer_changes"} and len(test_files) < 2:
+        raise AssetPackError(
+            f"Variant '{family_id}/{variant_id}' is too shallow for scenario_type='{scenario_type}': "
+            "expected at least 2 test files"
+        )
+    if scenario_type == "feature_evolution" and not docs_files:
+        raise AssetPackError(
+            f"Variant '{family_id}/{variant_id}' must include docs/ content for feature-evolution benchmark coverage"
+        )
+    if scenario_type == "build_ci_breakage":
+        if not (repo_dir / "Makefile").exists():
+            raise AssetPackError(f"Variant '{family_id}/{variant_id}' must include Makefile for CI-contract coverage")
+        if not (repo_dir / "scripts" / "run_ci.py").exists():
+            raise AssetPackError(
+                f"Variant '{family_id}/{variant_id}' must include scripts/run_ci.py for CI-contract coverage"
+            )
+        if not workflow_files:
+            raise AssetPackError(
+                f"Variant '{family_id}/{variant_id}' must include .github/workflows/ for CI drift coverage"
+            )
+    if scenario_type == "investigate_then_fix" and not logs_files:
+        raise AssetPackError(
+            f"Variant '{family_id}/{variant_id}' must include logs/ evidence for investigate-then-fix coverage"
+        )
+    if scenario_type == "cross_layer_changes":
+        if not docs_files:
+            raise AssetPackError(
+                f"Variant '{family_id}/{variant_id}' must include docs/ content for cross-layer coverage"
+            )
+        if not config_files:
+            raise AssetPackError(
+                f"Variant '{family_id}/{variant_id}' must include config/ content for cross-layer coverage"
+            )
 
 
 def _is_sys_executable(node: ast.AST) -> bool:
@@ -250,6 +330,16 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
         grading = family_spec.get("grading_invariant")
         if not isinstance(grading, dict):
             raise AssetPackError(f"grading_invariant must be a mapping: {family_spec_path}")
+        breakage_class = family_spec.get("breakage_class")
+        if not isinstance(breakage_class, dict):
+            raise AssetPackError(f"breakage_class must be a mapping: {family_spec_path}")
+        breakage_surfaces = breakage_class.get("surfaces")
+        if not isinstance(breakage_surfaces, list):
+            raise AssetPackError(f"breakage_class.surfaces must be a list: {family_spec_path}")
+        if len(breakage_surfaces) < 3:
+            raise AssetPackError(
+                f"Family '{family_id}' must define at least 3 breakage surfaces so the benchmark stays reasoning-heavy"
+            )
         functional_checks = grading.get("functional_checks")
         if not isinstance(functional_checks, list):
             raise AssetPackError(f"functional_checks must be a list: {family_spec_path}")
@@ -281,6 +371,10 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
         milestones = family_spec.get("milestones")
         if not isinstance(milestones, list):
             raise AssetPackError(f"Family milestones must be a list: {family_spec_path}")
+        if len(milestones) < 3:
+            raise AssetPackError(
+                f"Family '{family_id}' must define at least 3 milestones so the benchmark stays multi-step and non-trivial"
+            )
         milestone_helper_texts: list[str] = []
         for milestone in milestones:
             milestone_id = str(milestone["id"])
@@ -366,6 +460,12 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
             tests_dir = repo_dir / "tests"
             if not tests_dir.exists():
                 raise AssetPackError(f"Missing tests/ tree for variant '{family_id}/{variant_id}'")
+            _validate_variant_complexity(
+                family_id=family_id,
+                variant_id=variant_id,
+                scenario_type=scenario_type,
+                repo_dir=repo_dir,
+            )
 
             ci_runner_path = repo_dir / "scripts" / "run_ci.py"
             if ci_runner_path.exists():
