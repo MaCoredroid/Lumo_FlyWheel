@@ -566,6 +566,20 @@ def _merged_mapping(defaults: Any, override: Any) -> dict[str, Any]:
     return merged
 
 
+def _optional_mapping_section(
+    container: dict[str, Any],
+    key: str,
+    *,
+    owner_label: str,
+) -> dict[str, Any]:
+    if key not in container:
+        return {}
+    value = container[key]
+    if not isinstance(value, dict):
+        raise ValueError(f"{owner_label}.{key} must be a mapping when present")
+    return value
+
+
 def get_variant_spec(family_spec: dict[str, Any], variant_id: str) -> dict[str, Any]:
     variants = family_spec.get("variants")
     if not isinstance(variants, list):
@@ -581,13 +595,33 @@ def get_variant_quality_contract(
     variant_id: str,
 ) -> dict[str, Any]:
     variant = get_variant_spec(family_spec, variant_id)
+    family_oracle = _optional_mapping_section(family_spec, "oracle", owner_label="family")
+    family_hidden_tests = _optional_mapping_section(family_spec, "hidden_tests", owner_label="family")
+    family_red_team = _optional_mapping_section(family_spec, "red_team", owner_label="family")
+    family_calibration = _optional_mapping_section(family_spec, "calibration", owner_label="family")
+    variant_oracle = _optional_mapping_section(variant, "oracle", owner_label=f"variant '{variant_id}'")
+    variant_hidden_tests = _optional_mapping_section(
+        variant,
+        "hidden_tests",
+        owner_label=f"variant '{variant_id}'",
+    )
+    variant_red_team = _optional_mapping_section(
+        variant,
+        "red_team",
+        owner_label=f"variant '{variant_id}'",
+    )
+    variant_calibration = _optional_mapping_section(
+        variant,
+        "calibration",
+        owner_label=f"variant '{variant_id}'",
+    )
     return {
         "variant": variant,
         "tier": variant.get("tier", family_spec.get("tier")),
-        "oracle": _merged_mapping(family_spec.get("oracle"), variant.get("oracle")),
-        "hidden_tests": _merged_mapping(family_spec.get("hidden_tests"), variant.get("hidden_tests")),
-        "red_team": _merged_mapping(family_spec.get("red_team"), variant.get("red_team")),
-        "calibration": _merged_mapping(family_spec.get("calibration"), variant.get("calibration")),
+        "oracle": _merged_mapping(family_oracle, variant_oracle),
+        "hidden_tests": _merged_mapping(family_hidden_tests, variant_hidden_tests),
+        "red_team": _merged_mapping(family_red_team, variant_red_team),
+        "calibration": _merged_mapping(family_calibration, variant_calibration),
     }
 
 
@@ -2254,7 +2288,14 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 provenance.get("modification_notice"),
                 field_name=f"variants[{index}].provenance.modification_notice",
             )
-        contract = get_variant_quality_contract(family_spec, variant_id)
+        try:
+            contract = get_variant_quality_contract(family_spec, variant_id)
+        except ValueError as exc:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} has invalid richer-asset contract for "
+                f"variants[{index}]: {exc}",
+                affected_artifact="family_spec",
+            ) from exc
         tier = contract.get("tier")
         if tier is not None:
             tier_value = _require_non_empty_string(

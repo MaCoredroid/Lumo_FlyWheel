@@ -1755,6 +1755,26 @@ def test_validate_family_spec_accepts_templated_interactive_asset_paths() -> Non
     validate_family_spec(_codex_long_task(), family_spec)
 
 
+@pytest.mark.parametrize("section_name", ["oracle", "hidden_tests", "red_team", "calibration"])
+def test_validate_family_spec_rejects_non_mapping_family_quality_section(section_name: str) -> None:
+    family_spec = _modern_family_spec()
+    family_spec[section_name] = []
+    family_spec["variants"][0].pop(section_name, None)
+
+    with pytest.raises(ManifestMismatchError, match=rf"family\.{section_name} must be a mapping"):
+        validate_family_spec(_codex_long_task(), family_spec)
+
+
+@pytest.mark.parametrize("section_name", ["oracle", "hidden_tests", "red_team", "calibration"])
+def test_validate_family_spec_rejects_non_mapping_variant_quality_override(section_name: str) -> None:
+    family_spec = _modern_family_spec()
+    family_spec[section_name] = family_spec["variants"][0].pop(section_name)
+    family_spec["variants"][0][section_name] = []
+
+    with pytest.raises(ManifestMismatchError, match=rf"variants\[0\].*{section_name} must be a mapping"):
+        validate_family_spec(_codex_long_task(), family_spec)
+
+
 def test_validate_family_spec_rejects_declared_verifier_data_path_traversal() -> None:
     family_spec = _modern_family_spec()
     family_spec["variants"][0]["hidden_tests"]["path"] = "verifier_data/family-a/<variant_id>/../v2/hidden_tests"
