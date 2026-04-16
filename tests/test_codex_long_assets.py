@@ -146,6 +146,40 @@ def test_validate_authored_pack_allows_verify_sh_to_execute_milestone_helpers(tm
     assert summary.family_count == 5
 
 
+def test_validate_authored_pack_rejects_comment_only_milestone_source(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        "source /verifier/milestones/m1_cli_markdown.sh",
+        "# source /verifier/milestones/m1_cli_markdown.sh",
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="source and invoke milestone helper 'm1_cli_markdown'"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_rejects_comment_only_milestone_invocation(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        'if check_m1_cli_markdown "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then',
+        '# check_m1_cli_markdown "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"\nif true; then',
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="source and invoke milestone helper 'm1_cli_markdown'"):
+        validate_authored_asset_pack(repo_copy)
+
+
 def test_validate_authored_pack_rejects_missing_functional_check_result_consumption(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT, repo_copy)
@@ -164,6 +198,28 @@ def test_validate_authored_pack_rejects_missing_functional_check_result_consumpt
         '          add_error "Phase 2 pytest suite did not pass"\n'
         '        fi\n\n',
         "",
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="must consume the trusted functional check result"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_rejects_comment_only_functional_check_consumption(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        '        check_phase2_pytest_suite() {\n'
+        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '        }\n',
+        '        check_phase2_pytest_suite() {\n'
+        '          # pytest_suite_exit_code is checked elsewhere\n'
+        '          return 0\n'
+        '        }\n',
         1,
     )
     verify_path.write_text(verify_text, encoding="utf-8")

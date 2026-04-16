@@ -4,6 +4,7 @@ import ast
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -75,7 +76,40 @@ def _is_phase2_only_expected_state(entry: object) -> bool:
     return any(marker in combined for marker in markers)
 
 
-def _verify_references_milestone_helper(verify_text: str, milestone_id: str) -> bool:
+def _strip_shell_comments(text: str) -> str:
+    lines: list[str] = []
+    for raw_line in text.splitlines():
+        line: list[str] = []
+        in_single = False
+        in_double = False
+        for index, char in enumerate(raw_line):
+            if char == "'" and not in_double:
+                in_single = not in_single
+                line.append(char)
+                continue
+            if char == '"' and not in_single:
+                in_double = not in_double
+                line.append(char)
+                continue
+            if (
+                char == "#"
+                and not in_single
+                and not in_double
+                and (index == 0 or raw_line[index - 1].isspace())
+            ):
+                break
+            line.append(char)
+        lines.append("".join(line))
+    return "\n".join(lines)
+
+
+def _verify_references_milestone_helper(
+    verify_text: str,
+    milestone_id: str,
+    helper_text: str,
+) -> bool:
+    normalized_verify = _strip_shell_comments(verify_text)
+    normalized_helper = _strip_shell_comments(helper_text)
     helper_path = f"/verifier/milestones/{milestone_id}.sh"
     allowed_invocations = (
         f"source {helper_path}",
@@ -84,7 +118,17 @@ def _verify_references_milestone_helper(verify_text: str, milestone_id: str) -> 
         f"sh {helper_path}",
         helper_path,
     )
-    return any(invocation in verify_text for invocation in allowed_invocations)
+    helper_function = f"check_{milestone_id}"
+    helper_is_sourced = any(invocation in normalized_verify for invocation in allowed_invocations)
+    helper_defines_check = re.search(
+        rf"(^|\n)\s*(?:function\s+)?{re.escape(helper_function)}\s*\(",
+        normalized_helper,
+    ) is not None
+    helper_is_invoked = re.search(
+        rf"\b{re.escape(helper_function)}\b",
+        normalized_verify,
+    ) is not None
+    return helper_is_sourced and helper_defines_check and helper_is_invoked
 
 
 def _verify_references_functional_check_result(
@@ -93,7 +137,9 @@ def _verify_references_functional_check_result(
     check_id: str,
 ) -> bool:
     needle = f"{check_id}_exit_code"
-    return needle in verify_text or any(needle in helper_text for helper_text in helper_texts)
+    normalized_verify = _strip_shell_comments(verify_text)
+    normalized_helpers = [_strip_shell_comments(helper_text) for helper_text in helper_texts]
+    return needle in normalized_verify or any(needle in helper_text for helper_text in normalized_helpers)
 
 
 def _is_sys_executable(node: ast.AST) -> bool:
@@ -243,10 +289,12 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                 raise AssetPackError(f"Missing milestone helper: {milestone_path}")
             if not os.access(milestone_path, os.X_OK):
                 raise AssetPackError(f"Milestone helper is not executable: {milestone_path}")
-            milestone_helper_texts.append(milestone_path.read_text(encoding="utf-8"))
-            if not _verify_references_milestone_helper(verify_text, milestone_id):
+            helper_text = milestone_path.read_text(encoding="utf-8")
+            milestone_helper_texts.append(helper_text)
+            if not _verify_references_milestone_helper(verify_text, milestone_id, helper_text):
                 raise AssetPackError(
-                    f"verify.sh does not source or execute milestone helper '{milestone_id}' for family '{family_id}'"
+                    "verify.sh does not source and invoke milestone helper "
+                    f"'{milestone_id}' for family '{family_id}'"
                 )
 
         expected_final_state = grading.get("expected_final_state")
