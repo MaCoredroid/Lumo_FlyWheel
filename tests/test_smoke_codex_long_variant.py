@@ -21,6 +21,12 @@ assert LIVE_SPEC is not None and LIVE_SPEC.loader is not None
 LIVE = importlib.util.module_from_spec(LIVE_SPEC)
 LIVE_SPEC.loader.exec_module(LIVE)
 
+MATRIX_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "run_live_codex_long_matrix.py"
+MATRIX_SPEC = importlib.util.spec_from_file_location("run_live_codex_long_matrix_test", MATRIX_SCRIPT_PATH)
+assert MATRIX_SPEC is not None and MATRIX_SPEC.loader is not None
+MATRIX = importlib.util.module_from_spec(MATRIX_SPEC)
+MATRIX_SPEC.loader.exec_module(MATRIX)
+
 
 def _write_grader_dockerfile(repo_root: Path, content: str = "FROM scratch\n") -> str:
     docker_dir = repo_root / "docker"
@@ -333,3 +339,40 @@ def test_codex_result_is_infra_failure_ignores_model_failure(tmp_path: Path) -> 
     jsonl.write_text('{"type":"assistant_message","message":"try again"}\n', encoding="utf-8")
 
     assert LIVE._codex_result_is_infra_failure({"stderr": "model failed"}, jsonl) is False
+
+
+def test_parse_variant_ref_requires_family_variant_form() -> None:
+    assert MATRIX.parse_variant_ref("family-a/variant-b") == ("family-a", "variant-b")
+    with pytest.raises(Exception):
+        MATRIX.parse_variant_ref("variant-only")
+
+
+def test_summarize_results_excludes_infra_failures_from_adjusted_rate() -> None:
+    summary = MATRIX.summarize_results(
+        "balanced-two-per-family",
+        [
+            {"family": "f1", "variant": "v1", "countable": True, "pass": True, "infra_failure": False},
+            {"family": "f1", "variant": "v2", "countable": True, "pass": False, "infra_failure": False},
+            {"family": "f2", "variant": "v1", "countable": False, "pass": False, "infra_failure": True},
+        ],
+    )
+
+    assert summary["total_runs"] == 3
+    assert summary["countable_runs"] == 2
+    assert summary["infra_failures"] == 1
+    assert summary["passes"] == 1
+    assert summary["adjusted_pass_rate"] == 0.5
+
+
+def test_default_balanced_matrix_covers_two_variants_per_family() -> None:
+    family_counts: dict[str, int] = {}
+    for family, _variant in MATRIX.DEFAULT_BALANCED_MATRIX:
+        family_counts[family] = family_counts.get(family, 0) + 1
+
+    assert family_counts == {
+        "report-cli-markdown-evolution": 2,
+        "normalizer-api-migration": 2,
+        "ci-config-coverage-drift": 2,
+        "alert-dedupe-investigation": 2,
+        "owner-field-cross-layer": 2,
+    }
