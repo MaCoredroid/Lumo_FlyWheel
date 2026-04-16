@@ -90,7 +90,36 @@ def test_validate_authored_pack_rejects_untrusted_ci_runner(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    with pytest.raises(AssetPackError, match="import installed pytest"):
+    with pytest.raises(AssetPackError, match="trusted subprocess.call pytest path"):
+        validate_authored_asset_pack(repo_copy)
+
+
+def test_validate_authored_pack_rejects_ci_runner_early_success_shortcut(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    ci_runner = (
+        repo_copy
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "inventory-gate"
+        / "repo"
+        / "scripts"
+        / "run_ci.py"
+    )
+    ci_runner.write_text(
+        ci_runner.read_text(encoding="utf-8").replace(
+            'def main(argv: list[str] | None = None) -> int:\n',
+            'def main(argv: list[str] | None = None) -> int:\n'
+            '    if Path("pyproject.toml").exists():\n'
+            '        return 0\n',
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssetPackError, match="early success shortcuts"):
         validate_authored_asset_pack(repo_copy)
 
 

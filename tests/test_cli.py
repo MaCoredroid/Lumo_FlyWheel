@@ -18,7 +18,10 @@ class _Response:
         self.status_code = status_code
 
     def raise_for_status(self) -> None:
-        return None
+        if self.status_code >= 400:
+            error = requests.HTTPError(f"{self.status_code} error")
+            error.response = self
+            raise error
 
     def json(self) -> dict:
         return self._payload
@@ -153,7 +156,11 @@ def test_smoke_test_fails_when_prefix_cache_hits_do_not_increase(monkeypatch: py
     with pytest.raises(RuntimeError, match="Expected prefix cache hits"):
         cli.cmd_smoke_test(_args())
 
-    assert events == ["start:qwen3.5-27b", "stop:True"]
+    assert events == [
+        "start:qwen3.5-27b",
+        "meta:qwen3.5-27b:{'direct_api_smoke_status': 'escalated', 'direct_api_smoke_error': 'Expected prefix cache hits after repeated-prefix chat turns, but /metrics did not increase.'}",
+        "stop:True",
+    ]
 
 
 def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -248,6 +255,54 @@ def test_smoke_test_requires_responses_follow_up_id(monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(RuntimeError, match="did not return a response id"):
         cli.cmd_smoke_test(_args())
+
+
+def test_smoke_test_escalates_when_responses_follow_up_id_is_not_persisted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    server = SimpleNamespace(
+        start=lambda model_id, enable_request_logging=False: events.append(f"start:{model_id}"),
+        health=lambda: _Response(status_code=200),
+        models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
+        metrics=lambda: _Response(text="ignored"),
+        record_launch_metadata=lambda model_id, **metadata: events.append(f"meta:{model_id}:{metadata}"),
+        flush_prefix_cache=lambda: events.append("flush"),
+        stop=lambda missing_ok=True: events.append(f"stop:{missing_ok}"),
+    )
+
+    def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
+        if url.endswith("/v1/responses"):
+            if "previous_response_id" in json:
+                return _Response(
+                    payload={
+                        "error": {
+                            "message": "Response with id 'resp-1' not found.",
+                            "type": "invalid_request_error",
+                            "param": "response_id",
+                            "code": 404,
+                        }
+                    },
+                    text="""{"error":{"message":"Response with id 'resp-1' not found."}}""",
+                    status_code=404,
+                )
+            return _Response(payload={"id": "resp-1"})
+        return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
+
+    metrics_iter = iter([{"cache_hits": 0.0}])
+    monkeypatch.setattr(cli, "_server", lambda args: server)
+    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(RuntimeError, match="did not persist response ids for follow-up chaining"):
+        cli.cmd_smoke_test(_args())
+
+    assert events == [
+        "start:qwen3.5-27b",
+        "meta:qwen3.5-27b:{'direct_api_smoke_status': 'escalated', 'direct_api_smoke_error': \"Responses API follow-up turn failed: backend did not persist response ids for follow-up chaining. vLLM returned 404: Response with id 'resp-1' not found.\"}",
+        "stop:True",
+    ]
 
 
 def test_download_model_rejects_unpinned_hf_revision(

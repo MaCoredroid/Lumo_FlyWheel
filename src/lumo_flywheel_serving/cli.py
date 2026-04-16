@@ -58,6 +58,36 @@ def _response_id(payload: dict[str, object]) -> str:
     return response_id
 
 
+def _response_error_text(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()
+    body = response.text.strip()
+    return body or f"HTTP {response.status_code}"
+
+
+def _raise_for_smoke_response(response: requests.Response, *, phase: str) -> None:
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        error_text = _response_error_text(response)
+        if response.status_code == 404 and "Response with id" in error_text:
+            raise RuntimeError(
+                f"Responses API {phase} failed: backend did not persist response ids for follow-up chaining. "
+                f"vLLM returned 404: {error_text}"
+            ) from exc
+        raise RuntimeError(
+            f"Responses API {phase} failed with HTTP {response.status_code}: {error_text}"
+        ) from exc
+
+
 def _load_env_file(path: str | None) -> None:
     if not path:
         return
@@ -236,7 +266,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             json=_responses_probe_request(request_model_name, "Reply with the single token OK."),
             timeout=180,
         )
-        first_responses_call.raise_for_status()
+        _raise_for_smoke_response(first_responses_call, phase="initial turn")
         first_responses_payload = first_responses_call.json()
         first_response_id = _response_id(first_responses_payload)
         second_responses_call = requests.post(
@@ -249,7 +279,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             ),
             timeout=180,
         )
-        second_responses_call.raise_for_status()
+        _raise_for_smoke_response(second_responses_call, phase="follow-up turn")
         second_response_id = _response_id(second_responses_call.json())
         metrics_after = parse_prometheus_text(server.metrics().text)
         cache_hit_metric = schema["prefix_cache_hits"]
@@ -281,6 +311,13 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             )
         )
         return 0
+    except Exception as exc:
+        server.record_launch_metadata(
+            args.model_id,
+            direct_api_smoke_status="escalated",
+            direct_api_smoke_error=str(exc),
+        )
+        raise
     finally:
         if not args.keep_running:
             server.stop(missing_ok=True)

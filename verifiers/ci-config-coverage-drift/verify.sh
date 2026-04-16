@@ -43,6 +43,63 @@
             grep -Fq -- 'subprocess.call([sys.executable, "-c", runner])' "$agent_ws/scripts/run_ci.py"
         }
 
+        check_ci_runner_no_short_circuit() {
+          local agent_ws="$1"
+          python3 - "$agent_ws/scripts/run_ci.py" <<'PY'
+import ast
+import sys
+from pathlib import Path
+
+
+def is_sys_executable(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "executable"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "sys"
+    )
+
+
+def is_trusted_subprocess_call(node: ast.AST | None) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    if not (
+        isinstance(node.func, ast.Attribute)
+        and node.func.attr == "call"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "subprocess"
+    ):
+        return False
+    if len(node.args) != 1 or not isinstance(node.args[0], ast.List):
+        return False
+    args = node.args[0].elts
+    if len(args) != 3:
+        return False
+    if not is_sys_executable(args[0]):
+        return False
+    if not isinstance(args[1], ast.Constant) or args[1].value != "-c":
+        return False
+    return isinstance(args[2], ast.Name) and args[2].id == "runner"
+
+
+path = Path(sys.argv[1])
+module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+main_fn = next(
+    (node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "main"),
+    None,
+)
+if main_fn is None:
+    raise SystemExit(1)
+returns = [node for node in ast.walk(main_fn) if isinstance(node, ast.Return)]
+has_guard_return = any(
+    isinstance(node.value, ast.Constant) and node.value.value == 2
+    for node in returns
+)
+has_trusted_return = any(is_trusted_subprocess_call(node.value) for node in returns)
+raise SystemExit(0 if len(returns) == 2 and has_guard_return and has_trusted_return else 1)
+PY
+        }
+
         source /verifier/milestones/m1_pyproject_synced.sh
 source /verifier/milestones/m2_workflow_synced.sh
 source /verifier/milestones/m3_ci_passing.sh
@@ -88,6 +145,11 @@ source /verifier/milestones/m3_ci_passing.sh
         if ! check_ci_runner_contract "$AGENT_WS"; then
           write_result '.shortcut_detected = true'
           add_error "make ci contract no longer routes through the isolated repo CI runner"
+        fi
+
+        if ! check_ci_runner_no_short_circuit "$AGENT_WS"; then
+          write_result '.shortcut_detected = true'
+          add_error "repo CI runner short-circuits before the trusted subprocess.call pytest path"
         fi
 
         if check_m1_pyproject_synced "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then

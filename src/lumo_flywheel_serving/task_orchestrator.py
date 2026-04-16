@@ -559,8 +559,15 @@ def get_codex_harness_mounts(
     codex_node_modules: str,
     node_binary_path: str,
 ) -> dict[str, dict[str, str]]:
+    wrapper_path = Path(config_path).parent / "codex"
+    write_text(
+        wrapper_path,
+        "#!/bin/sh\n"
+        "exec /usr/local/bin/node /usr/local/lib/node_modules/@openai/codex/bin/codex.js \"$@\"\n",
+    )
+    wrapper_path.chmod(0o755)
     return {
-        str(codex_binary_path): {"bind": "/usr/local/bin/codex", "mode": "ro"},
+        str(wrapper_path): {"bind": "/usr/local/bin/codex", "mode": "ro"},
         str(codex_node_modules): {
             "bind": "/usr/local/lib/node_modules/@openai/codex",
             "mode": "ro",

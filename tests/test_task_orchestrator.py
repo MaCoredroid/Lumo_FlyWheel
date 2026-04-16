@@ -32,6 +32,7 @@ from lumo_flywheel_serving.task_orchestrator import (
     flush_prefix_cache,
     generate_codex_config,
     get_codex_harness_env,
+    get_codex_harness_mounts,
     get_local_image_digest,
     health_check,
     sha256_tree,
@@ -356,6 +357,30 @@ def test_generate_codex_config_uses_registry_context_window(tmp_path: Path) -> N
     assert "model_context_window           = 65536" in content
     assert "model_auto_compact_token_limit = 58982" in content
     assert 'wire_api               = "responses"' in content
+
+
+def test_get_codex_harness_mounts_wraps_package_entrypoint(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('model = "qwen3.5-27b"\n', encoding="utf-8")
+
+    mounts = get_codex_harness_mounts(
+        config_path=config_path,
+        codex_binary_path="/usr/bin/codex",
+        codex_node_modules="/usr/lib/node_modules/@openai/codex",
+        node_binary_path="/usr/bin/node",
+    )
+
+    wrapper_path = Path(next(path for path, mount in mounts.items() if mount["bind"] == "/usr/local/bin/codex"))
+    assert wrapper_path.read_text(encoding="utf-8") == (
+        "#!/bin/sh\n"
+        "exec /usr/local/bin/node /usr/local/lib/node_modules/@openai/codex/bin/codex.js \"$@\"\n"
+    )
+    assert oct(wrapper_path.stat().st_mode & 0o777) == "0o755"
+    assert mounts[str(wrapper_path)] == {"bind": "/usr/local/bin/codex", "mode": "ro"}
+    assert mounts["/usr/lib/node_modules/@openai/codex"] == {
+        "bind": "/usr/local/lib/node_modules/@openai/codex",
+        "mode": "ro",
+    }
 
 
 def test_generate_codex_config_is_unique_per_task_identity(tmp_path: Path) -> None:

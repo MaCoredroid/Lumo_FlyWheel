@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import os
@@ -93,6 +94,71 @@ def _verify_references_functional_check_result(
 ) -> bool:
     needle = f"{check_id}_exit_code"
     return needle in verify_text or any(needle in helper_text for helper_text in helper_texts)
+
+
+def _is_sys_executable(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "executable"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "sys"
+    )
+
+
+def _is_trusted_subprocess_call(node: ast.AST | None) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    if not (
+        isinstance(node.func, ast.Attribute)
+        and node.func.attr == "call"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "subprocess"
+    ):
+        return False
+    if len(node.args) != 1 or not isinstance(node.args[0], ast.List):
+        return False
+    args = node.args[0].elts
+    if len(args) != 3:
+        return False
+    if not _is_sys_executable(args[0]):
+        return False
+    if not isinstance(args[1], ast.Constant) or args[1].value != "-c":
+        return False
+    return isinstance(args[2], ast.Name) and args[2].id == "runner"
+
+
+def _uses_trusted_ci_runner_entrypoint(script_text: str) -> bool:
+    required_patterns = (
+        'sys.path=[p for p in sys.path if p not in ("", cwd)]',
+        'import pytest',
+        'pytest.main(["-q"])',
+        'subprocess.call([sys.executable, "-c", runner])',
+    )
+    if any(pattern not in script_text for pattern in required_patterns):
+        return False
+    try:
+        module = ast.parse(script_text)
+    except SyntaxError:
+        return False
+    main_fn = next(
+        (
+            node
+            for node in module.body
+            if isinstance(node, ast.FunctionDef) and node.name == "main"
+        ),
+        None,
+    )
+    if main_fn is None:
+        return False
+    returns = [node for node in ast.walk(main_fn) if isinstance(node, ast.Return)]
+    if len(returns) != 2:
+        return False
+    has_guard_return = any(
+        isinstance(node.value, ast.Constant) and node.value.value == 2
+        for node in returns
+    )
+    has_trusted_return = any(_is_trusted_subprocess_call(node.value) for node in returns)
+    return has_guard_return and has_trusted_return
 
 
 def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
@@ -256,15 +322,10 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
             ci_runner_path = repo_dir / "scripts" / "run_ci.py"
             if ci_runner_path.exists():
                 ci_runner_text = ci_runner_path.read_text(encoding="utf-8")
-                required_patterns = (
-                    'sys.path=[p for p in sys.path if p not in ("", cwd)]',
-                    'import pytest',
-                    'pytest.main(["-q"])',
-                    'subprocess.call([sys.executable, "-c", runner])',
-                )
-                if any(pattern not in ci_runner_text for pattern in required_patterns):
+                if not _uses_trusted_ci_runner_entrypoint(ci_runner_text):
                     raise AssetPackError(
-                        "Repo CI runner must import installed pytest before re-adding the workspace "
+                        "Repo CI runner must use the guarded package-drift branch plus the trusted "
+                        "subprocess.call pytest path without early success shortcuts "
                         f"for '{family_id}/{variant_id}'"
                     )
 
