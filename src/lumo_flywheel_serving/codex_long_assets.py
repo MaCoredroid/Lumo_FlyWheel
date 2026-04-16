@@ -48,6 +48,32 @@ def _uses_trusted_pytest_entrypoint(command: str) -> bool:
     return all(pattern in command for pattern in required)
 
 
+def _is_phase2_only_expected_state(entry: object) -> bool:
+    if isinstance(entry, str):
+        combined = entry.lower()
+    elif isinstance(entry, dict) and len(entry) == 1:
+        key, value = next(iter(entry.items()))
+        combined = f"{key} {value}".lower()
+    else:
+        return False
+    markers = (
+        "phase 2",
+        "phase2",
+        "functional check",
+        "functional_checks",
+        "exit 0",
+        "pytest",
+        "npm test",
+        "cargo test",
+        "go test",
+        "gradle test",
+        "mvn test",
+        "test suite passes",
+        "tests pass",
+    )
+    return any(marker in combined for marker in markers)
+
+
 def _verify_references_milestone_helper(verify_text: str, milestone_id: str) -> bool:
     helper_path = f"/verifier/milestones/{milestone_id}.sh"
     allowed_invocations = (
@@ -58,6 +84,15 @@ def _verify_references_milestone_helper(verify_text: str, milestone_id: str) -> 
         helper_path,
     )
     return any(invocation in verify_text for invocation in allowed_invocations)
+
+
+def _verify_references_functional_check_result(
+    verify_text: str,
+    helper_texts: list[str],
+    check_id: str,
+) -> bool:
+    needle = f"{check_id}_exit_code"
+    return needle in verify_text or any(needle in helper_text for helper_text in helper_texts)
 
 
 def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
@@ -134,6 +169,7 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
         milestones = family_spec.get("milestones")
         if not isinstance(milestones, list):
             raise AssetPackError(f"Family milestones must be a list: {family_spec_path}")
+        milestone_helper_texts: list[str] = []
         for milestone in milestones:
             milestone_id = str(milestone["id"])
             milestone_path = verifier_dir / "milestones" / f"{milestone_id}.sh"
@@ -141,10 +177,23 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                 raise AssetPackError(f"Missing milestone helper: {milestone_path}")
             if not os.access(milestone_path, os.X_OK):
                 raise AssetPackError(f"Milestone helper is not executable: {milestone_path}")
+            milestone_helper_texts.append(milestone_path.read_text(encoding="utf-8"))
             if not _verify_references_milestone_helper(verify_text, milestone_id):
                 raise AssetPackError(
                     f"verify.sh does not source or execute milestone helper '{milestone_id}' for family '{family_id}'"
                 )
+
+        expected_final_state = grading.get("expected_final_state")
+        if not isinstance(expected_final_state, list):
+            raise AssetPackError(f"expected_final_state must be a list: {family_spec_path}")
+        if any(_is_phase2_only_expected_state(entry) for entry in expected_final_state):
+            for check in functional_checks:
+                check_id = str(check.get("id", ""))
+                if not _verify_references_functional_check_result(verify_text, milestone_helper_texts, check_id):
+                    raise AssetPackError(
+                        "verify.sh must consume the trusted functional check result "
+                        f"for '{check_id}' in family '{family_id}'"
+                    )
 
         expectations_path = verifier_data_dir / family_id / "variant_expectations.json"
         if not expectations_path.exists():

@@ -115,3 +115,29 @@ def test_validate_authored_pack_allows_verify_sh_to_execute_milestone_helpers(tm
     summary = validate_authored_asset_pack(repo_copy)
 
     assert summary.family_count == 5
+
+
+def test_validate_authored_pack_rejects_missing_functional_check_result_consumption(tmp_path: Path) -> None:
+    repo_copy = tmp_path / "repo"
+    shutil.copytree(REPO_ROOT, repo_copy)
+
+    verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
+    verify_text = verify_path.read_text(encoding="utf-8")
+    verify_text = verify_text.replace(
+        '        check_phase2_pytest_suite() {\n'
+        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '        }\n\n',
+        "",
+        1,
+    )
+    verify_text = verify_text.replace(
+        '        if ! check_phase2_pytest_suite; then\n'
+        '          add_error "Phase 2 pytest suite did not pass"\n'
+        '        fi\n\n',
+        "",
+        1,
+    )
+    verify_path.write_text(verify_text, encoding="utf-8")
+
+    with pytest.raises(AssetPackError, match="must consume the trusted functional check result"):
+        validate_authored_asset_pack(repo_copy)

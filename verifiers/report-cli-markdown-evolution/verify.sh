@@ -32,6 +32,10 @@
             [ ! -f "$agent_ws/usercustomize.py" ]
         }
 
+        check_phase2_pytest_suite() {
+          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]
+        }
+
         source /verifier/milestones/m1_cli_markdown.sh
 source /verifier/milestones/m2_renderer_markdown.sh
 source /verifier/milestones/m3_docs_updated.sh
@@ -91,6 +95,10 @@ if check_m3_docs_updated "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then
 else
   add_error "Usage docs do not mention --format markdown"
 fi
+
+        if ! check_phase2_pytest_suite; then
+          add_error "Phase 2 pytest suite did not pass"
+        fi
 
         if jq -e '.errors | length == 0' "$RESULT_FILE" >/dev/null &&            jq -e '[.milestones[]] | length > 0 and all' "$RESULT_FILE" >/dev/null; then
           write_result '.pass = true'

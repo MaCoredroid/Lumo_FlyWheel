@@ -48,11 +48,14 @@ milestones:
   check_script: verifiers/report-cli-markdown-evolution/milestones/m3_docs_updated.sh
   partial_credit: 0.45
 shortcut_resistance:
-  notes: Phase 3 checks the CLI source, renderer source, and docs text directly while
-    test-file checksums catch test deletion or edits.
+  notes: Phase 3 checks the CLI source, renderer source, and docs text directly,
+    requires the trusted Phase 2 pytest exit code, and uses test-file checksums
+    to catch test deletion or edits.
   known_exploits_tested:
   - Delete docs assertions from the pytest suite
   - Stub the CLI to always print a canned Markdown string
+  - Add markdown strings to the grepped files without wiring a working markdown
+    path
   - Shadow pytest to exit 0 without exercising the renderer
 difficulty_estimate:
   target_solve_rate: 35-55%
