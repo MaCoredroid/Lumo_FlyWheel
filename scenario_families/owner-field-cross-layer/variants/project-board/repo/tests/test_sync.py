@@ -12,20 +12,24 @@ def _default_owner() -> str:
 
 
 def test_owner_is_persisted_by_the_service() -> None:
-    payload = sync_item("launch-checklist", "pending", owner="pm-oncall")
+    payload = sync_item("Launch  Checklist", "pending", owner="pm-oncall")
     assert payload == {
-        "name": "launch-checklist",
+        "name": "Launch  Checklist",
         "status": "pending",
         "owner": "pm-oncall",
+        "owner_source": "explicit",
+        "routing_key": "pm-oncall:launch-checklist",
     }
 
 
 def test_service_uses_default_owner_when_not_provided() -> None:
-    payload = sync_item("launch-checklist", "pending")
+    payload = sync_item("Launch Checklist", "pending")
     assert payload == {
-        "name": "launch-checklist",
+        "name": "Launch Checklist",
         "status": "pending",
         "owner": _default_owner(),
+        "owner_source": "default",
+        "routing_key": f"{_default_owner()}:launch-checklist",
     }
 
 
@@ -34,7 +38,7 @@ def test_cli_accepts_owner_flag_and_preserves_existing_fields() -> None:
         main(
             [
                 "--name",
-                "launch-checklist",
+                "Launch Checklist",
                 "--status",
                 "pending",
                 "--owner",
@@ -43,12 +47,20 @@ def test_cli_accepts_owner_flag_and_preserves_existing_fields() -> None:
         )
     )
     assert payload == {
-        "name": "launch-checklist",
+        "name": "Launch Checklist",
         "status": "pending",
         "owner": "pm-oncall",
+        "owner_source": "explicit",
+        "routing_key": "pm-oncall:launch-checklist",
     }
 
 
 def test_cli_uses_default_owner_when_flag_is_missing() -> None:
-    payload = json.loads(main(["--name", "launch-checklist", "--status", "pending"]))
-    assert payload["owner"] == _default_owner()
+    payload = json.loads(main(["--name", "Launch Checklist", "--status", "pending"]))
+    assert payload == {
+        "name": "Launch Checklist",
+        "status": "pending",
+        "owner": _default_owner(),
+        "owner_source": "default",
+        "routing_key": f"{_default_owner()}:launch-checklist",
+    }

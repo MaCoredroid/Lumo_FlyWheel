@@ -9,3 +9,5 @@ def test_usage_doc_mentions_json_and_markdown_modes() -> None:
     assert "--format json" in usage
     assert "owner table" in usage.lower()
     assert "queued items" in usage.lower()
+    assert "owner totals" in usage.lower()
+    assert "top owner" in usage.lower()

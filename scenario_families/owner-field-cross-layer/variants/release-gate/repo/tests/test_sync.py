@@ -12,20 +12,24 @@ def _default_owner() -> str:
 
 
 def test_owner_is_persisted_by_the_service() -> None:
-    payload = sync_item("patch-train", "pending", owner="release-captain")
+    payload = sync_item("Patch  Train", "pending", owner="release-captain")
     assert payload == {
-        "name": "patch-train",
+        "name": "Patch  Train",
         "status": "pending",
         "owner": "release-captain",
+        "owner_source": "explicit",
+        "routing_key": "release-captain:patch-train",
     }
 
 
 def test_service_uses_default_owner_when_not_provided() -> None:
-    payload = sync_item("patch-train", "pending")
+    payload = sync_item("Patch Train", "pending")
     assert payload == {
-        "name": "patch-train",
+        "name": "Patch Train",
         "status": "pending",
         "owner": _default_owner(),
+        "owner_source": "default",
+        "routing_key": f"{_default_owner()}:patch-train",
     }
 
 
@@ -34,7 +38,7 @@ def test_cli_accepts_owner_flag_and_preserves_existing_fields() -> None:
         main(
             [
                 "--name",
-                "patch-train",
+                "Patch Train",
                 "--status",
                 "pending",
                 "--owner",
@@ -43,12 +47,20 @@ def test_cli_accepts_owner_flag_and_preserves_existing_fields() -> None:
         )
     )
     assert payload == {
-        "name": "patch-train",
+        "name": "Patch Train",
         "status": "pending",
         "owner": "release-captain",
+        "owner_source": "explicit",
+        "routing_key": "release-captain:patch-train",
     }
 
 
 def test_cli_uses_default_owner_when_flag_is_missing() -> None:
-    payload = json.loads(main(["--name", "patch-train", "--status", "pending"]))
-    assert payload["owner"] == _default_owner()
+    payload = json.loads(main(["--name", "Patch Train", "--status", "pending"]))
+    assert payload == {
+        "name": "Patch Train",
+        "status": "pending",
+        "owner": _default_owner(),
+        "owner_source": "default",
+        "routing_key": f"{_default_owner()}:patch-train",
+    }

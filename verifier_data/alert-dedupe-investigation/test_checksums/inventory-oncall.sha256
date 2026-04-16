@@ -1,2 +1,2 @@
-d0c3f74cdd5c28e1aafa37313a62c51a3dc33efb4eedaf53045cd99de6f75296  ./tests/test_contract.py
-70977caf25933b1406662cabdf54edd019bfe7b6f3417f4b59e814b2ea667eea  ./tests/test_integration.py
+743ca3ef695b72fcb61d7d8f8ba723b5172890dddff41cfb9556382b3fbe459e  ./tests/test_contract.py
+b315cf645110912aa49c9e62399505fdc87c47d926d1f6d58a5454729e445dfd  ./tests/test_integration.py

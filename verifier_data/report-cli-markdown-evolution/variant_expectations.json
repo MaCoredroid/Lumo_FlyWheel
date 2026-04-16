@@ -3,11 +3,15 @@
     "incident-triage": {
       "checksum_file": "test_checksums/incident-triage.sha256",
       "m1_file": "report_app/cli.py",
-      "m1_pattern": "return render_markdown(TITLE, sections)",
+      "m1_pattern": "build_owner_summary(sections)",
+      "m1_extra_file": "report_app/service.py",
+      "m1_extra_pattern": "def build_owner_summary(",
       "m2_file": "report_app/rendering.py",
-      "m2_pattern": "| Owner | Label | Count |",
+      "m2_pattern": "## Owner Summary",
+      "m2_extra_pattern": "Top owner:",
       "m3_file": "docs/usage.md",
-      "m3_pattern": "--format markdown",
+      "m3_pattern": "owner totals",
+      "m3_extra_pattern": "top owner",
       "project_name": "incident-triage-report",
       "project_name_pattern": "name = \"incident-triage-report\""
     },
@@ -29,11 +33,15 @@
     "release-readiness": {
       "checksum_file": "test_checksums/release-readiness.sha256",
       "m1_file": "report_app/cli.py",
-      "m1_pattern": "return render_markdown(TITLE, sections)",
+      "m1_pattern": "build_owner_summary(sections)",
+      "m1_extra_file": "report_app/service.py",
+      "m1_extra_pattern": "def build_owner_summary(",
       "m2_file": "report_app/rendering.py",
-      "m2_pattern": "| Owner | Label | Count |",
+      "m2_pattern": "## Owner Summary",
+      "m2_extra_pattern": "Top owner:",
       "m3_file": "docs/usage.md",
-      "m3_pattern": "--format markdown",
+      "m3_pattern": "owner totals",
+      "m3_extra_pattern": "top owner",
       "project_name": "release-readiness-report",
       "project_name_pattern": "name = \"release-readiness-report\""
     }

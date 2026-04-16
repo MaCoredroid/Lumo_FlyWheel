@@ -1,2 +1,3 @@
-55e39fa1be5ecf1bd3cc5a931d1b18e62455a1c022b769c8ea0d925b60cfb072  ./tests/test_cli.py
-8bb20dc6775c58f93fc1714352d64fb65472c31fcf1c6dcc1dcdc16c6e7ce5d6  ./tests/test_docs.py
+bad540d96d1d3c2566d3ec0be6ebb7aed381892a10c25dff8e664a3981a7d2d6  ./tests/test_cli.py
+53ab4bb031cfc4628becddcb4cda2b27768788252ecc3e179578744f665241ab  ./tests/test_docs.py
+6a5dfc3b2f48d540429d3ab10ac29133918d9a4434f4dacc41f9c26d08ce335d  ./tests/test_service.py
