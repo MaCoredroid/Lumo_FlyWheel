@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
 import json
 import logging
@@ -43,6 +44,8 @@ _INFRASTRUCTURE_ERROR_PATTERNS = (
 )
 _PINNED_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$", re.IGNORECASE)
 _PINNED_IMAGE_RE = re.compile(r"^.+@sha256:[0-9a-f]{64}$", re.IGNORECASE)
+_CODEX_LONG_VARIANT_TIERS = {"small-investigative", "standard", "pro"}
+_MILESTONE_PASS_RULES = {"all", "any"}
 
 
 class OrchestratorError(RuntimeError):
@@ -383,6 +386,215 @@ def sha256_tree(root: str | Path) -> str:
     return f"sha256:{hasher.hexdigest()}"
 
 
+def sha256_path_set(paths: list[str | Path], *, repo_root: str | Path) -> str:
+    root_path = Path(repo_root)
+    if not root_path.exists():
+        raise FileNotFoundError(f"Directory does not exist: {root_path}")
+    if not root_path.is_dir():
+        raise NotADirectoryError(f"Expected directory tree, got: {root_path}")
+
+    normalized_files: list[Path] = []
+    seen: set[Path] = set()
+    for raw_path in paths:
+        candidate = Path(raw_path)
+        path = candidate if candidate.is_absolute() else root_path / candidate
+        if not path.exists():
+            raise FileNotFoundError(f"Declared asset path does not exist: {path}")
+        if path.is_dir():
+            file_paths = sorted(child for child in path.rglob("*") if child.is_file())
+        else:
+            file_paths = [path]
+        for file_path in file_paths:
+            if file_path in seen:
+                continue
+            seen.add(file_path)
+            normalized_files.append(file_path)
+
+    import hashlib
+
+    hasher = hashlib.sha256()
+    for file_path in sorted(normalized_files):
+        relative = file_path.relative_to(root_path).as_posix().encode("utf-8")
+        hasher.update(relative)
+        hasher.update(b"\0")
+        hasher.update(file_path.read_bytes())
+        hasher.update(b"\0")
+    return f"sha256:{hasher.hexdigest()}"
+
+
+def _render_variant_path_template(value: str, *, family_id: str, variant_id: str) -> str:
+    rendered = value
+    replacements = {
+        "<family>": family_id,
+        "<family_id>": family_id,
+        "<variant>": variant_id,
+        "<variant_id>": variant_id,
+    }
+    for needle, replacement in replacements.items():
+        rendered = rendered.replace(needle, replacement)
+    return rendered
+
+
+def _merged_mapping(defaults: Any, override: Any) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    if isinstance(defaults, dict):
+        merged.update(defaults)
+    if isinstance(override, dict):
+        merged.update(override)
+    return merged
+
+
+def get_variant_spec(family_spec: dict[str, Any], variant_id: str) -> dict[str, Any]:
+    variants = family_spec.get("variants")
+    if not isinstance(variants, list):
+        raise ValueError("Family spec variants must be a list")
+    for variant in variants:
+        if isinstance(variant, dict) and variant.get("variant_id") == variant_id:
+            return variant
+    raise KeyError(f"Variant '{variant_id}' not found in family spec")
+
+
+def get_variant_quality_contract(
+    family_spec: dict[str, Any],
+    variant_id: str,
+) -> dict[str, Any]:
+    variant = get_variant_spec(family_spec, variant_id)
+    return {
+        "variant": variant,
+        "tier": variant.get("tier", family_spec.get("tier")),
+        "oracle": _merged_mapping(family_spec.get("oracle"), variant.get("oracle")),
+        "hidden_tests": _merged_mapping(family_spec.get("hidden_tests"), variant.get("hidden_tests")),
+        "red_team": _merged_mapping(family_spec.get("red_team"), variant.get("red_team")),
+        "calibration": _merged_mapping(family_spec.get("calibration"), variant.get("calibration")),
+    }
+
+
+def resolve_milestone_test_nodes(
+    family_spec: dict[str, Any],
+    *,
+    family_id: str,
+    variant_id: str,
+) -> dict[str, tuple[str, ...]]:
+    contract = get_variant_quality_contract(family_spec, variant_id)
+    hidden_tests = contract["hidden_tests"]
+    milestone_map = hidden_tests.get("milestone_map") if isinstance(hidden_tests, dict) else None
+    milestones = family_spec.get("milestones")
+    if not isinstance(milestones, list):
+        raise ValueError("Family spec milestones must be a list")
+
+    resolved: dict[str, tuple[str, ...]] = {}
+    for milestone in milestones:
+        if not isinstance(milestone, dict):
+            raise ValueError("Family spec milestones entries must be mappings")
+        milestone_id = str(milestone.get("id", "")).strip()
+        raw_nodes = milestone.get("test_nodes")
+        if raw_nodes == "variant_scoped":
+            if not isinstance(milestone_map, dict):
+                raise ValueError(
+                    f"Family '{family_id}' milestone '{milestone_id}' requires hidden_tests.milestone_map "
+                    f"for variant '{variant_id}'"
+                )
+            raw_nodes = milestone_map.get(milestone_id)
+            if raw_nodes is None:
+                raise ValueError(
+                    f"Family '{family_id}' milestone '{milestone_id}' is missing hidden_tests.milestone_map "
+                    f"for variant '{variant_id}'"
+                )
+        if raw_nodes is None:
+            continue
+        if isinstance(raw_nodes, str):
+            nodes = [raw_nodes]
+        elif isinstance(raw_nodes, list):
+            nodes = raw_nodes
+        else:
+            raise ValueError(
+                f"Family '{family_id}' milestone '{milestone_id}' must use a string, list, or "
+                "'variant_scoped' test_nodes contract"
+            )
+        resolved_nodes = []
+        for index, node in enumerate(nodes):
+            if not isinstance(node, str) or not node.strip():
+                raise ValueError(
+                    f"Family '{family_id}' milestone '{milestone_id}' has invalid test_nodes[{index}] "
+                    f"for variant '{variant_id}'"
+                )
+            resolved_nodes.append(node)
+        resolved[milestone_id] = tuple(resolved_nodes)
+    return resolved
+
+
+def milestone_contract_hash(
+    family_spec: dict[str, Any],
+    *,
+    family_id: str,
+    variant_id: str,
+    milestone_id: str,
+) -> str:
+    milestones = family_spec.get("milestones")
+    if not isinstance(milestones, list):
+        raise ValueError("Family spec milestones must be a list")
+    resolved_nodes = resolve_milestone_test_nodes(
+        family_spec,
+        family_id=family_id,
+        variant_id=variant_id,
+    )
+    for milestone in milestones:
+        if not isinstance(milestone, dict):
+            continue
+        if str(milestone.get("id", "")).strip() != milestone_id:
+            continue
+        payload = {
+            "id": milestone_id,
+            "pass_rule": milestone.get("pass_rule", "all"),
+            "test_nodes": list(resolved_nodes.get(milestone_id, ())),
+        }
+        digest = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        return f"sha256:{digest}"
+    raise KeyError(f"Milestone '{milestone_id}' not found in family spec")
+
+
+def collect_declared_verifier_data_paths(task: TaskSpec, family_spec: dict[str, Any]) -> tuple[str, ...]:
+    family_id = str(task.family_id or "")
+    variant_id = str(task.variant_id or "")
+    contract = get_variant_quality_contract(family_spec, variant_id)
+    paths: set[str] = set()
+
+    def maybe_add(raw_path: Any) -> None:
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            return
+        rendered = _render_variant_path_template(raw_path.strip(), family_id=family_id, variant_id=variant_id)
+        if rendered.startswith("verifier_data/"):
+            paths.add(rendered)
+
+    for key in ("hidden_tests", "red_team", "calibration"):
+        section = contract.get(key)
+        if isinstance(section, dict):
+            maybe_add(section.get("path"))
+
+    difficulty_estimate = family_spec.get("difficulty_estimate")
+    if isinstance(difficulty_estimate, dict):
+        maybe_add(difficulty_estimate.get("evidence_path"))
+
+    shortcut_resistance = family_spec.get("shortcut_resistance")
+    if isinstance(shortcut_resistance, dict):
+        maybe_add(shortcut_resistance.get("generated_from"))
+
+    interactive = family_spec.get("interactive")
+    if isinstance(interactive, dict):
+        rounds = interactive.get("rounds")
+        if isinstance(rounds, int) and rounds > 0:
+            for round_index in range(1, rounds + 1):
+                round_cfg = interactive.get(f"round_{round_index}")
+                if not isinstance(round_cfg, dict):
+                    continue
+                maybe_add(round_cfg.get("brief_source"))
+                maybe_add(round_cfg.get("grader_between_rounds"))
+
+    return tuple(sorted(paths))
+
+
 def _sync_http_get(url: str, *, headers: dict[str, str] | None = None) -> requests.Response:
     return requests.get(url, headers=headers, timeout=10)
 
@@ -710,6 +922,7 @@ def verify_pre_grading_hashes(
     scenario_families_dir: str | Path | None = None,
 ) -> None:
     entry = find_manifest_entry(manifest, task.family_id or "", task.variant_id or "")
+    family_spec: dict[str, Any] | None = None
 
     try:
         actual_grader_digest = _canonical_sha256(image_digest_resolver(grader_image_ref))
@@ -723,99 +936,6 @@ def verify_pre_grading_hashes(
         raise ManifestMismatchError(
             f"Grader image digest mismatch: expected {expected_grader_digest}, got {actual_grader_digest}.",
             affected_artifact="grader_image",
-        )
-
-    family_verifier_dir = Path(verifiers_dir) / str(task.family_id)
-    verifier_path = family_verifier_dir / "verify.sh"
-    try:
-        actual_verifier_hash = _canonical_sha256(sha256_file(verifier_path))
-    except FileNotFoundError as exc:
-        raise ManifestMismatchError(
-            f"Verifier script missing for {task.scenario_id}: {verifier_path}",
-            affected_artifact="verifier",
-        ) from exc
-    if not os.access(verifier_path, os.X_OK):
-        raise ManifestMismatchError(
-            f"Verifier script is not executable for {task.scenario_id}: {verifier_path}",
-            affected_artifact="verifier",
-        )
-    if actual_verifier_hash != _canonical_sha256(entry["verifier_hash"]):
-        raise ManifestMismatchError(
-            f"Verifier hash mismatch for {task.scenario_id}: "
-            f"expected {entry['verifier_hash']}, got {actual_verifier_hash}",
-            affected_artifact="verifier",
-        )
-
-    milestone_hashes = entry.get("milestone_hashes", {})
-    milestones_dir = family_verifier_dir / "milestones"
-    expected_milestone_files = {f"{milestone_id}.sh" for milestone_id in milestone_hashes}
-    actual_milestone_files = (
-        {path.name for path in milestones_dir.iterdir() if path.is_file()}
-        if milestones_dir.exists()
-        else set()
-    )
-    if actual_milestone_files != expected_milestone_files:
-        missing = sorted(expected_milestone_files - actual_milestone_files)
-        unexpected = sorted(actual_milestone_files - expected_milestone_files)
-        details: list[str] = []
-        if missing:
-            details.append(f"missing {missing}")
-        if unexpected:
-            details.append(f"unexpected {unexpected}")
-        rendered = ", ".join(details) if details else "layout mismatch"
-        raise ManifestMismatchError(
-            f"Milestone file set mismatch for {task.scenario_id}: {rendered}",
-            affected_artifact="milestone",
-        )
-
-    for milestone_id, expected_hash in milestone_hashes.items():
-        milestone_path = milestones_dir / f"{milestone_id}.sh"
-        if not os.access(milestone_path, os.X_OK):
-            raise ManifestMismatchError(
-                f"Milestone helper is not executable for {task.scenario_id}/{milestone_id}: {milestone_path}",
-                affected_artifact="milestone",
-            )
-        actual_hash = _canonical_sha256(sha256_file(milestone_path))
-        if actual_hash != _canonical_sha256(expected_hash):
-            raise ManifestMismatchError(
-                f"Milestone hash mismatch for {task.scenario_id}/{milestone_id}: "
-                f"expected {expected_hash}, got {actual_hash}",
-                affected_artifact="milestone",
-            )
-
-    allowed_top_level_entries = {"verify.sh"}
-    if expected_milestone_files:
-        allowed_top_level_entries.add("milestones")
-    actual_top_level_entries = {path.name for path in family_verifier_dir.iterdir()}
-    unexpected_top_level_entries = sorted(actual_top_level_entries - allowed_top_level_entries)
-    if unexpected_top_level_entries:
-        raise ManifestMismatchError(
-            "Verifier tree contains untracked files for "
-            f"{task.scenario_id}: {unexpected_top_level_entries}",
-            affected_artifact="verifier",
-        )
-
-    unexpected_milestone_dirs = sorted(path.name for path in milestones_dir.iterdir() if path.is_dir()) if milestones_dir.exists() else []
-    if unexpected_milestone_dirs:
-        raise ManifestMismatchError(
-            "Milestones directory contains unexpected subdirectories for "
-            f"{task.scenario_id}: {unexpected_milestone_dirs}",
-            affected_artifact="milestone",
-        )
-
-    verifier_data_path = Path(verifier_data_dir) / str(task.family_id)
-    try:
-        verifier_data_hash = sha256_tree(verifier_data_path)
-    except (FileNotFoundError, NotADirectoryError) as exc:
-        raise ManifestMismatchError(
-            f"Verifier data missing for {task.scenario_id}: {verifier_data_path}",
-            affected_artifact="verifier_data",
-        ) from exc
-    if verifier_data_hash != _canonical_sha256(entry["verifier_data_hash"]):
-        raise ManifestMismatchError(
-            f"Verifier data hash mismatch for {task.scenario_id}: "
-            f"expected {entry['verifier_data_hash']}, got {verifier_data_hash}",
-            affected_artifact="verifier_data",
         )
 
     if scenario_families_dir is not None:
@@ -832,6 +952,184 @@ def verify_pre_grading_hashes(
                 f"Family spec hash mismatch for {task.scenario_id}: "
                 f"expected {entry['family_spec_hash']}, got {actual_family_spec_hash}",
                 affected_artifact="family_spec",
+            )
+        family_spec = load_family_spec(str(task.family_id), scenario_families_dir)
+
+    family_verifier_dir = Path(verifiers_dir) / str(task.family_id)
+    verifier_path = family_verifier_dir / "verify.sh"
+    try:
+        actual_verifier_hash = _canonical_sha256(sha256_file(verifier_path))
+    except FileNotFoundError as exc:
+        raise ManifestMismatchError(
+            f"Verifier script missing for {task.scenario_id}: {verifier_path}",
+            affected_artifact="verifier",
+        ) from exc
+    if not os.access(verifier_path, os.X_OK):
+        raise ManifestMismatchError(
+            f"Verifier script is not executable for {task.scenario_id}: {verifier_path}",
+            affected_artifact="verifier",
+        )
+    verifier_tree_hash = entry.get("verifier_tree_hash")
+    if verifier_tree_hash is not None:
+        actual_verifier_tree_hash = sha256_tree(family_verifier_dir)
+        if actual_verifier_tree_hash != _canonical_sha256(verifier_tree_hash):
+            raise ManifestMismatchError(
+                f"Verifier tree hash mismatch for {task.scenario_id}: "
+                f"expected {verifier_tree_hash}, got {actual_verifier_tree_hash}",
+                affected_artifact="verifier",
+            )
+    else:
+        if actual_verifier_hash != _canonical_sha256(entry["verifier_hash"]):
+            raise ManifestMismatchError(
+                f"Verifier hash mismatch for {task.scenario_id}: "
+                f"expected {entry['verifier_hash']}, got {actual_verifier_hash}",
+                affected_artifact="verifier",
+            )
+
+        milestone_hashes = entry.get("milestone_hashes", {})
+        milestones_dir = family_verifier_dir / "milestones"
+        expected_milestone_files: set[str] = set()
+        if family_spec is not None:
+            try:
+                milestones = family_spec.get("milestones")
+                if isinstance(milestones, list):
+                    for milestone in milestones:
+                        if not isinstance(milestone, dict):
+                            continue
+                        milestone_id = str(milestone.get("id", "")).strip()
+                        if milestone_id and milestone.get("check_script") is not None:
+                            expected_milestone_files.add(f"{milestone_id}.sh")
+            except Exception:
+                expected_milestone_files = {f"{milestone_id}.sh" for milestone_id in milestone_hashes}
+        else:
+            expected_milestone_files = {f"{milestone_id}.sh" for milestone_id in milestone_hashes}
+
+        actual_milestone_files = (
+            {path.name for path in milestones_dir.iterdir() if path.is_file()}
+            if milestones_dir.exists()
+            else set()
+        )
+        if actual_milestone_files != expected_milestone_files:
+            missing = sorted(expected_milestone_files - actual_milestone_files)
+            unexpected = sorted(actual_milestone_files - expected_milestone_files)
+            details: list[str] = []
+            if missing:
+                details.append(f"missing {missing}")
+            if unexpected:
+                details.append(f"unexpected {unexpected}")
+            rendered = ", ".join(details) if details else "layout mismatch"
+            raise ManifestMismatchError(
+                f"Milestone file set mismatch for {task.scenario_id}: {rendered}",
+                affected_artifact="milestone",
+            )
+
+        for milestone_id, expected_hash in milestone_hashes.items():
+            milestone_path = milestones_dir / f"{milestone_id}.sh"
+            if milestone_path.exists():
+                if not os.access(milestone_path, os.X_OK):
+                    raise ManifestMismatchError(
+                        f"Milestone helper is not executable for {task.scenario_id}/{milestone_id}: {milestone_path}",
+                        affected_artifact="milestone",
+                    )
+                actual_hash = _canonical_sha256(sha256_file(milestone_path))
+            elif family_spec is not None:
+                try:
+                    actual_hash = milestone_contract_hash(
+                        family_spec,
+                        family_id=str(task.family_id or ""),
+                        variant_id=str(task.variant_id or ""),
+                        milestone_id=milestone_id,
+                    )
+                except (KeyError, ValueError) as exc:
+                    raise ManifestMismatchError(
+                        f"Milestone contract missing for {task.scenario_id}/{milestone_id}: {exc}",
+                        affected_artifact="milestone",
+                    ) from exc
+            else:
+                raise ManifestMismatchError(
+                    f"Milestone helper missing for {task.scenario_id}/{milestone_id}: {milestone_path}",
+                    affected_artifact="milestone",
+                )
+            if actual_hash != _canonical_sha256(expected_hash):
+                raise ManifestMismatchError(
+                    f"Milestone hash mismatch for {task.scenario_id}/{milestone_id}: "
+                    f"expected {expected_hash}, got {actual_hash}",
+                    affected_artifact="milestone",
+                )
+
+        allowed_top_level_entries = {"verify.sh"}
+        if expected_milestone_files:
+            allowed_top_level_entries.add("milestones")
+        actual_top_level_entries = {path.name for path in family_verifier_dir.iterdir()}
+        unexpected_top_level_entries = sorted(actual_top_level_entries - allowed_top_level_entries)
+        if unexpected_top_level_entries:
+            raise ManifestMismatchError(
+                "Verifier tree contains untracked files for "
+                f"{task.scenario_id}: {unexpected_top_level_entries}",
+                affected_artifact="verifier",
+            )
+
+        unexpected_milestone_dirs = (
+            sorted(path.name for path in milestones_dir.iterdir() if path.is_dir())
+            if milestones_dir.exists()
+            else []
+        )
+        if unexpected_milestone_dirs:
+            raise ManifestMismatchError(
+                "Milestones directory contains unexpected subdirectories for "
+                f"{task.scenario_id}: {unexpected_milestone_dirs}",
+                affected_artifact="milestone",
+            )
+
+    repo_root = Path(verifier_data_dir).resolve().parent
+    declared_verifier_data_paths = (
+        collect_declared_verifier_data_paths(task, family_spec)
+        if family_spec is not None
+        else ()
+    )
+    if declared_verifier_data_paths:
+        try:
+            verifier_data_hash = sha256_path_set(list(declared_verifier_data_paths), repo_root=repo_root)
+        except (FileNotFoundError, NotADirectoryError) as exc:
+            raise ManifestMismatchError(
+                f"Verifier data missing for {task.scenario_id}: {exc}",
+                affected_artifact="verifier_data",
+            ) from exc
+    else:
+        verifier_data_path = Path(verifier_data_dir) / str(task.family_id)
+        try:
+            verifier_data_hash = sha256_tree(verifier_data_path)
+        except (FileNotFoundError, NotADirectoryError) as exc:
+            raise ManifestMismatchError(
+                f"Verifier data missing for {task.scenario_id}: {verifier_data_path}",
+                affected_artifact="verifier_data",
+            ) from exc
+    if verifier_data_hash != _canonical_sha256(entry["verifier_data_hash"]):
+        raise ManifestMismatchError(
+            f"Verifier data hash mismatch for {task.scenario_id}: "
+            f"expected {entry['verifier_data_hash']}, got {verifier_data_hash}",
+            affected_artifact="verifier_data",
+        )
+
+    if family_spec is not None and "calibration_hash" in entry:
+        calibration = get_variant_quality_contract(family_spec, str(task.variant_id or "")).get("calibration")
+        calibration_path = calibration.get("path") if isinstance(calibration, dict) else None
+        if not isinstance(calibration_path, str) or not calibration_path.strip():
+            raise ManifestMismatchError(
+                f"Calibration path missing from family spec for {task.scenario_id}",
+                affected_artifact="verifier_data",
+            )
+        rendered = _render_variant_path_template(
+            calibration_path,
+            family_id=str(task.family_id or ""),
+            variant_id=str(task.variant_id or ""),
+        )
+        actual_calibration_hash = _canonical_sha256(sha256_file(repo_root / rendered))
+        if actual_calibration_hash != _canonical_sha256(entry["calibration_hash"]):
+            raise ManifestMismatchError(
+                f"Calibration hash mismatch for {task.scenario_id}: "
+                f"expected {entry['calibration_hash']}, got {actual_calibration_hash}",
+                affected_artifact="verifier_data",
             )
 
 
@@ -1051,6 +1349,10 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             "functional check",
             "functional_checks",
             "exit 0",
+            "round 1",
+            "round1",
+            "round 2",
+            "round2",
         )
         test_runner_markers = (
             "pytest",
@@ -1059,6 +1361,8 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             "go test",
             "gradle test",
             "mvn test",
+            "hidden test",
+            "hidden tests",
             "test suite passes",
             "tests pass",
         )
@@ -1188,9 +1492,10 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
         grading_invariant.get("type"),
         field_name="grading_invariant.type",
     )
-    if grading_type != "state_based":
+    if grading_type not in {"state_based", "hybrid"}:
         raise ManifestMismatchError(
-            f"Family spec for {task.scenario_id} must set grading_invariant.type to 'state_based'",
+            f"Family spec for {task.scenario_id} must set grading_invariant.type to "
+            "'state_based' or 'hybrid'",
             affected_artifact="family_spec",
         )
     _require_non_empty_string(
@@ -1298,7 +1603,63 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"Family spec for {task.scenario_id} must define difficulty_estimate as a mapping",
             affected_artifact="family_spec",
         )
-    _require_target_solve_rate(difficulty_estimate.get("target_solve_rate"))
+    if "target_solve_rate" in difficulty_estimate:
+        _require_target_solve_rate(difficulty_estimate.get("target_solve_rate"))
+    elif "evidence_path" in difficulty_estimate:
+        _require_non_empty_string(
+            difficulty_estimate.get("evidence_path"),
+            field_name="difficulty_estimate.evidence_path",
+        )
+    else:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} must define either "
+            "difficulty_estimate.target_solve_rate or difficulty_estimate.evidence_path",
+            affected_artifact="family_spec",
+        )
+
+    interactive = family_spec.get("interactive")
+    if interactive is not None:
+        if not isinstance(interactive, dict):
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define interactive as a mapping",
+                affected_artifact="family_spec",
+            )
+        rounds = interactive.get("rounds")
+        if not isinstance(rounds, int) or rounds < 1:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define interactive.rounds as an integer >= 1",
+                affected_artifact="family_spec",
+            )
+        for round_index in range(1, rounds + 1):
+            round_key = f"round_{round_index}"
+            round_cfg = interactive.get(round_key)
+            if not isinstance(round_cfg, dict):
+                raise ManifestMismatchError(
+                    f"Family spec for {task.scenario_id} must define interactive.{round_key} as a mapping",
+                    affected_artifact="family_spec",
+                )
+            _require_non_empty_string(
+                round_cfg.get("brief_source"),
+                field_name=f"interactive.{round_key}.brief_source",
+            )
+            grader_between_rounds = round_cfg.get("grader_between_rounds")
+            if grader_between_rounds is not None:
+                _require_non_empty_string(
+                    grader_between_rounds,
+                    field_name=f"interactive.{round_key}.grader_between_rounds",
+                )
+            inject_timing = round_cfg.get("inject_timing")
+            if inject_timing is not None:
+                _require_non_empty_string(
+                    inject_timing,
+                    field_name=f"interactive.{round_key}.inject_timing",
+                )
+            inject_mechanism = round_cfg.get("inject_mechanism")
+            if inject_mechanism is not None:
+                _require_non_empty_string(
+                    inject_mechanism,
+                    field_name=f"interactive.{round_key}.inject_mechanism",
+                )
 
     milestones = family_spec.get("milestones")
     if not isinstance(milestones, list) or not milestones:
@@ -1334,17 +1695,53 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             milestone.get("description"),
             field_name=f"milestones[{index}].description",
         )
-        expected_check_script = f"verifiers/{expected_family_id}/milestones/{milestone_id}.sh"
-        check_script = _require_non_empty_string(
-            milestone.get("check_script"),
-            field_name=f"milestones[{index}].check_script",
-        )
-        if check_script != expected_check_script:
+        check_script = milestone.get("check_script")
+        test_nodes = milestone.get("test_nodes")
+        if check_script is None and test_nodes is None:
             raise ManifestMismatchError(
-                f"Family spec milestone check_script mismatch for {task.scenario_id}/{milestone_id}: "
-                f"expected '{expected_check_script}', got '{check_script}'",
+                f"Family spec milestones[{index}] for {task.scenario_id} must define check_script "
+                "or test_nodes",
                 affected_artifact="family_spec",
             )
+        if check_script is not None:
+            expected_check_script = f"verifiers/{expected_family_id}/milestones/{milestone_id}.sh"
+            check_script = _require_non_empty_string(
+                check_script,
+                field_name=f"milestones[{index}].check_script",
+            )
+            if check_script != expected_check_script:
+                raise ManifestMismatchError(
+                    f"Family spec milestone check_script mismatch for {task.scenario_id}/{milestone_id}: "
+                    f"expected '{expected_check_script}', got '{check_script}'",
+                    affected_artifact="family_spec",
+                )
+        if test_nodes is not None:
+            if test_nodes == "variant_scoped":
+                pass
+            elif isinstance(test_nodes, str):
+                _require_non_empty_string(
+                    test_nodes,
+                    field_name=f"milestones[{index}].test_nodes",
+                )
+            elif isinstance(test_nodes, list) and test_nodes:
+                for node_index, node in enumerate(test_nodes):
+                    _require_non_empty_string(
+                        node,
+                        field_name=f"milestones[{index}].test_nodes[{node_index}]",
+                    )
+            else:
+                raise ManifestMismatchError(
+                    f"Family spec milestones[{index}] for {task.scenario_id} must define test_nodes as "
+                    "a non-empty list, a non-empty string, or 'variant_scoped'",
+                    affected_artifact="family_spec",
+                )
+            pass_rule = milestone.get("pass_rule", "all")
+            if pass_rule not in _MILESTONE_PASS_RULES:
+                raise ManifestMismatchError(
+                    f"Family spec milestones[{index}] for {task.scenario_id} must use pass_rule "
+                    f"in {sorted(_MILESTONE_PASS_RULES)}",
+                    affected_artifact="family_spec",
+                )
         partial_credit = milestone.get("partial_credit")
         if not isinstance(partial_credit, (int, float)):
             raise ManifestMismatchError(
@@ -1376,33 +1773,53 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"Family spec for {task.scenario_id} must define shortcut_resistance as a mapping",
             affected_artifact="family_spec",
         )
-    _require_non_empty_string(
-        shortcut_resistance.get("notes"),
-        field_name="shortcut_resistance.notes",
-    )
-    known_exploits = shortcut_resistance.get("known_exploits_tested")
-    if not isinstance(known_exploits, list) or len(known_exploits) < 3:
-        raise ManifestMismatchError(
-            f"Family spec for {task.scenario_id} must list at least 3 known_exploits_tested entries",
-            affected_artifact="family_spec",
+    if "known_exploits_tested" in shortcut_resistance:
+        _require_non_empty_string(
+            shortcut_resistance.get("notes"),
+            field_name="shortcut_resistance.notes",
         )
-    has_spoofed_functional_success = False
-    for index, exploit in enumerate(known_exploits):
-        exploit_text = _require_non_empty_string(
-            exploit,
-            field_name=f"shortcut_resistance.known_exploits_tested[{index}]",
+        known_exploits = shortcut_resistance.get("known_exploits_tested")
+        if not isinstance(known_exploits, list) or len(known_exploits) < 3:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must list at least 3 known_exploits_tested entries",
+                affected_artifact="family_spec",
+            )
+        has_spoofed_functional_success = False
+        for index, exploit in enumerate(known_exploits):
+            exploit_text = _require_non_empty_string(
+                exploit,
+                field_name=f"shortcut_resistance.known_exploits_tested[{index}]",
+            )
+            has_spoofed_functional_success = (
+                has_spoofed_functional_success
+                or _is_spoofed_functional_success_exploit(exploit_text)
+            )
+        if not has_spoofed_functional_success:
+            raise ManifestMismatchError(
+                "Family spec for "
+                f"{task.scenario_id} must explicitly cover spoofed functional-check success "
+                "in shortcut_resistance.known_exploits_tested",
+                affected_artifact="family_spec",
+            )
+    else:
+        _require_non_empty_string(
+            shortcut_resistance.get("generated_from"),
+            field_name="shortcut_resistance.generated_from",
         )
-        has_spoofed_functional_success = (
-            has_spoofed_functional_success
-            or _is_spoofed_functional_success_exploit(exploit_text)
-        )
-    if not has_spoofed_functional_success:
-        raise ManifestMismatchError(
-            "Family spec for "
-            f"{task.scenario_id} must explicitly cover spoofed functional-check success "
-            "in shortcut_resistance.known_exploits_tested",
-            affected_artifact="family_spec",
-        )
+        min_exploits = shortcut_resistance.get("min_exploits")
+        if not isinstance(min_exploits, int) or min_exploits < 1:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define shortcut_resistance.min_exploits "
+                "as an integer >= 1",
+                affected_artifact="family_spec",
+            )
+        mutation_score_floor = shortcut_resistance.get("mutation_score_floor")
+        if not isinstance(mutation_score_floor, (int, float)) or not (0 < float(mutation_score_floor) <= 1):
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define shortcut_resistance.mutation_score_floor "
+                "in the interval (0, 1]",
+                affected_artifact="family_spec",
+            )
 
     variants = family_spec.get("variants")
     if not isinstance(variants, list) or len(variants) < 3:
@@ -1443,6 +1860,19 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             variant.get("repo_source", "authored"),
             field_name=f"variants[{index}].repo_source",
         )
+        variant_surfaces = variant.get("surfaces")
+        if variant_surfaces is not None:
+            if not isinstance(variant_surfaces, list) or not variant_surfaces:
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must define surfaces as "
+                    "a non-empty list when present",
+                    affected_artifact="family_spec",
+                )
+            for surface_index, surface in enumerate(variant_surfaces):
+                _require_non_empty_string(
+                    surface,
+                    field_name=f"variants[{index}].surfaces[{surface_index}]",
+                )
         if repo_source != "authored" and not repo_source.startswith("derived:"):
             raise ManifestMismatchError(
                 f"Family spec variants[{index}] for {task.scenario_id} must use repo_source "
@@ -1483,11 +1913,132 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 provenance.get("modification_notice"),
                 field_name=f"variants[{index}].provenance.modification_notice",
             )
+        contract = get_variant_quality_contract(family_spec, variant_id)
+        tier = contract.get("tier")
+        if tier is not None:
+            tier_value = _require_non_empty_string(
+                tier,
+                field_name=f"variants[{index}].tier",
+            )
+            if tier_value not in _CODEX_LONG_VARIANT_TIERS:
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must use tier in "
+                    f"{sorted(_CODEX_LONG_VARIANT_TIERS)}",
+                    affected_artifact="family_spec",
+                )
+
+        oracle = contract.get("oracle")
+        if oracle:
+            if not isinstance(oracle, dict):
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must define oracle as a mapping",
+                    affected_artifact="family_spec",
+                )
+            _require_non_empty_string(
+                oracle.get("path"),
+                field_name=f"variants[{index}].oracle.path",
+            )
+            for optional_field in ("followup_path", "source_commit"):
+                if optional_field in oracle:
+                    _require_non_empty_string(
+                        oracle.get(optional_field),
+                        field_name=f"variants[{index}].oracle.{optional_field}",
+                    )
+
+        hidden_tests = contract.get("hidden_tests")
+        if hidden_tests:
+            if not isinstance(hidden_tests, dict):
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must define hidden_tests as a mapping",
+                    affected_artifact="family_spec",
+                )
+            _require_non_empty_string(
+                hidden_tests.get("path"),
+                field_name=f"variants[{index}].hidden_tests.path",
+            )
+            if "entrypoint" in hidden_tests:
+                _require_non_empty_string(
+                    hidden_tests.get("entrypoint"),
+                    field_name=f"variants[{index}].hidden_tests.entrypoint",
+                )
+            milestone_map = hidden_tests.get("milestone_map")
+            if milestone_map is not None:
+                if not isinstance(milestone_map, dict) or not milestone_map:
+                    raise ManifestMismatchError(
+                        f"Family spec variants[{index}] for {task.scenario_id} must define hidden_tests.milestone_map "
+                        "as a non-empty mapping when present",
+                        affected_artifact="family_spec",
+                    )
+                for milestone_id, raw_nodes in milestone_map.items():
+                    _require_non_empty_string(
+                        milestone_id,
+                        field_name=f"variants[{index}].hidden_tests.milestone_map key",
+                    )
+                    if isinstance(raw_nodes, str):
+                        nodes = [raw_nodes]
+                    elif isinstance(raw_nodes, list) and raw_nodes:
+                        nodes = raw_nodes
+                    else:
+                        raise ManifestMismatchError(
+                            f"Family spec variants[{index}] for {task.scenario_id} must map milestone "
+                            f"'{milestone_id}' to a non-empty string or list of strings",
+                            affected_artifact="family_spec",
+                        )
+                    for node_index, node in enumerate(nodes):
+                        _require_non_empty_string(
+                            node,
+                            field_name=(
+                                f"variants[{index}].hidden_tests.milestone_map[{milestone_id}]"
+                                f"[{node_index}]"
+                            ),
+                        )
+
+        red_team = contract.get("red_team")
+        if red_team:
+            if not isinstance(red_team, dict):
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must define red_team as a mapping",
+                    affected_artifact="family_spec",
+                )
+            _require_non_empty_string(
+                red_team.get("path"),
+                field_name=f"variants[{index}].red_team.path",
+            )
+            exploits_required = red_team.get("exploits_required")
+            if exploits_required is not None and (not isinstance(exploits_required, int) or exploits_required < 1):
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must define red_team.exploits_required "
+                    "as an integer >= 1 when present",
+                    affected_artifact="family_spec",
+                )
+
+        calibration = contract.get("calibration")
+        if calibration:
+            if not isinstance(calibration, dict):
+                raise ManifestMismatchError(
+                    f"Family spec variants[{index}] for {task.scenario_id} must define calibration as a mapping",
+                    affected_artifact="family_spec",
+                )
+            _require_non_empty_string(
+                calibration.get("path"),
+                field_name=f"variants[{index}].calibration.path",
+            )
     if expected_variant_id not in variant_ids:
         raise ManifestMismatchError(
             f"Family spec for {task.scenario_id} does not declare variant_id '{expected_variant_id}'",
             affected_artifact="family_spec",
         )
+    try:
+        resolve_milestone_test_nodes(
+            family_spec,
+            family_id=expected_family_id,
+            variant_id=expected_variant_id,
+        )
+    except (KeyError, ValueError) as exc:
+        raise ManifestMismatchError(
+            f"Family spec for {task.scenario_id} has invalid milestone test-node wiring: {exc}",
+            affected_artifact="family_spec",
+        ) from exc
 
 
 def _call_verify_pre_run_hashes(

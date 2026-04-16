@@ -10,7 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .data_pool import MIN_CODEX_LONG_FAMILIES, SCENARIO_TYPES
-from .task_orchestrator import TaskSpec, validate_family_spec
+from .task_orchestrator import (
+    TaskSpec,
+    get_variant_quality_contract,
+    resolve_milestone_test_nodes,
+    validate_family_spec,
+)
 from .yaml_utils import load_yaml_file
 
 
@@ -40,6 +45,13 @@ def _checksum_manifest_for_dir(directory: Path) -> str:
 def _uses_trusted_pytest_entrypoint(command: str) -> bool:
     normalized_command = _strip_shell_comments(command)
     if "pytest" not in normalized_command:
+        return True
+    trusted_grader_patterns = (
+        "/grader/venv/bin/python -m pytest",
+        "/grader/venv/bin/python3 -m pytest",
+        "/grader/venv/bin/pytest",
+    )
+    if any(pattern in normalized_command for pattern in trusted_grader_patterns):
         return True
     if "python -m pytest" in normalized_command or "python3 -m pytest" in normalized_command:
         return False
@@ -77,12 +89,18 @@ def _is_phase2_only_expected_state(entry: object) -> bool:
         "functional check",
         "functional_checks",
         "exit 0",
+        "round 1",
+        "round1",
+        "round 2",
+        "round2",
         "pytest",
         "npm test",
         "cargo test",
         "go test",
         "gradle test",
         "mvn test",
+        "hidden test",
+        "hidden tests",
         "test suite passes",
         "tests pass",
     )
@@ -218,6 +236,16 @@ def _verify_references_functional_check_result(
         reader_function_names.update(reader_functions(helper_text))
 
     return any(gated_function_call(function_name) for function_name in reader_function_names)
+
+
+def _hidden_test_node_to_path(hidden_tests_dir: Path, test_node: str) -> Path:
+    node_path = test_node.split("::", 1)[0]
+    candidate = Path(node_path)
+    if candidate.parts[:2] == ("tests", "hidden"):
+        candidate = Path(*candidate.parts[2:])
+    elif not candidate.parts:
+        candidate = Path(candidate.name)
+    return hidden_tests_dir / candidate
 
 
 def _repo_source_files(repo_dir: Path) -> list[Path]:
@@ -447,6 +475,8 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
         milestone_helper_texts: list[str] = []
         for milestone in milestones:
             milestone_id = str(milestone["id"])
+            if milestone.get("check_script") is None:
+                continue
             milestone_path = verifier_dir / "milestones" / f"{milestone_id}.sh"
             if not milestone_path.exists():
                 raise AssetPackError(f"Missing milestone helper: {milestone_path}")
@@ -468,17 +498,18 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                 check_id = str(check.get("id", ""))
                 if not _verify_references_functional_check_result(verify_text, milestone_helper_texts, check_id):
                     raise AssetPackError(
-                        "verify.sh must consume the trusted functional check result "
-                        f"for '{check_id}' in family '{family_id}'"
+                    "verify.sh must consume the trusted functional check result "
+                    f"for '{check_id}' in family '{family_id}'"
                     )
 
         expectations_path = verifier_data_dir / family_id / "variant_expectations.json"
-        if not expectations_path.exists():
-            raise AssetPackError(f"Missing variant expectations for family '{family_id}'")
-        expectations = json.loads(expectations_path.read_text(encoding="utf-8"))
-        expected_variants = expectations.get("variants")
-        if not isinstance(expected_variants, dict):
-            raise AssetPackError(f"variant_expectations.json must contain a 'variants' mapping: {expectations_path}")
+        legacy_expectations: dict[str, object] = {}
+        if expectations_path.exists():
+            expectations = json.loads(expectations_path.read_text(encoding="utf-8"))
+            expected_variants = expectations.get("variants")
+            if not isinstance(expected_variants, dict):
+                raise AssetPackError(f"variant_expectations.json must contain a 'variants' mapping: {expectations_path}")
+            legacy_expectations = expected_variants
 
         for variant in variants:
             variant_id = str(variant["variant_id"])
@@ -546,24 +577,96 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                         f"for '{family_id}/{variant_id}'"
                     )
 
-            if variant_id not in expected_variants:
-                raise AssetPackError(
-                    f"variant_expectations.json missing entry for '{family_id}/{variant_id}'"
-                )
-            checksum_relpath = expected_variants[variant_id].get("checksum_file")
-            if not isinstance(checksum_relpath, str) or not checksum_relpath:
-                raise AssetPackError(
-                    f"variant_expectations.json missing checksum_file for '{family_id}/{variant_id}'"
-                )
-            checksum_path = verifier_data_dir / family_id / checksum_relpath
-            if not checksum_path.exists():
-                raise AssetPackError(f"Missing checksum manifest for '{family_id}/{variant_id}'")
-            expected_manifest = checksum_path.read_text(encoding="utf-8")
-            actual_manifest = _checksum_manifest_for_dir(tests_dir)
-            if expected_manifest != actual_manifest:
-                raise AssetPackError(
-                    f"Test checksum drift for '{family_id}/{variant_id}'; rerun the generator or update verifier_data."
-                )
+            contract = get_variant_quality_contract(family_spec, variant_id)
+            hidden_tests = contract.get("hidden_tests")
+            if isinstance(hidden_tests, dict) and hidden_tests:
+                hidden_tests_path = hidden_tests.get("path")
+                if isinstance(hidden_tests_path, str) and hidden_tests_path.strip():
+                    hidden_tests_dir = root / hidden_tests_path
+                    if not hidden_tests_dir.exists():
+                        raise AssetPackError(
+                            f"Missing hidden_tests directory for '{family_id}/{variant_id}': {hidden_tests_dir}"
+                        )
+                    if hidden_tests.get("entrypoint") is not None:
+                        entrypoint_path = hidden_tests_dir / str(hidden_tests["entrypoint"])
+                        if not entrypoint_path.exists():
+                            raise AssetPackError(
+                                f"Missing hidden_tests entrypoint for '{family_id}/{variant_id}': {entrypoint_path}"
+                            )
+                    milestone_nodes = resolve_milestone_test_nodes(
+                        family_spec,
+                        family_id=family_id,
+                        variant_id=variant_id,
+                    )
+                    for milestone_id, nodes in milestone_nodes.items():
+                        for test_node in nodes:
+                            test_path = _hidden_test_node_to_path(hidden_tests_dir, test_node)
+                            if not test_path.exists():
+                                raise AssetPackError(
+                                    f"Hidden test node '{test_node}' for '{family_id}/{variant_id}/{milestone_id}' "
+                                    f"does not resolve to an existing file under {hidden_tests_dir}"
+                                )
+
+            oracle = contract.get("oracle")
+            if isinstance(oracle, dict) and oracle:
+                for key in ("path", "followup_path"):
+                    raw_path = oracle.get(key)
+                    if raw_path is None:
+                        continue
+                    oracle_path = variant_dir / str(raw_path)
+                    if not oracle_path.exists():
+                        raise AssetPackError(
+                            f"Missing oracle asset '{key}' for '{family_id}/{variant_id}': {oracle_path}"
+                        )
+
+            red_team = contract.get("red_team")
+            if isinstance(red_team, dict) and red_team:
+                red_team_path = red_team.get("path")
+                if isinstance(red_team_path, str) and red_team_path.strip():
+                    red_team_dir = root / red_team_path
+                    if not red_team_dir.exists():
+                        raise AssetPackError(
+                            f"Missing red_team directory for '{family_id}/{variant_id}': {red_team_dir}"
+                        )
+                    if not (red_team_dir / "run_all.sh").exists():
+                        raise AssetPackError(
+                            f"red_team directory must include run_all.sh for '{family_id}/{variant_id}'"
+                        )
+
+            calibration = contract.get("calibration")
+            if isinstance(calibration, dict) and calibration:
+                calibration_path = calibration.get("path")
+                if isinstance(calibration_path, str) and calibration_path.strip():
+                    resolved_path = root / calibration_path
+                    if not resolved_path.exists():
+                        raise AssetPackError(
+                            f"Missing calibration asset for '{family_id}/{variant_id}': {resolved_path}"
+                        )
+
+            if legacy_expectations:
+                if variant_id not in legacy_expectations:
+                    raise AssetPackError(
+                        f"variant_expectations.json missing entry for '{family_id}/{variant_id}'"
+                    )
+                expectation_entry = legacy_expectations[variant_id]
+                if not isinstance(expectation_entry, dict):
+                    raise AssetPackError(
+                        f"variant_expectations.json entry for '{family_id}/{variant_id}' must be a mapping"
+                    )
+                checksum_relpath = expectation_entry.get("checksum_file")
+                if not isinstance(checksum_relpath, str) or not checksum_relpath:
+                    raise AssetPackError(
+                        f"variant_expectations.json missing checksum_file for '{family_id}/{variant_id}'"
+                    )
+                checksum_path = verifier_data_dir / family_id / checksum_relpath
+                if not checksum_path.exists():
+                    raise AssetPackError(f"Missing checksum manifest for '{family_id}/{variant_id}'")
+                expected_manifest = checksum_path.read_text(encoding="utf-8")
+                actual_manifest = _checksum_manifest_for_dir(tests_dir)
+                if expected_manifest != actual_manifest:
+                    raise AssetPackError(
+                        f"Test checksum drift for '{family_id}/{variant_id}'; rerun the generator or update verifier_data."
+                    )
 
     if scenario_types_seen != SCENARIO_TYPES:
         raise AssetPackError(
