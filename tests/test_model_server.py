@@ -6,6 +6,7 @@ import pytest
 import requests
 
 from lumo_flywheel_serving.model_server import (
+    DEFAULT_INFERENCE_PROXY_PORT,
     DEFAULT_VLLM_BASE_IMAGE,
     DEFAULT_VLLM_DOCKERFILE,
     DEFAULT_VLLM_IMAGE,
@@ -67,6 +68,9 @@ models:
     assert "vllm serve /models/qwen3.5-27b-fp8" in command
     assert "--chat-template /opt/lumo/chat_templates/qwen3-openai-codex.jinja" in command
     assert "docker/chat_templates/qwen3-openai-codex.jinja:/opt/lumo/chat_templates/qwen3-openai-codex.jinja:ro" in command
+    assert "--enable-auto-tool-choice" in command
+    assert "--tool-call-parser qwen3_xml" in command
+    assert "--reasoning-parser qwen3" in command
     assert "--enable-prefix-caching" in command
     assert "--enable-chunked-prefill" in command
     assert "--enable-log-requests" in command
@@ -233,6 +237,28 @@ models:
 
     assert "--chat-template" not in " ".join(cmd)
     assert server._chat_template_container_path(server.registry["glm-4.7"]) is None
+
+
+def test_proxy_base_url_uses_default_inference_proxy_port(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(registry_path=registry)
+
+    assert server.proxy_base_url() == f"http://127.0.0.1:{DEFAULT_INFERENCE_PROXY_PORT}"
 
 
 def test_record_launch_metadata_appends_sorted_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -535,6 +561,7 @@ models:
         "_run",
         lambda cmd, capture_output=False, check=True: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
     )
+    monkeypatch.setattr(server, "_start_proxy", lambda: None)
 
     def fake_wait_ready(model_id: str, timeout_s: int = 900) -> None:
         assert log_path.read_text(encoding="utf-8") == ""
@@ -588,6 +615,7 @@ models:
         or subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
     )
     monkeypatch.setattr(server, "_wait_ready", lambda model_id, timeout_s=900: events.append(f"ready:{model_id}"))
+    monkeypatch.setattr(server, "_start_proxy", lambda: events.append("proxy"))
 
     server.start("qwen3.5-27b")
 
@@ -638,6 +666,7 @@ models:
         lambda cmd, capture_output=False, check=True: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
     )
     monkeypatch.setattr(server, "_wait_ready", lambda model_id, timeout_s=900: None)
+    monkeypatch.setattr(server, "_start_proxy", lambda: None)
 
     server.start("qwen3.5-27b")
 
@@ -705,6 +734,7 @@ models:
             )
 
     monkeypatch.setattr(server, "_wait_ready", fake_wait_ready)
+    monkeypatch.setattr(server, "_start_proxy", lambda: None)
 
     server.start("qwen3.5-27b")
 

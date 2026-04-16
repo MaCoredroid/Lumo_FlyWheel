@@ -142,6 +142,64 @@ def _smoke_request_model_name(server: object, model_id: str) -> str:
     return getattr(config, "served_model_name", model_id)
 
 
+def _proxy_responses_url(server: object, port: int) -> str:
+    proxy_base_url = getattr(server, "proxy_base_url", None)
+    if callable(proxy_base_url):
+        return f"{proxy_base_url()}/v1/responses"
+    return f"http://127.0.0.1:{port + 1}/v1/responses"
+
+
+def _tool_call_probe_request(model: str) -> dict[str, object]:
+    return {
+        "model": model,
+        "input": "Call the codex_tool_probe function with no arguments. Do not answer in prose.",
+        "max_output_tokens": 256,
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "codex_tool_probe",
+                    "description": "Smoke-test tool used to validate Codex-compatible Responses function calls.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        ],
+    }
+
+
+def _has_structured_tool_call(payload: dict[str, object]) -> bool:
+    output = payload.get("output")
+    if not isinstance(output, list):
+        return False
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "function_call" and isinstance(item.get("name"), str):
+            return True
+    return False
+
+
+def _chat_message_text(payload: dict[str, object], default: str = "OK") -> str:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return default
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        return default
+    message = first_choice.get("message")
+    if not isinstance(message, dict):
+        return default
+    content = message.get("content")
+    if isinstance(content, str) and content.strip():
+        return content.strip()
+    return default
+
+
 def cmd_bootstrap_runtime(args: argparse.Namespace) -> int:
     for raw_path in (args.models_root, args.logs_root, args.triton_cache_root):
         Path(raw_path).mkdir(parents=True, exist_ok=True)
@@ -246,7 +304,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         )
         first_chat.raise_for_status()
         first_chat_payload = first_chat.json()
-        first_reply = first_chat_payload["choices"][0]["message"]["content"].strip() or "OK"
+        first_reply = _chat_message_text(first_chat_payload)
         second_chat_request = {
             "model": request_model_name,
             "messages": _prefix_cache_probe_messages(prior_reply=first_reply),
@@ -281,6 +339,18 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
         )
         _raise_for_smoke_response(second_responses_call, phase="follow-up turn")
         second_response_id = _response_id(second_responses_call.json())
+        tool_probe_response = requests.post(
+            _proxy_responses_url(server, args.port),
+            headers=_auth_headers(),
+            json=_tool_call_probe_request(request_model_name),
+            timeout=180,
+        )
+        _raise_for_smoke_response(tool_probe_response, phase="Codex tool-call probe")
+        tool_probe_payload = tool_probe_response.json()
+        if not _has_structured_tool_call(tool_probe_payload):
+            raise RuntimeError(
+                "Codex tool-call probe failed: proxy/vLLM path did not return a structured function_call item."
+            )
         metrics_after = parse_prometheus_text(server.metrics().text)
         cache_hit_metric = schema["prefix_cache_hits"]
         cache_hit_delta = metrics_after.get(cache_hit_metric, 0.0) - metrics_before.get(cache_hit_metric, 0.0)
@@ -293,6 +363,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             direct_api_smoke_status="pass",
             metric_schema_variant=_metric_schema_variant(schema),
             prefix_cache_hits_delta=round(cache_hit_delta, 3),
+            codex_tool_probe_status="pass",
         )
         server.flush_prefix_cache()
         print(
@@ -304,6 +375,7 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
                     "schema": schema,
                     "chat_completion_ids": [first_chat_payload.get("id"), second_chat.json().get("id")],
                     "responses_ids": [first_response_id, second_response_id],
+                    "tool_call_probe_status": "pass",
                     "reset_prefix_cache_status": 200,
                     "prefix_cache_hits_delta": cache_hit_delta,
                 },

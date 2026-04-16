@@ -7,14 +7,14 @@ Local vLLM serving layer implementation for the Lumo FlyWheel specs.
 1. `make venv`
 2. `make bootstrap-runtime`
 3. `make download-qwen35-27b`
-4. `make smoke` for the direct vLLM API smoke check
+4. `make smoke` for the direct vLLM API smoke check plus the Codex tool-call proxy path
 5. `make gate1` for the signed-off Codex CLI Gate 1 run
 
-The project-local Codex provider config lives in `.codex/config.toml` and points Codex CLI at `http://127.0.0.1:8000/v1` with `wire_api = "responses"`.
+The project-local Codex provider config lives in `.codex/config.toml` and points Codex CLI at `http://127.0.0.1:8001/v1`, the inference-only proxy that normalizes Codex Responses tool payloads before forwarding to local vLLM.
 
 The serving stack now builds a repo-owned image tagged `lumo-flywheel-vllm:26.01-py3-v0.19.0` from [docker/Dockerfile.nvidia-vllm](/home/mark/shared/lumoFlyWheel/docker/Dockerfile.nvidia-vllm), which is derived from the required NVIDIA base image `nvcr.io/nvidia/pytorch:26.01-py3`.
 
-The official launcher path now also sets `VLLM_ENABLE_RESPONSES_API_STORE=1`, which is required for live Responses `previous_response_id` follow-up persistence. `make smoke` verifies that contract directly by chaining a second `/v1/responses` request off the first response id.
+The official launcher path now also sets `VLLM_ENABLE_RESPONSES_API_STORE=1`, which is required for live Responses `previous_response_id` follow-up persistence. `make smoke` verifies that contract directly by chaining a second `/v1/responses` request off the first response id and by probing the proxy-backed Codex tool-call path.
 
 ## Codex-Long authored pack
 

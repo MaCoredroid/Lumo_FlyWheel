@@ -4,7 +4,10 @@ import json
 import os
 import re
 import shlex
+import signal
+import socket
 import subprocess
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -19,6 +22,7 @@ LOCAL_RUNTIME_ENV_FILENAME = ".lumo.local.env"
 DEFAULT_VLLM_BASE_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_VLLM_IMAGE = "lumo-flywheel-vllm:26.01-py3-v0.19.0"
 DEFAULT_VLLM_DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
+DEFAULT_INFERENCE_PROXY_PORT = 8001
 VLLM_ENABLE_RESPONSES_API_STORE = "1"
 QWEN_CHAT_TEMPLATE_HOST_PATH = REPO_ROOT / "docker" / "chat_templates" / "qwen3-openai-codex.jinja"
 QWEN_CHAT_TEMPLATE_CONTAINER_PATH = Path("/opt/lumo/chat_templates/qwen3-openai-codex.jinja")
@@ -44,6 +48,7 @@ class ModelServer:
         logs_root: str | Path = "/logs",
         triton_cache_root: str | Path = "/tmp/triton_cache",
         use_sleep_mode: bool = False,
+        proxy_port: int = DEFAULT_INFERENCE_PROXY_PORT,
     ) -> None:
         self.registry_path = Path(registry_path)
         self._load_local_runtime_env()
@@ -54,11 +59,100 @@ class ModelServer:
         self.logs_root = Path(logs_root)
         self.triton_cache_root = Path(triton_cache_root)
         self.use_sleep_mode = use_sleep_mode
+        self.proxy_port = proxy_port
         self.current_model: str | None = None
 
     def ensure_runtime_scaffolding(self) -> None:
         for path in (Path("/models"), self.logs_root, self.triton_cache_root):
             path.mkdir(parents=True, exist_ok=True)
+
+    def proxy_base_url(self, host: str = "127.0.0.1") -> str:
+        return f"http://{host}:{self.proxy_port}"
+
+    def _proxy_pid_path(self) -> Path:
+        return self.logs_root / "codex_inference_proxy.pid"
+
+    def _proxy_log_path(self) -> Path:
+        return self.logs_root / "codex_inference_proxy.log"
+
+    def _start_proxy(self) -> None:
+        self.logs_root.mkdir(parents=True, exist_ok=True)
+        self._stop_proxy(missing_ok=True)
+        pid_path = self._proxy_pid_path()
+        log_path = self._proxy_log_path()
+        command = [
+            sys.executable,
+            "-m",
+            "lumo_flywheel_serving.inference_proxy",
+            "--listen-host",
+            "0.0.0.0",
+            "--listen-port",
+            str(self.proxy_port),
+            "--upstream-base-url",
+            f"http://127.0.0.1:{self.port}",
+            "--pid-file",
+            str(pid_path),
+            "--log-path",
+            str(log_path),
+        ]
+        with log_path.open("a", encoding="utf-8") as handle:
+            process = subprocess.Popen(  # noqa: S603
+                command,
+                stdout=handle,
+                stderr=handle,
+                start_new_session=True,
+                text=True,
+                env=os.environ.copy(),
+            )
+        try:
+            self._wait_proxy_ready(timeout_s=10)
+        except Exception:
+            process.poll()
+            if process.returncode is None:
+                process.terminate()
+            raise
+
+    def _wait_proxy_ready(self, timeout_s: int = 10) -> None:
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1)
+                if sock.connect_ex(("127.0.0.1", self.proxy_port)) == 0:
+                    return
+            time.sleep(0.2)
+        raise RuntimeError(f"Inference proxy not ready within {timeout_s}s")
+
+    def _stop_proxy(self, missing_ok: bool = False) -> None:
+        pid_path = self._proxy_pid_path()
+        if not pid_path.exists():
+            if missing_ok:
+                return
+            raise RuntimeError("Inference proxy pid file is not present")
+        try:
+            pid = int(pid_path.read_text(encoding="utf-8").strip())
+        except ValueError:
+            pid_path.unlink(missing_ok=True)
+            if missing_ok:
+                return
+            raise RuntimeError(f"Invalid inference proxy pid file: {pid_path}")
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pid_path.unlink(missing_ok=True)
+            return
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                pid_path.unlink(missing_ok=True)
+                return
+            time.sleep(0.1)
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        pid_path.unlink(missing_ok=True)
 
     def _load_local_runtime_env(self) -> None:
         for env_path in self._local_runtime_env_candidates():
@@ -162,6 +256,7 @@ class ModelServer:
                     self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                     continue
                 raise
+        self._start_proxy()
         self.current_model = model_id
 
     def switch_model(self, model_id: str, enable_request_logging: bool = False) -> None:
@@ -177,12 +272,14 @@ class ModelServer:
         )
         if self.container_name not in result.stdout.splitlines():
             if missing_ok:
+                self._stop_proxy(missing_ok=True)
                 self._recover_host_memory()
                 return
             raise RuntimeError(f"Container {self.container_name} is not present")
 
         self._run(["docker", "stop", "-t", "30", self.container_name], capture_output=False, check=False)
         self._run(["docker", "rm", "-f", self.container_name], capture_output=False, check=False)
+        self._stop_proxy(missing_ok=True)
         self.current_model = None
         self._recover_host_memory()
 
@@ -430,6 +527,16 @@ class ModelServer:
             vllm_args.extend(self._format_lora_modules(config))
         if chat_template_path is not None:
             vllm_args.extend(["--chat-template", str(chat_template_path)])
+        if self._uses_qwen_openai_parsers(config):
+            vllm_args.extend(
+                [
+                    "--enable-auto-tool-choice",
+                    "--tool-call-parser",
+                    "qwen3_xml",
+                    "--reasoning-parser",
+                    "qwen3",
+                ]
+            )
         if enforce_eager:
             vllm_args.append("--enforce-eager")
         if self.use_sleep_mode:
@@ -565,6 +672,10 @@ class ModelServer:
         if config.hf_repo.lower().startswith("qwen/"):
             return QWEN_CHAT_TEMPLATE_CONTAINER_PATH
         return None
+
+    @staticmethod
+    def _uses_qwen_openai_parsers(config: ModelConfig) -> bool:
+        return config.hf_repo.lower().startswith("qwen/")
 
     @staticmethod
     def _expected_served_model_ids(config: ModelConfig) -> set[str]:

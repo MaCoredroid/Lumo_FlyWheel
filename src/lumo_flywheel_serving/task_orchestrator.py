@@ -852,6 +852,7 @@ def build_codex_command(task: TaskSpec) -> str:
     prompt = _get_prompt(task)
     return (
         "codex exec "
+        "--skip-git-repo-check "
         "--yolo "
         "--json "
         "-c 'web_search=\"disabled\"' "

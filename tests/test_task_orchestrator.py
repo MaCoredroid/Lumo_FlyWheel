@@ -29,6 +29,7 @@ from lumo_flywheel_serving.task_orchestrator import (
     VllmConfig,
     _grading_dir_for_run,
     _call_with_supported_kwargs,
+    build_codex_command,
     flush_prefix_cache,
     generate_codex_config,
     get_codex_harness_env,
@@ -172,6 +173,12 @@ def _valid_family_spec(
             },
         ],
     }
+
+
+def test_build_codex_command_allows_non_git_task_images() -> None:
+    command = build_codex_command(_codex_long_task())
+
+    assert "--skip-git-repo-check" in command
 
 
 class _Response:
