@@ -1025,6 +1025,27 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             )
         return solve_rate
 
+    def _is_phase2_only_invariant(check_id: str, description: str) -> bool:
+        combined = f"{check_id} {description}".lower()
+        explicit_phase2_markers = (
+            "phase 2",
+            "phase2",
+            "functional check",
+            "functional_checks",
+            "exit 0",
+        )
+        test_runner_markers = (
+            "pytest",
+            "npm test",
+            "cargo test",
+            "go test",
+            "gradle test",
+            "mvn test",
+            "test suite passes",
+            "tests pass",
+        )
+        return any(marker in combined for marker in (*explicit_phase2_markers, *test_runner_markers))
+
     expected_family_id = task.family_id or ""
     expected_variant_id = task.variant_id or ""
     expected_scenario_type = task.scenario_type or ""
@@ -1191,27 +1212,39 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             f"Family spec for {task.scenario_id} must define non-empty grading_invariant.expected_final_state",
             affected_artifact="family_spec",
         )
+    trusted_phase3_invariants = 0
     for index, expected_state in enumerate(expected_final_state):
         if isinstance(expected_state, str):
-            _require_non_empty_string(
+            description = _require_non_empty_string(
                 expected_state,
                 field_name=f"grading_invariant.expected_final_state[{index}]",
             )
+            if not _is_phase2_only_invariant(description, description):
+                trusted_phase3_invariants += 1
             continue
         if isinstance(expected_state, dict) and len(expected_state) == 1:
             check_id, description = next(iter(expected_state.items()))
-            _require_non_empty_string(
+            check_id = _require_non_empty_string(
                 check_id,
                 field_name=f"grading_invariant.expected_final_state[{index}] key",
             )
-            _require_non_empty_string(
+            description = _require_non_empty_string(
                 description,
                 field_name=f"grading_invariant.expected_final_state[{index}].{check_id}",
             )
+            if not _is_phase2_only_invariant(check_id, description):
+                trusted_phase3_invariants += 1
             continue
         raise ManifestMismatchError(
             "Family spec grading_invariant.expected_final_state entries must be non-empty strings "
             "or single-entry mappings",
+            affected_artifact="family_spec",
+        )
+    if trusted_phase3_invariants < 1:
+        raise ManifestMismatchError(
+            "Family spec for "
+            f"{task.scenario_id} must define at least one trusted Phase 3 expected_final_state "
+            "invariant that can reject spoofed functional-check success independently of Phase 2",
             affected_artifact="family_spec",
         )
 
@@ -1230,6 +1263,7 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             affected_artifact="family_spec",
         )
     partial_credit_total = 0.0
+    previous_partial_credit = 0.0
     seen_milestone_ids: set[str] = set()
     for index, milestone in enumerate(milestones):
         if not isinstance(milestone, dict):
@@ -1273,7 +1307,14 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 f"Family spec milestones[{index}] for {task.scenario_id} must use partial_credit >= 0",
                 affected_artifact="family_spec",
             )
+        if index > 0 and partial_credit < previous_partial_credit:
+            raise ManifestMismatchError(
+                f"Family spec milestones for {task.scenario_id} must use monotonically non-decreasing "
+                "partial_credit weights across task progression",
+                affected_artifact="family_spec",
+            )
         partial_credit_total += float(partial_credit)
+        previous_partial_credit = float(partial_credit)
     if partial_credit_total > 1.0 + 1e-9:
         raise ManifestMismatchError(
             f"Family spec milestone partial_credit sum exceeds 1.0 for {task.scenario_id}: {partial_credit_total}",

@@ -127,7 +127,10 @@ def _valid_family_spec(
                     "timeout_seconds": 120,
                 }
             ],
-            "expected_final_state": ["workspace state validated"],
+            "expected_final_state": [
+                {"workspace_files_check": "Expected source files are present with trusted contents."},
+                {"test_suite_check": "The pytest suite passes from Phase 2."},
+            ],
         },
         "milestones": [
             {
@@ -1113,6 +1116,40 @@ def test_validate_family_spec_rejects_invalid_expected_final_state_shape() -> No
     family_spec["grading_invariant"]["expected_final_state"] = [{"a": "x", "b": "y"}]
 
     with pytest.raises(ManifestMismatchError, match="single-entry mappings"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_requires_trusted_phase3_invariant() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["grading_invariant"]["expected_final_state"] = [
+        {"test_suite_check": "The pytest suite passes from Phase 2."},
+        {"functional_check": "Functional checks exit 0."},
+    ]
+
+    with pytest.raises(ManifestMismatchError, match="trusted Phase 3 expected_final_state invariant"):
+        validate_family_spec(task, family_spec)
+
+
+def test_validate_family_spec_rejects_non_monotonic_milestone_partial_credit() -> None:
+    task = _codex_long_task()
+    family_spec = _valid_family_spec()
+    family_spec["milestones"] = [
+        {
+            "id": "m1",
+            "description": "First milestone",
+            "check_script": "verifiers/family-a/milestones/m1.sh",
+            "partial_credit": 0.6,
+        },
+        {
+            "id": "m2",
+            "description": "Second milestone",
+            "check_script": "verifiers/family-a/milestones/m2.sh",
+            "partial_credit": 0.4,
+        },
+    ]
+
+    with pytest.raises(ManifestMismatchError, match="monotonically non-decreasing"):
         validate_family_spec(task, family_spec)
 
 

@@ -1655,6 +1655,15 @@ class DataPoolManager:
     ) -> None:
         if outcome not in {"resolved", "failed", "no_patch", "timeout", "crash"}:
             raise ValueError(f"Invalid outcome '{outcome}'")
+        prior_attempt: RunRecord | None = None
+        if attempt > 1:
+            prior_attempts = [
+                run
+                for run in self._query_runs(track, pool_or_split, scenario_id, model_id, harness, seed)
+                if run.attempt < attempt
+            ]
+            if prior_attempts:
+                prior_attempt = max(prior_attempts, key=lambda run: run.attempt)
         if track == "codex_long":
             manifest_entry = self._get_manifest_entry_for_scenario(scenario_id)
             expected_milestone_ids = set(manifest_entry["milestone_hashes"])
@@ -1720,6 +1729,16 @@ class DataPoolManager:
                             "Codex-Long finish_run() milestone_results values must be booleans from "
                             "Phase 3 verify_result.json"
                         )
+            if prior_attempt is not None and prior_attempt.recovery_action == "regrade_only":
+                if snapshot_image_ref != prior_attempt.snapshot_image_ref:
+                    raise IntegrityError(
+                        "Codex-Long finish_run() regrade_only attempts must preserve the retained "
+                        "snapshot_image_ref from the prior attempt"
+                    )
+                if trajectory_path is None:
+                    trajectory_path = prior_attempt.trajectory_path
+                if wall_time_seconds is None:
+                    wall_time_seconds = prior_attempt.wall_time_seconds
         with self.db.begin() as txn:
             result = txn.execute(
                 """

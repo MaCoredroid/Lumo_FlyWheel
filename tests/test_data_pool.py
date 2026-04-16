@@ -1881,6 +1881,108 @@ def test_regrade_attempt_preserves_prior_launch_manifest_provenance(tmp_path: Pa
         reloaded.close()
 
 
+def test_regrade_attempt_preserves_prior_trajectory_metadata_for_current_run(tmp_path: Path) -> None:
+    pools_path, split_path, manifest_path, _ = _fixture_files(tmp_path)
+    db_path = tmp_path / "run_state.db"
+    scenario_id = "train-feature/v1"
+
+    manager = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert manager.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            launch_manifest_ver=3,
+        )
+        manager.finish_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            1,
+            "resolved",
+            trajectory_path="/tmp/train-feature-v1.jsonl",
+            wall_time_seconds=42.0,
+            grading_manifest_ver=3,
+            codex_long_pass=True,
+            milestone_results={"m1": True},
+            snapshot_image_ref="snap-1",
+        )
+        manager.invalidate_stale_runs(
+            family_id="train-feature",
+            new_manifest_version=4,
+            affected_artifact="verifier",
+            reason="trusted verifier fix",
+            affected_variant_ids=["v1"],
+        )
+    finally:
+        manager.close()
+
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["manifest_version"] = 4
+    manifest["change_log"].append(
+        {
+            "manifest_version": 4,
+            "date": "2026-06-20",
+            "change": "Trusted verifier fix for train-feature/v1",
+            "reason": "Verifier bugfix",
+            "affected_variants": ["train-feature/v1"],
+            "affected_hashes": ["verifier_hash"],
+            "re_gate_required": False,
+        }
+    )
+    _write_yaml(manifest_path, manifest)
+
+    reloaded = DataPoolManager(
+        swe_bench_pools_path=pools_path,
+        split_assignment_path=split_path,
+        manifest_path=manifest_path,
+        db_path=db_path,
+    )
+    try:
+        assert reloaded.claim_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            attempt=2,
+        )
+        reloaded.finish_run(
+            "codex_long",
+            "train_long",
+            scenario_id,
+            "qwen3.5-27b",
+            "codex",
+            1,
+            2,
+            "resolved",
+            grading_manifest_ver=4,
+            codex_long_pass=True,
+            milestone_results={"m1": True},
+            snapshot_image_ref="snap-1",
+        )
+
+        current_runs = reloaded.list_training_eligible_runs("codex_long", "qwen3.5-27b", "codex")
+        assert [run.scenario_id for run in current_runs] == [scenario_id]
+        assert current_runs[0].trajectory_path == "/tmp/train-feature-v1.jsonl"
+        assert current_runs[0].wall_time_seconds == 42.0
+        assert current_runs[0].attempt == 2
+    finally:
+        reloaded.close()
+
+
 def test_regrade_downgrades_to_rerun_for_legacy_rows_missing_snapshot(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path)
     try:
