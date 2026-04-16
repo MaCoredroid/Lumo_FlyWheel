@@ -1054,6 +1054,100 @@ def verify_pre_grading_hashes(
             )
         family_spec = load_family_spec(str(task.family_id), scenario_families_dir)
         validate_family_spec(task, family_spec)
+        repo_root = Path(verifier_data_dir).resolve().parent
+        variant_root = Path(scenario_families_dir) / str(task.family_id) / "variants" / str(task.variant_id)
+        contract = get_variant_quality_contract(family_spec, str(task.variant_id or ""))
+
+        hidden_tests = contract.get("hidden_tests")
+        if isinstance(hidden_tests, dict) and hidden_tests:
+            hidden_tests_path = hidden_tests.get("path")
+            if isinstance(hidden_tests_path, str) and hidden_tests_path.strip():
+                hidden_tests_dir = repo_root / _render_variant_path_template(
+                    hidden_tests_path,
+                    family_id=str(task.family_id or ""),
+                    variant_id=str(task.variant_id or ""),
+                )
+                if not hidden_tests_dir.is_dir():
+                    raise ManifestMismatchError(
+                        f"Hidden tests path must resolve to a directory for {task.scenario_id}: {hidden_tests_dir}",
+                        affected_artifact="verifier_data",
+                    )
+                if hidden_tests.get("entrypoint") is not None:
+                    entrypoint_relpath = _normalize_hidden_tests_relative_path(str(hidden_tests["entrypoint"]))
+                    entrypoint_path = hidden_tests_dir / entrypoint_relpath
+                    if not entrypoint_path.is_file():
+                        raise ManifestMismatchError(
+                            f"Hidden tests entrypoint must resolve to a file for {task.scenario_id}: {entrypoint_path}",
+                            affected_artifact="verifier_data",
+                        )
+                milestone_nodes = resolve_milestone_test_nodes(
+                    family_spec,
+                    family_id=str(task.family_id or ""),
+                    variant_id=str(task.variant_id or ""),
+                )
+                for milestone_id, nodes in milestone_nodes.items():
+                    for test_node in nodes:
+                        test_path = hidden_tests_dir / _normalize_hidden_test_node_path(test_node)
+                        if not test_path.is_file():
+                            raise ManifestMismatchError(
+                                f"Hidden test node '{test_node}' for {task.scenario_id}/{milestone_id} "
+                                f"must resolve to a file under {hidden_tests_dir}",
+                                affected_artifact="verifier_data",
+                            )
+
+        oracle = contract.get("oracle")
+        if isinstance(oracle, dict) and oracle:
+            for key in ("path", "followup_path"):
+                raw_path = oracle.get(key)
+                if raw_path is None:
+                    continue
+                normalized_path = _normalize_declared_variant_asset_path(
+                    str(raw_path),
+                    family_id=str(task.family_id or ""),
+                    variant_id=str(task.variant_id or ""),
+                )
+                oracle_path = variant_root / normalized_path
+                if not oracle_path.is_file():
+                    raise ManifestMismatchError(
+                        f"Oracle asset '{key}' must resolve to a file for {task.scenario_id}: {oracle_path}",
+                        affected_artifact="family_spec",
+                    )
+
+        red_team = contract.get("red_team")
+        if isinstance(red_team, dict) and red_team:
+            red_team_path = red_team.get("path")
+            if isinstance(red_team_path, str) and red_team_path.strip():
+                red_team_dir = repo_root / _render_variant_path_template(
+                    red_team_path,
+                    family_id=str(task.family_id or ""),
+                    variant_id=str(task.variant_id or ""),
+                )
+                if not red_team_dir.is_dir():
+                    raise ManifestMismatchError(
+                        f"Red-team path must resolve to a directory for {task.scenario_id}: {red_team_dir}",
+                        affected_artifact="verifier_data",
+                    )
+                run_all_path = red_team_dir / "run_all.sh"
+                if not run_all_path.is_file():
+                    raise ManifestMismatchError(
+                        f"Red-team runner missing for {task.scenario_id}: {run_all_path}",
+                        affected_artifact="verifier_data",
+                    )
+
+        calibration = contract.get("calibration")
+        if isinstance(calibration, dict) and calibration:
+            calibration_path = calibration.get("path")
+            if isinstance(calibration_path, str) and calibration_path.strip():
+                resolved_calibration_path = repo_root / _render_variant_path_template(
+                    calibration_path,
+                    family_id=str(task.family_id or ""),
+                    variant_id=str(task.variant_id or ""),
+                )
+                if not resolved_calibration_path.is_file():
+                    raise ManifestMismatchError(
+                        f"Calibration asset must resolve to a file for {task.scenario_id}: {resolved_calibration_path}",
+                        affected_artifact="verifier_data",
+                    )
 
     family_verifier_dir = Path(verifiers_dir) / str(task.family_id)
     verifier_path = family_verifier_dir / "verify.sh"
@@ -1833,6 +1927,7 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
     partial_credit_total = 0.0
     previous_partial_credit = 0.0
     seen_milestone_ids: set[str] = set()
+    variant_scoped_milestone_ids: set[str] = set()
     for index, milestone in enumerate(milestones):
         if not isinstance(milestone, dict):
             raise ManifestMismatchError(
@@ -1875,6 +1970,7 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 )
         if test_nodes is not None:
             if test_nodes == "variant_scoped":
+                variant_scoped_milestone_ids.add(milestone_id)
                 pass
             elif isinstance(test_nodes, str):
                 _require_hidden_test_node(
@@ -2132,11 +2228,13 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                         "as a non-empty mapping when present",
                         affected_artifact="family_spec",
                     )
+                milestone_map_ids: set[str] = set()
                 for milestone_id, raw_nodes in milestone_map.items():
-                    _require_non_empty_string(
+                    normalized_milestone_id = _require_non_empty_string(
                         milestone_id,
                         field_name=f"variants[{index}].hidden_tests.milestone_map key",
                     )
+                    milestone_map_ids.add(normalized_milestone_id)
                     if isinstance(raw_nodes, str):
                         nodes = [raw_nodes]
                     elif isinstance(raw_nodes, list) and raw_nodes:
@@ -2155,6 +2253,14 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                                 f"[{node_index}]"
                             ),
                         )
+                unexpected_milestone_ids = sorted(milestone_map_ids - variant_scoped_milestone_ids)
+                if unexpected_milestone_ids:
+                    raise ManifestMismatchError(
+                        f"Family spec variants[{index}] for {task.scenario_id} must only define "
+                        "hidden_tests.milestone_map entries for milestones with "
+                        f"test_nodes='variant_scoped'; unexpected {unexpected_milestone_ids}",
+                        affected_artifact="family_spec",
+                    )
 
         red_team = contract.get("red_team")
         if red_team:

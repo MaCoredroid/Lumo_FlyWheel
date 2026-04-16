@@ -987,10 +987,15 @@ def test_verify_pre_grading_hashes_accepts_test_node_milestone_hashes(tmp_path: 
     verify_path.write_text("echo verify\n", encoding="utf-8")
     verify_path.chmod(0o755)
     (verifier_data_dir / "hidden_tests" / "test_example.py").write_text("def test_round_one_green():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "hidden_tests" / "test_property.py").write_text("def test_property_contract():\n    pass\n", encoding="utf-8")
     (verifier_data_dir / "hidden_tests" / "test_followup.py").write_text("def test_round_two_green():\n    pass\n", encoding="utf-8")
     (verifier_data_dir / "red_team" / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     (verifier_data_dir / "followup" / "brief.md").write_text("follow up\n", encoding="utf-8")
     (verifier_data_dir / "calibration.json").write_text('{"eligible_for_freeze": false}\n', encoding="utf-8")
+    oracle_dir = scenario_families_dir / "variants" / "v1" / "oracle"
+    oracle_dir.mkdir(parents=True)
+    (oracle_dir / "solution.patch").write_text("diff --git a/x b/x\n", encoding="utf-8")
+    (oracle_dir / "solution_followup.patch").write_text("diff --git a/y b/y\n", encoding="utf-8")
 
     family_spec = _modern_family_spec()
     family_spec_path = scenario_families_dir / "family.yaml"
@@ -1074,6 +1079,7 @@ def test_verify_pre_grading_hashes_hashes_declared_variant_asset_subset(tmp_path
     verify_path.write_text("echo verify\n", encoding="utf-8")
     verify_path.chmod(0o755)
     (variant_data_dir / "hidden_tests" / "test_example.py").write_text("def test_round_one_green():\n    pass\n", encoding="utf-8")
+    (variant_data_dir / "hidden_tests" / "test_property.py").write_text("def test_property_contract():\n    pass\n", encoding="utf-8")
     (variant_data_dir / "hidden_tests" / "test_followup.py").write_text("def test_round_two_green():\n    pass\n", encoding="utf-8")
     (variant_data_dir / "red_team").mkdir(parents=True)
     (variant_data_dir / "red_team" / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
@@ -1081,6 +1087,10 @@ def test_verify_pre_grading_hashes_hashes_declared_variant_asset_subset(tmp_path
     (variant_data_dir / "followup" / "brief.md").write_text("follow up\n", encoding="utf-8")
     (variant_data_dir / "calibration.json").write_text('{"eligible_for_freeze": false}\n', encoding="utf-8")
     (other_variant_dir / "noise.txt").write_text("ignore me\n", encoding="utf-8")
+    oracle_dir = scenario_families_dir / "variants" / "v1" / "oracle"
+    oracle_dir.mkdir(parents=True)
+    (oracle_dir / "solution.patch").write_text("diff --git a/x b/x\n", encoding="utf-8")
+    (oracle_dir / "solution_followup.patch").write_text("diff --git a/y b/y\n", encoding="utf-8")
 
     family_spec = _modern_family_spec()
     family_spec_text = yaml.safe_dump(family_spec, sort_keys=False)
@@ -1148,10 +1158,15 @@ def test_verify_pre_grading_hashes_accepts_family_level_template_asset_paths(tmp
     verify_path.write_text("echo verify\n", encoding="utf-8")
     verify_path.chmod(0o755)
     (verifier_data_dir / "hidden_tests" / "test_example.py").write_text("def test_round_one_green():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "hidden_tests" / "test_property.py").write_text("def test_property_contract():\n    pass\n", encoding="utf-8")
     (verifier_data_dir / "hidden_tests" / "test_followup.py").write_text("def test_round_two_green():\n    pass\n", encoding="utf-8")
     (verifier_data_dir / "red_team" / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     (verifier_data_dir / "followup").mkdir(parents=True)
     (verifier_data_dir / "followup" / "brief.md").write_text("follow up\n", encoding="utf-8")
+    oracle_dir = scenario_families_dir / "variants" / "v1" / "oracle"
+    oracle_dir.mkdir(parents=True)
+    (oracle_dir / "solution.patch").write_text("diff --git a/x b/x\n", encoding="utf-8")
+    (oracle_dir / "solution_followup.patch").write_text("diff --git a/y b/y\n", encoding="utf-8")
     (verifier_data_dir / "calibration.json").write_text('{"eligible_for_freeze": false}\n', encoding="utf-8")
 
     family_spec = _modern_family_spec()
@@ -1232,6 +1247,163 @@ def test_verify_pre_grading_hashes_accepts_family_level_template_asset_paths(tmp
         verifier_data_dir=verifier_data_root,
         scenario_families_dir=tmp_path / "scenario_families",
     )
+
+
+def test_verify_pre_grading_hashes_rejects_directory_calibration_asset(tmp_path: Path) -> None:
+    verifiers_dir = tmp_path / "verifiers" / "family-a"
+    verifier_data_root = tmp_path / "verifier_data"
+    scenario_families_dir = tmp_path / "scenario_families" / "family-a"
+    verifier_data_dir = verifier_data_root / "family-a" / "v1"
+    scenario_families_dir.mkdir(parents=True)
+    (verifier_data_dir / "hidden_tests").mkdir(parents=True)
+    (verifier_data_dir / "red_team").mkdir(parents=True)
+    (verifier_data_dir / "calibration.json").mkdir(parents=True)
+    verifiers_dir.mkdir(parents=True)
+
+    verify_path = verifiers_dir / "verify.sh"
+    verify_path.write_text("echo verify\n", encoding="utf-8")
+    verify_path.chmod(0o755)
+    (verifier_data_dir / "hidden_tests" / "test_example.py").write_text("def test_round_one_green():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "hidden_tests" / "test_property.py").write_text("def test_property_contract():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "hidden_tests" / "test_followup.py").write_text("def test_round_two_green():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "red_team" / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (verifier_data_dir / "followup").mkdir(parents=True)
+    (verifier_data_dir / "followup" / "brief.md").write_text("follow up\n", encoding="utf-8")
+    oracle_dir = scenario_families_dir / "variants" / "v1" / "oracle"
+    oracle_dir.mkdir(parents=True)
+    (oracle_dir / "solution.patch").write_text("diff --git a/x b/x\n", encoding="utf-8")
+    (oracle_dir / "solution_followup.patch").write_text("diff --git a/y b/y\n", encoding="utf-8")
+
+    family_spec = _modern_family_spec()
+    family_spec_text = yaml.safe_dump(family_spec, sort_keys=False)
+    (scenario_families_dir / "family.yaml").write_text(family_spec_text, encoding="utf-8")
+
+    from lumo_flywheel_serving.task_orchestrator import milestone_contract_hash, sha256_path_set
+
+    manifest = {
+        "manifest_version": 4,
+        "grader_image_digest": _sha("grader"),
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("echo verify\n"),
+                "family_spec_hash": _sha(family_spec_text),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_path_set(
+                    [
+                        "verifier_data/family-a/v1/hidden_tests",
+                        "verifier_data/family-a/v1/red_team",
+                        "verifier_data/family-a/v1/calibration.json",
+                        "verifier_data/family-a/v1/followup/brief.md",
+                    ],
+                    repo_root=tmp_path,
+                ),
+                "milestone_hashes": {
+                    milestone_id: milestone_contract_hash(
+                        family_spec,
+                        family_id="family-a",
+                        variant_id="v1",
+                        milestone_id=milestone_id,
+                    )
+                    for milestone_id in ("m1", "m2", "m3")
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Calibration asset must resolve to a file"):
+        verify_pre_grading_hashes(
+            _codex_long_task(),
+            manifest,
+            _sha("grader"),
+            image_digest_resolver=lambda image_ref: image_ref,
+            verifiers_dir=tmp_path / "verifiers",
+            verifier_data_dir=verifier_data_root,
+            scenario_families_dir=tmp_path / "scenario_families",
+        )
+
+
+def test_verify_pre_grading_hashes_rejects_missing_template_oracle_asset(tmp_path: Path) -> None:
+    verifiers_dir = tmp_path / "verifiers" / "family-a"
+    verifier_data_root = tmp_path / "verifier_data"
+    scenario_families_dir = tmp_path / "scenario_families" / "family-a"
+    verifier_data_dir = verifier_data_root / "family-a" / "v1"
+    scenario_families_dir.mkdir(parents=True)
+    (verifier_data_dir / "hidden_tests").mkdir(parents=True)
+    (verifier_data_dir / "red_team").mkdir(parents=True)
+    verifiers_dir.mkdir(parents=True)
+
+    verify_path = verifiers_dir / "verify.sh"
+    verify_path.write_text("echo verify\n", encoding="utf-8")
+    verify_path.chmod(0o755)
+    (verifier_data_dir / "hidden_tests" / "test_example.py").write_text("def test_round_one_green():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "hidden_tests" / "test_property.py").write_text("def test_property_contract():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "hidden_tests" / "test_followup.py").write_text("def test_round_two_green():\n    pass\n", encoding="utf-8")
+    (verifier_data_dir / "red_team" / "run_all.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (verifier_data_dir / "followup").mkdir(parents=True)
+    (verifier_data_dir / "followup" / "brief.md").write_text("follow up\n", encoding="utf-8")
+    (verifier_data_dir / "calibration.json").write_text('{"eligible_for_freeze": false}\n', encoding="utf-8")
+
+    family_spec = _modern_family_spec()
+    family_spec["oracle"] = {
+        "path": "oracle/<variant_id>/solution.patch",
+        "followup_path": "oracle/<variant_id>/solution_followup.patch",
+    }
+    family_spec["variants"][0].pop("oracle")
+    family_spec_text = yaml.safe_dump(family_spec, sort_keys=False)
+    (scenario_families_dir / "family.yaml").write_text(family_spec_text, encoding="utf-8")
+
+    from lumo_flywheel_serving.task_orchestrator import milestone_contract_hash, sha256_path_set
+
+    manifest = {
+        "manifest_version": 4,
+        "grader_image_digest": _sha("grader"),
+        "variants": [
+            {
+                "family_id": "family-a",
+                "variant_id": "v1",
+                "split": "train_long",
+                "scenario_type": "feature_evolution",
+                "image_digest": _sha("image"),
+                "verifier_hash": _sha("echo verify\n"),
+                "family_spec_hash": _sha(family_spec_text),
+                "agents_md_hash": _sha("agents"),
+                "verifier_data_hash": sha256_path_set(
+                    [
+                        "verifier_data/family-a/v1/hidden_tests",
+                        "verifier_data/family-a/v1/red_team",
+                        "verifier_data/family-a/v1/calibration.json",
+                        "verifier_data/family-a/v1/followup/brief.md",
+                    ],
+                    repo_root=tmp_path,
+                ),
+                "milestone_hashes": {
+                    milestone_id: milestone_contract_hash(
+                        family_spec,
+                        family_id="family-a",
+                        variant_id="v1",
+                        milestone_id=milestone_id,
+                    )
+                    for milestone_id in ("m1", "m2", "m3")
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestMismatchError, match="Oracle asset 'path' must resolve to a file"):
+        verify_pre_grading_hashes(
+            _codex_long_task(),
+            manifest,
+            _sha("grader"),
+            image_digest_resolver=lambda image_ref: image_ref,
+            verifiers_dir=tmp_path / "verifiers",
+            verifier_data_dir=verifier_data_root,
+            scenario_families_dir=tmp_path / "scenario_families",
+        )
 
 
 def test_verify_pre_run_hashes_reports_missing_agents_md(tmp_path: Path) -> None:
@@ -1516,6 +1688,16 @@ def test_validate_family_spec_rejects_hidden_test_node_path_traversal() -> None:
         ManifestMismatchError,
         match="must define variants\\[0\\]\\.hidden_tests\\.milestone_map\\[m1\\]\\[0\\]",
     ):
+        validate_family_spec(_codex_long_task(), family_spec)
+
+
+def test_validate_family_spec_rejects_non_variant_scoped_milestone_map_entries() -> None:
+    family_spec = _modern_family_spec()
+    family_spec["variants"][0]["hidden_tests"]["milestone_map"]["m2"] = [
+        "tests/hidden/test_property.py::test_property_contract"
+    ]
+
+    with pytest.raises(ManifestMismatchError, match="must only define hidden_tests\\.milestone_map entries"):
         validate_family_spec(_codex_long_task(), family_spec)
 
 

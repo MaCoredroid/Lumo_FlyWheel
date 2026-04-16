@@ -598,9 +598,10 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                         family_id=family_id,
                         variant_id=variant_id,
                     )
-                    if not hidden_tests_dir.exists():
+                    if not hidden_tests_dir.is_dir():
                         raise AssetPackError(
-                            f"Missing hidden_tests directory for '{family_id}/{variant_id}': {hidden_tests_dir}"
+                            f"hidden_tests path must resolve to a directory for '{family_id}/{variant_id}': "
+                            f"{hidden_tests_dir}"
                         )
                     if hidden_tests.get("entrypoint") is not None:
                         try:
@@ -612,9 +613,10 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                                 f"Invalid hidden_tests entrypoint for '{family_id}/{variant_id}': {exc}"
                             ) from exc
                         entrypoint_path = hidden_tests_dir / entrypoint_relpath
-                        if not entrypoint_path.exists():
+                        if not entrypoint_path.is_file():
                             raise AssetPackError(
-                                f"Missing hidden_tests entrypoint for '{family_id}/{variant_id}': {entrypoint_path}"
+                                f"hidden_tests entrypoint must resolve to a file for '{family_id}/{variant_id}': "
+                                f"{entrypoint_path}"
                             )
                     milestone_nodes = resolve_milestone_test_nodes(
                         family_spec,
@@ -624,10 +626,10 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                     for milestone_id, nodes in milestone_nodes.items():
                         for test_node in nodes:
                             test_path = _hidden_test_node_to_path(hidden_tests_dir, test_node)
-                            if not test_path.exists():
+                            if not test_path.is_file():
                                 raise AssetPackError(
                                     f"Hidden test node '{test_node}' for '{family_id}/{variant_id}/{milestone_id}' "
-                                    f"does not resolve to an existing file under {hidden_tests_dir}"
+                                    f"does not resolve to a file under {hidden_tests_dir}"
                                 )
 
             oracle = contract.get("oracle")
@@ -661,11 +663,12 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                         family_id=family_id,
                         variant_id=variant_id,
                     )
-                    if not red_team_dir.exists():
+                    if not red_team_dir.is_dir():
                         raise AssetPackError(
-                            f"Missing red_team directory for '{family_id}/{variant_id}': {red_team_dir}"
+                            f"red_team path must resolve to a directory for '{family_id}/{variant_id}': "
+                            f"{red_team_dir}"
                         )
-                    if not (red_team_dir / "run_all.sh").exists():
+                    if not (red_team_dir / "run_all.sh").is_file():
                         raise AssetPackError(
                             f"red_team directory must include run_all.sh for '{family_id}/{variant_id}'"
                         )
@@ -679,9 +682,10 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                         family_id=family_id,
                         variant_id=variant_id,
                     )
-                    if not resolved_path.exists():
+                    if not resolved_path.is_file():
                         raise AssetPackError(
-                            f"Missing calibration asset for '{family_id}/{variant_id}': {resolved_path}"
+                            f"Calibration asset must resolve to a file for '{family_id}/{variant_id}': "
+                            f"{resolved_path}"
                         )
 
             if legacy_expectations:
