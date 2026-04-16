@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,9 +38,21 @@ def _checksum_manifest_for_dir(directory: Path) -> str:
 
 
 def _uses_trusted_pytest_entrypoint(command: str) -> bool:
-    if "pytest" not in command:
+    normalized_command = _strip_shell_comments(command)
+    if "pytest" not in normalized_command:
         return True
-    if "python -m pytest" in command:
+    if "python -m pytest" in normalized_command or "python3 -m pytest" in normalized_command:
+        return False
+    try:
+        argv = shlex.split(normalized_command)
+    except ValueError:
+        return False
+    code = None
+    for index, token in enumerate(argv[:-2]):
+        if token in {"python", "python3"} and argv[index + 1] == "-c":
+            code = argv[index + 2]
+            break
+    if code is None:
         return False
     required = (
         "import pathlib, sys",
@@ -47,7 +60,7 @@ def _uses_trusted_pytest_entrypoint(command: str) -> bool:
         'sys.path.insert(0, cwd)',
         'pytest.main(["-q"])',
     )
-    return all(pattern in command for pattern in required)
+    return all(pattern in code for pattern in required)
 
 
 def _is_phase2_only_expected_state(entry: object) -> bool:

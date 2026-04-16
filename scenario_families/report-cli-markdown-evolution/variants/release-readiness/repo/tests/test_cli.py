@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+import report_app.cli as cli_module
 from report_app.cli import main
 from report_app.service import TITLE
 
@@ -12,8 +15,20 @@ def test_json_output_is_still_supported() -> None:
     assert payload["sections"][0]["owner"]
 
 
-def test_markdown_output_renders_heading_and_owner_table() -> None:
-    output = main(["--format", "markdown"])
-    assert output.startswith(f"# {TITLE}")
-    assert "| Owner |" in output
-    assert "Sam" in output
+def test_markdown_output_renders_runtime_sections_and_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_sections = [
+        {"label": "stale-pages", "count": 3, "owner": "Jules"},
+        {"label": "escalations", "count": 1, "owner": "Ivy"},
+    ]
+
+    monkeypatch.setattr(cli_module, "build_sections", lambda: fake_sections)
+
+    output = cli_module.main(["--format", "markdown"])
+
+    assert output.startswith(f"# {TITLE}\n")
+    assert "2 sections covering 4 queued items" in output
+    assert "| Owner | Label | Count |" in output
+    for section in fake_sections:
+        assert f"| {section['owner']} | {section['label']} | {section['count']} |" in output

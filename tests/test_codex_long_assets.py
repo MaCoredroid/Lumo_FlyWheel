@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from lumo_flywheel_serving.codex_long_assets import AssetPackError, validate_authored_asset_pack
+from lumo_flywheel_serving.codex_long_assets import (
+    AssetPackError,
+    _uses_trusted_pytest_entrypoint,
+    validate_authored_asset_pack,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +71,27 @@ def test_validate_authored_pack_rejects_untrusted_pytest_bootstrap(tmp_path: Pat
 
     with pytest.raises(AssetPackError, match="import installed pytest"):
         validate_authored_asset_pack(repo_copy)
+
+
+def test_uses_trusted_pytest_entrypoint_rejects_dead_string_reference() -> None:
+    command = (
+        "cd /workspace && "
+        "echo 'import pathlib, sys; import pytest; sys.path.insert(0, cwd); pytest.main([\"-q\"])' >/tmp/hint && "
+        "python -c 'import os; raise SystemExit(0)'"
+    )
+
+    assert _uses_trusted_pytest_entrypoint(command) is False
+
+
+def test_uses_trusted_pytest_entrypoint_accepts_python_c_payload() -> None:
+    command = (
+        "cd /workspace && "
+        "python -c 'import pathlib, sys; cwd=str(pathlib.Path.cwd()); "
+        "sys.path=[p for p in sys.path if p not in (\"\", cwd)]; import pytest; "
+        "sys.path.insert(0, cwd); raise SystemExit(pytest.main([\"-q\"]))'"
+    )
+
+    assert _uses_trusted_pytest_entrypoint(command) is True
 
 
 def test_validate_authored_pack_rejects_untrusted_ci_runner(tmp_path: Path) -> None:

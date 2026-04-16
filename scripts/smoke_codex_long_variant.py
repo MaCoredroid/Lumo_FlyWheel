@@ -153,9 +153,9 @@ def _assert_verify_expectations(
     expect: str,
     expect_shortcut_detected: str,
 ) -> None:
-    expected_pass = expect == "pass"
+    expected_pass = None if expect == "either" else expect == "pass"
     actual_pass = bool(verify_result.get("pass"))
-    if actual_pass != expected_pass:
+    if expected_pass is not None and actual_pass != expected_pass:
         raise SystemExit(
             f"expected Phase 3 pass={expected_pass} for {family}/{variant}, got {verify_result.get('pass')}"
         )
@@ -183,7 +183,12 @@ def main() -> int:
     )
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--grader-image", default="codex-long-grader-local")
-    parser.add_argument("--expect", choices=("pass", "fail"), default="fail")
+    parser.add_argument(
+        "--expect",
+        choices=("pass", "fail", "either"),
+        default="fail",
+        help="Optional assertion on verify_result.pass. Use 'either' for neutral grading of real task runs.",
+    )
     parser.add_argument(
         "--expect-shortcut-detected",
         choices=("ignore", "true", "false"),

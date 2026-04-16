@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 
@@ -13,6 +14,12 @@ SPEC = importlib.util.spec_from_file_location("smoke_codex_long_variant_test", S
 assert SPEC is not None and SPEC.loader is not None
 SMOKE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SMOKE)
+
+LIVE_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "run_live_codex_long_task.py"
+LIVE_SPEC = importlib.util.spec_from_file_location("run_live_codex_long_task_test", LIVE_SCRIPT_PATH)
+assert LIVE_SPEC is not None and LIVE_SPEC.loader is not None
+LIVE = importlib.util.module_from_spec(LIVE_SPEC)
+LIVE_SPEC.loader.exec_module(LIVE)
 
 
 def _write_grader_dockerfile(repo_root: Path, content: str = "FROM scratch\n") -> str:
@@ -114,6 +121,16 @@ def test_assert_verify_expectations_checks_shortcut_detection() -> None:
     )
 
 
+def test_assert_verify_expectations_allows_neutral_grading_mode() -> None:
+    SMOKE._assert_verify_expectations(
+        family="report-cli-markdown-evolution",
+        variant="inventory-ops",
+        verify_result={"pass": False, "shortcut_detected": False},
+        expect="either",
+        expect_shortcut_detected="ignore",
+    )
+
+
 def test_assert_verify_expectations_rejects_shortcut_detection_mismatch() -> None:
     with pytest.raises(SystemExit, match="shortcut_detected=True"):
         SMOKE._assert_verify_expectations(
@@ -123,3 +140,99 @@ def test_assert_verify_expectations_rejects_shortcut_detection_mismatch() -> Non
             expect="fail",
             expect_shortcut_detected="true",
         )
+
+
+def test_prepare_codex_home_copies_repo_config(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    config_dir = repo_root / ".codex"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.toml").write_text('model = "qwen3.5-27b"\n', encoding="utf-8")
+
+    codex_home = LIVE._prepare_codex_home(repo_root, tmp_path / "temp")
+
+    assert (codex_home / ".codex" / "config.toml").read_text(encoding="utf-8") == 'model = "qwen3.5-27b"\n'
+
+
+def test_run_codex_on_repo_uses_temp_home_and_captures_stdout(monkeypatch, tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo-root"
+    repo_root.mkdir()
+    repo_venv_bin = repo_root / ".venv" / "bin"
+    repo_venv_bin.mkdir(parents=True)
+    working_repo = tmp_path / "working"
+    working_repo.mkdir()
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    codex_jsonl = tmp_path / "codex.jsonl"
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(command: list[str], **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 1, stdout='{"type":"assistant_message"}\n', stderr="model failed")
+
+    monkeypatch.setattr(LIVE, "_run", fake_run)
+    monkeypatch.delenv("VLLM_API_KEY", raising=False)
+
+    payload = LIVE._run_codex_on_repo(
+        repo_root=repo_root,
+        working_repo=working_repo,
+        codex_home=codex_home,
+        prompt="Read AGENTS.md",
+        timeout_seconds=120,
+        codex_jsonl_path=codex_jsonl,
+    )
+
+    command, kwargs = calls[0]
+    assert command[:4] == ["codex", "exec", "--skip-git-repo-check", "--yolo"]
+    assert command[-2:] == [str(working_repo), "Read AGENTS.md"]
+    assert kwargs["cwd"] == repo_root
+    assert kwargs["capture"] is True
+    assert kwargs["timeout"] == 120
+    assert kwargs["env"]["HOME"] == str(codex_home)
+    assert kwargs["env"]["VLLM_API_KEY"] == "EMPTY"
+    assert kwargs["env"]["PATH"].split(":")[0] == str(repo_venv_bin)
+    assert payload["returncode"] == 1
+    assert payload["timed_out"] is False
+    assert codex_jsonl.read_text(encoding="utf-8") == '{"type":"assistant_message"}\n'
+
+
+def test_grade_repo_override_uses_neutral_smoke_mode(monkeypatch, tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo-root"
+    repo_root.mkdir()
+    scripts_dir = repo_root / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "smoke_codex_long_variant.py").write_text("# placeholder\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps({"verify_result": {"pass": False}}), stderr="")
+
+    monkeypatch.setattr(LIVE, "_run", fake_run)
+
+    payload = LIVE._grade_repo_override(
+        repo_root=repo_root,
+        family="report-cli-markdown-evolution",
+        variant="inventory-ops",
+        working_repo=tmp_path / "working-repo",
+    )
+
+    command = calls[0]
+    assert "--expect" in command
+    assert command[command.index("--expect") + 1] == "either"
+    assert payload["smoke_returncode"] == 0
+
+
+def test_extract_last_json_object_skips_build_logs() -> None:
+    payload = LIVE._extract_last_json_object(
+        "Step 1/3 : docker build\n"
+        "sha256:abcdef\n"
+        '{"verify_result":{"pass":true},"family":"report-cli-markdown-evolution"}'
+    )
+
+    assert payload["family"] == "report-cli-markdown-evolution"
+    assert payload["verify_result"]["pass"] is True
+
+
+def test_default_live_prompt_documents_shell_edit_constraint() -> None:
+    assert "does not expose apply_patch" in LIVE.DEFAULT_PROMPT
+    assert "shell-based file writes/edits" in LIVE.DEFAULT_PROMPT
