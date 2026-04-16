@@ -1,5 +1,8 @@
 FROM debian:bookworm-slim@sha256:0d49f9bc3af362aa0921b14b2f5c612a902ab6f7c2cac8d7026ade96fd0b9f6c
 
+ARG GRADER_DOCKERFILE_SHA=unknown
+LABEL org.lumo.codex_long_grader_dockerfile_sha="${GRADER_DOCKERFILE_SHA}"
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends bash coreutils grep jq sed ca-certificates python3-minimal \
     && rm -rf /var/lib/apt/lists/*

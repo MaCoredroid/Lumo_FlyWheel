@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
@@ -9,6 +10,8 @@ import tempfile
 from pathlib import Path
 
 from lumo_flywheel_serving.yaml_utils import load_yaml_file
+
+GRADER_DOCKERFILE_LABEL = "org.lumo.codex_long_grader_dockerfile_sha"
 
 
 def _run(command: list[str], *, cwd: Path | None = None, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -31,13 +34,43 @@ def _docker_image_exists(image_ref: str) -> bool:
     return result.returncode == 0
 
 
+def _docker_image_label(image_ref: str, label: str) -> str | None:
+    result = subprocess.run(
+        [
+            "docker",
+            "image",
+            "inspect",
+            image_ref,
+            "--format",
+            f"{{{{ index .Config.Labels {json.dumps(label)} }}}}",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    if not value or value == "<no value>":
+        return None
+    return value
+
+
+def _grader_dockerfile_sha(repo_root: Path) -> str:
+    dockerfile = repo_root / "docker" / "Dockerfile.codex-long-grader"
+    return hashlib.sha256(dockerfile.read_bytes()).hexdigest()
+
+
 def _ensure_grader_image(repo_root: Path, grader_image: str) -> None:
-    if _docker_image_exists(grader_image):
+    expected_sha = _grader_dockerfile_sha(repo_root)
+    if _docker_image_exists(grader_image) and _docker_image_label(grader_image, GRADER_DOCKERFILE_LABEL) == expected_sha:
         return
     _run(
         [
             "docker",
             "build",
+            "--build-arg",
+            f"GRADER_DOCKERFILE_SHA={expected_sha}",
             "-t",
             grader_image,
             "-f",
