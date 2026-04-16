@@ -34,8 +34,18 @@ def _checksum_manifest_for_dir(directory: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _uses_isolated_pytest(command: str) -> bool:
-    return "pytest" not in command or "-I -m pytest" in command or "-Im pytest" in command
+def _uses_trusted_pytest_entrypoint(command: str) -> bool:
+    if "pytest" not in command:
+        return True
+    if "python -m pytest" in command:
+        return False
+    required = (
+        "import pathlib, sys",
+        "import pytest",
+        'sys.path.insert(0, cwd)',
+        'pytest.main(["-q"])',
+    )
+    return all(pattern in command for pattern in required)
 
 
 def _verify_references_milestone_helper(verify_text: str, milestone_id: str) -> bool:
@@ -98,9 +108,10 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
             raise AssetPackError(f"functional_checks must be a list: {family_spec_path}")
         for check in functional_checks:
             command = str(check.get("command", ""))
-            if not _uses_isolated_pytest(command):
+            if not _uses_trusted_pytest_entrypoint(command):
                 raise AssetPackError(
-                    f"Functional check must use isolated pytest invocation to resist local shadowing: {family_spec_path}"
+                    "Functional check must import installed pytest before re-adding the workspace "
+                    f"to sys.path: {family_spec_path}"
                 )
 
         variants = family_spec.get("variants")
@@ -196,9 +207,16 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
             ci_runner_path = repo_dir / "scripts" / "run_ci.py"
             if ci_runner_path.exists():
                 ci_runner_text = ci_runner_path.read_text(encoding="utf-8")
-                if '"-I"' not in ci_runner_text or '"pytest"' not in ci_runner_text:
+                required_patterns = (
+                    'sys.path=[p for p in sys.path if p not in ("", cwd)]',
+                    'import pytest',
+                    'pytest.main(["-q"])',
+                    'subprocess.call([sys.executable, "-c", runner])',
+                )
+                if any(pattern not in ci_runner_text for pattern in required_patterns):
                     raise AssetPackError(
-                        f"Repo CI runner must invoke pytest in isolated mode for '{family_id}/{variant_id}'"
+                        "Repo CI runner must import installed pytest before re-adding the workspace "
+                        f"for '{family_id}/{variant_id}'"
                     )
 
             if variant_id not in expected_variants:

@@ -24,6 +24,25 @@
           mv "$tmp" "$RESULT_FILE"
         }
 
+        check_no_python_test_spoof() {
+          local agent_ws="$1"
+          [ ! -f "$agent_ws/pytest.py" ] && \
+            [ ! -d "$agent_ws/pytest" ] && \
+            [ ! -f "$agent_ws/sitecustomize.py" ] && \
+            [ ! -f "$agent_ws/usercustomize.py" ]
+        }
+
+        check_ci_runner_contract() {
+          local agent_ws="$1"
+          grep -Fq -- 'scripts/run_ci.py' "$agent_ws/Makefile" && \
+            grep -Fq -- 'configured_package = config["tool"]["lumo_ci"]["package"]' "$agent_ws/scripts/run_ci.py" && \
+            grep -Fq -- 'if package_name != "ci_app"' "$agent_ws/scripts/run_ci.py" && \
+            grep -Fq -- 'sys.path=[p for p in sys.path if p not in ("", cwd)]' "$agent_ws/scripts/run_ci.py" && \
+            grep -Fq -- 'import pytest' "$agent_ws/scripts/run_ci.py" && \
+            grep -Fq -- 'pytest.main(["-q"])' "$agent_ws/scripts/run_ci.py" && \
+            grep -Fq -- 'subprocess.call([sys.executable, "-c", runner])' "$agent_ws/scripts/run_ci.py"
+        }
+
         source /verifier/milestones/m1_pyproject_synced.sh
 source /verifier/milestones/m2_workflow_synced.sh
 source /verifier/milestones/m3_ci_passing.sh
@@ -59,6 +78,16 @@ source /verifier/milestones/m3_ci_passing.sh
           fi
         else
           add_error "missing verifier checksum manifest for $VARIANT_ID"
+        fi
+
+        if ! check_no_python_test_spoof "$AGENT_WS"; then
+          write_result '.shortcut_detected = true'
+          add_error "workspace contains pytest or Python startup shadowing that could spoof Phase 2"
+        fi
+
+        if ! check_ci_runner_contract "$AGENT_WS"; then
+          write_result '.shortcut_detected = true'
+          add_error "make ci contract no longer routes through the isolated repo CI runner"
         fi
 
         if check_m1_pyproject_synced "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then

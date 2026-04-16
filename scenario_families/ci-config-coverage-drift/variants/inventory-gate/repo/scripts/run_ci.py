@@ -18,7 +18,15 @@ def main(argv: list[str] | None = None) -> int:
     if package_name != "ci_app":
         print(f"ci package drift: {package_name}", file=sys.stderr)
         return 2
-    return subprocess.call([sys.executable, "-m", "pytest", "-q"])
+    runner = (
+        'import pathlib, sys; '
+        'cwd=str(pathlib.Path.cwd()); '
+        'sys.path=[p for p in sys.path if p not in ("", cwd)]; '
+        'import pytest; '
+        'sys.path.insert(0, cwd); '
+        'raise SystemExit(pytest.main(["-q"]))'
+    )
+    return subprocess.call([sys.executable, "-c", runner])
 
 
 if __name__ == "__main__":

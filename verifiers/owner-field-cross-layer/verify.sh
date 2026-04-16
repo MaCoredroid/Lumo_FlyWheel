@@ -24,6 +24,14 @@
           mv "$tmp" "$RESULT_FILE"
         }
 
+        check_no_python_test_spoof() {
+          local agent_ws="$1"
+          [ ! -f "$agent_ws/pytest.py" ] && \
+            [ ! -d "$agent_ws/pytest" ] && \
+            [ ! -f "$agent_ws/sitecustomize.py" ] && \
+            [ ! -f "$agent_ws/usercustomize.py" ]
+        }
+
         source /verifier/milestones/m1_store_owner_added.sh
 source /verifier/milestones/m2_cli_owner_wired.sh
 source /verifier/milestones/m3_defaults_and_tests.sh
@@ -59,6 +67,11 @@ source /verifier/milestones/m3_defaults_and_tests.sh
           fi
         else
           add_error "missing verifier checksum manifest for $VARIANT_ID"
+        fi
+
+        if ! check_no_python_test_spoof "$AGENT_WS"; then
+          write_result '.shortcut_detected = true'
+          add_error "workspace contains pytest or Python startup shadowing that could spoof Phase 2"
         fi
 
         if check_m1_store_owner_added "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then

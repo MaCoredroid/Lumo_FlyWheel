@@ -46,7 +46,7 @@ def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:
         validate_authored_asset_pack(repo_copy)
 
 
-def test_validate_authored_pack_rejects_non_isolated_pytest_command(tmp_path: Path) -> None:
+def test_validate_authored_pack_rejects_untrusted_pytest_bootstrap(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT, repo_copy)
 
@@ -58,17 +58,17 @@ def test_validate_authored_pack_rejects_non_isolated_pytest_command(tmp_path: Pa
     )
     family_yaml.write_text(
         family_yaml.read_text(encoding="utf-8").replace(
-            "python -I -m pytest -q",
-            "python -m pytest -q",
+            "import pytest;",
+            "import os;",
         ),
         encoding="utf-8",
     )
 
-    with pytest.raises(AssetPackError, match="isolated pytest invocation"):
+    with pytest.raises(AssetPackError, match="import installed pytest"):
         validate_authored_asset_pack(repo_copy)
 
 
-def test_validate_authored_pack_rejects_non_isolated_ci_runner(tmp_path: Path) -> None:
+def test_validate_authored_pack_rejects_untrusted_ci_runner(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT, repo_copy)
 
@@ -84,13 +84,13 @@ def test_validate_authored_pack_rejects_non_isolated_ci_runner(tmp_path: Path) -
     )
     ci_runner.write_text(
         ci_runner.read_text(encoding="utf-8").replace(
-            '[sys.executable, "-I", "-m", "pytest", "-q"]',
-            '[sys.executable, "-m", "pytest", "-q"]',
+            'subprocess.call([sys.executable, "-c", runner])',
+            'subprocess.call([sys.executable, "-m", "pytest", "-q"])',
         ),
         encoding="utf-8",
     )
 
-    with pytest.raises(AssetPackError, match="invoke pytest in isolated mode"):
+    with pytest.raises(AssetPackError, match="import installed pytest"):
         validate_authored_asset_pack(repo_copy)
 
 

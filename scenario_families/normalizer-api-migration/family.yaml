@@ -23,7 +23,10 @@ grading_invariant:
   verifier_script: verifiers/normalizer-api-migration/verify.sh
   functional_checks:
   - id: pytest_suite
-    command: cd /workspace && python -m pytest -q
+    command: >-
+      cd /workspace && python -c 'import pathlib, sys; cwd=str(pathlib.Path.cwd());
+      sys.path=[p for p in sys.path if p not in ("", cwd)]; import pytest;
+      sys.path.insert(0, cwd); raise SystemExit(pytest.main(["-q"]))'
     description: Run the normalization preview test suite
     timeout_seconds: 120
   expected_final_state:
