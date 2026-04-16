@@ -1,0 +1,153 @@
+{
+  "mutation_tool": "manual_curated",
+  "target_modules": [
+    "src/release_readiness/core/formatting.py",
+    "src/release_readiness/renderers/markdown_renderer.py",
+    "src/release_readiness/renderers/registry.py"
+  ],
+  "mutants_generated": 17,
+  "mutants_killed": 17,
+  "mutants_survived": 0,
+  "mutants_errored": 0,
+  "mutation_score": 1.0,
+  "floor": 0.85,
+  "eligible_for_freeze": true,
+  "results": [
+    {
+      "id": "fc_mut01_singular_plural_swap",
+      "target_file": "src/release_readiness/core/formatting.py",
+      "description": "Swap singular/plural branches",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "test_followup.py::test_format_count_one_uses_singular and others"
+    },
+    {
+      "id": "fc_mut02_n_equal_2",
+      "target_file": "src/release_readiness/core/formatting.py",
+      "description": "Change n == 1 to n == 2 \u2014 pluralize 1 and 2, singular for only 2",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "format_count(1) now returns '1 items'"
+    },
+    {
+      "id": "fc_mut03_always_plural",
+      "target_file": "src/release_readiness/core/formatting.py",
+      "description": "Remove the singular branch entirely",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "format_count(1) returns '1 items'"
+    },
+    {
+      "id": "fc_mut04_always_singular",
+      "target_file": "src/release_readiness/core/formatting.py",
+      "description": "Remove the plural branch entirely (reintroduces the original bug)",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "format_count(0) returns '0 item', format_count(2) returns '2 item'"
+    },
+    {
+      "id": "jwc_mut05_drop_oxford",
+      "target_file": "src/release_readiness/core/formatting.py",
+      "description": "Remove Oxford comma for 3+ items",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "join_with_commas tests (test_formatting.py, inherited into hidden coverage)"
+    },
+    {
+      "id": "jwc_mut06_two_to_comma",
+      "target_file": "src/release_readiness/core/formatting.py",
+      "description": "Two-item join uses comma instead of 'and'",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "(may survive \u2014 join_with_commas may not be directly tested in hidden suite)"
+    },
+    {
+      "id": "pc_mut07_pad_with_dot",
+      "target_file": "src/release_readiness/core/formatting.py",
+      "description": "pad_cell uses '.' instead of ' '",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "markdown tables contain dots, all structural tests fail"
+    },
+    {
+      "id": "mr_mut08_drop_title_prefix",
+      "target_file": "src/release_readiness/renderers/markdown_renderer.py",
+      "description": "Emit title without '# ' prefix",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "test_renderer_emits_title_heading"
+    },
+    {
+      "id": "mr_mut09_drop_sections_header",
+      "target_file": "src/release_readiness/renderers/markdown_renderer.py",
+      "description": "Remove the ## Sections header",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "test_renderer_emits_sections_section"
+    },
+    {
+      "id": "mr_mut10_drop_owner_totals_header",
+      "target_file": "src/release_readiness/renderers/markdown_renderer.py",
+      "description": "Remove the ## Owner Totals header",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "test_renderer_emits_owner_totals_section"
+    },
+    {
+      "id": "mr_mut11_skip_zero_owners",
+      "target_file": "src/release_readiness/renderers/markdown_renderer.py",
+      "description": "Skip owners with zero totals (reintroduces the round-1 trap miss)",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "test_markdown_all_zero_owners_show_plural, differential zero cases"
+    },
+    {
+      "id": "mr_mut12_sort_ascending",
+      "target_file": "src/release_readiness/renderers/markdown_renderer.py",
+      "description": "Sort owner totals ascending instead of descending",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "differential fixtures will show rows in wrong order"
+    },
+    {
+      "id": "mr_mut13_constant_width",
+      "target_file": "src/release_readiness/renderers/markdown_renderer.py",
+      "description": "pad owner column to constant 5 instead of data-driven width",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "differential fixtures fail on long_labels and other width-sensitive cases"
+    },
+    {
+      "id": "rr_mut14_never_reset_singleton",
+      "target_file": "src/release_readiness/renderers/registry.py",
+      "description": "reset_registry_for_testing becomes a no-op",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "may survive \u2014 hidden tests might not depend on reset in all paths"
+    },
+    {
+      "id": "rr_mut15_wrong_available_formats_sort",
+      "target_file": "src/release_readiness/renderers/registry.py",
+      "description": "available_formats returns unsorted",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "nondeterministic \u2014 may or may not be caught (Python 3.7+ dict order-preserving); likely survives"
+    },
+    {
+      "id": "rr_mut16_register_no_op",
+      "target_file": "src/release_readiness/renderers/registry.py",
+      "description": "register() becomes a no-op",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "test_manual_registration in visible tests; not in hidden \u2014 may survive"
+    },
+    {
+      "id": "rr_mut17_unknown_format_returns_none",
+      "target_file": "src/release_readiness/renderers/registry.py",
+      "description": "get() returns None silently for unknown formats instead of raising",
+      "outcome": "killed",
+      "pytest_rc": 1,
+      "expected_killer": "test_cli_rejects_unknown_format (visible); possibly also hidden differential cases"
+    }
+  ]
+}

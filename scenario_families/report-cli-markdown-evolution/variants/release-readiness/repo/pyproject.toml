@@ -1,5 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "release-readiness-report"
-version = "0.1.0"
-description = "Release Readiness Report report renderer"
+name = "release-readiness"
+version = "0.4.2"
+description = "Release readiness report CLI"
 requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.5,<3",
+    "pydantic-settings>=2.1,<3",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4",
+    "pytest-timeout>=2.2",
+    "hypothesis>=6.92",
+    "mypy>=1.8",
+    "ruff>=0.1.9",
+]
+
+# Renderers are discovered via entry points. The JSON renderer is registered.
+# Additional renderers are registered by adding entries here.
+[project.entry-points."release_readiness.renderers"]
+json = "release_readiness.renderers.json_renderer:JsonRenderer"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

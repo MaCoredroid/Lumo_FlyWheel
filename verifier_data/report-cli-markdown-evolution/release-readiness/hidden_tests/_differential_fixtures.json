@@ -1,0 +1,218 @@
+[
+  {
+    "id": "basic_two_owners",
+    "records": [
+      {
+        "owner": "Sam",
+        "label": "blocked-rollouts",
+        "count": 2
+      },
+      {
+        "owner": "Rin",
+        "label": "hotfixes",
+        "count": 1
+      }
+    ],
+    "known_owners": [
+      "Sam",
+      "Rin"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label            | Count |\n|-------|------------------|-------|\n| Sam   | blocked-rollouts |     2 |\n| Rin   | hotfixes         |     1 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Sam   | 2 items |\n| Rin   | 1 item  |\n"
+  },
+  {
+    "id": "single_owner_single_item",
+    "records": [
+      {
+        "owner": "Alex",
+        "label": "preflight",
+        "count": 1
+      }
+    ],
+    "known_owners": [
+      "Alex"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label     | Count |\n|-------|-----------|-------|\n| Alex  | preflight |     1 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Alex  | 1 item  |\n"
+  },
+  {
+    "id": "zero_count_owner",
+    "records": [
+      {
+        "owner": "Sam",
+        "label": "blocked-rollouts",
+        "count": 2
+      },
+      {
+        "owner": "Rin",
+        "label": "hotfixes",
+        "count": 1
+      }
+    ],
+    "known_owners": [
+      "Sam",
+      "Rin",
+      "Alex"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label            | Count |\n|-------|------------------|-------|\n| Sam   | blocked-rollouts |     2 |\n| Rin   | hotfixes         |     1 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Sam   | 2 items |\n| Rin   | 1 item  |\n| Alex  | 0 items |\n"
+  },
+  {
+    "id": "multiple_zero_owners",
+    "records": [
+      {
+        "owner": "Sam",
+        "label": "x",
+        "count": 5
+      }
+    ],
+    "known_owners": [
+      "Sam",
+      "Alex",
+      "Bee",
+      "Cas"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label | Count |\n|-------|-------|-------|\n| Sam   | x     |     5 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Sam   | 5 items |\n| Alex  | 0 items |\n| Bee   | 0 items |\n| Cas   | 0 items |\n"
+  },
+  {
+    "id": "same_owner_multiple_sections",
+    "records": [
+      {
+        "owner": "Sam",
+        "label": "a",
+        "count": 2
+      },
+      {
+        "owner": "Sam",
+        "label": "b",
+        "count": 3
+      },
+      {
+        "owner": "Sam",
+        "label": "c",
+        "count": 1
+      }
+    ],
+    "known_owners": [
+      "Sam"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label | Count |\n|-------|-------|-------|\n| Sam   | a     |     2 |\n| Sam   | b     |     3 |\n| Sam   | c     |     1 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Sam   | 6 items |\n"
+  },
+  {
+    "id": "tie_on_total_sort_by_name",
+    "records": [
+      {
+        "owner": "Bob",
+        "label": "x",
+        "count": 2
+      },
+      {
+        "owner": "Alice",
+        "label": "y",
+        "count": 2
+      },
+      {
+        "owner": "Carol",
+        "label": "z",
+        "count": 2
+      }
+    ],
+    "known_owners": [
+      "Alice",
+      "Bob",
+      "Carol"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label | Count |\n|-------|-------|-------|\n| Bob   | x     |     2 |\n| Alice | y     |     2 |\n| Carol | z     |     2 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Alice | 2 items |\n| Bob   | 2 items |\n| Carol | 2 items |\n"
+  },
+  {
+    "id": "larger_scenario",
+    "records": [
+      {
+        "owner": "Sam",
+        "label": "blocked-rollouts",
+        "count": 2
+      },
+      {
+        "owner": "Rin",
+        "label": "hotfixes",
+        "count": 1
+      },
+      {
+        "owner": "Sam",
+        "label": "preflight-checks",
+        "count": 4
+      },
+      {
+        "owner": "Alex",
+        "label": "rollback-prep",
+        "count": 3
+      },
+      {
+        "owner": "Rin",
+        "label": "incident-response",
+        "count": 2
+      }
+    ],
+    "known_owners": [
+      "Sam",
+      "Rin",
+      "Alex",
+      "Dee"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label             | Count |\n|-------|-------------------|-------|\n| Sam   | blocked-rollouts  |     2 |\n| Rin   | hotfixes          |     1 |\n| Sam   | preflight-checks  |     4 |\n| Alex  | rollback-prep     |     3 |\n| Rin   | incident-response |     2 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Sam   | 6 items |\n| Alex  | 3 items |\n| Rin   | 3 items |\n| Dee   | 0 items |\n"
+  },
+  {
+    "id": "long_labels",
+    "records": [
+      {
+        "owner": "Sam",
+        "label": "very-long-label-needing-padding-xxxx",
+        "count": 1
+      },
+      {
+        "owner": "Rin",
+        "label": "short",
+        "count": 2
+      }
+    ],
+    "known_owners": [
+      "Sam",
+      "Rin"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label                                | Count |\n|-------|--------------------------------------|-------|\n| Sam   | very-long-label-needing-padding-xxxx |     1 |\n| Rin   | short                                |     2 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Rin   | 2 items |\n| Sam   | 1 item  |\n"
+  },
+  {
+    "id": "high_counts",
+    "records": [
+      {
+        "owner": "Sam",
+        "label": "x",
+        "count": 999
+      },
+      {
+        "owner": "Rin",
+        "label": "y",
+        "count": 1000
+      }
+    ],
+    "known_owners": [
+      "Sam",
+      "Rin"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label | Count |\n|-------|-------|-------|\n| Sam   | x     |   999 |\n| Rin   | y     |  1000 |\n\n## Owner Totals\n\n| Owner | Total |\n|-------|-------|\n| Rin   | 1000 items|\n| Sam   | 999 items|\n"
+  },
+  {
+    "id": "only_zero_owners",
+    "records": [
+      {
+        "owner": "Sam",
+        "label": "x",
+        "count": 1
+      }
+    ],
+    "known_owners": [
+      "Sam",
+      "Ghost1",
+      "Ghost2",
+      "Ghost3"
+    ],
+    "expected_output": "# Release Readiness Report\n\n## Sections\n\n| Owner | Label | Count |\n|-------|-------|-------|\n| Sam   | x     |     1 |\n\n## Owner Totals\n\n| Owner  | Total |\n|--------|-------|\n| Sam    | 1 item  |\n| Ghost1 | 0 items |\n| Ghost2 | 0 items |\n| Ghost3 | 0 items |\n"
+  }
+]

@@ -17,9 +17,10 @@ breakage_class:
   - renderer
   - docs
 grading_invariant:
-  type: state_based
-  description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result.
+  type: hybrid
+  description: Legacy variants are graded by trusted Phase 3 file inspections plus
+    the Phase 2 command result, while release-readiness additionally runs bundled
+    hidden-test slices and release-quality asset checks in Phase 3.
   verifier_script: verifiers/report-cli-markdown-evolution/verify.sh
   functional_checks:
   - id: pytest_suite
@@ -33,6 +34,8 @@ grading_invariant:
   - cli_markdown_check: The CLI accepts --format markdown.
   - renderer_check: A Markdown renderer exists and is wired in.
   - docs_check: Usage docs mention the Markdown command.
+  - hidden_contract_check: Variants that declare bundled hidden assets must satisfy
+      the hidden-suite slices and mutation-floor checks in Phase 3.
   - test_suite_check: The pytest suite passes from Phase 2.
 milestones:
 - id: m1_cli_markdown
@@ -48,15 +51,18 @@ milestones:
   check_script: verifiers/report-cli-markdown-evolution/milestones/m3_docs_updated.sh
   partial_credit: 0.45
 shortcut_resistance:
-  notes: Phase 3 checks the CLI source, renderer source, and docs text directly,
-    requires the trusted Phase 2 pytest exit code, and uses test-file checksums
-    to catch test deletion or edits.
+  notes: Phase 3 always checks trusted Phase 2 pytest results and test-file integrity.
+    The release-readiness variant additionally ships oracle patches, hidden tests,
+    red-team exploits, and a mutation report so the richer bundle can be validated
+    without upgrading the sibling legacy variants yet.
   known_exploits_tested:
   - Delete docs assertions from the pytest suite
   - Stub the CLI to always print a canned Markdown string
   - Add markdown strings to the grepped files without wiring a working markdown
     path
   - Shadow pytest to exit 0 without exercising the renderer
+  - Patch zero-count pluralization only in the Markdown renderer instead of fixing
+    the shared formatter
 difficulty_estimate:
   target_solve_rate: 35-55%
   rationale: Requires coordinated CLI, renderer, and docs changes with clear regression
@@ -76,7 +82,23 @@ variants:
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
 - variant_id: release-readiness
   repo_source: authored
-  injected_breakage: Tests now require a Markdown mode plus updated usage docs, but
-    the repo still only supports JSON rendering.
+  tier: pro
+  surfaces:
+  - cli
+  - registry
+  - renderer
+  - docs
+  injected_breakage: Visible tests now require a Markdown renderer to be registered
+    via entry points and documented, while the richer release-readiness uplift also
+    carries hidden round-2 coverage for the latent zero-count pluralization trap.
   env_dockerfile: variants/release-readiness/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/report-cli-markdown-evolution/release-readiness/hidden_tests
+    entrypoint: test_example_based.py
+  red_team:
+    path: verifier_data/report-cli-markdown-evolution/release-readiness/red_team
+    exploits_required: 6

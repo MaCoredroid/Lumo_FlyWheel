@@ -2387,3 +2387,48 @@ def test_verify_pre_grading_hashes_rejects_non_executable_milestone_helper(tmp_p
             verifiers_dir=verifiers_dir,
             verifier_data_dir=verifier_data_dir,
         )
+
+
+def test_report_cli_family_spec_accepts_mixed_legacy_and_release_variants() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    family_path = (
+        repo_root
+        / "scenario_families"
+        / "report-cli-markdown-evolution"
+        / "family.yaml"
+    )
+    family_spec = yaml.safe_load(family_path.read_text(encoding="utf-8"))
+
+    validate_family_spec(
+        TaskSpec(
+            track="codex_long",
+            pool_or_split="train_long",
+            scenario_id="report-cli-markdown-evolution/inventory-ops",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            family_id="report-cli-markdown-evolution",
+            variant_id="inventory-ops",
+            image_digest="sha256:" + ("1" * 64),
+            scenario_type="feature_evolution",
+            timeout_seconds=9000,
+        ),
+        family_spec,
+    )
+
+    validate_family_spec(
+        TaskSpec(
+            track="codex_long",
+            pool_or_split="train_long",
+            scenario_id="report-cli-markdown-evolution/release-readiness",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            family_id="report-cli-markdown-evolution",
+            variant_id="release-readiness",
+            image_digest="sha256:" + ("2" * 64),
+            scenario_type="feature_evolution",
+            timeout_seconds=9000,
+        ),
+        family_spec,
+    )

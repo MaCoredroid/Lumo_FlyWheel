@@ -1,0 +1,26 @@
+diff -urN '--exclude=*.egg-info' '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_solved/src/release_readiness/core/formatting.py oracle_followup/src/release_readiness/core/formatting.py
+--- oracle_solved/src/release_readiness/core/formatting.py	2026-04-16 16:02:23.000000000 +0000
++++ oracle_followup/src/release_readiness/core/formatting.py	2026-04-16 16:28:04.491771693 +0000
+@@ -11,20 +11,14 @@
+     """Format an item count with the right pluralization.
+ 
+     Examples:
++        format_count(0, singular="item", plural="items") -> "0 items"
+         format_count(1, singular="item", plural="items") -> "1 item"
+         format_count(2, singular="item", plural="items") -> "2 items"
+         format_count(5, singular="owner", plural="owners") -> "5 owners"
+     """
+-    # LATENT BUG: when n == 0, English convention is "0 items" (plural form),
+-    # but this implementation picks singular for anything that isn't > 1.
+-    # The JSON renderer never calls this with n == 0 because it skips empty
+-    # sections, so the bug is latent until a new renderer exercises it.
+     if n == 1:
+         return f"{n} {singular}"
+-    elif n > 1:
+-        return f"{n} {plural}"
+-    else:
+-        return f"{n} {singular}"
++    return f"{n} {plural}"
+ 
+ 
+ def join_with_commas(parts: list[str]) -> str:

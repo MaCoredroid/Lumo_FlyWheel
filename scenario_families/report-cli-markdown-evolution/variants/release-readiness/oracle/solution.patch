@@ -1,0 +1,119 @@
+Binary files broken/.mypy_cache/3.12/cache.db and oracle_solved/.mypy_cache/3.12/cache.db differ
+Binary files broken/.ruff_cache/0.15.10/14817910145589762729 and oracle_solved/.ruff_cache/0.15.10/14817910145589762729 differ
+Binary files broken/.ruff_cache/0.15.10/3861330933492075565 and oracle_solved/.ruff_cache/0.15.10/3861330933492075565 differ
+diff -urN '--exclude=*.egg-info' '--exclude=__pycache__' '--exclude=.pytest_cache' broken/docs/renderers.md oracle_solved/docs/renderers.md
+--- broken/docs/renderers.md	2026-04-16 16:13:42.000000000 +0000
++++ oracle_solved/docs/renderers.md	2026-04-16 16:26:15.225772679 +0000
+@@ -36,3 +36,4 @@
+ | Format | Module |
+ |---|---|
+ | `json` | `release_readiness.renderers.json_renderer:JsonRenderer` |
++| `markdown` | `release_readiness.renderers.markdown_renderer:MarkdownRenderer` |
+diff -urN '--exclude=*.egg-info' '--exclude=__pycache__' '--exclude=.pytest_cache' broken/docs/usage.md oracle_solved/docs/usage.md
+--- broken/docs/usage.md	2026-04-16 16:13:26.000000000 +0000
++++ oracle_solved/docs/usage.md	2026-04-16 16:26:19.079772644 +0000
+@@ -34,5 +34,5 @@
+ ## Available output formats
+ 
+ Available formats depend on what renderers are registered. Run the CLI with
+-`--help` to see the current list. To add a new format, see
+-`docs/renderers.md`.
++`--help` to see the current list. Currently available: `json` and `markdown`.
++To add a new format, see `docs/renderers.md`.
+diff -urN '--exclude=*.egg-info' '--exclude=__pycache__' '--exclude=.pytest_cache' broken/pyproject.toml oracle_solved/pyproject.toml
+--- broken/pyproject.toml	2026-04-16 16:01:29.000000000 +0000
++++ oracle_solved/pyproject.toml	2026-04-16 16:26:11.377772714 +0000
+@@ -25,6 +25,7 @@
+ # Additional renderers are registered by adding entries here.
+ [project.entry-points."release_readiness.renderers"]
+ json = "release_readiness.renderers.json_renderer:JsonRenderer"
++markdown = "release_readiness.renderers.markdown_renderer:MarkdownRenderer"
+ 
+ [tool.setuptools.packages.find]
+ where = ["src"]
+diff -urN '--exclude=*.egg-info' '--exclude=__pycache__' '--exclude=.pytest_cache' broken/src/release_readiness/renderers/markdown_renderer.py oracle_solved/src/release_readiness/renderers/markdown_renderer.py
+--- broken/src/release_readiness/renderers/markdown_renderer.py	1970-01-01 00:00:00.000000000 +0000
++++ oracle_solved/src/release_readiness/renderers/markdown_renderer.py	2026-04-16 16:26:07.563772748 +0000
+@@ -0,0 +1,82 @@
++"""Markdown renderer for Report objects."""
++from __future__ import annotations
++
++from release_readiness.core.formatting import format_count, pad_cell
++from release_readiness.core.model import Report
++
++
++class MarkdownRenderer:
++    """Renders a Report as GitHub-flavored Markdown.
++
++    Output structure:
++      # <title>
++      <blank line>
++      ## Sections
++      <table of owner | label | count>
++      <blank line>
++      ## Owner Totals
++      <table of owner | total>
++    """
++
++    def render(self, report: Report) -> str:
++        lines: list[str] = []
++        lines.append(f"# {report.title}")
++        lines.append("")
++        lines.extend(self._render_sections_table(report))
++        lines.append("")
++        lines.extend(self._render_owner_totals_table(report))
++        lines.append("")
++        return "\n".join(lines)
++
++    def _render_sections_table(self, report: Report) -> list[str]:
++        lines: list[str] = ["## Sections", ""]
++        if not report.sections:
++            lines.append("_No sections in the current report._")
++            return lines
++
++        owner_w = max((len(s.owner) for s in report.sections), default=5)
++        owner_w = max(owner_w, len("Owner"))
++        label_w = max((len(s.label) for s in report.sections), default=5)
++        label_w = max(label_w, len("Label"))
++
++        header = f"| {pad_cell('Owner', owner_w)} | {pad_cell('Label', label_w)} | Count |"
++        sep = f"|{'-' * (owner_w + 2)}|{'-' * (label_w + 2)}|-------|"
++        lines.append(header)
++        lines.append(sep)
++        for section in report.sections:
++            lines.append(
++                f"| {pad_cell(section.owner, owner_w)} | "
++                f"{pad_cell(section.label, label_w)} | "
++                f"{section.count:>5} |"
++            )
++        return lines
++
++    def _render_owner_totals_table(self, report: Report) -> list[str]:
++        lines: list[str] = ["## Owner Totals", ""]
++
++        # Union known_owners with any owner actually appearing in totals,
++        # so owners with zero items still get a row when the adapter knows
++        # about them.
++        totals_by_owner = {ot.owner: ot.total for ot in report.owner_totals}
++        all_owners_set = set(report.known_owners) | set(totals_by_owner.keys())
++        if not all_owners_set:
++            lines.append("_No owners in the current report._")
++            return lines
++
++        # Preserve sort: total desc, then name asc.
++        all_owners = sorted(all_owners_set, key=lambda o: (-totals_by_owner.get(o, 0), o))
++
++        owner_w = max(len(o) for o in all_owners)
++        owner_w = max(owner_w, len("Owner"))
++
++        header = f"| {pad_cell('Owner', owner_w)} | Total |"
++        sep = f"|{'-' * (owner_w + 2)}|-------|"
++        lines.append(header)
++        lines.append(sep)
++        for owner in all_owners:
++            total = totals_by_owner.get(owner, 0)
++            lines.append(
++                f"| {pad_cell(owner, owner_w)} | "
++                f"{pad_cell(format_count(total, singular='item', plural='items'), 8)}|"
++            )
++        return lines

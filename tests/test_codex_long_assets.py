@@ -12,6 +12,7 @@ from lumo_flywheel_serving.codex_long_assets import (
     _uses_trusted_pytest_entrypoint,
     validate_authored_asset_pack,
 )
+from lumo_flywheel_serving.task_orchestrator import get_variant_quality_contract
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,35 @@ def test_validate_authored_codex_long_asset_pack() -> None:
         "investigate_then_fix",
         "migration_refactor",
     )
+
+
+def test_report_cli_family_mixes_legacy_and_release_quality_contracts() -> None:
+    family_yaml = (
+        REPO_ROOT
+        / "scenario_families"
+        / "report-cli-markdown-evolution"
+        / "family.yaml"
+    )
+    payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
+
+    inventory_contract = get_variant_quality_contract(payload, "inventory-ops")
+    release_contract = get_variant_quality_contract(payload, "release-readiness")
+
+    assert payload["grading_invariant"]["type"] == "hybrid"
+    assert inventory_contract["oracle"] == {}
+    assert inventory_contract["hidden_tests"] == {}
+    assert inventory_contract["red_team"] == {}
+    assert release_contract["tier"] == "pro"
+    assert release_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert release_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert release_contract["hidden_tests"]["path"] == (
+        "verifier_data/report-cli-markdown-evolution/release-readiness/hidden_tests"
+    )
+    assert release_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert release_contract["red_team"]["path"] == (
+        "verifier_data/report-cli-markdown-evolution/release-readiness/red_team"
+    )
+    assert release_contract["red_team"]["exploits_required"] == 6
 
 
 def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:
@@ -251,13 +281,13 @@ def test_validate_authored_pack_rejects_milestone_helper_called_without_gating_r
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
     verify_text = verify_text.replace(
-        'if check_m1_cli_markdown "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then\n'
-        "  write_result '.milestones.m1_cli_markdown = true'\n"
-        "else\n"
-        '  add_error "CLI still does not expose markdown output"\n'
-        "fi\n",
-        'check_m1_cli_markdown "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"\n'
-        "write_result '.milestones.m1_cli_markdown = true'\n",
+        '  if check_m1_cli_markdown "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then\n'
+        "    write_result '.milestones.m1_cli_markdown = true'\n"
+        "  else\n"
+        '    add_error "CLI still does not expose markdown output"\n'
+        "  fi\n",
+        '  check_m1_cli_markdown "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"\n'
+        "  write_result '.milestones.m1_cli_markdown = true'\n",
         1,
     )
     verify_path.write_text(verify_text, encoding="utf-8")
@@ -273,16 +303,16 @@ def test_validate_authored_pack_rejects_missing_functional_check_result_consumpt
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
     verify_text = verify_text.replace(
-        '        check_phase2_pytest_suite() {\n'
-        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
-        '        }\n\n',
+        'check_phase2_pytest_suite() {\n'
+        '  [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '}\n\n',
         "",
         1,
     )
     verify_text = verify_text.replace(
-        '        if ! check_phase2_pytest_suite; then\n'
-        '          add_error "Phase 2 pytest suite did not pass"\n'
-        '        fi\n\n',
+        'if ! check_phase2_pytest_suite; then\n'
+        '  add_error "Phase 2 pytest suite did not pass"\n'
+        'fi\n\n',
         "",
         1,
     )
@@ -299,13 +329,13 @@ def test_validate_authored_pack_rejects_comment_only_functional_check_consumptio
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
     verify_text = verify_text.replace(
-        '        check_phase2_pytest_suite() {\n'
-        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
-        '        }\n',
-        '        check_phase2_pytest_suite() {\n'
-        '          # pytest_suite_exit_code is checked elsewhere\n'
-        '          return 0\n'
-        '        }\n',
+        'check_phase2_pytest_suite() {\n'
+        '  [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '}\n',
+        'check_phase2_pytest_suite() {\n'
+        '  # pytest_suite_exit_code is checked elsewhere\n'
+        '  return 0\n'
+        '}\n',
         1,
     )
     verify_path.write_text(verify_text, encoding="utf-8")
@@ -321,13 +351,13 @@ def test_validate_authored_pack_rejects_dead_string_functional_check_reference(t
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
     verify_text = verify_text.replace(
-        '        check_phase2_pytest_suite() {\n'
-        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
-        '        }\n',
-        '        check_phase2_pytest_suite() {\n'
-        '          printf "%s\\n" "pytest_suite_exit_code"\n'
-        '          return 0\n'
-        '        }\n',
+        'check_phase2_pytest_suite() {\n'
+        '  [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '}\n',
+        'check_phase2_pytest_suite() {\n'
+        '  printf "%s\\n" "pytest_suite_exit_code"\n'
+        '  return 0\n'
+        '}\n',
         1,
     )
     verify_path.write_text(verify_text, encoding="utf-8")
@@ -343,15 +373,15 @@ def test_validate_authored_pack_rejects_unused_functional_check_reader(tmp_path:
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
     verify_text = verify_text.replace(
-        '        check_phase2_pytest_suite() {\n'
-        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
-        '        }\n',
-        '        check_phase2_pytest_suite() {\n'
-        '          return 0\n'
-        '        }\n'
-        '        check_unused_pytest_suite() {\n'
-        '          [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
-        '        }\n',
+        'check_phase2_pytest_suite() {\n'
+        '  [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '}\n',
+        'check_phase2_pytest_suite() {\n'
+        '  return 0\n'
+        '}\n'
+        'check_unused_pytest_suite() {\n'
+        '  [ -f "$FUNCTIONAL_DIR/pytest_suite_exit_code" ] && [ "$(cat "$FUNCTIONAL_DIR/pytest_suite_exit_code")" = "0" ]\n'
+        '}\n',
         1,
     )
     verify_path.write_text(verify_text, encoding="utf-8")

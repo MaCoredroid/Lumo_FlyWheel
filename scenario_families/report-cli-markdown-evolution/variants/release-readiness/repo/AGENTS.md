@@ -1,16 +1,28 @@
-Release Readiness Report needs a Markdown mode for its local report CLI.
+# Task: add Markdown output to the release-readiness report CLI
 
-The repo already supports JSON output, but the new tests expect
-`--format markdown` to produce a readable heading, a summary line showing
-how many sections and queued items are represented, and an owner table
-that preserves every owner/label/count row returned by `build_sections()`.
-Release readiness handoff also now needs an owner totals rollup in the
-Markdown output so repeated owners are easy to scan during go/no-go review.
-The owner totals should be derived from the runtime sections, sorted by
-queued items descending with owner name as the tie-breaker, and the
-Markdown handoff should call out the busiest owner before the rollup table.
-Keep the JSON path working, add the Markdown renderer, and update
-`docs/usage.md` so the documented commands and output description match
-the code.
+## Context
 
-Do not remove or rewrite the existing tests.
+The release-readiness team uses `python -m release_readiness` to produce a
+daily snapshot of release blockers, hotfixes, and preflight-check status. The
+JSON output is consumed by automation, but release managers have asked for a
+human-readable Markdown version they can paste into the release channel each
+morning.
+
+## What's failing
+
+`make ci` currently fails. `make test` shows failures in `tests/test_cli_json.py`
+where the new `--format markdown` option is expected to work. `make lint`
+and `make typecheck` currently pass — please keep it that way.
+
+The CLI gets its available `--format` choices from the renderer registry.
+Look at how `json` is currently wired before you add anything new.
+
+## Scope
+
+Read the repo before writing code. There is existing scaffolding you should
+understand before you touch anything.
+
+Do not modify or delete any existing tests. Do not add `pytest.mark.skip`,
+`pytest.mark.xfail`, or `# type: ignore` comments to make things pass.
+
+`make ci` must pass at the end.

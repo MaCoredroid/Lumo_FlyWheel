@@ -32,18 +32,19 @@
     },
     "release-readiness": {
       "checksum_file": "test_checksums/release-readiness.sha256",
-      "m1_file": "report_app/cli.py",
-      "m1_pattern": "build_owner_summary(sections)",
-      "m1_extra_file": "report_app/service.py",
-      "m1_extra_pattern": "def build_owner_summary(",
-      "m2_file": "report_app/rendering.py",
-      "m2_pattern": "## Owner Summary",
-      "m2_extra_pattern": "Top owner:",
+      "m1_file": "pyproject.toml",
+      "m1_pattern": "markdown = \"release_readiness.renderers.markdown_renderer:MarkdownRenderer\"",
+      "m1_extra_file": "src/release_readiness/renderers/markdown_renderer.py",
+      "m1_extra_pattern": "class MarkdownRenderer:",
+      "m2_file": "src/release_readiness/renderers/markdown_renderer.py",
+      "m2_pattern": "## Owner Totals",
+      "m2_extra_pattern": "format_count(total, singular='item', plural='items')",
       "m3_file": "docs/usage.md",
-      "m3_pattern": "owner totals",
-      "m3_extra_pattern": "top owner",
-      "project_name": "release-readiness-report",
-      "project_name_pattern": "name = \"release-readiness-report\""
+      "m3_pattern": "Currently available: `json` and `markdown`.",
+      "m3_extra_file": "docs/renderers.md",
+      "m3_extra_pattern": "| `markdown` | `release_readiness.renderers.markdown_renderer:MarkdownRenderer` |",
+      "project_name": "release-readiness",
+      "project_name_pattern": "name = \"release-readiness\""
     }
   }
 }
