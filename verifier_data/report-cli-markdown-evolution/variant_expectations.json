@@ -16,9 +16,9 @@
       "m1_file": "report_app/cli.py",
       "m1_pattern": "return render_markdown(TITLE, sections)",
       "m2_file": "report_app/rendering.py",
-      "m2_pattern": "| Owner | Label | Count |",
+      "m2_pattern": "| Owner | Total Items |",
       "m3_file": "docs/usage.md",
-      "m3_pattern": "--format markdown",
+      "m3_pattern": "owner totals",
       "project_name": "inventory-ops-report",
       "project_name_pattern": "name = \"inventory-ops-report\""
     },

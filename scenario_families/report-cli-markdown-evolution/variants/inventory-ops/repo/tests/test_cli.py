@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -21,6 +22,7 @@ def test_markdown_output_renders_runtime_sections_and_summary(
     fake_sections = [
         {"label": "stale-pages", "count": 3, "owner": "Jules"},
         {"label": "escalations", "count": 1, "owner": "Ivy"},
+        {"label": "queue-audits", "count": 2, "owner": "Jules"},
     ]
 
     monkeypatch.setattr(cli_module, "build_sections", lambda: fake_sections)
@@ -28,7 +30,19 @@ def test_markdown_output_renders_runtime_sections_and_summary(
     output = cli_module.main(["--format", "markdown"])
 
     assert output.startswith(f"# {TITLE}\n")
-    assert "2 sections covering 4 queued items" in output
+    assert "3 sections covering 6 queued items" in output
     assert "| Owner | Label | Count |" in output
     for section in fake_sections:
         assert f"| {section['owner']} | {section['label']} | {section['count']} |" in output
+    assert "## Owner Totals" in output
+    assert "| Owner | Total Items |" in output
+    assert re.search(r"\| Jules \| 5 \|", output)
+    assert re.search(r"\| Ivy \| 1 \|", output)
+
+
+def test_markdown_output_includes_owner_rollup_for_runtime_records() -> None:
+    output = cli_module.main(["--format", "markdown"])
+
+    assert "3 sections covering 7 queued items" in output
+    assert "| Mae | 5 |" in output
+    assert "| Noah | 2 |" in output
