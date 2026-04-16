@@ -8,6 +8,7 @@ import yaml
 
 from lumo_flywheel_serving.codex_long_assets import (
     AssetPackError,
+    _hidden_test_node_to_path,
     _uses_trusted_pytest_entrypoint,
     validate_authored_asset_pack,
 )
@@ -98,6 +99,17 @@ def test_uses_trusted_pytest_entrypoint_accepts_trusted_grader_pytest() -> None:
     command = "/grader/venv/bin/python -m pytest /verifier_data/hidden_tests -q"
 
     assert _uses_trusted_pytest_entrypoint(command) is True
+
+
+def test_hidden_test_node_to_path_rejects_path_traversal(tmp_path: Path) -> None:
+    hidden_tests_dir = tmp_path / "hidden_tests"
+    hidden_tests_dir.mkdir()
+
+    with pytest.raises(ValueError, match="must not escape hidden_tests"):
+        _hidden_test_node_to_path(
+            hidden_tests_dir,
+            "tests/hidden/../../red_team/run_all.sh::test_round_one_green",
+        )
 
 
 def test_validate_authored_pack_rejects_untrusted_ci_runner(tmp_path: Path) -> None:

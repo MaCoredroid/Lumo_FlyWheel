@@ -14,6 +14,8 @@ from .task_orchestrator import (
     ManifestMismatchError,
     TaskSpec,
     _normalize_declared_variant_asset_path,
+    _normalize_hidden_test_node_path,
+    _normalize_hidden_tests_relative_path,
     _render_variant_path_template,
     collect_declared_verifier_data_paths,
     get_variant_quality_contract,
@@ -243,13 +245,7 @@ def _verify_references_functional_check_result(
 
 
 def _hidden_test_node_to_path(hidden_tests_dir: Path, test_node: str) -> Path:
-    node_path = test_node.split("::", 1)[0]
-    candidate = Path(node_path)
-    if candidate.parts[:2] == ("tests", "hidden"):
-        candidate = Path(*candidate.parts[2:])
-    elif not candidate.parts:
-        candidate = Path(candidate.name)
-    return hidden_tests_dir / candidate
+    return hidden_tests_dir / _normalize_hidden_test_node_path(test_node)
 
 
 def _repo_source_files(repo_dir: Path) -> list[Path]:
@@ -607,7 +603,15 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                             f"Missing hidden_tests directory for '{family_id}/{variant_id}': {hidden_tests_dir}"
                         )
                     if hidden_tests.get("entrypoint") is not None:
-                        entrypoint_path = hidden_tests_dir / str(hidden_tests["entrypoint"])
+                        try:
+                            entrypoint_relpath = _normalize_hidden_tests_relative_path(
+                                str(hidden_tests["entrypoint"])
+                            )
+                        except ValueError as exc:
+                            raise AssetPackError(
+                                f"Invalid hidden_tests entrypoint for '{family_id}/{variant_id}': {exc}"
+                            ) from exc
+                        entrypoint_path = hidden_tests_dir / entrypoint_relpath
                         if not entrypoint_path.exists():
                             raise AssetPackError(
                                 f"Missing hidden_tests entrypoint for '{family_id}/{variant_id}': {entrypoint_path}"

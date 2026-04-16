@@ -1498,6 +1498,27 @@ def test_validate_family_spec_rejects_oracle_path_traversal() -> None:
         validate_family_spec(_codex_long_task(), family_spec)
 
 
+def test_validate_family_spec_rejects_hidden_tests_entrypoint_traversal() -> None:
+    family_spec = _modern_family_spec()
+    family_spec["variants"][0]["hidden_tests"]["entrypoint"] = "../red_team/run_all.sh"
+
+    with pytest.raises(ManifestMismatchError, match="must define variants\\[0\\]\\.hidden_tests\\.entrypoint"):
+        validate_family_spec(_codex_long_task(), family_spec)
+
+
+def test_validate_family_spec_rejects_hidden_test_node_path_traversal() -> None:
+    family_spec = _modern_family_spec()
+    family_spec["variants"][0]["hidden_tests"]["milestone_map"]["m1"] = [
+        "tests/hidden/../../red_team/run_all.sh::test_round_one_green"
+    ]
+
+    with pytest.raises(
+        ManifestMismatchError,
+        match="must define variants\\[0\\]\\.hidden_tests\\.milestone_map\\[m1\\]\\[0\\]",
+    ):
+        validate_family_spec(_codex_long_task(), family_spec)
+
+
 def test_validate_family_spec_rejects_missing_variant_scoped_hidden_tests() -> None:
     family_spec = _modern_family_spec()
     family_spec["variants"][0]["hidden_tests"]["milestone_map"].pop("m3")

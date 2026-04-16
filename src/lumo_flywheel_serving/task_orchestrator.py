@@ -493,6 +493,41 @@ def _normalize_declared_variant_asset_path(
     return Path(*normalized_parts).as_posix()
 
 
+def _normalize_hidden_tests_relative_path(value: str) -> str:
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError("path must be non-empty")
+    if re.search(r"<[^>]+>", rendered):
+        raise ValueError(f"path contains an unsupported template placeholder: {rendered}")
+
+    candidate = Path(rendered)
+    if candidate.is_absolute():
+        raise ValueError(f"path must be relative to hidden_tests/: {rendered}")
+
+    normalized_parts: list[str] = []
+    for part in candidate.parts:
+        if not part or part == ".":
+            continue
+        if part == "..":
+            raise ValueError(f"path must not escape hidden_tests/: {rendered}")
+        normalized_parts.append(part)
+
+    if not normalized_parts:
+        raise ValueError("path must resolve to a file under hidden_tests/")
+    return Path(*normalized_parts).as_posix()
+
+
+def _normalize_hidden_test_node_path(test_node: str) -> str:
+    node_path = test_node.split("::", 1)[0].strip()
+    normalized = _normalize_hidden_tests_relative_path(node_path)
+    candidate = Path(normalized)
+    if candidate.parts[:2] == ("tests", "hidden"):
+        candidate = Path(*candidate.parts[2:])
+    if not candidate.parts:
+        raise ValueError("test node path must resolve to a file under hidden_tests/")
+    return candidate.as_posix()
+
+
 def _merged_mapping(defaults: Any, override: Any) -> dict[str, Any]:
     merged: dict[str, Any] = {}
     if isinstance(defaults, dict):
@@ -1436,6 +1471,29 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 affected_artifact="family_spec",
             ) from exc
 
+    def _require_hidden_tests_relative_path(value: Any, *, field_name: str) -> str:
+        path = _require_non_empty_string(value, field_name=field_name)
+        try:
+            return _normalize_hidden_tests_relative_path(path)
+        except ValueError as exc:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define {field_name} as a hidden_tests-relative "
+                f"path without unsupported placeholders or '..' segments: {exc}",
+                affected_artifact="family_spec",
+            ) from exc
+
+    def _require_hidden_test_node(value: Any, *, field_name: str) -> str:
+        node = _require_non_empty_string(value, field_name=field_name)
+        try:
+            _normalize_hidden_test_node_path(node)
+        except ValueError as exc:
+            raise ManifestMismatchError(
+                f"Family spec for {task.scenario_id} must define {field_name} as a hidden test node "
+                f"under hidden_tests/ without unsupported placeholders or '..' segments: {exc}",
+                affected_artifact="family_spec",
+            ) from exc
+        return node
+
     def _is_phase2_only_invariant(check_id: str, description: str) -> bool:
         combined = f"{check_id} {description}".lower()
         explicit_phase2_markers = (
@@ -1819,13 +1877,13 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
             if test_nodes == "variant_scoped":
                 pass
             elif isinstance(test_nodes, str):
-                _require_non_empty_string(
+                _require_hidden_test_node(
                     test_nodes,
                     field_name=f"milestones[{index}].test_nodes",
                 )
             elif isinstance(test_nodes, list) and test_nodes:
                 for node_index, node in enumerate(test_nodes):
-                    _require_non_empty_string(
+                    _require_hidden_test_node(
                         node,
                         field_name=f"milestones[{index}].test_nodes[{node_index}]",
                     )
@@ -2062,7 +2120,7 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                 field_name=f"variants[{index}].hidden_tests.path",
             )
             if "entrypoint" in hidden_tests:
-                _require_non_empty_string(
+                _require_hidden_tests_relative_path(
                     hidden_tests.get("entrypoint"),
                     field_name=f"variants[{index}].hidden_tests.entrypoint",
                 )
@@ -2090,7 +2148,7 @@ def validate_family_spec(task: TaskSpec, family_spec: dict[str, Any]) -> None:
                             affected_artifact="family_spec",
                         )
                     for node_index, node in enumerate(nodes):
-                        _require_non_empty_string(
+                        _require_hidden_test_node(
                             node,
                             field_name=(
                                 f"variants[{index}].hidden_tests.milestone_map[{milestone_id}]"
