@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .data_pool import MIN_CODEX_LONG_FAMILIES, SCENARIO_TYPES
 from .task_orchestrator import (
+    ManifestMismatchError,
     TaskSpec,
     _render_variant_path_template,
     collect_declared_verifier_data_paths,
@@ -528,7 +529,10 @@ def validate_authored_asset_pack(repo_root: str | Path) -> AssetPackSummary:
                 scenario_type=scenario_type,
                 timeout_seconds=1,
             )
-            validate_family_spec(task, family_spec)
+            try:
+                validate_family_spec(task, family_spec)
+            except ManifestMismatchError as exc:
+                raise AssetPackError(str(exc)) from exc
 
             variant_dir = family_dir / "variants" / variant_id
             repo_dir = variant_dir / "repo"

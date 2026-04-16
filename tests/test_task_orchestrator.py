@@ -1471,6 +1471,14 @@ def test_validate_family_spec_accepts_modern_quality_contract() -> None:
     validate_family_spec(_codex_long_task(), _modern_family_spec())
 
 
+def test_validate_family_spec_rejects_declared_verifier_data_path_traversal() -> None:
+    family_spec = _modern_family_spec()
+    family_spec["variants"][0]["hidden_tests"]["path"] = "verifier_data/family-a/<variant_id>/../v2/hidden_tests"
+
+    with pytest.raises(ManifestMismatchError, match="must define variants\\[0\\]\\.hidden_tests\\.path"):
+        validate_family_spec(_codex_long_task(), family_spec)
+
+
 def test_validate_family_spec_rejects_missing_variant_scoped_hidden_tests() -> None:
     family_spec = _modern_family_spec()
     family_spec["variants"][0]["hidden_tests"]["milestone_map"].pop("m3")
