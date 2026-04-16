@@ -68,6 +68,25 @@ def _write_json_error(handler: BaseHTTPRequestHandler, status: int, message: str
     handler.wfile.write(body)
 
 
+def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Response) -> None:
+    try:
+        for chunk in upstream.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+            handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+            handler.wfile.write(chunk)
+            handler.wfile.write(b"\r\n")
+            handler.wfile.flush()
+        handler.wfile.write(b"0\r\n\r\n")
+        handler.wfile.flush()
+    except (BrokenPipeError, ConnectionResetError):
+        # Codex occasionally abandons an HTTP stream after it already has the
+        # terminal event. Treat that as a cancelled client, not a proxy crash.
+        return
+    finally:
+        upstream.close()
+
+
 def build_proxy_handler(upstream_base_url: str) -> type[BaseHTTPRequestHandler]:
     class ProxyHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -115,18 +134,7 @@ def build_proxy_handler(upstream_base_url: str) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
 
             if response_headers.get("Transfer-Encoding") == "chunked":
-                try:
-                    for chunk in upstream.iter_content(chunk_size=8192):
-                        if not chunk:
-                            continue
-                        self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
-                        self.wfile.write(chunk)
-                        self.wfile.write(b"\r\n")
-                        self.wfile.flush()
-                    self.wfile.write(b"0\r\n\r\n")
-                    self.wfile.flush()
-                finally:
-                    upstream.close()
+                _write_chunked_stream(self, upstream)
                 return
 
             self.wfile.write(upstream.content)

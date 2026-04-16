@@ -8,4 +8,11 @@ Build the `RulePlan` once in the CLI preview path, then thread that
 dataclass through the assembler and router helpers instead of rebuilding
 it separately in each layer.
 
+The preview contract also now exposes a canonical `dispatch_key` derived
+from region, owner, and the normalized title slug. Keep the alert route
+format stable, but append the dispatch key as a query suffix so the
+preview output preserves both the route bucket and the canonical alert
+dispatch identity. The title normalization for this key must collapse
+extra internal whitespace before slugging.
+
 Keep the existing behavior the tests describe; do not remove the tests.

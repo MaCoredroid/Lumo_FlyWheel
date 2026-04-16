@@ -2,10 +2,14 @@
   "variants": {
     "alert-routing": {
       "checksum_file": "test_checksums/alert-routing.sha256",
+      "m2_cli_file": "norm_app/cli.py",
+      "m2_cli_pattern": "dispatch_key",
+      "m2_extra_pattern": "dispatch_key",
       "m1_forbidden_pattern": "legacy_rules",
       "m1_glob": "norm_app",
       "m2_file_a": "norm_app/assembler.py",
       "m2_file_b": "norm_app/router.py",
+      "m2_forbidden_pattern": "build_rule_plan",
       "m2_pattern": "RulePlan",
       "project_name": "alert-routing-normalizer",
       "project_name_pattern": "name = \"alert-routing-normalizer\""
