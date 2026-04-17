@@ -1,0 +1,94 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/docs/cli.md oracle_round1/docs/cli.md
+--- broken/docs/cli.md
++++ oracle_round1/docs/cli.md
+@@ -4,4 +4,17 @@
+ 
+ ```bash
+ python -m sync_app.cli --name picker-backlog --status pending
++python -m sync_app.cli --name picker-backlog --status pending --owner ops-lead
+ ```
++
++The CLI accepts `--owner`. When it is omitted, the service falls back to the
++default owner in `config/defaults.json`. Synced payloads preserve the existing
++`name` and `status` fields, and also return:
++
++- `owner`: the effective owner
++- `owner_source`: `explicit` when `--owner` is provided, otherwise `default`
++- `routing_key`: a canonical route derived from the effective owner and a
++  normalized item slug so warehouse queue routes stay stable across whitespace
++  changes in item names
++
++The default owner for this variant is `ops-lead`.
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/sync_app/cli.py oracle_round1/sync_app/cli.py
+--- broken/sync_app/cli.py
++++ oracle_round1/sync_app/cli.py
+@@ -10,8 +10,9 @@
+     parser = argparse.ArgumentParser()
+     parser.add_argument("--name", required=True)
+     parser.add_argument("--status", required=True)
++    parser.add_argument("--owner")
+     args = parser.parse_args(argv)
+-    payload = sync_item(args.name, args.status)
++    payload = sync_item(args.name, args.status, owner=args.owner)
+     return json.dumps(payload, sort_keys=True)
+ 
+ 
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/sync_app/service.py oracle_round1/sync_app/service.py
+--- broken/sync_app/service.py
++++ oracle_round1/sync_app/service.py
+@@ -1,8 +1,30 @@
+ from __future__ import annotations
+ 
++import json
++import re
++from pathlib import Path
++
+ from sync_app.store import make_record
+ 
++DEFAULTS_PATH = Path("config/defaults.json")
++
++
++def _load_defaults() -> dict[str, str]:
++    return json.loads(DEFAULTS_PATH.read_text(encoding="utf-8"))
++
++
++def _slugify(value: str) -> str:
++    collapsed = re.sub(r"\s+", " ", value.strip())
++    return collapsed.lower().replace(" ", "-")
++
+ 
+ def sync_item(name: str, status: str, owner: str | None = None) -> dict[str, str]:
+-    del owner
+-    return make_record(name, status)
++    defaults = _load_defaults()
++    if owner is None:
++        effective_owner = defaults["owner"]
++        owner_source = "default"
++    else:
++        effective_owner = owner
++        owner_source = "explicit"
++    routing_key = f"{effective_owner}:{_slugify(name)}"
++    return make_record(name, status, effective_owner, owner_source, routing_key)
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/sync_app/store.py oracle_round1/sync_app/store.py
+--- broken/sync_app/store.py
++++ oracle_round1/sync_app/store.py
+@@ -1,5 +1,17 @@
+ from __future__ import annotations
+ 
+ 
+-def make_record(name: str, status: str) -> dict[str, str]:
+-    return {"name": name, "status": status}
++def make_record(
++    name: str,
++    status: str,
++    owner: str,
++    owner_source: str,
++    routing_key: str,
++) -> dict[str, str]:
++    return {
++        "name": name,
++        "status": status,
++        "owner": owner,
++        "owner_source": owner_source,
++        "routing_key": routing_key,
++    }

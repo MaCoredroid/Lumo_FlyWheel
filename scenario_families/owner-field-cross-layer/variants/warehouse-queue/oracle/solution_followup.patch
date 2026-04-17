@@ -1,0 +1,15 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/sync_app/service.py oracle_round2/sync_app/service.py
+--- oracle_round1/sync_app/service.py
++++ oracle_round2/sync_app/service.py
+@@ -11,8 +11,9 @@
+ 
+ 
+ def _slugify(value: str) -> str:
+-    collapsed = re.sub(r"\s+", " ", value.strip())
+-    return collapsed.lower().replace(" ", "-")
++    collapsed = re.sub(r"\s+", " ", value.strip()).lower()
++    canonical = re.sub(r"[^a-z0-9]+", "-", collapsed)
++    return canonical.strip("-")
+ 
+ 
+ def sync_item(name: str, status: str, owner: str | None = None) -> dict[str, str]:

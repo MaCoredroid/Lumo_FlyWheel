@@ -1,0 +1,11 @@
+{
+  "variant": "warehouse-queue",
+  "mutants_generated": 10,
+  "mutants_killed": 10,
+  "mutation_score": 1.0,
+  "focus": "canonical warehouse queue routing keys for separator-heavy item labels",
+  "notes": [
+    "Round-2 hidden tests kill visible-only fixes that normalize only whitespace in queue names.",
+    "The surviving round-1 class was canonical routing drift when warehouse queue labels carried separators or punctuation."
+  ]
+}

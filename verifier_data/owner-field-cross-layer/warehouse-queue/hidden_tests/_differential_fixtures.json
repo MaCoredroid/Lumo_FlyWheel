@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "record": {
+        "name": "Picker Backlog",
+        "status": "pending",
+        "owner": "ops-lead"
+      },
+      "expected": {
+        "name": "Picker Backlog",
+        "status": "pending",
+        "owner": "ops-lead",
+        "owner_source": "explicit",
+        "routing_key": "ops-lead:picker-backlog"
+      }
+    },
+    {
+      "record": {
+        "name": "Receiving Hold",
+        "status": "blocked",
+        "owner": "dock-coordinator"
+      },
+      "expected": {
+        "name": "Receiving Hold",
+        "status": "blocked",
+        "owner": "dock-coordinator",
+        "owner_source": "explicit",
+        "routing_key": "dock-coordinator:receiving-hold"
+      }
+    },
+    {
+      "record": {
+        "name": "Returns Review",
+        "status": "ready",
+        "owner": "returns-captain"
+      },
+      "expected": {
+        "name": "Returns Review",
+        "status": "ready",
+        "owner": "returns-captain",
+        "owner_source": "explicit",
+        "routing_key": "returns-captain:returns-review"
+      }
+    }
+  ]
+}

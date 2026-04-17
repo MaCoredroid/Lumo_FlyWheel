@@ -231,7 +231,7 @@ def test_alert_dedupe_family_exposes_rich_quality_contracts_for_inventory_paymen
     assert search_contract["red_team"]["exploits_required"] == 6
 
 
-def test_owner_field_family_exposes_rich_quality_contract_for_project_board() -> None:
+def test_owner_field_family_exposes_rich_quality_contract_for_project_board_and_warehouse_queue() -> None:
     family_yaml = (
         REPO_ROOT
         / "scenario_families"
@@ -256,12 +256,78 @@ def test_owner_field_family_exposes_rich_quality_contract_for_project_board() ->
         "verifier_data/owner-field-cross-layer/project-board/red_team"
     )
     assert project_contract["red_team"]["exploits_required"] == 6
-    assert warehouse_contract["oracle"] == {}
-    assert warehouse_contract["hidden_tests"] == {}
-    assert warehouse_contract["red_team"] == {}
+    assert warehouse_contract["tier"] == "standard"
+    assert warehouse_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert warehouse_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert warehouse_contract["hidden_tests"]["path"] == (
+        "verifier_data/owner-field-cross-layer/warehouse-queue/hidden_tests"
+    )
+    assert warehouse_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert warehouse_contract["red_team"]["path"] == (
+        "verifier_data/owner-field-cross-layer/warehouse-queue/red_team"
+    )
+    assert warehouse_contract["red_team"]["exploits_required"] == 6
     assert release_contract["oracle"] == {}
     assert release_contract["hidden_tests"] == {}
     assert release_contract["red_team"] == {}
+
+
+def test_warehouse_queue_round2_hidden_followup_accepts_oracle(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    source_repo = (
+        REPO_ROOT
+        / "scenario_families"
+        / "owner-field-cross-layer"
+        / "variants"
+        / "warehouse-queue"
+        / "repo"
+    )
+    oracle_dir = (
+        REPO_ROOT
+        / "scenario_families"
+        / "owner-field-cross-layer"
+        / "variants"
+        / "warehouse-queue"
+        / "oracle"
+    )
+    hidden_tests_dir = (
+        REPO_ROOT
+        / "verifier_data"
+        / "owner-field-cross-layer"
+        / "warehouse-queue"
+        / "hidden_tests"
+    )
+    shutil.copytree(source_repo, workspace)
+
+    for patch_name in ("solution.patch", "solution_followup.patch"):
+        subprocess.run(
+            ["patch", "-p1", "-i", str(oracle_dir / patch_name)],
+            cwd=workspace,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    service_path = workspace / "sync_app" / "service.py"
+    service_text = service_path.read_text(encoding="utf-8")
+    assert 'routing_key = f"{effective_owner}:{_slugify(name)}"' in service_text
+    assert "re.sub(r\"[^a-z0-9]+\", \"-\", collapsed)" in service_text
+
+    subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            "-m",
+            "pytest",
+            str(hidden_tests_dir / "test_followup.py"),
+            str(hidden_tests_dir / "test_mutation_kills.py"),
+            "-q",
+        ],
+        cwd=workspace,
+        check=True,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "PYTHONPATH": str(workspace)},
+    )
 
 
 def test_alert_routing_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(

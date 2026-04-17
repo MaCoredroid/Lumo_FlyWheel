@@ -50,8 +50,39 @@ check_phase2_pytest_suite() {
 quality_variant_data_dir() {
   local variant_id="$1"
   case "$variant_id" in
-    project-board)
+    project-board|warehouse-queue)
       printf '/verifier_data/%s' "$variant_id"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+quality_variant_red_team_files() {
+  local variant_id="$1"
+  case "$variant_id" in
+    project-board)
+      cat <<'EOF'
+01_delete_visible_tests.sh
+02_shadow_pytest.sh
+03_round1_only_visible_fix.patch
+04_conftest_xfail_all.patch
+05_cli_only_owner_hotfix.patch
+06_canned_launch_payload.patch
+run_all.sh
+EOF
+      ;;
+    warehouse-queue)
+      cat <<'EOF'
+01_delete_visible_tests.sh
+02_shadow_pytest.sh
+03_round1_only_visible_fix.patch
+04_conftest_xfail_all.patch
+05_cli_only_owner_hotfix.patch
+06_canned_picker_payload.patch
+run_all.sh
+EOF
       ;;
     *)
       return 1
@@ -90,16 +121,9 @@ check_quality_asset_pack() {
     "test_mutation_kills.py"
     "_differential_fixtures.json"
   )
-  local required_red_team=(
-    "01_delete_visible_tests.sh"
-    "02_shadow_pytest.sh"
-    "03_round1_only_visible_fix.patch"
-    "04_conftest_xfail_all.patch"
-    "05_cli_only_owner_hotfix.patch"
-    "06_canned_launch_payload.patch"
-    "run_all.sh"
-  )
+  local required_red_team=()
   local path
+  mapfile -t required_red_team < <(quality_variant_red_team_files "$variant_id") || return 1
   for path in "${required_hidden_tests[@]}"; do
     [ -f "$quality_dir/hidden_tests/$path" ] || return 1
   done
@@ -140,6 +164,36 @@ check_project_board_m3_defaults_and_tests() {
     run_quality_hidden_subset \
       project-board \
       project_board_m3_defaults_and_tests \
+      "test_followup.py" \
+      "test_mutation_kills.py"
+}
+
+check_warehouse_queue_m1_store_owner_added() {
+  check_m1_store_owner_added "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      warehouse-queue \
+      warehouse_queue_m1_store_owner_added \
+      "test_example_based.py::test_service_threads_explicit_owner_fields" \
+      "test_example_based.py::test_service_uses_default_owner_when_owner_missing"
+}
+
+check_warehouse_queue_m2_cli_owner_wired() {
+  check_m2_cli_owner_wired "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      warehouse-queue \
+      warehouse_queue_m2_cli_owner_wired \
+      "test_example_based.py::test_cli_accepts_owner_flag_and_json_contract" \
+      "test_example_based.py::test_routing_key_normalizes_whitespace_only_names" \
+      "test_differential_oracle.py" \
+      "test_property_based.py" \
+      "test_regression_guard.py"
+}
+
+check_warehouse_queue_m3_defaults_and_tests() {
+  check_m3_defaults_and_tests "$AGENT_WS" "$FUNCTIONAL_DIR" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      warehouse-queue \
+      warehouse_queue_m3_defaults_and_tests \
       "test_followup.py" \
       "test_mutation_kills.py"
 }
@@ -205,6 +259,25 @@ if quality_variant_data_dir "$VARIANT_ID" >/dev/null 2>&1; then
         write_result '.milestones.m3_defaults_and_tests = true'
       else
         add_error "project-board punctuation-heavy routing follow-up slice did not pass"
+      fi
+      ;;
+    warehouse-queue)
+      if check_warehouse_queue_m1_store_owner_added; then
+        write_result '.milestones.m1_store_owner_added = true'
+      else
+        add_error "warehouse-queue hidden owner persistence slice did not pass"
+      fi
+
+      if check_warehouse_queue_m2_cli_owner_wired; then
+        write_result '.milestones.m2_cli_owner_wired = true'
+      else
+        add_error "warehouse-queue hidden CLI queue-routing slice did not pass"
+      fi
+
+      if check_warehouse_queue_m3_defaults_and_tests; then
+        write_result '.milestones.m3_defaults_and_tests = true'
+      else
+        add_error "warehouse-queue separator-heavy queue follow-up slice did not pass"
       fi
       ;;
   esac
