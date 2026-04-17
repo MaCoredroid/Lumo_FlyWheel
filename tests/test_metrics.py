@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from lumo_flywheel_serving.metrics import PendingSnapshot, compute_task_metrics, parse_prometheus_text, resolve_metric_schema
+from pathlib import Path
+
+from lumo_flywheel_serving.metrics import (
+    REQUIRED_METRIC_VARIANTS,
+    PendingSnapshot,
+    compute_task_metrics,
+    parse_prometheus_text,
+    resolve_metric_schema,
+)
 
 
 def test_parse_prometheus_text_and_schema_resolution() -> None:
@@ -72,6 +80,39 @@ vllm:inter_token_latency_seconds_sum{model_name="qwen3.5-27b",engine="0"} 0.4
         "decode_time": "vllm:request_decode_time_seconds",
         "itl": "vllm:inter_token_latency_seconds",
     }
+
+
+def test_parse_prometheus_text_against_live_vllm_fixture() -> None:
+    raw = (Path(__file__).parent / "fixtures" / "vllm_metrics_qwen3.5-27b.prom").read_text(encoding="utf-8")
+
+    # The fixture is a real /metrics capture, so bucket lines must be present
+    # in the raw text and absent from the parsed output.
+    assert "_bucket" in raw
+
+    metrics = parse_prometheus_text(raw)
+    schema = resolve_metric_schema(metrics)
+
+    assert not any(key.endswith("_bucket") for key in metrics)
+
+    for candidates in REQUIRED_METRIC_VARIANTS.values():
+        assert any(
+            candidate in metrics
+            or f"{candidate}_sum" in metrics
+            or f"{candidate}_count" in metrics
+            for candidate in candidates
+        )
+
+    for key, value in metrics.items():
+        if key.startswith("vllm:") and (key.endswith("_sum") or key.endswith("_count")):
+            assert value >= 0
+
+    histogram_keys = {"kv_computed_tokens", "ttft", "prefill_time", "decode_time", "itl"}
+    for logical_name, base in schema.items():
+        if logical_name in histogram_keys:
+            assert f"{base}_sum" in metrics
+            assert f"{base}_count" in metrics
+        else:
+            assert base in metrics
 
 
 def test_compute_task_metrics_uses_pending_snapshot_contract() -> None:
