@@ -414,6 +414,17 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             raise RuntimeError(
                 "Telemetry smoke violated cache_hits <= cache_queries."
             )
+        expected_request_count = 5
+        if telemetry_metrics.ttft_count != expected_request_count:
+            raise RuntimeError(
+                f"Telemetry smoke expected ttft_count={expected_request_count} for the five smoke requests, "
+                f"but observed {telemetry_metrics.ttft_count}."
+            )
+        gpu_compute_s = telemetry_metrics.prefill_sum_s + telemetry_metrics.decode_sum_s
+        if gpu_compute_s >= telemetry_metrics.wall_clock_s:
+            raise RuntimeError(
+                "Telemetry smoke violated prefill_sum_s + decode_sum_s < wall_clock_s."
+            )
         telemetry_records = load_telemetry(str(Path(output_dir) / "telemetry"))
         telemetry_summary = aggregate_by_model(
             telemetry_records,
@@ -455,9 +466,12 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
                         "prompt_tokens": telemetry_metrics.prompt_tokens,
                         "kv_computed_tokens": telemetry_metrics.kv_computed_tokens,
                         "gen_tokens": telemetry_metrics.gen_tokens,
+                        "prefill_sum_s": telemetry_metrics.prefill_sum_s,
+                        "decode_sum_s": telemetry_metrics.decode_sum_s,
                         "ttft_count": telemetry_metrics.ttft_count,
                         "cache_queries": telemetry_metrics.cache_queries,
                         "cache_hits": telemetry_metrics.cache_hits,
+                        "wall_clock_s": telemetry_metrics.wall_clock_s,
                         "anomalies": telemetry_metrics.anomalies,
                     },
                     "telemetry_summary": {

@@ -119,7 +119,10 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
                 decode_throughput_tps=18.0,
                 cache_hit_rate_pct=75.0,
                 gen_tokens=18.0,
-                ttft_count=3,
+                prefill_sum_s=2.0,
+                decode_sum_s=1.0,
+                ttft_count=5,
+                wall_clock_s=4.5,
             )
 
     requests_seen: list[dict] = []
@@ -158,6 +161,10 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
         "pool_or_split": "public_dev",
         "n_tasks": 1,
     }
+    assert output["telemetry_record"]["ttft_count"] == 5
+    assert output["telemetry_record"]["prefill_sum_s"] == 2.0
+    assert output["telemetry_record"]["decode_sum_s"] == 1.0
+    assert output["telemetry_record"]["wall_clock_s"] == 4.5
     assert events == [
         "start:qwen3.5-27b",
         "meta:qwen3.5-27b:{'direct_api_smoke_status': 'pass', 'metric_schema_variant': 'legacy_no_total', 'prefix_cache_hits_delta': 3.0, 'codex_tool_probe_status': 'pass'}",
@@ -291,7 +298,10 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
                 decode_throughput_tps=18.0,
                 cache_hit_rate_pct=25.0,
                 gen_tokens=18.0,
-                ttft_count=3,
+                prefill_sum_s=2.0,
+                decode_sum_s=1.0,
+                ttft_count=5,
+                wall_clock_s=4.5,
             )
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
@@ -364,7 +374,10 @@ def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: 
                 decode_throughput_tps=18.0,
                 cache_hit_rate_pct=25.0,
                 gen_tokens=18.0,
-                ttft_count=3,
+                prefill_sum_s=2.0,
+                decode_sum_s=1.0,
+                ttft_count=5,
+                wall_clock_s=4.5,
             )
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
@@ -381,6 +394,122 @@ def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: 
 
     assert cli.cmd_smoke_test(_args()) == 0
     assert seen_models == ["codex-sft-all", "codex-sft-all", "codex-sft-all", "codex-sft-all", "codex-sft-all"]
+
+
+def test_smoke_test_rejects_ttft_count_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    server = SimpleNamespace(
+        start=lambda model_id, enable_request_logging=False: None,
+        health=lambda: _Response(status_code=200),
+        models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
+        record_launch_metadata=lambda model_id, **metadata: None,
+        flush_prefix_cache=lambda: None,
+        stop=lambda missing_ok=True: None,
+    )
+
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            return None
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            return None
+
+        async def snapshot_after(self, task_id: str):
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=1.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+                ttft_ms=500.0,
+                prefill_throughput_tps=12.0,
+                decode_throughput_tps=18.0,
+                cache_hit_rate_pct=25.0,
+                gen_tokens=18.0,
+                prefill_sum_s=2.0,
+                decode_sum_s=1.0,
+                ttft_count=4,
+                wall_clock_s=4.5,
+            )
+
+    def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
+        if url.endswith("/v1/responses"):
+            if "tools" in json:
+                return _Response(payload={"output": [{"type": "function_call", "name": "codex_tool_probe"}]})
+            response_id = "resp-1" if "previous_response_id" not in json else "resp-2"
+            return _Response(payload={"id": response_id})
+        return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
+
+    monkeypatch.setattr(cli, "_server", lambda args: server)
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(RuntimeError, match="expected ttft_count=5"):
+        cli.cmd_smoke_test(_args())
+
+
+def test_smoke_test_rejects_gpu_time_exceeding_wall_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    server = SimpleNamespace(
+        start=lambda model_id, enable_request_logging=False: None,
+        health=lambda: _Response(status_code=200),
+        models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
+        record_launch_metadata=lambda model_id, **metadata: None,
+        flush_prefix_cache=lambda: None,
+        stop=lambda missing_ok=True: None,
+    )
+
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            return None
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            return None
+
+        async def snapshot_after(self, task_id: str):
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=1.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+                ttft_ms=500.0,
+                prefill_throughput_tps=12.0,
+                decode_throughput_tps=18.0,
+                cache_hit_rate_pct=25.0,
+                gen_tokens=18.0,
+                prefill_sum_s=3.0,
+                decode_sum_s=2.0,
+                ttft_count=5,
+                wall_clock_s=4.0,
+            )
+
+    def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
+        if url.endswith("/v1/responses"):
+            if "tools" in json:
+                return _Response(payload={"output": [{"type": "function_call", "name": "codex_tool_probe"}]})
+            response_id = "resp-1" if "previous_response_id" not in json else "resp-2"
+            return _Response(payload={"id": response_id})
+        return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
+
+    monkeypatch.setattr(cli, "_server", lambda args: server)
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(RuntimeError, match="prefill_sum_s \\+ decode_sum_s < wall_clock_s"):
+        cli.cmd_smoke_test(_args())
 
 
 def test_smoke_test_requires_responses_follow_up_id(monkeypatch: pytest.MonkeyPatch) -> None:
