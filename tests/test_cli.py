@@ -39,6 +39,11 @@ def _args() -> argparse.Namespace:
         model_id="qwen3.5-27b",
         enable_request_logging=False,
         keep_running=False,
+        output_dir="/tmp/lumo-smoke",
+        pool_or_split="public_dev",
+        smoke_task_id="smoke-test/qwen3.5-27b/unit",
+        smoke_seed=0,
+        smoke_attempt=1,
     )
 
 
@@ -75,17 +80,47 @@ def test_annotate_log_rejects_invalid_entries(monkeypatch: pytest.MonkeyPatch) -
 
 def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     events: list[str] = []
-    metrics_iter = iter(["before", "after"])
+    telemetry_events: list[str] = []
 
     server = SimpleNamespace(
         start=lambda model_id, enable_request_logging=False: events.append(f"start:{model_id}"),
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
-        metrics=lambda: _Response(text=next(metrics_iter)),
         record_launch_metadata=lambda model_id, **metadata: events.append(f"meta:{model_id}:{metadata}"),
         flush_prefix_cache=lambda: events.append("flush"),
         stop=lambda missing_ok=True: events.append(f"stop:{missing_ok}"),
     )
+
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            telemetry_events.append(f"init:{host}:{port}:{output_dir}:{model_id}:{pool_or_split}")
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            telemetry_events.append("resolve")
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            telemetry_events.append(f"before:{task_id}:{seed}:{attempt}")
+
+        async def snapshot_after(self, task_id: str):
+            telemetry_events.append(f"after:{task_id}")
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=3.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+                ttft_ms=500.0,
+                prefill_throughput_tps=12.0,
+                decode_throughput_tps=18.0,
+                cache_hit_rate_pct=75.0,
+                gen_tokens=18.0,
+                ttft_count=3,
+            )
 
     requests_seen: list[dict] = []
 
@@ -101,23 +136,39 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
         return _Response(payload={"id": "chat-2", "choices": [{"message": {"content": "OK"}}]})
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: {"marker": raw})
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
+    monkeypatch.setattr(cli, "load_telemetry", lambda telemetry_dir: [{"telemetry_dir": telemetry_dir}])
+    monkeypatch.setattr(
+        cli,
+        "aggregate_by_model",
+        lambda records, reportable_runs: [
+            SimpleNamespace(model_id="qwen3.5-27b", pool_or_split="public_dev", n_tasks=1)
+        ],
+    )
     monkeypatch.setattr(requests, "post", fake_post)
-
-    cache_hits = iter([{"cache_hits": 0.0}, {"cache_hits": 3.0}])
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(cache_hits))
 
     assert cli.cmd_smoke_test(_args()) == 0
 
     output = json.loads(capsys.readouterr().out)
     assert output["direct_api_smoke_status"] == "pass"
     assert output["prefix_cache_hits_delta"] == 3.0
+    assert output["telemetry_task_id"] == "smoke-test/qwen3.5-27b/unit"
+    assert output["telemetry_summary"] == {
+        "model_id": "qwen3.5-27b",
+        "pool_or_split": "public_dev",
+        "n_tasks": 1,
+    }
     assert events == [
         "start:qwen3.5-27b",
         "meta:qwen3.5-27b:{'direct_api_smoke_status': 'pass', 'metric_schema_variant': 'legacy_no_total', 'prefix_cache_hits_delta': 3.0, 'codex_tool_probe_status': 'pass'}",
         "flush",
         "stop:True",
+    ]
+    assert telemetry_events == [
+        "init:127.0.0.1:8000:/tmp/lumo-smoke:qwen3.5-27b:public_dev",
+        "resolve",
+        "before:smoke-test/qwen3.5-27b/unit:0:1",
+        "after:smoke-test/qwen3.5-27b/unit",
     ]
     assert len(requests_seen) == 5
     assert requests_seen[0]["url"].endswith("/v1/chat/completions")
@@ -139,17 +190,38 @@ def test_chat_message_text_falls_back_when_chat_content_is_null() -> None:
 
 def test_smoke_test_fails_when_prefix_cache_hits_do_not_increase(monkeypatch: pytest.MonkeyPatch) -> None:
     events: list[str] = []
-    metrics_iter = iter([{"cache_hits": 4.0}, {"cache_hits": 4.0}])
 
     server = SimpleNamespace(
         start=lambda model_id, enable_request_logging=False: events.append(f"start:{model_id}"),
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
-        metrics=lambda: _Response(text="ignored"),
         record_launch_metadata=lambda model_id, **metadata: events.append(f"meta:{model_id}:{metadata}"),
         flush_prefix_cache=lambda: events.append("flush"),
         stop=lambda missing_ok=True: events.append(f"stop:{missing_ok}"),
     )
+
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            return None
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            return None
+
+        async def snapshot_after(self, task_id: str):
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=0.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+            )
 
     def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
         if url.endswith("/v1/responses"):
@@ -160,8 +232,7 @@ def test_smoke_test_fails_when_prefix_cache_hits_do_not_increase(monkeypatch: py
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
     monkeypatch.setattr(requests, "post", fake_post)
 
     with pytest.raises(RuntimeError, match="Expected prefix cache hits"):
@@ -179,7 +250,6 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
         start=lambda model_id, enable_request_logging=False: None,
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
-        metrics=lambda: _Response(text="ignored"),
         record_launch_metadata=lambda model_id, **metadata: None,
         flush_prefix_cache=lambda: None,
         stop=lambda missing_ok=True: None,
@@ -195,14 +265,47 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
             return _Response(payload={"id": response_id})
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            return None
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            return None
+
+        async def snapshot_after(self, task_id: str):
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=1.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+                ttft_ms=500.0,
+                prefill_throughput_tps=12.0,
+                decode_throughput_tps=18.0,
+                cache_hit_rate_pct=25.0,
+                gen_tokens=18.0,
+                ttft_count=3,
+            )
+
     monkeypatch.setattr(cli, "_server", lambda args: server)
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: {"cache_hits": 0.0} if raw == "ignored" else {})
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
+    monkeypatch.setattr(cli, "load_telemetry", lambda telemetry_dir: [{"telemetry_dir": telemetry_dir}])
+    monkeypatch.setattr(
+        cli,
+        "aggregate_by_model",
+        lambda records, reportable_runs: [
+            SimpleNamespace(model_id="qwen3.5-27b", pool_or_split="public_dev", n_tasks=1)
+        ],
+    )
     monkeypatch.setattr(requests, "post", fake_post)
     monkeypatch.setenv("VLLM_API_KEY", "custom-token")
-
-    metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
 
     assert cli.cmd_smoke_test(_args()) == 0
     assert seen_headers == [{"Authorization": "Bearer custom-token"}] * 5
@@ -220,7 +323,6 @@ def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: 
         start=lambda model_id, enable_request_logging=False: None,
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b-served"}, {"id": "codex-sft-all"}]}),
-        metrics=lambda: _Response(text="ignored"),
         record_launch_metadata=lambda model_id, **metadata: None,
         flush_prefix_cache=lambda: None,
         stop=lambda missing_ok=True: None,
@@ -236,10 +338,45 @@ def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: 
             return _Response(payload={"id": response_id})
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
-    metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            return None
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            return None
+
+        async def snapshot_after(self, task_id: str):
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=1.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+                ttft_ms=500.0,
+                prefill_throughput_tps=12.0,
+                decode_throughput_tps=18.0,
+                cache_hit_rate_pct=25.0,
+                gen_tokens=18.0,
+                ttft_count=3,
+            )
+
     monkeypatch.setattr(cli, "_server", lambda args: server)
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
+    monkeypatch.setattr(cli, "load_telemetry", lambda telemetry_dir: [{"telemetry_dir": telemetry_dir}])
+    monkeypatch.setattr(
+        cli,
+        "aggregate_by_model",
+        lambda records, reportable_runs: [
+            SimpleNamespace(model_id="qwen3.5-27b", pool_or_split="public_dev", n_tasks=1)
+        ],
+    )
     monkeypatch.setattr(requests, "post", fake_post)
 
     assert cli.cmd_smoke_test(_args()) == 0
@@ -251,7 +388,6 @@ def test_smoke_test_requires_responses_follow_up_id(monkeypatch: pytest.MonkeyPa
         start=lambda model_id, enable_request_logging=False: None,
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
-        metrics=lambda: _Response(text="ignored"),
         record_launch_metadata=lambda model_id, **metadata: None,
         flush_prefix_cache=lambda: None,
         stop=lambda missing_ok=True: None,
@@ -264,10 +400,31 @@ def test_smoke_test_requires_responses_follow_up_id(monkeypatch: pytest.MonkeyPa
             return _Response(payload={})
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
-    metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            return None
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            return None
+
+        async def snapshot_after(self, task_id: str):
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=1.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+            )
+
     monkeypatch.setattr(cli, "_server", lambda args: server)
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
     monkeypatch.setattr(requests, "post", fake_post)
 
     with pytest.raises(RuntimeError, match="did not return a response id"):
@@ -279,7 +436,6 @@ def test_smoke_test_requires_structured_tool_call_probe(monkeypatch: pytest.Monk
         start=lambda model_id, enable_request_logging=False: None,
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
-        metrics=lambda: _Response(text="ignored"),
         record_launch_metadata=lambda model_id, **metadata: None,
         flush_prefix_cache=lambda: None,
         stop=lambda missing_ok=True: None,
@@ -293,10 +449,31 @@ def test_smoke_test_requires_structured_tool_call_probe(monkeypatch: pytest.Monk
             return _Response(payload={"id": response_id})
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
-    metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            return None
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            return None
+
+        async def snapshot_after(self, task_id: str):
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=1.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+            )
+
     monkeypatch.setattr(cli, "_server", lambda args: server)
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
     monkeypatch.setattr(requests, "post", fake_post)
 
     with pytest.raises(RuntimeError, match="did not return a structured function_call item"):
@@ -311,7 +488,6 @@ def test_smoke_test_escalates_when_responses_follow_up_id_is_not_persisted(
         start=lambda model_id, enable_request_logging=False: events.append(f"start:{model_id}"),
         health=lambda: _Response(status_code=200),
         models=lambda: _Response(payload={"data": [{"id": "qwen3.5-27b"}]}),
-        metrics=lambda: _Response(text="ignored"),
         record_launch_metadata=lambda model_id, **metadata: events.append(f"meta:{model_id}:{metadata}"),
         flush_prefix_cache=lambda: events.append("flush"),
         stop=lambda missing_ok=True: events.append(f"stop:{missing_ok}"),
@@ -337,10 +513,31 @@ def test_smoke_test_escalates_when_responses_follow_up_id_is_not_persisted(
             return _Response(payload={"id": "resp-1"})
         return _Response(payload={"id": "chat-1", "choices": [{"message": {"content": "OK"}}]})
 
-    metrics_iter = iter([{"cache_hits": 0.0}])
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        @property
+        def resolved_schema(self) -> dict[str, str]:
+            return {"cache_hits": "cache_hits"}
+
+        async def resolve_schema(self) -> None:
+            return None
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            return None
+
+        async def snapshot_after(self, task_id: str):
+            return SimpleNamespace(
+                anomalies=[],
+                cache_hits=1.0,
+                kv_computed_tokens=24.0,
+                prompt_tokens=60.0,
+                cache_queries=4.0,
+            )
+
     monkeypatch.setattr(cli, "_server", lambda args: server)
-    monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
     monkeypatch.setattr(requests, "post", fake_post)
 
     with pytest.raises(RuntimeError, match="did not persist response ids for follow-up chaining"):

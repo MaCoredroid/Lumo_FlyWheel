@@ -13,7 +13,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Protocol
 from urllib.parse import quote
 
 import requests
@@ -21,6 +21,9 @@ import requests
 from .data_pool import SCENARIO_TYPES, _find_manifest_variant, load_codex_long_manifest, make_scenario_id, sha256_file
 from .registry import ModelConfig, load_registry
 from .yaml_utils import load_yaml_file
+
+if TYPE_CHECKING:
+    from .metrics import TaskMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +272,7 @@ class OrchestratorConfig:
 class LatencyCaptureProtocol(Protocol):
     async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None: ...
 
-    async def snapshot_after(self, task_id: str) -> None: ...
+    async def snapshot_after(self, task_id: str) -> TaskMetrics: ...
 
 
 @dataclass

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import requests
 
-from .metrics import parse_prometheus_text, resolve_metric_schema
+from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .registry import load_registry
 
@@ -155,6 +157,32 @@ def _proxy_responses_url(server: object, port: int) -> str:
     return f"http://127.0.0.1:{port + 1}/v1/responses"
 
 
+def _smoke_pool_or_split(args: argparse.Namespace) -> str:
+    return getattr(args, "pool_or_split", "public_dev")
+
+
+def _smoke_output_dir(args: argparse.Namespace) -> str:
+    return getattr(args, "output_dir", "output")
+
+
+def _smoke_task_id(args: argparse.Namespace) -> str:
+    task_id = getattr(args, "smoke_task_id", None)
+    if isinstance(task_id, str) and task_id.strip():
+        return task_id.strip()
+    return f"smoke-test/{args.model_id}/{int(time.time())}"
+
+
+def _smoke_seed(args: argparse.Namespace) -> int:
+    return int(getattr(args, "smoke_seed", 0))
+
+
+def _smoke_attempt(args: argparse.Namespace) -> int:
+    attempt = int(getattr(args, "smoke_attempt", 1))
+    if attempt < 1:
+        raise RuntimeError("Smoke telemetry attempt must be >= 1")
+    return attempt
+
+
 def _tool_call_probe_request(model: str) -> dict[str, object]:
     return {
         "model": model,
@@ -292,10 +320,23 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
     server.start(model_id=args.model_id, enable_request_logging=args.enable_request_logging)
     try:
         request_model_name = _smoke_request_model_name(server, args.model_id)
+        pool_or_split = _smoke_pool_or_split(args)
+        output_dir = _smoke_output_dir(args)
+        task_id = _smoke_task_id(args)
+        seed = _smoke_seed(args)
+        attempt = _smoke_attempt(args)
+        telemetry_capture = LatencyCapture(
+            "127.0.0.1",
+            args.port,
+            output_dir,
+            args.model_id,
+            pool_or_split,
+        )
+        asyncio.run(telemetry_capture.resolve_schema())
+        schema = telemetry_capture.resolved_schema
+        asyncio.run(telemetry_capture.snapshot_before(task_id=task_id, seed=seed, attempt=attempt))
         health = server.health()
         models = server.models().json()
-        metrics_before = parse_prometheus_text(server.metrics().text)
-        schema = resolve_metric_schema(metrics_before)
         first_chat_request = {
             "model": request_model_name,
             "messages": _prefix_cache_probe_messages(),
@@ -357,14 +398,30 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
             raise RuntimeError(
                 "Codex tool-call probe failed: proxy/vLLM path did not return a structured function_call item."
             )
-        metrics_after = parse_prometheus_text(server.metrics().text)
-        cache_hit_metric = schema.get("cache_hits") or schema.get("prefix_cache_hits")
-        if not cache_hit_metric:
-            raise RuntimeError("Resolved telemetry schema does not include a cache-hit metric key")
-        cache_hit_delta = metrics_after.get(cache_hit_metric, 0.0) - metrics_before.get(cache_hit_metric, 0.0)
+        telemetry_metrics = asyncio.run(telemetry_capture.snapshot_after(task_id))
+        if telemetry_metrics.anomalies:
+            raise RuntimeError(f"Telemetry smoke produced anomalous record: {telemetry_metrics.anomalies}")
+        cache_hit_delta = telemetry_metrics.cache_hits
         if cache_hit_delta <= 0:
             raise RuntimeError(
                 "Expected prefix cache hits after repeated-prefix chat turns, but /metrics did not increase."
+            )
+        if telemetry_metrics.kv_computed_tokens > telemetry_metrics.prompt_tokens:
+            raise RuntimeError(
+                "Telemetry smoke violated kv_computed_tokens <= prompt_tokens."
+            )
+        if telemetry_metrics.cache_hits > telemetry_metrics.cache_queries:
+            raise RuntimeError(
+                "Telemetry smoke violated cache_hits <= cache_queries."
+            )
+        telemetry_records = load_telemetry(str(Path(output_dir) / "telemetry"))
+        telemetry_summary = aggregate_by_model(
+            telemetry_records,
+            {(task_id, args.model_id, seed, attempt)},
+        )
+        if len(telemetry_summary) != 1 or telemetry_summary[0].n_tasks != 1:
+            raise RuntimeError(
+                "Telemetry smoke could not reload and aggregate exactly one smoke telemetry record."
             )
         server.record_launch_metadata(
             args.model_id,
@@ -386,6 +443,28 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
                     "tool_call_probe_status": "pass",
                     "reset_prefix_cache_status": 200,
                     "prefix_cache_hits_delta": cache_hit_delta,
+                    "telemetry_task_id": task_id,
+                    "telemetry_path": telemetry_capture.writer_path,
+                    "telemetry_record": {
+                        "seed": seed,
+                        "attempt": attempt,
+                        "ttft_ms": telemetry_metrics.ttft_ms,
+                        "prefill_throughput_tps": telemetry_metrics.prefill_throughput_tps,
+                        "decode_throughput_tps": telemetry_metrics.decode_throughput_tps,
+                        "cache_hit_rate_pct": telemetry_metrics.cache_hit_rate_pct,
+                        "prompt_tokens": telemetry_metrics.prompt_tokens,
+                        "kv_computed_tokens": telemetry_metrics.kv_computed_tokens,
+                        "gen_tokens": telemetry_metrics.gen_tokens,
+                        "ttft_count": telemetry_metrics.ttft_count,
+                        "cache_queries": telemetry_metrics.cache_queries,
+                        "cache_hits": telemetry_metrics.cache_hits,
+                        "anomalies": telemetry_metrics.anomalies,
+                    },
+                    "telemetry_summary": {
+                        "model_id": telemetry_summary[0].model_id,
+                        "pool_or_split": telemetry_summary[0].pool_or_split,
+                        "n_tasks": telemetry_summary[0].n_tasks,
+                    },
                 },
                 indent=2,
             )
@@ -471,6 +550,11 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("model_id")
     smoke.add_argument("--enable-request-logging", action="store_true")
     smoke.add_argument("--keep-running", action="store_true")
+    smoke.add_argument("--output-dir", default="output")
+    smoke.add_argument("--pool-or-split", default="public_dev")
+    smoke.add_argument("--smoke-task-id")
+    smoke.add_argument("--smoke-seed", type=int, default=0)
+    smoke.add_argument("--smoke-attempt", type=int, default=1)
     smoke.set_defaults(func=cmd_smoke_test)
 
     annotate = subparsers.add_parser("annotate-log")

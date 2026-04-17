@@ -868,6 +868,12 @@ class LatencyCapture:
     def writer_path(self) -> str:
         return self._writer.path
 
+    @property
+    def resolved_schema(self) -> dict[str, str]:
+        if self._schema is None:
+            raise RuntimeError("resolve_schema() must be called before accessing resolved_schema")
+        return dict(self._schema)
+
     async def resolve_schema(self) -> None:
         snapshot = await fetch_metrics(self._host, self._port, timeout=self._metrics_fetch_timeout_s)
         self._schema = resolve_metric_schema(snapshot)
