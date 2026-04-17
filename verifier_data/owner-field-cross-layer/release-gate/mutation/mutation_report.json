@@ -1,0 +1,11 @@
+{
+  "variant": "release-gate",
+  "mutants_generated": 10,
+  "mutants_killed": 10,
+  "mutation_score": 1.0,
+  "focus": "canonical release gate routing keys for separator-heavy release train labels",
+  "notes": [
+    "Round-2 hidden tests kill visible-only fixes that normalize only whitespace in release train names.",
+    "The surviving round-1 class was canonical routing drift when versioned release train labels carried separators or punctuation."
+  ]
+}

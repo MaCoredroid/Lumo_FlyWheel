@@ -12,4 +12,9 @@ include a canonical `routing_key` derived from the effective owner and a
 normalized item slug so release gate routes stay stable even when the item
 name includes extra internal whitespace.
 
+Release train names are shown back to operators exactly as entered, but
+downstream routing still needs a stable gate slug. Keep the visible `name`
+unchanged while making the `routing_key` stable for release labels that differ
+only by spacing, punctuation, or train-version separators.
+
 Do not remove the schema checks or the CLI coverage.

@@ -1,8 +1,8 @@
 family_id: owner-field-cross-layer
 scenario_type: cross_layer_changes
 description: Thread a new owner field through backend storage, service logic, CLI
-  flags, config defaults, and docs. The richer project-board and warehouse-queue
-  uplifts also carry hidden routing-key follow-up coverage.
+  flags, config defaults, and docs. The richer project-board, warehouse-queue,
+  and release-gate uplifts also carry hidden routing-key follow-up coverage.
 repo_pattern:
   language: python
   framework: pytest
@@ -22,9 +22,9 @@ breakage_class:
 grading_invariant:
   type: hybrid
   description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result. The richer project-board and warehouse-queue uplifts
-    additionally run authored hidden-test slices and verifier-bundle integrity
-    checks.
+    Phase 2 command result. The richer project-board, warehouse-queue, and
+    release-gate uplifts additionally run authored hidden-test slices and
+    verifier-bundle integrity checks.
   verifier_script: verifiers/owner-field-cross-layer/verify.sh
   functional_checks:
   - id: pytest_suite
@@ -62,15 +62,16 @@ milestones:
   partial_credit: 0.4
 shortcut_resistance:
   notes: Phase 3 inspects store, CLI, defaults, and docs directly, checksum manifests
-    stop visible-test deletion, and the richer project-board and warehouse-queue
-    uplifts also ship hidden routing bundles plus mutation evidence covering shortcut
-    fixes that only satisfy the visible owner-field tests.
+    stop visible-test deletion, and the richer project-board, warehouse-queue,
+    and release-gate uplifts also ship hidden routing bundles plus mutation evidence
+    covering shortcut fixes that only satisfy the visible owner-field tests.
   known_exploits_tested:
   - Delete the visible owner-field tests
   - Shadow pytest to report success
   - Apply only the visible round-one owner-field fix
   - Normalize separator-heavy queue names only in the CLI path
   - Return a canned picker-backlog payload for the visible fixtures
+  - Return a canned patch-train payload for the visible fixtures
   - Preserve the visible owner field while skipping variant-specific routing-key
     canonicalization follow-up work
   min_exploits: 6
@@ -82,7 +83,9 @@ difficulty_estimate:
     coverage around punctuation-heavy owner labels that must normalize into a
     canonical routing key without mutating the visible owner field, while the
     richer warehouse-queue uplift adds queue-name canonicalization pressure for
-    separator-heavy item labels.
+    separator-heavy item labels, and the richer release-gate uplift does the
+    same for versioned release train labels without mutating the visible train
+    name.
   evidence_path: verifier_data/owner-field-cross-layer/project-board/mutation/mutation_report.json
 variants:
 - variant_id: project-board
@@ -165,7 +168,40 @@ variants:
     exploits_required: 6
 - variant_id: release-gate
   repo_source: authored
+  tier: standard
+  surfaces:
+  - store
+  - service
+  - cli
+  - config
+  - docs
+  - gate_slug
   injected_breakage: Tests now require an owner field to exist across storage, service,
-    CLI, defaults, and docs, but the repo only handles name/status.
+    CLI, defaults, and docs, but the repo only handles name/status. The richer
+    release-gate uplift also carries hidden follow-up coverage for punctuation-heavy
+    release train labels that must normalize into a canonical routing-key suffix
+    while preserving the visible train name.
   env_dockerfile: variants/release-gate/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/owner-field-cross-layer/release-gate/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_store_owner_added:
+      - test_example_based.py::test_service_threads_explicit_owner_fields
+      - test_example_based.py::test_service_uses_default_owner_when_owner_missing
+      m2_cli_owner_wired:
+      - test_example_based.py::test_cli_accepts_owner_flag_and_json_contract
+      - test_example_based.py::test_routing_key_normalizes_whitespace_only_names
+      - test_differential_oracle.py
+      - test_property_based.py
+      - test_regression_guard.py
+      m3_defaults_and_tests:
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/owner-field-cross-layer/release-gate/red_team
+    exploits_required: 6

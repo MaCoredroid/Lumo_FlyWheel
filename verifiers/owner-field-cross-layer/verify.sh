@@ -50,7 +50,7 @@ check_phase2_pytest_suite() {
 quality_variant_data_dir() {
   local variant_id="$1"
   case "$variant_id" in
-    project-board|warehouse-queue)
+    project-board|warehouse-queue|release-gate)
       printf '/verifier_data/%s' "$variant_id"
       ;;
     *)
@@ -81,6 +81,17 @@ EOF
 04_conftest_xfail_all.patch
 05_cli_only_owner_hotfix.patch
 06_canned_picker_payload.patch
+run_all.sh
+EOF
+      ;;
+    release-gate)
+      cat <<'EOF'
+01_delete_visible_tests.sh
+02_shadow_pytest.sh
+03_round1_only_visible_fix.patch
+04_conftest_xfail_all.patch
+05_cli_only_owner_hotfix.patch
+06_canned_patch_payload.patch
 run_all.sh
 EOF
       ;;
@@ -198,6 +209,36 @@ check_warehouse_queue_m3_defaults_and_tests() {
       "test_mutation_kills.py"
 }
 
+check_release_gate_m1_store_owner_added() {
+  check_m1_store_owner_added "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      release-gate \
+      release_gate_m1_store_owner_added \
+      "test_example_based.py::test_service_threads_explicit_owner_fields" \
+      "test_example_based.py::test_service_uses_default_owner_when_owner_missing"
+}
+
+check_release_gate_m2_cli_owner_wired() {
+  check_m2_cli_owner_wired "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      release-gate \
+      release_gate_m2_cli_owner_wired \
+      "test_example_based.py::test_cli_accepts_owner_flag_and_json_contract" \
+      "test_example_based.py::test_routing_key_normalizes_whitespace_only_names" \
+      "test_differential_oracle.py" \
+      "test_property_based.py" \
+      "test_regression_guard.py"
+}
+
+check_release_gate_m3_defaults_and_tests() {
+  check_m3_defaults_and_tests "$AGENT_WS" "$FUNCTIONAL_DIR" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      release-gate \
+      release_gate_m3_defaults_and_tests \
+      "test_followup.py" \
+      "test_mutation_kills.py"
+}
+
 source /verifier/milestones/m1_store_owner_added.sh
 source /verifier/milestones/m2_cli_owner_wired.sh
 source /verifier/milestones/m3_defaults_and_tests.sh
@@ -278,6 +319,25 @@ if quality_variant_data_dir "$VARIANT_ID" >/dev/null 2>&1; then
         write_result '.milestones.m3_defaults_and_tests = true'
       else
         add_error "warehouse-queue separator-heavy queue follow-up slice did not pass"
+      fi
+      ;;
+    release-gate)
+      if check_release_gate_m1_store_owner_added; then
+        write_result '.milestones.m1_store_owner_added = true'
+      else
+        add_error "release-gate hidden owner persistence slice did not pass"
+      fi
+
+      if check_release_gate_m2_cli_owner_wired; then
+        write_result '.milestones.m2_cli_owner_wired = true'
+      else
+        add_error "release-gate hidden CLI routing slice did not pass"
+      fi
+
+      if check_release_gate_m3_defaults_and_tests; then
+        write_result '.milestones.m3_defaults_and_tests = true'
+      else
+        add_error "release-gate separator-heavy release routing follow-up slice did not pass"
       fi
       ;;
   esac

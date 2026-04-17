@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "record": {
+        "name": "Patch Train",
+        "status": "pending",
+        "owner": "release-captain"
+      },
+      "expected": {
+        "name": "Patch Train",
+        "status": "pending",
+        "owner": "release-captain",
+        "owner_source": "explicit",
+        "routing_key": "release-captain:patch-train"
+      }
+    },
+    {
+      "record": {
+        "name": "Hotfix Queue",
+        "status": "blocked",
+        "owner": "ops-approver"
+      },
+      "expected": {
+        "name": "Hotfix Queue",
+        "status": "blocked",
+        "owner": "ops-approver",
+        "owner_source": "explicit",
+        "routing_key": "ops-approver:hotfix-queue"
+      }
+    },
+    {
+      "record": {
+        "name": "Canary Train",
+        "status": "ready",
+        "owner": "release-captain"
+      },
+      "expected": {
+        "name": "Canary Train",
+        "status": "ready",
+        "owner": "release-captain",
+        "owner_source": "explicit",
+        "routing_key": "release-captain:canary-train"
+      }
+    }
+  ]
+}

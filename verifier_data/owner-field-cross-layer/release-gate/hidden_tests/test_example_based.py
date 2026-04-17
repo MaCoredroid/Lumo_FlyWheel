@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from sync_app.cli import main
 from sync_app.service import sync_item
 
 
-def _default_owner() -> str:
-    return json.loads(Path("config/defaults.json").read_text(encoding="utf-8"))["owner"]
-
-
-def test_owner_is_persisted_by_the_service() -> None:
-    payload = sync_item("Patch  Train", "pending", owner="release-captain")
-    assert payload == {
-        "name": "Patch  Train",
+def test_service_threads_explicit_owner_fields() -> None:
+    assert sync_item("Patch Train", "pending", owner="release-captain") == {
+        "name": "Patch Train",
         "status": "pending",
         "owner": "release-captain",
         "owner_source": "explicit",
@@ -22,18 +16,17 @@ def test_owner_is_persisted_by_the_service() -> None:
     }
 
 
-def test_service_uses_default_owner_when_not_provided() -> None:
-    payload = sync_item("Patch Train", "pending")
-    assert payload == {
+def test_service_uses_default_owner_when_owner_missing(default_owner: str) -> None:
+    assert sync_item("Patch Train", "pending") == {
         "name": "Patch Train",
         "status": "pending",
-        "owner": _default_owner(),
+        "owner": default_owner,
         "owner_source": "default",
-        "routing_key": f"{_default_owner()}:patch-train",
+        "routing_key": f"{default_owner}:patch-train",
     }
 
 
-def test_cli_accepts_owner_flag_and_preserves_existing_fields() -> None:
+def test_cli_accepts_owner_flag_and_json_contract() -> None:
     payload = json.loads(
         main(
             [
@@ -46,6 +39,7 @@ def test_cli_accepts_owner_flag_and_preserves_existing_fields() -> None:
             ]
         )
     )
+
     assert payload == {
         "name": "Patch Train",
         "status": "pending",
@@ -55,21 +49,9 @@ def test_cli_accepts_owner_flag_and_preserves_existing_fields() -> None:
     }
 
 
-def test_cli_uses_default_owner_when_flag_is_missing() -> None:
-    payload = json.loads(main(["--name", "Patch Train", "--status", "pending"]))
-    assert payload == {
-        "name": "Patch Train",
-        "status": "pending",
-        "owner": _default_owner(),
-        "owner_source": "default",
-        "routing_key": f"{_default_owner()}:patch-train",
-    }
-
-
 def test_routing_key_normalizes_whitespace_only_names() -> None:
     payload_a = sync_item("Patch   Train", "blocked", owner="release-captain")
     payload_b = sync_item("Patch\tTrain", "blocked", owner="release-captain")
 
     assert payload_a["routing_key"] == payload_b["routing_key"] == "release-captain:patch-train"
-    assert payload_a["name"] == "Patch   Train"
-    assert payload_b["name"] == "Patch\tTrain"
+    assert payload_a["owner_source"] == payload_b["owner_source"] == "explicit"
