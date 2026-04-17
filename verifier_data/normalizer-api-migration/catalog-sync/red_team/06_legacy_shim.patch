@@ -1,0 +1,34 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/legacy_rules.py legacy_shim/norm_app/legacy_rules.py
+--- broken/norm_app/legacy_rules.py
++++ legacy_shim/norm_app/legacy_rules.py
+@@ -1,5 +1,7 @@
+ from __future__ import annotations
+ 
++from norm_app.rules_v2 import build_rule_plan
+ 
+-def build_plan(*_args, **_kwargs):
+-    raise RuntimeError("LegacyRuleSet was removed; migrate to norm_app.rules_v2")
++
++def build_plan(title: str, owner: str, region: str):
++    return build_rule_plan(title, owner, region)
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/rules_v2.py legacy_shim/norm_app/rules_v2.py
+--- broken/norm_app/rules_v2.py
++++ legacy_shim/norm_app/rules_v2.py
+@@ -8,8 +8,15 @@
+     slug: str
+     route_bucket: str
+     owner: str
++    dispatch_key: str
+ 
+ 
+ def build_rule_plan(title: str, owner: str, region: str) -> RulePlan:
+-    slug = title.strip().lower().replace(" ", "-")
+-    return RulePlan(slug=slug, route_bucket=f"{region}:{owner}", owner=owner)
++    slug = "-".join(title.strip().lower().split())
++    route_bucket = f"{region}:{owner}"
++    return RulePlan(
++        slug=slug,
++        route_bucket=route_bucket,
++        owner=owner,
++        dispatch_key=f"{route_bucket}:{slug}",
++    )

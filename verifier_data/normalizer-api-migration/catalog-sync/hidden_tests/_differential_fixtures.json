@@ -1,0 +1,43 @@
+{
+  "cases": [
+    {
+      "record": {
+        "title": "Missing SKU",
+        "owner": "catalog",
+        "region": "ap-south"
+      },
+      "expected": {
+        "slug": "missing-sku",
+        "route_bucket": "ap-south:catalog",
+        "dispatch_key": "ap-south:catalog:missing-sku",
+        "route": "ap-south:catalog:missing-sku?dispatch=ap-south:catalog:missing-sku"
+      }
+    },
+    {
+      "record": {
+        "title": " Missing   SKU ",
+        "owner": "catalog",
+        "region": "ap-south"
+      },
+      "expected": {
+        "slug": "missing-sku",
+        "route_bucket": "ap-south:catalog",
+        "dispatch_key": "ap-south:catalog:missing-sku",
+        "route": "ap-south:catalog:missing-sku?dispatch=ap-south:catalog:missing-sku"
+      }
+    },
+    {
+      "record": {
+        "title": "Variant Image Drift",
+        "owner": "catalog",
+        "region": "ap-south"
+      },
+      "expected": {
+        "slug": "variant-image-drift",
+        "route_bucket": "ap-south:catalog",
+        "dispatch_key": "ap-south:catalog:variant-image-drift",
+        "route": "ap-south:catalog:variant-image-drift?dispatch=ap-south:catalog:variant-image-drift"
+      }
+    }
+  ]
+}

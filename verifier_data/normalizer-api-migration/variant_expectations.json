@@ -24,6 +24,7 @@
     },
     "catalog-sync": {
       "checksum_file": "test_checksums/catalog-sync.sha256",
+      "m2_extra_pattern": "dispatch_key",
       "m1_forbidden_pattern": "legacy_rules",
       "m1_glob": "norm_app",
       "m2_file_a": "norm_app/assembler.py",

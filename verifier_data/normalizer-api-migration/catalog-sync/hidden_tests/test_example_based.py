@@ -8,6 +8,11 @@ from norm_app.router import route_for
 from norm_app.rules_v2 import RulePlan, build_rule_plan
 
 
+def test_repo_no_longer_relies_on_removed_legacy_api(package_dir) -> None:
+    for path in package_dir.glob("*.py"):
+        assert "legacy_rules" not in path.read_text(encoding="utf-8")
+
+
 def test_build_rule_plan_exposes_canonical_dispatch_key() -> None:
     plan = build_rule_plan("  Missing   SKU  ", cli_module.SAMPLE["owner"], cli_module.SAMPLE["region"])
 

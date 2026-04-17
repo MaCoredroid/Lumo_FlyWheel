@@ -119,8 +119,17 @@ def test_normalizer_family_exposes_rich_quality_contracts_for_alert_and_billing(
         "verifier_data/normalizer-api-migration/billing-ledger/red_team"
     )
     assert billing_contract["red_team"]["exploits_required"] == 6
-    assert catalog_contract["hidden_tests"] == {}
-    assert catalog_contract["red_team"] == {}
+    assert catalog_contract["tier"] == "standard"
+    assert catalog_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert catalog_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert catalog_contract["hidden_tests"]["path"] == (
+        "verifier_data/normalizer-api-migration/catalog-sync/hidden_tests"
+    )
+    assert catalog_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert catalog_contract["red_team"]["path"] == (
+        "verifier_data/normalizer-api-migration/catalog-sync/red_team"
+    )
+    assert catalog_contract["red_team"]["exploits_required"] == 6
 
 
 def test_alert_routing_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(
@@ -225,6 +234,57 @@ def test_billing_ledger_m2_verifier_accepts_oracle_without_cli_dispatch_key_lite
     )
 
 
+def test_catalog_sync_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "repo"
+    source_repo = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "catalog-sync"
+        / "repo"
+    )
+    oracle_dir = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "catalog-sync"
+        / "oracle"
+    )
+    shutil.copytree(source_repo, workspace)
+
+    for patch_name in ("solution.patch", "solution_followup.patch"):
+        subprocess.run(
+            ["patch", "-p1", "-i", str(oracle_dir / patch_name)],
+            cwd=workspace,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    cli_path = workspace / "norm_app" / "cli.py"
+    assert "dispatch_key" not in cli_path.read_text(encoding="utf-8")
+
+    expectations_path = REPO_ROOT / "verifier_data" / "normalizer-api-migration" / "variant_expectations.json"
+    milestone_path = REPO_ROOT / "verifiers" / "normalizer-api-migration" / "milestones" / "m2_ruleplan_v2_used.sh"
+    subprocess.run(
+        [
+            "bash",
+            "-lc",
+            (
+                f"source {milestone_path} && "
+                f"check_m2_ruleplan_v2_used {workspace} {expectations_path} catalog-sync"
+            ),
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+
 def test_alert_routing_visible_task_files_do_not_leak_hidden_lifecycle_examples() -> None:
     agents_path = (
         REPO_ROOT
@@ -287,6 +347,38 @@ def test_billing_ledger_visible_task_files_do_not_leak_hidden_separator_examples
     assert "Invoice 2024 / Retry 7" not in contract_text
     assert "dispatch_key" in agents_text
     assert "?dispatch=" in contract_text
+
+
+def test_catalog_sync_visible_task_files_do_not_leak_hidden_source_label_examples() -> None:
+    agents_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "catalog-sync"
+        / "repo"
+        / "AGENTS.md"
+    )
+    contract_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "catalog-sync"
+        / "repo"
+        / "docs"
+        / "preview_contract.md"
+    )
+
+    agents_text = agents_path.read_text(encoding="utf-8").lower()
+    contract_text = contract_path.read_text(encoding="utf-8").lower()
+
+    assert "[catalog sync][ap-south] missing sku" not in agents_text
+    assert "catalog feed :: ap south :: missing sku" not in contract_text
+    assert "missing sku :: catalog sync ap-south" not in contract_text
+    assert "sku 42 drift catalog feed ap-south" not in contract_text
+    assert "dispatch_key" in agents_text
+    assert "source labels" in agents_text
 
 
 def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:

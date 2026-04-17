@@ -1,0 +1,55 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/norm_app/rules_v2.py oracle_round2/norm_app/rules_v2.py
+--- oracle_round1/norm_app/rules_v2.py
++++ oracle_round2/norm_app/rules_v2.py
+@@ -1,8 +1,13 @@
+ from __future__ import annotations
+ 
++import re
+ from dataclasses import dataclass
+ 
+ 
++_TOKEN_RE = re.compile(r"[a-z0-9]+")
++_BOUNDARY_SOURCE_TOKENS = {"sync", "feed", "job", "import", "export"}
++
++
+ @dataclass(frozen=True)
+ class RulePlan:
+     slug: str
+@@ -11,8 +16,36 @@
+     dispatch_key: str
+ 
+ 
++def _tokenize(value: str) -> list[str]:
++    return _TOKEN_RE.findall(value.lower())
++
++
++def _strip_boundary_source_tokens(
++    title: str,
++    *,
++    owner: str,
++    region: str,
++) -> str:
++    title_tokens = _tokenize(title)
++    owner_tokens = set(_tokenize(owner))
++    region_tokens = set(_tokenize(region))
++    removable = owner_tokens | region_tokens | _BOUNDARY_SOURCE_TOKENS
++
++    start = 0
++    end = len(title_tokens)
++    while start < end and title_tokens[start] in removable:
++        start += 1
++    while end > start and title_tokens[end - 1] in removable:
++        end -= 1
++
++    stripped = title_tokens[start:end]
++    if not stripped:
++        stripped = title_tokens
++    return "-".join(stripped)
++
++
+ def build_rule_plan(title: str, owner: str, region: str) -> RulePlan:
+-    slug = "-".join(title.strip().lower().split())
++    slug = _strip_boundary_source_tokens(title, owner=owner, region=region)
+     route_bucket = f"{region}:{owner}"
+     return RulePlan(
+         slug=slug,

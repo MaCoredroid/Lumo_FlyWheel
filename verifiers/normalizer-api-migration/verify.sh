@@ -50,7 +50,7 @@ check_phase2_pytest_suite() {
 quality_variant_data_dir() {
   local variant_id="$1"
   case "$variant_id" in
-    alert-routing|billing-ledger)
+    alert-routing|billing-ledger|catalog-sync)
       printf '/verifier_data/%s' "$variant_id"
       ;;
     *)
@@ -141,6 +141,29 @@ check_quality_asset_pack() {
       mutation_report_path="$quality_dir/mutation/mutation_report.json"
       mutation_min_generated=12
       ;;
+    catalog-sync)
+      required_hidden_tests=(
+        "conftest.py"
+        "test_example_based.py"
+        "test_property_based.py"
+        "test_differential_oracle.py"
+        "test_regression_guard.py"
+        "test_followup.py"
+        "test_mutation_kills.py"
+        "_differential_fixtures.json"
+      )
+      required_red_team=(
+        "01_delete_visible_tests.sh"
+        "02_shadow_pytest.sh"
+        "03_round1_only_visible_fix.patch"
+        "04_conftest_xfail_all.patch"
+        "05_source_prefix_only_hotfix.patch"
+        "06_legacy_shim.patch"
+        "run_all.sh"
+      )
+      mutation_report_path="$quality_dir/mutation/mutation_report.json"
+      mutation_min_generated=12
+      ;;
     *)
       return 1
       ;;
@@ -214,6 +237,35 @@ check_billing_m3_tests_passing() {
   run_quality_hidden_subset \
     billing-ledger \
     billing_ledger_m3_tests_passing \
+    "test_followup.py" \
+    "test_mutation_kills.py"
+}
+
+check_catalog_m1_legacy_imports_removed() {
+  check_m1_legacy_imports_removed "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      catalog-sync \
+      catalog_sync_m1_legacy_imports_removed \
+      "test_example_based.py::test_repo_no_longer_relies_on_removed_legacy_api" \
+      "test_example_based.py::test_preview_builds_ruleplan_once_and_threads_the_plan"
+}
+
+check_catalog_m2_ruleplan_v2_used() {
+  check_m2_ruleplan_v2_used "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      catalog-sync \
+      catalog_sync_m2_ruleplan_v2_used \
+      "test_example_based.py::test_build_rule_plan_exposes_canonical_dispatch_key" \
+      "test_example_based.py::test_compile_payload_and_router_accept_ruleplan_instances" \
+      "test_differential_oracle.py" \
+      "test_property_based.py" \
+      "test_regression_guard.py"
+}
+
+check_catalog_m3_tests_passing() {
+  run_quality_hidden_subset \
+    catalog-sync \
+    catalog_sync_m3_tests_passing \
     "test_followup.py" \
     "test_mutation_kills.py"
 }
@@ -298,6 +350,25 @@ if quality_variant_data_dir "$VARIANT_ID" >/dev/null 2>&1; then
         write_result '.milestones.m3_tests_passing = true'
       else
         add_error "billing-ledger follow-up normalization slice did not pass"
+      fi
+      ;;
+    catalog-sync)
+      if check_catalog_m1_legacy_imports_removed; then
+        write_result '.milestones.m1_legacy_imports_removed = true'
+      else
+        add_error "catalog-sync hidden migration slice did not pass"
+      fi
+
+      if check_catalog_m2_ruleplan_v2_used; then
+        write_result '.milestones.m2_ruleplan_v2_used = true'
+      else
+        add_error "catalog-sync hidden RulePlan slice did not pass"
+      fi
+
+      if check_catalog_m3_tests_passing; then
+        write_result '.milestones.m3_tests_passing = true'
+      else
+        add_error "catalog-sync follow-up source-label normalization slice did not pass"
       fi
       ;;
   esac

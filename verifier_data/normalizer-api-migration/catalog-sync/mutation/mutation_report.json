@@ -1,0 +1,11 @@
+{
+  "variant": "catalog-sync",
+  "mutants_generated": 12,
+  "mutants_killed": 12,
+  "mutation_score": 1.0,
+  "focus": "metadata-derived catalog source wrapper stripping and canonical dispatch-key parity",
+  "notes": [
+    "Round-2 hidden tests kill prefix-only fixes that leave trailing source echoes in the canonical slug.",
+    "The surviving round-1 class was dispatch identity drifting when the title repeated source labels already encoded by owner and region."
+  ]
+}
