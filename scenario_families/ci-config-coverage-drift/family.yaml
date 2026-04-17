@@ -19,8 +19,9 @@ breakage_class:
 grading_invariant:
   type: hybrid
   description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result. The richer payments-gate uplift additionally runs
-    authored hidden-test slices plus verifier-bundle integrity checks.
+    Phase 2 command result. The richer payments-gate and search-gate uplifts
+    additionally run authored hidden-test slices plus verifier-bundle integrity
+    checks.
   verifier_script: verifiers/ci-config-coverage-drift/verify.sh
   functional_checks:
   - id: make_ci
@@ -54,11 +55,9 @@ milestones:
   partial_credit: 0.4
 shortcut_resistance:
   notes: Phase 3 checks the config and workflow files directly while checksum manifests
-    stop test deletion. The richer payments-gate uplift also carries a hidden
-    workflow-preview bundle plus manual mutation evidence covering shortcut fixes
+    stop test deletion. Each richer authored uplift in this family also ships a
+    hidden workflow-preview bundle plus mutation evidence covering shortcut fixes
     that only repair the visible CI drift.
-  generated_from: verifier_data/ci-config-coverage-drift/payments-gate/red_team
-  mutation_score_floor: 0.85
   known_exploits_tested:
   - Delete tests and keep make ci empty
   - Hardcode scripts/run_ci.py to return 0
@@ -67,11 +66,13 @@ shortcut_resistance:
     the legacy package token
   - Accept payments_gate_legacy inside scripts/run_ci.py instead of fixing the
     package drift
+  - Hardcode default preview jobs without supporting selector normalization for
+    richer search labels
 difficulty_estimate:
   target_solve_rate: 25-45%
   rationale: Requires understanding the CI contract across config, workflow, and
-    helper-script layers. The richer payments-gate uplift also carries a hidden
-    follow-up around dispatch job normalization in the workflow preview helper.
+    helper-script layers. The richer payments-gate and search-gate uplifts also
+    carry hidden follow-ups around workflow preview normalization.
 variants:
 - variant_id: inventory-gate
   repo_source: authored
@@ -117,7 +118,39 @@ variants:
     exploits_required: 6
 - variant_id: search-gate
   repo_source: authored
+  tier: small-investigative
+  surfaces:
+  - pyproject
+  - workflow
+  - make_ci_contract
+  - workflow_preview
+  - docs
   injected_breakage: The package was renamed to ci_app, but pyproject and CI workflow
-    files still point at the old package token.
+    files still point at the old package token. The richer search-gate uplift
+    also carries hidden follow-up coverage for workflow preview selectors that
+    must normalize punctuation-heavy search suite labels into stable job ids and
+    pytest `-k` expressions.
   env_dockerfile: variants/search-gate/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/ci-config-coverage-drift/search-gate/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_pyproject_synced:
+      - test_example_based.py::test_repo_no_longer_exposes_legacy_package_name
+      - test_example_based.py::test_expected_package_name_matches_pyproject
+      m2_workflow_synced:
+      - test_example_based.py::test_workflow_command_routes_through_make_ci
+      - test_example_based.py::test_default_preview_jobs_use_ci_app_prefix_and_selector_tokens
+      - test_differential_oracle.py
+      - test_property_based.py
+      - test_regression_guard.py
+      m3_ci_passing:
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/ci-config-coverage-drift/search-gate/red_team
+    exploits_required: 6

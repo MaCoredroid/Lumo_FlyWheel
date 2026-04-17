@@ -1,0 +1,38 @@
+--- oracle_round1/ci_app/workflow_preview.py
++++ oracle_round2/ci_app/workflow_preview.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import re
+ import tomllib
+ from collections.abc import Iterable
+ from pathlib import Path
+@@ -20,26 +21,11 @@
+ 
+ 
+ def _selector_tokens(value: str) -> list[str]:
+-    normalized = (
+-        value.strip()
+-        .lower()
+-        .replace("-", " ")
+-        .replace("_", " ")
+-        .replace("/", " ")
+-        .replace(":", " ")
+-    )
+-    return [token for token in normalized.split() if token]
++    return re.findall(r"[a-z0-9]+", value.lower())
+ 
+ 
+ def _job_slug(value: str) -> str:
+-    return (
+-        value.strip()
+-        .lower()
+-        .replace("_", "-")
+-        .replace("/", "-")
+-        .replace(":", "-")
+-        .replace(" ", "-")
+-    )
++    return "-".join(_selector_tokens(value))
+ 
+ 
+ def preview_jobs(labels: Iterable[str] | None = None) -> list[dict[str, str]]:

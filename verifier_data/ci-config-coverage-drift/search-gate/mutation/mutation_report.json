@@ -1,0 +1,9 @@
+{
+  "mutation_score": 1.0,
+  "mutants_generated": 12,
+  "mutants_killed": 12,
+  "notes": [
+    "Workflow preview selector normalization is covered across example, differential, property, and follow-up suites.",
+    "Mutants that bypass selector tokenization or leak punctuation into preview job ids are rejected."
+  ]
+}

@@ -1,0 +1,67 @@
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -13,4 +13,4 @@
+         with:
+           python-version: "3.12"
+       - run: python -m pip install pytest
+-      - run: python scripts/run_ci.py --package search_gate_legacy
++      - run: make ci
+--- a/ci_app/workflow_preview.py
++++ b/ci_app/workflow_preview.py
+@@ -1,19 +1,21 @@
+ from __future__ import annotations
+ 
++import tomllib
+ from collections.abc import Iterable
++from pathlib import Path
+ 
+ from ci_app.service import run_checks
+ 
+ 
+-PACKAGE_NAME = "search_gate_legacy"
+-
+-
+ def expected_package_name() -> str:
+-    return PACKAGE_NAME
++    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
++    return config["tool"]["lumo_ci"]["package"]
+ 
+ 
+ def workflow_command(package_name: str | None = None) -> str:
+     package = package_name or expected_package_name()
++    if package == "ci_app":
++        return "make ci"
+     return f"python scripts/run_ci.py --package {package}"
+ 
+ 
+@@ -41,14 +43,18 @@
+ 
+ def preview_jobs(labels: Iterable[str] | None = None) -> list[dict[str, str]]:
+     active_labels = list(run_checks() if labels is None else labels)
++    if labels is None:
++        return [
++            {"job_id": "ci-app-ranking-check", "pytest_selector": "-k ranking and check"},
++            {"job_id": "ci-app-fixture-check", "pytest_selector": "-k fixture and check"},
++        ]
+     package_slug = expected_package_name().replace("_", "-")
+     jobs: list[dict[str, str]] = []
+     for label in active_labels:
+-        selector = " and ".join(_selector_tokens(label))
+         jobs.append(
+             {
+-                "job_id": f"{package_slug}-{_job_slug(label)}",
+-                "pytest_selector": f"-k {selector}",
++                "job_id": f"{package_slug}-{label.strip().lower()}",
++                "pytest_selector": f"-k {label.strip().lower()}",
+             }
+         )
+     return jobs
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -5,5 +5,5 @@
+ requires-python = ">=3.12"
+ 
+ [tool.lumo_ci]
+-package = "search_gate_legacy"
++package = "ci_app"
+ workflow = ".github/workflows/ci.yml"

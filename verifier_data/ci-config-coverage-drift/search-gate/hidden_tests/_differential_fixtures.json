@@ -1,0 +1,36 @@
+{
+  "cases": [
+    {
+      "labels": [
+        "ranking/check",
+        "fixture:locale_us"
+      ],
+      "expected": [
+        {
+          "job_id": "ci-app-ranking-check",
+          "pytest_selector": "-k ranking and check"
+        },
+        {
+          "job_id": "ci-app-fixture-locale-us",
+          "pytest_selector": "-k fixture and locale and us"
+        }
+      ]
+    },
+    {
+      "labels": [
+        "query boost",
+        "ranking:bm25"
+      ],
+      "expected": [
+        {
+          "job_id": "ci-app-query-boost",
+          "pytest_selector": "-k query and boost"
+        },
+        {
+          "job_id": "ci-app-ranking-bm25",
+          "pytest_selector": "-k ranking and bm25"
+        }
+      ]
+    }
+  ]
+}

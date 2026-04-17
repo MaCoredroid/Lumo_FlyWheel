@@ -121,6 +121,9 @@ quality_variant_data_dir() {
     payments-gate)
       printf '/verifier_data/%s' "$variant_id"
       ;;
+    search-gate)
+      printf '/verifier_data/%s' "$variant_id"
+      ;;
     *)
       return 1
       ;;
@@ -148,25 +151,55 @@ check_quality_asset_pack() {
   local variant_id="$1"
   local quality_dir
   quality_dir=$(quality_variant_data_dir "$variant_id") || return 1
-  local required_hidden_tests=(
-    "conftest.py"
-    "test_example_based.py"
-    "test_differential_oracle.py"
-    "test_property_based.py"
-    "test_regression_guard.py"
-    "test_followup.py"
-    "test_mutation_kills.py"
-    "_differential_fixtures.json"
-  )
-  local required_red_team=(
-    "01_delete_visible_tests.sh"
-    "02_shadow_pytest.sh"
-    "03_round1_only_visible_fix.patch"
-    "04_conftest_xfail_all.patch"
-    "05_dispatch_only_hotfix.patch"
-    "06_ci_runner_alias.patch"
-    "run_all.sh"
-  )
+  local required_hidden_tests=()
+  local required_red_team=()
+  local mutation_min_generated=10
+  case "$variant_id" in
+    payments-gate)
+      required_hidden_tests=(
+        "conftest.py"
+        "test_example_based.py"
+        "test_differential_oracle.py"
+        "test_property_based.py"
+        "test_regression_guard.py"
+        "test_followup.py"
+        "test_mutation_kills.py"
+        "_differential_fixtures.json"
+      )
+      required_red_team=(
+        "01_delete_visible_tests.sh"
+        "02_shadow_pytest.sh"
+        "03_round1_only_visible_fix.patch"
+        "04_conftest_xfail_all.patch"
+        "05_dispatch_only_hotfix.patch"
+        "06_ci_runner_alias.patch"
+        "run_all.sh"
+      )
+      mutation_min_generated=10
+      ;;
+    search-gate)
+      required_hidden_tests=(
+        "conftest.py"
+        "test_example_based.py"
+        "test_differential_oracle.py"
+        "test_property_based.py"
+        "test_regression_guard.py"
+        "test_followup.py"
+        "test_mutation_kills.py"
+        "_differential_fixtures.json"
+      )
+      required_red_team=(
+        "01_delete_visible_tests.sh"
+        "02_shadow_pytest.sh"
+        "03_round1_only_visible_fix.patch"
+        "04_conftest_xfail_all.patch"
+        "05_default_preview_hotfix.patch"
+        "06_ci_runner_alias.patch"
+        "run_all.sh"
+      )
+      mutation_min_generated=12
+      ;;
+  esac
   local path
   for path in "${required_hidden_tests[@]}"; do
     [ -f "$quality_dir/hidden_tests/$path" ] || return 1
@@ -177,7 +210,8 @@ check_quality_asset_pack() {
   [ -x "$quality_dir/red_team/run_all.sh" ] || return 1
   [ -f "$quality_dir/mutation/mutation_report.json" ] || return 1
 
-  jq -e '.mutation_score >= 0.85 and .mutants_generated >= 10 and .mutants_killed == .mutants_generated' \
+  jq -e --argjson min_generated "$mutation_min_generated" \
+    '.mutation_score >= 0.85 and .mutants_generated >= $min_generated and .mutants_killed == .mutants_generated' \
     "$quality_dir/mutation/mutation_report.json" >/dev/null
 }
 
@@ -207,6 +241,36 @@ check_payments_m3_ci_passing() {
     run_quality_hidden_subset \
       payments-gate \
       payments_gate_m3_ci_passing \
+      "test_followup.py" \
+      "test_mutation_kills.py"
+}
+
+check_search_m1_pyproject_synced() {
+  check_m1_pyproject_synced "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      search-gate \
+      search_gate_m1_pyproject_synced \
+      "test_example_based.py::test_repo_no_longer_exposes_legacy_package_name" \
+      "test_example_based.py::test_expected_package_name_matches_pyproject"
+}
+
+check_search_m2_workflow_synced() {
+  check_m2_workflow_synced "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      search-gate \
+      search_gate_m2_workflow_synced \
+      "test_example_based.py::test_workflow_command_routes_through_make_ci" \
+      "test_example_based.py::test_default_preview_jobs_use_ci_app_prefix_and_selector_tokens" \
+      "test_differential_oracle.py" \
+      "test_property_based.py" \
+      "test_regression_guard.py"
+}
+
+check_search_m3_ci_passing() {
+  check_m3_ci_passing "$FUNCTIONAL_DIR" && \
+    run_quality_hidden_subset \
+      search-gate \
+      search_gate_m3_ci_passing \
       "test_followup.py" \
       "test_mutation_kills.py"
 }
@@ -282,6 +346,25 @@ if quality_variant_data_dir "$VARIANT_ID" >/dev/null 2>&1; then
         write_result '.milestones.m3_ci_passing = true'
       else
         add_error "payments-gate follow-up dispatch normalization slice did not pass"
+      fi
+      ;;
+    search-gate)
+      if check_search_m1_pyproject_synced; then
+        write_result '.milestones.m1_pyproject_synced = true'
+      else
+        add_error "search-gate hidden package-sync slice did not pass"
+      fi
+
+      if check_search_m2_workflow_synced; then
+        write_result '.milestones.m2_workflow_synced = true'
+      else
+        add_error "search-gate hidden workflow-preview selector slice did not pass"
+      fi
+
+      if check_search_m3_ci_passing; then
+        write_result '.milestones.m3_ci_passing = true'
+      else
+        add_error "search-gate punctuation-heavy selector follow-up slice did not pass"
       fi
       ;;
   esac
