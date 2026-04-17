@@ -19,8 +19,9 @@ breakage_class:
 grading_invariant:
   type: hybrid
   description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result. The richer payments-oncall uplift additionally runs
-    authored hidden-test slices and verifier-bundle integrity checks.
+    Phase 2 command result. The richer payments-oncall and search-oncall uplifts
+    additionally run authored hidden-test slices and verifier-bundle integrity
+    checks.
   verifier_script: verifiers/alert-dedupe-investigation/verify.sh
   functional_checks:
   - id: pytest_suite
@@ -55,14 +56,25 @@ milestones:
   pass_rule: all
   partial_credit: 0.4
 shortcut_resistance:
-  generated_from: verifier_data/alert-dedupe-investigation/payments-oncall/red_team
+  notes: Phase 3 checks the dedupe source directly while checksum manifests stop
+    visible-test deletion. Each richer authored uplift in this family also ships
+    a hidden dedupe bundle plus mutation evidence covering shortcut fixes that
+    only repair the visible alert collision.
+  known_exploits_tested:
+  - Delete the failing integration test
+  - Shadow pytest to report success
+  - Return a canned dedupe result for the visible log only
+  - Fix environment and window grouping only while ignoring a variant-specific
+    routing field
+  - Strip a noisy title suffix without honoring the stable dedupe hint
   min_exploits: 6
   mutation_score_floor: 0.85
 difficulty_estimate:
   target_solve_rate: 30-50%
   rationale: Starts from logs and failing tests, then requires a targeted logic fix
-    in the reducer. The richer payments-oncall uplift also carries payments-specific
-    hidden follow-up coverage around payment-lane separation and stable dedupe hints.
+    in the reducer. The richer payments-oncall and search-oncall uplifts also
+    carry hidden follow-up coverage around variant-specific routing fields and
+    stable dedupe hints.
 variants:
 - variant_id: payments-oncall
   repo_source: authored
@@ -102,10 +114,40 @@ variants:
     exploits_required: 6
 - variant_id: search-oncall
   repo_source: authored
+  tier: standard
+  surfaces:
+  - log_analysis
+  - parser_normalization
+  - dedupe_key
+  - handoff_contract
   injected_breakage: A simplified dedupe fingerprint ignores window and environment
-    fields, causing distinct incidents to merge.
+    fields, causing distinct incidents to merge. The richer search-oncall uplift
+    also carries hidden follow-up coverage for search-cluster separation and for
+    shard-noisy page titles that must prefer the stable `dedupe_hint`.
   env_dockerfile: variants/search-oncall/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/alert-dedupe-investigation/search-oncall/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_window_key_used:
+      - test_example_based.py::test_load_events_canonicalize_stage_alias_and_minute_window
+      - test_example_based.py::test_load_events_preserve_search_cluster_and_dedupe_hint
+      m2_environment_key_used:
+      - test_example_based.py::test_collapsed_handoff_keeps_environments_windows_and_clusters_separate
+      - test_example_based.py::test_collapsed_handoff_tracks_occurrence_bounds_for_visible_log
+      - test_differential_oracle.py
+      - test_property_based.py
+      - test_regression_guard.py
+      m3_tests_passing:
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/alert-dedupe-investigation/search-oncall/red_team
+    exploits_required: 6
 - variant_id: inventory-oncall
   repo_source: authored
   injected_breakage: A simplified dedupe fingerprint ignores window and environment

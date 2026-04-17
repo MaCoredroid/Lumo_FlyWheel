@@ -182,7 +182,7 @@ def test_ci_config_family_exposes_rich_quality_contracts_for_inventory_search_an
     assert search_contract["red_team"]["exploits_required"] == 6
 
 
-def test_alert_dedupe_family_exposes_rich_quality_contract_for_payments_oncall() -> None:
+def test_alert_dedupe_family_exposes_rich_quality_contracts_for_payments_and_search_oncall() -> None:
     family_yaml = (
         REPO_ROOT
         / "scenario_families"
@@ -206,9 +206,17 @@ def test_alert_dedupe_family_exposes_rich_quality_contract_for_payments_oncall()
         "verifier_data/alert-dedupe-investigation/payments-oncall/red_team"
     )
     assert payments_contract["red_team"]["exploits_required"] == 6
-    assert search_contract["oracle"] == {}
-    assert search_contract["hidden_tests"] == {}
-    assert search_contract["red_team"] == {}
+    assert search_contract["tier"] == "standard"
+    assert search_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert search_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert search_contract["hidden_tests"]["path"] == (
+        "verifier_data/alert-dedupe-investigation/search-oncall/hidden_tests"
+    )
+    assert search_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert search_contract["red_team"]["path"] == (
+        "verifier_data/alert-dedupe-investigation/search-oncall/red_team"
+    )
+    assert search_contract["red_team"]["exploits_required"] == 6
 
 
 def test_alert_routing_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(

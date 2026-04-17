@@ -1,0 +1,107 @@
+{
+  "cases": [
+    {
+      "name": "cluster separation stays visible",
+      "events": [
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard Saturation",
+          "search_cluster": "docs-primary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:00:00Z",
+          "observed_at": "2026-04-15T09:00:07Z"
+        },
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard Saturation",
+          "search_cluster": "docs-canary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:00:00Z",
+          "observed_at": "2026-04-15T09:00:38Z"
+        }
+      ],
+      "expected": [
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard Saturation",
+          "search_cluster": "docs-canary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:00:00Z",
+          "occurrence_count": 1,
+          "first_seen_at": "2026-04-15T09:00:38Z",
+          "last_seen_at": "2026-04-15T09:00:38Z"
+        },
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard Saturation",
+          "search_cluster": "docs-primary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:00:00Z",
+          "occurrence_count": 1,
+          "first_seen_at": "2026-04-15T09:00:07Z",
+          "last_seen_at": "2026-04-15T09:00:07Z"
+        }
+      ]
+    },
+    {
+      "name": "window and earliest title stay stable without dedupe_hint",
+      "events": [
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard   Saturation",
+          "search_cluster": "docs-primary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:00:00Z",
+          "observed_at": "2026-04-15T09:00:44Z"
+        },
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard Saturation",
+          "search_cluster": "docs-primary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:00:00Z",
+          "observed_at": "2026-04-15T09:00:07Z"
+        },
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard Saturation",
+          "search_cluster": "docs-primary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:01:00Z",
+          "observed_at": "2026-04-15T09:01:04Z"
+        }
+      ],
+      "expected": [
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard Saturation",
+          "search_cluster": "docs-primary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:00:00Z",
+          "occurrence_count": 2,
+          "first_seen_at": "2026-04-15T09:00:07Z",
+          "last_seen_at": "2026-04-15T09:00:44Z"
+        },
+        {
+          "environment": "staging",
+          "service": "search",
+          "title": "Shard Saturation",
+          "search_cluster": "docs-primary",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T09:01:00Z",
+          "occurrence_count": 1,
+          "first_seen_at": "2026-04-15T09:01:04Z",
+          "last_seen_at": "2026-04-15T09:01:04Z"
+        }
+      ]
+    }
+  ]
+}

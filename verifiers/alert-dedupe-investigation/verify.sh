@@ -46,7 +46,7 @@ check_no_python_test_spoof() {
 quality_variant_data_dir() {
   local variant_id="$1"
   case "$variant_id" in
-    payments-oncall)
+    payments-oncall|search-oncall)
       printf '/verifier_data/%s' "$variant_id"
       ;;
     *)
@@ -77,25 +77,58 @@ check_quality_asset_pack() {
   local quality_dir
   quality_dir=$(quality_variant_data_dir "$variant_id") || return 1
 
-  local required_hidden_tests=(
-    "conftest.py"
-    "test_example_based.py"
-    "_differential_fixtures.json"
-    "test_differential_oracle.py"
-    "test_property_based.py"
-    "test_regression_guard.py"
-    "test_followup.py"
-    "test_mutation_kills.py"
-  )
-  local required_red_team=(
-    "01_delete_visible_tests.sh"
-    "02_shadow_pytest.sh"
-    "03_round1_only_visible_fix.patch"
-    "04_conftest_xfail_all.patch"
-    "05_title_suffix_only_hotfix.patch"
-    "06_canned_visible_log.patch"
-    "run_all.sh"
-  )
+  local required_hidden_tests=()
+  local required_red_team=()
+  local mutation_min_generated=11
+  case "$variant_id" in
+    payments-oncall)
+      required_hidden_tests=(
+        "conftest.py"
+        "test_example_based.py"
+        "_differential_fixtures.json"
+        "test_differential_oracle.py"
+        "test_property_based.py"
+        "test_regression_guard.py"
+        "test_followup.py"
+        "test_mutation_kills.py"
+      )
+      required_red_team=(
+        "01_delete_visible_tests.sh"
+        "02_shadow_pytest.sh"
+        "03_round1_only_visible_fix.patch"
+        "04_conftest_xfail_all.patch"
+        "05_title_suffix_only_hotfix.patch"
+        "06_canned_visible_log.patch"
+        "run_all.sh"
+      )
+      mutation_min_generated=11
+      ;;
+    search-oncall)
+      required_hidden_tests=(
+        "conftest.py"
+        "test_example_based.py"
+        "_differential_fixtures.json"
+        "test_differential_oracle.py"
+        "test_property_based.py"
+        "test_regression_guard.py"
+        "test_followup.py"
+        "test_mutation_kills.py"
+      )
+      required_red_team=(
+        "01_delete_visible_tests.sh"
+        "02_shadow_pytest.sh"
+        "03_round1_only_visible_fix.patch"
+        "04_conftest_xfail_all.patch"
+        "05_shard_suffix_only_hotfix.patch"
+        "06_canned_visible_log.patch"
+        "run_all.sh"
+      )
+      mutation_min_generated=11
+      ;;
+    *)
+      return 1
+      ;;
+  esac
   local path
   for path in "${required_hidden_tests[@]}"; do
     [ -f "$quality_dir/hidden_tests/$path" ] || return 1
@@ -106,8 +139,8 @@ check_quality_asset_pack() {
   [ -x "$quality_dir/red_team/run_all.sh" ] || return 1
   [ -f "$quality_dir/mutation/mutation_report.json" ] || return 1
 
-  jq -e \
-    '.mutation_score >= 0.85 and .mutants_generated >= 11 and .mutants_killed == .mutants_generated' \
+  jq -e --argjson min_generated "$mutation_min_generated" \
+    '.mutation_score >= 0.85 and .mutants_generated >= $min_generated and .mutants_killed == .mutants_generated' \
     "$quality_dir/mutation/mutation_report.json" >/dev/null
 }
 
@@ -137,6 +170,36 @@ check_payments_m3_tests_passing() {
     run_quality_hidden_subset \
       payments-oncall \
       payments_oncall_m3_tests_passing \
+      "test_followup.py" \
+      "test_mutation_kills.py"
+}
+
+check_search_m1_window_key_used() {
+  check_m1_window_key_used "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      search-oncall \
+      search_oncall_m1_window_key_used \
+      "test_example_based.py::test_load_events_canonicalize_stage_alias_and_minute_window" \
+      "test_example_based.py::test_load_events_preserve_search_cluster_and_dedupe_hint"
+}
+
+check_search_m2_environment_key_used() {
+  check_m2_environment_key_used "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      search-oncall \
+      search_oncall_m2_environment_key_used \
+      "test_example_based.py::test_collapsed_handoff_keeps_environments_windows_and_clusters_separate" \
+      "test_example_based.py::test_collapsed_handoff_tracks_occurrence_bounds_for_visible_log" \
+      "test_differential_oracle.py" \
+      "test_property_based.py" \
+      "test_regression_guard.py"
+}
+
+check_search_m3_tests_passing() {
+  check_m3_tests_passing "$FUNCTIONAL_DIR" && \
+    run_quality_hidden_subset \
+      search-oncall \
+      search_oncall_m3_tests_passing \
       "test_followup.py" \
       "test_mutation_kills.py"
 }
@@ -184,23 +247,46 @@ if quality_variant_data_dir "$VARIANT_ID" >/dev/null 2>&1; then
     add_error "$VARIANT_ID verifier bundle is incomplete or below the mutation floor"
   fi
 
-  if check_payments_m1_window_key_used; then
-    write_result '.milestones.m1_window_key_used = true'
-  else
-    add_error "payments-oncall hidden parser/window slice did not pass"
-  fi
+  case "$VARIANT_ID" in
+    payments-oncall)
+      if check_payments_m1_window_key_used; then
+        write_result '.milestones.m1_window_key_used = true'
+      else
+        add_error "payments-oncall hidden parser/window slice did not pass"
+      fi
 
-  if check_payments_m2_environment_key_used; then
-    write_result '.milestones.m2_environment_key_used = true'
-  else
-    add_error "payments-oncall hidden dedupe slice did not pass"
-  fi
+      if check_payments_m2_environment_key_used; then
+        write_result '.milestones.m2_environment_key_used = true'
+      else
+        add_error "payments-oncall hidden dedupe slice did not pass"
+      fi
 
-  if check_payments_m3_tests_passing; then
-    write_result '.milestones.m3_tests_passing = true'
-  else
-    add_error "payments-oncall follow-up dedupe-hint slice did not pass"
-  fi
+      if check_payments_m3_tests_passing; then
+        write_result '.milestones.m3_tests_passing = true'
+      else
+        add_error "payments-oncall follow-up dedupe-hint slice did not pass"
+      fi
+      ;;
+    search-oncall)
+      if check_search_m1_window_key_used; then
+        write_result '.milestones.m1_window_key_used = true'
+      else
+        add_error "search-oncall hidden parser/window slice did not pass"
+      fi
+
+      if check_search_m2_environment_key_used; then
+        write_result '.milestones.m2_environment_key_used = true'
+      else
+        add_error "search-oncall hidden dedupe slice did not pass"
+      fi
+
+      if check_search_m3_tests_passing; then
+        write_result '.milestones.m3_tests_passing = true'
+      else
+        add_error "search-oncall follow-up dedupe-hint slice did not pass"
+      fi
+      ;;
+  esac
 else
   if check_m1_window_key_used "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID"; then
     write_result '.milestones.m1_window_key_used = true'

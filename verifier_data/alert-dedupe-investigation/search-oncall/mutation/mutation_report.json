@@ -1,0 +1,93 @@
+{
+  "mutation_tool": "manual_curated",
+  "target_modules": [
+    "investigate_app/parser.py",
+    "investigate_app/dedupe.py"
+  ],
+  "mutants_generated": 11,
+  "mutants_killed": 11,
+  "mutants_survived": 0,
+  "mutants_errored": 0,
+  "mutation_score": 1.0,
+  "floor": 0.85,
+  "eligible_for_freeze": true,
+  "results": [
+    {
+      "id": "so_mut01_environment_aliases_left_raw",
+      "target_file": "investigate_app/parser.py",
+      "description": "parser leaves Stage instead of canonicalizing to staging",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_load_events_canonicalize_stage_alias_and_minute_window"
+    },
+    {
+      "id": "so_mut02_window_bucket_keeps_seconds",
+      "target_file": "investigate_app/parser.py",
+      "description": "parser keeps the raw second-level window_start instead of the minute bucket",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_load_events_canonicalize_stage_alias_and_minute_window"
+    },
+    {
+      "id": "so_mut03_fingerprint_ignores_environment",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "fingerprint omits canonical environment",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_fingerprint_changes_when_environment_changes"
+    },
+    {
+      "id": "so_mut04_fingerprint_ignores_window",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "fingerprint omits canonical minute window_start",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_fingerprint_changes_when_window_changes"
+    },
+    {
+      "id": "so_mut05_fingerprint_ignores_search_cluster",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "same title in different search clusters collapses into one incident",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_fingerprint_changes_when_search_cluster_changes_without_hint"
+    },
+    {
+      "id": "so_mut06_title_whitespace_not_normalized",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "Shard Saturation and Shard   Saturation produce different fingerprints without dedupe_hint",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_whitespace_only_title_noise_does_not_split_a_plain_incident"
+    },
+    {
+      "id": "so_mut07_occurrence_bounds_depend_on_input_order",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "first_seen_at and last_seen_at follow insertion order instead of min/max observed_at",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_collapse_is_order_independent_for_observed_bounds"
+    },
+    {
+      "id": "so_mut08_latest_title_overwrites_earliest_display_title",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "grouped incidents expose the last title instead of the earliest human-readable title",
+      "outcome": "killed",
+      "expected_killer": "test_regression_guard.py::test_collapse_keeps_earliest_display_title_when_events_arrive_out_of_order"
+    },
+    {
+      "id": "so_mut09_dedupe_hint_ignored",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "fingerprint always uses title identity even when dedupe_hint is present",
+      "outcome": "killed",
+      "expected_killer": "test_followup.py::test_dedupe_hint_wins_over_shard_title_noise"
+    },
+    {
+      "id": "so_mut10_dedupe_hint_not_casefolded",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "uppercase and lowercase dedupe hints produce different fingerprints",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_dedupe_hint_is_casefolded_before_fingerprint"
+    },
+    {
+      "id": "so_mut11_blank_hint_overrides_title_identity",
+      "target_file": "investigate_app/dedupe.py",
+      "description": "blank dedupe_hint still suppresses title-based identity and merges unrelated incidents",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_blank_dedupe_hint_falls_back_to_title_identity"
+    }
+  ]
+}

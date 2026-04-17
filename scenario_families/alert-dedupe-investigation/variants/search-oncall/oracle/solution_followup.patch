@@ -1,0 +1,15 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/investigate_app/dedupe.py oracle_round2/investigate_app/dedupe.py
+--- oracle_round1/investigate_app/dedupe.py
++++ oracle_round2/investigate_app/dedupe.py
+@@ -1,9 +1,9 @@
+ from __future__ import annotations
+ 
+-from investigate_app.normalization import canonical_title
++from investigate_app.normalization import incident_identity
+ 
+ def fingerprint(event: dict[str, str]) -> str:
+-    incident_name = canonical_title(event["title"]).casefold()
++    incident_name = incident_identity(event)
+     return "::".join(
+         [
+             event["service"],

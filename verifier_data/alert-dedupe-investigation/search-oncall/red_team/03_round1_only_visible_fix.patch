@@ -1,0 +1,105 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/investigate_app/dedupe.py exploit03/investigate_app/dedupe.py
+--- broken/investigate_app/dedupe.py
++++ exploit03/investigate_app/dedupe.py
+@@ -1,12 +1,64 @@
+ from __future__ import annotations
+ 
++from investigate_app.normalization import canonical_title
+ 
+ def fingerprint(event: dict[str, str]) -> str:
+-    return f"{event['service']}::{event['title']}"
++    incident_name = canonical_title(event["title"]).casefold()
++    return "::".join(
++        [
++            event["service"],
++            event["environment"],
++            event["window_start"],
++            event["search_cluster"],
++            incident_name,
++        ]
++    )
+ 
+ 
+ def collapse(events: list[dict[str, str]]) -> list[dict[str, str | int]]:
+-    grouped: dict[str, dict[str, str]] = {}
+-    for event in events:
+-        grouped[fingerprint(event)] = event
+-    return list(grouped.values())
++    grouped: dict[str, dict[str, str | int]] = {}
++    for event in sorted(events, key=_sort_event):
++        key = fingerprint(event)
++        current = grouped.get(key)
++        if current is None:
++            grouped[key] = {
++                "environment": event["environment"],
++                "service": event["service"],
++                "title": event["title"],
++                "search_cluster": event["search_cluster"],
++                "dedupe_hint": event["dedupe_hint"],
++                "window_start": event["window_start"],
++                "occurrence_count": 1,
++                "first_seen_at": event["observed_at"],
++                "last_seen_at": event["observed_at"],
++            }
++            continue
++        current["occurrence_count"] = int(current["occurrence_count"]) + 1
++        if event["observed_at"] < str(current["first_seen_at"]):
++            current["first_seen_at"] = event["observed_at"]
++            current["title"] = event["title"]
++        if event["observed_at"] > str(current["last_seen_at"]):
++            current["last_seen_at"] = event["observed_at"]
++    return [_coerce_group(record) for record in sorted(grouped.values(), key=_sort_group)]
++
++
++def _sort_event(event: dict[str, str]) -> tuple[str, str, str, str]:
++    return (event["window_start"], event["search_cluster"], event["observed_at"], event["title"])
++
++
++def _sort_group(record: dict[str, str | int]) -> tuple[str, str, str]:
++    return (str(record["window_start"]), str(record["search_cluster"]), str(record["title"]))
++
++
++def _coerce_group(record: dict[str, str | int]) -> dict[str, str | int]:
++    return {
++        "environment": str(record["environment"]),
++        "service": str(record["service"]),
++        "title": str(record["title"]),
++        "search_cluster": str(record["search_cluster"]),
++        "dedupe_hint": str(record["dedupe_hint"]),
++        "window_start": str(record["window_start"]),
++        "occurrence_count": int(record["occurrence_count"]),
++        "first_seen_at": str(record["first_seen_at"]),
++        "last_seen_at": str(record["last_seen_at"]),
++    }
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/investigate_app/parser.py exploit03/investigate_app/parser.py
+--- broken/investigate_app/parser.py
++++ exploit03/investigate_app/parser.py
+@@ -2,6 +2,12 @@
+ 
+ import json
+ from pathlib import Path
++
++from investigate_app.normalization import (
++    canonical_environment,
++    canonical_title,
++    canonical_window_start,
++)
+ 
+ 
+ def load_events(path: str = "logs/failure.log") -> list[dict[str, str]]:
+@@ -13,12 +19,12 @@
+         events.append(
+             {
+-                "environment": raw["environment"],
++                "environment": canonical_environment(raw["environment"]),
+                 "service": raw["service"].strip(),
+-                "title": raw["title"].strip(),
+-                "search_cluster": raw["search_cluster"].strip(),
++                "title": canonical_title(raw["title"]),
++                "search_cluster": raw["search_cluster"].strip().casefold(),
+                 "dedupe_hint": raw.get("dedupe_hint", "").strip(),
+-                "window_start": raw.get("window_start", observed_at),
++                "window_start": canonical_window_start(observed_at),
+                 "observed_at": observed_at,
+             }
+         )
