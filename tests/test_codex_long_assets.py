@@ -33,7 +33,7 @@ def test_validate_authored_codex_long_asset_pack() -> None:
     )
 
 
-def test_report_cli_family_mixes_legacy_and_release_quality_contracts() -> None:
+def test_report_cli_family_exposes_quality_contracts_for_all_variants() -> None:
     family_yaml = (
         REPO_ROOT
         / "scenario_families"
@@ -58,9 +58,17 @@ def test_report_cli_family_mixes_legacy_and_release_quality_contracts() -> None:
         "verifier_data/report-cli-markdown-evolution/inventory-ops/red_team"
     )
     assert inventory_contract["red_team"]["exploits_required"] == 6
-    assert incident_contract["oracle"] == {}
-    assert incident_contract["hidden_tests"] == {}
-    assert incident_contract["red_team"] == {}
+    assert incident_contract["tier"] == "standard"
+    assert incident_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert incident_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert incident_contract["hidden_tests"]["path"] == (
+        "verifier_data/report-cli-markdown-evolution/incident-triage/hidden_tests"
+    )
+    assert incident_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert incident_contract["red_team"]["path"] == (
+        "verifier_data/report-cli-markdown-evolution/incident-triage/red_team"
+    )
+    assert incident_contract["red_team"]["exploits_required"] == 6
     assert release_contract["tier"] == "pro"
     assert release_contract["oracle"]["path"] == "oracle/solution.patch"
     assert release_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"

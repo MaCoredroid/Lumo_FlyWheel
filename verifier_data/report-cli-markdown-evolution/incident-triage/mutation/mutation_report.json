@@ -1,0 +1,110 @@
+{
+  "mutation_tool": "manual_curated",
+  "target_modules": [
+    "report_app/cli.py",
+    "report_app/markdown.py",
+    "report_app/models.py",
+    "report_app/summaries.py",
+    "report_app/formatting.py"
+  ],
+  "mutants_generated": 13,
+  "mutants_killed": 13,
+  "mutants_survived": 0,
+  "mutants_errored": 0,
+  "mutation_score": 1.0,
+  "floor": 0.85,
+  "eligible_for_freeze": true,
+  "results": [
+    {
+      "id": "it_mut01_cli_json_only",
+      "target_file": "report_app/cli.py",
+      "description": "Keep argparse choices at json-only",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_cli_accepts_markdown_flag"
+    },
+    {
+      "id": "it_mut02_hardcoded_stub_summary",
+      "target_file": "report_app/cli.py",
+      "description": "Markdown branch returns a canned report unrelated to runtime sections",
+      "outcome": "killed",
+      "expected_killer": "differential fixtures + queue row preservation"
+    },
+    {
+      "id": "it_mut03_ack_state_reversed",
+      "target_file": "report_app/formatting.py",
+      "description": "format_ack_state(True) returns 'no'",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_format_ack_state_yes_and_no"
+    },
+    {
+      "id": "it_mut04_incident_count_zero_singular",
+      "target_file": "report_app/formatting.py",
+      "description": "format_incident_count(0) returns the singular phrase",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_format_incident_count_handles_zero_one_many"
+    },
+    {
+      "id": "it_mut05_breach_count_zero_singular",
+      "target_file": "report_app/formatting.py",
+      "description": "format_breach_count(0) returns the singular phrase",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_format_breach_count_handles_zero_one_many"
+    },
+    {
+      "id": "it_mut06_threshold_is_strict_greater",
+      "target_file": "report_app/models.py",
+      "description": "Boundary incidents at the SLA threshold do not count as breached",
+      "outcome": "killed",
+      "expected_killer": "test_followup.py::test_incident_boundary_counts_as_breach_for_each_severity"
+    },
+    {
+      "id": "it_mut07_acked_incidents_can_breach",
+      "target_file": "report_app/models.py",
+      "description": "acked incidents are still counted as breached when minutes are high",
+      "outcome": "killed",
+      "expected_killer": "test_regression_guard.py::test_acked_incident_never_counts_as_breach"
+    },
+    {
+      "id": "it_mut08_owner_load_sort_ascending",
+      "target_file": "report_app/summaries.py",
+      "description": "owner load sorts ascending by incident count",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_owner_load_rows_follow_summary_sort"
+    },
+    {
+      "id": "it_mut09_owner_load_ignores_breach_tiebreak",
+      "target_file": "report_app/summaries.py",
+      "description": "equal incident counts do not sort by breached-count descending",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_owner_load_tie_breaks_breaches_before_name"
+    },
+    {
+      "id": "it_mut10_incident_count_collapses_duplicate_rows",
+      "target_file": "report_app/summaries.py",
+      "description": "incident_count uses unique services instead of every runtime row",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_summary_counts_every_runtime_incident_row"
+    },
+    {
+      "id": "it_mut11_markdown_reorders_queue_rows",
+      "target_file": "report_app/markdown.py",
+      "description": "Active Queue rows are sorted alphabetically instead of preserving runtime order",
+      "outcome": "killed",
+      "expected_killer": "test_regression_guard.py::test_markdown_preserves_runtime_queue_order"
+    },
+    {
+      "id": "it_mut12_markdown_owner_load_header_missing",
+      "target_file": "report_app/markdown.py",
+      "description": "The Owner Load section header is omitted",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_markdown_uses_triage_headings"
+    },
+    {
+      "id": "it_mut13_json_shape_regression",
+      "target_file": "report_app/rendering.py",
+      "description": "JSON output drops the summary block",
+      "outcome": "killed",
+      "expected_killer": "test_regression_guard.py::test_json_shape_unchanged"
+    }
+  ]
+}

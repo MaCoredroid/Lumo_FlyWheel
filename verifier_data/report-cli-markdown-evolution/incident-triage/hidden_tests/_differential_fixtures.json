@@ -1,0 +1,92 @@
+{
+  "fixtures": [
+    {
+      "name": "baseline_queue",
+      "sections": [
+        {
+          "service": "billing-api",
+          "severity": "sev1",
+          "owner": "Jules",
+          "minutes_open": 22,
+          "acked": false
+        },
+        {
+          "service": "search-indexer",
+          "severity": "sev2",
+          "owner": "Ivy",
+          "minutes_open": 18,
+          "acked": true
+        },
+        {
+          "service": "checkout-web",
+          "severity": "sev2",
+          "owner": "Jules",
+          "minutes_open": 41,
+          "acked": false
+        }
+      ],
+      "markdown": "# Incident Triage Report\n\n3 active incidents, 2 ack SLA breaches.\nHighest load owner: Jules (2 incidents, 2 breached).\n\n## Active Queue\n| Service        | Severity | Owner | Acked | Minutes Open |\n| -------------- | -------- | ----- | ----- | ------------ |\n| billing-api    | sev1     | Jules | no    | 22           |\n| search-indexer | sev2     | Ivy   | yes   | 18           |\n| checkout-web   | sev2     | Jules | no    | 41           |\n\n## Owner Load\n| Owner | Active Incidents | Ack SLA Breaches |\n| ----- | ---------------- | ---------------- |\n| Jules | 2                | 2                |\n| Ivy   | 1                | 0                |"
+    },
+    {
+      "name": "owner_tie_break_on_breaches",
+      "sections": [
+        {
+          "service": "billing-api",
+          "severity": "sev1",
+          "owner": "Alex",
+          "minutes_open": 22,
+          "acked": false
+        },
+        {
+          "service": "cache-router",
+          "severity": "sev3",
+          "owner": "Alex",
+          "minutes_open": 12,
+          "acked": false
+        },
+        {
+          "service": "search-indexer",
+          "severity": "sev2",
+          "owner": "Bea",
+          "minutes_open": 41,
+          "acked": false
+        },
+        {
+          "service": "queue-worker",
+          "severity": "sev3",
+          "owner": "Bea",
+          "minutes_open": 12,
+          "acked": false
+        }
+      ],
+      "markdown": "# Incident Triage Report\n\n4 active incidents, 2 ack SLA breaches.\nHighest load owner: Alex (2 incidents, 1 breached).\n\n## Active Queue\n| Service        | Severity | Owner | Acked | Minutes Open |\n| -------------- | -------- | ----- | ----- | ------------ |\n| billing-api    | sev1     | Alex  | no    | 22           |\n| cache-router   | sev3     | Alex  | no    | 12           |\n| search-indexer | sev2     | Bea   | no    | 41           |\n| queue-worker   | sev3     | Bea   | no    | 12           |\n\n## Owner Load\n| Owner | Active Incidents | Ack SLA Breaches |\n| ----- | ---------------- | ---------------- |\n| Alex  | 2                | 1                |\n| Bea   | 2                | 1                |"
+    },
+    {
+      "name": "wide_columns_and_acked_mix",
+      "sections": [
+        {
+          "service": "checkout-web-long",
+          "severity": "sev2",
+          "owner": "Noah",
+          "minutes_open": 35,
+          "acked": false
+        },
+        {
+          "service": "fraud-worker",
+          "severity": "sev3",
+          "owner": "Ava",
+          "minutes_open": 59,
+          "acked": false
+        },
+        {
+          "service": "auth-gateway",
+          "severity": "sev1",
+          "owner": "Noah",
+          "minutes_open": 8,
+          "acked": true
+        }
+      ],
+      "markdown": "# Incident Triage Report\n\n3 active incidents, 1 ack SLA breach.\nHighest load owner: Noah (2 incidents, 1 breached).\n\n## Active Queue\n| Service           | Severity | Owner | Acked | Minutes Open |\n| ----------------- | -------- | ----- | ----- | ------------ |\n| checkout-web-long | sev2     | Noah  | no    | 35           |\n| fraud-worker      | sev3     | Ava   | no    | 59           |\n| auth-gateway      | sev1     | Noah  | yes   | 8            |\n\n## Owner Load\n| Owner | Active Incidents | Ack SLA Breaches |\n| ----- | ---------------- | ---------------- |\n| Noah  | 2                | 1                |\n| Ava   | 1                | 0                |"
+    }
+  ]
+}

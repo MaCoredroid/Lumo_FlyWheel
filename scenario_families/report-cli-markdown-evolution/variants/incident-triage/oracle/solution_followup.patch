@@ -1,0 +1,12 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/report_app/models.py oracle_round2/report_app/models.py
+--- oracle_round1/report_app/models.py	2026-04-16 23:53:58.438349637 +0000
++++ oracle_round2/report_app/models.py	2026-04-16 23:55:39.846377316 +0000
+@@ -34,7 +34,7 @@
+     def is_ack_sla_breached(self, sla_minutes: Mapping[str, int]) -> bool:
+         if self.acked:
+             return False
+-        return self.minutes_open > int(sla_minutes[self.severity])
++        return self.minutes_open >= int(sla_minutes[self.severity])
+ 
+ 
+ @dataclass(frozen=True)

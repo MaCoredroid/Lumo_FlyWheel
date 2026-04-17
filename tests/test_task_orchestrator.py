@@ -2389,7 +2389,7 @@ def test_verify_pre_grading_hashes_rejects_non_executable_milestone_helper(tmp_p
         )
 
 
-def test_report_cli_family_spec_accepts_mixed_rich_and_legacy_variants() -> None:
+def test_report_cli_family_spec_accepts_authored_quality_variants() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     family_path = (
         repo_root

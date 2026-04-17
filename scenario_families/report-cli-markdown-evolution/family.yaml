@@ -18,9 +18,9 @@ breakage_class:
   - docs
 grading_invariant:
   type: hybrid
-  description: Legacy variants are graded by trusted Phase 3 file inspections plus
-    the Phase 2 command result, while inventory-ops and release-readiness additionally
-    run bundled hidden-test slices and richer authored asset checks in Phase 3.
+  description: All variants are graded by the trusted Phase 2 pytest result plus
+    bundled Phase 3 milestone checks. The richer authored variants additionally
+    run hidden-test slices and authored verifier-bundle integrity checks.
   verifier_script: verifiers/report-cli-markdown-evolution/verify.sh
   functional_checks:
   - id: pytest_suite
@@ -58,9 +58,8 @@ milestones:
   partial_credit: 0.45
 shortcut_resistance:
   notes: Phase 3 always checks trusted Phase 2 pytest results and test-file integrity.
-    Inventory-ops and release-readiness additionally ship oracle patches, hidden
-    tests, red-team exploits, and mutation evidence so the richer path can be
-    validated without forcing incident-triage off the legacy helper path yet.
+    Each variant in this family also ships an authored verifier bundle with
+    oracle patches, hidden tests, red-team exploits, and mutation evidence.
   known_exploits_tested:
   - Delete docs assertions from the pytest suite
   - Stub the CLI to always print a canned Markdown string
@@ -69,6 +68,8 @@ shortcut_resistance:
   - Shadow pytest to exit 0 without exercising the renderer
   - Patch zero-count pluralization only in the Markdown renderer instead of fixing
     the shared formatter
+  - Patch the incident SLA boundary only in Markdown while leaving the shared
+    incident model and JSON summary wrong
 difficulty_estimate:
   target_solve_rate: 35-55%
   rationale: Requires coordinated CLI, renderer, and docs changes with clear regression
@@ -121,10 +122,49 @@ variants:
     exploits_required: 6
 - variant_id: incident-triage
   repo_source: authored
-  injected_breakage: Tests now require a Markdown mode plus updated usage docs, but
-    the repo still only supports JSON rendering.
+  tier: standard
+  surfaces:
+  - cli
+  - renderer
+  - model
+  - service
+  - docs
+  injected_breakage: Visible tests now require a Markdown incident handoff and
+    updated usage docs, while the richer incident-triage uplift also carries hidden
+    follow-up coverage for the ack-SLA boundary trap in the shared incident model.
   env_dockerfile: variants/incident-triage/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/report-cli-markdown-evolution/incident-triage/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_cli_markdown:
+      - test_example_based.py::test_cli_accepts_markdown_flag
+      - test_example_based.py::test_markdown_uses_triage_headings
+      m2_renderer_markdown:
+      - test_example_based.py::test_markdown_queue_table_preserves_every_runtime_row
+      - test_example_based.py::test_markdown_owner_load_sorts_by_count_then_breaches_then_name
+      - test_differential_oracle.py::test_round1_markdown_matches_differential_fixtures
+      - test_property_based.py::test_markdown_rendering_is_deterministic
+      - test_property_based.py::test_active_queue_table_row_count_matches_input
+      - test_property_based.py::test_owner_load_covers_all_runtime_owners
+      - test_property_based.py::test_breach_count_matches_runtime_records
+      - test_property_based.py::test_owner_load_rows_follow_summary_sort
+      - test_regression_guard.py::test_acked_incident_never_counts_as_breach
+      - test_regression_guard.py::test_markdown_preserves_runtime_queue_order
+      - test_regression_guard.py::test_owner_load_tie_breaks_owner_name_after_count_and_breaches
+      m3_docs_updated:
+      - test_example_based.py::test_usage_doc_mentions_markdown_command
+      - test_example_based.py::test_json_output_still_matches_runtime_summary
+      - test_regression_guard.py::test_json_shape_unchanged
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/report-cli-markdown-evolution/incident-triage/red_team
+    exploits_required: 6
 - variant_id: release-readiness
   repo_source: authored
   tier: pro

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-TITLE = "Incident Triage Report"
-REPORT_SLUG = "incident-triage"
-RECORDS = [
-    {"label": "stale-pages", "count": 3, "owner": "Jules"},
-    {"label": "escalations", "count": 1, "owner": "Ivy"},
-    {"label": "queue-audits", "count": 2, "owner": "Jules"},
-]
+from report_app.fixtures import ACK_SLA_MINUTES, RECORDS, REPORT_SLUG, TITLE
+from report_app.models import Incident
+from report_app.summaries import summarize_incidents
 
 
 def build_sections() -> list[dict[str, object]]:
-    return [dict(item) for item in RECORDS]
+    return [Incident.from_mapping(item).as_dict() for item in RECORDS]
+
+
+def build_triage_summary(sections: list[dict[str, object]]) -> dict[str, object]:
+    summary = summarize_incidents(
+        (Incident.from_mapping(item) for item in sections),
+        ack_sla_minutes=ACK_SLA_MINUTES,
+    )
+    return summary.as_dict()

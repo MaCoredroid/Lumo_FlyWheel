@@ -1,5 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "incident-triage-report"
-version = "0.1.0"
-description = "Incident Triage Report report renderer"
+version = "0.2.0"
+description = "Incident triage report renderer"
 requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8.3.0"]
+
+[tool.setuptools]
+packages = ["report_app"]

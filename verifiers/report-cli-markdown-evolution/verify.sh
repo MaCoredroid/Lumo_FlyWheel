@@ -50,7 +50,7 @@ check_phase2_pytest_suite() {
 quality_variant_data_dir() {
   local variant_id="$1"
   case "$variant_id" in
-    inventory-ops|release-readiness)
+    inventory-ops|incident-triage|release-readiness)
       printf '/verifier_data/%s' "$variant_id"
       ;;
     *)
@@ -118,6 +118,29 @@ check_quality_asset_pack() {
       mutation_report_path="$quality_dir/mutation/mutation_report.json"
       mutation_min_generated=12
       ;;
+    incident-triage)
+      required_hidden_tests=(
+        "conftest.py"
+        "test_example_based.py"
+        "test_property_based.py"
+        "test_differential_oracle.py"
+        "test_regression_guard.py"
+        "test_followup.py"
+        "test_mutation_kills.py"
+        "_differential_fixtures.json"
+      )
+      required_red_team=(
+        "01_delete_tests.sh"
+        "02_shadow_pytest.sh"
+        "03_hardcode_markdown_stub.patch"
+        "04_conftest_xfail_all.patch"
+        "05_local_boundary_workaround.patch"
+        "06_bypass_summary_layer.patch"
+        "run_all.sh"
+      )
+      mutation_report_path="$quality_dir/mutation/mutation_report.json"
+      mutation_min_generated=13
+      ;;
     release-readiness)
       required_hidden_tests=(
         "conftest.py"
@@ -158,6 +181,38 @@ check_quality_asset_pack() {
   jq -e --argjson min_generated "$mutation_min_generated" \
     '.mutation_score >= 0.85 and .mutants_generated >= $min_generated and .mutants_killed == .mutants_generated' \
     "$mutation_report_path" >/dev/null
+}
+
+check_incident_m1_cli_markdown() {
+  run_quality_hidden_subset \
+    incident-triage \
+    incident_triage_m1_cli_markdown \
+    "test_example_based.py::test_cli_accepts_markdown_flag" \
+    "test_example_based.py::test_markdown_uses_triage_headings"
+}
+
+check_incident_m2_renderer_markdown() {
+  run_quality_hidden_subset \
+    incident-triage \
+    incident_triage_m2_renderer_markdown \
+    "test_example_based.py::test_markdown_queue_table_preserves_every_runtime_row" \
+    "test_example_based.py::test_markdown_owner_load_sorts_by_count_then_breaches_then_name" \
+    "test_differential_oracle.py" \
+    "test_property_based.py" \
+    "test_regression_guard.py::test_acked_incident_never_counts_as_breach" \
+    "test_regression_guard.py::test_markdown_preserves_runtime_queue_order" \
+    "test_regression_guard.py::test_owner_load_tie_breaks_owner_name_after_count_and_breaches"
+}
+
+check_incident_m3_docs_updated() {
+  run_quality_hidden_subset \
+    incident-triage \
+    incident_triage_m3_docs_updated \
+    "test_example_based.py::test_usage_doc_mentions_markdown_command" \
+    "test_example_based.py::test_json_output_still_matches_runtime_summary" \
+    "test_regression_guard.py::test_json_shape_unchanged" \
+    "test_followup.py" \
+    "test_mutation_kills.py"
 }
 
 check_inventory_m1_cli_markdown() {
@@ -288,6 +343,25 @@ if quality_variant_data_dir "$VARIANT_ID" >/dev/null 2>&1; then
         write_result '.milestones.m3_docs_updated = true'
       else
         add_error "inventory-ops follow-up/docs slice did not pass"
+      fi
+      ;;
+    incident-triage)
+      if check_incident_m1_cli_markdown; then
+        write_result '.milestones.m1_cli_markdown = true'
+      else
+        add_error "incident-triage hidden CLI slice did not pass"
+      fi
+
+      if check_incident_m2_renderer_markdown; then
+        write_result '.milestones.m2_renderer_markdown = true'
+      else
+        add_error "incident-triage hidden renderer slice did not pass"
+      fi
+
+      if check_incident_m3_docs_updated; then
+        write_result '.milestones.m3_docs_updated = true'
+      else
+        add_error "incident-triage follow-up/docs slice did not pass"
       fi
       ;;
     release-readiness)
