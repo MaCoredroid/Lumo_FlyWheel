@@ -358,7 +358,9 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
                 "Codex tool-call probe failed: proxy/vLLM path did not return a structured function_call item."
             )
         metrics_after = parse_prometheus_text(server.metrics().text)
-        cache_hit_metric = schema["prefix_cache_hits"]
+        cache_hit_metric = schema.get("cache_hits") or schema.get("prefix_cache_hits")
+        if not cache_hit_metric:
+            raise RuntimeError("Resolved telemetry schema does not include a cache-hit metric key")
         cache_hit_delta = metrics_after.get(cache_hit_metric, 0.0) - metrics_before.get(cache_hit_metric, 0.0)
         if cache_hit_delta <= 0:
             raise RuntimeError(

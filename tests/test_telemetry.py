@@ -146,6 +146,27 @@ def test_extract_turns_parses_codex_jsonl(tmp_path: Path) -> None:
     assert turns[1].output_tokens_approx > 0
 
 
+def test_extract_turns_ignores_non_assistant_message_events(tmp_path: Path) -> None:
+    path = tmp_path / "trajectory.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps({"type": "message", "role": "user", "timestamp": "2026-04-17T00:00:00Z"}),
+                json.dumps({"type": "response.created", "timestamp": "2026-04-17T00:00:01Z"}),
+                json.dumps({"type": "message_delta", "delta": {"text": "assistant reply"}}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    turns = extract_turns(str(path))
+
+    assert len(turns) == 1
+    assert turns[0].tool_calls == 0
+    assert turns[0].output_tokens_approx > 0
+
+
 def test_latency_capture_lifecycle_writes_jsonl(tmp_path: Path, monkeypatch) -> None:
     snapshots = iter(
         [

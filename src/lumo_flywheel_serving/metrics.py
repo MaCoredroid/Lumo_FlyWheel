@@ -611,6 +611,10 @@ def extract_turns(trajectory_path: str) -> list[TurnInfo]:
         timestamp = event.get("timestamp")
         return timestamp if isinstance(timestamp, str) else None
 
+    def _is_assistant_event(event: dict[str, Any]) -> bool:
+        role = event.get("role")
+        return not isinstance(role, str) or role == "assistant"
+
     def _extract_text(event: dict[str, Any]) -> str:
         for key in ("text", "message", "content"):
             value = event.get(key)
@@ -669,7 +673,7 @@ def extract_turns(trajectory_path: str) -> list[TurnInfo]:
             event_type = _event_type(event)
             timestamp = _event_timestamp(event)
 
-            if event_type in start_types:
+            if event_type in start_types and _is_assistant_event(event):
                 if current_start is not None and current_output_chars > 0:
                     turns.append(
                         TurnInfo(
@@ -686,9 +690,13 @@ def extract_turns(trajectory_path: str) -> list[TurnInfo]:
                 current_output_chars = 0
                 current_tool_calls = 0
 
-            if event_type in output_types:
+            if event_type in output_types and _is_assistant_event(event):
                 current_output_chars += len(_extract_text(event))
-            elif any(key in event for key in ("text", "message", "content")) and event_type not in tool_types:
+            elif (
+                any(key in event for key in ("text", "message", "content"))
+                and event_type not in tool_types
+                and _is_assistant_event(event)
+            ):
                 if current_start is None:
                     current_start = timestamp
                 current_output_chars += len(_extract_text(event))

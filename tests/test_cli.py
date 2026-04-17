@@ -102,7 +102,7 @@ def test_smoke_test_requires_prefix_cache_hits(monkeypatch: pytest.MonkeyPatch, 
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
     monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: {"marker": raw})
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
     monkeypatch.setattr(requests, "post", fake_post)
 
     cache_hits = iter([{"cache_hits": 0.0}, {"cache_hits": 3.0}])
@@ -161,7 +161,7 @@ def test_smoke_test_fails_when_prefix_cache_hits_do_not_increase(monkeypatch: py
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
     monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
     monkeypatch.setattr(requests, "post", fake_post)
 
     with pytest.raises(RuntimeError, match="Expected prefix cache hits"):
@@ -197,7 +197,7 @@ def test_smoke_test_uses_configured_api_key(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(cli, "_server", lambda args: server)
     monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: {"cache_hits": 0.0} if raw == "ignored" else {})
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
     monkeypatch.setattr(requests, "post", fake_post)
     monkeypatch.setenv("VLLM_API_KEY", "custom-token")
 
@@ -239,7 +239,7 @@ def test_smoke_test_targets_served_model_override_and_lora_adapter(monkeypatch: 
     metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
     monkeypatch.setattr(cli, "_server", lambda args: server)
     monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
     monkeypatch.setattr(requests, "post", fake_post)
 
     assert cli.cmd_smoke_test(_args()) == 0
@@ -267,7 +267,7 @@ def test_smoke_test_requires_responses_follow_up_id(monkeypatch: pytest.MonkeyPa
     metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
     monkeypatch.setattr(cli, "_server", lambda args: server)
     monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
     monkeypatch.setattr(requests, "post", fake_post)
 
     with pytest.raises(RuntimeError, match="did not return a response id"):
@@ -296,7 +296,7 @@ def test_smoke_test_requires_structured_tool_call_probe(monkeypatch: pytest.Monk
     metrics_iter = iter([{"cache_hits": 0.0}, {"cache_hits": 1.0}])
     monkeypatch.setattr(cli, "_server", lambda args: server)
     monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
     monkeypatch.setattr(requests, "post", fake_post)
 
     with pytest.raises(RuntimeError, match="did not return a structured function_call item"):
@@ -340,7 +340,7 @@ def test_smoke_test_escalates_when_responses_follow_up_id_is_not_persisted(
     metrics_iter = iter([{"cache_hits": 0.0}])
     monkeypatch.setattr(cli, "_server", lambda args: server)
     monkeypatch.setattr(cli, "parse_prometheus_text", lambda raw: next(metrics_iter))
-    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"prefix_cache_hits": "cache_hits"})
+    monkeypatch.setattr(cli, "resolve_metric_schema", lambda snapshot: {"cache_hits": "cache_hits"})
     monkeypatch.setattr(requests, "post", fake_post)
 
     with pytest.raises(RuntimeError, match="did not persist response ids for follow-up chaining"):
