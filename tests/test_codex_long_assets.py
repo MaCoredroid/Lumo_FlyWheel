@@ -231,6 +231,39 @@ def test_alert_dedupe_family_exposes_rich_quality_contracts_for_inventory_paymen
     assert search_contract["red_team"]["exploits_required"] == 6
 
 
+def test_owner_field_family_exposes_rich_quality_contract_for_project_board() -> None:
+    family_yaml = (
+        REPO_ROOT
+        / "scenario_families"
+        / "owner-field-cross-layer"
+        / "family.yaml"
+    )
+    payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
+
+    project_contract = get_variant_quality_contract(payload, "project-board")
+    warehouse_contract = get_variant_quality_contract(payload, "warehouse-queue")
+    release_contract = get_variant_quality_contract(payload, "release-gate")
+
+    assert payload["grading_invariant"]["type"] == "hybrid"
+    assert project_contract["tier"] == "standard"
+    assert project_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert project_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert project_contract["hidden_tests"]["path"] == (
+        "verifier_data/owner-field-cross-layer/project-board/hidden_tests"
+    )
+    assert project_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert project_contract["red_team"]["path"] == (
+        "verifier_data/owner-field-cross-layer/project-board/red_team"
+    )
+    assert project_contract["red_team"]["exploits_required"] == 6
+    assert warehouse_contract["oracle"] == {}
+    assert warehouse_contract["hidden_tests"] == {}
+    assert warehouse_contract["red_team"] == {}
+    assert release_contract["oracle"] == {}
+    assert release_contract["hidden_tests"] == {}
+    assert release_contract["red_team"] == {}
+
+
 def test_alert_routing_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(
     tmp_path: Path,
 ) -> None:

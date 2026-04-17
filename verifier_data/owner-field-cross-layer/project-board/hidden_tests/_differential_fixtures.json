@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "record": {
+        "name": "Launch Checklist",
+        "status": "pending",
+        "owner": "pm-oncall"
+      },
+      "expected": {
+        "name": "Launch Checklist",
+        "status": "pending",
+        "owner": "pm-oncall",
+        "owner_source": "explicit",
+        "routing_key": "pm-oncall:launch-checklist"
+      }
+    },
+    {
+      "record": {
+        "name": "Quarterly   Roadmap",
+        "status": "blocked",
+        "owner": "product-ops"
+      },
+      "expected": {
+        "name": "Quarterly   Roadmap",
+        "status": "blocked",
+        "owner": "product-ops",
+        "owner_source": "explicit",
+        "routing_key": "product-ops:quarterly-roadmap"
+      }
+    },
+    {
+      "record": {
+        "name": "Launch   Review",
+        "status": "ready",
+        "owner": "release-captain"
+      },
+      "expected": {
+        "name": "Launch   Review",
+        "status": "ready",
+        "owner": "release-captain",
+        "owner_source": "explicit",
+        "routing_key": "release-captain:launch-review"
+      }
+    }
+  ]
+}

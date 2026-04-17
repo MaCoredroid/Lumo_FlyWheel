@@ -1,0 +1,11 @@
+{
+  "variant": "project-board",
+  "mutants_generated": 10,
+  "mutants_killed": 10,
+  "mutation_score": 1.0,
+  "focus": "canonical project-board routing keys for separator-heavy owner labels",
+  "notes": [
+    "Round-2 hidden tests kill visible-only fixes that build routing_key from the raw owner field.",
+    "The surviving round-1 class was canonical routing drift when owner labels carried separators or punctuation."
+  ]
+}
