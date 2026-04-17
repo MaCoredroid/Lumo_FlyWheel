@@ -1,0 +1,43 @@
+{
+  "cases": [
+    {
+      "record": {
+        "title": "Disk Pressure",
+        "owner": "ops",
+        "region": "us-east"
+      },
+      "expected": {
+        "slug": "disk-pressure",
+        "route_bucket": "us-east:ops",
+        "dispatch_key": "us-east:ops:disk-pressure",
+        "route": "us-east:ops:disk-pressure?dispatch=us-east:ops:disk-pressure"
+      }
+    },
+    {
+      "record": {
+        "title": " API   Gateway   Latency ",
+        "owner": "ops",
+        "region": "us-east"
+      },
+      "expected": {
+        "slug": "api-gateway-latency",
+        "route_bucket": "us-east:ops",
+        "dispatch_key": "us-east:ops:api-gateway-latency",
+        "route": "us-east:ops:api-gateway-latency?dispatch=us-east:ops:api-gateway-latency"
+      }
+    },
+    {
+      "record": {
+        "title": "DB\tPrimary\nDown",
+        "owner": "ops",
+        "region": "us-east"
+      },
+      "expected": {
+        "slug": "db-primary-down",
+        "route_bucket": "us-east:ops",
+        "dispatch_key": "us-east:ops:db-primary-down",
+        "route": "us-east:ops:db-primary-down?dispatch=us-east:ops:db-primary-down"
+      }
+    }
+  ]
+}

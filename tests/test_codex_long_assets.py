@@ -83,7 +83,7 @@ def test_report_cli_family_exposes_quality_contracts_for_all_variants() -> None:
     assert release_contract["red_team"]["exploits_required"] == 6
 
 
-def test_normalizer_family_exposes_mixed_quality_contract_for_billing_ledger() -> None:
+def test_normalizer_family_exposes_rich_quality_contracts_for_alert_and_billing() -> None:
     family_yaml = (
         REPO_ROOT
         / "scenario_families"
@@ -97,8 +97,17 @@ def test_normalizer_family_exposes_mixed_quality_contract_for_billing_ledger() -
     catalog_contract = get_variant_quality_contract(payload, "catalog-sync")
 
     assert payload["grading_invariant"]["type"] == "hybrid"
-    assert alert_contract["hidden_tests"] == {}
-    assert alert_contract["red_team"] == {}
+    assert alert_contract["tier"] == "small-investigative"
+    assert alert_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert alert_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert alert_contract["hidden_tests"]["path"] == (
+        "verifier_data/normalizer-api-migration/alert-routing/hidden_tests"
+    )
+    assert alert_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert alert_contract["red_team"]["path"] == (
+        "verifier_data/normalizer-api-migration/alert-routing/red_team"
+    )
+    assert alert_contract["red_team"]["exploits_required"] == 6
     assert billing_contract["tier"] == "standard"
     assert billing_contract["oracle"]["path"] == "oracle/solution.patch"
     assert billing_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
@@ -112,6 +121,57 @@ def test_normalizer_family_exposes_mixed_quality_contract_for_billing_ledger() -
     assert billing_contract["red_team"]["exploits_required"] == 6
     assert catalog_contract["hidden_tests"] == {}
     assert catalog_contract["red_team"] == {}
+
+
+def test_alert_routing_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "repo"
+    source_repo = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "alert-routing"
+        / "repo"
+    )
+    oracle_dir = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "alert-routing"
+        / "oracle"
+    )
+    shutil.copytree(source_repo, workspace)
+
+    for patch_name in ("solution.patch", "solution_followup.patch"):
+        subprocess.run(
+            ["patch", "-p1", "-i", str(oracle_dir / patch_name)],
+            cwd=workspace,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    cli_path = workspace / "norm_app" / "cli.py"
+    assert "dispatch_key" not in cli_path.read_text(encoding="utf-8")
+
+    expectations_path = REPO_ROOT / "verifier_data" / "normalizer-api-migration" / "variant_expectations.json"
+    milestone_path = REPO_ROOT / "verifiers" / "normalizer-api-migration" / "milestones" / "m2_ruleplan_v2_used.sh"
+    subprocess.run(
+        [
+            "bash",
+            "-lc",
+            (
+                f"source {milestone_path} && "
+                f"check_m2_ruleplan_v2_used {workspace} {expectations_path} alert-routing"
+            ),
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
 
 
 def test_billing_ledger_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(
@@ -163,6 +223,38 @@ def test_billing_ledger_m2_verifier_accepts_oracle_without_cli_dispatch_key_lite
         text=True,
         capture_output=True,
     )
+
+
+def test_alert_routing_visible_task_files_do_not_leak_hidden_lifecycle_examples() -> None:
+    agents_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "alert-routing"
+        / "repo"
+        / "AGENTS.md"
+    )
+    contract_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "alert-routing"
+        / "repo"
+        / "docs"
+        / "preview_contract.md"
+    )
+
+    agents_text = agents_path.read_text(encoding="utf-8").lower()
+    contract_text = contract_path.read_text(encoding="utf-8").lower()
+
+    assert "[sev2] firing: api gateway latency (page)" not in agents_text
+    assert "(acked) api gateway latency [resolved]" not in contract_text
+    assert "resolved :: db primary down [sev1]" not in contract_text
+    assert "lifecycle" in agents_text
+    assert "dispatch_key" in agents_text
+    assert "route_bucket" in contract_text
 
 
 def test_billing_ledger_visible_task_files_do_not_leak_hidden_separator_examples() -> None:

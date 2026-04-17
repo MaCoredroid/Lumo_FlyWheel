@@ -1,0 +1,11 @@
+{
+  "variant": "alert-routing",
+  "mutants_generated": 13,
+  "mutants_killed": 13,
+  "mutation_score": 1.0,
+  "focus": "lifecycle-wrapper alert title normalization and dispatch-key routing parity",
+  "notes": [
+    "Round-2 hidden tests kill local-only prefix fixes that leave trailing or bracketed paging state in the canonical slug.",
+    "The surviving round-1 class was canonical dispatch identity changing when pager wrappers were present at alert-title boundaries."
+  ]
+}

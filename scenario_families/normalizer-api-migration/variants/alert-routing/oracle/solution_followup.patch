@@ -1,0 +1,40 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/norm_app/rules_v2.py oracle_round2/norm_app/rules_v2.py
+--- oracle_round1/norm_app/rules_v2.py	2026-04-17 03:21:21.885505014 +0000
++++ oracle_round2/norm_app/rules_v2.py	2026-04-17 03:21:21.890293558 +0000
+@@ -1,8 +1,13 @@
+ from __future__ import annotations
+ 
++import re
+ from dataclasses import dataclass
+ 
+ 
++_TOKEN_RE = re.compile(r"[a-z0-9]+")
++_BOUNDARY_STATUS_TOKENS = {"ack", "acked", "firing", "page", "paging", "resolved"}
++
++
+ @dataclass(frozen=True)
+ class RulePlan:
+     slug: str
+@@ -11,8 +16,21 @@
+     dispatch_key: str
+ 
+ 
++def _is_lifecycle_wrapper_token(token: str) -> bool:
++    return token in _BOUNDARY_STATUS_TOKENS or re.fullmatch(r"(?:p|sev)\d+", token) is not None
++
++
++def _canonical_slug(title: str) -> str:
++    tokens = _TOKEN_RE.findall(title.lower())
++    while tokens and _is_lifecycle_wrapper_token(tokens[0]):
++        tokens = tokens[1:]
++    while tokens and _is_lifecycle_wrapper_token(tokens[-1]):
++        tokens = tokens[:-1]
++    return "-".join(tokens or ["alert"])
++
++
+ def build_rule_plan(title: str, owner: str, region: str) -> RulePlan:
+-    slug = "-".join(title.strip().lower().split())
++    slug = _canonical_slug(title)
+     route_bucket = f"{region}:{owner}"
+     return RulePlan(
+         slug=slug,

@@ -19,8 +19,9 @@ breakage_class:
 grading_invariant:
   type: hybrid
   description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result. The richer billing-ledger variant additionally runs
-    authored hidden-test slices and verifier-bundle integrity checks.
+    Phase 2 command result. The richer alert-routing and billing-ledger variants
+    additionally run authored hidden-test slices and verifier-bundle integrity
+    checks.
   verifier_script: verifiers/normalizer-api-migration/verify.sh
   functional_checks:
   - id: pytest_suite
@@ -69,10 +70,41 @@ difficulty_estimate:
 variants:
 - variant_id: alert-routing
   repo_source: authored
+  tier: small-investigative
+  surfaces:
+  - rules_v2
+  - assembler
+  - router
+  - cli_preview
+  - docs
   injected_breakage: The deprecated legacy builder now raises, and the repo must be
-    migrated to rules_v2.build_rule_plan().
+    migrated to rules_v2.build_rule_plan(). The richer alert-routing uplift also
+    carries hidden follow-up coverage for pager lifecycle wrappers that must not
+    perturb the canonical dispatch identity.
   env_dockerfile: variants/alert-routing/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/normalizer-api-migration/alert-routing/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_legacy_imports_removed:
+      - test_example_based.py::test_repo_no_longer_relies_on_removed_legacy_api
+      - test_example_based.py::test_preview_builds_ruleplan_once_and_threads_the_plan
+      m2_ruleplan_v2_used:
+      - test_example_based.py::test_build_rule_plan_exposes_canonical_dispatch_key
+      - test_example_based.py::test_compile_payload_and_router_accept_ruleplan_instances
+      - test_differential_oracle.py
+      - test_property_based.py
+      - test_regression_guard.py
+      m3_tests_passing:
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/normalizer-api-migration/alert-routing/red_team
+    exploits_required: 6
 - variant_id: billing-ledger
   repo_source: authored
   tier: standard

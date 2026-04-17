@@ -12,7 +12,13 @@ The preview contract also now exposes a canonical `dispatch_key` derived
 from region, owner, and the normalized title slug. Keep the alert route
 format stable, but append the dispatch key as a query suffix so the
 preview output preserves both the route bucket and the canonical alert
-dispatch identity. The title normalization for this key must collapse
-extra internal whitespace before slugging.
+dispatch identity. The preview contract in `docs/preview_contract.md`
+documents the response shape and canonical dispatch format that downstream
+fanout expects.
+
+The canonical dispatch identity should stay stable even when upstream
+paging systems wrap an alert title with lifecycle or status markers.
+Keep that identity derived from the alert itself rather than transient
+paging state.
 
 Keep the existing behavior the tests describe; do not remove the tests.

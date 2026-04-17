@@ -1,0 +1,134 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/docs/preview_contract.md hotfix/docs/preview_contract.md
+--- broken/docs/preview_contract.md	2026-04-17 03:18:49.414656536 +0000
++++ hotfix/docs/preview_contract.md	2026-04-17 03:23:45.545809278 +0000
+@@ -1,7 +1,8 @@
+ # Alert Preview Contract
+ 
+-The alert-routing preview endpoint emits the normalized slug and route
+-bucket that on-call routing currently uses.
++The alert-routing preview endpoint emits a canonical dispatch identity for
++on-call alert fanout. The route bucket stays stable, while the dispatch
++key carries the normalized alert slug that downstream paging tools use.
+ 
+ ## Preview shape
+ 
+@@ -9,21 +10,26 @@
+ 
+ - `slug`
+ - `route_bucket`
++- `dispatch_key`
+ - `route`
+ 
+-`route` uses the legacy bucket format:
++`route` keeps the legacy bucket format and appends the canonical dispatch key:
+ 
+-`<route_bucket>:<slug>`
++`<route_bucket>:<slug>?dispatch=<dispatch_key>`
+ 
+-## Title normalization
++## Canonical dispatch identity
++
++`dispatch_key` is:
++
++`<region>:<owner>:<normalized-title-slug>`
+ 
+ The normalized title slug:
+ 
+-- trims surrounding whitespace
+-- lowercases the title before routing
++- lowercases all text
++- collapses repeated whitespace into a canonical hyphenated slug
+ - keeps the route bucket stable for a given owner and region
+ 
+ Examples:
+ 
+ - `Disk Pressure` -> `disk-pressure`
+-- ` Disk Pressure ` -> `disk-pressure`
++- ` Disk   Pressure ` -> `disk-pressure`
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/assembler.py hotfix/norm_app/assembler.py
+--- broken/norm_app/assembler.py	2026-04-16 00:03:27.381738894 +0000
++++ hotfix/norm_app/assembler.py	2026-04-17 03:23:45.541122274 +0000
+@@ -1,8 +1,11 @@
+ from __future__ import annotations
+ 
+-from norm_app.legacy_rules import build_plan
++from norm_app.rules_v2 import RulePlan
+ 
+ 
+-def compile_payload(record: dict[str, str]) -> dict[str, str]:
+-    plan = build_plan(record["title"], record["owner"], record["region"])
+-    return {"slug": plan.slug, "route_bucket": plan.route_bucket}
++def compile_payload(plan: RulePlan) -> dict[str, str]:
++    return {
++        "slug": plan.slug,
++        "route_bucket": plan.route_bucket,
++        "dispatch_key": plan.dispatch_key,
++    }
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/cli.py hotfix/norm_app/cli.py
+--- broken/norm_app/cli.py	2026-04-16 00:03:27.381777822 +0000
++++ hotfix/norm_app/cli.py	2026-04-17 03:23:45.543426718 +0000
+@@ -2,12 +2,14 @@
+ 
+ from norm_app.assembler import compile_payload
+ from norm_app.router import route_for
++from norm_app.rules_v2 import build_rule_plan
+ 
+ 
+ SAMPLE = {'title': 'Disk Pressure', 'owner': 'ops', 'region': 'us-east'}
+ 
+ 
+ def preview() -> dict[str, str]:
+-    compiled = compile_payload(SAMPLE)
+-    compiled["route"] = route_for(SAMPLE)
++    plan = build_rule_plan(SAMPLE['title'], SAMPLE['owner'], SAMPLE['region'])
++    compiled = compile_payload(plan)
++    compiled['route'] = route_for(plan)
+     return compiled
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/router.py hotfix/norm_app/router.py
+--- broken/norm_app/router.py	2026-04-16 00:03:27.381758254 +0000
++++ hotfix/norm_app/router.py	2026-04-17 03:23:45.542327330 +0000
+@@ -1,8 +1,7 @@
+ from __future__ import annotations
+ 
+-from norm_app.legacy_rules import build_plan
++from norm_app.rules_v2 import RulePlan
+ 
+ 
+-def route_for(record: dict[str, str]) -> str:
+-    plan = build_plan(record["title"], record["owner"], record["region"])
+-    return f"{plan.route_bucket}:{plan.slug}"
++def route_for(plan: RulePlan) -> str:
++    return f"{plan.route_bucket}:{plan.slug}?dispatch={plan.dispatch_key}"
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/rules_v2.py hotfix/norm_app/rules_v2.py
+--- broken/norm_app/rules_v2.py	2026-04-16 00:03:27.381720190 +0000
++++ hotfix/norm_app/rules_v2.py	2026-04-17 03:23:45.544525403 +0000
+@@ -1,15 +1,27 @@
+ from __future__ import annotations
+ 
++import re
+ from dataclasses import dataclass
+ 
+ 
++_LEADING_STATUS_RE = re.compile(r"^\s*(?:firing|resolved|acked|ack|page|paging)\s*[:\-]+\s*", re.IGNORECASE)
++
++
+ @dataclass(frozen=True)
+ class RulePlan:
+     slug: str
+     route_bucket: str
+     owner: str
++    dispatch_key: str
+ 
+ 
+ def build_rule_plan(title: str, owner: str, region: str) -> RulePlan:
+-    slug = title.strip().lower().replace(" ", "-")
+-    return RulePlan(slug=slug, route_bucket=f"{region}:{owner}", owner=owner)
++    normalized = _LEADING_STATUS_RE.sub("", title.strip().lower())
++    slug = "-".join(part for part in re.split(r"[^a-z0-9]+", normalized) if part)
++    route_bucket = f"{region}:{owner}"
++    return RulePlan(
++        slug=slug,
++        route_bucket=route_bucket,
++        owner=owner,
++        dispatch_key=f"{route_bucket}:{slug}",
++    )

@@ -2449,3 +2449,65 @@ def test_report_cli_family_spec_accepts_authored_quality_variants() -> None:
         ),
         family_spec,
     )
+
+
+def test_normalizer_family_spec_accepts_authored_quality_variants() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    family_path = (
+        repo_root
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "family.yaml"
+    )
+    family_spec = yaml.safe_load(family_path.read_text(encoding="utf-8"))
+
+    validate_family_spec(
+        TaskSpec(
+            track="codex_long",
+            pool_or_split="train_long",
+            scenario_id="normalizer-api-migration/alert-routing",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            family_id="normalizer-api-migration",
+            variant_id="alert-routing",
+            image_digest="sha256:" + ("3" * 64),
+            scenario_type="migration_refactor",
+            timeout_seconds=9000,
+        ),
+        family_spec,
+    )
+
+    validate_family_spec(
+        TaskSpec(
+            track="codex_long",
+            pool_or_split="train_long",
+            scenario_id="normalizer-api-migration/billing-ledger",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            family_id="normalizer-api-migration",
+            variant_id="billing-ledger",
+            image_digest="sha256:" + ("4" * 64),
+            scenario_type="migration_refactor",
+            timeout_seconds=9000,
+        ),
+        family_spec,
+    )
+
+    validate_family_spec(
+        TaskSpec(
+            track="codex_long",
+            pool_or_split="train_long",
+            scenario_id="normalizer-api-migration/catalog-sync",
+            model_id="qwen3.5-27b",
+            harness="codex",
+            seed=1,
+            family_id="normalizer-api-migration",
+            variant_id="catalog-sync",
+            image_digest="sha256:" + ("5" * 64),
+            scenario_type="migration_refactor",
+            timeout_seconds=9000,
+        ),
+        family_spec,
+    )
