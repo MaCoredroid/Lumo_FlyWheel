@@ -1,0 +1,96 @@
+{
+  "cases": [
+    {
+      "name": "dedupe_hint_keeps_batch_noise_together",
+      "events": [
+        {
+          "environment": "prod",
+          "service": "inventory",
+          "title": "Recount Drift (batch=417)",
+          "inventory_scope": "cycle-counts",
+          "dedupe_hint": "inventory.recount-drift.cycle-counts",
+          "window_start": "2026-04-15T07:00:00Z",
+          "observed_at": "2026-04-15T07:00:44Z"
+        },
+        {
+          "environment": "prod",
+          "service": "inventory",
+          "title": "Recount Drift",
+          "inventory_scope": "cycle-counts",
+          "dedupe_hint": "inventory.recount-drift.cycle-counts",
+          "window_start": "2026-04-15T07:00:00Z",
+          "observed_at": "2026-04-15T07:00:11Z"
+        }
+      ],
+      "expected": [
+        {
+          "environment": "prod",
+          "service": "inventory",
+          "title": "Recount Drift",
+          "inventory_scope": "cycle-counts",
+          "dedupe_hint": "inventory.recount-drift.cycle-counts",
+          "window_start": "2026-04-15T07:00:00Z",
+          "occurrence_count": 2,
+          "first_seen_at": "2026-04-15T07:00:11Z",
+          "last_seen_at": "2026-04-15T07:00:44Z"
+        }
+      ]
+    },
+    {
+      "name": "scope_stays_split_when_hint_is_blank",
+      "events": [
+        {
+          "environment": "prod",
+          "service": "inventory",
+          "title": "Recount Drift",
+          "inventory_scope": "cycle-counts",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T07:00:00Z",
+          "observed_at": "2026-04-15T07:00:11Z"
+        },
+        {
+          "environment": "prod",
+          "service": "inventory",
+          "title": "Recount   Drift",
+          "inventory_scope": "cycle-counts",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T07:00:00Z",
+          "observed_at": "2026-04-15T07:00:44Z"
+        },
+        {
+          "environment": "prod",
+          "service": "inventory",
+          "title": "Recount Drift",
+          "inventory_scope": "safety-stock",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T07:00:00Z",
+          "observed_at": "2026-04-15T07:00:38Z"
+        }
+      ],
+      "expected": [
+        {
+          "environment": "prod",
+          "service": "inventory",
+          "title": "Recount Drift",
+          "inventory_scope": "cycle-counts",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T07:00:00Z",
+          "occurrence_count": 2,
+          "first_seen_at": "2026-04-15T07:00:11Z",
+          "last_seen_at": "2026-04-15T07:00:44Z"
+        },
+        {
+          "environment": "prod",
+          "service": "inventory",
+          "title": "Recount Drift",
+          "inventory_scope": "safety-stock",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T07:00:00Z",
+          "occurrence_count": 1,
+          "first_seen_at": "2026-04-15T07:00:38Z",
+          "last_seen_at": "2026-04-15T07:00:38Z"
+        }
+      ]
+    }
+  ]
+}

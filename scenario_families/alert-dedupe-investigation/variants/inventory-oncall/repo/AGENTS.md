@@ -1,14 +1,20 @@
-An integration regression in the inventory on-call alert stream started after
-the dedupe logic was simplified.
+The inventory on-call handoff started over-collapsing alert bursts after the
+dedupe path was simplified.
 
-Read `logs/failure.log`, reproduce the problem through the tests, and fix the
-dedupe key so alerts are collapsed by the correct time window and environment.
-The raw evidence mixes aliases like `Production`/`prod` and second-level
-timestamps, so normalize the environment and minute window before building
-the dedupe key. The collapsed incidents should still be useful to the
-on-call handoff: keep the canonical environment and minute window on each
-merged record, and surface `occurrence_count`, `first_seen_at`, and
-`last_seen_at` so the grouped incidents show how many raw alerts were
-folded together, when the burst started, and when the latest one arrived.
+Start with `logs/failure.log`, `docs/handoff_contract.md`, and the failing
+tests. Repair the parser plus dedupe flow so the grouped incidents follow the
+documented inventory contract:
 
-Do not delete the failing integration coverage.
+- normalize environment aliases like `Production` and `prod` to the canonical
+  `prod` token
+- bucket `observed_at` into the minute-level `window_start`
+- keep `inventory_scope` stable on the grouped handoff entry
+- preserve `occurrence_count`, `first_seen_at`, and `last_seen_at`
+- prefer the stable `dedupe_hint` when it is present, because batch-specific
+  recount suffixes are noisy display text and should not split an inventory
+  incident family
+
+Keep the handoff human-readable: preserve the earliest display title inside a
+merged record instead of replacing it with the machine-oriented `dedupe_hint`.
+
+Do not delete the failing tests.

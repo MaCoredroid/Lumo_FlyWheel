@@ -1,0 +1,113 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/investigate_app/dedupe.py exploit05/investigate_app/dedupe.py
+--- broken/investigate_app/dedupe.py
++++ exploit05/investigate_app/dedupe.py
+@@ -1,20 +1,39 @@
+ from __future__ import annotations
+ 
++import re
++
++from investigate_app.normalization import canonical_title
++
++
++def _display_identity(title: str) -> str:
++    collapsed = canonical_title(title)
++    collapsed = re.sub(r"\s*\(batch=[^)]+\)$", "", collapsed)
++    collapsed = re.sub(r"\s*\[batch=[^]]+\]$", "", collapsed)
++    return canonical_title(collapsed).casefold()
++
+ 
+ def fingerprint(event: dict[str, str]) -> str:
+-    return f"{event['service']}::{event['title']}"
++    return "::".join(
++        [
++            event["service"],
++            event["environment"],
++            event["window_start"],
++            event["inventory_scope"],
++            _display_identity(event["title"]),
++        ]
++    )
+ 
+ 
+ def collapse(events: list[dict[str, str]]) -> list[dict[str, str | int]]:
+     grouped: dict[str, dict[str, str | int]] = {}
+-    for event in events:
++    for event in sorted(events, key=_sort_event):
+         key = fingerprint(event)
+         current = grouped.get(key)
+         if current is None:
+             grouped[key] = {
+                 "environment": event["environment"],
+                 "service": event["service"],
+-                "title": event["title"],
++                "title": canonical_title(_display_identity(event["title"])),
+                 "inventory_scope": event["inventory_scope"],
+                 "dedupe_hint": event["dedupe_hint"],
+                 "window_start": event["window_start"],
+@@ -24,9 +43,31 @@
+             }
+             continue
+         current["occurrence_count"] = int(current["occurrence_count"]) + 1
+-        current["first_seen_at"] = min(str(current["first_seen_at"]), event["observed_at"])
+-        current["last_seen_at"] = max(str(current["last_seen_at"]), event["observed_at"])
+-    return [_coerce_group(record) for record in grouped.values()]
++        if event["observed_at"] < str(current["first_seen_at"]):
++            current["first_seen_at"] = event["observed_at"]
++            current["title"] = canonical_title(_display_identity(event["title"]))
++        if event["observed_at"] > str(current["last_seen_at"]):
++            current["last_seen_at"] = event["observed_at"]
++    return [_coerce_group(record) for record in sorted(grouped.values(), key=_sort_group)]
++
++
++def _sort_event(event: dict[str, str]) -> tuple[str, str, str, str, str]:
++    return (
++        event["window_start"],
++        event["inventory_scope"],
++        event["environment"],
++        event["observed_at"],
++        event["title"],
++    )
++
++
++def _sort_group(record: dict[str, str | int]) -> tuple[str, str, str, str]:
++    return (
++        str(record["window_start"]),
++        str(record["inventory_scope"]),
++        str(record["environment"]),
++        str(record["title"]),
++    )
+ 
+ 
+ def _coerce_group(record: dict[str, str | int]) -> dict[str, str | int]:
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/investigate_app/parser.py exploit05/investigate_app/parser.py
+--- broken/investigate_app/parser.py
++++ exploit05/investigate_app/parser.py
+@@ -3,7 +3,11 @@
+ import json
+ from pathlib import Path
+ 
+-from investigate_app.normalization import canonical_title
++from investigate_app.normalization import (
++    canonical_environment,
++    canonical_title,
++    canonical_window_start,
++)
+ 
+ 
+ def load_events(path: str = "logs/failure.log") -> list[dict[str, str]]:
+@@ -15,12 +19,12 @@
+         observed_at = raw.get("observed_at") or raw["window_start"]
+         events.append(
+             {
+-                "environment": raw["environment"],
++                "environment": canonical_environment(raw["environment"]),
+                 "service": raw["service"].strip(),
+                 "title": canonical_title(raw["title"]),
+-                "inventory_scope": raw["inventory_scope"].strip(),
++                "inventory_scope": raw["inventory_scope"].strip().casefold(),
+                 "dedupe_hint": raw.get("dedupe_hint", "").strip(),
+-                "window_start": raw.get("window_start", observed_at),
++                "window_start": canonical_window_start(observed_at),
+                 "observed_at": observed_at,
+             }
+         )

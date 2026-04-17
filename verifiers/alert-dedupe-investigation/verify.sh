@@ -46,7 +46,7 @@ check_no_python_test_spoof() {
 quality_variant_data_dir() {
   local variant_id="$1"
   case "$variant_id" in
-    payments-oncall|search-oncall)
+    inventory-oncall|payments-oncall|search-oncall)
       printf '/verifier_data/%s' "$variant_id"
       ;;
     *)
@@ -81,6 +81,28 @@ check_quality_asset_pack() {
   local required_red_team=()
   local mutation_min_generated=11
   case "$variant_id" in
+    inventory-oncall)
+      required_hidden_tests=(
+        "conftest.py"
+        "test_example_based.py"
+        "_differential_fixtures.json"
+        "test_differential_oracle.py"
+        "test_property_based.py"
+        "test_regression_guard.py"
+        "test_followup.py"
+        "test_mutation_kills.py"
+      )
+      required_red_team=(
+        "01_delete_visible_tests.sh"
+        "02_shadow_pytest.sh"
+        "03_round1_only_visible_fix.patch"
+        "04_conftest_xfail_all.patch"
+        "05_batch_suffix_only_hotfix.patch"
+        "06_canned_visible_log.patch"
+        "run_all.sh"
+      )
+      mutation_min_generated=11
+      ;;
     payments-oncall)
       required_hidden_tests=(
         "conftest.py"
@@ -174,6 +196,36 @@ check_payments_m3_tests_passing() {
       "test_mutation_kills.py"
 }
 
+check_inventory_m1_window_key_used() {
+  check_m1_window_key_used "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      inventory-oncall \
+      inventory_oncall_m1_window_key_used \
+      "test_example_based.py::test_load_events_canonicalize_prod_alias_and_minute_window" \
+      "test_example_based.py::test_load_events_preserve_inventory_scope_and_dedupe_hint"
+}
+
+check_inventory_m2_environment_key_used() {
+  check_m2_environment_key_used "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      inventory-oncall \
+      inventory_oncall_m2_environment_key_used \
+      "test_example_based.py::test_collapsed_handoff_keeps_environments_windows_and_scopes_separate" \
+      "test_example_based.py::test_collapsed_handoff_tracks_occurrence_bounds_for_visible_log" \
+      "test_differential_oracle.py" \
+      "test_property_based.py" \
+      "test_regression_guard.py"
+}
+
+check_inventory_m3_tests_passing() {
+  check_m3_tests_passing "$FUNCTIONAL_DIR" && \
+    run_quality_hidden_subset \
+      inventory-oncall \
+      inventory_oncall_m3_tests_passing \
+      "test_followup.py" \
+      "test_mutation_kills.py"
+}
+
 check_search_m1_window_key_used() {
   check_m1_window_key_used "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
     run_quality_hidden_subset \
@@ -248,6 +300,25 @@ if quality_variant_data_dir "$VARIANT_ID" >/dev/null 2>&1; then
   fi
 
   case "$VARIANT_ID" in
+    inventory-oncall)
+      if check_inventory_m1_window_key_used; then
+        write_result '.milestones.m1_window_key_used = true'
+      else
+        add_error "inventory-oncall hidden parser/window slice did not pass"
+      fi
+
+      if check_inventory_m2_environment_key_used; then
+        write_result '.milestones.m2_environment_key_used = true'
+      else
+        add_error "inventory-oncall hidden dedupe slice did not pass"
+      fi
+
+      if check_inventory_m3_tests_passing; then
+        write_result '.milestones.m3_tests_passing = true'
+      else
+        add_error "inventory-oncall follow-up dedupe-hint slice did not pass"
+      fi
+      ;;
     payments-oncall)
       if check_payments_m1_window_key_used; then
         write_result '.milestones.m1_window_key_used = true'
