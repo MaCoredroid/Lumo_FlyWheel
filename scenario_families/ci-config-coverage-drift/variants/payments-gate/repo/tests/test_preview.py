@@ -16,3 +16,7 @@ def test_preview_summary_mentions_every_required_label() -> None:
 
     assert "queue-check" in summary
     assert "ledger-check" in summary
+
+
+def test_preview_dispatch_ids_collapse_separator_noise() -> None:
+    assert dispatch_job_ids(["fraud///hold"]) == ["ci-app-fraud-hold"]

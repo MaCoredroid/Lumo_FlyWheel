@@ -469,6 +469,37 @@ def test_catalog_sync_visible_task_files_do_not_leak_hidden_source_label_example
     assert "source labels" in agents_text
 
 
+def test_payments_gate_visible_task_files_surface_dispatch_id_stability_without_hidden_examples() -> None:
+    agents_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "payments-gate"
+        / "repo"
+        / "AGENTS.md"
+    )
+    contract_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "payments-gate"
+        / "repo"
+        / "docs"
+        / "ci_contract.md"
+    )
+
+    agents_text = agents_path.read_text(encoding="utf-8").lower()
+    contract_text = contract_path.read_text(encoding="utf-8").lower()
+
+    assert "receipt__audit" not in agents_text
+    assert "ledger///hold" not in contract_text
+    assert "workflow preview dispatch ids" in agents_text
+    assert "preview dispatch ids should stay stable" in contract_text
+    assert "extra punctuation or repeated separators" in contract_text
+
+
 def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT, repo_copy)

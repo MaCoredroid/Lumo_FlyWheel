@@ -201,6 +201,40 @@ def test_run_codex_on_repo_uses_temp_home_and_captures_stdout(monkeypatch, tmp_p
     assert codex_jsonl.read_text(encoding="utf-8") == '{"type":"assistant_message"}\n'
 
 
+def test_run_codex_on_repo_decodes_timeout_bytes(monkeypatch, tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo-root"
+    repo_root.mkdir()
+    working_repo = tmp_path / "working"
+    working_repo.mkdir()
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    codex_jsonl = tmp_path / "codex.jsonl"
+
+    def fake_run(command: list[str], **kwargs):
+        raise subprocess.TimeoutExpired(
+            command,
+            timeout=45,
+            output=b'{"type":"assistant_message"}\n',
+            stderr=b"transport stalled",
+        )
+
+    monkeypatch.setattr(LIVE, "_run", fake_run)
+
+    payload = LIVE._run_codex_on_repo(
+        repo_root=repo_root,
+        working_repo=working_repo,
+        codex_home=codex_home,
+        prompt="Read AGENTS.md",
+        timeout_seconds=45,
+        codex_jsonl_path=codex_jsonl,
+    )
+
+    assert payload["returncode"] is None
+    assert payload["timed_out"] is True
+    assert payload["stderr"] == "transport stalled"
+    assert codex_jsonl.read_text(encoding="utf-8") == '{"type":"assistant_message"}\n'
+
+
 def test_grade_repo_override_uses_neutral_smoke_mode(monkeypatch, tmp_path: Path) -> None:
     repo_root = tmp_path / "repo-root"
     repo_root.mkdir()

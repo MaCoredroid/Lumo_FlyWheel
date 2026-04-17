@@ -8,5 +8,7 @@ the current package name `ci_app`.
 Keep the payment gate behavior stable:
 - required checks stay `queue-check` and `ledger-check`
 - the receipt audit lane stays optional
+- workflow preview dispatch ids should stay stable even when payment lane labels
+  contain extra separators
 
 Do not delete the CI checks or rewrite the tests to avoid the failure.

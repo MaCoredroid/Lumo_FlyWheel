@@ -27,6 +27,14 @@ DEFAULT_PROMPT = (
 )
 
 
+def _coerce_subprocess_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
 def _run(
     command: list[str],
     *,
@@ -262,8 +270,8 @@ def _run_codex_on_repo(
             "stderr": result.stderr,
         }
     except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout or ""
-        stderr = exc.stderr or ""
+        stdout = _coerce_subprocess_text(exc.stdout)
+        stderr = _coerce_subprocess_text(exc.stderr)
         codex_jsonl_path.write_text(stdout, encoding="utf-8")
         return {
             "returncode": None,
