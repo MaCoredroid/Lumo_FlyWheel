@@ -387,12 +387,12 @@ def test_metric_schema_variant_detects_openmetrics_total() -> None:
         {
             "prompt_tokens": "vllm:prompt_tokens_total",
             "generation_tokens": "vllm:generation_tokens_total",
-            "prefix_cache_queries": "vllm:prefix_cache_queries_total",
-            "prefix_cache_hits": "vllm:prefix_cache_hits_total",
-            "kv_computed_tokens_sum": "vllm:request_prefill_kv_computed_tokens_sum",
-            "ttft_seconds_sum": "vllm:time_to_first_token_seconds_sum",
-            "ttft_seconds_count": "vllm:time_to_first_token_seconds_count",
-            "prefill_seconds_sum": "vllm:request_prefill_time_seconds_sum",
-            "decode_seconds_sum": "vllm:request_decode_time_seconds_sum",
+            "cache_queries": "vllm:prefix_cache_queries_total",
+            "cache_hits": "vllm:prefix_cache_hits_total",
+            "kv_computed_tokens": "vllm:request_prefill_kv_computed_tokens",
+            "ttft": "vllm:time_to_first_token_seconds",
+            "prefill_time": "vllm:request_prefill_time_seconds",
+            "decode_time": "vllm:request_decode_time_seconds",
+            "itl": "vllm:inter_token_latency_seconds",
         }
     ) == "openmetrics_total"

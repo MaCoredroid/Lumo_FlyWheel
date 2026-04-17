@@ -282,8 +282,8 @@ class _Response:
 class _LatencyCapture:
     events: list[str]
 
-    async def snapshot_before(self, task_id: str) -> None:
-        self.events.append(f"before:{task_id}")
+    async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+        self.events.append(f"before:{task_id}:{seed}:{attempt}")
 
     async def snapshot_after(self, task_id: str) -> None:
         self.events.append(f"after:{task_id}")
@@ -1997,7 +1997,7 @@ def test_execute_task_records_codex_long_manifest_versions(tmp_path: Path) -> No
         "health:qwen3.5-27b",
         "pre-run:7",
         "family-spec:family-a",
-        "before:family-a/v1",
+        "before:family-a/v1:1:1",
         "setup:7",
         "invoke",
         "snapshot:family-a/v1/qwen3.5-27b/codex/seed1/attempt1",

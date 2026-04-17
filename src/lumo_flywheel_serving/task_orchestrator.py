@@ -267,7 +267,7 @@ class OrchestratorConfig:
 
 
 class LatencyCaptureProtocol(Protocol):
-    async def snapshot_before(self, task_id: str) -> None: ...
+    async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None: ...
 
     async def snapshot_after(self, task_id: str) -> None: ...
 
@@ -2627,7 +2627,11 @@ class TaskOrchestrator:
         launch_manifest_ver = manifest_state.manifest_version if task.track == "codex_long" else None
 
         try:
-            await self.hooks.latency_capture.snapshot_before(task_id=task.scenario_id)
+            await self.hooks.latency_capture.snapshot_before(
+                task_id=task.scenario_id,
+                seed=task.seed,
+                attempt=task.attempt,
+            )
             telemetry_started = True
             if task.track == "swe_bench":
                 container = await self.hooks.setup_swe_bench_container(task, config)

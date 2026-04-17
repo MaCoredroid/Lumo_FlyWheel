@@ -122,10 +122,16 @@ def _metric_schema_variant(schema: dict[str, str]) -> str:
     variant_keys = (
         "prompt_tokens",
         "generation_tokens",
-        "prefix_cache_queries",
-        "prefix_cache_hits",
+        "cache_queries",
+        "cache_hits",
     )
     values = [schema[key] for key in variant_keys if key in schema]
+    if not values:
+        legacy_keys = (
+            "prefix_cache_queries",
+            "prefix_cache_hits",
+        )
+        values = [schema[key] for key in legacy_keys if key in schema]
     if values and all(key.endswith("_total") for key in values):
         return "openmetrics_total"
     return "legacy_no_total"
