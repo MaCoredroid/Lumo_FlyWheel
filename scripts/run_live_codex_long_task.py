@@ -292,6 +292,9 @@ def _codex_result_is_infra_failure(codex_result: dict[str, object], codex_jsonl_
         "connection refused",
         "couldn't connect to server",
         "failed to connect",
+        "failed to parse function arguments",
+        "badrequesterror",
+        "extra data: line 1 column 32",
     )
     combined = f"{stderr}\n{stdout_text}"
     return any(marker in combined for marker in markers)

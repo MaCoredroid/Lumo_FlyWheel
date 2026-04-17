@@ -368,6 +368,25 @@ def test_codex_result_is_infra_failure_detects_transport_disconnect(tmp_path: Pa
     assert LIVE._codex_result_is_infra_failure({"stderr": ""}, jsonl) is True
 
 
+def test_codex_result_is_infra_failure_detects_router_parse_badrequest(tmp_path: Path) -> None:
+    jsonl = tmp_path / "codex.jsonl"
+    jsonl.write_text(
+        '{"type":"error","message":"{\\"error\\":{\\"message\\":\\"Extra data: line 1 column 32 (char 31)\\",\\"type\\":\\"BadRequestError\\"}}"}\n',
+        encoding="utf-8",
+    )
+
+    assert LIVE._codex_result_is_infra_failure(
+        {
+            "stderr": (
+                "Reading additional input from stdin...\n"
+                "ERROR codex_core::tools::router: error=failed to parse function arguments: "
+                "trailing characters at line 1 column 32\n"
+            )
+        },
+        jsonl,
+    ) is True
+
+
 def test_codex_result_is_infra_failure_ignores_model_failure(tmp_path: Path) -> None:
     jsonl = tmp_path / "codex.jsonl"
     jsonl.write_text('{"type":"assistant_message","message":"try again"}\n', encoding="utf-8")
