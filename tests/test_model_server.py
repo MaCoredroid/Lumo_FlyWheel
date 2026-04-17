@@ -10,6 +10,7 @@ from lumo_flywheel_serving.model_server import (
     DEFAULT_VLLM_BASE_IMAGE,
     DEFAULT_VLLM_DOCKERFILE,
     DEFAULT_VLLM_IMAGE,
+    MIN_GPU_MEMORY_UTILIZATION,
     ModelServer,
 )
 from lumo_flywheel_serving.registry import ModelConfig, load_registry
@@ -619,7 +620,13 @@ models:
 
     server.start("qwen3.5-27b")
 
-    assert events[:5] == ["reset:qwen3.5-27b", "stop:True", "recover", "wait:120:0.9", "run"]
+    assert events[:5] == [
+        "reset:qwen3.5-27b",
+        "stop:True",
+        "recover",
+        f"wait:120:{MIN_GPU_MEMORY_UTILIZATION}",
+        "run",
+    ]
 
 
 def test_start_uses_valid_initial_kv_cache_dtype_for_fp8_checkpoints(
@@ -738,7 +745,7 @@ models:
 
     server.start("qwen3.5-27b")
 
-    assert waits == [0.9, 0.88]
+    assert waits == [MIN_GPU_MEMORY_UTILIZATION, 0.88]
     assert launch_targets == [0.9, 0.88]
 
 
@@ -784,7 +791,7 @@ models:
 
     server.switch_model("qwen3.5-27b", enable_request_logging=True)
 
-    assert events == ["stop:True", "wait:120:0.9", "start:qwen3.5-27b:True"]
+    assert events == ["stop:True", f"wait:120:{MIN_GPU_MEMORY_UTILIZATION}", "start:qwen3.5-27b:True"]
 
 
 def test_switch_model_keeps_sleep_mode_fast_path_when_model_is_healthy(

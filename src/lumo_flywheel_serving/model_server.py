@@ -198,9 +198,10 @@ class ModelServer:
         self.stop(missing_ok=True)
         self._recover_host_memory()
         # A prior stop can return before GB10 unified-memory pressure fully drains.
-        # Wait before the first launch attempt so fresh starts after a recent stop
-        # do not immediately spiral through the low-VRAM fallback ladder.
-        self._wait_vram_free(timeout_s=120, required_utilization=config.gpu_memory_utilization)
+        # Only wait for the minimum viable floor before the first launch so the
+        # low-VRAM retry ladder can still engage when the configured target is
+        # temporarily unattainable on the host.
+        self._wait_vram_free(timeout_s=120, required_utilization=MIN_GPU_MEMORY_UTILIZATION)
         kv_cache_dtype = self._initial_kv_cache_dtype(config)
         gpu_memory_utilization = config.gpu_memory_utilization
         enforce_eager = False
@@ -263,7 +264,7 @@ class ModelServer:
         if self.use_sleep_mode and self.current_model == model_id and self._is_serving_model(model_id):
             return
         self.stop(missing_ok=True)
-        self._wait_vram_free(timeout_s=120, required_utilization=self.registry[model_id].gpu_memory_utilization)
+        self._wait_vram_free(timeout_s=120, required_utilization=MIN_GPU_MEMORY_UTILIZATION)
         self.start(model_id=model_id, enable_request_logging=enable_request_logging)
 
     def stop(self, missing_ok: bool = False) -> None:
