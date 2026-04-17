@@ -4,6 +4,8 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from lumo_flywheel_serving.metrics import (
     LatencyCapture,
     LatencyRecord,
@@ -56,6 +58,38 @@ def test_telemetry_writer_and_loader_filter_anomalies(tmp_path: Path) -> None:
     assert len(records) == 1
     assert records[0].task_id == "family-a/v1"
     assert records[0].ttft_count == 3
+
+
+def test_load_telemetry_raises_on_malformed_jsonl(tmp_path: Path) -> None:
+    path = tmp_path / "telemetry" / "latency_qwen3.5-27b_train-long.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "task_id": "family-a/v1",
+                "model_id": "qwen3.5-27b",
+                "track": "codex_long",
+                "pool_or_split": "train_long",
+                "seed": 7,
+                "attempt": 2,
+                "ttft_ms": 500.0,
+                "prefill_throughput_tps": 12.0,
+                "decode_throughput_tps": 18.0,
+                "cache_hit_rate_pct": 83.3,
+                "gen_tokens": 18.0,
+                "kv_computed_tokens": 24.0,
+                "prompt_tokens": 60.0,
+                "wall_clock_s": 4.5,
+                "ttft_count": 3,
+                "anomalies": [],
+            }
+        )
+        + "\nnot-json\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match=r"Malformed telemetry JSONL .*:2:"):
+        load_telemetry(str(tmp_path / "telemetry"))
 
 
 def test_aggregate_by_model_summarizes_records() -> None:

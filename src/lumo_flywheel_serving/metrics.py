@@ -733,14 +733,16 @@ def load_telemetry(
     pattern = os.path.join(telemetry_dir, "latency_*.jsonl")
     for path in sorted(glob.glob(pattern)):
         with open(path, "r", encoding="utf-8") as handle:
-            for line in handle:
+            for line_number, line in enumerate(handle, start=1):
                 stripped = line.strip()
                 if not stripped:
                     continue
                 try:
                     data = json.loads(stripped)
-                except json.JSONDecodeError:
-                    continue
+                except json.JSONDecodeError as exc:
+                    raise RuntimeError(
+                        f"Malformed telemetry JSONL in {path}:{line_number}: {exc.msg}"
+                    ) from exc
                 task_anomalies = data.get("anomalies") or []
                 if not isinstance(task_anomalies, list):
                     task_anomalies = [str(task_anomalies)]
