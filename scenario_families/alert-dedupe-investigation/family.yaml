@@ -17,9 +17,10 @@ breakage_class:
   - dedupe_key
   - integration_tests
 grading_invariant:
-  type: state_based
+  type: hybrid
   description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result.
+    Phase 2 command result. The richer payments-oncall uplift additionally runs
+    authored hidden-test slices and verifier-bundle integrity checks.
   verifier_script: verifiers/alert-dedupe-investigation/verify.sh
   functional_checks:
   - id: pytest_suite
@@ -31,38 +32,74 @@ grading_invariant:
     timeout_seconds: 120
   expected_final_state:
   - fingerprint_check: The dedupe fingerprint includes environment and window_start.
+  - hidden_contract_check: Variants that declare richer verifier assets must satisfy
+      the bundled hidden-suite slices and mutation-floor checks in Phase 3.
   - test_suite_check: The pytest suite passes from Phase 2.
 milestones:
 - id: m1_window_key_used
   description: Fingerprint includes the time window
   check_script: verifiers/alert-dedupe-investigation/milestones/m1_window_key_used.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.3
 - id: m2_environment_key_used
   description: Fingerprint includes the environment
   check_script: verifiers/alert-dedupe-investigation/milestones/m2_environment_key_used.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.3
 - id: m3_tests_passing
   description: Pytest suite passes
   check_script: verifiers/alert-dedupe-investigation/milestones/m3_tests_passing.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.4
 shortcut_resistance:
-  notes: Phase 3 inspects the dedupe source for the required fields and uses test
-    checksums to catch deleted integration coverage.
-  known_exploits_tested:
-  - Delete the failing integration test
-  - Shadow pytest to report success
-  - Return a canned dedupe result without fixing the source key
+  generated_from: verifier_data/alert-dedupe-investigation/payments-oncall/red_team
+  min_exploits: 6
+  mutation_score_floor: 0.85
 difficulty_estimate:
   target_solve_rate: 30-50%
   rationale: Starts from logs and failing tests, then requires a targeted logic fix
-    in the reducer.
+    in the reducer. The richer payments-oncall uplift also carries payments-specific
+    hidden follow-up coverage around payment-lane separation and stable dedupe hints.
 variants:
 - variant_id: payments-oncall
   repo_source: authored
+  tier: standard
+  surfaces:
+  - log_analysis
+  - parser_normalization
+  - dedupe_key
+  - handoff_contract
   injected_breakage: A simplified dedupe fingerprint ignores window and environment
-    fields, causing distinct incidents to merge.
+    fields, causing distinct incidents to merge. The richer payments-oncall uplift
+    also carries hidden follow-up coverage for payment-lane separation and for
+    processor-noisy page titles that must prefer the stable `dedupe_hint`.
   env_dockerfile: variants/payments-oncall/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/alert-dedupe-investigation/payments-oncall/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_window_key_used:
+      - test_example_based.py::test_load_events_canonicalize_prod_alias_and_five_minute_window
+      - test_example_based.py::test_load_events_preserve_payment_lane_and_dedupe_hint
+      m2_environment_key_used:
+      - test_example_based.py::test_collapsed_handoff_keeps_windows_and_payment_lanes_separate
+      - test_example_based.py::test_collapsed_handoff_tracks_occurrence_bounds_for_visible_log
+      - test_differential_oracle.py
+      - test_property_based.py
+      - test_regression_guard.py
+      m3_tests_passing:
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/alert-dedupe-investigation/payments-oncall/red_team
+    exploits_required: 6
 - variant_id: search-oncall
   repo_source: authored
   injected_breakage: A simplified dedupe fingerprint ignores window and environment

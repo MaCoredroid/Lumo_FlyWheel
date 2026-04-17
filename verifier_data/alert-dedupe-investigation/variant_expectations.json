@@ -17,10 +17,11 @@
       "m1_file": "investigate_app/dedupe.py",
       "m1_pattern": "window_start",
       "m1_extra_file": "investigate_app/parser.py",
-      "m1_extra_pattern": "observed_at",
+      "m1_extra_pattern": "canonical_window_start",
       "m2_file": "investigate_app/dedupe.py",
       "m2_pattern": "environment",
-      "m2_extra_pattern": "first_seen_at",
+      "m2_extra_file": "investigate_app/parser.py",
+      "m2_extra_pattern": "canonical_environment",
       "project_name": "payments-oncall-alerts",
       "project_name_pattern": "name = \"payments-oncall-alerts\""
     },

@@ -1,0 +1,87 @@
+{
+  "cases": [
+    {
+      "name": "same lane same window collapses even when alerts arrive out of order",
+      "events": [
+        {
+          "environment": "prod",
+          "service": "payments",
+          "title": "Queue Lag",
+          "payment_lane": "card-payins",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T10:00:00Z",
+          "observed_at": "2026-04-15T10:00:41Z"
+        },
+        {
+          "environment": "prod",
+          "service": "payments",
+          "title": "Queue Lag",
+          "payment_lane": "card-payins",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T10:00:00Z",
+          "observed_at": "2026-04-15T10:00:27Z"
+        }
+      ],
+      "expected": [
+        {
+          "environment": "prod",
+          "service": "payments",
+          "title": "Queue Lag",
+          "payment_lane": "card-payins",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T10:00:00Z",
+          "occurrence_count": 2,
+          "first_seen_at": "2026-04-15T10:00:27Z",
+          "last_seen_at": "2026-04-15T10:00:41Z"
+        }
+      ]
+    },
+    {
+      "name": "same title but different payment lane stays split",
+      "events": [
+        {
+          "environment": "prod",
+          "service": "payments",
+          "title": "Queue Lag",
+          "payment_lane": "ach-payouts",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T10:00:00Z",
+          "observed_at": "2026-04-15T10:00:11Z"
+        },
+        {
+          "environment": "prod",
+          "service": "payments",
+          "title": "Queue Lag",
+          "payment_lane": "card-payins",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T10:00:00Z",
+          "observed_at": "2026-04-15T10:00:27Z"
+        }
+      ],
+      "expected": [
+        {
+          "environment": "prod",
+          "service": "payments",
+          "title": "Queue Lag",
+          "payment_lane": "ach-payouts",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T10:00:00Z",
+          "occurrence_count": 1,
+          "first_seen_at": "2026-04-15T10:00:11Z",
+          "last_seen_at": "2026-04-15T10:00:11Z"
+        },
+        {
+          "environment": "prod",
+          "service": "payments",
+          "title": "Queue Lag",
+          "payment_lane": "card-payins",
+          "dedupe_hint": "",
+          "window_start": "2026-04-15T10:00:00Z",
+          "occurrence_count": 1,
+          "first_seen_at": "2026-04-15T10:00:27Z",
+          "last_seen_at": "2026-04-15T10:00:27Z"
+        }
+      ]
+    }
+  ]
+}
