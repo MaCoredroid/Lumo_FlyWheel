@@ -4,7 +4,9 @@ import hashlib
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -290,6 +292,168 @@ def test_load_localvllm_base_url_reads_codex_config(tmp_path: Path) -> None:
     )
 
     assert LIVE._load_localvllm_base_url(repo_root) == "http://127.0.0.1:8001/v1"
+
+
+def test_load_localvllm_runtime_config_reads_model_and_metrics_port(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    config_dir = repo_root / ".codex"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.toml").write_text(
+        'model = "qwen3.5-27b"\n'
+        'model_provider = "localvllm"\n\n'
+        '[model_providers.localvllm]\n'
+        'base_url = "http://127.0.0.1:8001/v1"\n',
+        encoding="utf-8",
+    )
+
+    assert LIVE._load_localvllm_runtime_config(repo_root) == {
+        "base_url": "http://127.0.0.1:8001/v1",
+        "model_id": "qwen3.5-27b",
+        "proxy_host": "127.0.0.1",
+        "proxy_port": 8001,
+        "metrics_host": "127.0.0.1",
+        "metrics_port": 8000,
+    }
+
+
+def test_live_task_main_emits_result_json_and_telemetry(monkeypatch, tmp_path: Path, capsys) -> None:
+    repo_root = tmp_path / "repo-root"
+    repo_root.mkdir()
+    run_output_dir = repo_root / "output" / "live-codex"
+    run_output_dir.mkdir(parents=True)
+    working_repo = tmp_path / "working-repo"
+    working_repo.mkdir()
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    telemetry_events: list[str] = []
+    telemetry_dirs: list[str] = []
+
+    class _FakeLatencyCapture:
+        def __init__(self, host: str, port: int, output_dir: str, model_id: str, pool_or_split: str) -> None:
+            telemetry_events.append(f"init:{host}:{port}:{output_dir}:{model_id}:{pool_or_split}")
+            self.writer_path = f"{output_dir}/telemetry/latency_{model_id}_{pool_or_split}.jsonl"
+
+        async def resolve_schema(self) -> None:
+            telemetry_events.append("resolve")
+
+        async def snapshot_before(self, task_id: str, seed: int, attempt: int) -> None:
+            telemetry_events.append(f"before:{task_id}:{seed}:{attempt}")
+
+        async def snapshot_after(self, task_id: str):
+            telemetry_events.append(f"after:{task_id}")
+            return SimpleNamespace(
+                anomalies=[],
+                ttft_ms=500.0,
+                prefill_throughput_tps=12.0,
+                decode_throughput_tps=18.0,
+                cache_hit_rate_pct=75.0,
+                prompt_tokens=60.0,
+                kv_computed_tokens=24.0,
+                gen_tokens=18.0,
+                prefill_sum_s=2.0,
+                decode_sum_s=1.0,
+                ttft_count=5,
+                cache_queries=4.0,
+                cache_hits=3.0,
+                wall_clock_s=12.5,
+            )
+
+    monkeypatch.setattr(
+        LIVE,
+        "_load_localvllm_runtime_config",
+        lambda repo_root: {
+            "base_url": "http://127.0.0.1:8001/v1",
+            "model_id": "qwen3.5-27b",
+            "proxy_host": "127.0.0.1",
+            "proxy_port": 8001,
+            "metrics_host": "127.0.0.1",
+            "metrics_port": 8000,
+        },
+    )
+    monkeypatch.setattr(LIVE, "_make_run_output_dir", lambda repo_root, family, variant: run_output_dir)
+    monkeypatch.setattr(
+        LIVE,
+        "_ensure_live_endpoint",
+        lambda repo_root, temp_root: (None, {"base_url": "http://127.0.0.1:8001/v1", "proxy_autostarted": False}),
+    )
+    monkeypatch.setattr(LIVE, "LatencyCapture", _FakeLatencyCapture)
+    monkeypatch.setattr(LIVE, "_prepare_codex_home", lambda repo_root, temp_root: codex_home)
+    monkeypatch.setattr(LIVE, "_copy_variant_repo", lambda repo_root, family, variant, temp_root: working_repo)
+    monkeypatch.setattr(
+        LIVE,
+        "_run_codex_on_repo",
+        lambda **kwargs: {
+            "returncode": 0,
+            "timed_out": False,
+            "stdout_path": str(run_output_dir / "codex-session.jsonl"),
+            "stderr": "",
+        },
+    )
+    monkeypatch.setattr(LIVE, "_codex_result_is_infra_failure", lambda codex_result, codex_jsonl_path: False)
+    monkeypatch.setattr(
+        LIVE,
+        "load_telemetry",
+        lambda telemetry_dir: telemetry_dirs.append(telemetry_dir) or [{"telemetry_dir": telemetry_dir}],
+    )
+    monkeypatch.setattr(
+        LIVE,
+        "aggregate_by_model",
+        lambda records, reportable_runs: [
+            SimpleNamespace(
+                model_id="qwen3.5-27b",
+                pool_or_split="public_dev",
+                n_tasks=1,
+                ttft_ms_median=500.0,
+                prefill_throughput_tps_median=12.0,
+                decode_throughput_tps_median=18.0,
+                cache_hit_rate_pct_median=75.0,
+                total_wall_clock_s=12.5,
+                total_turns=1,
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        LIVE,
+        "_grade_repo_override",
+        lambda **kwargs: {"verify_result": {"pass": True, "shortcut_detected": False}},
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_live_codex_long_task.py",
+            "--family",
+            "family-a",
+            "--variant",
+            "variant-b",
+            "--repo-root",
+            str(repo_root),
+            "--json",
+        ],
+    )
+
+    assert LIVE.main() == 0
+
+    output = json.loads(capsys.readouterr().out)
+    result_path = run_output_dir / "result.json"
+    result_payload = json.loads(result_path.read_text(encoding="utf-8"))
+
+    assert output["command_success"] is True
+    assert output["pass"] is True
+    assert output["task_elapsed_seconds"] == 12.5
+    assert output["end_to_end_elapsed_seconds"] >= 0.0
+    assert output["telemetry_task_id"] == "family-a/variant-b"
+    assert output["telemetry_record"]["attempt"] == 1
+    assert output["telemetry_record"]["seed"] == 0
+    assert output["result_path"] == str(result_path)
+    assert result_payload == output
+    assert telemetry_events == [
+        f"init:127.0.0.1:8000:{run_output_dir}:qwen3.5-27b:public_dev",
+        "resolve",
+        "before:family-a/variant-b:0:1",
+        "after:family-a/variant-b",
+    ]
+    assert telemetry_dirs == [str(run_output_dir / "telemetry")]
 
 
 def test_ensure_live_endpoint_autostarts_proxy_when_missing(monkeypatch, tmp_path: Path) -> None:

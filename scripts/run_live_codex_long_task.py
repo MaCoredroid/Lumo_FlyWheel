@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import shutil
@@ -15,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
+from lumo_flywheel_serving.metrics import LatencyCapture, TaskMetrics, aggregate_by_model, load_telemetry
 
 
 DEFAULT_PROMPT = (
@@ -67,6 +69,7 @@ def _infra_failure_details(
         "family": family,
         "variant": variant,
         "pass": False,
+        "command_success": False,
         "shortcut_detected": False,
         "countable": False,
         "infra_failure": True,
@@ -119,6 +122,49 @@ def _load_localvllm_base_url(repo_root: Path) -> str | None:
     if isinstance(base_url, str) and base_url.strip():
         return base_url.rstrip("/")
     return None
+
+
+def _load_localvllm_model(repo_root: Path) -> str | None:
+    config_path = repo_root / ".codex" / "config.toml"
+    if not config_path.exists():
+        return None
+    payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    model_id = payload.get("model")
+    if isinstance(model_id, str) and model_id.strip():
+        return model_id.strip()
+    return None
+
+
+def _load_localvllm_runtime_config(repo_root: Path) -> dict[str, object] | None:
+    base_url = _load_localvllm_base_url(repo_root)
+    model_id = _load_localvllm_model(repo_root)
+    if base_url is None or model_id is None:
+        return None
+    parsed = urlparse(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.port is None:
+        raise RuntimeError(f"Unsupported localvllm base_url: {base_url}")
+    metrics_port = parsed.port - 1
+    if metrics_port <= 0:
+        raise RuntimeError(f"Cannot derive upstream metrics port from localvllm base_url: {base_url}")
+    return {
+        "base_url": base_url,
+        "model_id": model_id,
+        "proxy_host": parsed.hostname,
+        "proxy_port": parsed.port,
+        "metrics_host": parsed.hostname,
+        "metrics_port": metrics_port,
+    }
+
+
+def _make_run_output_dir(repo_root: Path, family: str, variant: str) -> Path:
+    timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    run_dir = repo_root / "output" / "live_codex_long_task" / family / variant / timestamp
+    suffix = 1
+    while run_dir.exists():
+        suffix += 1
+        run_dir = repo_root / "output" / "live_codex_long_task" / family / variant / f"{timestamp}-{suffix:02d}"
+    run_dir.mkdir(parents=True, exist_ok=False)
+    return run_dir
 
 
 def _can_connect(host: str, port: int, timeout_seconds: float = 1.0) -> bool:
@@ -344,6 +390,43 @@ def _extract_last_json_object(text: str) -> dict[str, object]:
     raise SystemExit("neutral smoke grading did not emit a parseable JSON object")
 
 
+def _telemetry_record_payload(metrics: TaskMetrics, *, seed: int, attempt: int) -> dict[str, object]:
+    return {
+        "seed": seed,
+        "attempt": attempt,
+        "ttft_ms": metrics.ttft_ms,
+        "prefill_throughput_tps": metrics.prefill_throughput_tps,
+        "decode_throughput_tps": metrics.decode_throughput_tps,
+        "cache_hit_rate_pct": metrics.cache_hit_rate_pct,
+        "prompt_tokens": metrics.prompt_tokens,
+        "kv_computed_tokens": metrics.kv_computed_tokens,
+        "gen_tokens": metrics.gen_tokens,
+        "prefill_sum_s": metrics.prefill_sum_s,
+        "decode_sum_s": metrics.decode_sum_s,
+        "ttft_count": metrics.ttft_count,
+        "cache_queries": metrics.cache_queries,
+        "cache_hits": metrics.cache_hits,
+        "wall_clock_s": metrics.wall_clock_s,
+        "anomalies": metrics.anomalies,
+    }
+
+
+def _write_result_json(result_path: Path, payload: dict[str, object]) -> None:
+    result_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _complete_telemetry_capture(
+    telemetry_capture: LatencyCapture | None,
+    *,
+    telemetry_started: bool,
+    telemetry_metrics: TaskMetrics | None,
+    task_id: str,
+) -> TaskMetrics | None:
+    if telemetry_capture is None or not telemetry_started or telemetry_metrics is not None:
+        return telemetry_metrics
+    return asyncio.run(telemetry_capture.snapshot_after(task_id=task_id))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run a real local Codex session on a Codex-Long variant repo, then grade the edited tree."
@@ -352,17 +435,30 @@ def main() -> int:
     parser.add_argument("--variant", required=True)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
+    parser.add_argument("--pool-or-split", default="public_dev")
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--attempt", type=int, default=1)
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--keep-artifacts", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     repo_root = args.repo_root.resolve()
+    run_output_dir = _make_run_output_dir(repo_root, args.family, args.variant)
+    result_path = run_output_dir / "result.json"
     temp_parent = repo_root.parent / ".lumo-live-codex"
     temp_parent.mkdir(parents=True, exist_ok=True)
     temp_root = Path(tempfile.mkdtemp(prefix="live-codex-long-", dir=temp_parent))
     proxy_process: subprocess.Popen[str] | None = None
+    telemetry_capture: LatencyCapture | None = None
+    telemetry_metrics: TaskMetrics | None = None
+    telemetry_started = False
+    task_id = f"{args.family}/{args.variant}"
+    end_to_end_started = time.monotonic()
     try:
+        runtime_config = _load_localvllm_runtime_config(repo_root)
+        if runtime_config is None:
+            raise SystemExit("missing localvllm model/base_url config in .codex/config.toml")
         proxy_process, endpoint_meta = _ensure_live_endpoint(repo_root, temp_root)
         if endpoint_meta is not None and endpoint_meta.get("infra_failure"):
             payload = _infra_failure_details(
@@ -371,14 +467,27 @@ def main() -> int:
                 message=str(endpoint_meta["excluded_reason"]),
                 endpoint_meta=endpoint_meta,
             )
+            payload["run_output_dir"] = str(run_output_dir)
+            payload["result_path"] = str(result_path)
+            _write_result_json(result_path, payload)
             if args.json:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             return 0
+        telemetry_capture = LatencyCapture(
+            str(runtime_config["metrics_host"]),
+            int(runtime_config["metrics_port"]),
+            str(run_output_dir),
+            str(runtime_config["model_id"]),
+            args.pool_or_split,
+        )
+        asyncio.run(telemetry_capture.resolve_schema())
         codex_home = _prepare_codex_home(repo_root, temp_root)
         working_repo = _copy_variant_repo(repo_root, args.family, args.variant, temp_root)
-        codex_jsonl_path = temp_root / "codex-session.jsonl"
+        codex_jsonl_path = run_output_dir / "codex-session.jsonl"
+        asyncio.run(telemetry_capture.snapshot_before(task_id=task_id, seed=args.seed, attempt=args.attempt))
+        telemetry_started = True
         codex_result = _run_codex_on_repo(
             repo_root=repo_root,
             working_repo=working_repo,
@@ -386,6 +495,12 @@ def main() -> int:
             prompt=args.prompt,
             timeout_seconds=args.timeout_seconds,
             codex_jsonl_path=codex_jsonl_path,
+        )
+        telemetry_metrics = _complete_telemetry_capture(
+            telemetry_capture,
+            telemetry_started=telemetry_started,
+            telemetry_metrics=telemetry_metrics,
+            task_id=task_id,
         )
         if _codex_result_is_infra_failure(codex_result, codex_jsonl_path):
             payload = _infra_failure_details(
@@ -396,11 +511,33 @@ def main() -> int:
                 codex_result=codex_result,
                 endpoint_meta=endpoint_meta,
             )
+            payload["run_output_dir"] = str(run_output_dir)
+            payload["result_path"] = str(result_path)
+            if telemetry_metrics is not None:
+                payload["telemetry_task_id"] = task_id
+                payload["telemetry_path"] = telemetry_capture.writer_path
+                payload["telemetry_record"] = _telemetry_record_payload(
+                    telemetry_metrics,
+                    seed=args.seed,
+                    attempt=args.attempt,
+                )
+            _write_result_json(result_path, payload)
             if args.json:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             return 0
+        telemetry_records = load_telemetry(str(run_output_dir / "telemetry"))
+        telemetry_summary = aggregate_by_model(
+            telemetry_records,
+            {(task_id, str(runtime_config["model_id"]), args.seed, args.attempt)},
+        )
+        if telemetry_metrics is None:
+            raise RuntimeError("LatencyCapture did not return metrics for the live task run.")
+        if telemetry_metrics.anomalies:
+            raise RuntimeError(f"Live task telemetry produced anomalies: {telemetry_metrics.anomalies}")
+        if len(telemetry_summary) != 1 or telemetry_summary[0].n_tasks != 1:
+            raise RuntimeError("Live task telemetry aggregation did not resolve exactly one reportable run.")
         grading_result = _grade_repo_override(
             repo_root=repo_root,
             family=args.family,
@@ -410,16 +547,41 @@ def main() -> int:
         payload = {
             "family": args.family,
             "variant": args.variant,
+            "task_id": task_id,
+            "model_id": runtime_config["model_id"],
+            "pool_or_split": args.pool_or_split,
+            "seed": args.seed,
+            "attempt": args.attempt,
             "working_repo": str(working_repo),
+            "run_output_dir": str(run_output_dir),
+            "result_path": str(result_path),
             "codex_result": codex_result,
             "grading_result": grading_result,
             "pass": bool(grading_result.get("verify_result", {}).get("pass")),
             "shortcut_detected": bool(grading_result.get("verify_result", {}).get("shortcut_detected")),
             "countable": True,
             "infra_failure": False,
+            "command_success": True,
+            "task_elapsed_seconds": telemetry_metrics.wall_clock_s,
+            "end_to_end_elapsed_seconds": time.monotonic() - end_to_end_started,
+            "telemetry_task_id": task_id,
+            "telemetry_path": telemetry_capture.writer_path,
+            "telemetry_record": _telemetry_record_payload(telemetry_metrics, seed=args.seed, attempt=args.attempt),
+            "telemetry_summary": {
+                "model_id": telemetry_summary[0].model_id,
+                "pool_or_split": telemetry_summary[0].pool_or_split,
+                "n_tasks": telemetry_summary[0].n_tasks,
+                "ttft_ms_median": telemetry_summary[0].ttft_ms_median,
+                "prefill_throughput_tps_median": telemetry_summary[0].prefill_throughput_tps_median,
+                "decode_throughput_tps_median": telemetry_summary[0].decode_throughput_tps_median,
+                "cache_hit_rate_pct_median": telemetry_summary[0].cache_hit_rate_pct_median,
+                "total_wall_clock_s": telemetry_summary[0].total_wall_clock_s,
+                "total_turns": telemetry_summary[0].total_turns,
+            },
         }
         if endpoint_meta is not None:
             payload["endpoint"] = endpoint_meta
+        _write_result_json(result_path, payload)
         if args.json:
             print(json.dumps(payload, indent=2, sort_keys=True))
         else:
@@ -428,11 +590,18 @@ def main() -> int:
                 f"live Codex run complete for {args.family}/{args.variant}: "
                 f"pass={bool(verify_result.get('pass'))} "
                 f"shortcut_detected={bool(verify_result.get('shortcut_detected'))} "
-                f"codex_timed_out={codex_result['timed_out']}"
+                f"codex_timed_out={codex_result['timed_out']} "
+                f"task_elapsed_seconds={telemetry_metrics.wall_clock_s:.3f}"
             )
             print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
     finally:
+        telemetry_metrics = _complete_telemetry_capture(
+            telemetry_capture,
+            telemetry_started=telemetry_started,
+            telemetry_metrics=telemetry_metrics,
+            task_id=task_id,
+        )
         if proxy_process is not None:
             proxy_process.terminate()
             try:
