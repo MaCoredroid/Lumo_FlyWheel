@@ -1,0 +1,43 @@
+{
+  "cases": [
+    {
+      "record": {
+        "title": "Invoice Retry",
+        "owner": "finance",
+        "region": "eu-west"
+      },
+      "expected": {
+        "slug": "invoice-retry",
+        "route_bucket": "eu-west:finance",
+        "dispatch_key": "eu-west:finance:invoice-retry",
+        "route": "eu-west:finance:invoice-retry?dispatch=eu-west:finance:invoice-retry"
+      }
+    },
+    {
+      "record": {
+        "title": " Refund   Hold ",
+        "owner": "finance",
+        "region": "eu-west"
+      },
+      "expected": {
+        "slug": "refund-hold",
+        "route_bucket": "eu-west:finance",
+        "dispatch_key": "eu-west:finance:refund-hold",
+        "route": "eu-west:finance:refund-hold?dispatch=eu-west:finance:refund-hold"
+      }
+    },
+    {
+      "record": {
+        "title": "Ledger\tClose\nRequest",
+        "owner": "finance",
+        "region": "eu-west"
+      },
+      "expected": {
+        "slug": "ledger-close-request",
+        "route_bucket": "eu-west:finance",
+        "dispatch_key": "eu-west:finance:ledger-close-request",
+        "route": "eu-west:finance:ledger-close-request?dispatch=eu-west:finance:ledger-close-request"
+      }
+    }
+  ]
+}

@@ -17,9 +17,10 @@ breakage_class:
   - call_sites
   - cli_preview
 grading_invariant:
-  type: state_based
+  type: hybrid
   description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result.
+    Phase 2 command result. The richer billing-ledger variant additionally runs
+    authored hidden-test slices and verifier-bundle integrity checks.
   verifier_script: verifiers/normalizer-api-migration/verify.sh
   functional_checks:
   - id: pytest_suite
@@ -32,19 +33,27 @@ grading_invariant:
   expected_final_state:
   - legacy_import_check: No legacy_rules imports remain in the package.
   - ruleplan_usage_check: RulePlan v2 helpers are used in the assembler and router.
+  - hidden_contract_check: Variants that declare bundled hidden assets must satisfy
+      the hidden-suite slices and mutation-floor checks in Phase 3.
   - test_suite_check: The pytest suite passes from Phase 2.
 milestones:
 - id: m1_legacy_imports_removed
   description: Removed legacy_rules imports
   check_script: verifiers/normalizer-api-migration/milestones/m1_legacy_imports_removed.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.25
 - id: m2_ruleplan_v2_used
   description: Assembler and router use RulePlan v2
   check_script: verifiers/normalizer-api-migration/milestones/m2_ruleplan_v2_used.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.35
 - id: m3_tests_passing
   description: Pytest suite passes
   check_script: verifiers/normalizer-api-migration/milestones/m3_tests_passing.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.4
 shortcut_resistance:
   notes: Trusted greps reject stale legacy imports and require RulePlan v2 symbols
@@ -66,10 +75,41 @@ variants:
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
 - variant_id: billing-ledger
   repo_source: authored
+  tier: standard
+  surfaces:
+  - rules_v2
+  - assembler
+  - router
+  - cli_preview
+  - docs
   injected_breakage: The deprecated legacy builder now raises, and the repo must be
-    migrated to rules_v2.build_rule_plan().
+    migrated to rules_v2.build_rule_plan(). The richer billing-ledger uplift also
+    carries hidden follow-up coverage for separator-heavy ledger titles that must
+    normalize to a canonical dispatch key without doubled hyphens.
   env_dockerfile: variants/billing-ledger/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/normalizer-api-migration/billing-ledger/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_legacy_imports_removed:
+      - test_example_based.py::test_repo_no_longer_relies_on_removed_legacy_api
+      - test_example_based.py::test_preview_builds_ruleplan_once_and_threads_the_plan
+      m2_ruleplan_v2_used:
+      - test_example_based.py::test_build_rule_plan_exposes_canonical_dispatch_key
+      - test_example_based.py::test_compile_payload_and_router_accept_ruleplan_instances
+      - test_differential_oracle.py
+      - test_property_based.py
+      - test_regression_guard.py
+      m3_tests_passing:
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/normalizer-api-migration/billing-ledger/red_team
+    exploits_required: 6
 - variant_id: catalog-sync
   repo_source: authored
   injected_breakage: The deprecated legacy builder now raises, and the repo must be

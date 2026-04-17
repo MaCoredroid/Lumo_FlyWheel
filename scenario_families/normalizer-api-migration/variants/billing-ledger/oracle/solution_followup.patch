@@ -1,0 +1,27 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/norm_app/rules_v2.py oracle_round2/norm_app/rules_v2.py
+--- oracle_round1/norm_app/rules_v2.py
++++ oracle_round2/norm_app/rules_v2.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import re
+ from dataclasses import dataclass
+ 
+ 
+@@ -11,8 +12,15 @@
+     dispatch_key: str
+ 
+ 
++_SLUG_TOKEN_RE = re.compile(r"[a-z0-9]+")
++
++
++def normalize_title_slug(title: str) -> str:
++    return "-".join(_SLUG_TOKEN_RE.findall(title.lower()))
++
++
+ def build_rule_plan(title: str, owner: str, region: str) -> RulePlan:
+-    slug = "-".join(title.strip().lower().split())
++    slug = normalize_title_slug(title)
+     route_bucket = f"{region}:{owner}"
+     return RulePlan(
+         slug=slug,

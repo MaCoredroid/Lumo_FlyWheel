@@ -1,0 +1,75 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/assembler.py oracle_round1/norm_app/assembler.py
+--- broken/norm_app/assembler.py
++++ oracle_round1/norm_app/assembler.py
+@@ -1,8 +1,11 @@
+ from __future__ import annotations
+ 
+-from norm_app.legacy_rules import build_plan
++from norm_app.rules_v2 import RulePlan
+ 
+ 
+-def compile_payload(record: dict[str, str]) -> dict[str, str]:
+-    plan = build_plan(record["title"], record["owner"], record["region"])
+-    return {"slug": plan.slug, "route_bucket": plan.route_bucket}
++def compile_payload(plan: RulePlan) -> dict[str, str]:
++    return {
++        "slug": plan.slug,
++        "route_bucket": plan.route_bucket,
++        "dispatch_key": plan.dispatch_key,
++    }
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/cli.py oracle_round1/norm_app/cli.py
+--- broken/norm_app/cli.py
++++ oracle_round1/norm_app/cli.py
+@@ -2,12 +2,14 @@
+ 
+ from norm_app.assembler import compile_payload
+ from norm_app.router import route_for
++from norm_app.rules_v2 import build_rule_plan
+ 
+ 
+ SAMPLE = {'title': 'Invoice Retry', 'owner': 'finance', 'region': 'eu-west'}
+ 
+ 
+ def preview() -> dict[str, str]:
+-    compiled = compile_payload(SAMPLE)
+-    compiled["route"] = route_for(SAMPLE)
++    plan = build_rule_plan(SAMPLE["title"], SAMPLE["owner"], SAMPLE["region"])
++    compiled = compile_payload(plan)
++    compiled["route"] = route_for(plan)
+     return compiled
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/router.py oracle_round1/norm_app/router.py
+--- broken/norm_app/router.py
++++ oracle_round1/norm_app/router.py
+@@ -1,8 +1,7 @@
+ from __future__ import annotations
+ 
+-from norm_app.legacy_rules import build_plan
++from norm_app.rules_v2 import RulePlan
+ 
+ 
+-def route_for(record: dict[str, str]) -> str:
+-    plan = build_plan(record["title"], record["owner"], record["region"])
+-    return f"{plan.route_bucket}:{plan.slug}"
++def route_for(plan: RulePlan) -> str:
++    return f"{plan.route_bucket}:{plan.slug}?dispatch={plan.dispatch_key}"
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/norm_app/rules_v2.py oracle_round1/norm_app/rules_v2.py
+--- broken/norm_app/rules_v2.py
++++ oracle_round1/norm_app/rules_v2.py
+@@ -8,8 +8,15 @@
+     slug: str
+     route_bucket: str
+     owner: str
++    dispatch_key: str
+ 
+ 
+ def build_rule_plan(title: str, owner: str, region: str) -> RulePlan:
+-    slug = title.strip().lower().replace(" ", "-")
+-    return RulePlan(slug=slug, route_bucket=f"{region}:{owner}", owner=owner)
++    slug = "-".join(title.strip().lower().split())
++    route_bucket = f"{region}:{owner}"
++    return RulePlan(
++        slug=slug,
++        route_bucket=route_bucket,
++        owner=owner,
++        dispatch_key=f"{route_bucket}:{slug}",
++    )

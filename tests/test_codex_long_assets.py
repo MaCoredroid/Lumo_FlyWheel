@@ -82,6 +82,37 @@ def test_report_cli_family_exposes_quality_contracts_for_all_variants() -> None:
     assert release_contract["red_team"]["exploits_required"] == 6
 
 
+def test_normalizer_family_exposes_mixed_quality_contract_for_billing_ledger() -> None:
+    family_yaml = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "family.yaml"
+    )
+    payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
+
+    alert_contract = get_variant_quality_contract(payload, "alert-routing")
+    billing_contract = get_variant_quality_contract(payload, "billing-ledger")
+    catalog_contract = get_variant_quality_contract(payload, "catalog-sync")
+
+    assert payload["grading_invariant"]["type"] == "hybrid"
+    assert alert_contract["hidden_tests"] == {}
+    assert alert_contract["red_team"] == {}
+    assert billing_contract["tier"] == "standard"
+    assert billing_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert billing_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert billing_contract["hidden_tests"]["path"] == (
+        "verifier_data/normalizer-api-migration/billing-ledger/hidden_tests"
+    )
+    assert billing_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert billing_contract["red_team"]["path"] == (
+        "verifier_data/normalizer-api-migration/billing-ledger/red_team"
+    )
+    assert billing_contract["red_team"]["exploits_required"] == 6
+    assert catalog_contract["hidden_tests"] == {}
+    assert catalog_contract["red_team"] == {}
+
+
 def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
     shutil.copytree(REPO_ROOT, repo_copy)

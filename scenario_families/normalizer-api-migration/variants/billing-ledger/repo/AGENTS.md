@@ -13,6 +13,8 @@ from region, owner, and the normalized title slug. Keep the billing route
 format stable, but append the dispatch key as a query suffix so the
 preview output preserves both the route bucket and the canonical dispatch
 identity. The title normalization for this key must collapse extra
-internal whitespace before slugging.
+internal whitespace before slugging, and the billing preview contract in
+`docs/preview_contract.md` shows how separator noise from ledger exports
+should normalize.
 
 Keep the existing behavior the tests describe; do not remove the tests.

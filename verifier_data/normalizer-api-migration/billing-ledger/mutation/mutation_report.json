@@ -1,0 +1,11 @@
+{
+  "variant": "billing-ledger",
+  "mutants_generated": 12,
+  "mutants_killed": 12,
+  "mutation_score": 1.0,
+  "focus": "separator-heavy billing title normalization and dispatch-key routing parity",
+  "notes": [
+    "Round-2 hidden tests kill local-only router fixes that leave slug normalization inconsistent.",
+    "The surviving round-1 class was repeated separator and punctuation handling in build_rule_plan()."
+  ]
+}
