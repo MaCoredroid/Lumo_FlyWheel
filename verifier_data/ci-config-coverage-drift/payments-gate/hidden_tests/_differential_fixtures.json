@@ -1,0 +1,30 @@
+{
+  "cases": [
+    {
+      "labels": [
+        "queue-check",
+        "ledger-check"
+      ],
+      "expected": [
+        "ci-app-queue-check",
+        "ci-app-ledger-check"
+      ]
+    },
+    {
+      "labels": [
+        "receipt_audit"
+      ],
+      "expected": [
+        "ci-app-receipt-audit"
+      ]
+    },
+    {
+      "labels": [
+        "receipt/check"
+      ],
+      "expected": [
+        "ci-app-receipt-check"
+      ]
+    }
+  ]
+}

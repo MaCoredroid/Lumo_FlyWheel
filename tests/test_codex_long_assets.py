@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import shutil
 from pathlib import Path
@@ -130,6 +131,35 @@ def test_normalizer_family_exposes_rich_quality_contracts_for_alert_and_billing(
         "verifier_data/normalizer-api-migration/catalog-sync/red_team"
     )
     assert catalog_contract["red_team"]["exploits_required"] == 6
+
+
+def test_ci_config_family_exposes_rich_quality_contract_for_payments_gate() -> None:
+    family_yaml = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "family.yaml"
+    )
+    payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
+
+    inventory_contract = get_variant_quality_contract(payload, "inventory-gate")
+    payments_contract = get_variant_quality_contract(payload, "payments-gate")
+
+    assert payload["grading_invariant"]["type"] == "hybrid"
+    assert inventory_contract["oracle"] == {}
+    assert inventory_contract["hidden_tests"] == {}
+    assert inventory_contract["red_team"] == {}
+    assert payments_contract["tier"] == "standard"
+    assert payments_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert payments_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert payments_contract["hidden_tests"]["path"] == (
+        "verifier_data/ci-config-coverage-drift/payments-gate/hidden_tests"
+    )
+    assert payments_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert payments_contract["red_team"]["path"] == (
+        "verifier_data/ci-config-coverage-drift/payments-gate/red_team"
+    )
+    assert payments_contract["red_team"]["exploits_required"] == 6
 
 
 def test_alert_routing_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(
@@ -282,6 +312,64 @@ def test_catalog_sync_m2_verifier_accepts_oracle_without_cli_dispatch_key_litera
         check=True,
         text=True,
         capture_output=True,
+    )
+
+
+def test_payments_gate_round2_hidden_followup_accepts_oracle(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    source_repo = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "payments-gate"
+        / "repo"
+    )
+    oracle_dir = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "payments-gate"
+        / "oracle"
+    )
+    hidden_tests_dir = (
+        REPO_ROOT
+        / "verifier_data"
+        / "ci-config-coverage-drift"
+        / "payments-gate"
+        / "hidden_tests"
+    )
+    shutil.copytree(source_repo, workspace)
+
+    for patch_name in ("solution.patch", "solution_followup.patch"):
+        subprocess.run(
+            ["patch", "-p1", "-i", str(oracle_dir / patch_name)],
+            cwd=workspace,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    preview_path = workspace / "ci_app" / "workflow_preview.py"
+    preview_text = preview_path.read_text(encoding="utf-8")
+    assert "payments_gate_legacy" not in preview_text
+    assert "PACKAGE_NAME" not in preview_text
+
+    subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            "-m",
+            "pytest",
+            str(hidden_tests_dir / "test_followup.py"),
+            str(hidden_tests_dir / "test_mutation_kills.py"),
+            "-q",
+        ],
+        cwd=workspace,
+        check=True,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "PYTHONPATH": str(workspace)},
     )
 
 

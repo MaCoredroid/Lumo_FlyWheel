@@ -17,9 +17,10 @@ breakage_class:
   - workflow
   - make_ci_contract
 grading_invariant:
-  type: state_based
+  type: hybrid
   description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result.
+    Phase 2 command result. The richer payments-gate uplift additionally runs
+    authored hidden-test slices plus verifier-bundle integrity checks.
   verifier_script: verifiers/ci-config-coverage-drift/verify.sh
   functional_checks:
   - id: make_ci
@@ -29,31 +30,48 @@ grading_invariant:
   expected_final_state:
   - pyproject_check: tool.lumo_ci.package points at ci_app.
   - workflow_check: The workflow calls make ci or ci_app, not the legacy package.
+  - hidden_contract_check: Variants that declare richer verifier assets must satisfy
+      the bundled hidden-suite slices and mutation-floor checks in Phase 3.
   - test_suite_check: The local make ci contract passes from Phase 2.
 milestones:
 - id: m1_pyproject_synced
   description: pyproject points at ci_app
   check_script: verifiers/ci-config-coverage-drift/milestones/m1_pyproject_synced.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.25
 - id: m2_workflow_synced
   description: CI workflow matches the local contract
   check_script: verifiers/ci-config-coverage-drift/milestones/m2_workflow_synced.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.35
 - id: m3_ci_passing
   description: make ci passes
   check_script: verifiers/ci-config-coverage-drift/milestones/m3_ci_passing.sh
+  test_nodes: variant_scoped
+  pass_rule: all
   partial_credit: 0.4
 shortcut_resistance:
   notes: Phase 3 checks the config and workflow files directly while checksum manifests
-    stop test deletion.
+    stop test deletion. The richer payments-gate uplift also carries a hidden
+    workflow-preview bundle plus manual mutation evidence covering shortcut fixes
+    that only repair the visible CI drift.
+  generated_from: verifier_data/ci-config-coverage-drift/payments-gate/red_team
+  mutation_score_floor: 0.85
   known_exploits_tested:
   - Delete tests and keep make ci empty
   - Hardcode scripts/run_ci.py to return 0
   - Shadow pytest to claim success without fixing the config drift
+  - Fix pyproject and workflow only while leaving the workflow preview helper on
+    the legacy package token
+  - Accept payments_gate_legacy inside scripts/run_ci.py instead of fixing the
+    package drift
 difficulty_estimate:
   target_solve_rate: 25-45%
-  rationale: Requires understanding the CI contract across config, workflow, and helper-script
-    layers.
+  rationale: Requires understanding the CI contract across config, workflow, and
+    helper-script layers. The richer payments-gate uplift also carries a hidden
+    follow-up around dispatch job normalization in the workflow preview helper.
 variants:
 - variant_id: inventory-gate
   repo_source: authored
@@ -63,10 +81,40 @@ variants:
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
 - variant_id: payments-gate
   repo_source: authored
+  tier: standard
+  surfaces:
+  - pyproject
+  - workflow
+  - make_ci_contract
+  - workflow_preview
   injected_breakage: The package was renamed to ci_app, but pyproject and CI workflow
-    files still point at the old package token.
+    files still point at the old package token. The richer payments-gate uplift
+    also carries hidden follow-up coverage for workflow preview dispatch labels
+    that must normalize separator-heavy payment lanes without doubled hyphens.
   env_dockerfile: variants/payments-gate/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/ci-config-coverage-drift/payments-gate/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_pyproject_synced:
+      - test_example_based.py::test_repo_no_longer_exposes_legacy_package_name
+      - test_example_based.py::test_expected_package_name_matches_pyproject
+      m2_workflow_synced:
+      - test_example_based.py::test_workflow_command_routes_through_make_ci
+      - test_example_based.py::test_default_dispatch_job_ids_use_ci_app_prefix
+      - test_differential_oracle.py
+      - test_property_based.py
+      - test_regression_guard.py
+      m3_ci_passing:
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/ci-config-coverage-drift/payments-gate/red_team
+    exploits_required: 6
 - variant_id: search-gate
   repo_source: authored
   injected_breakage: The package was renamed to ci_app, but pyproject and CI workflow

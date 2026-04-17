@@ -1,0 +1,86 @@
+{
+  "mutation_tool": "manual_curated",
+  "target_modules": [
+    "ci_app/workflow_preview.py",
+    "scripts/run_ci.py"
+  ],
+  "mutants_generated": 10,
+  "mutants_killed": 10,
+  "mutants_survived": 0,
+  "mutants_errored": 0,
+  "mutation_score": 1.0,
+  "floor": 0.85,
+  "eligible_for_freeze": true,
+  "results": [
+    {
+      "id": "pg_mut01_pyproject_legacy_token_allowed",
+      "target_file": "scripts/run_ci.py",
+      "description": "CI runner accepts payments_gate_legacy as an alias",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_repo_no_longer_exposes_legacy_package_name"
+    },
+    {
+      "id": "pg_mut02_preview_hardcodes_legacy_package",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "expected_package_name returns payments_gate_legacy instead of reading pyproject",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_expected_package_name_matches_pyproject"
+    },
+    {
+      "id": "pg_mut03_workflow_command_stays_direct_script",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "workflow_command always returns python scripts/run_ci.py --package ...",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_workflow_command_routes_through_make_ci"
+    },
+    {
+      "id": "pg_mut04_package_slug_keeps_underscores",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "package slug leaves ci_app as ci_app instead of ci-app",
+      "outcome": "killed",
+      "expected_killer": "test_example_based.py::test_default_dispatch_job_ids_use_ci_app_prefix"
+    },
+    {
+      "id": "pg_mut05_simple_label_keeps_underscore",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "receipt_audit stays receipt_audit in dispatch ids",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_dispatch_job_ids_normalize_simple_payment_labels"
+    },
+    {
+      "id": "pg_mut06_simple_label_keeps_slash",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "receipt/check stays receipt/check in dispatch ids",
+      "outcome": "killed",
+      "expected_killer": "differential fixtures"
+    },
+    {
+      "id": "pg_mut07_repeated_underscores_become_double_hyphens",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "receipt__audit renders receipt--audit",
+      "outcome": "killed",
+      "expected_killer": "test_followup.py::test_dispatch_job_ids_collapse_separator_noise"
+    },
+    {
+      "id": "pg_mut08_boundary_punctuation_survives",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "boundary punctuation is kept in dispatch ids",
+      "outcome": "killed",
+      "expected_killer": "test_mutation_kills.py::test_boundary_punctuation_is_removed_from_payment_lane_labels"
+    },
+    {
+      "id": "pg_mut09_summary_reorders_jobs",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "render_summary sorts labels alphabetically instead of preserving input order",
+      "outcome": "killed",
+      "expected_killer": "test_property_based.py::test_render_summary_preserves_requested_order"
+    },
+    {
+      "id": "pg_mut10_manual_override_ignored",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "workflow_command ignores manual package overrides",
+      "outcome": "killed",
+      "expected_killer": "test_regression_guard.py::test_workflow_command_keeps_manual_override_path"
+    }
+  ]
+}
