@@ -26,15 +26,11 @@ key carries the canonical slug that downstream reconciliation uses.
 The normalized title slug:
 
 - lowercases all text
-- collapses repeated whitespace
-- treats separator noise from ledger exports such as `/`, `_`, and repeated
-  punctuation as word breaks
-- strips punctuation-only fragments
+- collapses repeated whitespace into a canonical hyphenated slug
+- stays stable even when upstream billing exports contain formatting noise
 - never emits doubled or trailing hyphens
 
 Examples:
 
 - `Invoice Retry` -> `invoice-retry`
-- `Refund / Retry _ Queue` -> `refund-retry-queue`
-- `Chargeback---Retry!!!` -> `chargeback-retry`
-- `Invoice 2024 / Retry 7` -> `invoice-2024-retry-7`
+- ` Invoice   Retry ` -> `invoice-retry`

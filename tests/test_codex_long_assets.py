@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import shutil
 from pathlib import Path
 
@@ -111,6 +112,89 @@ def test_normalizer_family_exposes_mixed_quality_contract_for_billing_ledger() -
     assert billing_contract["red_team"]["exploits_required"] == 6
     assert catalog_contract["hidden_tests"] == {}
     assert catalog_contract["red_team"] == {}
+
+
+def test_billing_ledger_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "repo"
+    source_repo = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "billing-ledger"
+        / "repo"
+    )
+    oracle_dir = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "billing-ledger"
+        / "oracle"
+    )
+    shutil.copytree(source_repo, workspace)
+
+    for patch_name in ("solution.patch", "solution_followup.patch"):
+        subprocess.run(
+            ["patch", "-p1", "-i", str(oracle_dir / patch_name)],
+            cwd=workspace,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    cli_path = workspace / "norm_app" / "cli.py"
+    assert "dispatch_key" not in cli_path.read_text(encoding="utf-8")
+
+    expectations_path = REPO_ROOT / "verifier_data" / "normalizer-api-migration" / "variant_expectations.json"
+    milestone_path = REPO_ROOT / "verifiers" / "normalizer-api-migration" / "milestones" / "m2_ruleplan_v2_used.sh"
+    subprocess.run(
+        [
+            "bash",
+            "-lc",
+            (
+                f"source {milestone_path} && "
+                f"check_m2_ruleplan_v2_used {workspace} {expectations_path} billing-ledger"
+            ),
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+
+def test_billing_ledger_visible_task_files_do_not_leak_hidden_separator_examples() -> None:
+    agents_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "billing-ledger"
+        / "repo"
+        / "AGENTS.md"
+    )
+    contract_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "normalizer-api-migration"
+        / "variants"
+        / "billing-ledger"
+        / "repo"
+        / "docs"
+        / "preview_contract.md"
+    )
+
+    agents_text = agents_path.read_text(encoding="utf-8")
+    contract_text = contract_path.read_text(encoding="utf-8")
+
+    assert "separator noise" not in agents_text
+    assert "Refund / Retry _ Queue" not in contract_text
+    assert "Chargeback---Retry!!!" not in contract_text
+    assert "Invoice 2024 / Retry 7" not in contract_text
+    assert "dispatch_key" in agents_text
+    assert "?dispatch=" in contract_text
 
 
 def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:
