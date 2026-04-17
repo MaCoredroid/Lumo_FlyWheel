@@ -1,7 +1,7 @@
 diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' broken/tests/conftest.py exploit/tests/conftest.py
 --- broken/tests/conftest.py
 +++ exploit/tests/conftest.py
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,8 @@
 +from __future__ import annotations
 +
 +import pytest

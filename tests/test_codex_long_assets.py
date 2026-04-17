@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -328,6 +329,48 @@ def test_warehouse_queue_round2_hidden_followup_accepts_oracle(tmp_path: Path) -
         capture_output=True,
         env={**os.environ, "PYTHONPATH": str(workspace)},
     )
+
+
+@pytest.mark.parametrize("variant_id", ["project-board", "warehouse-queue"])
+def test_owner_field_rich_red_team_bundle_rejects_all_exploits(variant_id: str) -> None:
+    red_team_dir = (
+        REPO_ROOT
+        / "verifier_data"
+        / "owner-field-cross-layer"
+        / variant_id
+        / "red_team"
+    )
+    source_repo = (
+        REPO_ROOT
+        / "scenario_families"
+        / "owner-field-cross-layer"
+        / "variants"
+        / variant_id
+        / "repo"
+    )
+    hidden_tests_dir = (
+        REPO_ROOT
+        / "verifier_data"
+        / "owner-field-cross-layer"
+        / variant_id
+        / "hidden_tests"
+    )
+
+    result = subprocess.run(
+        [str(red_team_dir / "run_all.sh")],
+        check=False,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "BROKEN": str(source_repo),
+            "HIDDEN": str(hidden_tests_dir),
+            "PYTHON_BIN": sys.executable,
+        },
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "FAILED TO REJECT:   0" in result.stdout
 
 
 def test_alert_routing_m2_verifier_accepts_oracle_without_cli_dispatch_key_literal(
