@@ -1,0 +1,12 @@
+--- a/scripts/run_ci.py
++++ b/scripts/run_ci.py
+@@ -13,8 +13,8 @@
+ 
+     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+     configured_package = config["tool"]["lumo_ci"]["package"]
+     package_name = args.package or configured_package
+-    if package_name != "ci_app":
++    if package_name not in {"ci_app", "inventory_gate_legacy"}:
+         print(f"ci package drift: {package_name}", file=sys.stderr)
+         return 2
+     runner = (

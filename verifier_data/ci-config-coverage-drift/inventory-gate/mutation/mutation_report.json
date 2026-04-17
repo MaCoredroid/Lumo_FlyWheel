@@ -1,0 +1,100 @@
+{
+  "mutation_tool": "manual_curated",
+  "target_modules": [
+    "ci_app/workflow_preview.py",
+    "scripts/run_ci.py"
+  ],
+  "mutants_generated": 12,
+  "mutants_killed": 12,
+  "mutants_survived": 0,
+  "mutants_errored": 0,
+  "mutation_score": 1.0,
+  "floor": 0.85,
+  "eligible_for_freeze": true,
+  "results": [
+    {
+      "id": "ig_mut01_pyproject_legacy_token_allowed",
+      "target_file": "scripts/run_ci.py",
+      "description": "CI runner accepts inventory_gate_legacy as an alias",
+      "outcome": "killed",
+      "expected_killer": "test_repo_no_longer_exposes_legacy_package_name"
+    },
+    {
+      "id": "ig_mut02_preview_hardcodes_legacy_package",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "expected_package_name returns inventory_gate_legacy instead of reading pyproject",
+      "outcome": "killed",
+      "expected_killer": "test_expected_package_name_matches_pyproject"
+    },
+    {
+      "id": "ig_mut03_workflow_command_stays_direct_script",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "workflow_command always returns python scripts/run_ci.py --package ...",
+      "outcome": "killed",
+      "expected_killer": "test_workflow_command_routes_through_make_ci"
+    },
+    {
+      "id": "ig_mut04_package_slug_keeps_underscores",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "package slug leaves ci_app as ci_app instead of ci-app",
+      "outcome": "killed",
+      "expected_killer": "test_default_preview_jobs_use_ci_app_prefix_and_inventory_report_paths"
+    },
+    {
+      "id": "ig_mut05_simple_label_keeps_underscore",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "stock_recount stays stock_recount in preview outputs",
+      "outcome": "killed",
+      "expected_killer": "test_preview_jobs_normalize_common_inventory_separator_forms"
+    },
+    {
+      "id": "ig_mut06_simple_label_keeps_slash",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "render/check stays render/check in preview outputs",
+      "outcome": "killed",
+      "expected_killer": "differential fixtures"
+    },
+    {
+      "id": "ig_mut07_report_path_escapes_reports_dir",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "report_path uses inventory/<slug>.json instead of reports/<slug>.json",
+      "outcome": "killed",
+      "expected_killer": "test_preview_jobs_keep_report_paths_under_reports_dir"
+    },
+    {
+      "id": "ig_mut08_repeated_punctuation_becomes_double_hyphens",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "stock...recount renders stock---recount",
+      "outcome": "killed",
+      "expected_killer": "test_preview_jobs_strip_extra_punctuation_from_inventory_labels"
+    },
+    {
+      "id": "ig_mut09_boundary_punctuation_survives",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "boundary punctuation is kept in artifact names and report paths",
+      "outcome": "killed",
+      "expected_killer": "test_artifact_names_trim_boundary_punctuation"
+    },
+    {
+      "id": "ig_mut10_summary_reorders_jobs",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "render_summary sorts labels alphabetically instead of preserving input order",
+      "outcome": "killed",
+      "expected_killer": "test_render_summary_preserves_requested_order"
+    },
+    {
+      "id": "ig_mut11_manual_override_ignored",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "workflow_command ignores manual package overrides",
+      "outcome": "killed",
+      "expected_killer": "test_workflow_command_keeps_manual_override_path"
+    },
+    {
+      "id": "ig_mut12_summary_leaks_parent_dirs",
+      "target_file": "ci_app/workflow_preview.py",
+      "description": "render_summary emits ../ or ..json fragments for punctuation-heavy labels",
+      "outcome": "killed",
+      "expected_killer": "test_render_summary_never_leaks_double_hyphens_or_parent_dirs"
+    }
+  ]
+}

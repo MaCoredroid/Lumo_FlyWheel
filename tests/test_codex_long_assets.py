@@ -133,7 +133,7 @@ def test_normalizer_family_exposes_rich_quality_contracts_for_alert_and_billing(
     assert catalog_contract["red_team"]["exploits_required"] == 6
 
 
-def test_ci_config_family_exposes_rich_quality_contracts_for_search_and_payments() -> None:
+def test_ci_config_family_exposes_rich_quality_contracts_for_inventory_search_and_payments() -> None:
     family_yaml = (
         REPO_ROOT
         / "scenario_families"
@@ -147,9 +147,17 @@ def test_ci_config_family_exposes_rich_quality_contracts_for_search_and_payments
     search_contract = get_variant_quality_contract(payload, "search-gate")
 
     assert payload["grading_invariant"]["type"] == "hybrid"
-    assert inventory_contract["oracle"] == {}
-    assert inventory_contract["hidden_tests"] == {}
-    assert inventory_contract["red_team"] == {}
+    assert inventory_contract["tier"] == "standard"
+    assert inventory_contract["oracle"]["path"] == "oracle/solution.patch"
+    assert inventory_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
+    assert inventory_contract["hidden_tests"]["path"] == (
+        "verifier_data/ci-config-coverage-drift/inventory-gate/hidden_tests"
+    )
+    assert inventory_contract["hidden_tests"]["entrypoint"] == "test_example_based.py"
+    assert inventory_contract["red_team"]["path"] == (
+        "verifier_data/ci-config-coverage-drift/inventory-gate/red_team"
+    )
+    assert inventory_contract["red_team"]["exploits_required"] == 6
     assert payments_contract["tier"] == "standard"
     assert payments_contract["oracle"]["path"] == "oracle/solution.patch"
     assert payments_contract["oracle"]["followup_path"] == "oracle/solution_followup.patch"
@@ -385,6 +393,64 @@ def test_payments_gate_round2_hidden_followup_accepts_oracle(tmp_path: Path) -> 
     )
 
 
+def test_inventory_gate_round2_hidden_followup_accepts_oracle(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    source_repo = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "inventory-gate"
+        / "repo"
+    )
+    oracle_dir = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "inventory-gate"
+        / "oracle"
+    )
+    hidden_tests_dir = (
+        REPO_ROOT
+        / "verifier_data"
+        / "ci-config-coverage-drift"
+        / "inventory-gate"
+        / "hidden_tests"
+    )
+    shutil.copytree(source_repo, workspace)
+
+    for patch_name in ("solution.patch", "solution_followup.patch"):
+        subprocess.run(
+            ["patch", "-p1", "-i", str(oracle_dir / patch_name)],
+            cwd=workspace,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    preview_path = workspace / "ci_app" / "workflow_preview.py"
+    preview_text = preview_path.read_text(encoding="utf-8")
+    assert "inventory_gate_legacy" not in preview_text
+    assert "PACKAGE_NAME" not in preview_text
+
+    subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            "-m",
+            "pytest",
+            str(hidden_tests_dir / "test_followup.py"),
+            str(hidden_tests_dir / "test_mutation_kills.py"),
+            "-q",
+        ],
+        cwd=workspace,
+        check=True,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "PYTHONPATH": str(workspace)},
+    )
+
+
 def test_search_gate_round2_hidden_followup_accepts_oracle(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     source_repo = (
@@ -567,6 +633,37 @@ def test_payments_gate_visible_task_files_surface_dispatch_id_stability_without_
     assert "ledger///hold" not in contract_text
     assert "workflow preview dispatch ids" in agents_text
     assert "preview dispatch ids should stay stable" in contract_text
+    assert "extra punctuation or repeated separators" in contract_text
+
+
+def test_inventory_gate_visible_task_files_surface_artifact_path_stability_without_hidden_examples() -> None:
+    agents_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "inventory-gate"
+        / "repo"
+        / "AGENTS.md"
+    )
+    contract_path = (
+        REPO_ROOT
+        / "scenario_families"
+        / "ci-config-coverage-drift"
+        / "variants"
+        / "inventory-gate"
+        / "repo"
+        / "docs"
+        / "ci_contract.md"
+    )
+
+    agents_text = agents_path.read_text(encoding="utf-8").lower()
+    contract_text = contract_path.read_text(encoding="utf-8").lower()
+
+    assert "stock...recount" not in agents_text
+    assert "render[beta]/fr" not in contract_text
+    assert "preview report paths should remain stable" in agents_text
+    assert "preview artifacts should stay paired" in contract_text
     assert "extra punctuation or repeated separators" in contract_text
 
 

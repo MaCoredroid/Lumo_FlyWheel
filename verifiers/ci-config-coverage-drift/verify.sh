@@ -118,6 +118,9 @@ check_phase2_make_ci() {
 quality_variant_data_dir() {
   local variant_id="$1"
   case "$variant_id" in
+    inventory-gate)
+      printf '/verifier_data/%s' "$variant_id"
+      ;;
     payments-gate)
       printf '/verifier_data/%s' "$variant_id"
       ;;
@@ -155,6 +158,28 @@ check_quality_asset_pack() {
   local required_red_team=()
   local mutation_min_generated=10
   case "$variant_id" in
+    inventory-gate)
+      required_hidden_tests=(
+        "conftest.py"
+        "test_example_based.py"
+        "test_differential_oracle.py"
+        "test_property_based.py"
+        "test_regression_guard.py"
+        "test_followup.py"
+        "test_mutation_kills.py"
+        "_differential_fixtures.json"
+      )
+      required_red_team=(
+        "01_delete_visible_tests.sh"
+        "02_shadow_pytest.sh"
+        "03_round1_only_visible_fix.patch"
+        "04_conftest_xfail_all.patch"
+        "05_preview_artifacts_only_hotfix.patch"
+        "06_ci_runner_alias.patch"
+        "run_all.sh"
+      )
+      mutation_min_generated=12
+      ;;
     payments-gate)
       required_hidden_tests=(
         "conftest.py"
@@ -213,6 +238,36 @@ check_quality_asset_pack() {
   jq -e --argjson min_generated "$mutation_min_generated" \
     '.mutation_score >= 0.85 and .mutants_generated >= $min_generated and .mutants_killed == .mutants_generated' \
     "$quality_dir/mutation/mutation_report.json" >/dev/null
+}
+
+check_inventory_m1_pyproject_synced() {
+  check_m1_pyproject_synced "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      inventory-gate \
+      inventory_gate_m1_pyproject_synced \
+      "test_example_based.py::test_repo_no_longer_exposes_legacy_package_name" \
+      "test_example_based.py::test_expected_package_name_matches_pyproject"
+}
+
+check_inventory_m2_workflow_synced() {
+  check_m2_workflow_synced "$AGENT_WS" "$CONFIG_PATH" "$VARIANT_ID" && \
+    run_quality_hidden_subset \
+      inventory-gate \
+      inventory_gate_m2_workflow_synced \
+      "test_example_based.py::test_workflow_command_routes_through_make_ci" \
+      "test_example_based.py::test_default_preview_jobs_use_ci_app_prefix_and_inventory_report_paths" \
+      "test_differential_oracle.py" \
+      "test_property_based.py" \
+      "test_regression_guard.py"
+}
+
+check_inventory_m3_ci_passing() {
+  check_m3_ci_passing "$FUNCTIONAL_DIR" && \
+    run_quality_hidden_subset \
+      inventory-gate \
+      inventory_gate_m3_ci_passing \
+      "test_followup.py" \
+      "test_mutation_kills.py"
 }
 
 check_payments_m1_pyproject_synced() {
@@ -329,6 +384,25 @@ if quality_variant_data_dir "$VARIANT_ID" >/dev/null 2>&1; then
   fi
 
   case "$VARIANT_ID" in
+    inventory-gate)
+      if check_inventory_m1_pyproject_synced; then
+        write_result '.milestones.m1_pyproject_synced = true'
+      else
+        add_error "inventory-gate hidden package-sync slice did not pass"
+      fi
+
+      if check_inventory_m2_workflow_synced; then
+        write_result '.milestones.m2_workflow_synced = true'
+      else
+        add_error "inventory-gate hidden workflow-preview artifact slice did not pass"
+      fi
+
+      if check_inventory_m3_ci_passing; then
+        write_result '.milestones.m3_ci_passing = true'
+      else
+        add_error "inventory-gate punctuation-heavy preview artifact slice did not pass"
+      fi
+      ;;
     payments-gate)
       if check_payments_m1_pyproject_synced; then
         write_result '.milestones.m1_pyproject_synced = true'

@@ -19,9 +19,9 @@ breakage_class:
 grading_invariant:
   type: hybrid
   description: Final state is graded by trusted Phase 3 file inspections plus the
-    Phase 2 command result. The richer payments-gate and search-gate uplifts
-    additionally run authored hidden-test slices plus verifier-bundle integrity
-    checks.
+    Phase 2 command result. The richer inventory-gate, payments-gate, and
+    search-gate uplifts additionally run authored hidden-test slices plus
+    verifier-bundle integrity checks.
   verifier_script: verifiers/ci-config-coverage-drift/verify.sh
   functional_checks:
   - id: make_ci
@@ -62,6 +62,10 @@ shortcut_resistance:
   - Delete tests and keep make ci empty
   - Hardcode scripts/run_ci.py to return 0
   - Shadow pytest to claim success without fixing the config drift
+  - Fix pyproject and workflow only while leaving inventory preview artifacts on
+    the legacy package token
+  - Normalize inventory preview defaults only while punctuation-heavy report
+    labels still leak repeated separators into artifact names or report paths
   - Fix pyproject and workflow only while leaving the workflow preview helper on
     the legacy package token
   - Accept payments_gate_legacy inside scripts/run_ci.py instead of fixing the
@@ -71,15 +75,48 @@ shortcut_resistance:
 difficulty_estimate:
   target_solve_rate: 25-45%
   rationale: Requires understanding the CI contract across config, workflow, and
-    helper-script layers. The richer payments-gate and search-gate uplifts also
-    carry hidden follow-ups around workflow preview normalization.
+    helper-script layers. The richer inventory-gate, payments-gate, and
+    search-gate uplifts also carry hidden follow-ups around workflow preview
+    normalization.
 variants:
 - variant_id: inventory-gate
   repo_source: authored
+  tier: standard
+  surfaces:
+  - pyproject
+  - workflow
+  - make_ci_contract
+  - workflow_preview
+  - docs
   injected_breakage: The package was renamed to ci_app, but pyproject and CI workflow
-    files still point at the old package token.
+    files still point at the old package token. The richer inventory-gate uplift
+    also carries hidden follow-up coverage for workflow preview artifacts that
+    must normalize separator-heavy inventory labels into stable report ids and
+    `reports/*.json` paths.
   env_dockerfile: variants/inventory-gate/Dockerfile
   base_image_digest: sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3
+  oracle:
+    path: oracle/solution.patch
+    followup_path: oracle/solution_followup.patch
+  hidden_tests:
+    path: verifier_data/ci-config-coverage-drift/inventory-gate/hidden_tests
+    entrypoint: test_example_based.py
+    milestone_map:
+      m1_pyproject_synced:
+      - test_example_based.py::test_repo_no_longer_exposes_legacy_package_name
+      - test_example_based.py::test_expected_package_name_matches_pyproject
+      m2_workflow_synced:
+      - test_example_based.py::test_workflow_command_routes_through_make_ci
+      - test_example_based.py::test_default_preview_jobs_use_ci_app_prefix_and_inventory_report_paths
+      - test_differential_oracle.py
+      - test_property_based.py
+      - test_regression_guard.py
+      m3_ci_passing:
+      - test_followup.py
+      - test_mutation_kills.py
+  red_team:
+    path: verifier_data/ci-config-coverage-drift/inventory-gate/red_team
+    exploits_required: 6
 - variant_id: payments-gate
   repo_source: authored
   tier: standard

@@ -1,0 +1,26 @@
+diff -urN '--exclude=__pycache__' '--exclude=.pytest_cache' oracle_round1/ci_app/workflow_preview.py oracle_round2/ci_app/workflow_preview.py
+--- oracle_round1/ci_app/workflow_preview.py	2026-04-17 09:43:58.209791362 +0000
++++ oracle_round2/ci_app/workflow_preview.py	2026-04-17 09:43:58.226305142 +0000
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import re
+ import tomllib
+ from collections.abc import Iterable
+ from pathlib import Path
+@@ -20,14 +21,7 @@
+ 
+ 
+ def _preview_slug(value: str) -> str:
+-    return (
+-        value.strip()
+-        .lower()
+-        .replace("_", "-")
+-        .replace("/", "-")
+-        .replace(":", "-")
+-        .replace(" ", "-")
+-    )
++    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", value.strip().lower())).strip("-")
+ 
+ 
+ def preview_jobs(labels: Iterable[str] | None = None) -> list[dict[str, str]]:
