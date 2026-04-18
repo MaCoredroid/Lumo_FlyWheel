@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"019d9de9-3409-7ee0-a092-83693032e694"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":""}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'ls -la'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'ls -la'","aggregated_output":"total 44\ndrwxr-xr-x 7 mark mark 4096 Apr 17 08:41 .\ndrwx------ 4 mark mark 4096 Apr 18 00:06 ..\ndrwxr-xr-x 3 mark mark 4096 Apr 16 00:03 .github\n-rw-r--r-- 1 mark mark   12 Apr 16 00:03 .scenario_variant\n-rw-r--r-- 1 mark mark  668 Apr 17 08:41 AGENTS.md\n-rw-r--r-- 1 mark mark   63 Apr 16 00:03 Makefile\ndrwxr-xr-x 2 mark mark 4096 Apr 17 08:41 ci_app\ndrwxr-xr-x 2 mark mark 4096 Apr 17 08:41 docs\n-rw-r--r-- 1 mark mark  209 Apr 16 00:03 pyproject.toml\ndrwxr-xr-x 2 mark mark 4096 Apr 16 00:03 scripts\ndrwxr-xr-x 2 mark mark 4096 Apr 17 08:41 tests\n","exit_code":0,"status":"completed"}}
+{"type":"turn.completed","usage":{"input_tokens":21803,"cached_input_tokens":18032,"output_tokens":79}}

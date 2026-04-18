@@ -1,0 +1,43 @@
+{
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n2026-04-18T00:06:08.780075Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string \"[{\\\"step\\\": \\\"Fix pyproject.toml package name\\\", \\\"status\\\": \\\"completed\\\"}, {\\\"step\\\": \\\"Fix ci.yml workflow package\\\", \\\"status\\\": \\\"completed\\\"}, {\\\"step\\\": \\\"Fix workflow_preview.py package name\\\", \\\"status\\\": \\\"completed\\\"}, {\\\"step\\\": \\\"Fix separator collapsing in dispatch_job_ids\\\", \\\"status\\\": \\\"completed\\\"}, {\\\"step\\\": \\\"Run make ci to verify\\\", \\\"status\\\": \\\"completed\\\"}]\", expected a sequence at line 1 column 395\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/payments-gate/20260418T000102Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": false,
+  "countable": false,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "excluded_reason": "Codex transport to localvllm failed before completion",
+  "family": "ci-config-coverage-drift",
+  "infra_failure": true,
+  "pass": false,
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/payments-gate/20260418T000102Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/payments-gate/20260418T000102Z",
+  "shortcut_detected": false,
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/payments-gate/20260418T000102Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 91.24291177898797,
+    "cache_hits": 227360.0,
+    "cache_queries": 249181.0,
+    "decode_sum_s": 286.7412577820942,
+    "decode_throughput_tps": 7.606160400040606,
+    "gen_tokens": 2181.0,
+    "kv_computed_tokens": 21821.0,
+    "prefill_sum_s": 35.90083247702569,
+    "prefill_throughput_tps": 607.8132036064649,
+    "prompt_tokens": 249181.0,
+    "seed": 0,
+    "ttft_count": 19,
+    "ttft_ms": 1958.2957719501696,
+    "wall_clock_s": 326.2008404005319
+  },
+  "telemetry_task_id": "ci-config-coverage-drift/payments-gate",
+  "variant": "payments-gate",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-7u7ipdoo/repo"
+}

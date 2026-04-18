@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/search-gate/20260418T000639Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 21.648635008372366,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "ci-config-coverage-drift",
+  "grading_result": {
+    "expect": "either",
+    "family": "ci-config-coverage-drift",
+    "functional_dir": "/tmp/codex-long-smoke-0w8zfyaz/functional",
+    "image_ref": "codex-long-smoke-ci-config-coverage-drift-search-gate",
+    "results_dir": "/tmp/codex-long-smoke-0w8zfyaz/results",
+    "smoke_returncode": 0,
+    "variant": "search-gate",
+    "verify_result": {
+      "errors": [
+        "search-gate hidden package-sync slice did not pass",
+        "search-gate hidden workflow-preview selector slice did not pass",
+        "search-gate punctuation-heavy selector follow-up slice did not pass",
+        "Phase 2 make ci did not pass"
+      ],
+      "milestones": {},
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 0
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/search-gate/20260418T000639Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/search-gate/20260418T000639Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 13.015860019251704,
+  "task_id": "ci-config-coverage-drift/search-gate",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/search-gate/20260418T000639Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 82.70421501628216,
+    "cache_hits": 18032.0,
+    "cache_queries": 21803.0,
+    "decode_sum_s": 10.16372505389154,
+    "decode_throughput_tps": 7.772740760018107,
+    "gen_tokens": 79.0,
+    "kv_computed_tokens": 3771.0,
+    "prefill_sum_s": 2.2649286901578307,
+    "prefill_throughput_tps": 1664.953080592228,
+    "prompt_tokens": 21803.0,
+    "seed": 0,
+    "ttft_count": 2,
+    "ttft_ms": 1168.8958406448364,
+    "wall_clock_s": 13.015860019251704
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 82.70421501628216,
+    "decode_throughput_tps_median": 7.772740760018107,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1664.953080592228,
+    "total_turns": 2,
+    "total_wall_clock_s": 13.015860019251704,
+    "ttft_ms_median": 1168.8958406448364
+  },
+  "telemetry_task_id": "ci-config-coverage-drift/search-gate",
+  "variant": "search-gate",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-ukj2gsn0/repo"
+}

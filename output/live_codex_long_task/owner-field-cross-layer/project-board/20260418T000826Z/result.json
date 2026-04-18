@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/project-board/20260418T000826Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 117.96578289661556,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "owner-field-cross-layer",
+  "grading_result": {
+    "expect": "either",
+    "family": "owner-field-cross-layer",
+    "functional_dir": "/tmp/codex-long-smoke-yl01083y/functional",
+    "image_ref": "codex-long-smoke-owner-field-cross-layer-project-board",
+    "results_dir": "/tmp/codex-long-smoke-yl01083y/results",
+    "smoke_returncode": 0,
+    "variant": "project-board",
+    "verify_result": {
+      "errors": [
+        "project-board hidden owner persistence slice did not pass",
+        "project-board hidden CLI routing slice did not pass",
+        "project-board punctuation-heavy routing follow-up slice did not pass",
+        "Phase 2 pytest suite did not pass"
+      ],
+      "milestones": {},
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 0
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/project-board/20260418T000826Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/project-board/20260418T000826Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 110.03583014197648,
+  "task_id": "owner-field-cross-layer/project-board",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/project-board/20260418T000826Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 92.6804659322787,
+    "cache_hits": 123088.0,
+    "cache_queries": 132809.0,
+    "decode_sum_s": 102.34250350203365,
+    "decode_throughput_tps": 7.6703224284952265,
+    "gen_tokens": 785.0,
+    "kv_computed_tokens": 9721.0,
+    "prefill_sum_s": 6.019223262555897,
+    "prefill_throughput_tps": 1614.9924294172542,
+    "prompt_tokens": 132809.0,
+    "seed": 0,
+    "ttft_count": 11,
+    "ttft_ms": 611.2307851964777,
+    "wall_clock_s": 110.03583014197648
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 92.6804659322787,
+    "decode_throughput_tps_median": 7.6703224284952265,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1614.9924294172542,
+    "total_turns": 11,
+    "total_wall_clock_s": 110.03583014197648,
+    "ttft_ms_median": 611.2307851964777
+  },
+  "telemetry_task_id": "owner-field-cross-layer/project-board",
+  "variant": "project-board",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-n3rszu4a/repo"
+}

@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/release-gate/20260417T234036Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 219.68921296764165,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "owner-field-cross-layer",
+  "grading_result": {
+    "expect": "either",
+    "family": "owner-field-cross-layer",
+    "functional_dir": "/tmp/codex-long-smoke-6t8fyvd4/functional",
+    "image_ref": "codex-long-smoke-owner-field-cross-layer-release-gate",
+    "results_dir": "/tmp/codex-long-smoke-6t8fyvd4/results",
+    "smoke_returncode": 0,
+    "variant": "release-gate",
+    "verify_result": {
+      "errors": [
+        "release-gate hidden owner persistence slice did not pass",
+        "release-gate separator-heavy release routing follow-up slice did not pass"
+      ],
+      "milestones": {
+        "m2_cli_owner_wired": true
+      },
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 0
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/release-gate/20260417T234036Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/release-gate/20260417T234036Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 211.63371683750302,
+  "task_id": "owner-field-cross-layer/release-gate",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/release-gate/20260417T234036Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 92.96555750145943,
+    "cache_hits": 152880.0,
+    "cache_queries": 164448.0,
+    "decode_sum_s": 202.20636749919504,
+    "decode_throughput_tps": 7.615981727213069,
+    "gen_tokens": 1540.0,
+    "kv_computed_tokens": 11568.0,
+    "prefill_sum_s": 7.316277506761253,
+    "prefill_throughput_tps": 1581.1319334606385,
+    "prompt_tokens": 164448.0,
+    "seed": 0,
+    "ttft_count": 13,
+    "ttft_ms": 627.1026684687688,
+    "wall_clock_s": 211.63371683750302
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 92.96555750145943,
+    "decode_throughput_tps_median": 7.615981727213069,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1581.1319334606385,
+    "total_turns": 13,
+    "total_wall_clock_s": 211.63371683750302,
+    "ttft_ms_median": 627.1026684687688
+  },
+  "telemetry_task_id": "owner-field-cross-layer/release-gate",
+  "variant": "release-gate",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-fy4vm5wj/repo"
+}

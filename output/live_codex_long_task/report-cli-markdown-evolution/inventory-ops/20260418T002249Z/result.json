@@ -1,0 +1,18 @@
+{
+  "command_success": false,
+  "countable": false,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "excluded_reason": "localvllm endpoint http://127.0.0.1:8001/v1 is unavailable and upstream port 8000 is not healthy",
+    "infra_failure": true,
+    "proxy_autostarted": false
+  },
+  "excluded_reason": "localvllm endpoint http://127.0.0.1:8001/v1 is unavailable and upstream port 8000 is not healthy",
+  "family": "report-cli-markdown-evolution",
+  "infra_failure": true,
+  "pass": false,
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/inventory-ops/20260418T002249Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/inventory-ops/20260418T002249Z",
+  "shortcut_detected": false,
+  "variant": "inventory-ops"
+}

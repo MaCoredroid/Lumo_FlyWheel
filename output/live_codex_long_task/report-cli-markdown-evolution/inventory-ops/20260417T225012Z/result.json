@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/inventory-ops/20260417T225012Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 83.14308169204742,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "report-cli-markdown-evolution",
+  "grading_result": {
+    "expect": "either",
+    "family": "report-cli-markdown-evolution",
+    "functional_dir": "/tmp/codex-long-smoke-thm9l8nv/functional",
+    "image_ref": "codex-long-smoke-report-cli-markdown-evolution-inventory-ops",
+    "results_dir": "/tmp/codex-long-smoke-thm9l8nv/results",
+    "smoke_returncode": 0,
+    "variant": "inventory-ops",
+    "verify_result": {
+      "errors": [
+        "inventory-ops hidden CLI slice did not pass",
+        "inventory-ops hidden renderer slice did not pass",
+        "inventory-ops follow-up/docs slice did not pass",
+        "Phase 2 pytest suite did not pass"
+      ],
+      "milestones": {},
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 1
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/inventory-ops/20260417T225012Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/inventory-ops/20260417T225012Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 69.23449842911214,
+  "task_id": "report-cli-markdown-evolution/inventory-ops",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/inventory-ops/20260417T225012Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 68.67153284671534,
+    "cache_hits": 35280.0,
+    "cache_queries": 51375.0,
+    "decode_sum_s": 36.6522447951138,
+    "decode_throughput_tps": 7.6393683815330045,
+    "gen_tokens": 280.0,
+    "kv_computed_tokens": 16095.0,
+    "prefill_sum_s": 31.124008265323937,
+    "prefill_throughput_tps": 517.124910866055,
+    "prompt_tokens": 51375.0,
+    "seed": 0,
+    "ttft_count": 4,
+    "ttft_ms": 7887.848317623138,
+    "wall_clock_s": 69.23449842911214
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 68.67153284671534,
+    "decode_throughput_tps_median": 7.6393683815330045,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 517.124910866055,
+    "total_turns": 4,
+    "total_wall_clock_s": 69.23449842911214,
+    "ttft_ms_median": 7887.848317623138
+  },
+  "telemetry_task_id": "report-cli-markdown-evolution/inventory-ops",
+  "variant": "inventory-ops",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-wgehd422/repo"
+}

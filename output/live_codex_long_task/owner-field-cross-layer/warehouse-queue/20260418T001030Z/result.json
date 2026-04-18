@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/warehouse-queue/20260418T001030Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 43.30978237465024,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "owner-field-cross-layer",
+  "grading_result": {
+    "expect": "either",
+    "family": "owner-field-cross-layer",
+    "functional_dir": "/tmp/codex-long-smoke-i3cvd317/functional",
+    "image_ref": "codex-long-smoke-owner-field-cross-layer-warehouse-queue",
+    "results_dir": "/tmp/codex-long-smoke-i3cvd317/results",
+    "smoke_returncode": 0,
+    "variant": "warehouse-queue",
+    "verify_result": {
+      "errors": [
+        "warehouse-queue hidden owner persistence slice did not pass",
+        "warehouse-queue hidden CLI queue-routing slice did not pass",
+        "warehouse-queue separator-heavy queue follow-up slice did not pass",
+        "Phase 2 pytest suite did not pass"
+      ],
+      "milestones": {},
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 0
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/warehouse-queue/20260418T001030Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/warehouse-queue/20260418T001030Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 37.92548132315278,
+  "task_id": "owner-field-cross-layer/warehouse-queue",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/owner-field-cross-layer/warehouse-queue/20260418T001030Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 89.43965999328934,
+    "cache_hits": 39984.0,
+    "cache_queries": 44705.0,
+    "decode_sum_s": 34.04038197174668,
+    "decode_throughput_tps": 7.696740894901193,
+    "gen_tokens": 262.0,
+    "kv_computed_tokens": 4721.0,
+    "prefill_sum_s": 2.871246872469783,
+    "prefill_throughput_tps": 1644.2333974365292,
+    "prompt_tokens": 44705.0,
+    "seed": 0,
+    "ttft_count": 4,
+    "ttft_ms": 772.2721695899963,
+    "wall_clock_s": 37.92548132315278
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 89.43965999328934,
+    "decode_throughput_tps_median": 7.696740894901193,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1644.2333974365292,
+    "total_turns": 4,
+    "total_wall_clock_s": 37.92548132315278,
+    "ttft_ms_median": 772.2721695899963
+  },
+  "telemetry_task_id": "owner-field-cross-layer/warehouse-queue",
+  "variant": "warehouse-queue",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-20lmv9mx/repo"
+}

@@ -1,0 +1,43 @@
+{
+  "codex_result": {
+    "returncode": 1,
+    "stderr": "Reading additional input from stdin...\n2026-04-17T23:37:17.728943Z ERROR codex_core::tools::router: error=failed to parse function arguments: trailing characters at line 1 column 32\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/alert-dedupe-investigation/payments-oncall/20260417T233654Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": false,
+  "countable": false,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "excluded_reason": "Codex transport to localvllm failed before completion",
+  "family": "alert-dedupe-investigation",
+  "infra_failure": true,
+  "pass": false,
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/alert-dedupe-investigation/payments-oncall/20260417T233654Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/alert-dedupe-investigation/payments-oncall/20260417T233654Z",
+  "shortcut_detected": false,
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/alert-dedupe-investigation/payments-oncall/20260417T233654Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 72.72052685279658,
+    "cache_hits": 7840.0,
+    "cache_queries": 10781.0,
+    "decode_sum_s": 21.52383299265057,
+    "decode_throughput_tps": 7.61946071854389,
+    "gen_tokens": 164.0,
+    "kv_computed_tokens": 2941.0,
+    "prefill_sum_s": 1.6750120157375932,
+    "prefill_throughput_tps": 1755.808300100419,
+    "prompt_tokens": 10781.0,
+    "seed": 0,
+    "ttft_count": 1,
+    "ttft_ms": 1698.779582977295,
+    "wall_clock_s": 23.451723334379494
+  },
+  "telemetry_task_id": "alert-dedupe-investigation/payments-oncall",
+  "variant": "payments-oncall",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-c74x57s7/repo"
+}

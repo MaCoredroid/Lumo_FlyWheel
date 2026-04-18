@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/alert-routing/20260417T232546Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 412.3403833406046,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "normalizer-api-migration",
+  "grading_result": {
+    "expect": "either",
+    "family": "normalizer-api-migration",
+    "functional_dir": "/tmp/codex-long-smoke-6rh6htlv/functional",
+    "image_ref": "codex-long-smoke-normalizer-api-migration-alert-routing",
+    "results_dir": "/tmp/codex-long-smoke-6rh6htlv/results",
+    "smoke_returncode": 0,
+    "variant": "alert-routing",
+    "verify_result": {
+      "errors": [
+        "alert-routing follow-up lifecycle normalization slice did not pass"
+      ],
+      "milestones": {
+        "m1_legacy_imports_removed": true,
+        "m2_ruleplan_v2_used": true
+      },
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 2
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/alert-routing/20260417T232546Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/alert-routing/20260417T232546Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 400.0410509277135,
+  "task_id": "normalizer-api-migration/alert-routing",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/alert-routing/20260417T232546Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 90.97980178145778,
+    "cache_hits": 261072.0,
+    "cache_queries": 286956.0,
+    "decode_sum_s": 359.4556541973725,
+    "decode_throughput_tps": 7.5836893040029585,
+    "gen_tokens": 2726.0,
+    "kv_computed_tokens": 25884.0,
+    "prefill_sum_s": 37.87565899360925,
+    "prefill_throughput_tps": 683.3940501039837,
+    "prompt_tokens": 286956.0,
+    "seed": 0,
+    "ttft_count": 22,
+    "ttft_ms": 1790.2040156451137,
+    "wall_clock_s": 400.0410509277135
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 90.97980178145778,
+    "decode_throughput_tps_median": 7.5836893040029585,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 683.3940501039837,
+    "total_turns": 22,
+    "total_wall_clock_s": 400.0410509277135,
+    "ttft_ms_median": 1790.2040156451137
+  },
+  "telemetry_task_id": "normalizer-api-migration/alert-routing",
+  "variant": "alert-routing",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-y2qs1rs9/repo"
+}

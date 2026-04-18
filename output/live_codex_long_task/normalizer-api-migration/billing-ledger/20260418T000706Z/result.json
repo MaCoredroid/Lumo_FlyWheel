@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/billing-ledger/20260418T000706Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 74.56677167955786,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "normalizer-api-migration",
+  "grading_result": {
+    "expect": "either",
+    "family": "normalizer-api-migration",
+    "functional_dir": "/tmp/codex-long-smoke-rhs5kv4g/functional",
+    "image_ref": "codex-long-smoke-normalizer-api-migration-billing-ledger",
+    "results_dir": "/tmp/codex-long-smoke-rhs5kv4g/results",
+    "smoke_returncode": 0,
+    "variant": "billing-ledger",
+    "verify_result": {
+      "errors": [
+        "billing-ledger hidden migration slice did not pass",
+        "billing-ledger hidden RulePlan slice did not pass",
+        "billing-ledger follow-up normalization slice did not pass",
+        "Phase 2 pytest suite did not pass"
+      ],
+      "milestones": {},
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 1
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/billing-ledger/20260418T000706Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/billing-ledger/20260418T000706Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 68.55114801693708,
+  "task_id": "normalizer-api-migration/billing-ledger",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/billing-ledger/20260418T000706Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 91.88935771214253,
+    "cache_hits": 86240.0,
+    "cache_queries": 93852.0,
+    "decode_sum_s": 62.610083484090865,
+    "decode_throughput_tps": 7.698440461630682,
+    "gen_tokens": 482.0,
+    "kv_computed_tokens": 7612.0,
+    "prefill_sum_s": 4.677285454235971,
+    "prefill_throughput_tps": 1627.4396922057028,
+    "prompt_tokens": 93852.0,
+    "seed": 0,
+    "ttft_count": 8,
+    "ttft_ms": 645.1928317546844,
+    "wall_clock_s": 68.55114801693708
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 91.88935771214253,
+    "decode_throughput_tps_median": 7.698440461630682,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1627.4396922057028,
+    "total_turns": 8,
+    "total_wall_clock_s": 68.55114801693708,
+    "ttft_ms_median": 645.1928317546844
+  },
+  "telemetry_task_id": "normalizer-api-migration/billing-ledger",
+  "variant": "billing-ledger",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-sk348n5t/repo"
+}

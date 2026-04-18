@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/incident-triage/20260418T001122Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 82.75490337610245,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "report-cli-markdown-evolution",
+  "grading_result": {
+    "expect": "either",
+    "family": "report-cli-markdown-evolution",
+    "functional_dir": "/tmp/codex-long-smoke-rz0d2f4o/functional",
+    "image_ref": "codex-long-smoke-report-cli-markdown-evolution-incident-triage",
+    "results_dir": "/tmp/codex-long-smoke-rz0d2f4o/results",
+    "smoke_returncode": 0,
+    "variant": "incident-triage",
+    "verify_result": {
+      "errors": [
+        "incident-triage hidden CLI slice did not pass",
+        "incident-triage hidden renderer slice did not pass",
+        "incident-triage follow-up/docs slice did not pass",
+        "Phase 2 pytest suite did not pass"
+      ],
+      "milestones": {},
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 1
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/incident-triage/20260418T001122Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/incident-triage/20260418T001122Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 77.23893728479743,
+  "task_id": "report-cli-markdown-evolution/incident-triage",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/incident-triage/20260418T001122Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 90.78753336047406,
+    "cache_hits": 100352.0,
+    "cache_queries": 110535.0,
+    "decode_sum_s": 69.64002728369087,
+    "decode_throughput_tps": 7.696723004092315,
+    "gen_tokens": 536.0,
+    "kv_computed_tokens": 10183.0,
+    "prefill_sum_s": 6.149689576588571,
+    "prefill_throughput_tps": 1655.8559376339829,
+    "prompt_tokens": 110535.0,
+    "seed": 0,
+    "ttft_count": 9,
+    "ttft_ms": 745.2523708343506,
+    "wall_clock_s": 77.23893728479743
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 90.78753336047406,
+    "decode_throughput_tps_median": 7.696723004092315,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1655.8559376339829,
+    "total_turns": 9,
+    "total_wall_clock_s": 77.23893728479743,
+    "ttft_ms_median": 745.2523708343506
+  },
+  "telemetry_task_id": "report-cli-markdown-evolution/incident-triage",
+  "variant": "incident-triage",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-53gjop2i/repo"
+}

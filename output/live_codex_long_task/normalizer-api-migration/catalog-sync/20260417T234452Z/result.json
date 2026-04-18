@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/catalog-sync/20260417T234452Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 375.64489604346454,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "normalizer-api-migration",
+  "grading_result": {
+    "expect": "either",
+    "family": "normalizer-api-migration",
+    "functional_dir": "/tmp/codex-long-smoke-nsq3d0jm/functional",
+    "image_ref": "codex-long-smoke-normalizer-api-migration-catalog-sync",
+    "results_dir": "/tmp/codex-long-smoke-nsq3d0jm/results",
+    "smoke_returncode": 0,
+    "variant": "catalog-sync",
+    "verify_result": {
+      "errors": [
+        "catalog-sync hidden migration slice did not pass",
+        "catalog-sync follow-up source-label normalization slice did not pass"
+      ],
+      "milestones": {
+        "m2_ruleplan_v2_used": true
+      },
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 0
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/catalog-sync/20260417T234452Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/catalog-sync/20260417T234452Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 366.1707670474425,
+  "task_id": "normalizer-api-migration/catalog-sync",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/normalizer-api-migration/catalog-sync/20260417T234452Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 93.57861006086706,
+    "cache_hits": 275968.0,
+    "cache_queries": 294905.0,
+    "decode_sum_s": 350.57204039860517,
+    "decode_throughput_tps": 7.5790413775695145,
+    "gen_tokens": 2657.0,
+    "kv_computed_tokens": 18937.0,
+    "prefill_sum_s": 12.02695550955832,
+    "prefill_throughput_tps": 1574.5464415287793,
+    "prompt_tokens": 294905.0,
+    "seed": 0,
+    "ttft_count": 21,
+    "ttft_ms": 636.7432389940534,
+    "wall_clock_s": 366.1707670474425
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 93.57861006086706,
+    "decode_throughput_tps_median": 7.5790413775695145,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1574.5464415287793,
+    "total_turns": 21,
+    "total_wall_clock_s": 366.1707670474425,
+    "ttft_ms_median": 636.7432389940534
+  },
+  "telemetry_task_id": "normalizer-api-migration/catalog-sync",
+  "variant": "catalog-sync",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-no7ngelx/repo"
+}

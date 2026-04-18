@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/release-readiness/20260417T233726Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 181.55282226298004,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "report-cli-markdown-evolution",
+  "grading_result": {
+    "expect": "either",
+    "family": "report-cli-markdown-evolution",
+    "functional_dir": "/tmp/codex-long-smoke-n9le3xy5/functional",
+    "image_ref": "codex-long-smoke-report-cli-markdown-evolution-release-readiness",
+    "results_dir": "/tmp/codex-long-smoke-n9le3xy5/results",
+    "smoke_returncode": 0,
+    "variant": "release-readiness",
+    "verify_result": {
+      "errors": [
+        "release-readiness hidden renderer slice did not pass",
+        "release-readiness follow-up/docs slice did not pass"
+      ],
+      "milestones": {
+        "m1_cli_markdown": true
+      },
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 3
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/release-readiness/20260417T233726Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/release-readiness/20260417T233726Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 162.61323301773518,
+  "task_id": "report-cli-markdown-evolution/release-readiness",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/report-cli-markdown-evolution/release-readiness/20260417T233726Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 91.76442310204466,
+    "cache_hits": 175616.0,
+    "cache_queries": 191377.0,
+    "decode_sum_s": 148.12244297098368,
+    "decode_throughput_tps": 7.608570162596985,
+    "gen_tokens": 1127.0,
+    "kv_computed_tokens": 15761.0,
+    "prefill_sum_s": 9.55453522503376,
+    "prefill_throughput_tps": 1649.5831172095877,
+    "prompt_tokens": 191377.0,
+    "seed": 0,
+    "ttft_count": 13,
+    "ttft_ms": 795.5042398892916,
+    "wall_clock_s": 162.61323301773518
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 91.76442310204466,
+    "decode_throughput_tps_median": 7.608570162596985,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1649.5831172095877,
+    "total_turns": 13,
+    "total_wall_clock_s": 162.61323301773518,
+    "ttft_ms_median": 795.5042398892916
+  },
+  "telemetry_task_id": "report-cli-markdown-evolution/release-readiness",
+  "variant": "release-readiness",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-w0i1et0i/repo"
+}

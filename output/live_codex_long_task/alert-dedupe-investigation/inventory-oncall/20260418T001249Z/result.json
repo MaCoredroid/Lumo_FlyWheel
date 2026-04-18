@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/alert-dedupe-investigation/inventory-oncall/20260418T001249Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 276.2763150623068,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "alert-dedupe-investigation",
+  "grading_result": {
+    "expect": "either",
+    "family": "alert-dedupe-investigation",
+    "functional_dir": "/tmp/codex-long-smoke-eov9079r/functional",
+    "image_ref": "codex-long-smoke-alert-dedupe-investigation-inventory-oncall",
+    "results_dir": "/tmp/codex-long-smoke-eov9079r/results",
+    "smoke_returncode": 0,
+    "variant": "inventory-oncall",
+    "verify_result": {
+      "errors": [
+        "inventory-oncall hidden dedupe slice did not pass",
+        "inventory-oncall follow-up dedupe-hint slice did not pass"
+      ],
+      "milestones": {
+        "m1_window_key_used": true
+      },
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 1
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/alert-dedupe-investigation/inventory-oncall/20260418T001249Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/alert-dedupe-investigation/inventory-oncall/20260418T001249Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 267.7019670093432,
+  "task_id": "alert-dedupe-investigation/inventory-oncall",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/alert-dedupe-investigation/inventory-oncall/20260418T001249Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 92.18133175805013,
+    "cache_hits": 162288.0,
+    "cache_queries": 176053.0,
+    "decode_sum_s": 256.64051369111985,
+    "decode_throughput_tps": 7.57869430678006,
+    "gen_tokens": 1945.0,
+    "kv_computed_tokens": 13765.0,
+    "prefill_sum_s": 8.767835474573076,
+    "prefill_throughput_tps": 1569.9427800531632,
+    "prompt_tokens": 176053.0,
+    "seed": 0,
+    "ttft_count": 13,
+    "ttft_ms": 735.2489324716421,
+    "wall_clock_s": 267.7019670093432
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 92.18133175805013,
+    "decode_throughput_tps_median": 7.57869430678006,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1569.9427800531632,
+    "total_turns": 13,
+    "total_wall_clock_s": 267.7019670093432,
+    "ttft_ms_median": 735.2489324716421
+  },
+  "telemetry_task_id": "alert-dedupe-investigation/inventory-oncall",
+  "variant": "inventory-oncall",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-c_tl3npf/repo"
+}

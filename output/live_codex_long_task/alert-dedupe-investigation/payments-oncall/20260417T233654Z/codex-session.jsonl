@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"019d9dcd-f7b3-7a51-bb21-fd353b718e8b"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":""}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":""}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":""}}
+{"type":"error","message":"{\"error\":{\"message\":\"Extra data: line 1 column 32 (char 31)\",\"type\":\"BadRequestError\",\"param\":null,\"code\":400}}"}
+{"type":"turn.failed","error":{"message":"{\"error\":{\"message\":\"Extra data: line 1 column 32 (char 31)\",\"type\":\"BadRequestError\",\"param\":null,\"code\":400}}"}}

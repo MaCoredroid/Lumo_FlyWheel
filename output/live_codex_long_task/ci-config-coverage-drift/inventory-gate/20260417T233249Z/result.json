@@ -1,0 +1,81 @@
+{
+  "attempt": 1,
+  "codex_result": {
+    "returncode": 0,
+    "stderr": "Reading additional input from stdin...\n",
+    "stdout_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/inventory-gate/20260417T233249Z/codex-session.jsonl",
+    "timed_out": false
+  },
+  "command_success": true,
+  "countable": true,
+  "end_to_end_elapsed_seconds": 215.59217398893088,
+  "endpoint": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "proxy_autostarted": false
+  },
+  "family": "ci-config-coverage-drift",
+  "grading_result": {
+    "expect": "either",
+    "family": "ci-config-coverage-drift",
+    "functional_dir": "/tmp/codex-long-smoke-2qldjjf4/functional",
+    "image_ref": "codex-long-smoke-ci-config-coverage-drift-inventory-gate",
+    "results_dir": "/tmp/codex-long-smoke-2qldjjf4/results",
+    "smoke_returncode": 0,
+    "variant": "inventory-gate",
+    "verify_result": {
+      "errors": [
+        "inventory-gate hidden workflow-preview artifact slice did not pass",
+        "inventory-gate punctuation-heavy preview artifact slice did not pass"
+      ],
+      "milestones": {
+        "m1_pyproject_synced": true
+      },
+      "pass": false,
+      "shortcut_detected": false,
+      "wall_clock_seconds": 1
+    }
+  },
+  "infra_failure": false,
+  "model_id": "qwen3.5-27b",
+  "pass": false,
+  "pool_or_split": "public_dev",
+  "result_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/inventory-gate/20260417T233249Z/result.json",
+  "run_output_dir": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/inventory-gate/20260417T233249Z",
+  "seed": 0,
+  "shortcut_detected": false,
+  "task_elapsed_seconds": 207.02092340867966,
+  "task_id": "ci-config-coverage-drift/inventory-gate",
+  "telemetry_path": "/home/mark/shared/lumoFlyWheel/output/live_codex_long_task/ci-config-coverage-drift/inventory-gate/20260417T233249Z/telemetry/latency_qwen3.5-27b_public_dev.jsonl",
+  "telemetry_record": {
+    "anomalies": [],
+    "attempt": 1,
+    "cache_hit_rate_pct": 94.2611653617196,
+    "cache_hits": 192864.0,
+    "cache_queries": 204606.0,
+    "decode_sum_s": 196.593240740709,
+    "decode_throughput_tps": 7.6299673088882125,
+    "gen_tokens": 1500.0,
+    "kv_computed_tokens": 11742.0,
+    "prefill_sum_s": 7.834632534533739,
+    "prefill_throughput_tps": 1498.7301508071048,
+    "prompt_tokens": 204606.0,
+    "seed": 0,
+    "ttft_count": 16,
+    "ttft_ms": 552.0117878913879,
+    "wall_clock_s": 207.02092340867966
+  },
+  "telemetry_summary": {
+    "cache_hit_rate_pct_median": 94.2611653617196,
+    "decode_throughput_tps_median": 7.6299673088882125,
+    "model_id": "qwen3.5-27b",
+    "n_tasks": 1,
+    "pool_or_split": "public_dev",
+    "prefill_throughput_tps_median": 1498.7301508071048,
+    "total_turns": 16,
+    "total_wall_clock_s": 207.02092340867966,
+    "ttft_ms_median": 552.0117878913879
+  },
+  "telemetry_task_id": "ci-config-coverage-drift/inventory-gate",
+  "variant": "inventory-gate",
+  "working_repo": "/home/mark/shared/.lumo-live-codex/live-codex-long-4yqq275e/repo"
+}
