@@ -1,0 +1,21 @@
+version = 1
+family_id = "responses-sdk-adapter-cutover"
+profile = "configured_codex"
+wire_api = "responses"
+reasoning_effort = "high"
+
+[workspace]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+
+[skills]
+paths = ["skills/responses-replay-audit/SKILL.md"]
+
+[validation]
+commands = [
+  "pytest -q tests/test_adapter.py tests/test_replay.py tests/test_render.py",
+]
+
+[scoring]
+target_naive_score = 20
+hard_cap_for_shallow_solver = 30
