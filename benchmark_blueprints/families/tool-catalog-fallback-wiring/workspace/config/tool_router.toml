@@ -1,0 +1,9 @@
+[router]
+eligible_fallback_policies = ["safe", "interactive"]
+
+[router.preferred_tools]
+browser.read = "chrome-devtools"
+
+[router.fallbacks]
+browser.read = ["http_fetch", "browser_snapshot"]
+docs.lookup = ["http_fetch"]

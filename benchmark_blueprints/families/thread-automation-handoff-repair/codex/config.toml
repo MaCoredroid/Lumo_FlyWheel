@@ -1,0 +1,23 @@
+[family]
+id = "thread-automation-handoff-repair"
+primary_task = "repair_thread_heartbeat"
+runtime_profile = "configured_codex"
+
+[skills.repair_thread_heartbeat]
+path = "skills/repair-thread-heartbeat/SKILL.md"
+recommended = true
+
+[surfaces]
+required = ["shell", "apply_patch", "automation_config", "prompt_editing"]
+preferred = ["skills", "ops_docs", "verification_note"]
+
+[evaluation]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+visible_score_cap = 20
+naive_solver_score_ceiling_target = 30
+
+[guardrails]
+repair_in_place_only = true
+reject_duplicate_automation = true
+preserve_operator_notes = true

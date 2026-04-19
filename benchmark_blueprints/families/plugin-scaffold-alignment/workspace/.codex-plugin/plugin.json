@@ -1,0 +1,6 @@
+{
+  "id": "plugin-ops",
+  "display_name": "Plugin Ops",
+  "skill_path": "skills/plugin_ops/SKILL.md",
+  "version": "0.1.0"
+}

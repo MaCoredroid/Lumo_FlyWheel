@@ -1,0 +1,2 @@
+[skills.release_handoff]
+command = "python scripts/skill_verify.py --input fixtures/sample.json"

@@ -1,0 +1,23 @@
+[family]
+id = "tool-catalog-fallback-wiring"
+primary_task = "repair_tool_catalog_fallbacks"
+runtime_profile = "configured_codex"
+
+[skills.repair_tool_fallbacks]
+path = "skills/repair-tool-fallbacks/SKILL.md"
+recommended = true
+
+[surfaces]
+required = ["shell", "repo_search", "apply_patch", "terminal_tests", "config_editing"]
+preferred = ["docs", "verification_note"]
+
+[evaluation]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+visible_score_cap = 20
+naive_solver_score_ceiling_target = 30
+
+[guardrails]
+reject_alias_only_repairs = true
+require_preferred_present_regression_checks = true
+require_policy_aware_fallback = true

@@ -1,0 +1,23 @@
+[family]
+id = "skill-router-contract-upgrade"
+primary_task = "upgrade_skill_router"
+runtime_profile = "configured_codex"
+
+[skills.audit_skill_routing]
+path = "skills/audit-skill-routing/SKILL.md"
+recommended = true
+
+[surfaces]
+required = ["shell", "repo_search", "apply_patch", "terminal_tests"]
+preferred = ["routing_docs", "config_editing", "fixture_audit"]
+
+[evaluation]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+visible_score_cap = 20
+naive_solver_score_ceiling_target = 30
+
+[guardrails]
+preserve_unrelated_edits = true
+reject_fixture_deletion = true
+require_schema_parity = true

@@ -1,0 +1,23 @@
+[family]
+id = "skill-pack-contract-drift"
+primary_task = "repair_skill_contract"
+runtime_profile = "configured_codex"
+
+[skills.repair_skill_contract]
+path = "skills/repair-skill-contract/SKILL.md"
+recommended = true
+
+[surfaces]
+required = ["shell", "repo_search", "apply_patch", "terminal_tests"]
+preferred = ["skill_docs", "config_editing", "verification_note"]
+
+[evaluation]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+visible_score_cap = 20
+naive_solver_score_ceiling_target = 30
+
+[guardrails]
+preserve_unrelated_edits = true
+reject_legacy_aliases = true
+reject_test_weakening = true

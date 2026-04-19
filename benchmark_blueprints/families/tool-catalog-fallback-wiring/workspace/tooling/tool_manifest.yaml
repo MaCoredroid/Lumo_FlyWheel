@@ -1,0 +1,23 @@
+preferred_tools:
+  browser.read: chrome-devtools
+
+tools:
+  chrome-devtools:
+    capabilities:
+      - browser.read
+    policy: interactive
+  http_fetch:
+    capabilities:
+      - docs.lookup
+    policy: safe
+  browser_snapshot:
+    capabilities:
+      - browser.read
+    policy: safe
+
+fallbacks:
+  browser.read:
+    - http_fetch
+    - browser_snapshot
+  docs.lookup:
+    - http_fetch

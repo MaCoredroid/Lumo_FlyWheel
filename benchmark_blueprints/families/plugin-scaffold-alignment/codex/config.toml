@@ -1,0 +1,23 @@
+[family]
+id = "plugin-scaffold-alignment"
+primary_task = "align_plugin_scaffold"
+runtime_profile = "configured_codex"
+
+[skills.align_plugin_scaffold]
+path = "skills/align-plugin-scaffold/SKILL.md"
+recommended = true
+
+[surfaces]
+required = ["shell", "repo_search", "apply_patch", "terminal_tests", "json_editing"]
+preferred = ["docs", "verification_note"]
+
+[evaluation]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+visible_score_cap = 20
+naive_solver_score_ceiling_target = 30
+
+[guardrails]
+reject_duplicate_manifests = true
+reject_duplicate_marketplace_entries = true
+require_real_discovery_flow = true
