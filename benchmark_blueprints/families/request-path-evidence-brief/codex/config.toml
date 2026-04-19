@@ -1,0 +1,24 @@
+[family]
+family_id = "request-path-evidence-brief"
+task_id = "t2_request_path_owner_source_brief"
+scenario_type = "trace_and_explain"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+workspace_root = "."
+must_read = ["task_spec.md", "evaluator_contract.md", "skills/request-path-trace/SKILL.md"]
+preferred_output_dir = "artifacts"
+evidence_required = true
+assumption_budget = "low"
+
+[solver.rules]
+require_positive_and_negative_evidence = true
+require_machine_readable_path_map = true
+forbid_behavior_patch_without_proof = true
+forbid_out_of_bundle_evidence = true
+
+[grading]
+target_attack_band = "15-25"
+hard_fail_on_fabricated_symbols = true
+cap_without_symbol_adjacency = 25

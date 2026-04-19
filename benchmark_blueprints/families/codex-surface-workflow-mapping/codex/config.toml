@@ -1,0 +1,24 @@
+[family]
+family_id = "codex-surface-workflow-mapping"
+task_id = "t2_codex_surface_daily_triage_mapping"
+scenario_type = "codex_native_workflow_design"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+workspace_root = "."
+must_read = ["task_spec.md", "evaluator_contract.md", "skills/workflow-mapping/SKILL.md"]
+preferred_output_dir = "artifacts"
+evidence_required = true
+assumption_budget = "low"
+
+[solver.rules]
+require_cross_artifact_consistency = true
+require_command_literals = true
+require_schedule_evidence = true
+forbid_out_of_bundle_evidence = true
+
+[grading]
+target_attack_band = "15-25"
+hard_fail_on_inconsistent_entrypoints = true
+cap_without_command_literals = 15

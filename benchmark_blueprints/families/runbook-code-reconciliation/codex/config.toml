@@ -1,0 +1,24 @@
+[family]
+family_id = "runbook-code-reconciliation"
+task_id = "t2_runbook_release_preview_reconciliation"
+scenario_type = "docs_from_codebase"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+workspace_root = "."
+must_read = ["task_spec.md", "evaluator_contract.md", "skills/runbook-reconcile/SKILL.md"]
+preferred_output_dir = "artifacts"
+evidence_required = true
+assumption_budget = "low"
+
+[solver.rules]
+require_checked_commands = true
+require_current_vs_deprecated_split = true
+forbid_primary_use_of_legacy_alias = true
+forbid_out_of_bundle_evidence = true
+
+[grading]
+target_attack_band = "15-25"
+hard_fail_on_deprecated_primary_path = true
+cap_without_live_help_validation = 20

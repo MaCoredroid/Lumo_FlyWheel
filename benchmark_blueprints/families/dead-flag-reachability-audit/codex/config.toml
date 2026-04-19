@@ -1,0 +1,24 @@
+[family]
+family_id = "dead-flag-reachability-audit"
+task_id = "t2_dead_flag_preview_reachability_audit"
+scenario_type = "reachability_audit"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+workspace_root = "."
+must_read = ["task_spec.md", "evaluator_contract.md", "skills/flag-reachability/SKILL.md"]
+preferred_output_dir = "artifacts"
+evidence_required = true
+assumption_budget = "low"
+
+[solver.rules]
+require_parser_vs_runtime_split = true
+require_alias_handling = true
+forbid_cleanup_without_proof = true
+forbid_out_of_bundle_evidence = true
+
+[grading]
+target_attack_band = "15-25"
+hard_fail_on_fabricated_runtime_paths = true
+cap_without_runtime_branch_evidence = 20
