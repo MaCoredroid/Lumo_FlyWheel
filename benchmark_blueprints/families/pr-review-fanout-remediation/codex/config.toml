@@ -1,0 +1,32 @@
+[family]
+id = "pr-review-fanout-remediation"
+scenario_type = "review_thread_orchestration"
+
+[solver]
+default_model = "gpt-5.4"
+default_reasoning_effort = "high"
+required_surfaces = ["subagents", "review", "shell", "apply_patch"]
+preferred_surfaces = ["git", "worktree"]
+
+[workflow]
+must_delegate = true
+must_classify_threads_before_editing = true
+must_emit_reply_bundle = true
+
+[deliverables]
+required = [
+  "code_patch",
+  "docs_update",
+  "thread_triage_json",
+  "reply_bundle",
+  "remediation_report",
+]
+
+[quality_gate]
+naive_solver_target_max_score = 30
+critical_failure_modes = [
+  "trusting_stale_digest",
+  "treating_all_threads_as_actionable",
+  "generic_reviewer_replies",
+]
+

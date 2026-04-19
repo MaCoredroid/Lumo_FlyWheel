@@ -1,0 +1,32 @@
+[family]
+id = "candidate-worktree-shootout"
+scenario_type = "worktree_candidate_comparison"
+
+[solver]
+default_model = "gpt-5.4"
+default_reasoning_effort = "high"
+required_surfaces = ["subagents", "worktree", "shell", "apply_patch"]
+preferred_surfaces = ["review", "screenshots"]
+
+[workflow]
+must_use_worktrees = true
+must_evaluate_two_candidates = true
+must_land_one_final_strategy = true
+
+[deliverables]
+required = [
+  "final_patch",
+  "candidate_a_eval",
+  "candidate_b_eval",
+  "comparison_note",
+  "verification_note",
+]
+
+[quality_gate]
+naive_solver_target_max_score = 30
+critical_failure_modes = [
+  "cli_only_fix",
+  "no_per_worktree_evidence",
+  "cross_candidate_blend",
+]
+

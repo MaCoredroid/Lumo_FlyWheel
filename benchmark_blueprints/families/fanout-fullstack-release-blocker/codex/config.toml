@@ -1,0 +1,31 @@
+[family]
+id = "fanout-fullstack-release-blocker"
+scenario_type = "parallel_cross_surface_repair"
+
+[solver]
+default_model = "gpt-5.4"
+default_reasoning_effort = "high"
+required_surfaces = ["subagents", "shell", "apply_patch"]
+preferred_surfaces = ["browser_preview", "screenshots", "review"]
+
+[workflow]
+must_delegate = true
+expected_write_scopes = ["backend", "frontend", "docs"]
+must_capture_visual_proof = true
+
+[deliverables]
+required = [
+  "integrated_patch",
+  "rollout_note",
+  "integration_report",
+  "runtime_proof_artifact",
+]
+
+[quality_gate]
+naive_solver_target_max_score = 30
+critical_failure_modes = [
+  "backend_alias_only_fix",
+  "frontend_label_only_fix",
+  "canned_screenshot",
+]
+

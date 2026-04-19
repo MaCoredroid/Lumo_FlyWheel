@@ -1,0 +1,33 @@
+[family]
+id = "parallel-explorer-root-cause-map"
+scenario_type = "parallel_read_heavy_investigation"
+
+[solver]
+default_model = "gpt-5.4"
+default_reasoning_effort = "high"
+required_surfaces = ["subagents", "repo_search", "shell"]
+preferred_surfaces = ["review", "worktree"]
+
+[workflow]
+must_delegate = true
+min_non_overlapping_subtasks = 2
+must_produce_patch = false
+must_produce_report = true
+
+[deliverables]
+required = [
+  "root_cause_brief",
+  "ranked_suspect_list",
+  "evidence_table",
+  "bounded_remediation_plan",
+  "verification_note",
+]
+
+[quality_gate]
+naive_solver_target_max_score = 30
+critical_failure_modes = [
+  "renderer_blame_only",
+  "spec_parroting_without_symbol_evidence",
+  "single_path_investigation",
+]
+

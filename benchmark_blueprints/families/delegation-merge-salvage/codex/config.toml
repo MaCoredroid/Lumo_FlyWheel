@@ -1,0 +1,31 @@
+[family]
+id = "delegation-merge-salvage"
+scenario_type = "subagent_recovery_and_salvage"
+
+[solver]
+default_model = "gpt-5.4"
+default_reasoning_effort = "high"
+required_surfaces = ["subagents", "shell", "apply_patch"]
+preferred_surfaces = ["worktree", "review"]
+
+[workflow]
+must_use_worker_artifacts = true
+must_produce_salvage_postmortem = true
+must_preserve_existing_contracts = true
+
+[deliverables]
+required = [
+  "final_patch",
+  "salvage_postmortem",
+  "verification_note",
+  "reviewer_note",
+]
+
+[quality_gate]
+naive_solver_target_max_score = 30
+critical_failure_modes = [
+  "wholesale_worker_patch",
+  "generic_salvage_prose",
+  "json_contract_regression",
+]
+
