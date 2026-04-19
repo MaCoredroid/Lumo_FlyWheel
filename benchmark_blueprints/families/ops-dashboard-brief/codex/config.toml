@@ -1,0 +1,18 @@
+# Benchmark-local Codex config for the Ops Dashboard Brief family.
+
+[model_providers.family_local]
+name = "Family Local Responses Proxy"
+base_url = "http://127.0.0.1:8001/v1"
+env_key = "VLLM_API_KEY"
+wire_api = "responses"
+
+provider = "family_local"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+model_verbosity = "low"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
+# Benchmark guidance:
+# - browser evidence is part of correctness
+# - fresh screenshot artifacts are required, not references to stale captures
