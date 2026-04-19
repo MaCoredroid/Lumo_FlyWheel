@@ -1,0 +1,28 @@
+[family]
+id = "preview-form-webhook-cors"
+profile = "configured_codex"
+
+[solver]
+preferred_model = "gpt-5.4"
+reasoning_effort = "high"
+family_local_context_only = true
+
+[surfaces]
+required = ["browser_preview", "shell", "apply_patch", "network_inspection", "screenshots"]
+
+[artifacts]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+skill = "skills/network-origin-discipline/SKILL.md"
+benchmark_run = "benchmark_run.md"
+
+[scoring_caps]
+no_file_level_patch = 45
+no_runtime_preview_evidence = 25
+spec_only_reasoning = 20
+banned_shortcut = 10
+
+[target]
+naive_gpt54_high_score_min = 15
+naive_gpt54_high_score_max = 25
+target_score = 20
