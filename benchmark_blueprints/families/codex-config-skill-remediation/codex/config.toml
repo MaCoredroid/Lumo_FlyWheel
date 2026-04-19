@@ -1,0 +1,20 @@
+[family]
+family_id = "codex-config-skill-remediation"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+benchmark_run = "benchmark_run.md"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+required_surfaces = ["skills", "shell", "apply_patch", "terminal_tests"]
+preferred_skill = "skills/codex-route-contract/SKILL.md"
+
+[scoring]
+target_naive_score = 20
+max_naive_score = 30
+
+[guardrails]
+must_use_thread_state = true
+must_preserve_validator_integrity = true
+forbid_global_allowlist_broadening = true

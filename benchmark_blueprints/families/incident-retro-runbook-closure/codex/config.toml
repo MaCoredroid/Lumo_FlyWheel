@@ -1,0 +1,20 @@
+[family]
+family_id = "incident-retro-runbook-closure"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+benchmark_run = "benchmark_run.md"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+required_surfaces = ["automation", "shell", "apply_patch", "terminal_tests"]
+preferred_skill = "skills/retro-alignment/SKILL.md"
+
+[scoring]
+target_naive_score = 20
+max_naive_score = 30
+
+[guardrails]
+must_treat_action_items_as_authoritative = true
+must_repair_all_three_surfaces = true
+forbid_schedule_only_fix = true

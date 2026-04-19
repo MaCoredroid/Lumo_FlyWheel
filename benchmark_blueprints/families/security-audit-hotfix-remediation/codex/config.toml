@@ -1,0 +1,20 @@
+[family]
+family_id = "security-audit-hotfix-remediation"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+benchmark_run = "benchmark_run.md"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+required_surfaces = ["review", "shell", "apply_patch", "terminal_tests"]
+preferred_skill = "skills/audit-hotfix-triage/SKILL.md"
+
+[scoring]
+target_naive_score = 20
+max_naive_score = 30
+
+[guardrails]
+must_use_artifact_grounded_triage = true
+must_preserve_legitimate_exports = true
+forbid_validator_or_test_tampering = true

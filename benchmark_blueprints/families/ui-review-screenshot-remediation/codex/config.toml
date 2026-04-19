@@ -1,0 +1,20 @@
+[family]
+family_id = "ui-review-screenshot-remediation"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+benchmark_run = "benchmark_run.md"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+required_surfaces = ["review", "browser_preview", "apply_patch", "terminal_tests"]
+preferred_skill = "skills/screenshot-review-fix/SKILL.md"
+
+[scoring]
+target_naive_score = 20
+max_naive_score = 30
+
+[guardrails]
+must_preserve_copy = true
+must_modify_product_code = true
+forbid_golden_only_fix = true
