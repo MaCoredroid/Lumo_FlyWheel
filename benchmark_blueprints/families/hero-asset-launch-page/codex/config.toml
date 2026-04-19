@@ -1,0 +1,24 @@
+[family]
+family_id = "hero-asset-launch-page"
+scenario_type = "multimodal_asset_integration"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+skill_entry = "skills/launch-hero-brief-reconcile/SKILL.md"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+profile = "configured_codex"
+
+[surfaces]
+required = ["image_inspection", "repo_patch", "responsive_verification"]
+preferred = ["content_config_edit", "asset_manifest_edit", "delivery_note"]
+
+[deliverables]
+required = ["code_patch", "content_or_media_config_patch", "fresh_screenshots", "delivery_note"]
+
+[calibration]
+target_score = 20
+acceptable_range = "15-25"
+hard_fail_if_missing = ["asset_identity", "content_source_fidelity", "fresh_evidence"]
+

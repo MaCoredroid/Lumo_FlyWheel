@@ -1,0 +1,24 @@
+[family]
+family_id = "design-token-dashboard-refresh"
+scenario_type = "frontend_surface_refresh"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+skill_entry = "skills/dashboard-token-audit/SKILL.md"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+profile = "configured_codex"
+
+[surfaces]
+required = ["repo_patch", "browser_inspection", "terminal_tests"]
+preferred = ["screenshots", "computed_style_checks", "review_note"]
+
+[deliverables]
+required = ["code_patch", "visual_evidence", "root_cause_note", "rollout_note"]
+
+[calibration]
+target_score = 20
+acceptable_range = "15-25"
+hard_fail_if_missing = ["shared_fix", "fresh_evidence"]
+

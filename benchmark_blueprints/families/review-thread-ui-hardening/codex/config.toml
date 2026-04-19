@@ -1,0 +1,24 @@
+[family]
+family_id = "review-thread-ui-hardening"
+scenario_type = "review_driven_frontend_repair"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+skill_entry = "skills/review-thread-triage/SKILL.md"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+profile = "configured_codex"
+
+[surfaces]
+required = ["review_thread_interpretation", "repo_patch", "visual_test_config"]
+preferred = ["screenshot_inspection", "review_reply_drafting", "branch_hygiene"]
+
+[deliverables]
+required = ["runtime_fix", "coverage_or_config_fix", "reply_mapping", "fresh_evidence"]
+
+[calibration]
+target_score = 20
+acceptable_range = "15-25"
+hard_fail_if_missing = ["thread_mapping", "runtime_fix", "coverage_fix"]
+
