@@ -1,0 +1,29 @@
+[benchmark]
+family_id = "workspace-approval-state-threading"
+task_id = "cnb55-core-workspace-approval-state-threading-admin-ui"
+profile = "configured_codex"
+canonical_runtime = "responses_api"
+
+[solver]
+reasoning_effort = "high"
+model_hint = "gpt-5.4"
+max_turns = 24
+
+[workspace]
+primary_languages = ["python", "typescript"]
+root_hint = "/workspace"
+dirty_workspace_variant = true
+
+[surfaces]
+required = ["shell", "apply_patch", "terminal_tests", "browser_preview"]
+preferred = ["screenshots", "review", "worktree"]
+
+[grading]
+visible_gate = "backend serializer tests + frontend table tests + screenshot harness"
+non_code_requirements = ["config/defaults.toml", "docs/runbooks/workspace-approvals.md"]
+fail_on = [
+  "frontend_only_value_fabrication",
+  "risk_level_alias_shortcut",
+  "missing_legacy_row_fallback",
+]
+

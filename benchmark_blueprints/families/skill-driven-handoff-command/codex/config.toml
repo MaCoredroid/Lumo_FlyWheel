@@ -1,0 +1,29 @@
+[benchmark]
+family_id = "skill-driven-handoff-command"
+task_id = "cnb55-core-skill-driven-handoff-command-report-bundle"
+profile = "configured_codex"
+canonical_runtime = "responses_api"
+
+[solver]
+reasoning_effort = "high"
+model_hint = "gpt-5.4"
+max_turns = 20
+
+[workspace]
+primary_languages = ["python", "markdown", "toml"]
+root_hint = "/workspace"
+dirty_workspace_variant = true
+
+[surfaces]
+required = ["shell", "apply_patch", "terminal_tests", "skills", "automation"]
+preferred = ["browser_preview", "screenshots", "review"]
+
+[grading]
+visible_gate = "CLI tests + render tests + skill-contract test"
+non_code_requirements = [".codex/skills/handoff/SKILL.md", "automations/handoff_digest.toml", "docs/handoff_workflow.md"]
+fail_on = [
+  "static_markdown_template",
+  "json_export_regression",
+  "automation_canned_output",
+]
+

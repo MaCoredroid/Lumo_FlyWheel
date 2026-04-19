@@ -1,0 +1,29 @@
+[benchmark]
+family_id = "responses-tool-schema-cutover"
+task_id = "cnb55-core-responses-tool-schema-cutover-router-replay"
+profile = "configured_codex"
+canonical_runtime = "responses_api"
+
+[solver]
+reasoning_effort = "high"
+model_hint = "gpt-5.4"
+max_turns = 20
+
+[workspace]
+primary_languages = ["python"]
+root_hint = "/workspace"
+dirty_workspace_variant = true
+
+[surfaces]
+required = ["shell", "apply_patch", "terminal_tests", "transcript_fixtures"]
+preferred = ["review", "worktree"]
+
+[grading]
+visible_gate = "pytest -q tests/test_adapter_contract.py tests/test_replay_render.py"
+non_code_requirements = ["codex/config.toml", "docs/migrations/responses-cutover.md"]
+fail_on = [
+  "tool_name_only_dedupe",
+  "fixture_specific_call_id_reconstruction",
+  "chronology_sorting_shortcut",
+]
+

@@ -1,0 +1,29 @@
+[benchmark]
+family_id = "transcript-merge-regression"
+task_id = "cnb55-core-transcript-merge-regression-reducer-diagnosis"
+profile = "configured_codex"
+canonical_runtime = "responses_api"
+
+[solver]
+reasoning_effort = "high"
+model_hint = "gpt-5.4"
+max_turns = 18
+
+[workspace]
+primary_languages = ["python"]
+root_hint = "/workspace"
+dirty_workspace_variant = true
+
+[surfaces]
+required = ["shell", "apply_patch", "terminal_tests", "transcript_fixtures"]
+preferred = ["review", "diff_inspection"]
+
+[grading]
+visible_gate = "pytest -q tests/test_merge.py tests/test_render.py tests/test_incident_summary.py"
+non_code_requirements = ["reports/incidents/transcript-merge.md"]
+fail_on = [
+  "render_layer_duplicate_filtering",
+  "drop_all_post_completion_fragments",
+  "fixture_specific_event_indexing",
+]
+
