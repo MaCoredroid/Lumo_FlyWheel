@@ -1,0 +1,21 @@
+[benchmark]
+family_id = "release-cockpit-approval-threading"
+task_id = "release-cockpit-approval-threading/pause-resume-handoff"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+benchmark_run = "benchmark_run.md"
+runtime = "responses_api"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+required_surfaces = ["computer_use", "browser_preview", "shell", "apply_patch", "automation", "screenshots"]
+required_evidence = ["artifacts/screenshots/", "automations/release_followup/automation.toml", "docs/runbooks/release_cockpit.md"]
+
+[skills]
+primary = "skills/pause-resume-state-threading/SKILL.md"
+
+[hardness]
+target_naive_score = 20
+naive_solver_under_30 = true
+notes = "Enum-threading alone must not score as a meaningful solve; exact provenance and resume-target semantics dominate."

@@ -1,0 +1,21 @@
+[benchmark]
+family_id = "oauth-preview-browser-recovery"
+task_id = "oauth-preview-browser-recovery/fake-idp-callback-drift"
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+benchmark_run = "benchmark_run.md"
+runtime = "responses_api"
+
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+required_surfaces = ["computer_use", "browser_preview", "shell", "apply_patch", "network_inspection", "screenshots"]
+required_evidence = ["artifacts/screenshots/", "deploy/preview.env.example", "codex-preview.toml"]
+
+[skills]
+primary = "skills/preview-oauth-reality-check/SKILL.md"
+
+[hardness]
+target_naive_score = 20
+naive_solver_under_30 = true
+notes = "Dashboard-only or fake-session attempts must be capped well below a meaningful solve."
