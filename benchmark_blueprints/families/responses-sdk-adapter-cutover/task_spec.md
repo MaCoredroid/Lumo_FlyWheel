@@ -71,5 +71,6 @@ Migrate the `incident-handoff` assistant service from a legacy chat-wrapper inte
   - Elevated replay determinism and anti-compatibility-shim checks into the grader contract.
   - Capped docs/config-only credit and kept replay correctness as the score separator.
   - Explicitly banned transcript-sourced replay and text-driven tool routing.
+- Actual run evidence: [benchmark_run.md](./benchmark_run.md) records an overperforming first attempt, then a hardened rerun scored at `20/100`.
 - Final quality judgment after hardening: `under_30_for_naive_solver = yes`.
 - Rationale: a naive solver can still patch the visible adapter path, but without true event-sourced replay and temporal semantics it should stay below the 30-point band.

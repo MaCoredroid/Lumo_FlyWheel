@@ -75,5 +75,6 @@ Modernize the `ops-report` TypeScript CLI from CommonJS plugin discovery to an E
   - Forced built-dist loading, typed runtime validation, and mixed `.cjs` coexistence.
   - Bound the evidence artifact to a repo script that captures actual CLI output.
   - Added malformed-plugin hidden checks so namespace coercion does not earn a passing score.
+- Actual run evidence: [benchmark_run.md](./benchmark_run.md) records an overperforming first attempt, then a hardened rerun scored at `20/100`.
 - Final quality judgment after hardening: `under_30_for_naive_solver = yes`.
 - Rationale: a naive solver can land obvious module-system edits, but it should stay under 30 without real built-output loading, contract validation, and evidence tied to the live CLI.

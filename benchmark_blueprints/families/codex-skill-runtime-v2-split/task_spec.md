@@ -72,5 +72,6 @@ Refactor the `ops-handoff` Codex runtime bundle from one monolithic prompt/runbo
   - Required canonical uniqueness across automation and config references.
   - Elevated stale-reference removal and dirty-workspace preservation into trusted checks.
   - Required hidden follow-up reuse of the new structure instead of simple copy-paste.
+- Actual run evidence: [benchmark_run.md](./benchmark_run.md) records an overperforming first attempt, then a hardened rerun scored at `20/100`.
 - Final quality judgment after hardening: `under_30_for_naive_solver = yes`.
 - Rationale: a naive solver can still create plausible artifacts, but without executable alignment, canonical cleanup, and structured reuse it should not cross the 30-point band.

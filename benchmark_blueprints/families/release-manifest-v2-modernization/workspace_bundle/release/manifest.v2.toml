@@ -1,0 +1,3 @@
+version = "v2"
+artifact_name = "shipit.tar.gz"
+target_environment = "production"

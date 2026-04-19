@@ -18,19 +18,19 @@ Score whether a solver turns a monolithic Codex runtime bundle into a canonical,
 - Duplicate automation cleanup is semantic, not cosmetic.
 
 ## 100-Point Breakdown
-- `15`: visible tests pass.
-- `15`: smoke command succeeds from the authored bundle.
-- `15`: canonical skill bundle exists and points at a runnable path.
-- `15`: config references only canonical live skill paths.
-- `15`: only the canonical automation remains active for the task path.
-- `10`: runbook, skill, config, and automation are aligned.
-- `10`: hidden follow-up reuse checks pass.
-- `5`: dirty-workspace preservation checks pass.
+- `10`: visible tests pass.
+- `10`: smoke command succeeds from the authored bundle.
+- `20`: hidden follow-up bundle proves a second skill or heartbeat reuses the canonical structure.
+- `20`: hidden stale-reference pack proves monolith and duplicate references are fully retired.
+- `20`: hidden duplicate-automation pack proves cleanup is semantic, not cosmetic.
+- `10`: trusted canonical-alignment checks pass across skill, config, automation, and runbook.
+- `10`: hidden dirty-workspace preservation checks pass.
 
 ## Caps
 - If the command path is not actually runnable, total score is capped at `20`.
 - If duplicate automations remain semantically live, total score is capped at `25`.
-- If the fix is mostly docs/config/file creation without canonical alignment, total score is capped at `30`.
+- If only the visible bundle is proven and no hidden follow-up reuse pack is exercised, total score is capped at `20`.
+- If the fix is mostly docs/config/file creation without canonical alignment, total score is capped at `20`.
 - If tests or smoke are bypassed, total score is capped at `0`.
 
 ## Passing Interpretation

@@ -18,19 +18,21 @@ Score whether a solver actually migrates a small assistant service to Responses-
 - Transcript rendering preserves role boundaries for multi-event assistant turns.
 
 ## 100-Point Breakdown
-- `15`: visible tests all pass.
-- `15`: adapter emits structured events from Responses-style items.
-- `20`: replay remains event-sourced and deterministic.
-- `10`: renderer preserves tool-result correlation and ordering.
+- `10`: visible tests pass without editing benchmark-owned tests.
+- `5`: adapter handles the visible message-block shape.
+- `5`: renderer keeps visible tool-result correlation.
+- `20`: hidden replay pack proves event-sourced deterministic replay on withheld fixtures.
+- `20`: hidden interleaved-order pack proves multi-event turn stability.
+- `20`: hidden future-event pack proves safe preservation without transcript flattening.
 - `10`: trusted anti-legacy-shim checks pass.
-- `10`: hidden interleaved-order checks pass.
-- `10`: hidden future-event preservation checks pass.
 - `5`: `codex/config.toml` is aligned with the runtime contract.
 - `5`: migration doc is accurate and specific.
 
 ## Caps
 - If replay is transcript-sourced, total score is capped at `25`.
 - If a legacy compatibility shim remains on the live serving path, total score is capped at `35`.
+- If the solver edits benchmark-owned visible tests, total score is capped at `20`.
+- If only the visible fixture pack is proven and no withheld replay/interleaving pack is exercised, total score is capped at `20`.
 - If only docs/config are updated and code semantics are unchanged, total score is capped at `10`.
 - If visible tests are bypassed or fixtures are edited without semantic fixes, total score is capped at `0`.
 

@@ -1,0 +1,9 @@
+{
+  "name": "ops-report",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "node scripts/typecheck.mjs"
+  }
+}

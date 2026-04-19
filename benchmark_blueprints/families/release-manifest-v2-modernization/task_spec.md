@@ -72,5 +72,6 @@ Modernize the `shipit` service release path from a legacy release manifest and h
   - Added trusted checks for real `workflow_call` plumbing, manifest-field alignment, and non-bypassed smoke behavior.
   - Added dirty-workspace preservation as a score separator.
   - Treated docs/config as dependent artifacts instead of primary scoring surfaces.
+- Actual run evidence: [benchmark_run.md](./benchmark_run.md) records an overperforming first attempt, then a hardened rerun scored at `20/100`.
 - Final quality judgment after hardening: `under_30_for_naive_solver = yes`.
 - Rationale: a naive solver can still make the workflow parse, but without wiring manifest, workflow, staging smoke, and preserved local edits together it should stay under the 30-point band.

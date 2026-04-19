@@ -17,19 +17,20 @@ Score whether a solver performs a real SQLAlchemy 2.0 transaction-boundary moder
 - Rollback leaves database state clean after exceptions.
 
 ## 100-Point Breakdown
-- `15`: visible tests all pass.
-- `10`: `session.query(` is removed from live paths.
-- `15`: API path uses explicit SQLAlchemy 2.0-style access.
-- `20`: worker path preserves rollback and retry semantics.
-- `15`: admin CLI dry-run is non-persistent and batch mode persists only when intended.
-- `10`: trusted anti-global-session and anti-blanket-commit checks pass.
-- `10`: hidden rollback-state checks pass.
+- `10`: visible tests all pass.
+- `5`: `session.query(` is removed from live paths.
 - `5`: deploy note is specific and operationally correct.
+- `20`: hidden worker retry pack proves rollback and idempotence.
+- `20`: hidden admin CLI pack proves dry-run non-persistence and batch correctness on withheld fixtures.
+- `20`: hidden rollback-state checks pass across forced-failure cases.
+- `10`: trusted anti-global-session and anti-blanket-commit checks pass.
+- `10`: hidden multi-entrypoint transaction-boundary checks pass.
 
 ## Caps
 - If the worker path still leaks partial writes, total score is capped at `25`.
 - If the solver introduces blanket commits or global session reuse, total score is capped at `20`.
-- If the modernization is only syntactic and does not prove behavior across entrypoints, total score is capped at `30`.
+- If only the visible entrypoints are proven and no withheld retry/idempotence pack is exercised, total score is capped at `20`.
+- If the modernization is only syntactic and does not prove behavior across entrypoints, total score is capped at `20`.
 - If tests are bypassed or removed, total score is capped at `0`.
 
 ## Passing Interpretation

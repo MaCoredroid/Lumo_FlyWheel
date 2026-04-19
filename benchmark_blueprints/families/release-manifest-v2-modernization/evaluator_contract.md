@@ -18,18 +18,19 @@ Score whether a solver actually aligns workflow, manifest, config, and release s
 - Legacy artifact and environment aliases are fully retired from the live path.
 
 ## 100-Point Breakdown
-- `15`: visible tests pass.
-- `15`: release dry-run succeeds.
-- `20`: workflow aligns with the reusable release contract.
-- `20`: manifest-v2 aligns with driver and smoke semantics.
-- `10`: staging smoke succeeds without bypasses.
+- `10`: visible tests pass.
+- `10`: release dry-run succeeds.
+- `20`: hidden staging pack proves alignment on withheld environment and artifact cases.
+- `20`: hidden reusable-workflow pack proves `workflow_call` inputs, secrets, and outputs are aligned.
+- `20`: hidden alias-retirement and dirty-workspace pack passes.
 - `10`: trusted anti-bypass and anti-legacy-alias checks pass.
 - `5`: config is aligned with the live release path.
 - `5`: rollout doc is accurate and specific.
 
 ## Caps
 - If staging smoke is not attempted or is bypassed, total score is capped at `20`.
-- If workflow and manifest are only syntactically modernized, total score is capped at `30`.
+- If only the visible dry-run pack is proven and no hidden staging pack is exercised, total score is capped at `20`.
+- If workflow and manifest are only syntactically modernized, total score is capped at `20`.
 - If dirty-workspace edits are overwritten, total score is capped at `25`.
 - If tests or dry-run are bypassed, total score is capped at `0`.
 

@@ -1,0 +1,2 @@
+canonical = true
+command = "python scripts/run_handoff.py --input fixtures/handoff_input.json --output out.md"

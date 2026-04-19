@@ -68,5 +68,6 @@ Modernize the `ledger-sync` service from legacy SQLAlchemy `session.query(...)` 
   - Added rollback-state inspection and retry idempotence to the hidden suite.
   - Explicitly capped syntax-only credit and banned blanket commit/global-session escape hatches.
   - Made dry-run non-persistence part of the contract.
+- Actual run evidence: [benchmark_run.md](./benchmark_run.md) records an overperforming first attempt, then a hardened rerun scored at `20/100`.
 - Final quality judgment after hardening: `under_30_for_naive_solver = yes`.
 - Rationale: the obvious migration pattern should earn some progress, but without fixing rollback, retry, and dry-run semantics across all surfaces it should not clear the 30-point threshold.
