@@ -1,0 +1,7 @@
+tools:
+  - id: github.list_pull_requests
+    handler: github_list_pull_requests_handler
+    owner: github
+  - id: gmail.search_threads
+    handler: gmail_search_threads_handler
+    owner: gmail

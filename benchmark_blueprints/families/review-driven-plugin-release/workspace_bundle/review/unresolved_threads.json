@@ -1,0 +1,13 @@
+{
+  "resolved": [
+    { "id": "T-100", "state": "resolved", "summary": "Rename screenshot file" }
+  ],
+  "unresolved": [
+    { "id": "T-201", "state": "unresolved", "summary": "Restore backward-compatible manifest field for one release." },
+    { "id": "T-202", "state": "unresolved", "summary": "Fallback toggle disappears when optional value is unset." }
+  ],
+  "screenshot_note": {
+    "id": "S-9",
+    "summary": "Expected settings screenshot still shows the fallback toggle in the unset state."
+  }
+}

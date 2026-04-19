@@ -1,0 +1,17 @@
+profile = "configured_codex"
+model = "gpt-5.4"
+reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+
+[workspace]
+root = "workspace_bundle"
+task_spec = "../task_spec.md"
+evaluator_contract = "../evaluator_contract.md"
+
+[skills]
+paths = ["../skills/release-review-closure/SKILL.md"]
+
+[surfaces]
+required = ["review", "shell", "apply_patch", "screenshots"]
+preferred = ["plugins_mcp", "git"]

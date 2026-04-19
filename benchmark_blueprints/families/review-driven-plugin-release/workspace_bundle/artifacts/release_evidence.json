@@ -1,0 +1,39 @@
+{
+  "plugin_id": "drive-brief",
+  "manifest_backward_compatibility": {
+    "field": "name",
+    "value": "drive-brief",
+    "remove_after": "2026.05"
+  },
+  "settings_panel_states": {
+    "unset_optional_value": {
+      "html": "<section><h1>Settings</h1><p>Optional connector value is unset. Connector fallback remains available.</p><label><input type=\"checkbox\" name=\"connector_fallback\" />Connector fallback</label></section>",
+      "toggle_visible": true
+    },
+    "configured_optional_value": {
+      "html": "<section><h1>Settings</h1><p>Optional connector value: shared-drive</p><label><input type=\"checkbox\" name=\"connector_fallback\" />Connector fallback</label></section>",
+      "toggle_visible": true
+    }
+  },
+  "docs": {
+    "release_notes": "docs/release_notes.md",
+    "release_checklist": "docs/release_checklist.md"
+  },
+  "review": {
+    "actionable_thread_ids": [
+      "T-201",
+      "T-202",
+      "S-9"
+    ],
+    "reply_ids": [
+      "T-201",
+      "T-202",
+      "S-9"
+    ],
+    "reply_path": "artifacts/review_reply.json"
+  },
+  "screenshots": {
+    "before": "artifacts/screenshots/settings-panel-before.png",
+    "expected": "artifacts/screenshots/settings-panel-expected.png"
+  }
+}

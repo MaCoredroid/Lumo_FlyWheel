@@ -1,0 +1,1 @@
+print("trusted validator placeholder")

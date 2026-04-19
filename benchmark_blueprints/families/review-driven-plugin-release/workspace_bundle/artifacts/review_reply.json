@@ -1,0 +1,34 @@
+{
+  "resolved_threads": [
+    {
+      "id": "T-201",
+      "status": "addressed",
+      "changed_files": [
+        ".codex-plugin/plugin.json",
+        "docs/release_notes.md",
+        "docs/release_checklist.md"
+      ],
+      "summary": "Restored the deprecated manifest field `name` beside `id` for the 2026.05 compatibility window."
+    },
+    {
+      "id": "T-202",
+      "status": "addressed",
+      "changed_files": [
+        "drive_brief/ui/settings_panel.tsx",
+        "drive_brief/settings.py"
+      ],
+      "summary": "The settings panel now keeps the Connector fallback toggle visible even when the optional connector value is unset."
+    },
+    {
+      "id": "S-9",
+      "status": "addressed",
+      "changed_files": [
+        "docs/release_notes.md",
+        "docs/release_checklist.md",
+        "review/review_response.md",
+        "scripts/render_release_evidence.py"
+      ],
+      "summary": "Release evidence now names the immutable before and expected screenshot pair for the unset-state review note."
+    }
+  ]
+}

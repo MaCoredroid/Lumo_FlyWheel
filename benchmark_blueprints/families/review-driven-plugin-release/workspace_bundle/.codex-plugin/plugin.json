@@ -1,0 +1,13 @@
+{
+  "id": "drive-brief",
+  "name": "drive-brief",
+  "schema_version": 2,
+  "compatibility": {
+    "deprecated_fields": {
+      "name": {
+        "value": "drive-brief",
+        "remove_after": "2026.05"
+      }
+    }
+  }
+}

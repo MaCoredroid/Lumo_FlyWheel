@@ -1,0 +1,23 @@
+[
+  {
+    "date": "2026-04-14",
+    "severity": "sev1",
+    "service": "payments",
+    "status": "open",
+    "summary": "Gateway failover increased payment retry latency."
+  },
+  {
+    "date": "2026-04-15",
+    "severity": "sev2",
+    "service": "search",
+    "status": "closed",
+    "summary": "Search indexing lag delayed catalog updates."
+  },
+  {
+    "date": "2026-04-16",
+    "severity": "sev3",
+    "service": "deploy",
+    "status": "open",
+    "summary": "Region rebalance slowed the deployment queue."
+  }
+]

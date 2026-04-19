@@ -1,0 +1,14 @@
+{
+  "schema_version": 2,
+  "id": "release-sync",
+  "entrypoint": {
+    "type": "python",
+    "command": "python -m release_sync_mcp"
+  },
+  "icon": "assets/icon-release-sync.png",
+  "capabilities": {
+    "tools": [
+      { "id": "release-sync.push-digest" }
+    ]
+  }
+}

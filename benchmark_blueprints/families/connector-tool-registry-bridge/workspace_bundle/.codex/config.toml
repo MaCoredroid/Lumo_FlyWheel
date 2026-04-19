@@ -1,0 +1,10 @@
+[routing.preferred_owners]
+"github.list_pull_requests" = "github"
+"gmail.search_threads" = "gmail"
+
+[routing.fallback_order]
+"github.list_pull_requests" = ["github", "gmail"]
+"gmail.search_threads" = ["gmail", "github"]
+
+[routing.connector_precedence]
+default = ["github", "gmail"]

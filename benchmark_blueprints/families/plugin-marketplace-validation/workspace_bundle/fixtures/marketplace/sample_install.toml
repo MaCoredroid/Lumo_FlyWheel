@@ -1,0 +1,3 @@
+plugin_id = "release-sync"
+startup_command = "python -m release_sync_mcp"
+bundle = "dist/release-sync.zip"
