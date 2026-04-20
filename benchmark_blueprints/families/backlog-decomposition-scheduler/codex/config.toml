@@ -1,21 +1,25 @@
-version = 1
+[family]
 family_id = "backlog-decomposition-scheduler"
-profile = "configured_codex"
-wire_api = "responses"
-reasoning_effort = "high"
-
-[workspace]
 task_spec = "task_spec.md"
 evaluator_contract = "evaluator_contract.md"
+benchmark_run = "benchmark_run.md"
 
-[skills]
-paths = ["skills/backlog-dependency-plan/SKILL.md"]
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+workspace_root = "."
+required_surfaces = ["shell", "skills", "structured_reasoning"]
+preferred_skill = "skills/backlog-dependency-plan/SKILL.md"
+evidence_required = true
+assumption_budget = "low"
 
-[validation]
-commands = [
-  "pytest -q tests/test_schedule_contract.py",
-]
+[solver.rules]
+require_ordered_schedule = true
+require_assumption_ledger = true
+forbid_live_web_or_external_evidence = true
+forbid_invented_fixture_claims = true
 
-[scoring]
-target_naive_score = 20
-hard_cap_for_shallow_solver = 30
+[grading]
+target_attack_band = "15-25"
+cap_without_runtime_fixtures = 20
+max_naive_score = 30
