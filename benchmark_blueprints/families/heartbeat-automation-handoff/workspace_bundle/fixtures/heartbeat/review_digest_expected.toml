@@ -1,6 +1,0 @@
-name = "Review Digest"
-kind = "heartbeat"
-destination = "thread"
-status = "ACTIVE"
-rrule = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=9;BYMINUTE=0"
-prompt = "Open the review digest inbox item and continue the review-digest workflow in this thread."

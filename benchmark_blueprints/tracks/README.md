@@ -1,11 +1,17 @@
-# CNB-55 Track Folders
+# CNB-40 Track Folders
 
-This directory organizes the 55 family blueprints into the 11 tracks described in [benchmark_deisgn.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_deisgn.md).
+This directory organizes the Linux Codex CLI subset into the 8 tracks described in [benchmark_deisgn.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_deisgn.md).
 
-The canonical family bundles still live under [benchmark_blueprints/families](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families). Each entry here is a symlink so the repo now has both:
+The canonical family bundles still live under [benchmark_blueprints/families](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families). Each entry here is a symlink so the repo has both:
 
-- a flat family-owned layout for the benchmark artifacts
-- a track-based layout for the 11 x 5 benchmark plan
+- a flat family-owned layout for the retained benchmark artifacts
+- a track-based layout for the Linux CLI track plan
+
+App-only tracks were removed from this Linux CLI subset:
+
+- browser preview workflows
+- computer use workflows
+- scheduled automation maintenance
 
 ## Track Index
 
@@ -49,23 +55,7 @@ The canonical family bundles still live under [benchmark_blueprints/families](/U
 - `responsive-checkout-visual-regression`
 - `support-playbook-ui-migration`
 
-### 06 Browser Preview Workflows
-
-- `deploy-preview-route-flag-recovery`
-- `draft-mode-content-preview-sync`
-- `oauth-preview-browser-recovery`
-- `preview-auth-cookie-handoff`
-- `preview-form-webhook-cors`
-
-### 07 Computer Use Workflows
-
-- `admin-console-bulk-triage`
-- `checkout-screenshot-triage`
-- `checkout-wizard-devtools-investigation`
-- `release-cockpit-approval-threading`
-- `ui-review-screenshot-remediation`
-
-### 08 Skills Tooling
+### 06 Skills Tooling
 
 - `codex-config-skill-remediation`
 - `skill-driven-handoff-command`
@@ -73,7 +63,7 @@ The canonical family bundles still live under [benchmark_blueprints/families](/U
 - `skill-pack-contract-drift`
 - `skill-router-contract-upgrade`
 
-### 09 Plugin Integration Work
+### 07 Plugin Integration Work
 
 - `connector-tool-registry-bridge`
 - `plugin-marketplace-validation`
@@ -81,15 +71,7 @@ The canonical family bundles still live under [benchmark_blueprints/families](/U
 - `review-driven-plugin-release`
 - `tool-catalog-fallback-wiring`
 
-### 10 Automation Maintenance
-
-- `artifact-retention-janitor`
-- `heartbeat-automation-handoff`
-- `heartbeat-rollout-watch`
-- `ops-dashboard-brief`
-- `thread-automation-handoff-repair`
-
-### 11 Subagents Orchestration
+### 08 Subagents Orchestration
 
 - `candidate-worktree-shootout`
 - `delegation-merge-salvage`

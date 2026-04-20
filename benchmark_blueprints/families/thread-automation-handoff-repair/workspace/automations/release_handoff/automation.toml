@@ -1,5 +1,0 @@
-name = "Release Handoff"
-kind = "heartbeat"
-destination = "thread"
-rrule = "FREQ=HOURLY;INTERVAL=1"
-status = "ACTIVE"
