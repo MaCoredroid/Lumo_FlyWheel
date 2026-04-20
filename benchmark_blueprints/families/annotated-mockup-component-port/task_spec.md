@@ -1,84 +1,107 @@
 # Annotated Mockup Component Port
 
+- `family_id`: `annotated-mockup-component-port`
+- `task_id`: `annotated-mockup-component-port/shared-comparison-card-port`
+- `scenario_type`: `frontend_multimodal_component_repair`
+
 ## Task Prompt
 
-You are working in a React component-library repository. Design supplied an annotated mockup bundle for a comparison-style card component that now needs to match the shared library implementation used by existing consumers. The current implementation is visually close in some paths but drifts from the supplied artifacts in others, and at least one live consumer expectation is still real even though the design notes are not perfectly trustworthy. Repair the shared implementation so it matches the artifact-backed behavior without breaking existing consumers, then bring the stories and usage documentation back into alignment with what the component actually does.
+You are dropped into a React component-library workspace with a shared comparison-style card that has drifted from the latest annotated design package. The drift is not isolated to one screenshot and the design notes are not fully trustworthy. Repair the shared implementation that downstream consumers actually import, preserve the still-live compatibility path implied by the bundle artifacts, and leave the workspace with code-backed verification that would fail if the fix only worked at one width, one label length, or one presentation mode.
 
-The task is complete only when the shared component, not a preview-only substitute, behaves correctly across the required annotated states, remains compatible with the still-live integration path, and has automated verification that would catch a narrow-width regression plus at least one density or theme mismatch.
+The task is complete only when the real shared component path is repaired, the downstream compatibility contract still holds, stories and docs match the repaired implementation, and trusted automated checks pass for both width-sensitive behavior and an alternate presentation path such as density or theme.
 
-## Workspace Bundle
+## Runtime Bundle Shape
 
-- `repo/`: a component-library package, shared layout utilities, Storybook stories, unit and visual tests, a small docs site, and one downstream integration or preview surface that still consumes the shared component.
-- `artifacts/mockups/`: annotated PNG or PDF exports covering multiple component states, callouts for spacing or typography, and at least one state where the mockup is visually subtle rather than dramatically broken.
-- `artifacts/notes/`: mixed-authority design and API notes, including at least one stale recommendation and at least one note that is directionally right but incomplete.
-- `artifacts/screenshots/`: current renders from Storybook and from a consumer-facing integration surface; some screenshots are redundant and at least one is a distraction rather than the critical failure.
-- `artifacts/history/`: issue, changelog, or review snippets that make one compatibility expectation discoverable without stating it cleanly in the main task text.
+The official runtime instance is offline and replayable. The family directory you are reading now is only the public benchmark blueprint. The held-out runtime bundle used for real scoring supplies:
+
+- `repo/`
+  - React component-library source, shared tokens or layout helpers, Storybook stories, unit tests, visual or DOM-geometry tests, docs, and one downstream integration surface that still imports the shared component.
+- `artifacts/mockups/`
+  - Annotated PNG or PDF mockups covering multiple states, at least one subtle layout or typography defect, and callouts that are incomplete rather than answer-key explicit.
+- `artifacts/notes/`
+  - Mixed-authority design notes, including at least one stale recommendation and one incomplete but directionally useful note.
+- `artifacts/screenshots/`
+  - Current Storybook and integration renders, including distractors that do not correspond to the highest-value defect.
+- `artifacts/history/`
+  - Review, changelog, or issue fragments that make one compatibility requirement discoverable without stating it cleanly.
+- hidden verifier assets outside the family directory
+  - `verifiers/annotated-mockup-component-port/verify.sh`
+  - milestone inspection scripts
+  - held-out hidden test slices
+  - verifier data such as screenshot expectations, DOM-geometry assertions, mutation checks, and exploit fixtures
 
 ## Seeded Breakage Surfaces
 
-- `surface_visual_fidelity`: the shared component diverges from the mockup in more than one state, but the dominant mistake is not fully specified here.
-- `surface_responsive_layout`: a width-sensitive layout defect exists in the reusable component or shared helper, not only in a local story fixture.
-- `surface_contract_drift`: a live consumer still depends on behavior or prop handling that is under-documented or partially contradicted by the notes.
-- `surface_state_coverage_gap`: current stories, tests, or docs give the appearance of coverage while leaving at least one important state family under-specified.
-- `noise`: some artifact notes are stale or overconfident, and some screenshots highlight symptoms rather than the root compatibility constraint.
+- `shared_component_drift`
+  - The real consumer path imports a shared component whose rendered structure or token wiring no longer matches the annotated mockup family across all required states.
+- `responsive_layout_instability`
+  - One width-sensitive failure lives in shared layout or token logic rather than only in a local story fixture.
+- `compatibility_contract_drift`
+  - A still-live consumer behavior is under-documented or partially contradicted by the notes and must be inferred from repeated evidence.
+- `coverage_illusion`
+  - Existing stories, tests, or docs make the surface look covered while leaving at least one important state family under-specified.
+- `artifact_noise`
+  - Some screenshots and notes point at symptoms or stale recommendations rather than the canonical fix.
 
-## Required Surfaces
+## Required Solver Surfaces
 
-- Multimodal inspection of the annotated mockup bundle.
-- Repo patching in the shared component path and any helper or token wiring it truly depends on.
-- Storybook or equivalent visual verification plus automated test coverage.
-- Light compatibility reasoning grounded in the downstream integration surface.
+- multimodal inspection of the provided mockups and screenshots
+- code search and patching in the real shared component path plus true shared dependencies
+- story or example updates only after the implementation is coherent
+- trusted automated verification
+- compatibility reasoning grounded in the downstream integration surface
 
-## Deliverables
+## Required Deliverables
 
-- A code patch for the shared component and any real shared helper or token wiring it depends on.
-- Story or example coverage for the artifact-backed state families, including the previously under-specified presentation path.
-- A docs or usage-contract update that reflects the true supported behavior.
-- Automated verification covering:
-  - one narrow-width or long-label case in the shared component, and
-  - one density, theme, or equivalent presentation-mode case that would fail if the repair were too one-dimensional.
-- Fresh verification evidence or notes tied to the real shared implementation rather than a preview-only fork.
+- code changes in the shared component path and any real shared helper, token, or layout dependency it actually relies on
+- story or example coverage for the repaired state family, including the previously under-specified presentation path
+- docs or usage-contract updates that describe the repaired behavior instead of stale note language
+- automated checks that prove:
+  - one narrow-width, long-label, or geometry-stress case, and
+  - one density, theme, or equivalent alternate-presentation case
+- verification evidence tied to the shared implementation rather than a preview-only substitute
 
-## Grader Contract
+## Official Evaluation Path
 
-The grader should award full credit only if all of the following hold:
+Official scoring is code-backed and hidden-test-backed only. Prose quality can clarify reasoning, but it does not replace verifier results.
 
-1. Shared implementation contract:
-   - The solver changes the shared component path that downstream consumers actually use.
-   - The repair addresses the real drift surfaces visible in the artifact bundle rather than moving styling into stories, docs, or a preview-only clone.
-   - The fix generalizes across the annotated state family instead of matching only one obvious screenshot.
-2. Multimodal fidelity contract:
-   - Hidden checks compare implementation behavior against the annotated mockup across multiple states, widths, and at least one alternate presentation path such as density or theme.
-   - Hidden checks reject brittle pixel nudges or hardcoded layout exceptions that pass only on one label length, one viewport, or one screenshot.
-3. Compatibility contract:
-   - Hidden checks exercise the live downstream behavior or prop contract implied by the integration surface and history artifacts.
-   - Solutions that silently drop compatibility to satisfy one note or one screenshot do not receive full credit.
-4. Evidence and alignment contract:
-   - Stories and docs must reflect the repaired implementation instead of diverging from it.
-   - Automated verification must prove more than basic renderability and must cover the narrow-width and alternate-presentation cases explicitly.
+The trusted evaluation path mirrors the `scenario_families` pattern:
 
-## Red-Team Traps
+1. `Phase 1: integrity and anti-shortcut inspection`
+   - diff inspection confirms the solver repaired the real shared component path
+   - grader rejects preview-only forks, story-only patches, docs-only patches, snapshot-only fixes, and verifier tampering
+2. `Phase 2: visible command slice`
+   - runtime executes the authored visible verification command for the held-out repo
+   - at minimum this includes the component test slice and the visible story or visual regression slice
+3. `Phase 3: held-out milestone and hidden-test checks`
+   - milestone scripts inspect code ownership, state coverage, compatibility preservation, and docs or story alignment
+   - hidden tests stress widths, labels, density or theme modes, and downstream consumer behavior
+   - hidden checks include DOM or geometry assertions and diff inspections, not only pixel snapshots
 
-- Patch only stories, docs, screenshots, or snapshot baselines while leaving the shared component wrong.
-- Implement the mockup as a preview-only component instead of repairing the library component used by consumers.
-- Follow the noisiest artifact note literally and remove live compatibility behavior that is still required.
-- Fix only the shortest label or one viewport and leave the component brittle under longer labels, denser layouts, or alternate theme paths.
-- Claim fidelity from hand-wavy visual reasoning without reconciling the actual shared implementation, state coverage, and downstream usage.
+## Anti-Cheat Constraints
+
+- Do not patch only stories, docs, screenshots, baselines, or preview-only components.
+- Do not disable the live compatibility path to satisfy one loud artifact note.
+- Do not gate layout on one exact label string, one exact width, or one screenshot-specific offset.
+- Do not weaken, skip, or delete visible or hidden verification hooks.
+- Do not introduce artifact-specific conditionals that detect the benchmark fixture instead of fixing the shared behavior.
 
 ## Quality Gate
 
-- Naive solver target: `15-25/100`, with the preferred observed score near `20/100`.
-- Pre-hardening weakness in the earlier draft:
-  - It overexposed the exact failing states and told the solver too directly where to look for width and compatibility failures.
-  - It allowed a largely textual plan to score too well even without trustworthy integration or verification evidence.
-- Hardening applied in this revision:
-  - Shifted the task text from answer-key states to breakage surfaces and artifact ambiguity.
-  - Made live consumer compatibility discoverable but not solver-spoon-fed.
-  - Required dual-mode verification so narrow-width-only or screenshot-only fixes cannot score well.
-  - Explicitly grounded grading in the shared implementation path, not a preview shim.
-- SOTA benchmark-design justification:
-  - `SWE-bench Multimodal` shows that visual software tasks are materially harder once image understanding and cross-language front-end behavior are required.
-  - `Design2Code`, `FullFront`, and `FrontendBench` show that layout fidelity, visual element recall, and realistic front-end interaction remain weak areas for strong multimodal models, so the benchmark must demand artifact-to-code reconciliation instead of screenshot mimicry.
-  - OpenAI's 2026 `SWE-bench Verified` analysis argues against public-answer-key leakage, overly narrow tests, and contamination-prone benchmark construction; this family therefore keeps the grading signal in hidden invariants and privately authored artifact ambiguity rather than explicit fix instructions.
-- Current assessment:
-  - If hidden multimodal fidelity, compatibility, and verification checks are enforced together, a naive GPT-5.4/high solver should land near the target band rather than succeeding from generic front-end best practices alone.
+- `target naive GPT-5.4/high score`: about `20/100`
+- `acceptable observed band`: `15-25/100`
+
+### Why This Family Is Meaningfully Hard
+
+- Following `scenario_families/normalizer-api-migration/family.yaml`, official scoring is split into visible commands, milestone inspections, and held-out hidden tests rather than rubric-only judging.
+- Following [SWE-bench Multimodal](https://arxiv.org/abs/2410.03859), the family targets visual JavaScript repair where strong issue-solving systems still struggle with image-grounded and cross-language software tasks.
+- Following [Design2Code](https://arxiv.org/abs/2403.03163), the family emphasizes layout fidelity and visual-element recall, because front-end models often fail on exact structure and layout even when high-level intent is obvious.
+- Following [FrontendBench](https://arxiv.org/abs/2506.13832), the family requires executable automatic evaluation with sandboxed tests instead of subjective visual grading.
+- Following [OpenAI's SWE-bench Verified analysis](https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/), the family keeps the decisive checks hidden and avoids public answer-key leakage, narrow implementation-name tests, and wide tests that demand unstated behavior.
+
+### Hardening Applied In This Revision
+
+- Replaced rubric-like task completion language with an explicit trusted verifier path.
+- Shifted evaluation authority to held-out milestone scripts, hidden tests, and diff inspections.
+- Made contamination resistance concrete by forbidding fixture-specific hacks and public-answer-key scoring.
+- Tightened the task around shared-component ownership, downstream compatibility, and dual-mode verification so a screenshot-matching plan cannot score well.

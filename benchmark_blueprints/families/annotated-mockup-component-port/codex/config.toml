@@ -1,30 +1,35 @@
 [family]
-id = "annotated-mockup-component-port"
-profile = "configured_codex"
+family_id = "annotated-mockup-component-port"
+task_id = "annotated-mockup-component-port/shared-comparison-card-port"
+scenario_type = "frontend_multimodal_component_repair"
 
 [solver]
-preferred_model = "gpt-5.4"
+model = "gpt-5.4"
 reasoning_effort = "high"
-family_local_context_only = true
+workspace_root = "."
+must_read = ["task_spec.md", "evaluator_contract.md", "skills/mockup-port-fidelity/SKILL.md"]
+preferred_output_dir = "artifacts"
+evidence_required = true
+assumption_budget = "low"
 
-[surfaces]
-required = ["multimodal_mockup_inspection", "shell", "apply_patch", "visual_or_story_verification"]
-preferred = ["docs_update", "downstream_integration_check", "component_tests"]
+[solver.surfaces]
+required = ["multimodal_artifact_inspection", "shell", "apply_patch", "component_tests"]
+preferred = ["storybook_or_visual_regression", "downstream_integration_checks", "docs_update"]
 
-[artifacts]
-task_spec = "task_spec.md"
-evaluator_contract = "evaluator_contract.md"
-skill = "skills/mockup-port-fidelity/SKILL.md"
-benchmark_run = "benchmark_run.md"
+[solver.rules]
+require_shared_component_patch = true
+require_width_and_alt_mode_coverage = true
+require_downstream_compatibility_preservation = true
+forbid_preview_only_replacement = true
+forbid_story_or_docs_only_fix = true
+forbid_snapshot_only_fix = true
+forbid_verifier_tampering = true
 
-[scoring_caps]
-no_shared_component_repair = 25
-missing_dual_mode_verification = 30
-no_compatibility_evidence = 25
-spec_only_reasoning = 20
-shortcut_patch = 10
-
-[target]
-naive_gpt54_high_score_min = 15
-naive_gpt54_high_score_max = 25
+[grading]
+target_attack_band = "15-25"
 target_score = 20
+cap_without_runtime_bundle = 20
+cap_without_shared_path_repair = 25
+cap_without_dual_mode_verification = 30
+cap_without_compatibility_evidence = 25
+hard_fail_on_banned_shortcut = true
