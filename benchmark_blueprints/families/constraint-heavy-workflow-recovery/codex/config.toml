@@ -1,0 +1,21 @@
+version = 1
+family_id = "constraint-heavy-workflow-recovery"
+profile = "configured_codex"
+wire_api = "responses"
+reasoning_effort = "high"
+
+[workspace]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+
+[skills]
+paths = ["skills/constraint-recovery-audit/SKILL.md"]
+
+[validation]
+commands = [
+  "pytest -q tests/test_constraints.py tests/test_recovery.py",
+]
+
+[scoring]
+target_naive_score = 20
+hard_cap_for_shallow_solver = 30

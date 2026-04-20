@@ -1,0 +1,21 @@
+version = 1
+family_id = "policy-aware-request-resolution"
+profile = "configured_codex"
+wire_api = "responses"
+reasoning_effort = "high"
+
+[workspace]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+
+[skills]
+paths = ["skills/policy-resolution-operator/SKILL.md"]
+
+[validation]
+commands = [
+  "pytest -q tests/test_policy_resolution.py",
+]
+
+[scoring]
+target_naive_score = 20
+hard_cap_for_shallow_solver = 30

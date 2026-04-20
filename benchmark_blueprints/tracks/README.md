@@ -1,17 +1,17 @@
-# CNB-40 Track Folders
+# CNB-55 Track Folders
 
-This directory organizes the Linux Codex CLI subset into the 8 tracks described in [benchmark_deisgn.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_deisgn.md).
+This directory organizes the canonical CNB-55 Linux Codex CLI benchmark into the 11 tracks described in [benchmark_deisgn.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_deisgn.md).
 
 The canonical family bundles still live under [benchmark_blueprints/families](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families). Each entry here is a symlink so the repo has both:
 
-- a flat family-owned layout for the retained benchmark artifacts
-- a track-based layout for the Linux CLI track plan
+- a flat family-owned layout for the benchmark artifacts
+- a track-based layout for the 11 x 5 benchmark plan
 
-App-only tracks were removed from this Linux CLI subset:
+The former app-only tracks were replaced in the canonical Linux CLI design by:
 
-- browser preview workflows
-- computer use workflows
-- scheduled automation maintenance
+- evidence-grounded research & synthesis
+- stateful tool, policy & constraint execution
+- strategic management & long-horizon evolution
 
 ## Track Index
 
@@ -55,7 +55,23 @@ App-only tracks were removed from this Linux CLI subset:
 - `responsive-checkout-visual-regression`
 - `support-playbook-ui-migration`
 
-### 06 Skills Tooling
+### 06 Evidence-Grounded Research & Synthesis
+
+- `dependency-upgrade-research-pack`
+- `incident-evidence-synthesis`
+- `issue-pr-archaeology-memo`
+- `policy-docs-compliance-audit`
+- `rfc-spec-retrieval-grounding`
+
+### 07 Stateful Tool, Policy & Constraint Execution
+
+- `constraint-heavy-workflow-recovery`
+- `mcp-routing-parameter-fidelity`
+- `multi-tool-transaction-repair`
+- `partial-failure-rollback-recovery`
+- `policy-aware-request-resolution`
+
+### 08 Skills Tooling
 
 - `codex-config-skill-remediation`
 - `skill-driven-handoff-command`
@@ -63,7 +79,7 @@ App-only tracks were removed from this Linux CLI subset:
 - `skill-pack-contract-drift`
 - `skill-router-contract-upgrade`
 
-### 07 Plugin Integration Work
+### 09 MCP & Local Integrations
 
 - `connector-tool-registry-bridge`
 - `plugin-marketplace-validation`
@@ -71,7 +87,15 @@ App-only tracks were removed from this Linux CLI subset:
 - `review-driven-plugin-release`
 - `tool-catalog-fallback-wiring`
 
-### 08 Subagents Orchestration
+### 10 Strategic Management & Long-Horizon Evolution
+
+- `backlog-decomposition-scheduler`
+- `multi-round-software-evolution`
+- `objective-driven-repo-improvement`
+- `proposal-ranking-manager-judgment`
+- `release-note-to-plan-translation`
+
+### 11 Subagents Orchestration
 
 - `candidate-worktree-shootout`
 - `delegation-merge-salvage`
