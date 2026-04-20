@@ -1,24 +1,30 @@
 [family]
-family_id = "annotated-mockup-component-port"
-scenario_type = "mockup_to_component_library"
-task_spec = "task_spec.md"
-evaluator_contract = "evaluator_contract.md"
-skill_entry = "skills/mockup-port-fidelity/SKILL.md"
-
-[solver]
-model = "gpt-5.4"
-reasoning_effort = "high"
+id = "annotated-mockup-component-port"
 profile = "configured_codex"
 
+[solver]
+preferred_model = "gpt-5.4"
+reasoning_effort = "high"
+family_local_context_only = true
+
 [surfaces]
-required = ["mockup_inspection", "repo_patch", "storybook_or_visual_verification"]
-preferred = ["preview_app_checks", "docs_update", "component_tests"]
+required = ["multimodal_mockup_inspection", "shell", "apply_patch", "visual_or_story_verification"]
+preferred = ["docs_update", "downstream_integration_check", "component_tests"]
 
-[deliverables]
-required = ["shared_component_patch", "state_coverage", "docs_or_story_alignment", "verification_output"]
+[artifacts]
+task_spec = "task_spec.md"
+evaluator_contract = "evaluator_contract.md"
+skill = "skills/mockup-port-fidelity/SKILL.md"
+benchmark_run = "benchmark_run.md"
 
-[calibration]
+[scoring_caps]
+no_shared_component_repair = 25
+missing_dual_mode_verification = 30
+no_compatibility_evidence = 25
+spec_only_reasoning = 20
+shortcut_patch = 10
+
+[target]
+naive_gpt54_high_score_min = 15
+naive_gpt54_high_score_max = 25
 target_score = 20
-acceptable_range = "15-25"
-hard_fail_if_missing = ["shared_component_change", "integration_fidelity", "verification_output"]
-

@@ -1,21 +1,28 @@
 # Mockup Port Fidelity
 
-Use this skill when a component-library task depends on translating annotated visual states into the shared implementation without breaking downstream consumers.
+Use this skill when a component-library task requires translating annotated visual artifacts into the shared implementation without dropping live consumer behavior.
 
 ## Inputs
-- Annotated mockup or state reference.
-- Shared component implementation and stories.
-- Preview-app or downstream integration surface.
+
+- Annotated mockup bundle with multiple states or callouts.
+- Shared component implementation, helpers, stories, tests, and docs.
+- A downstream integration or preview surface that still consumes the shared component.
+- Mixed-authority notes or history artifacts that may disagree with one another.
 
 ## Workflow
-1. Identify all required states and any width or density-sensitive behavior.
-2. Patch the shared component first, not preview-only surfaces.
-3. Reconcile notes against actual downstream integration behavior.
-4. Verify long-label, compact-density, and alternate-theme behavior.
-5. Ensure stories and docs match the real implementation.
+
+1. Inspect the mockup and screenshots first. Enumerate the required state families, width-sensitive behaviors, and any alternate presentation mode such as density or theme.
+2. Trace the shared component path that real consumers use. Do not start by editing stories, screenshots, or docs.
+3. Reconcile artifact authority: live integration behavior and repeated evidence beat a single stale note.
+4. Patch the shared component and only the real helper or token paths it depends on.
+5. Add verification that would fail for:
+   - a narrow-width or long-label regression, and
+   - a density, theme, or equivalent alternate presentation regression.
+6. Update stories and docs only after the implementation behavior is coherent.
 
 ## Guardrails
-- Do not accept a story-only or snapshot-only match.
-- Do not drop compatibility behavior just because one note says it is stale.
-- Do not rely on one width or one density when the mockup shows more than one state family.
 
+- Do not accept a story-only, preview-only, snapshot-only, or docs-only fix.
+- Do not hardcode one viewport, one label length, or one screenshot-specific offset.
+- Do not remove under-documented compatibility behavior unless the integration surface proves it is dead.
+- Do not treat the loudest artifact note as authoritative without checking the consumer path.
