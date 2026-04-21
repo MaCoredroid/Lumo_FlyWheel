@@ -198,6 +198,51 @@ The repo ships with oracle briefs at score 90 / 90 / 90 / 94 / 99 for V1-V5 and 
 
   Recommended follow-up (deferred, requires user direction): either (1) accept the family at this difficulty band and revise the §10.1 freeze-gate target window upward for "instructions-fully-disclosed" mode, (2) introduce a separate "evidence-only" run mode where AGENTS.md and SKILL.md are stripped to bare task language so the agent must derive the gates from the evidence, or (3) add adversarial evidence (e.g. an internally inconsistent staffing memo where the agent must reconcile contradictions). Options 2 and 3 are legitimate hardness levers that do not violate the user's directive; option 1 is a calibration concession.
 
+- `attempt_02c` (decouple rubric from task docs, 2026-04-20): per user direction, take option (2) from the attempt_02b follow-up list. Principle: the task description stays complete and honest, but the exact grader rubric (keyword lists, char-count thresholds, cap values, reference to `evaluator_contract.md` / `SKILL.md`) is not mirrored into AGENTS.md. A competent manager should infer what concrete mitigations look like from the phrase "concrete operational levers (rollout shape, observability, reversibility)" without being told the grader scans for `{mitigate, gate, pre-warm, shadow, staged rollout, rollback, observability, SLO, kill switch, feature flag, canary}`.
+
+  **AGENTS.md rewrite (identical across all 5 variants, md5 `24c183d9...`):**
+  - Removed: explicit keyword lists for staffing-update / stale-perf / sunk-cost / objective / watermark traps; explicit `≥ 40 chars` and `≥ 3 citations` thresholds; explicit cap values (30/40/45/55); references to `evaluator_contract.md` and `.claude/skills/proposal-ranking-brief/SKILL.md` (neither file is staged into the run workspace anyway).
+  - Kept: task framing, input list (including pointer to `repo_evidence/meta/` as where staffing artifacts live), CLI workflow, schema minimal example, enum lists for `constraint_tags` and `assumption_ledger.status`, structural rules enforced by the trusted-final-state check, principle-level guidance in a "Things to pay attention to" section.
+  - Principle-level framing example: instead of "your brief MUST cite `staffing_update_2026_06_15.md` OR mention the update keywords (`40%`, `parental`, ...)", AGENTS.md now says "staffing can change mid-quarter. `repo_evidence/meta/` may contain more than one staffing artifact written at different dates. If the accepted pick's owner is the one whose availability changed, that reality should shape how you reason about risk, rollout pacing, and mitigations — not sit as a footnote."
+  - Grader section now simply tells the agent the grader exists, lists a few named anti-pattern categories (staffing-blocked, stale perf, sunk cost, objective drift, incident-blind re-select) without enumerating the regex keywords or caps, and ends with: "The specific thresholds and caps are grader-internal. Produce a good brief by the standard above."
+  - All grader logic (scorer, gold files, evaluator_contract.md, SKILL.md — which is family-maintainer documentation, not staged into the agent workspace) is unchanged. This is a **task-doc-only** change, not a rubric change.
+
+  Verified: `regen_cnb55_v2.py` re-run end-to-end after the rewrite → oracle V1=90 / V2=90 / V3=90 / V4=96 / V5=99, empty=0, shortcut=30 (no rubric regression).
+
+  **Re-probe on codex gpt-5.4 --reasoning-effort=high** (probe_run_id `20260421T011218Z`, N=3 × 5 = 15 runs, ~38 min wall). Report at `report/attempt_02c_probe_report.txt`.
+
+  | variant | n | mean | stdev | scores | ceilings (probe-wide) |
+  | --- | --- | --- | --- | --- | --- |
+  | v1-clean-baseline | 3 | 88.67 | 1.15 | [88, 88, 90] | — |
+  | v2-noisy-distractor | 3 | 88.00 | 0.00 | [88, 88, 88] | — |
+  | v3-dirty-state | 3 | 87.33 | 1.15 | [88, 86, 88] | — |
+  | v4-multi-corpus-objective | 3 | 45.00 | 0.00 | [45, 45, 45] | objective_drift × 3 |
+  | v5-recovery-in-thread | 3 | **25.00** | 0.00 | [25, 25, 25] | ignored_stale_perf × 3, missed_watermark_assumption × 1 |
+
+  **Delta vs attempt_02b (coupled AGENTS.md):**
+
+  | variant | coupled mean | decoupled mean | Δ |
+  | --- | ---: | ---: | ---: |
+  | V1 | 88.67 | 88.67 | 0 |
+  | V2 | 88.00 | 88.00 | 0 |
+  | V3 | 88.67 | 87.33 | -1.33 |
+  | V4 | 45.00 | 45.00 | 0 |
+  | V5 | 81.00 | 25.00 | **-56.00** |
+  | family_mean | 78.27 | 66.80 | -11.47 |
+
+  V5 collapsed from 81 → 25. All three V5 runs tripped `ignored_stale_perf` (cap 25), and one additionally tripped `missed_watermark_assumption`. The interpretation is direct: in attempt_02b, AGENTS.md listed the staleness keyword set and explicitly instructed the agent to add a `status: missing` row with the word `watermark`. Codex was reliably pattern-matching to that instruction. With those pointers removed, codex now cites post-incident streaming-era evidence alongside the January 2026 benchmarks *without flagging* the age gap, and does not spontaneously produce a watermark-redesign-timing assumption row. Both behaviors are real manager-judgment failures — the dates are on the files, the incident_context doc mentions the watermark redesign — the agent just does not connect them without an explicit cue.
+
+  V1-V3 were almost unchanged: the staffing-update cue survives removal of the keyword list because the staffing_update_2026_06_15.md document's filename, date-in-filename, and contents are themselves sufficient to make a competent brief cite or acknowledge it. This is the expected outcome — the decoupling does not hide evidence; it hides the grader's regex.
+
+  Acceptance vs §10.1 freeze gate:
+  - `[FAIL] family_mean in window [15,25]` — observed **66.80** (better than 78.27, still outside)
+  - `[FAIL] max variant ≤ 40` — observed **88.67** (V1)
+  - `[FAIL] ≥ 1 variant ≤ 10` — observed min **25.00** (V5)
+  - `[PASS]` **monotonic V1≥V2≥V3≥V4≥V5 ±3** — V1 88.67 ≥ V2 88 ≥ V3 87.33 ≥ V4 45 ≥ V5 25. First pass on monotonicity in the whole calibration history.
+  - `[PASS]` oracle ≥ 90 / empty = 0 / shortcut ≤ 30 (90/90/90/96/99, 0, 30)
+
+  Overall verdict: **HARDEN NEEDED** by the §10.1 gate, but the decoupling did the meaningful work it was supposed to do — it turned V5's 81 into a 25 by forcing real reasoning instead of pattern-matching. The remaining gap is the V1-V3 cluster at ~88, which stays high because the easy-variant gates (citation depth, mitigation depth, staffing-update acknowledgment) are things gpt-5.4 high infers correctly from the evidence without needing a cheat sheet. To bring V1-V3 down would require either (a) adding adversarial evidence (the inconsistent-staffing-memo proposal from earlier), (b) widening the §10.1 window, or (c) accepting that on this family the signal lives in V4 / V5 and the easy variants are a floor-check rather than a discriminator.
+
 ## Hardening decisions already applied
 
 - Full-ranking scoring via Kendall tau rather than single-pick top-1, preventing memorize-top-1 shortcuts.
