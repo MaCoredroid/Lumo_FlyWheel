@@ -243,6 +243,46 @@ The repo ships with oracle briefs at score 90 / 90 / 90 / 94 / 99 for V1-V5 and 
 
   Overall verdict: **HARDEN NEEDED** by the §10.1 gate, but the decoupling did the meaningful work it was supposed to do — it turned V5's 81 into a 25 by forcing real reasoning instead of pattern-matching. The remaining gap is the V1-V3 cluster at ~88, which stays high because the easy-variant gates (citation depth, mitigation depth, staffing-update acknowledgment) are things gpt-5.4 high infers correctly from the evidence without needing a cheat sheet. To bring V1-V3 down would require either (a) adding adversarial evidence (the inconsistent-staffing-memo proposal from earlier), (b) widening the §10.1 window, or (c) accepting that on this family the signal lives in V4 / V5 and the easy variants are a floor-check rather than a discriminator.
 
+## attempt_02d — adversarial staffing evidence on V1-V3 (probe_run_id `20260421T022540Z`, 15 runs, gpt-5.4 high)
+
+**Hypothesis.** attempt_02c moved V5 from 81 → 25 by decoupling AGENTS.md from the rubric, but V1-V3 stayed clustered at ~88 because the easy-variant gates (citation depth, staffing-update acknowledgment, mitigation-depth) are inferable from the evidence itself without needing the AGENTS.md cheat sheet. Hypothesis: make the evidence *itself* harder to read by inserting an internal contradiction the agent has to reconcile. Real-world analogue: a plan-of-record doc superseded mid-quarter by a memo, where the filename no longer carries the date cue. Managers deal with this all the time.
+
+**What changed in V1-V3 only (V4/V5 untouched).**
+
+- `repo_evidence/meta/staffing.md` rewritten as an authoritative 2026-04-10 Q3 plan of record, "Approved by VP Engineering," with an explicit **`Priya — 100% Q3`** allocation in the headcount table. V1 keeps baseline (no Kenji row); V2/V3 preserve the Kenji-departing row + handoff-plan footnote.
+- `repo_evidence/meta/staffing_update_2026_06_15.md` — the dated-filename update memo — deleted in V1/V2/V3.
+- Replaced by `repo_evidence/meta/roster_memo.md` (neutral filename, no date cue) containing the same 2026-06-15 in-document date, the `Supersedes: staffing.md` language, the Priya 40% / Ravi cover / 2026-07-08 handoff facts. **Stripped the prior "How to reflect this in a manager brief" section** that was leaking the rubric (literal keyword list: `40%`, `parental leave`, `Ravi cover`, etc.) — the agent now only sees facts.
+- `verifier_data/v{1,2,3}/gold_ranking.json` → `staffing_update_file = repo_evidence/meta/roster_memo.md`.
+- `scripts/regen_cnb55_v2.py` oracle P4 citations updated to cite `roster_memo.md`.
+- Ran `regen_cnb55_v2.py` + `refresh_manifest_lock.py`. Oracles unchanged: V1/V2/V3 = 90/90/90, V4 = 96, V5 = 99; empty = 0; shortcut = 30. `readonly_tree_hashes` refreshed for the new `repo_evidence` layout.
+
+**Results (15 runs, 3 per variant).**
+
+| Variant | n | mean  | stdev | scores     | ceilings                  |
+|---------|---|-------|-------|------------|---------------------------|
+| V1      | 3 | 88.00 | 0.00  | 88,88,88   | —                         |
+| V2      | 3 | 88.00 | 0.00  | 88,88,88   | —                         |
+| V3      | 3 | 87.33 | 1.15  | 88,88,86   | —                         |
+| V4      | 3 | 45.00 | 0.00  | 45,45,45   | `objective_drift` × 3     |
+| V5      | 3 | 49.67 | 42.72 | 25,99,25   | `ignored_stale_perf` × 2  |
+
+`family_mean = 71.60`, `max = 88.00`, `min = 45.00`.
+
+Acceptance against §10.1:
+- `[FAIL]` family_mean in `[15.0, 25.0]` — observed **71.60**
+- `[FAIL]` max variant ≤ 40 — observed **88.00** (V1 & V2)
+- `[FAIL]` ≥ 1 variant ≤ 10 — observed min **45.00** (V4)
+- `[FAIL]` monotonic V1 ≥ V2 ≥ V3 ≥ V4 ≥ V5 ±3 — V4 45.0 < V5 49.7 beyond ±3 (V5 variance flipped the ordering; three-sample stdev 42.72 on V5 is the real story, not a V4/V5 ordering change)
+- `[PASS]` oracle ≥ 90 / empty = 0 / shortcut ≤ 30 (unchanged)
+
+**What actually happened on the adversarial evidence.** Spot-checked V1 run 1 `manager_brief.json`: the agent cited `roster_memo.md`, set `primary_risk` = "Priya at 40% capacity … Ravi covers execution," tagged the P4 entry with `constraint_tags: [perf, staffing, rollout]`. It silently resolved the 100% vs 40% contradiction by trusting the later in-document date, did not hit `missed_staffing_update`, and did not regress any other dimension. In other words: gpt-5.4 high reconciled the contradiction cleanly and kept its 88. The adversarial-evidence lever did not move V1-V3 because reconciling dated docs is a skill the model already has.
+
+**Why V1-V3 are stuck at 88.** The 88 floor is remarkably stable across every attempt since 02b: 88.67 / 88 / 88.67 (02b), 88.67 / 88 / 87.33 (02c), 88 / 88 / 87.33 (02d). That's a mechanical scoring floor, not a judgment score — the agent hits every concrete rubric item (Kendall τ, accepted match, primary_risk match, citation count, ledger rows, pass_bar) and the 12-point gap is spread across minor dimensions none of which this hardening lever touches. No ceiling fires because there's no honest ceiling to fire — a good manager reading this evidence would do exactly what gpt-5.4 did.
+
+**V5 regressed from 25→49.67.** The 99 run 2 slipped the `ignored_stale_perf` ceiling — same behavior attempt_02c showed once (its 99/99/45 pattern). V5's high variance under decoupled AGENTS.md is real: sometimes the model catches the jan_bench staleness cue, sometimes it doesn't. That's a genuine judgment dimension behaving stochastically, which is actually what we want — but it means V5 can't anchor the "one variant ≤ 10" gate without more reliable pressure.
+
+**Takeaway.** Three calibration attempts (02b → 02c → 02d) have established that the §10.1 acceptance window cannot be hit for gpt-5.4 high on this family via rubric hardening alone. The family as configured is within the model's competence envelope on V1-V3 and genuinely partial on V4/V5. That is a real finding about model capability, not a benchmark authoring failure — and hardening further without a concrete judgment lever would cross into the "fake ambiguity" zone that the directive explicitly rules out. Options to consider before re-running: (a) widen the §10.1 acceptance window for this family (treat it as a "this family is at the frontier" family), (b) add a new legitimate judgment ceiling keyed on explicit contradiction-acknowledgment in the brief (fires when accepted == P4 AND brief does NOT reference both `staffing.md` and `roster_memo.md` — a good manager would flag the conflict, not silently resolve it), or (c) accept this as the family's honest signal and move on. Pending user decision.
+
 ## Hardening decisions already applied
 
 - Full-ranking scoring via Kendall tau rather than single-pick top-1, preventing memorize-top-1 shortcuts.

@@ -1,15 +1,17 @@
-# Staffing sheet — respproxy team, Q3 2026
+# Staffing plan — respproxy team, Q3 2026
 
-Closed 2026-04-10 after q2 planning.
+**Closed:** 2026-04-10 (Q2 planning cycle)
+**Approved by:** Mei (EM), signed off by VP Engineering
+**Status:** plan of record for Q3 2026 capacity on respproxy
 
 ## Current headcount on respproxy
 
-| Engineer | Role                 | Availability next 12 weeks      |
-| -------- | -------------------- | ------------------------------- |
-| Priya    | Senior backend       | Available (lead)                |
-| Ravi     | Backend              | Available                       |
-| Mei      | Platform infra       | Available (lead on platform)    |
-| Anja     | Backend              | Part-time until 2026-05-08      |
+| Engineer | Role                 | Q3 2026 allocation               |
+| -------- | -------------------- | -------------------------------- |
+| Priya    | Senior backend       | **100%** — tech lead on respproxy |
+| Ravi     | Backend              | **100%**                          |
+| Mei      | Platform infra       | **100%** — lead on platform       |
+| Anja     | Backend              | Part-time until 2026-05-08, then 100% |
 
 ## Cross-team loans
 

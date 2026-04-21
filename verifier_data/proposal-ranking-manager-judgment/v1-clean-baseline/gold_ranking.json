@@ -30,11 +30,11 @@
     "Dockerfile": "eec6b1c1b0682a2341c08b36fa1774be4700259376d448e7d1d02a46c1cb5b15",
     "bin": "753c4f857699d9023fa3fc463a54fe3c7da28de9cc26aeb5518c2adb7981f3df",
     "proposals": "2cfb76e052fa9b78ee3d31ba2c45e6e3a53b6357937c6ed1913b75bd5bef31fc",
-    "repo_evidence": "880e054c3e3f0b3c315b20097761cca61d17133d1fbf83e8e3e2cd8f39529291",
+    "repo_evidence": "7737f3a01da5ca27884d546b13feeacd7591faf808975451cb2e5bd9241deecc",
     "tests": "909812d11a33b67ed7765e3dd336ab1fe0417b9ecb07f346b3ff4dad3fd047a0"
   },
   "staffing_blocked_proposal": "P3",
-  "staffing_update_file": "repo_evidence/meta/staffing_update_2026_06_15.md",
+  "staffing_update_file": "repo_evidence/meta/roster_memo.md",
   "staffing_update_owner_proposal": "P4",
   "test_ranking_brief_sha256": "365abde96d4dc1295a98410efe9bf6d2acf608cc26d6fe24be01f366ebaf5959",
   "variant_id": "v1-clean-baseline"

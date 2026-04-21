@@ -9,7 +9,7 @@ Accept **P4**. Rankings, citations, and assumptions are listed below.
 ## Ranking
 
 - **P4** (rank 1, **ACCEPTED**) — Surgical schema-compile warm-start pays down the dominant hot-path segment and is staffable in Q3 with Ravi covering during Priya's 40% parental leave ramp-down.
-  - Citations: `proposals/P4.md`, `repo_evidence/perf/schema_compile_bench.md`, `repo_evidence/meta/staffing.md`, `repo_evidence/meta/staffing_update_2026_06_15.md`, `repo_evidence/code/normalizer_excerpt.py`, `repo_evidence/perf/hot_path_flame_2026_04_02.txt`
+  - Citations: `proposals/P4.md`, `repo_evidence/perf/schema_compile_bench.md`, `repo_evidence/meta/staffing.md`, `repo_evidence/meta/roster_memo.md`, `repo_evidence/code/normalizer_excerpt.py`, `repo_evidence/perf/hot_path_flame_2026_04_02.txt`
   - Constraint tags: staffing, rollout, perf
 - **P2** (rank 2, rejected) — L2 response cache is a close-call trade-off vs P4; real win but coupled to watermark without staged rollout.
   - Citations: `proposals/P2.md`, `repo_evidence/perf/l2_cache_shadow_replay.md`, `repo_evidence/meta/rollout_history.md`
