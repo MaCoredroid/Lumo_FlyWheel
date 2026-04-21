@@ -1,0 +1,589 @@
+#!/usr/bin/env python3
+"""
+cnb55-brief — family-specific CLI for CNB-55 Track 10
+               family `proposal-ranking-manager-judgment`.
+
+This is the agent's structured-output tool. Instead of hand-writing markdown
+and hoping the grader's regex catches it, the agent writes a small JSON file
+and runs:
+
+    cnb55-brief submit brief_input.json
+
+The CLI validates the input against the JSON schema (cnb55.manager_brief.v2),
+checks every citation path exists on disk, and then writes:
+
+  - brief/manager_brief.json   (canonical — this is what the grader reads)
+  - brief/manager_brief.md     (human-readable renderer output)
+
+No YAML. No regex extraction. No format ambiguity. If `cnb55-brief submit`
+exits 0, the grader will be able to read your structured data cleanly.
+
+Subcommands:
+
+  schema             Print the JSON schema.
+  validate FILE      Dry-run validation. Exits non-zero on error. Writes nothing.
+  submit FILE        Validate + write brief/{manager_brief.json,manager_brief.md}.
+
+Exit codes:
+
+  0  success (for validate: input is valid; for submit: wrote files)
+  2  input file missing or not valid JSON
+  3  schema violation (missing/wrong-typed required field, bad enum, ...)
+  4  citation error (a cited path does not exist in the workspace)
+  5  variant mismatch with .scenario_variant
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+SCHEMA_VERSION = "cnb55.manager_brief.v2"
+CONSTRAINT_TAGS = ("staffing", "rollout", "regression", "perf", "release", "incident")
+ASSUMPTION_STATUSES = ("observed", "to_verify", "missing")
+MITIGATION_KEYWORDS = (
+    "feature flag", "kill switch", "shadow", "canary",
+    "staged rollout", "rollback", "observability", "slo",
+    "pre-warm", "mitigate", "gate",
+)
+EVIDENCE_ROOTS = ("proposals", "repo_evidence", "release_context", "incident_context")
+
+
+# --------------------------------------------------------------- JSON SCHEMA
+
+
+def schema_object() -> dict:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "CNB-55 Manager Brief Input (v2)",
+        "type": "object",
+        "required": ["schema_version", "variant_id", "accepted",
+                     "primary_risk", "ranking", "assumption_ledger"],
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {
+                "type": "string",
+                "const": SCHEMA_VERSION,
+                "description": "Schema tag. Must equal " + SCHEMA_VERSION,
+            },
+            "variant_id": {
+                "type": "string",
+                "description": (
+                    "Variant id from the workspace's .scenario_variant file."
+                ),
+            },
+            "accepted": {
+                "type": "string",
+                "pattern": "^P[0-9]+$",
+                "description": "Proposal id you are accepting, e.g. \"P4\".",
+            },
+            "primary_risk": {
+                "type": "object",
+                "required": ["statement", "mitigations"],
+                "additionalProperties": False,
+                "properties": {
+                    "statement": {
+                        "type": "string",
+                        "minLength": 20,
+                        "description": (
+                            "One sentence naming the most likely way the "
+                            "accepted proposal can fail in production."
+                        ),
+                    },
+                    "mitigations": {
+                        "type": "array",
+                        "minItems": 2,
+                        "items": {"type": "string", "minLength": 3},
+                        "description": (
+                            "Concrete mitigation phrases. Must include at least "
+                            "two of: " + ", ".join(MITIGATION_KEYWORDS) + "."
+                        ),
+                    },
+                },
+            },
+            "ranking": {
+                "type": "array",
+                "minItems": 2,
+                "description": (
+                    "Ordered ranking, one entry per proposal in proposals/. "
+                    "rank=1 is the accepted pick. Ranks must be contiguous 1..N."
+                ),
+                "items": {
+                    "type": "object",
+                    "required": ["proposal_id", "rank", "summary",
+                                 "citations", "constraint_tags"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "proposal_id": {"type": "string", "pattern": "^P[0-9]+$"},
+                        "rank": {"type": "integer", "minimum": 1},
+                        "summary": {
+                            "type": "string",
+                            "minLength": 12,
+                            "description": (
+                                "Short human-readable rationale (>=12 chars). "
+                                "This is rendered as prose in the .md output."
+                            ),
+                        },
+                        "citations": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "File paths under proposals/, repo_evidence/, "
+                                "release_context/, or incident_context/ that "
+                                "back this ranking entry. All paths are "
+                                "checked for existence. Non-accepted entries "
+                                "should cite >=1 evidence file."
+                            ),
+                        },
+                        "constraint_tags": {
+                            "type": "array",
+                            "items": {"enum": list(CONSTRAINT_TAGS)},
+                            "description": (
+                                "Which engineering constraints this entry "
+                                "hinges on. Valid: "
+                                + ", ".join(CONSTRAINT_TAGS) + "."
+                            ),
+                        },
+                    },
+                },
+            },
+            "assumption_ledger": {
+                "type": "array",
+                "minItems": 1,
+                "description": (
+                    "Things you assumed or could not verify. At least one "
+                    "entry must have status=missing."
+                ),
+                "items": {
+                    "type": "object",
+                    "required": ["topic", "status", "note"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "topic": {"type": "string", "minLength": 3},
+                        "status": {"enum": list(ASSUMPTION_STATUSES)},
+                        "note": {"type": "string", "minLength": 3},
+                    },
+                },
+            },
+        },
+    }
+
+
+# ----------------------------------------------------- validation (stdlib only)
+
+
+class ValidationError(Exception):
+    def __init__(self, code: int, messages: list[str]):
+        super().__init__("\n".join(messages))
+        self.code = code
+        self.messages = messages
+
+
+def _type_ok(v: Any, kind: str) -> bool:
+    if kind == "object":
+        return isinstance(v, dict)
+    if kind == "array":
+        return isinstance(v, list)
+    if kind == "string":
+        return isinstance(v, str)
+    if kind == "integer":
+        return isinstance(v, int) and not isinstance(v, bool)
+    return False
+
+
+def validate_schema(doc: Any) -> list[str]:
+    """
+    Minimal, hand-rolled schema validator against schema_object(). Returns a
+    list of error messages; empty list means valid. We avoid pulling jsonschema
+    so the CLI stays zero-dep.
+    """
+    errors: list[str] = []
+    if not isinstance(doc, dict):
+        return ["top-level value must be a JSON object"]
+
+    # required top-level fields
+    req = {"schema_version", "variant_id", "accepted",
+           "primary_risk", "ranking", "assumption_ledger"}
+    missing = sorted(req - set(doc))
+    for m in missing:
+        errors.append(f"missing required field: {m}")
+    extra = sorted(set(doc) - req)
+    for e in extra:
+        errors.append(f"unexpected top-level field: {e}")
+    if errors:
+        return errors
+
+    if doc["schema_version"] != SCHEMA_VERSION:
+        errors.append(
+            f"schema_version must be {SCHEMA_VERSION}, got {doc['schema_version']!r}"
+        )
+    if not _type_ok(doc["variant_id"], "string") or not doc["variant_id"]:
+        errors.append("variant_id must be a non-empty string")
+    if not _type_ok(doc["accepted"], "string"):
+        errors.append("accepted must be a string like 'P4'")
+    else:
+        import re
+        if not re.match(r"^P[0-9]+$", doc["accepted"]):
+            errors.append(f"accepted must match ^P[0-9]+$, got {doc['accepted']!r}")
+
+    # primary_risk
+    pr = doc.get("primary_risk")
+    if not _type_ok(pr, "object"):
+        errors.append("primary_risk must be an object")
+    else:
+        pr_req = {"statement", "mitigations"}
+        pr_missing = sorted(pr_req - set(pr))
+        pr_extra = sorted(set(pr) - pr_req)
+        for m in pr_missing:
+            errors.append(f"primary_risk.{m} is required")
+        for e in pr_extra:
+            errors.append(f"primary_risk.{e} is not a known field")
+        if "statement" in pr and (not _type_ok(pr["statement"], "string")
+                                  or len(pr["statement"].strip()) < 20):
+            errors.append("primary_risk.statement must be a string >=20 chars")
+        if "mitigations" in pr:
+            if not _type_ok(pr["mitigations"], "array") or len(pr["mitigations"]) < 2:
+                errors.append("primary_risk.mitigations must be an array of >=2 strings")
+            elif not all(_type_ok(m, "string") and len(m) >= 3 for m in pr["mitigations"]):
+                errors.append("every mitigation must be a string of >=3 chars")
+
+    # ranking
+    r = doc.get("ranking")
+    ranks_seen: list[int] = []
+    pids_seen: list[str] = []
+    if not _type_ok(r, "array") or len(r) < 2:
+        errors.append("ranking must be an array with >=2 entries")
+    else:
+        import re
+        for i, e in enumerate(r):
+            path = f"ranking[{i}]"
+            if not _type_ok(e, "object"):
+                errors.append(f"{path} must be an object")
+                continue
+            req_fields = {"proposal_id", "rank", "summary",
+                          "citations", "constraint_tags"}
+            m2 = sorted(req_fields - set(e))
+            x2 = sorted(set(e) - req_fields)
+            for m in m2:
+                errors.append(f"{path}.{m} is required")
+            for ex in x2:
+                errors.append(f"{path}.{ex} is not a known field")
+            if "proposal_id" in e:
+                pid = e["proposal_id"]
+                if not _type_ok(pid, "string") or not re.match(r"^P[0-9]+$", pid):
+                    errors.append(f"{path}.proposal_id must match ^P[0-9]+$")
+                else:
+                    pids_seen.append(pid)
+            if "rank" in e:
+                if not _type_ok(e["rank"], "integer") or e["rank"] < 1:
+                    errors.append(f"{path}.rank must be an integer >=1")
+                else:
+                    ranks_seen.append(e["rank"])
+            if "summary" in e:
+                if not _type_ok(e["summary"], "string") or len(e["summary"].strip()) < 12:
+                    errors.append(f"{path}.summary must be a string >=12 chars")
+            if "citations" in e:
+                if not _type_ok(e["citations"], "array"):
+                    errors.append(f"{path}.citations must be an array of strings")
+                elif not all(_type_ok(c, "string") for c in e["citations"]):
+                    errors.append(f"{path}.citations must be an array of strings")
+            if "constraint_tags" in e:
+                if not _type_ok(e["constraint_tags"], "array"):
+                    errors.append(f"{path}.constraint_tags must be an array")
+                else:
+                    for tag in e["constraint_tags"]:
+                        if tag not in CONSTRAINT_TAGS:
+                            errors.append(
+                                f"{path}.constraint_tags: {tag!r} not in "
+                                f"{{{', '.join(CONSTRAINT_TAGS)}}}"
+                            )
+        # structural: ranks contiguous 1..N, proposal_ids unique
+        if ranks_seen:
+            if sorted(ranks_seen) != list(range(1, len(r) + 1)):
+                errors.append(
+                    f"ranks must be the contiguous set 1..{len(r)}, got {sorted(ranks_seen)}"
+                )
+        if pids_seen:
+            if len(set(pids_seen)) != len(pids_seen):
+                errors.append(f"proposal_ids must be unique; got {pids_seen}")
+        # accepted must exist in ranking with rank 1
+        if _type_ok(doc.get("accepted"), "string") and ranks_seen and pids_seen:
+            try:
+                accepted_rank = next(
+                    e["rank"] for e in r
+                    if isinstance(e, dict) and e.get("proposal_id") == doc["accepted"]
+                )
+                if accepted_rank != 1:
+                    errors.append(
+                        f"accepted={doc['accepted']!r} must be the rank=1 entry "
+                        f"(it is currently at rank {accepted_rank})"
+                    )
+            except StopIteration:
+                errors.append(
+                    f"accepted={doc['accepted']!r} does not appear in ranking"
+                )
+
+    # assumption_ledger
+    al = doc.get("assumption_ledger")
+    if not _type_ok(al, "array") or len(al) < 1:
+        errors.append("assumption_ledger must be a non-empty array")
+    else:
+        has_missing = False
+        for i, e in enumerate(al):
+            path = f"assumption_ledger[{i}]"
+            if not _type_ok(e, "object"):
+                errors.append(f"{path} must be an object")
+                continue
+            req_fields = {"topic", "status", "note"}
+            m2 = sorted(req_fields - set(e))
+            for m in m2:
+                errors.append(f"{path}.{m} is required")
+            if "status" in e and e["status"] not in ASSUMPTION_STATUSES:
+                errors.append(
+                    f"{path}.status must be one of {ASSUMPTION_STATUSES}, got {e['status']!r}"
+                )
+            if e.get("status") == "missing":
+                has_missing = True
+        if not has_missing:
+            errors.append(
+                "assumption_ledger must contain at least one row with status='missing'"
+            )
+
+    return errors
+
+
+# ---------------------------------------------------- workspace-aware checks
+
+
+def find_workspace_root(start: Path) -> Path:
+    """
+    Walk up from `start` looking for a directory that contains at least one of
+    our evidence roots AND a brief/ directory. Falls back to cwd if nothing
+    obvious found.
+    """
+    cur = start.resolve()
+    for _ in range(6):
+        if (cur / "brief").is_dir() and any((cur / r).exists() for r in EVIDENCE_ROOTS):
+            return cur
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+    return Path.cwd().resolve()
+
+
+def workspace_evidence_set(ws: Path) -> set[str]:
+    ev: set[str] = set()
+    for root in EVIDENCE_ROOTS:
+        base = ws / root
+        if base.exists():
+            for p in base.rglob("*"):
+                if p.is_file():
+                    ev.add(p.relative_to(ws).as_posix())
+    return ev
+
+
+def check_variant_id(doc: dict, ws: Path) -> list[str]:
+    """variant_id must match .scenario_variant if present."""
+    sv = ws / ".scenario_variant"
+    if not sv.exists():
+        return []
+    want = sv.read_text().strip()
+    got = doc.get("variant_id", "")
+    if want and got and want != got:
+        return [
+            f"variant_id={got!r} does not match workspace .scenario_variant={want!r}"
+        ]
+    return []
+
+
+def check_citations(doc: dict, ws: Path) -> list[str]:
+    """Every citation path must be a real file in the evidence roots."""
+    errors: list[str] = []
+    ev = workspace_evidence_set(ws)
+    for i, e in enumerate(doc.get("ranking", [])):
+        if not isinstance(e, dict):
+            continue
+        for c in e.get("citations", []):
+            if not isinstance(c, str):
+                continue
+            # Allow paths with or without leading ./
+            normalized = c.lstrip("./")
+            if normalized not in ev:
+                errors.append(
+                    f"ranking[{i}] ({e.get('proposal_id', '?')}): citation "
+                    f"{c!r} does not exist under "
+                    f"{{{', '.join(EVIDENCE_ROOTS)}}} of this workspace"
+                )
+    return errors
+
+
+# ----------------------------------------------------------------- rendering
+
+
+def render_markdown(doc: dict) -> str:
+    """Render the canonical JSON into a human-readable markdown brief."""
+    out: list[str] = []
+    out.append(f"# Manager Brief — {doc['variant_id']}")
+    out.append("")
+    out.append(
+        f"*Machine-readable source of truth: `brief/manager_brief.json` "
+        f"(schema {SCHEMA_VERSION}).*"
+    )
+    out.append("")
+    out.append("## Decision")
+    out.append("")
+    out.append(
+        f"Accept **{doc['accepted']}**. Rankings, citations, and assumptions "
+        f"are listed below."
+    )
+    out.append("")
+    out.append("## Ranking")
+    out.append("")
+    for e in sorted(doc["ranking"], key=lambda x: x["rank"]):
+        cit = ", ".join(f"`{c}`" for c in e.get("citations", [])) or "_(no citations)_"
+        tags = ", ".join(e.get("constraint_tags", [])) or "_(no tags)_"
+        marker = "**ACCEPTED**" if e["proposal_id"] == doc["accepted"] else "rejected"
+        out.append(
+            f"- **{e['proposal_id']}** (rank {e['rank']}, {marker}) — "
+            f"{e['summary']}"
+        )
+        out.append(f"  - Citations: {cit}")
+        out.append(f"  - Constraint tags: {tags}")
+    out.append("")
+    out.append("## Primary Risk and Mitigations")
+    out.append("")
+    out.append(f"**Risk.** {doc['primary_risk']['statement']}")
+    out.append("")
+    out.append("**Mitigations.**")
+    for m in doc["primary_risk"]["mitigations"]:
+        out.append(f"- {m}")
+    out.append("")
+    out.append("## Assumption Ledger")
+    out.append("")
+    out.append("| Status | Topic | Note |")
+    out.append("| --- | --- | --- |")
+    for a in doc["assumption_ledger"]:
+        out.append(f"| {a['status']} | {a['topic']} | {a['note']} |")
+    out.append("")
+    return "\n".join(out)
+
+
+# ------------------------------------------------------------------- actions
+
+
+def load_input(path: Path) -> dict:
+    if not path.exists():
+        raise ValidationError(2, [f"input file not found: {path}"])
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise ValidationError(
+            2, [f"input file is not valid JSON: {path}: {e}"]
+        ) from e
+
+
+def do_validate(doc: dict, ws: Path) -> None:
+    """Raise ValidationError if anything is wrong. No filesystem writes."""
+    errs = validate_schema(doc)
+    if errs:
+        raise ValidationError(3, errs)
+    errs = check_variant_id(doc, ws)
+    if errs:
+        raise ValidationError(5, errs)
+    errs = check_citations(doc, ws)
+    if errs:
+        raise ValidationError(4, errs)
+
+
+def do_submit(doc: dict, ws: Path) -> tuple[Path, Path]:
+    do_validate(doc, ws)
+    brief_dir = ws / "brief"
+    brief_dir.mkdir(parents=True, exist_ok=True)
+    json_path = brief_dir / "manager_brief.json"
+    md_path = brief_dir / "manager_brief.md"
+    # Canonical JSON: sorted keys, deterministic spacing.
+    json_path.write_text(
+        json.dumps(doc, indent=2, sort_keys=True) + "\n"
+    )
+    md_path.write_text(render_markdown(doc))
+    return json_path, md_path
+
+
+# --------------------------------------------------------------------- CLI
+
+
+def cmd_schema(args: argparse.Namespace) -> int:
+    json.dump(schema_object(), sys.stdout, indent=2, sort_keys=True)
+    sys.stdout.write("\n")
+    return 0
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    try:
+        doc = load_input(args.file)
+        ws = find_workspace_root(args.file.parent)
+        do_validate(doc, ws)
+    except ValidationError as e:
+        print(f"cnb55-brief: validation failed ({len(e.messages)} error(s)):",
+              file=sys.stderr)
+        for m in e.messages:
+            print(f"  - {m}", file=sys.stderr)
+        return e.code
+    print(f"cnb55-brief: OK ({args.file})")
+    return 0
+
+
+def cmd_submit(args: argparse.Namespace) -> int:
+    try:
+        doc = load_input(args.file)
+        ws = find_workspace_root(args.file.parent)
+        json_path, md_path = do_submit(doc, ws)
+    except ValidationError as e:
+        print(f"cnb55-brief: submit failed ({len(e.messages)} error(s)):",
+              file=sys.stderr)
+        for m in e.messages:
+            print(f"  - {m}", file=sys.stderr)
+        return e.code
+    print(f"cnb55-brief: wrote {json_path}")
+    print(f"cnb55-brief: wrote {md_path}")
+    # Emit a short summary so the agent gets a confirmation line.
+    n_ranks = len(doc["ranking"])
+    n_cites = sum(len(e.get("citations", [])) for e in doc["ranking"])
+    print(
+        f"cnb55-brief: {n_ranks} ranking entries, {n_cites} citations, "
+        f"accepted={doc['accepted']}"
+    )
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(
+        prog="cnb55-brief",
+        description=(
+            "Structured-output CLI for the CNB-55 "
+            "proposal-ranking-manager-judgment family. "
+            "Writes brief/manager_brief.{json,md} from a brief_input.json."
+        ),
+    )
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("schema", help="print the JSON schema")
+    s.set_defaults(fn=cmd_schema)
+
+    v = sub.add_parser("validate", help="dry-run validation of an input file")
+    v.add_argument("file", type=Path)
+    v.set_defaults(fn=cmd_validate)
+
+    u = sub.add_parser("submit", help="validate and write brief/manager_brief.{json,md}")
+    u.add_argument("file", type=Path)
+    u.set_defaults(fn=cmd_submit)
+
+    ns = p.parse_args(argv)
+    return ns.fn(ns)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

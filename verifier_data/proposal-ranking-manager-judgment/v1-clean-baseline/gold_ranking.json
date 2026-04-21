@@ -1,0 +1,41 @@
+{
+  "accepted": "P4",
+  "pass_bar": 40,
+  "primary_risk": "schema-cache warmup cost on cold process start",
+  "ranking": [
+    {
+      "proposal_id": "P4",
+      "rank": 1,
+      "reason": "surgical schema-compile warm-start; clean evidence; matches staffing"
+    },
+    {
+      "proposal_id": "P2",
+      "rank": 2,
+      "reason": "L2 cache; modest latency win; watermark coupling noted as primary risk"
+    },
+    {
+      "proposal_id": "P1",
+      "rank": 3,
+      "reason": "fast-ship structural-validation drop; regression risk on SDK contract"
+    },
+    {
+      "proposal_id": "P3",
+      "rank": 4,
+      "reason": "largest latency delta but staffing-blocked \u2014 Diego at 0% this quarter"
+    }
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "f8eca655d75e277db77a7639038b300b1b57505760b81d8579cb15e4e58ef96d",
+    "Dockerfile": "eec6b1c1b0682a2341c08b36fa1774be4700259376d448e7d1d02a46c1cb5b15",
+    "bin": "753c4f857699d9023fa3fc463a54fe3c7da28de9cc26aeb5518c2adb7981f3df",
+    "proposals": "2cfb76e052fa9b78ee3d31ba2c45e6e3a53b6357937c6ed1913b75bd5bef31fc",
+    "repo_evidence": "880e054c3e3f0b3c315b20097761cca61d17133d1fbf83e8e3e2cd8f39529291",
+    "tests": "909812d11a33b67ed7765e3dd336ab1fe0417b9ecb07f346b3ff4dad3fd047a0"
+  },
+  "staffing_blocked_proposal": "P3",
+  "staffing_update_file": "repo_evidence/meta/staffing_update_2026_06_15.md",
+  "staffing_update_owner_proposal": "P4",
+  "test_ranking_brief_sha256": "365abde96d4dc1295a98410efe9bf6d2acf608cc26d6fe24be01f366ebaf5959",
+  "variant_id": "v1-clean-baseline"
+}

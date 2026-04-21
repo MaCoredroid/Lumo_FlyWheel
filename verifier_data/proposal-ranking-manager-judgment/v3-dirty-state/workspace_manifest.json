@@ -1,0 +1,40 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "bin/cnb55-brief",
+    "proposals/P1.md",
+    "proposals/P2.md",
+    "proposals/P3.md",
+    "proposals/P4.md",
+    "proposals/P5.md",
+    "repo_evidence/code/hot_path_excerpt.py",
+    "repo_evidence/code/in_progress_patch/Cargo.toml",
+    "repo_evidence/code/in_progress_patch/README.md",
+    "repo_evidence/code/in_progress_patch/notes.md",
+    "repo_evidence/code/in_progress_patch_v2/README.md",
+    "repo_evidence/code/normalizer_excerpt.py",
+    "repo_evidence/meta/rollout_history.md",
+    "repo_evidence/meta/staffing.md",
+    "repo_evidence/meta/staffing_update_2026_06_15.md",
+    "repo_evidence/perf/hot_path_flame_2026_04_02.txt",
+    "repo_evidence/perf/l2_cache_shadow_replay.md",
+    "repo_evidence/perf/rust_prototype_notes.md",
+    "repo_evidence/perf/schema_compile_bench.md",
+    "repo_evidence/perf/validator_service_jan_bench.md",
+    "tests/test_ranking_brief.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+    "AGENTS.md": "f8eca655d75e277db77a7639038b300b1b57505760b81d8579cb15e4e58ef96d",
+    "Dockerfile": "eec6b1c1b0682a2341c08b36fa1774be4700259376d448e7d1d02a46c1cb5b15",
+    "bin": "753c4f857699d9023fa3fc463a54fe3c7da28de9cc26aeb5518c2adb7981f3df",
+    "proposals": "ddd3536eca963f1c263c2e43456c62544aa2632fecb8bd49faedaaaa06c2fefa",
+    "repo_evidence": "38279b3f1d337ff11deba9326f6752b756c77450df090dae610bd2e5536eeb60",
+    "tests": "909812d11a33b67ed7765e3dd336ab1fe0417b9ecb07f346b3ff4dad3fd047a0"
+  },
+  "test_ranking_brief_sha256": "365abde96d4dc1295a98410efe9bf6d2acf608cc26d6fe24be01f366ebaf5959",
+  "variant_id": "v3-dirty-state"
+}

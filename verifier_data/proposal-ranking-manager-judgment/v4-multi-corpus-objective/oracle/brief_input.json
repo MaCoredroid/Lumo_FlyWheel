@@ -1,0 +1,105 @@
+{
+  "accepted": "P2",
+  "assumption_ledger": [
+    {
+      "note": "Release notes describe truncation incidents but do not set an explicit SLO; would need PM confirmation.",
+      "status": "missing",
+      "topic": "Streaming-reliability SLO numerical target for INC-2411/2419/2427"
+    },
+    {
+      "note": "validator_service_jan_bench.md is outdated; no fresh bench found.",
+      "status": "missing",
+      "topic": "Whether stale Jan validator bench has been refreshed"
+    },
+    {
+      "note": "Shadow replay predates INC-2427 watermark changes.",
+      "status": "to_verify",
+      "topic": "Whether P2 shadow-replay results still hold after watermark changes"
+    }
+  ],
+  "primary_risk": {
+    "mitigations": [
+      "feature flag gated 1%/10% canary",
+      "kill switch back to no-cache path on watermark lag",
+      "shadow replay comparing watermark boundaries with/without cache",
+      "SLO observability on truncation rate during rollout",
+      "staged rollout halts at 10% if the INC-2427 watermark regression reappears; Mei pre-warm reviewer for the watermark coupling gate"
+    ],
+    "statement": "L2 cache invalidation coupling with the streaming watermark module can regress truncation guarantees under load, and watermark state changes landed AFTER the shadow replay numbers were collected (INC-2427) \u2014 so the replay baseline is a conservative lower-bound, not a ship-ready SLO."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "proposals/P2.md",
+        "repo_evidence/perf/l2_cache_shadow_replay.md",
+        "release_context/release_notes_2026_03.md"
+      ],
+      "constraint_tags": [
+        "rollout",
+        "release",
+        "perf"
+      ],
+      "proposal_id": "P2",
+      "rank": 1,
+      "summary": "L2 cache now pairs latency with streaming reliability isolation; matches the new objective (INC-2411/2419/2427)."
+    },
+    {
+      "citations": [
+        "proposals/P5.md",
+        "repo_evidence/perf/validator_service_jan_bench.md",
+        "release_context/release_notes_2026_03.md"
+      ],
+      "constraint_tags": [
+        "release",
+        "regression"
+      ],
+      "proposal_id": "P5",
+      "rank": 2,
+      "summary": "Validator microservice delivers reliability isolation under the new streaming objective; January 2026 jan_bench perf is stale and superseded pre-streaming \u2014 flagged here."
+    },
+    {
+      "citations": [
+        "proposals/P4.md",
+        "repo_evidence/perf/schema_compile_bench.md",
+        "release_context/release_notes_2026_03.md"
+      ],
+      "constraint_tags": [
+        "release",
+        "perf"
+      ],
+      "proposal_id": "P4",
+      "rank": 3,
+      "summary": "Surgical warm-start is strong latency win but does NOT advance streaming-reliability \u2014 mismatch vs current objective."
+    },
+    {
+      "citations": [
+        "proposals/P1.md",
+        "repo_evidence/meta/rollout_history.md",
+        "release_context/release_notes_2026_03.md"
+      ],
+      "constraint_tags": [
+        "release",
+        "regression"
+      ],
+      "proposal_id": "P1",
+      "rank": 4,
+      "summary": "Fast-ship validation drop; does not advance streaming reliability and keeps SDK regression risk."
+    },
+    {
+      "citations": [
+        "proposals/P3.md",
+        "repo_evidence/perf/rust_prototype_notes.md",
+        "repo_evidence/meta/staffing.md"
+      ],
+      "constraint_tags": [
+        "staffing",
+        "regression"
+      ],
+      "proposal_id": "P3",
+      "rank": 5,
+      "summary": "Rust rewrite; sunk-cost abandoned patch; staffing-blocked (Diego 0%); does not advance streaming reliability."
+    }
+  ],
+  "schema_version": "cnb55.manager_brief.v2",
+  "variant_id": "v4-multi-corpus-objective"
+}

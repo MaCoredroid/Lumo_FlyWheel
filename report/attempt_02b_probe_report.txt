@@ -1,0 +1,21 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=20260420T221304Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   88.67    1.15    88    90  [88,88,90]  -
+v2-noisy-distractor                3   88.00    0.00    88    88  [88,88,88]  -
+v3-dirty-state                     3   88.67    1.15    88    90  [88,90,88]  -
+v4-multi-corpus-objective          3   45.00    0.00    45    45  [45,45,45]  objective_driftx3
+v5-recovery-in-thread              3   81.00   31.18    45    99  [99,99,45]  objective_driftx1
+
+family_mean = 78.27   (window 15.0-25.0)
+max_variant_mean = 88.67   (cap 40.0)
+min_variant_mean = 45.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 78.27
+  [FAIL] max variant <= cap: 88.67
+  [FAIL] at least one variant <= hard floor: min variant mean = 45.00
+  [FAIL] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: v4-multi-corpus-objective (45.0) < v5-recovery-in-thread (81.0) beyond +/-3.0
+
+overall: HARDEN NEEDED

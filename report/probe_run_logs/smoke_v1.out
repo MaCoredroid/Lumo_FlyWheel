@@ -1,0 +1,13 @@
+probe_run_id=20260420T063532Z  family=proposal-ranking-manager-judgment  N=1  variants=[v1-clean-baseline]
+repo=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel
+probe_root=/tmp/cnb55_probe
+runs_jsonl=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/report/probe_runs.jsonl
+
+=== v1-clean-baseline run 1/1 (20260420T063532Z-v1-clean-baseline-run1) ===
+  codex exit=0  (log: /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/report/probe_run_logs/20260420T063532Z-v1-clean-baseline-run1.log)
+  score=10  raw=12  pass=False  ceilings=['malformed_machine_block']
+
+done.        3 total runs recorded in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/report/probe_runs.jsonl
+next: python3 /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/scripts/probe_report.py /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/report/probe_runs.jsonl --probe-run-id 20260420T063532Z
+obe_runs.jsonl
+next: python3 /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/scripts/probe_report.py /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/report/probe_runs.jsonl --probe-run-id 20260420T063454Z

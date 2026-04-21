@@ -1,0 +1,22 @@
+respproxy/v0.19.0 — /v1/responses tool-call path — flamegraph summary
+Captured: 2026-04-02, production traffic, 10-min window, p95 request cohort
+
+Total p95 end-to-end latency:                   420 ms
+Breakdown (self-time on hot path):
+    normalize_request                            52 ms
+    compile_tool_schema (per-call)              128 ms    <-- repeated per request
+    validate_tool_call_args (jsonschema)         84 ms
+    dispatch_to_skill_pack                       61 ms
+    model_forward (transformer runtime)          42 ms
+    finalize + stream                            53 ms
+
+Notes:
+ - The per-call schema compilation is unambiguous waste: the same
+   tool schema is compiled ~40 times per minute per pod.
+ - validate_tool_call_args is large but covers real semantic errors
+   that the SDK contract depends on (clients rely on 400 responses).
+ - model_forward is small in the tool-call path because tool-call
+   turns typically re-enter the skill pack without a full token loop.
+
+Profiler: scripts/scripts/flame_respproxy.sh
+Next capture: weekly rotation.

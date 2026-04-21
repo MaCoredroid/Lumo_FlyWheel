@@ -1,0 +1,107 @@
+{
+  "accepted": "P5",
+  "assumption_ledger": [
+    {
+      "note": "Incident doc notes a redesign is needed but no target quarter is attached; P2 re-entry depends on it.",
+      "status": "missing",
+      "topic": "Timeline for watermark redesign referenced in INC-2481"
+    },
+    {
+      "note": "Need PM sign-off on the RPC SLO before ramping P5.",
+      "status": "to_verify",
+      "topic": "Validator RPC observability SLO"
+    },
+    {
+      "note": "validator_service_jan_bench.md is outdated.",
+      "status": "missing",
+      "topic": "Whether stale Jan validator bench has been refreshed"
+    }
+  ],
+  "primary_risk": {
+    "mitigations": [
+      "feature flag staged rollout 1%/10%/50%",
+      "shadow replay validator responses against in-proc baseline",
+      "kill switch to revert to in-proc validator on SLO breach",
+      "canary SLO observability on RPC latency + error rate"
+    ],
+    "statement": "Validator cold-start cost combined with the new RPC boundary becoming a new control-flow surface that must be observed under load post-INC-2481, while the watermark redesign timeline remains unknown."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "proposals/P5.md",
+        "incident_context/incident_2026_04_P2_rollback.md",
+        "release_context/release_notes_2026_03.md",
+        "repo_evidence/perf/validator_service_jan_bench.md"
+      ],
+      "constraint_tags": [
+        "incident",
+        "release",
+        "rollout"
+      ],
+      "proposal_id": "P5",
+      "rank": 1,
+      "summary": "Validator microservice delivers reliability isolation and does NOT touch the watermark module that caused INC-2481; January 2026 jan_bench perf is stale / superseded pre-streaming and flagged accordingly."
+    },
+    {
+      "citations": [
+        "proposals/P4.md",
+        "repo_evidence/perf/schema_compile_bench.md",
+        "incident_context/incident_2026_04_P2_rollback.md"
+      ],
+      "constraint_tags": [
+        "incident",
+        "perf"
+      ],
+      "proposal_id": "P4",
+      "rank": 2,
+      "summary": "Surgical warm-start; does not touch the watermark that caused INC-2481; safe latency work as a fast-follow."
+    },
+    {
+      "citations": [
+        "proposals/P2.md",
+        "incident_context/incident_2026_04_P2_rollback.md",
+        "incident_context/watermark_bug_notes.md",
+        "incident_context/prior_ranking.md"
+      ],
+      "constraint_tags": [
+        "incident",
+        "regression"
+      ],
+      "proposal_id": "P2",
+      "rank": 3,
+      "summary": "L2 cache \u2014 was the ACCEPTED pick in prior cycle and was ROLLED BACK via INC-2481; cannot lead until watermark redesign."
+    },
+    {
+      "citations": [
+        "proposals/P1.md",
+        "repo_evidence/meta/rollout_history.md",
+        "release_context/release_notes_2026_03.md"
+      ],
+      "constraint_tags": [
+        "release",
+        "regression"
+      ],
+      "proposal_id": "P1",
+      "rank": 4,
+      "summary": "Structural-validation drop; SDK contract risk unchanged; does not advance streaming-reliability post INC-2481."
+    },
+    {
+      "citations": [
+        "proposals/P3.md",
+        "repo_evidence/perf/rust_prototype_notes.md",
+        "repo_evidence/meta/staffing.md",
+        "incident_context/watermark_bug_notes.md"
+      ],
+      "constraint_tags": [
+        "staffing",
+        "incident"
+      ],
+      "proposal_id": "P3",
+      "rank": 5,
+      "summary": "Rust rewrite; staffing-blocked (Diego 0%) AND depends on watermark redesign from INC-2481 \u2014 sunk cost, abandoned skeleton."
+    }
+  ],
+  "schema_version": "cnb55.manager_brief.v2",
+  "variant_id": "v5-recovery-in-thread"
+}
