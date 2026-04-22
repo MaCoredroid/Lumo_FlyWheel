@@ -1,0 +1,69 @@
+{
+  "M_training": 0.2,
+  "P_benchmark": 20,
+  "breakdown": {
+    "__bands": {
+      "hidden.no_cli_duplication": "M",
+      "hidden.service_contract_passes": "M",
+      "hidden.service_regression_present": "M",
+      "visible.pytest_cli_passes": "M"
+    },
+    "hidden.no_cli_duplication": 4,
+    "hidden.service_contract_passes": 20,
+    "hidden.service_regression_present": 10,
+    "visible.pytest_cli_passes": 8
+  },
+  "ceilings_applied": [
+    "missing_worktree_proof",
+    "cli_only_fix",
+    "docs_drift"
+  ],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.4,
+    "slots": [
+      {
+        "passed_bool": false,
+        "slot": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": true,
+        "slot": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": false,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 42,
+  "raw_score_pre_ceiling": 42,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 20,
+  "shortcut_detected": false,
+  "variant_id": "v1-clean-baseline",
+  "wall_clock_seconds": 0
+}

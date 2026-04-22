@@ -10,6 +10,7 @@
     "repo_evidence": "15da4c5babdad62feebbaba59089beb8f91059537b55239a850f6eb7d4d03074",
     "src/report_filters/__init__.py": "6c2a51111d0b1a3f4fecf0c141c7ee8518429f336e8a7e2748ea62304b764703",
     "src/report_filters/normalization.py": "9aee536b7dff45475dff25f9eae0af28f9e6d51eeb7898415ee8c78f637352e1",
+    "tests/conftest.py": "f985c8e7037a48b7896f1f7272411dc47beedadc7d6a0fccdba16b77e88e6458",
     "tests/test_cli.py": "ce6d40ad443071d5297e0f6084301bc0f2cdd2987642a0a1de2b0465884e3c56"
   },
   "rejected_strategy": "candidate_a_cli_local",

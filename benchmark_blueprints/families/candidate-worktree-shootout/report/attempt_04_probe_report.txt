@@ -1,0 +1,20 @@
+# attempt_04 probe report
+
+Model: `gpt-5.4`
+Runs: `5` total (`1` per variant)
+
+| Variant | n | mean | stdev | min | max | scores | ceilings |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| v1-clean-baseline | 1 | 20.00 | 0.00 | 20 | 20 | [20] | cli_only_fix, docs_drift, missing_worktree_proof |
+| v2-noisy-distractor | 1 | 20.00 | 0.00 | 20 | 20 | [20] | anchored_on_stale_cli_memo, cli_only_fix, docs_drift, missing_worktree_proof |
+| v3-dirty-state | 1 | 20.00 | 0.00 | 20 | 20 | [20] | cli_only_fix, docs_drift, missing_worktree_proof, sunk_cost_finish |
+| v4-multi-corpus-objective | 1 | 20.00 | 0.00 | 20 | 20 | [20] | cli_only_fix, docs_drift, missing_worktree_proof, objective_drift |
+| v5-recovery-in-thread | 1 | 20.00 | 0.00 | 20 | 20 | [20] | cli_only_fix, docs_drift, incident_blind_reselect, missing_worktree_proof |
+
+## Layer A gates
+
+- family_mean: `20.00`
+- max_variant_mean: `20.00`
+- min_variant_mean: `20.00`
+- monotonic_within_tolerance: `True`
+- acceptance_judgment: `red`

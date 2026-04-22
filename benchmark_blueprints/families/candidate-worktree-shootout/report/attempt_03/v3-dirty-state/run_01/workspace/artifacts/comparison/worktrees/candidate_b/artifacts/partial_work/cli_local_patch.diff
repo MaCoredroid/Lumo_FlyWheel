@@ -1,0 +1,5 @@
+diff --git a/src/report_filters/cli.py b/src/report_filters/cli.py
+@@
+-    return build_filter_query(parts)
++    normalized = [normalize_label(piece) for piece in parts]
++    return build_filter_query(normalized)

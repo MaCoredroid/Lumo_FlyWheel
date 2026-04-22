@@ -144,6 +144,7 @@ READONLY_PATHS = [
     "Dockerfile",
     "src/report_filters/normalization.py",
     "src/report_filters/__init__.py",
+    "tests/conftest.py",
     "tests/test_cli.py",
     "artifacts/candidates",
     "repo_evidence",
@@ -291,6 +292,22 @@ def test_cli_py() -> str:
 
         def test_cli_drops_blank_entries() -> None:
             assert render_filters("  , API__Errors ") == "api errors"
+        """
+    )
+
+
+def conftest_py() -> str:
+    return dedent(
+        """
+        from __future__ import annotations
+
+        import sys
+        from pathlib import Path
+
+        ROOT = Path(__file__).resolve().parents[1]
+        SRC = ROOT / "src"
+        if str(SRC) not in sys.path:
+            sys.path.insert(0, str(SRC))
         """
     )
 
@@ -683,6 +700,7 @@ def build_workspace_bundle(variant: dict[str, object]) -> None:
     write(ws / "src/report_filters/normalization.py", normalization_py())
     write(ws / "src/report_filters/service.py", initial_service_py())
     write(ws / "src/report_filters/cli.py", initial_cli_py())
+    write(ws / "tests/conftest.py", conftest_py())
     write(ws / "tests/test_cli.py", test_cli_py())
     write(ws / "tests/test_service.py", initial_test_service_py())
     write(ws / "docs/filter_contract.md", initial_docs())
@@ -775,7 +793,7 @@ def family_yaml() -> str:
         family_id: candidate-worktree-shootout
         track: 11
         schema_version: cnb55.family.v1
-        layer_a_status: in_progress
+        layer_a_status: red
         layer_b_status: implemented
 
         grader_ref: verifiers/candidate-worktree-shootout/score_shootout.py

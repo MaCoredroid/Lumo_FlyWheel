@@ -1,0 +1,5 @@
+codex exec --full-auto --ephemeral -m gpt-5.4 -c reasoning_effort="high" --cd /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_02/v2-noisy-distractor/run_01/workspace --output-last-message /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_02/v2-noisy-distractor/run_01/last_message.txt --json Read AGENTS.md and complete the benchmark task in this workspace.
+Use two isolated directories under artifacts/comparison/worktrees/ for Candidate A and Candidate B.
+Produce the required files under artifacts/comparison/.
+Land one coherent final patch in the main workspace and do not modify immutable surfaces.
+Return when the workspace satisfies the task.

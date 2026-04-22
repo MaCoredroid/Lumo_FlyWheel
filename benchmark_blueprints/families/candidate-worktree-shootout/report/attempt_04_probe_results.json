@@ -1,0 +1,304 @@
+{
+  "attempt_name": "attempt_04",
+  "current_observed_stdev_M_training": 0.0,
+  "exact_command_template": [
+    "codex",
+    "exec",
+    "--full-auto",
+    "--ephemeral",
+    "-m",
+    "gpt-5.4",
+    "-c",
+    "reasoning_effort=\"high\"",
+    "--cd",
+    "<workspace>",
+    "--output-last-message",
+    "<last_message_file>",
+    "--json",
+    "Read AGENTS.md and complete the benchmark task in this workspace.\nUse two isolated directories under artifacts/comparison/worktrees/ for Candidate A and Candidate B.\nProduce the required files under artifacts/comparison/.\nLand one coherent final patch in the main workspace and do not modify immutable surfaces.\nReturn when the workspace satisfies the task."
+  ],
+  "generated_at_unix": 1776890155.20659,
+  "layer_a_gates": {
+    "acceptance_judgment": "red",
+    "family_mean": 20,
+    "max_variant_mean": 20,
+    "min_variant_mean": 20,
+    "monotonic_within_tolerance": true
+  },
+  "model": "gpt-5.4",
+  "prompt": "Read AGENTS.md and complete the benchmark task in this workspace.\nUse two isolated directories under artifacts/comparison/worktrees/ for Candidate A and Candidate B.\nProduce the required files under artifacts/comparison/.\nLand one coherent final patch in the main workspace and do not modify immutable surfaces.\nReturn when the workspace satisfies the task.",
+  "reasoning_effort": "high",
+  "results": [
+    {
+      "M_training": 0.2,
+      "ceilings_applied": [
+        "missing_worktree_proof",
+        "cli_only_fix",
+        "docs_drift"
+      ],
+      "command": [
+        "codex",
+        "exec",
+        "--full-auto",
+        "--ephemeral",
+        "-m",
+        "gpt-5.4",
+        "-c",
+        "reasoning_effort=\"high\"",
+        "--cd",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v1-clean-baseline/run_01/workspace",
+        "--output-last-message",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v1-clean-baseline/run_01/last_message.txt",
+        "--json",
+        "Read AGENTS.md and complete the benchmark task in this workspace.\nUse two isolated directories under artifacts/comparison/worktrees/ for Candidate A and Candidate B.\nProduce the required files under artifacts/comparison/.\nLand one coherent final patch in the main workspace and do not modify immutable surfaces.\nReturn when the workspace satisfies the task."
+      ],
+      "elapsed_seconds": 180.01,
+      "events_file": "report/attempt_04/v1-clean-baseline/run_01/codex_events.jsonl",
+      "integrity_flag": 0,
+      "last_message_file": "report/attempt_04/v1-clean-baseline/run_01/last_message.txt",
+      "pass": false,
+      "returncode": 124,
+      "run_idx": 1,
+      "score": 20,
+      "stderr_file": "report/attempt_04/v1-clean-baseline/run_01/codex_stderr.log",
+      "timed_out": true,
+      "variant": "v1-clean-baseline",
+      "verify_result_file": "report/attempt_04/v1-clean-baseline/run_01/verify_result.json"
+    },
+    {
+      "M_training": 0.2,
+      "ceilings_applied": [
+        "missing_worktree_proof",
+        "cli_only_fix",
+        "docs_drift",
+        "anchored_on_stale_cli_memo"
+      ],
+      "command": [
+        "codex",
+        "exec",
+        "--full-auto",
+        "--ephemeral",
+        "-m",
+        "gpt-5.4",
+        "-c",
+        "reasoning_effort=\"high\"",
+        "--cd",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v2-noisy-distractor/run_01/workspace",
+        "--output-last-message",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v2-noisy-distractor/run_01/last_message.txt",
+        "--json",
+        "Read AGENTS.md and complete the benchmark task in this workspace.\nUse two isolated directories under artifacts/comparison/worktrees/ for Candidate A and Candidate B.\nProduce the required files under artifacts/comparison/.\nLand one coherent final patch in the main workspace and do not modify immutable surfaces.\nReturn when the workspace satisfies the task."
+      ],
+      "elapsed_seconds": 180.01,
+      "events_file": "report/attempt_04/v2-noisy-distractor/run_01/codex_events.jsonl",
+      "integrity_flag": 0,
+      "last_message_file": "report/attempt_04/v2-noisy-distractor/run_01/last_message.txt",
+      "pass": false,
+      "returncode": 124,
+      "run_idx": 1,
+      "score": 20,
+      "stderr_file": "report/attempt_04/v2-noisy-distractor/run_01/codex_stderr.log",
+      "timed_out": true,
+      "variant": "v2-noisy-distractor",
+      "verify_result_file": "report/attempt_04/v2-noisy-distractor/run_01/verify_result.json"
+    },
+    {
+      "M_training": 0.2,
+      "ceilings_applied": [
+        "missing_worktree_proof",
+        "cli_only_fix",
+        "docs_drift",
+        "sunk_cost_finish"
+      ],
+      "command": [
+        "codex",
+        "exec",
+        "--full-auto",
+        "--ephemeral",
+        "-m",
+        "gpt-5.4",
+        "-c",
+        "reasoning_effort=\"high\"",
+        "--cd",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v3-dirty-state/run_01/workspace",
+        "--output-last-message",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v3-dirty-state/run_01/last_message.txt",
+        "--json",
+        "Read AGENTS.md and complete the benchmark task in this workspace.\nUse two isolated directories under artifacts/comparison/worktrees/ for Candidate A and Candidate B.\nProduce the required files under artifacts/comparison/.\nLand one coherent final patch in the main workspace and do not modify immutable surfaces.\nReturn when the workspace satisfies the task."
+      ],
+      "elapsed_seconds": 180.01,
+      "events_file": "report/attempt_04/v3-dirty-state/run_01/codex_events.jsonl",
+      "integrity_flag": 0,
+      "last_message_file": "report/attempt_04/v3-dirty-state/run_01/last_message.txt",
+      "pass": false,
+      "returncode": 124,
+      "run_idx": 1,
+      "score": 20,
+      "stderr_file": "report/attempt_04/v3-dirty-state/run_01/codex_stderr.log",
+      "timed_out": true,
+      "variant": "v3-dirty-state",
+      "verify_result_file": "report/attempt_04/v3-dirty-state/run_01/verify_result.json"
+    },
+    {
+      "M_training": 0.2,
+      "ceilings_applied": [
+        "missing_worktree_proof",
+        "cli_only_fix",
+        "docs_drift",
+        "objective_drift"
+      ],
+      "command": [
+        "codex",
+        "exec",
+        "--full-auto",
+        "--ephemeral",
+        "-m",
+        "gpt-5.4",
+        "-c",
+        "reasoning_effort=\"high\"",
+        "--cd",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v4-multi-corpus-objective/run_01/workspace",
+        "--output-last-message",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v4-multi-corpus-objective/run_01/last_message.txt",
+        "--json",
+        "Read AGENTS.md and complete the benchmark task in this workspace.\nUse two isolated directories under artifacts/comparison/worktrees/ for Candidate A and Candidate B.\nProduce the required files under artifacts/comparison/.\nLand one coherent final patch in the main workspace and do not modify immutable surfaces.\nReturn when the workspace satisfies the task."
+      ],
+      "elapsed_seconds": 180.01,
+      "events_file": "report/attempt_04/v4-multi-corpus-objective/run_01/codex_events.jsonl",
+      "integrity_flag": 0,
+      "last_message_file": "report/attempt_04/v4-multi-corpus-objective/run_01/last_message.txt",
+      "pass": false,
+      "returncode": 124,
+      "run_idx": 1,
+      "score": 20,
+      "stderr_file": "report/attempt_04/v4-multi-corpus-objective/run_01/codex_stderr.log",
+      "timed_out": true,
+      "variant": "v4-multi-corpus-objective",
+      "verify_result_file": "report/attempt_04/v4-multi-corpus-objective/run_01/verify_result.json"
+    },
+    {
+      "M_training": 0.2,
+      "ceilings_applied": [
+        "missing_worktree_proof",
+        "cli_only_fix",
+        "docs_drift",
+        "incident_blind_reselect"
+      ],
+      "command": [
+        "codex",
+        "exec",
+        "--full-auto",
+        "--ephemeral",
+        "-m",
+        "gpt-5.4",
+        "-c",
+        "reasoning_effort=\"high\"",
+        "--cd",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v5-recovery-in-thread/run_01/workspace",
+        "--output-last-message",
+        "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/candidate-worktree-shootout/report/attempt_04/v5-recovery-in-thread/run_01/last_message.txt",
+        "--json",
+        "Read AGENTS.md and complete the benchmark task in this workspace.\nUse two isolated directories under artifacts/comparison/worktrees/ for Candidate A and Candidate B.\nProduce the required files under artifacts/comparison/.\nLand one coherent final patch in the main workspace and do not modify immutable surfaces.\nReturn when the workspace satisfies the task."
+      ],
+      "elapsed_seconds": 180.01,
+      "events_file": "report/attempt_04/v5-recovery-in-thread/run_01/codex_events.jsonl",
+      "integrity_flag": 0,
+      "last_message_file": "report/attempt_04/v5-recovery-in-thread/run_01/last_message.txt",
+      "pass": false,
+      "returncode": 124,
+      "run_idx": 1,
+      "score": 20,
+      "stderr_file": "report/attempt_04/v5-recovery-in-thread/run_01/codex_stderr.log",
+      "timed_out": true,
+      "variant": "v5-recovery-in-thread",
+      "verify_result_file": "report/attempt_04/v5-recovery-in-thread/run_01/verify_result.json"
+    }
+  ],
+  "runs_per_variant": 1,
+  "summary": [
+    {
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "unique_ceilings": [
+        "cli_only_fix",
+        "docs_drift",
+        "missing_worktree_proof"
+      ],
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "unique_ceilings": [
+        "anchored_on_stale_cli_memo",
+        "cli_only_fix",
+        "docs_drift",
+        "missing_worktree_proof"
+      ],
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "unique_ceilings": [
+        "cli_only_fix",
+        "docs_drift",
+        "missing_worktree_proof",
+        "sunk_cost_finish"
+      ],
+      "variant": "v3-dirty-state"
+    },
+    {
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "unique_ceilings": [
+        "cli_only_fix",
+        "docs_drift",
+        "missing_worktree_proof",
+        "objective_drift"
+      ],
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "unique_ceilings": [
+        "cli_only_fix",
+        "docs_drift",
+        "incident_blind_reselect",
+        "missing_worktree_proof"
+      ],
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}

@@ -22,6 +22,7 @@
     "src/report_filters/cli.py",
     "src/report_filters/normalization.py",
     "src/report_filters/service.py",
+    "tests/conftest.py",
     "tests/test_cli.py",
     "tests/test_service.py"
   ],

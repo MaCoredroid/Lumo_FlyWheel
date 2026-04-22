@@ -1,7 +1,7 @@
 family_id: candidate-worktree-shootout
 track: 11
 schema_version: cnb55.family.v1
-layer_a_status: in_progress
+layer_a_status: red
 layer_b_status: implemented
 
 grader_ref: verifiers/candidate-worktree-shootout/score_shootout.py

@@ -4,28 +4,28 @@
   "schema_version": "cnb55.manifest_lock.v1",
   "variants": [
     {
-      "gold_sha256": "3187bf97e777b85281591bc1dbe74b98e2bc7df54ccae477a9573ca63664fde0",
-      "manifest_sha256": "0f9b0276df7a18bfc8c7b6222bf84a1fe83b361a9ddc96fbe6b70a3c1377de5f",
+      "gold_sha256": "14d3d4eed726e9f0885d2e0183a38e01707eeb5a44a2a579f6dddd8ae036a665",
+      "manifest_sha256": "5335cbd0dffdf37972015bdabb56c796e1406fa4a356b0990c2b0f6f9639c3bd",
       "variant_id": "v1-clean-baseline"
     },
     {
-      "gold_sha256": "018e018910d8ac3ebb45f0a0da505694bb0d37e93ba82c0a8e1fae089247b1c5",
-      "manifest_sha256": "845f7cccce4d65e97321a0c1bfd8ad1a7c810ea546c26f5dedef94ebbaa7139b",
+      "gold_sha256": "9ecc0e29b79c57773153649d842aa8e0bfaf77b383e4aa3629831bfb46ebdd83",
+      "manifest_sha256": "883c2a9eafb63d2002b5303c7d3c7fca205f3b601a56dc966e54cbc2a60b1b06",
       "variant_id": "v2-noisy-distractor"
     },
     {
-      "gold_sha256": "a962dc9dd4b45c6b5a4f548802ec758f6883fde7f81d9c24870f8f16bbd4be8f",
-      "manifest_sha256": "454c437e67ecda161016841fdaff23386c40fdd85a115edb56462493a51fff30",
+      "gold_sha256": "ba0aff9c2fca7eb6a76d8551fa0cb3662b5cd248400f4cd05161393f198281c9",
+      "manifest_sha256": "c7b7cccc5436983c1e604f7748826536ee3eb844eb17655ec4613c3751986339",
       "variant_id": "v3-dirty-state"
     },
     {
-      "gold_sha256": "1e103a6d956ed725188cc0e218e554715a7e788cbafdcacaf48f8109c89438be",
-      "manifest_sha256": "d1c0cc3bf6cbac9045178c716f072c96e5b1dd995f6af0bab092a8ae46e8d54b",
+      "gold_sha256": "fc0da44041bb1caa9ac912d3c5e845cabd22eb19b5ec765f90ded44bd8d29398",
+      "manifest_sha256": "ed1d92bcce2f811de54f84d7a77d027f2bd1021aef59aa7f189bab5c5b182d59",
       "variant_id": "v4-multi-corpus-objective"
     },
     {
-      "gold_sha256": "9c845b0ebac0265cf94fe44e06d44018403a1be2dd99477d5e52f8dcc46b88dc",
-      "manifest_sha256": "a3798e4a8e448f1d8e794ed33702ccf742db7c449e02e7ad8558a6fab6cc80b1",
+      "gold_sha256": "582661de9777bdc0e713bcc59e3f7a4f0f19e273ce6ab6cc81eaae8d53dacb28",
+      "manifest_sha256": "b82fd8f21c64ae6364b15714c290f5448e7ca870c253acc9e61a56e200571202",
       "variant_id": "v5-recovery-in-thread"
     }
   ]
