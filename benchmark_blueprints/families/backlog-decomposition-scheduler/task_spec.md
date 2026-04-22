@@ -1,83 +1,141 @@
-# Backlog Decomposition Scheduler
+# `backlog-decomposition-scheduler` Task Spec
 
-- `task_id`: `backlog-decomposition-scheduler/dependency-schedule`
-- `family_id`: `backlog-decomposition-scheduler`
-- `scenario_type`: `strategic_management`
+**Track:** 10 — Strategic Management & Long-Horizon Evolution
+**Family id:** `backlog-decomposition-scheduler`
+**Spec version:** CNB-55 v1.0
+**Variants:** 5 (`v1-clean-baseline` through `v5-recovery-in-thread`)
 
 ## Task Prompt
 
-Turn a frozen delivery backlog into an execution schedule that respects dependency edges, scarce specialist capacity, and rollout risk. The target outcome is near-term objective progress without scheduling blocked work first, overloading the constrained specialist, or shipping a risky rollout before its observability and prerequisite work land.
+You are acting as the delivery manager for a backlog that cannot simply be
+sorted by raw business value. Some work is blocked by prerequisites, two items
+compete for the same scarce migration specialist, and the customer-visible
+cutover must not ship before the rollout guardrails exist.
 
-Produce:
+Read the backlog items and supporting evidence, then produce a structured
+schedule using the family-local CLI:
 
-- an ordered backlog schedule
-- a dependency rationale for the ordering
-- a specialist-capacity note
-- a risk-isolation note
-- an assumption ledger that separates observed facts from missing inputs
+```bash
+./bin/cnb55-schedule schema
+./bin/cnb55-schedule validate brief_input.json
+./bin/cnb55-schedule submit brief_input.json
+```
 
-## Workspace Bundle
+The CLI writes the canonical deliverable at `brief/schedule_brief.json` and a
+human-readable rendering at `brief/schedule_brief.md`.
 
-- Family authoring bundle only:
-  - `task_spec.md`
-  - `evaluator_contract.md`
-  - `codex/config.toml`
-  - `skills/backlog-dependency-plan/SKILL.md`
-  - `benchmark_run.md`
-- A full runtime task instance is expected to provide:
-  - a frozen backlog table with stable item identifiers
-  - dependency edges or prerequisite metadata
-  - team-capacity and scarce-specialist constraints
-  - rollout-risk and observability notes
-- Those runtime fixtures are intentionally not committed in this family bundle. The canonical benchmark should stay offline and replayable, with no live web or live service dependency in the official score path.
+The brief must:
 
-## Seeded Strategic Ambiguity
+1. Name the current objective in `objective_focus`.
+2. Schedule every backlog item exactly once with contiguous slots starting at
+   `1`. Multiple items may share a slot if they can safely run in parallel.
+3. Keep dependency-blocked work after its prerequisites.
+4. Keep scarce-role items out of the same slot.
+5. Place risky rollout work after its required observability / dry-run gates.
+6. Include a scarce-role note, a rollout-gate note, and an assumption ledger
+   with at least one `status: "missing"` row.
 
-- A high-value initiative is blocked by smaller prerequisite work.
-- One plausible parallel path is invalid because it double-books a scarce specialist.
-- A risky rollout should wait until observability or guardrail work lands.
-- Generic prioritization advice is intentionally insufficient; the solver must commit to an ordered schedule while staying honest about missing data.
+## Scenario Type
+
+`strategic_management`
 
 ## Required Surfaces
 
 - `shell`
-- `skills`
-- structured planning output
-- explicit evidence and assumption discipline
+- file inspection of `backlog/`, `repo_evidence/`, `release_context/`,
+  `incident_context/`
+- structured-output CLI usage
+
+No network, browser, MCP, or sub-agents are required to solve the task.
+
+## Workspace Bundle
+
+Every variant ships:
+
+```text
+AGENTS.md
+Dockerfile
+.scenario_variant
+artifacts/README.md
+bin/cnb55-schedule
+backlog/B*.md
+repo_evidence/*.md
+tests/test_schedule_brief.py
+brief/
+```
+
+`release_context/` is present in V4+.
+`incident_context/` is present in V5.
+
+## Difficulty Ladder
+
+### v1 — clean baseline
+
+The schedule must unblock the high-value dry-run and then the wave-1 cutover
+without double-booking the migration SRE.
+
+### v2 — noisy distractor
+
+Adds a stale Q1 fast-lane memo and a tempting backlog item that looks urgent if
+the stale memo is trusted over the current staffing / rollout evidence.
+
+### v3 — dirty state
+
+Adds an abandoned partial patch for the distractor item. The trap is to treat
+the partial patch as progress instead of sunk cost.
+
+### v4 — multi-corpus objective
+
+Adds release-context evidence showing the current cycle objective shifted from
+throughput-first to reliability-first, so observability moves ahead of the
+migration-specialist data prep.
+
+### v5 — recovery in thread
+
+Adds incident evidence showing the distractor path was already rolled back in a
+prior attempt. The schedule must acknowledge recovery work before re-entering
+that lane.
 
 ## Expected Deliverables
 
-- An ordered schedule with concrete backlog identifiers if the runtime instance provides them.
-- A dependency explanation that names the critical blockers.
-- A capacity note that explains how specialist overload was avoided.
-- A risk-isolation note that explains why the risky rollout is or is not delayed.
-- An assumption ledger that marks any inferred backlog items, role capacities, or rollout gates as unverified.
+- `brief/schedule_brief.json`
+  - `schema_version`
+  - `variant_id`
+  - `objective_focus`
+  - `schedule[]` with `item_id`, `slot`, `lane`, `summary`, `citations[]`,
+    `constraint_tags[]`
+  - `scarce_role_plan`
+  - `risk_gate`
+  - `assumption_ledger[]`
+- `brief/schedule_brief.md`
 
-## Grader Contract
+## Layer A Acceptance Target
 
-- Full credit requires:
-  - the schedule is grounded in concrete backlog items from the provided runtime instance
-  - prerequisite work appears before blocked work
-  - scarce specialist capacity is respected across concurrent work
-  - observability or guardrail work lands before the risky rollout
-  - the ordering improves objective progress rather than maximizing raw item count
-  - the answer clearly separates checked facts from assumptions
-- Partial credit if the schedule logic is strategically sound but some dependency, capacity, or rollout-gate detail is unresolved.
-- Low credit if the answer is mostly generic prioritization advice or if it invents concrete fixture data as though it were observed.
+The intended freeze-gate probe target is:
 
-## Red-Team Traps
+- family mean in `[15, 25]`
+- no variant mean above `40`
+- at least one variant at or below `10`
+- monotonic difficulty within the usual ±3 tolerance
+- oracle `>= 90`
+- empty `= 0`
+- shortcut `<= 30`
 
-- Schedule a blocked high-value item before its prerequisites.
-- Overload the scarce specialist because the timeline looks faster on paper.
-- Front-load the risky rollout before observability or guardrail work.
-- Claim fixture-backed validation or gold-schedule agreement when no runtime fixtures were provided.
+## Layer B Readiness Notes
 
-## Quality Gate
+This family emits both `P_benchmark` and `M_training`, publishes 5-slot
+milestones, ships family-local milestone scripts, declares capability tags and
+state-delta rules in `family.yaml`, and includes verification-matrix artifacts
+for V1 and one stress variant.
 
-- The runtime prompt should reveal the business objective but not leak the exact hidden dependency graph or gold schedule.
-- Valid runtime instances should include at least one tempting but invalid parallelization path and one risky rollout gated on observability or prerequisite work.
-- Hidden grading should use held-out, fixed runtime fixtures so the benchmark is replayable and less vulnerable to contamination or prompt leakage.
-- The grader should reward partial progress on milestone placement and constraint satisfaction, not only exact schedule-string matches.
-- The family bundle must remain bundle-only: no committed backlog fixtures, gold schedule, variant directories, or local service scaffolding are required here.
-- A family-bundle-only attack should top out in the low-20 range because concrete backlog identifiers, capacities, and hidden schedule checks are unavailable.
-- Latest family-bundle calibration: `benchmark_run.md` records a real `GPT-5.4/high` `codex exec` attempt on `2026-04-19` that finished at `20/100` after the runtime-fixture grounding cap.
+## Saturation And Renewal Plan
+
+Trigger saturation when mean `P_benchmark` exceeds `80` for two consecutive
+probe rounds.
+
+Renewal queue:
+
+1. Introduce a mid-run staffing update variant.
+2. Introduce a contradictory-evidence variant where release and incident
+   guidance disagree and must be flagged explicitly.
+3. Retire V1 once it becomes a solved floor-check and promote a harder baseline.

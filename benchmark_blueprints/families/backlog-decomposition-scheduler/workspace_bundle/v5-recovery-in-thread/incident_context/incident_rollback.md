@@ -1,0 +1,1 @@
+# Incident rollback\n\nThe last B7 fast-lane attempt was rolled back because contract compatibility checks were missing.\n

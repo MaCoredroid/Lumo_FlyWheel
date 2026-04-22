@@ -1,0 +1,115 @@
+{
+  "family_id": "backlog-decomposition-scheduler",
+  "grader": {
+    "regen_family_py_sha256": "f36e18f0af97cb91491eb85191e4367e98e47a93c5e844a7e03ec027e3249d0c",
+    "score_schedule_py_sha256": "391cfde8661d8e529a2b71e63ad079b240f48f91432c28eaeecf527d2909e7cc",
+    "verify_sh_sha256": "702077546911d0c8e9c502ea277d899db930354084221c8241b92f08d66d4faa"
+  },
+  "last_regen_utc": "2026-04-22T04:50:34Z",
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_schedule_sha256": "51c4b29a23cfb2c152f6fdbbec0f59308dc80c0783f62f86e227b2e68527ae54",
+        "oracle_schedule_json_sha256": "3f38bb7286c9803ec2aa52df7103ef99870ff5fff219bd7320bdf56fb6f643d8",
+        "oracle_schedule_md_sha256": "679ab93042a3fd38c32d33521650e39e6305ec75a37b2d9a64fd6e9ae53325a3",
+        "workspace_manifest_sha256": "4fd9924a75c39e55b902c9f636898e51d4febc4824c6e763e38fc7a7cc35516b"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+        "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+        "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+        "backlog": "56ff51a4491f478a90effc2f654b23a77643d691f61fcb5c3bdaa147e990a765",
+        "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+        "repo_evidence": "1b503266425aa8a2e9a274643aa142967a24543ae5ad90b68f5f31b675e84af7",
+        "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_schedule_sha256": "5026d80eb946f14a2d8a489d6037481f1a07fc22f12a857757cd5450b6e658b3",
+        "oracle_schedule_json_sha256": "5067831fc414c042ede114cc3ca60068954e30bbcb01e9cbf6985f591f231b94",
+        "oracle_schedule_md_sha256": "36e21fa59c07cbb09b2e25f5a16c2e7f01143a6ecbbbd1d846e71afc0db45eb1",
+        "workspace_manifest_sha256": "68eb4d484e9bca6fc096444ba27f96e92daa248e1a1972749d21c5f245149a49"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+        "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+        "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+        "backlog": "9b7d220d45042f810e1909e7aea5e08b88833da34bcfb39d29e3e264f0a211be",
+        "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+        "repo_evidence": "e6e7259edb428ef70b9144c66cc6b6eaffc19e18f1e345561cb2dfad2be1d87f",
+        "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_schedule_sha256": "e373b9f5c60be5ae270b45b32b07b43e63163d06b486a2f17b40edf757e93a5e",
+        "oracle_schedule_json_sha256": "74328c1284aff6fa567c13a6a6dcdc14bd21d985ed0da049db2417c07d6ca481",
+        "oracle_schedule_md_sha256": "98749dbc952aea46e029bb6e7252739062e2af0e74965d668b4e99132c6d1325",
+        "workspace_manifest_sha256": "64002c00d223ca60dffee41035992d38b92fadae806cefeda727b8c0c7be94d1"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+        "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+        "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+        "backlog": "9b7d220d45042f810e1909e7aea5e08b88833da34bcfb39d29e3e264f0a211be",
+        "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+        "repo_evidence": "6d610f26cecc51f5dc0754ee8fcdedd52ba50300242c60f22e5373f6b35e6765",
+        "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_schedule_sha256": "f0b5d82675d2cab29ec0b8f9149e6ad777bba9d49486c3be37b33427dfe1563b",
+        "oracle_schedule_json_sha256": "a3f269252ee476fe53781ed661f180ebacd4c1e17ac273d264a1a5c55e100e4c",
+        "oracle_schedule_md_sha256": "4bd7eb26e3d10fb8089c2ec0adeb0710b7946c8dfb5c3de5f95b2cb1e61109b6",
+        "workspace_manifest_sha256": "f8d54093e10e2203a304d65eb0376b0052025dc5c197e5579b3e2f1fe98515b2"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+        "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+        "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+        "backlog": "9b7d220d45042f810e1909e7aea5e08b88833da34bcfb39d29e3e264f0a211be",
+        "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+        "release_context": "744f179674c2064d372bf67ad0be9d82db0e51bee71fe90f7ef98130ebc427a3",
+        "repo_evidence": "d20f89ebb8b4936e3596ef641a547e5bc3e15a9b3a7c212e541401d1c1a309f2",
+        "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_schedule_sha256": "4f5b7b67c5e677e71749cb30d6053339a8fb41d936cd94d78e9de271e1db89d8",
+        "oracle_schedule_json_sha256": "6fea0b8f9f925bfdb82cacf544fe912ba3f774e6a861d16dfc274ab0c4176061",
+        "oracle_schedule_md_sha256": "8db3757001dbe26e62b8d5f48a391126710491aed2b07f921ac516f5b8bfbea6",
+        "workspace_manifest_sha256": "070aba2eb1cd8537bd06501024c715d4f6f2bdba0b9539833583d8109a7693ba"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+        "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+        "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+        "backlog": "9b6c23b31291e8605400ebadb9df25847d0e3ed8b79a4f474af5019e6c3a06d0",
+        "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+        "incident_context": "2cbaf8fedb4f485881d4df869d97d683e95515aa2b43e122241f3c995f93d824",
+        "release_context": "714408a03c156759be3be4669132247c24746071080f9044cc03b5e573455fef",
+        "repo_evidence": "e3e433b40a48e43d2f39668f663b1ad514be21e928a9262da8cd4c5f4e8136ad",
+        "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+      }
+    }
+  }
+}

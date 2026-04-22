@@ -1,0 +1,158 @@
+{
+  "critical_path": [
+    "B1",
+    "B2",
+    "B3",
+    "B5"
+  ],
+  "dependency_edges": [
+    [
+      "B1",
+      "B2"
+    ],
+    [
+      "B1",
+      "B4"
+    ],
+    [
+      "B2",
+      "B3"
+    ],
+    [
+      "B3",
+      "B5"
+    ],
+    [
+      "B4",
+      "B5"
+    ],
+    [
+      "B1",
+      "B6"
+    ],
+    [
+      "B1",
+      "B7"
+    ]
+  ],
+  "hard_dependency_edges": [
+    [
+      "B1",
+      "B2"
+    ],
+    [
+      "B1",
+      "B4"
+    ],
+    [
+      "B2",
+      "B3"
+    ],
+    [
+      "B3",
+      "B5"
+    ],
+    [
+      "B4",
+      "B5"
+    ],
+    [
+      "B1",
+      "B6"
+    ],
+    [
+      "B1",
+      "B7"
+    ]
+  ],
+  "incident_guard_item": null,
+  "incident_reselect_item": null,
+  "items": [
+    {
+      "item_id": "B1"
+    },
+    {
+      "item_id": "B2"
+    },
+    {
+      "item_id": "B3"
+    },
+    {
+      "item_id": "B4"
+    },
+    {
+      "item_id": "B5"
+    },
+    {
+      "item_id": "B6"
+    },
+    {
+      "item_id": "B7"
+    }
+  ],
+  "objective_drift_active": false,
+  "objective_keywords": [
+    "wave-1",
+    "cutover",
+    "dry-run"
+  ],
+  "objective_order_pairs": [
+    [
+      "B2",
+      "B3"
+    ],
+    [
+      "B4",
+      "B5"
+    ],
+    [
+      "B5",
+      "B7"
+    ]
+  ],
+  "pass_bar": 40,
+  "preferred_prefix": [
+    "B1",
+    "B2",
+    "B4"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+    "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+    "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+    "backlog": "9b7d220d45042f810e1909e7aea5e08b88833da34bcfb39d29e3e264f0a211be",
+    "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+    "repo_evidence": "6d610f26cecc51f5dc0754ee8fcdedd52ba50300242c60f22e5373f6b35e6765",
+    "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+  },
+  "risk_must_follow": [
+    "B3",
+    "B4"
+  ],
+  "risky_item_id": "B5",
+  "scarce_role_items": [
+    "B2",
+    "B4"
+  ],
+  "scarce_role_name": "migration-sre",
+  "slot_targets": {
+    "B1": 1,
+    "B2": 2,
+    "B3": 4,
+    "B4": 3,
+    "B5": 5,
+    "B6": 2,
+    "B7": 6
+  },
+  "stale_anchor_after": [
+    "B3",
+    "B4"
+  ],
+  "stale_priority_item": "B7",
+  "sunk_cost_after": [
+    "B5"
+  ],
+  "sunk_cost_item": "B7",
+  "test_schedule_brief_sha256": "e5dbb245fd7ebb15a1ec8cf00a888f5aae1307126f1e35aa385239b70ff813a3",
+  "variant_id": "v3-dirty-state"
+}

@@ -1,0 +1,35 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "backlog/B1.md",
+    "backlog/B2.md",
+    "backlog/B3.md",
+    "backlog/B4.md",
+    "backlog/B5.md",
+    "backlog/B6.md",
+    "backlog/B7.md",
+    "bin/cnb55-schedule",
+    "release_context/release_notes.md",
+    "release_context/test_inventory.md",
+    "repo_evidence/current_objective.md",
+    "repo_evidence/dependency_notes.md",
+    "repo_evidence/risk_register.md",
+    "repo_evidence/staffing.md",
+    "tests/test_schedule_brief.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+    "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+    "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+    "backlog": "9b7d220d45042f810e1909e7aea5e08b88833da34bcfb39d29e3e264f0a211be",
+    "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+    "release_context": "744f179674c2064d372bf67ad0be9d82db0e51bee71fe90f7ef98130ebc427a3",
+    "repo_evidence": "d20f89ebb8b4936e3596ef641a547e5bc3e15a9b3a7c212e541401d1c1a309f2",
+    "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+  },
+  "test_schedule_brief_sha256": "e5dbb245fd7ebb15a1ec8cf00a888f5aae1307126f1e35aa385239b70ff813a3",
+  "variant_id": "v4-multi-corpus-objective"
+}

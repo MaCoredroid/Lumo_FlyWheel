@@ -1,0 +1,1 @@
+# Q1 fast-lane memo (stale)\n\nThis note pre-dates the current staffing freeze and argues for the fast-lane toggle first. Treat it as stale.\n

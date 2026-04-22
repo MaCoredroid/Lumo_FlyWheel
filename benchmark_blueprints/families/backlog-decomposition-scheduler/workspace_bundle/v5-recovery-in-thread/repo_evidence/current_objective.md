@@ -1,0 +1,1 @@
+# Current objective\n\nStay in recovery mode: restore a safe rollout path before reopening the fast-lane.\n

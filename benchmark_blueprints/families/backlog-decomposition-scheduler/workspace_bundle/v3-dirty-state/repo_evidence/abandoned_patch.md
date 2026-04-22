@@ -1,0 +1,1 @@
+# Abandoned fast-lane patch\n\nA prior session left a half-finished B7 patch. It is not production-ready and should be treated as sunk cost.\n

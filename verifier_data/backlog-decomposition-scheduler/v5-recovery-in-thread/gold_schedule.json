@@ -1,0 +1,174 @@
+{
+  "critical_path": [
+    "B1",
+    "B4",
+    "B2",
+    "B3",
+    "B5"
+  ],
+  "dependency_edges": [
+    [
+      "B1",
+      "B2"
+    ],
+    [
+      "B1",
+      "B4"
+    ],
+    [
+      "B1",
+      "B8"
+    ],
+    [
+      "B2",
+      "B3"
+    ],
+    [
+      "B3",
+      "B5"
+    ],
+    [
+      "B4",
+      "B5"
+    ],
+    [
+      "B1",
+      "B6"
+    ],
+    [
+      "B1",
+      "B7"
+    ]
+  ],
+  "hard_dependency_edges": [
+    [
+      "B1",
+      "B2"
+    ],
+    [
+      "B1",
+      "B4"
+    ],
+    [
+      "B1",
+      "B8"
+    ],
+    [
+      "B2",
+      "B3"
+    ],
+    [
+      "B3",
+      "B5"
+    ],
+    [
+      "B4",
+      "B5"
+    ],
+    [
+      "B1",
+      "B6"
+    ],
+    [
+      "B1",
+      "B7"
+    ]
+  ],
+  "incident_guard_item": "B8",
+  "incident_reselect_item": "B7",
+  "items": [
+    {
+      "item_id": "B1"
+    },
+    {
+      "item_id": "B2"
+    },
+    {
+      "item_id": "B3"
+    },
+    {
+      "item_id": "B4"
+    },
+    {
+      "item_id": "B5"
+    },
+    {
+      "item_id": "B6"
+    },
+    {
+      "item_id": "B7"
+    },
+    {
+      "item_id": "B8"
+    }
+  ],
+  "objective_drift_active": true,
+  "objective_keywords": [
+    "reliability",
+    "recovery",
+    "rollback"
+  ],
+  "objective_order_pairs": [
+    [
+      "B4",
+      "B2"
+    ],
+    [
+      "B8",
+      "B7"
+    ],
+    [
+      "B4",
+      "B5"
+    ],
+    [
+      "B5",
+      "B7"
+    ]
+  ],
+  "pass_bar": 40,
+  "preferred_prefix": [
+    "B1",
+    "B4",
+    "B8"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+    "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+    "backlog": "9b6c23b31291e8605400ebadb9df25847d0e3ed8b79a4f474af5019e6c3a06d0",
+    "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+    "incident_context": "2cbaf8fedb4f485881d4df869d97d683e95515aa2b43e122241f3c995f93d824",
+    "release_context": "714408a03c156759be3be4669132247c24746071080f9044cc03b5e573455fef",
+    "repo_evidence": "e3e433b40a48e43d2f39668f663b1ad514be21e928a9262da8cd4c5f4e8136ad",
+    "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+  },
+  "risk_must_follow": [
+    "B3",
+    "B4"
+  ],
+  "risky_item_id": "B5",
+  "scarce_role_items": [
+    "B2",
+    "B4"
+  ],
+  "scarce_role_name": "migration-sre",
+  "slot_targets": {
+    "B1": 1,
+    "B2": 3,
+    "B3": 4,
+    "B4": 2,
+    "B5": 5,
+    "B6": 3,
+    "B7": 6,
+    "B8": 2
+  },
+  "stale_anchor_after": [
+    "B5"
+  ],
+  "stale_priority_item": "B7",
+  "sunk_cost_after": [],
+  "sunk_cost_item": null,
+  "test_schedule_brief_sha256": "e5dbb245fd7ebb15a1ec8cf00a888f5aae1307126f1e35aa385239b70ff813a3",
+  "variant_id": "v5-recovery-in-thread"
+}

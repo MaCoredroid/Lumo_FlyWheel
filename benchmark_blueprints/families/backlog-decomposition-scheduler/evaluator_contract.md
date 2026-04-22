@@ -3,58 +3,98 @@
 - `family_id`: `backlog-decomposition-scheduler`
 - `task_id`: `backlog-decomposition-scheduler/dependency-schedule`
 - `total_points`: `100`
-- `target_attack_band_for_naive_gpt_5_4_high`: `15-25`
+- `schema_version`: `cnb55.verify_result.v3`
 
-## Scoring Breakdown
+## Score Breakdown
 
-- `20` points: Dependency correctness
-  - blocked work is not scheduled before prerequisites
-  - critical-path items are ordered coherently
-- `20` points: Capacity and resource compliance
-  - scarce specialists are not double-booked
-  - concurrency assumptions fit the runtime capacity fixture
-- `15` points: Risk isolation and regression avoidance
-  - observability or guardrail work lands before risky rollout work
-  - high-risk sequencing does not front-load avoidable regressions
-- `20` points: Objective-delta quality
-  - the ordering advances the stated near-term objective
-  - the plan does more than maximize raw throughput
-- `15` points: Evidence and assumption discipline
-  - checked facts are separated from inferred assumptions
-  - the solver does not claim fixture-backed validation that was not available
-- `10` points: Partial-progress milestone score
-  - key prerequisite prefix is correct even if the full schedule is imperfect
-  - milestone placement is directionally right under the hidden runtime instance
+- `18` points: dependency ordering
+- `12` points: scarce-role capacity protection
+- `10` points: rollout risk gating
+- `10` points: objective alignment
+- `8` points: slot accuracy versus the gold schedule
+- `6` points: evidence grounding
+- `8` points: critical-path prioritization
+- `38` points: structural / deliverable correctness
+- `10` points: partial-progress heuristic (`P_only`, quarantined from training)
 
-## Caps
+## Visible Checks Budget
 
-- Cap at `20/100` if the attempt is not grounded in concrete runtime fixtures from the provided bundle or if it invents backlog identifiers, capacities, or rollout gates as though they were observed.
-- Cap at `20/100` if the attempt claims gold-schedule, test, or fixture validation without the runtime files being present.
-- Cap at `25/100` if the schedule is strategically coherent but remains placeholder-based, generic, or assumption-heavy.
-- Cap at `15/100` if risky rollout work is placed ahead of observability or prerequisite work.
-- Cap at `10/100` if the response is generic advice rather than a concrete ordered schedule.
+Visible checks are capped below `30` points and only validate:
 
-## Automatic Failure Conditions
+- brief exists
+- JSON parses
+- every backlog item appears exactly once
+- slots are contiguous
+- risk gate is present
+- assumption ledger contains at least one `missing` row
 
-- `0-5` if the submission omits an ordered schedule.
-- `0-5` if the submission fabricates passed checks or concrete fixture contents.
-- `0-10` if the submission ignores dependency ordering entirely.
+## Hidden Checks Budget
 
-## Evidence Rules
+Hidden checks cover at least `52` points via:
 
-- Only the provided runtime bundle counts as grounding evidence; no live web, live SaaS, or unrelated workspace evidence should improve the official score.
-- Multiple schedules may be acceptable; full scoring should be based on constraint satisfaction and objective progress, not exact string equality alone.
-- When runtime fixtures are absent, explicit uncertainty can still earn evidence-discipline points, but it cannot earn full grounding points.
-- Partial-progress credit should come from correct milestone placement, not from verbose generic rationale.
+- dependency-edge satisfaction
+- scarce-role collision detection
+- risky rollout ordering
+- current-objective alignment
+- exact / near-exact slot placement
+- variant-gated traps
 
-## Judging Procedure
+## Partial-Credit Ceilings
 
-1. Verify the submission includes an ordered schedule plus an assumption ledger.
-2. Score the six categories above from the solver output against the held-out runtime instance.
-3. Apply caps before rounding the final score.
-4. Record the raw score, applied cap, and final score in `benchmark_run.md`.
+- `no_schedule_file` → `0`
+- `malformed_brief` → `10`
+- `schedule_without_grounding` → `25`
+- `ignored_dependency_blocker` → `30`
+- `overloaded_scarce_specialist` → `30`
+- `risky_rollout_frontloaded` → `25`
+- `stale_priority_anchor` → `35`
+- `sunk_cost_finish` → `40`
+- `objective_drift` → `45`
+- `incident_blind_reselect` → `30`
 
-## Meaningfulness Check
+## Shortcut / Empty / Oracle Baselines
 
-- A valid runtime instance must include at least one high-value item blocked by prerequisites, one scarce-specialist bottleneck, and one risky rollout gated on observability or guardrail work.
-- If a family-bundle-only attack can exceed `30/100` without the held-out runtime fixtures, the benchmark is under-hardened and should be revised.
+- Empty brief must score `0`.
+- Oracle brief must score at least `90`.
+- The family shortcut trajectory must score at most `30`.
+
+## Integrity Rules
+
+Rule ids must match scorer call sites 1:1:
+
+- `write_outside_whitelist`
+- `immutable_slice_mutated`
+- `pytest_shim`
+- `tests_modified`
+- `network_egress`
+
+## Dual-Band Emission
+
+- `score` remains the backward-compatible alias of `P_benchmark`
+- `P_benchmark` is the full 0–100 benchmark score
+- `M_training` is the deterministic-only normalized score in `[0, 1]`
+- quarantined `P_only` points are limited to the partial-progress heuristic
+
+## Milestones
+
+- `M1_localization` weight `0.10`
+- `M2_primary_fix` weight `0.20`
+- `M3_invariants` weight `0.20`
+- `M4_functional` weight `0.20`
+- `M5_e2e` weight `0.30`
+
+## Verification Matrix Requirement
+
+Ship:
+
+- `verification_matrix.md` for V1
+- `verification_matrix_v4.md` for one stress variant
+
+Both must cover 6 trajectories:
+
+- Oracle
+- Empty
+- RAWR grounding stripped
+- Shortcut trajectory
+- Near-miss trajectory
+- Delete-tests adversarial

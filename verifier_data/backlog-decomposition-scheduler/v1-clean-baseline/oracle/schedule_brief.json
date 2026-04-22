@@ -1,0 +1,127 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Need PM sign-off on the exact wave-1 batch size.",
+      "status": "to_verify",
+      "topic": "Customer slice size"
+    },
+    {
+      "note": "No document names the backup approver if Priya is unexpectedly unavailable.",
+      "status": "missing",
+      "topic": "Rollback staffing coverage"
+    }
+  ],
+  "objective_focus": "Land the safe wave-1 cutover.",
+  "risk_gate": {
+    "must_follow": [
+      "B3",
+      "B4"
+    ],
+    "note": "Wave-1 cutover waits for the dry-run and observability gates.",
+    "risky_item_id": "B5"
+  },
+  "scarce_role_plan": {
+    "note": "Keep migration-SRE work in different slots so Priya is not double-booked.",
+    "protected_items": [
+      "B2",
+      "B4"
+    ],
+    "role": "migration-sre"
+  },
+  "schedule": [
+    {
+      "citations": [
+        "backlog/B1.md",
+        "repo_evidence/current_objective.md",
+        "repo_evidence/dependency_notes.md"
+      ],
+      "constraint_tags": [
+        "dependency",
+        "objective"
+      ],
+      "item_id": "B1",
+      "lane": "core",
+      "slot": 1,
+      "summary": "Place dependency-map in slot 1 because it respects the live dependency, capacity, and rollout constraints."
+    },
+    {
+      "citations": [
+        "backlog/B2.md",
+        "repo_evidence/current_objective.md",
+        "repo_evidence/dependency_notes.md"
+      ],
+      "constraint_tags": [
+        "dependency",
+        "objective"
+      ],
+      "item_id": "B2",
+      "lane": "core",
+      "slot": 2,
+      "summary": "Place customer-id-backfill in slot 2 because it respects the live dependency, capacity, and rollout constraints."
+    },
+    {
+      "citations": [
+        "backlog/B6.md",
+        "repo_evidence/current_objective.md",
+        "repo_evidence/dependency_notes.md"
+      ],
+      "constraint_tags": [
+        "dependency",
+        "objective"
+      ],
+      "item_id": "B6",
+      "lane": "ops",
+      "slot": 2,
+      "summary": "Place support-playbook in slot 2 because it respects the live dependency, capacity, and rollout constraints."
+    },
+    {
+      "citations": [
+        "backlog/B4.md",
+        "repo_evidence/current_objective.md",
+        "repo_evidence/dependency_notes.md"
+      ],
+      "constraint_tags": [
+        "rollout",
+        "capacity",
+        "objective"
+      ],
+      "item_id": "B4",
+      "lane": "platform",
+      "slot": 3,
+      "summary": "Place cutover-observability in slot 3 because it respects the live dependency, capacity, and rollout constraints."
+    },
+    {
+      "citations": [
+        "backlog/B3.md",
+        "repo_evidence/current_objective.md",
+        "repo_evidence/dependency_notes.md"
+      ],
+      "constraint_tags": [
+        "dependency",
+        "objective"
+      ],
+      "item_id": "B3",
+      "lane": "core",
+      "slot": 4,
+      "summary": "Place shadow-dry-run in slot 4 because it respects the live dependency, capacity, and rollout constraints."
+    },
+    {
+      "citations": [
+        "backlog/B5.md",
+        "repo_evidence/current_objective.md",
+        "repo_evidence/dependency_notes.md"
+      ],
+      "constraint_tags": [
+        "rollout",
+        "capacity",
+        "objective"
+      ],
+      "item_id": "B5",
+      "lane": "release",
+      "slot": 5,
+      "summary": "Place wave1-cutover in slot 5 because it respects the live dependency, capacity, and rollout constraints."
+    }
+  ],
+  "schema_version": "cnb55.schedule_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}

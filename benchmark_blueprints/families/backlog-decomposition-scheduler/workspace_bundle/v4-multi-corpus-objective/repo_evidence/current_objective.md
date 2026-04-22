@@ -1,0 +1,1 @@
+# Current objective\n\nThe backlog still mentions throughput, but the release team reopened reliability as the current objective.\n

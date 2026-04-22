@@ -1,0 +1,1 @@
+# Dependency notes\n\nB8 is now required before B7 because the rollback showed a compatibility hole.\n

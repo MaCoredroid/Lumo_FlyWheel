@@ -1,0 +1,33 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "backlog/B1.md",
+    "backlog/B2.md",
+    "backlog/B3.md",
+    "backlog/B4.md",
+    "backlog/B5.md",
+    "backlog/B6.md",
+    "backlog/B7.md",
+    "bin/cnb55-schedule",
+    "repo_evidence/current_objective.md",
+    "repo_evidence/dependency_notes.md",
+    "repo_evidence/q1_fastlane_memo.md",
+    "repo_evidence/risk_register.md",
+    "repo_evidence/staffing.md",
+    "tests/test_schedule_brief.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+    "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+    "backlog": "9b7d220d45042f810e1909e7aea5e08b88833da34bcfb39d29e3e264f0a211be",
+    "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+    "repo_evidence": "e6e7259edb428ef70b9144c66cc6b6eaffc19e18f1e345561cb2dfad2be1d87f",
+    "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+  },
+  "test_schedule_brief_sha256": "e5dbb245fd7ebb15a1ec8cf00a888f5aae1307126f1e35aa385239b70ff813a3",
+  "variant_id": "v2-noisy-distractor"
+}

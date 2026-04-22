@@ -1,0 +1,1 @@
+# Risk register\n\nWave-1 cutover is the risky rollout item. Do not schedule it before dry-run proof and observability.\n

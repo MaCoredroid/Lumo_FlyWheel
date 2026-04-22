@@ -1,0 +1,1 @@
+# Current objective\n\nThe current objective is still the safe wave-1 cutover. Ignore older planning that optimized for the legacy fast-lane.\n

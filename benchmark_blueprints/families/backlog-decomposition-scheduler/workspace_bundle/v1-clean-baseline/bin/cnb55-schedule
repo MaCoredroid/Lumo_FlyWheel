@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+SCHEMA_VERSION = "cnb55.schedule_brief.v1"
+LANES = ('core', 'platform', 'ops', 'release')
+CONSTRAINT_TAGS = ("dependency", "capacity", "rollout", "objective", "incident")
+STATUS_VALUES = ("observed", "to_verify", "missing")
+EVIDENCE_ROOTS = ("backlog", "repo_evidence", "release_context", "incident_context")
+
+
+def item_ids(root: Path) -> list[str]:
+    return sorted(p.stem for p in (root / "backlog").glob("B*.md"))
+
+
+def schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "schema_version",
+            "variant_id",
+            "objective_focus",
+            "schedule",
+            "scarce_role_plan",
+            "risk_gate",
+            "assumption_ledger",
+        ],
+        "additionalProperties": False,
+    }
+
+
+class ValidationError(Exception):
+    def __init__(self, code: int, messages: list[str]):
+        super().__init__("\n".join(messages))
+        self.code = code
+        self.messages = messages
+
+
+def validate(doc: Any, root: Path) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(doc, dict):
+        return ["top-level value must be an object"]
+    required = set(schema()["required"])
+    missing = sorted(required - set(doc))
+    extra = sorted(set(doc) - required)
+    for name in missing:
+        errors.append(f"missing field: {name}")
+    for name in extra:
+        errors.append(f"unexpected field: {name}")
+    if errors:
+        return errors
+    if doc["schema_version"] != SCHEMA_VERSION:
+        errors.append(f"schema_version must be {SCHEMA_VERSION}")
+    variant = (root / ".scenario_variant").read_text().strip()
+    if doc["variant_id"] != variant:
+        errors.append("variant_id mismatch")
+    if not isinstance(doc["objective_focus"], str) or len(doc["objective_focus"].strip()) < 8:
+        errors.append("objective_focus must be a non-empty sentence")
+    items = item_ids(root)
+    schedule = doc["schedule"]
+    if not isinstance(schedule, list) or len(schedule) != len(items):
+        errors.append("schedule must cover every backlog item exactly once")
+    else:
+        seen = set()
+        slots = []
+        for entry in schedule:
+            if not isinstance(entry, dict):
+                errors.append("schedule entries must be objects")
+                continue
+            for field in ("item_id", "slot", "lane", "summary", "citations", "constraint_tags"):
+                if field not in entry:
+                    errors.append(f"schedule entry missing {field}")
+            item_id = entry.get("item_id")
+            if item_id not in items:
+                errors.append(f"unknown item_id: {item_id}")
+            if item_id in seen:
+                errors.append(f"duplicate item_id: {item_id}")
+            seen.add(item_id)
+            slot = entry.get("slot")
+            if not isinstance(slot, int) or slot < 1:
+                errors.append(f"bad slot for {item_id}")
+            else:
+                slots.append(slot)
+            if entry.get("lane") not in LANES:
+                errors.append(f"bad lane for {item_id}")
+            if not isinstance(entry.get("summary"), str) or len(entry["summary"].strip()) < 12:
+                errors.append(f"summary too short for {item_id}")
+            citations = entry.get("citations")
+            if not isinstance(citations, list) or not citations:
+                errors.append(f"citations missing for {item_id}")
+            else:
+                for rel in citations:
+                    if not isinstance(rel, str):
+                        errors.append(f"citation must be string for {item_id}")
+                        continue
+                    if not any(rel == prefix or rel.startswith(prefix + "/") for prefix in EVIDENCE_ROOTS):
+                        errors.append(f"citation outside evidence roots: {rel}")
+                    if not (root / rel).exists():
+                        errors.append(f"missing citation path: {rel}")
+            tags = entry.get("constraint_tags")
+            if not isinstance(tags, list) or not tags or not set(tags).issubset(CONSTRAINT_TAGS):
+                errors.append(f"bad constraint_tags for {item_id}")
+        if slots and set(slots) != set(range(1, max(slots) + 1)):
+            errors.append("slots must be contiguous starting at 1")
+    scarce = doc["scarce_role_plan"]
+    if not isinstance(scarce, dict):
+        errors.append("scarce_role_plan must be object")
+    else:
+        for field in ("role", "protected_items", "note"):
+            if field not in scarce:
+                errors.append(f"scarce_role_plan missing {field}")
+    risk = doc["risk_gate"]
+    if not isinstance(risk, dict):
+        errors.append("risk_gate must be object")
+    else:
+        for field in ("risky_item_id", "must_follow", "note"):
+            if field not in risk:
+                errors.append(f"risk_gate missing {field}")
+    ledger = doc["assumption_ledger"]
+    if not isinstance(ledger, list) or not ledger:
+        errors.append("assumption_ledger must be non-empty")
+    else:
+        if not any(isinstance(row, dict) and row.get("status") == "missing" for row in ledger):
+            errors.append("assumption_ledger needs a missing row")
+        for row in ledger:
+            if not isinstance(row, dict):
+                errors.append("assumption row must be object")
+                continue
+            if row.get("status") not in STATUS_VALUES:
+                errors.append("assumption status invalid")
+    return errors
+
+
+def render_md(doc: dict[str, Any]) -> str:
+    lines = [
+        "# Schedule Brief",
+        "",
+        f"- variant: `{doc['variant_id']}`",
+        f"- objective: {doc['objective_focus']}",
+        "",
+        "## Scheduled Slots",
+        "",
+        "| slot | lane | item | summary |",
+        "|---:|---|---|---|",
+    ]
+    for entry in sorted(doc["schedule"], key=lambda x: (x["slot"], x["item_id"])):
+        lines.append(f"| {entry['slot']} | {entry['lane']} | `{entry['item_id']}` | {entry['summary']} |")
+    lines.extend(
+        [
+            "",
+            "## Scarce Role Plan",
+            "",
+            f"- role: `{doc['scarce_role_plan']['role']}`",
+            f"- protected_items: {', '.join(doc['scarce_role_plan']['protected_items'])}",
+            f"- note: {doc['scarce_role_plan']['note']}",
+            "",
+            "## Risk Gate",
+            "",
+            f"- risky_item_id: `{doc['risk_gate']['risky_item_id']}`",
+            f"- must_follow: {', '.join(doc['risk_gate']['must_follow'])}",
+            f"- note: {doc['risk_gate']['note']}",
+            "",
+            "## Assumption Ledger",
+            "",
+            "| status | topic | note |",
+            "|---|---|---|",
+        ]
+    )
+    for row in doc["assumption_ledger"]:
+        lines.append(f"| {row['status']} | {row['topic']} | {row['note']} |")
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("schema")
+    for name in ("validate", "submit"):
+        sp = sub.add_parser(name)
+        sp.add_argument("input_file")
+    args = ap.parse_args()
+    root = Path.cwd()
+    if args.cmd == "schema":
+        print(json.dumps(schema(), indent=2, sort_keys=True))
+        return 0
+    path = Path(args.input_file)
+    if not path.exists():
+        raise ValidationError(2, [f"missing input file: {path}"])
+    try:
+        doc = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        raise ValidationError(2, [f"invalid json: {exc}"])
+    errors = validate(doc, root)
+    if errors:
+        raise ValidationError(3, errors)
+    if args.cmd == "validate":
+        return 0
+    brief_dir = root / "brief"
+    brief_dir.mkdir(exist_ok=True)
+    (brief_dir / "schedule_brief.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    (brief_dir / "schedule_brief.md").write_text(render_md(doc))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except ValidationError as exc:
+        for line in exc.messages:
+            print(line, file=sys.stderr)
+        raise SystemExit(exc.code)

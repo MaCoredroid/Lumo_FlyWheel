@@ -1,0 +1,1 @@
+# Dependency notes\n\nThe real gating path is unchanged from V1.\n

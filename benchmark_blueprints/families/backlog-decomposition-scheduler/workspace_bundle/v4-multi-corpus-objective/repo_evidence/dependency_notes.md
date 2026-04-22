@@ -1,0 +1,1 @@
+# Dependency notes\n\nB4 guards the risky rollout. B2 still feeds B3, but observability must move first this cycle.\n

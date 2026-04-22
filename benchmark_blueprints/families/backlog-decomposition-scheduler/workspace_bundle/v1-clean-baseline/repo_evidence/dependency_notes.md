@@ -1,0 +1,1 @@
+# Dependency notes\n\n- B2 and B4 both wait on B1.\n- B3 waits on B2.\n- B5 waits on both B3 and B4.\n- B6 can start once B1 is done.\n

@@ -1,0 +1,137 @@
+{
+  "critical_path": [
+    "B1",
+    "B2",
+    "B3",
+    "B5"
+  ],
+  "dependency_edges": [
+    [
+      "B1",
+      "B2"
+    ],
+    [
+      "B1",
+      "B4"
+    ],
+    [
+      "B2",
+      "B3"
+    ],
+    [
+      "B3",
+      "B5"
+    ],
+    [
+      "B4",
+      "B5"
+    ],
+    [
+      "B1",
+      "B6"
+    ]
+  ],
+  "hard_dependency_edges": [
+    [
+      "B1",
+      "B2"
+    ],
+    [
+      "B1",
+      "B4"
+    ],
+    [
+      "B2",
+      "B3"
+    ],
+    [
+      "B3",
+      "B5"
+    ],
+    [
+      "B4",
+      "B5"
+    ],
+    [
+      "B1",
+      "B6"
+    ]
+  ],
+  "incident_guard_item": null,
+  "incident_reselect_item": null,
+  "items": [
+    {
+      "item_id": "B1"
+    },
+    {
+      "item_id": "B2"
+    },
+    {
+      "item_id": "B3"
+    },
+    {
+      "item_id": "B4"
+    },
+    {
+      "item_id": "B5"
+    },
+    {
+      "item_id": "B6"
+    }
+  ],
+  "objective_drift_active": false,
+  "objective_keywords": [
+    "wave-1",
+    "cutover",
+    "dry-run"
+  ],
+  "objective_order_pairs": [
+    [
+      "B2",
+      "B3"
+    ],
+    [
+      "B4",
+      "B5"
+    ]
+  ],
+  "pass_bar": 40,
+  "preferred_prefix": [
+    "B1",
+    "B2",
+    "B4"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+    "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+    "backlog": "56ff51a4491f478a90effc2f654b23a77643d691f61fcb5c3bdaa147e990a765",
+    "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+    "repo_evidence": "1b503266425aa8a2e9a274643aa142967a24543ae5ad90b68f5f31b675e84af7",
+    "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+  },
+  "risk_must_follow": [
+    "B3",
+    "B4"
+  ],
+  "risky_item_id": "B5",
+  "scarce_role_items": [
+    "B2",
+    "B4"
+  ],
+  "scarce_role_name": "migration-sre",
+  "slot_targets": {
+    "B1": 1,
+    "B2": 2,
+    "B3": 4,
+    "B4": 3,
+    "B5": 5,
+    "B6": 2
+  },
+  "stale_anchor_after": [],
+  "stale_priority_item": null,
+  "sunk_cost_after": [],
+  "sunk_cost_item": null,
+  "test_schedule_brief_sha256": "e5dbb245fd7ebb15a1ec8cf00a888f5aae1307126f1e35aa385239b70ff813a3",
+  "variant_id": "v1-clean-baseline"
+}

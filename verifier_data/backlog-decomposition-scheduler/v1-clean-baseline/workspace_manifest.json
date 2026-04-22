@@ -1,0 +1,31 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "backlog/B1.md",
+    "backlog/B2.md",
+    "backlog/B3.md",
+    "backlog/B4.md",
+    "backlog/B5.md",
+    "backlog/B6.md",
+    "bin/cnb55-schedule",
+    "repo_evidence/current_objective.md",
+    "repo_evidence/dependency_notes.md",
+    "repo_evidence/risk_register.md",
+    "repo_evidence/staffing.md",
+    "tests/test_schedule_brief.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "284735ca34d594b2ff1ea4ca523d0c216eb70448a268a548434a28146740e394",
+    "Dockerfile": "6ee7860fab1c0072be9903ab811638923497548172828ee9842b7d9991bf7816",
+    "backlog": "56ff51a4491f478a90effc2f654b23a77643d691f61fcb5c3bdaa147e990a765",
+    "bin": "8a45f8530cd51fa268cfce4479a924545da6fe9aec77ebdc7ab674fec3fd2919",
+    "repo_evidence": "1b503266425aa8a2e9a274643aa142967a24543ae5ad90b68f5f31b675e84af7",
+    "tests": "0ae61f2d79606251517205d3bdd7e22254cf558a1e5f66adcd50c995ee6eefce"
+  },
+  "test_schedule_brief_sha256": "e5dbb245fd7ebb15a1ec8cf00a888f5aae1307126f1e35aa385239b70ff813a3",
+  "variant_id": "v1-clean-baseline"
+}

@@ -1,0 +1,1 @@
+# Dependency notes\n\nThe cutover path is still B1 -> B2 -> B3 -> B5 with B4 guarding B5.\n
