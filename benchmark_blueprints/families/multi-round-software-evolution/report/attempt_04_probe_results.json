@@ -1,0 +1,140 @@
+{
+  "runs": [
+    {
+      "run_index": 1,
+      "variant": "v1-clean-baseline",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "d_plan.md](/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/mrse_probe_v1-clean-baseline_r1_7u7lllw3/workspace/brief/round_plan.md). The selected next-round focus is `schema-snapshot-alignment`, with explicit evidence-backed `do_not_touch` items, a concrete replay-divergence metric, and an assumption ledger that includes a `missing` row.\n\nOnly `brief_input.json` and `brief/*` were written.",
+      "codex_stderr_tail": " \"status\": \"missing\",\n+      \"note\": \"The frozen evidence names the mismatch but does not enumerate the specific snapshot shapes or ordering traces that diverge.\"\n+    }\n+  ]\n+}\n\n2026-04-22T06:53:45.802884Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db3f5-c8e3-78e3-a55f-8d1f38c6bea2 hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n70,458",
+      "selected_focus_id": "schema-snapshot-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    },
+    {
+      "run_index": 1,
+      "variant": "v2-noisy-distractor",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "brief/round_plan.md).\n\nThe selected next-round focus is `schema-snapshot-alignment`, with explicit do-not-touch boundaries around the already-contained pager work and downstream tuning items. I also verified the required missing assumption row is present. There is no `.git` repo in this workspace, so file verification was done by reading the generated outputs directly rather than via `git status`.",
+      "codex_stderr_tail": "\": \"The workspace evidence identifies the mismatch class but does not name the precise code path or ownership boundary where writer and restore ordering diverge.\"\n+    }\n+  ]\n+}\n\n2026-04-22T06:55:30.546868Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db3f7-5d68-7793-bb25-28b08d199ef6 hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n70,454",
+      "selected_focus_id": "schema-snapshot-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    },
+    {
+      "run_index": 1,
+      "variant": "v3-dirty-state",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "_v3-dirty-state_r1_rpyad11u/workspace/brief/round_plan.json) and [brief/round_plan.md](/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/mrse_probe_v3-dirty-state_r1_rpyad11u/workspace/brief/round_plan.md). The selected next-round focus is `schema-snapshot-alignment`, with `do_not_touch`, a concrete partial-progress metric, and an assumption ledger that includes a `missing` row as required.",
+      "codex_stderr_tail": "ozen evidence identifies the focus area but does not include the concrete callsite-level mismatch or failing trace needed to choose the first implementation cut.\"\n+    }\n+  ]\n+}\n\n2026-04-22T06:57:02.595222Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db3f8-f61f-7510-8cb9-0631adb19732 hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n70,712",
+      "selected_focus_id": "schema-snapshot-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    },
+    {
+      "run_index": 1,
+      "variant": "v4-multi-corpus-objective",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "/brief/round_plan.json) and [brief/round_plan.md](/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/mrse_probe_v4-multi-corpus-objective_r1_o_d35c9e/workspace/brief/round_plan.md). The selected next-round focus is `streaming-watermark-alignment`, with explicit evidence-backed `do_not_touch`, a concrete baseline/target/guardrail metric, and an assumption ledger that includes a `missing` row.",
+      "codex_stderr_tail": "und replay divergence remains unresolved, so the next round must verify that watermark alignment work does not worsen the 7 / 10 seeded-restore failure baseline.\"\n+    }\n+  ]\n+}\n\n2026-04-22T06:58:32.248923Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db3fa-5da4-7e40-8e43-7e22dad63acb hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n70,338",
+      "selected_focus_id": "streaming-watermark-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    },
+    {
+      "run_index": 1,
+      "variant": "v5-recovery-in-thread",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "n) and [brief/round_plan.md](/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/mrse_probe_v5-recovery-in-thread_r1_i87_pxvz/workspace/brief/round_plan.md). The selected next-round focus is `schema-snapshot-alignment`, with explicit `do_not_touch` entries for pager cleanup, cache tuning, and watermark retry, plus a concrete replay-divergence metric and a `missing` assumption row as required.",
+      "codex_stderr_tail": " identifies unstable restore ordering as the failure class, but it does not isolate the specific ordering transition or schema boundary that triggers corruption.\"\n+    }\n+  ]\n+}\n\n2026-04-22T07:00:33.047183Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db3fb-bbdb-7653-b529-89193cd9e9ff hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n70,439",
+      "selected_focus_id": "schema-snapshot-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    }
+  ],
+  "summary": {
+    "variants": [
+      {
+        "variant": "v1-clean-baseline",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "schema-snapshot-alignment"
+        ]
+      },
+      {
+        "variant": "v2-noisy-distractor",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "schema-snapshot-alignment"
+        ]
+      },
+      {
+        "variant": "v3-dirty-state",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "schema-snapshot-alignment"
+        ]
+      },
+      {
+        "variant": "v4-multi-corpus-objective",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "streaming-watermark-alignment"
+        ]
+      },
+      {
+        "variant": "v5-recovery-in-thread",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "schema-snapshot-alignment"
+        ]
+      }
+    ],
+    "family_mean_P_benchmark": 86.0,
+    "max_variant_mean": 86.0,
+    "min_variant_mean": 86.0,
+    "monotonic_with_tolerance_3": true,
+    "oracle_gate_reference": "oracle>=90 empty=0 shortcut<=30 checked separately by regen_family.py",
+    "observed_stdev_M_training": 0.0,
+    "layer_a_gate": {
+      "family_mean_in_range_15_25": false,
+      "max_variant_mean_le_40": false,
+      "min_variant_mean_le_10": false,
+      "monotonic_with_tolerance_3": true
+    }
+  }
+}

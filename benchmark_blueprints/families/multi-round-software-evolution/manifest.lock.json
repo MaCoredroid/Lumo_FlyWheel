@@ -18,7 +18,7 @@
   },
   "family_id": "multi-round-software-evolution",
   "grader": {
-    "score_round_plan_py_sha256": "b105569db96dfa23bf3c1d8e34f4db82a8ad62cec4f7ebc82ce64ac75a5da609",
+    "score_round_plan_py_sha256": "f19feb26bdd564563446a7f6868b46e4fabf16d34684b3921507218a6be46bcd",
     "verify_sh_sha256": "56e3bd9323adb3a742e6abd39715a4bbdef82ea42d590cf3aaeb30d23e9047f8"
   },
   "schema_version": "cnb55.manifest.v2",

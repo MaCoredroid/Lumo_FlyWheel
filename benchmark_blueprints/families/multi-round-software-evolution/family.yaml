@@ -1,7 +1,7 @@
 family_id: multi-round-software-evolution
 track: 10
 schema_version: cnb55.family.v1
-layer_a_status: in_progress
+layer_a_status: red
 layer_b_status: in_progress
 
 grader_ref: verifiers/multi-round-software-evolution/score_round_plan.py

@@ -48,6 +48,8 @@ def sha256_tree(root: Path, rel: str) -> str:
         h.update(sha256_file(target).encode())
         return h.hexdigest()
     for p in sorted(target.rglob("*")):
+        if p.name == ".pytest_cache" or "__pycache__" in p.parts or p.suffix == ".pyc":
+            continue
         rp = p.relative_to(target).as_posix()
         if p.is_file():
             h.update(b"F:" + rp.encode() + b"\x00")

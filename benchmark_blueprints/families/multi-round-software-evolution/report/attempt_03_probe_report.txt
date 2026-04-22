@@ -1,0 +1,31 @@
+# Multi-Round Software Evolution Probe Report
+
+Model: `gpt-5.4`
+Runs per variant: `1`
+
+## Per-Variant Means
+
+| Variant | Mean P | Min | Max | Mean M | Selected Focuses |
+|---|---:|---:|---:|---:|---|
+| v1-clean-baseline | 86.00 | 86 | 86 | 0.9348 | schema-snapshot-alignment |
+| v2-noisy-distractor | 0.00 | 0 | 0 | 0.0000 | schema-snapshot-alignment |
+| v3-dirty-state | 0.00 | 0 | 0 | 0.0000 | schema-snapshot-alignment |
+| v4-multi-corpus-objective | 86.00 | 86 | 86 | 0.9348 | streaming-watermark-alignment |
+| v5-recovery-in-thread | 0.00 | 0 | 0 | 0.0000 | schema-snapshot-alignment |
+
+## Layer A Gate
+
+- family mean = `34.4` -> FAIL for `[15,25]`
+- max variant mean = `86.0` -> FAIL for `<= 40`
+- min variant mean = `0.0` -> PASS for `<= 10`
+- monotonic within +/-3 = `False` -> FAIL
+
+## Raw Runs
+
+| Run | Variant | Exit | P | M | Pass | Focus | Ceilings |
+|---|---|---:|---:|---:|---|---|---|
+| 1 | v1-clean-baseline | 0 | 86 | 0.9348 | True | schema-snapshot-alignment | — |
+| 1 | v2-noisy-distractor | 0 | 0 | 0.0000 | False | schema-snapshot-alignment | — |
+| 1 | v3-dirty-state | 0 | 0 | 0.0000 | False | schema-snapshot-alignment | — |
+| 1 | v4-multi-corpus-objective | 0 | 86 | 0.9348 | True | streaming-watermark-alignment | — |
+| 1 | v5-recovery-in-thread | 0 | 0 | 0.0000 | False | schema-snapshot-alignment | vague_partial_progress_metric |
