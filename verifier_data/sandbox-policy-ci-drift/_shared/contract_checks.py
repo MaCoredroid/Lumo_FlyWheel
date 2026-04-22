@@ -36,6 +36,9 @@ def changed_files(agent_ws: Path, manifest: dict[str, Any]) -> list[str]:
         path.relative_to(agent_ws).as_posix(): path
         for path in agent_ws.rglob("*")
         if path.is_file()
+        and "__pycache__" not in path.relative_to(agent_ws).as_posix()
+        and not path.name.endswith(".pyc")
+        and ".pytest_cache" not in path.relative_to(agent_ws).as_posix()
     }
     for rel, expected_sha in expected.items():
         path = current_files.pop(rel, None)
@@ -66,6 +69,8 @@ def readonly_tree_hashes_ok(agent_ws: Path, gold: dict[str, Any]) -> tuple[bool,
         else:
             for path in sorted(target.rglob("*")):
                 rel_path = path.relative_to(target).as_posix()
+                if "__pycache__" in rel_path or rel_path.endswith(".pyc") or ".pytest_cache" in rel_path:
+                    continue
                 if path.is_file():
                     h.update(b"F:" + rel_path.encode() + b"\x00")
                     h.update(sha256_file(path).encode() + b"\x00")
@@ -92,6 +97,8 @@ class SurfaceChecks:
     workflow_canonical_ok: bool
     config_canonical_ok: bool
     docs_contract_ok: bool
+    release_context_consumer_ok: bool
+    rollback_incident_ack_ok: bool
     helper_shortcut_clean: bool
     code_files_changed: bool
     localization_span_ok: bool
@@ -136,15 +143,19 @@ def inspect_surfaces(agent_ws: Path, changed: list[str], gold: dict[str, Any]) -
         and workflow.count("SANDBOX_POLICY: workspace_write") == 2
     )
 
+    config_mod = _load_module("sandbox_config_actual", agent_ws / "codex" / "config.py")
     config_text = (agent_ws / "codex" / "config.toml").read_text(encoding="utf-8")
+    try:
+        actual_config = config_mod.load_config(agent_ws / "codex" / "config.toml")
+    except Exception:
+        actual_config = {}
     config_canonical_ok = (
-        'sandbox = "workspace_write"' in config_text
-        and 'approval_policy = "on_request"' in config_text
-        and "workspace-write" not in config_text
+        actual_config == {"sandbox": "workspace_write", "approval_policy": "on_request"}
         and "manual-review" not in config_text
     )
 
     note = (agent_ws / "docs" / "releases" / "policy-rename.md").read_text(encoding="utf-8")
+    note_lower = note.lower()
     docs_contract_ok = (
         "workspace-write" in note
         and "workspace_write" in note
@@ -153,6 +164,24 @@ def inspect_surfaces(agent_ws: Path, changed: list[str], gold: dict[str, Any]) -
         and "fully breaking" not in note
         and "make ci" in note
     )
+    release_context = agent_ws / "release_context" / "preview-consumer-contract.md"
+    release_context_consumer_ok = True
+    if release_context.exists():
+        release_context_consumer_ok = (
+            "preview" in note_lower
+            and "canonical-only" in note_lower
+            and ("operator" in note_lower or "screenshots" in note_lower)
+            and "make ci" in note_lower
+        )
+    incident_context = agent_ws / "incident_context" / "rollback_2026_04.md"
+    rollback_incident_ack_ok = True
+    if incident_context.exists():
+        rollback_incident_ack_ok = (
+            "rolled back" in note_lower
+            and "workspace-write" in note
+            and ("compat" in note_lower or "preserve" in note_lower)
+            and "make ci" in note_lower
+        )
 
     run_ci = (agent_ws / "scripts" / "run_ci.py").read_text(encoding="utf-8")
     helper_shortcut_clean = (
@@ -172,6 +201,8 @@ def inspect_surfaces(agent_ws: Path, changed: list[str], gold: dict[str, Any]) -
         workflow_canonical_ok=workflow_canonical_ok,
         config_canonical_ok=config_canonical_ok,
         docs_contract_ok=docs_contract_ok,
+        release_context_consumer_ok=release_context_consumer_ok,
+        rollback_incident_ack_ok=rollback_incident_ack_ok,
         helper_shortcut_clean=helper_shortcut_clean,
         code_files_changed=code_files_changed,
         localization_span_ok=localization_span_ok,

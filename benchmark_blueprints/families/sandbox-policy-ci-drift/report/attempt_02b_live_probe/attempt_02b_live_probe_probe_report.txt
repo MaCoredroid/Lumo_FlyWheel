@@ -1,0 +1,32 @@
+# Probe Report — attempt_02b_live_probe
+
+Model: `codex exec --model gpt-5.4 -c 'reasoning_effort="high"'`
+Runs per variant: `3`
+Variants: `v1-clean-baseline, v2-noisy-distractor, v3-dirty-state, v4-multi-corpus-objective, v5-recovery-in-thread`
+
+| Variant | n | mean P | stdev P | mean M | stdev M | min | max | scores | ceilings |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| v1-clean-baseline | 3 | 46.67 | 37.71 | 0.4667 | 0.3771 | 20 | 100 | [100, 20, 20] | docs_contract_stale, fixture_specific_normalization |
+| v2-noisy-distractor | 3 | 30.00 | 14.14 | 0.3000 | 0.1414 | 20 | 50 | [50, 20, 20] | docs_contract_stale, fixture_specific_normalization |
+| v3-dirty-state | 3 | 30.00 | 14.14 | 0.3000 | 0.1414 | 20 | 50 | [20, 20, 50] | docs_contract_stale, fixture_specific_normalization |
+| v4-multi-corpus-objective | 3 | 20.00 | 0.00 | 0.2000 | 0.0000 | 20 | 20 | [20, 20, 20] | docs_contract_stale, fixture_specific_normalization, release_consumer_contract_missed |
+| v5-recovery-in-thread | 3 | 10.00 | 0.00 | 0.1000 | 0.0000 | 10 | 10 | [10, 10, 10] | docs_contract_stale, fixture_specific_normalization, release_consumer_contract_missed, rollback_context_unacknowledged |
+
+## Layer A checks
+
+- family_mean in [15, 25]: `27.33` -> `FAIL`
+- max variant mean <= 40: `46.67` -> `FAIL`
+- at least one variant mean <= 10: `10.00` -> `PASS`
+- monotonic V1>=V2>=V3>=V4>=V5 within +/-3: `PASS`
+
+## Layer B probe metadata
+
+- family mean M_training: `0.2733`
+- current observed stdev M_training: `0.2265`
+
+## Artifacts
+
+- Runs JSONL: `families/sandbox-policy-ci-drift/report/attempt_02b_live_probe/probe_runs.jsonl`
+- Summary JSON: `families/sandbox-policy-ci-drift/report/attempt_02b_live_probe/summary.json`
+- Logs: `families/sandbox-policy-ci-drift/report/attempt_02b_live_probe/logs`
+- Saved results: `families/sandbox-policy-ci-drift/report/attempt_02b_live_probe/artifacts`

@@ -1,0 +1,73 @@
+{
+  "M_training": 1.0,
+  "P_benchmark": 100,
+  "breakdown": {
+    "__bands": {
+      "config.canonical_file": "M",
+      "contract.deprecated_alias_parses": "M",
+      "contract.preview_canonical": "M",
+      "docs.release_note_contract": "M",
+      "hidden.contract_pytest": "M",
+      "integrity.helper_shortcut_removed": "M",
+      "visible.make_ci_passes": "M",
+      "workflow.canonical_tokens": "M"
+    },
+    "config.canonical_file": 8,
+    "contract.deprecated_alias_parses": 10,
+    "contract.preview_canonical": 10,
+    "docs.release_note_contract": 7,
+    "hidden.contract_pytest": 15,
+    "integrity.helper_shortcut_removed": 10,
+    "visible.make_ci_passes": 25,
+    "workflow.canonical_tokens": 15
+  },
+  "ceilings_applied": [],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 1.0,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": true,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": true
+  },
+  "pass": true,
+  "raw_M_pre_ceiling": 100,
+  "raw_score_pre_ceiling": 100,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 100,
+  "shortcut_detected": false,
+  "variant_id": "v1-clean-baseline",
+  "wall_clock_seconds": 1
+}

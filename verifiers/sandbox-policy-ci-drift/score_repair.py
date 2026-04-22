@@ -191,6 +191,14 @@ def main() -> int:
         state.apply_ceiling("docs_contract_stale", 50)
         state.add_error("release note still stale or breaking-only")
 
+    if not surfaces.release_context_consumer_ok:
+        state.apply_ceiling("release_consumer_contract_missed", 20)
+        state.add_error("release-context consumer contract missing from release note")
+
+    if not surfaces.rollback_incident_ack_ok:
+        state.apply_ceiling("rollback_context_unacknowledged", 10)
+        state.add_error("incident rollback rationale missing from release note")
+
     if surfaces.helper_shortcut_clean:
         state.add("integrity.helper_shortcut_removed", 10)
     else:

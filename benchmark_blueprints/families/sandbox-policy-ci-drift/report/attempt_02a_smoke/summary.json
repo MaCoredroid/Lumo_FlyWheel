@@ -1,0 +1,119 @@
+{
+  "acceptance": {
+    "at_least_one_variant_le_10": false,
+    "family_mean_window": false,
+    "max_variant_le_40": false,
+    "monotonic_with_tolerance_3": false
+  },
+  "current_observed_stdev_M_training": 0.12,
+  "family_mean": 26.0,
+  "family_mean_M_training": 0.26,
+  "max_variant_mean": 50.0,
+  "min_variant_mean": 20.0,
+  "rows": [
+    {
+      "ceilings": [
+        "docs_contract_stale",
+        "fixture_specific_normalization"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.2
+      ],
+      "max": 20,
+      "mean": 20.0,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "ceilings": [
+        "docs_contract_stale",
+        "fixture_specific_normalization"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.2
+      ],
+      "max": 20,
+      "mean": 20.0,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "ceilings": [
+        "docs_contract_stale",
+        "fixture_specific_normalization"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.2
+      ],
+      "max": 20,
+      "mean": 20.0,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "ceilings": [
+        "docs_contract_stale"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.5
+      ],
+      "max": 50,
+      "mean": 50.0,
+      "mean_M_training": 0.5,
+      "min": 50,
+      "n": 1,
+      "scores": [
+        50
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "ceilings": [
+        "docs_contract_stale",
+        "fixture_specific_normalization"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.2
+      ],
+      "max": 20,
+      "mean": 20.0,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}
