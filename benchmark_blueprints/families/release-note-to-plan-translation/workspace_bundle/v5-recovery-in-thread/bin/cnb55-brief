@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+SCHEMA_VERSION = "cnb55.release_plan_brief.v1"
+ASSUMPTION_STATUSES = ("observed", "to_verify", "missing")
+EVIDENCE_ROOTS = ("release_notes", "repo_inventory", "release_context", "incident_context")
+
+
+def schema_object() -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "CNB-55 Release Plan Brief Input",
+        "type": "object",
+        "required": [
+            "schema_version",
+            "variant_id",
+            "first_milestone_id",
+            "ordered_steps",
+            "dependency_notes",
+            "primary_risk",
+            "assumption_ledger",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {"type": "string", "const": SCHEMA_VERSION},
+            "variant_id": {"type": "string"},
+            "first_milestone_id": {"type": "string", "minLength": 2},
+            "ordered_steps": {
+                "type": "array",
+                "minItems": 3,
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "step_id",
+                        "rank",
+                        "title",
+                        "summary",
+                        "bounded_deliverable",
+                        "evidence",
+                    ],
+                    "additionalProperties": False,
+                },
+            },
+            "dependency_notes": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "required": ["before", "after", "reason"],
+                    "additionalProperties": False,
+                },
+            },
+            "primary_risk": {
+                "type": "object",
+                "required": ["statement", "evidence", "mitigations"],
+                "additionalProperties": False,
+            },
+            "assumption_ledger": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "required": ["topic", "status", "note"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+    }
+
+
+class ValidationError(Exception):
+    def __init__(self, code: int, messages: list[str]):
+        super().__init__("\n".join(messages))
+        self.code = code
+        self.messages = messages
+
+
+def _load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError as exc:
+        raise ValidationError(2, [f"input file missing: {path}"]) from exc
+    except json.JSONDecodeError as exc:
+        raise ValidationError(2, [f"input file is not valid JSON: {exc}"]) from exc
+
+
+def validate_document(doc: Any, workspace: Path) -> None:
+    errors: list[str] = []
+    if not isinstance(doc, dict):
+        raise ValidationError(3, ["top-level value must be an object"])
+    required = {
+        "schema_version",
+        "variant_id",
+        "first_milestone_id",
+        "ordered_steps",
+        "dependency_notes",
+        "primary_risk",
+        "assumption_ledger",
+    }
+    for key in sorted(required - set(doc)):
+        errors.append(f"missing required field: {key}")
+    for key in sorted(set(doc) - required):
+        errors.append(f"unexpected field: {key}")
+    if errors:
+        raise ValidationError(3, errors)
+    if doc["schema_version"] != SCHEMA_VERSION:
+        errors.append(f"schema_version must equal {SCHEMA_VERSION}")
+    variant_marker = (workspace / ".scenario_variant").read_text().strip()
+    if doc["variant_id"] != variant_marker:
+        errors.append(f"variant_id must match .scenario_variant ({variant_marker})")
+    steps = doc["ordered_steps"]
+    if not isinstance(steps, list) or len(steps) < 3:
+        errors.append("ordered_steps must be an array of at least 3 entries")
+        steps = []
+    ranks = []
+    step_ids = []
+    for idx, step in enumerate(steps):
+        if not isinstance(step, dict):
+            errors.append(f"ordered_steps[{idx}] must be an object")
+            continue
+        needed = {"step_id", "rank", "title", "summary", "bounded_deliverable", "evidence"}
+        for key in sorted(needed - set(step)):
+            errors.append(f"ordered_steps[{idx}].{key} is required")
+        for key in sorted(set(step) - needed):
+            errors.append(f"ordered_steps[{idx}].{key} is not allowed")
+        step_id = step.get("step_id")
+        rank = step.get("rank")
+        evidence = step.get("evidence", [])
+        if not isinstance(step_id, str) or not step_id:
+            errors.append(f"ordered_steps[{idx}].step_id must be a non-empty string")
+        else:
+            step_ids.append(step_id)
+        if not isinstance(rank, int):
+            errors.append(f"ordered_steps[{idx}].rank must be an int")
+        else:
+            ranks.append(rank)
+        for field in ("title", "summary", "bounded_deliverable"):
+            if not isinstance(step.get(field), str) or len(step[field].strip()) < 8:
+                errors.append(f"ordered_steps[{idx}].{field} must be a string >= 8 chars")
+        if not isinstance(evidence, list) or not evidence:
+            errors.append(f"ordered_steps[{idx}].evidence must be a non-empty array")
+        else:
+            for rel in evidence:
+                if not isinstance(rel, str):
+                    errors.append(f"ordered_steps[{idx}].evidence entries must be strings")
+                    continue
+                if not any(rel == root or rel.startswith(root + "/") for root in EVIDENCE_ROOTS):
+                    errors.append(f"evidence path outside allowed roots: {rel}")
+                if not (workspace / rel).exists():
+                    errors.append(f"evidence path does not exist: {rel}")
+    if sorted(ranks) != list(range(1, len(steps) + 1)):
+        errors.append("ordered_steps ranks must be contiguous 1..N")
+    if len(set(step_ids)) != len(step_ids):
+        errors.append("ordered_steps step_id values must be unique")
+    if steps and doc["first_milestone_id"] != steps[0].get("step_id"):
+        errors.append("first_milestone_id must match ordered_steps[0].step_id")
+    dependency_notes = doc["dependency_notes"]
+    if not isinstance(dependency_notes, list) or not dependency_notes:
+        errors.append("dependency_notes must be a non-empty array")
+    else:
+        valid_ids = set(step_ids)
+        for idx, note in enumerate(dependency_notes):
+            if not isinstance(note, dict):
+                errors.append(f"dependency_notes[{idx}] must be an object")
+                continue
+            if note.get("before") not in valid_ids:
+                errors.append(f"dependency_notes[{idx}].before must reference a known step_id")
+            if note.get("after") not in valid_ids:
+                errors.append(f"dependency_notes[{idx}].after must reference a known step_id")
+            if not isinstance(note.get("reason"), str) or len(note["reason"].strip()) < 8:
+                errors.append(f"dependency_notes[{idx}].reason must be a string >= 8 chars")
+    primary_risk = doc["primary_risk"]
+    if not isinstance(primary_risk, dict):
+        errors.append("primary_risk must be an object")
+    else:
+        if not isinstance(primary_risk.get("statement"), str) or len(primary_risk["statement"].strip()) < 20:
+            errors.append("primary_risk.statement must be a string >= 20 chars")
+        evidence = primary_risk.get("evidence")
+        if not isinstance(evidence, list) or not evidence:
+            errors.append("primary_risk.evidence must be a non-empty array")
+        else:
+            for rel in evidence:
+                if not isinstance(rel, str) or not (workspace / rel).exists():
+                    errors.append(f"primary_risk evidence path missing: {rel}")
+        mitigations = primary_risk.get("mitigations")
+        if not isinstance(mitigations, list) or len(mitigations) < 2:
+            errors.append("primary_risk.mitigations must have at least 2 items")
+    assumption_ledger = doc["assumption_ledger"]
+    if not isinstance(assumption_ledger, list) or not assumption_ledger:
+        errors.append("assumption_ledger must be a non-empty array")
+    else:
+        if not any(isinstance(row, dict) and row.get("status") == "missing" for row in assumption_ledger):
+            errors.append("assumption_ledger must include at least one status='missing' row")
+        for idx, row in enumerate(assumption_ledger):
+            if not isinstance(row, dict):
+                errors.append(f"assumption_ledger[{idx}] must be an object")
+                continue
+            if row.get("status") not in ASSUMPTION_STATUSES:
+                errors.append(f"assumption_ledger[{idx}].status invalid: {row.get('status')!r}")
+            for field in ("topic", "note"):
+                if not isinstance(row.get(field), str) or len(row[field].strip()) < 3:
+                    errors.append(f"assumption_ledger[{idx}].{field} must be a string >= 3 chars")
+    if errors:
+        raise ValidationError(3, errors)
+
+
+def render_markdown(doc: dict[str, Any]) -> str:
+    lines = [
+        "# Release Plan Brief",
+        "",
+        f"- Variant: `{doc['variant_id']}`",
+        f"- First milestone: `{doc['first_milestone_id']}`",
+        "",
+        "## Ordered Plan",
+        "",
+    ]
+    for step in sorted(doc["ordered_steps"], key=lambda item: item["rank"]):
+        lines.extend(
+            [
+                f"### {step['rank']}. {step['step_id']} — {step['title']}",
+                "",
+                step["summary"],
+                "",
+                f"Bounded deliverable: {step['bounded_deliverable']}",
+                "",
+                "Evidence:",
+            ]
+        )
+        for rel in step["evidence"]:
+            lines.append(f"- `{rel}`")
+        lines.append("")
+    lines.extend(["## Dependency Notes", ""])
+    for note in doc["dependency_notes"]:
+        lines.append(f"- `{note['before']}` before `{note['after']}`: {note['reason']}")
+    lines.extend(["", "## Primary Risk", "", doc["primary_risk"]["statement"], "", "Evidence:"])
+    for rel in doc["primary_risk"]["evidence"]:
+        lines.append(f"- `{rel}`")
+    lines.extend(["", "Mitigations:"])
+    for item in doc["primary_risk"]["mitigations"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Assumption Ledger", ""])
+    for row in doc["assumption_ledger"]:
+        lines.append(f"- {row['topic']} [{row['status']}]: {row['note']}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def cmd_schema() -> int:
+    json.dump(schema_object(), sys.stdout, indent=2, sort_keys=True)
+    sys.stdout.write("\n")
+    return 0
+
+
+def cmd_validate(file_path: Path) -> int:
+    workspace = Path.cwd()
+    doc = _load_json(file_path)
+    validate_document(doc, workspace)
+    return 0
+
+
+def cmd_submit(file_path: Path) -> int:
+    workspace = Path.cwd()
+    doc = _load_json(file_path)
+    validate_document(doc, workspace)
+    out_dir = workspace / "brief"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "manager_brief.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    (out_dir / "manager_brief.md").write_text(render_markdown(doc) + "\n")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("schema")
+    for name in ("validate", "submit"):
+        p = sub.add_parser(name)
+        p.add_argument("file")
+    args = parser.parse_args()
+    try:
+        if args.cmd == "schema":
+            return cmd_schema()
+        if args.cmd == "validate":
+            return cmd_validate(Path(args.file))
+        return cmd_submit(Path(args.file))
+    except ValidationError as exc:
+        for msg in exc.messages:
+            print(msg, file=sys.stderr)
+        return exc.code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

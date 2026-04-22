@@ -1,0 +1,79 @@
+family_id: release-note-to-plan-translation
+track: 10
+schema_version: cnb55.family.v1
+layer_a_status: in_progress
+layer_b_status: implemented
+grader_ref: verifiers/release-note-to-plan-translation/score_ranking.py
+milestone_config_ref: verifier_data/release-note-to-plan-translation/{variant_id}/milestones/
+milestones:
+  M1_localization:
+    weight: 0.10
+  M2_primary_fix:
+    weight: 0.20
+  M3_invariants:
+    weight: 0.20
+  M4_functional:
+    weight: 0.20
+  M5_e2e:
+    weight: 0.30
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+  per_variant:
+    v1-clean-baseline:
+      required: [inspect:evidence_triage, modify:policy_tradeoff]
+    v2-noisy-distractor:
+      required: [inspect:evidence_triage]
+    v3-dirty-state:
+      required: [inspect:prioritize, inspect:evidence_triage]
+    v4-multi-corpus-objective:
+      required: [modify:policy_tradeoff, verify:assumption_honesty]
+    v5-recovery-in-thread:
+      required: [modify:policy_tradeoff, verify:assumption_honesty]
+tool_call_overrides:
+  - command: "cnb55-brief schema"
+    tags: [inspect]
+  - command: "cnb55-brief validate"
+    tags: [verify]
+  - command: "cnb55-brief submit"
+    tags: [modify]
+    terminal: true
+state_delta:
+  kind: json_deliverable
+  deliverable_path: brief/manager_brief.json
+  states: [absent, present_and_invalid, present_and_valid]
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only action", delta: 0.0}
+    - {from: absent, to: present_and_valid, trigger: "cnb55-brief submit", delta: 0.7}
+    - {from: absent, to: present_and_invalid, trigger: "raw brief write with invalid json", delta: 0.0}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "cnb55-brief submit", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+integrity_rules:
+  - id: write_outside_whitelist
+  - id: immutable_slice_mutated
+  - id: pytest_shim
+  - id: tests_modified
+  - id: network_egress
+llm_judge_quarantine:
+  partial_progress_markdown:
+    max_points: 2
+    band: P_benchmark_only
+  total_quarantined_points: 2
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/release-note-to-plan-translation/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/release-note-to-plan-translation/manifest.lock.json
+  pinning: manifest_locked
+saturation:
+  trigger: mean P_benchmark > 80 for 2 consecutive rounds
+  renewal_queue:
+    - add mid-run state change after the first plan draft
+    - add contradictory repo-inventory evidence requiring explicit reconciliation

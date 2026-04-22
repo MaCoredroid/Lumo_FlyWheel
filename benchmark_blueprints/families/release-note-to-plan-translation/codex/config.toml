@@ -1,21 +1,24 @@
-version = 1
+[family]
 family_id = "release-note-to-plan-translation"
-profile = "configured_codex"
-wire_api = "responses"
-reasoning_effort = "high"
-
-[workspace]
 task_spec = "task_spec.md"
 evaluator_contract = "evaluator_contract.md"
 
-[skills]
-paths = ["skills/release-plan-conversion/SKILL.md"]
+[solver]
+model = "gpt-5.4"
+reasoning_effort = "high"
+workspace_root = "."
+required_surfaces = ["shell", "structured_reasoning"]
+preferred_skill = "skills/release-plan-conversion/SKILL.md"
+evidence_required = true
+assumption_budget = "low"
 
-[validation]
-commands = [
-  "pytest -q tests/plan_contract.py",
-]
+[solver.rules]
+require_ordered_schedule = true
+require_assumption_ledger = true
+forbid_live_web_or_external_evidence = true
+forbid_invented_fixture_claims = true
 
-[scoring]
-target_naive_score = 20
-hard_cap_for_shallow_solver = 30
+[grading]
+target_attack_band = "15-25"
+cap_without_runtime_fixtures = 20
+max_naive_score = 30

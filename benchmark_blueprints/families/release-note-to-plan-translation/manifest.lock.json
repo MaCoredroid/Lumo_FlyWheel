@@ -1,0 +1,144 @@
+{
+  "calibration_targets": {
+    "family_mean_center": 20,
+    "family_mean_window": [
+      15,
+      25
+    ],
+    "max_variant_score": 40,
+    "min_hard_variant_score": 10,
+    "monotonicity_tolerance": 3
+  },
+  "cli": {
+    "cnb55_brief_sha256": "2822bd8b10751106b09e989dc79e23f3369e473f6b6fc1b3b453681e3e743dd9"
+  },
+  "created_at_utc": "2026-04-21T00:00:00Z",
+  "determinism": {
+    "cnb55_seed": 42,
+    "result_key_sort": "sorted"
+  },
+  "docker_base": "python:3.12-bookworm@sha256:1e034bf5ce1ca754be43d1491516da937c0fa03fc29b97a8b6a5e1ce7cb8bbf3",
+  "family_id": "release-note-to-plan-translation",
+  "grader": {
+    "score_ranking_py_sha256": "8f4e45667b75789152fcbacb82a90796c7075ff7082b7e7210f91d17632fea72"
+  },
+  "last_regen_utc": "2026-04-21T00:00:00Z",
+  "model_under_test": {
+    "model": "gpt-5.4",
+    "provider": "codex",
+    "reasoning_effort": "high"
+  },
+  "schema_version": "cnb55.manifest.v2",
+  "track": 10,
+  "track_name": "Strategic Management & Long-Horizon Evolution",
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 35,
+      "verifier_data": {
+        "gold_ranking_sha256": "da68883188b7aa1915436f518792958593b134ba6cbba6d2c92f4106741b5b36",
+        "hidden_tests_tree_sha256": "7f40fb6ca4f3c8d120c1a5e3c6eaef33532c61bbc6a3996f565e62a8c5921e6d",
+        "oracle_brief_json_sha256": "e1ef9bd130c6c6134ca8c561a8a7822e9c8acdb891f4e3494b47112e1aa6f316",
+        "oracle_brief_md_sha256": "f27c29b3ca61e226acbc49790de1c30e4b55b871dfbfe0c0f343e1ff7541d351",
+        "workspace_manifest_sha256": "04aaef3bff2f911a2276169ed79cbb95e6d3161d31366310a704e6b62accdd76"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+        "AGENTS.md": "339620de973fe229ee735c38043232a24a69a35598eb4bdfab7021e645c73e87",
+        "Dockerfile": "e4ab239935601d765219d402782ff23a88849e7f979b2739dfed73d16ef42137",
+        "bin": "0c137d6caa745645970d175fa882870d1d56af9aae82d15e2b2fce4b9f218c78",
+        "release_notes": "b12b2afeccf86fe5f9bbb0f0f3fb5ec36a5387fc7e3c11f837a9b1d1de8cf72f",
+        "repo_inventory": "57d81462821e887c08e709d4e311bc764b2da08539c18db109faedf70d43813c",
+        "tests": "9625bcf0a0e251de55c65a7360d3411d95595e4ba4b9a4e060c6c3eaad7dae3e"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 97,
+      "observed_shortcut_score": 30,
+      "verifier_data": {
+        "gold_ranking_sha256": "7d1ac98219144f1928501e1ea5e0c9bf712499750db65dce779de4ad20aa605f",
+        "hidden_tests_tree_sha256": "7f40fb6ca4f3c8d120c1a5e3c6eaef33532c61bbc6a3996f565e62a8c5921e6d",
+        "oracle_brief_json_sha256": "3677309d969d7607935481baa7038c431a3eb236c28cb300f0cdfb5aa98f83e5",
+        "oracle_brief_md_sha256": "0a47d2c530b4297da7e104076334e7e20f967bbbf9abb981b4fe821f9c3f4556",
+        "workspace_manifest_sha256": "6d92a76f49012733cad1255c784214bc75284e4c74a53b535ef3eb70284534ae"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+        "AGENTS.md": "339620de973fe229ee735c38043232a24a69a35598eb4bdfab7021e645c73e87",
+        "Dockerfile": "e4ab239935601d765219d402782ff23a88849e7f979b2739dfed73d16ef42137",
+        "bin": "0c137d6caa745645970d175fa882870d1d56af9aae82d15e2b2fce4b9f218c78",
+        "release_notes": "774546979fd0ba48a04871cf3d4e98559c384a0436e90d87d17055965cfffd48",
+        "repo_inventory": "60e3a54deb19a06819df2a604dba595b26c22a7a55a8bd6cbe5321d28dcea366",
+        "tests": "9625bcf0a0e251de55c65a7360d3411d95595e4ba4b9a4e060c6c3eaad7dae3e"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 30,
+      "verifier_data": {
+        "gold_ranking_sha256": "e1728a854bfe760c640249993a4c38b4789da012c84d6a9d5aad19957282af62",
+        "hidden_tests_tree_sha256": "7f40fb6ca4f3c8d120c1a5e3c6eaef33532c61bbc6a3996f565e62a8c5921e6d",
+        "oracle_brief_json_sha256": "9507b3590d7ca34f7c11e6febe587df6b3aa5a762d645b20898c3f8076e1407a",
+        "oracle_brief_md_sha256": "c7372d779745f8156945d9dd17905156e4109c8f2d28a83486484acd68c09153",
+        "workspace_manifest_sha256": "7deb35c2022d332b7946f3ce34b067983367689267a4f8cbcbc8978000601442"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+        "AGENTS.md": "339620de973fe229ee735c38043232a24a69a35598eb4bdfab7021e645c73e87",
+        "Dockerfile": "e4ab239935601d765219d402782ff23a88849e7f979b2739dfed73d16ef42137",
+        "bin": "0c137d6caa745645970d175fa882870d1d56af9aae82d15e2b2fce4b9f218c78",
+        "release_notes": "ca4ff0e464e5467d5abd906be3ebc4e618ee74aa3a1a1a092120a85523782583",
+        "repo_inventory": "ff9cc24ccdab2595a46b518e7baf2c6a183b803cf1be8431be156c293aedfaa2",
+        "tests": "9625bcf0a0e251de55c65a7360d3411d95595e4ba4b9a4e060c6c3eaad7dae3e"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 30,
+      "verifier_data": {
+        "gold_ranking_sha256": "2b286fc39097c7542d864129fa8a29410ffaa9a48a99c0dd981f505312b16134",
+        "hidden_tests_tree_sha256": "7f40fb6ca4f3c8d120c1a5e3c6eaef33532c61bbc6a3996f565e62a8c5921e6d",
+        "oracle_brief_json_sha256": "e20190de33c8726285532c22fe27299f86cef96caf4c47bce9d04cef97e16f45",
+        "oracle_brief_md_sha256": "0f63a93a5bd49c3eafcb99b17cc340e245765b1b540bd415f6bf5fe9905596c5",
+        "workspace_manifest_sha256": "b9c6d6e6c91d2f5eb29b37fb1eb6568a09f34c05c95f077f67f7f96b6e6f4c14"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+        "AGENTS.md": "339620de973fe229ee735c38043232a24a69a35598eb4bdfab7021e645c73e87",
+        "Dockerfile": "e4ab239935601d765219d402782ff23a88849e7f979b2739dfed73d16ef42137",
+        "bin": "0c137d6caa745645970d175fa882870d1d56af9aae82d15e2b2fce4b9f218c78",
+        "release_context": "ffd3d98147494fe28b5e5c2e297d3f99c874df8d9804d1cc65eaa5ff782d461d",
+        "release_notes": "696751c70c59a2c116094a826965d6011870ea0450fa80120987cea91697dfd5",
+        "repo_inventory": "b4513bf7d18d608ff4d6f3bc641d9591c886666e809d49f1a36895bc4ea8fd9a",
+        "tests": "9625bcf0a0e251de55c65a7360d3411d95595e4ba4b9a4e060c6c3eaad7dae3e"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 30,
+      "verifier_data": {
+        "gold_ranking_sha256": "c776bc7c9f555c0a78e6d1f0548639f606fc0a9aa89414c5a0987cd7ce25f561",
+        "hidden_tests_tree_sha256": "7f40fb6ca4f3c8d120c1a5e3c6eaef33532c61bbc6a3996f565e62a8c5921e6d",
+        "oracle_brief_json_sha256": "d5af0e1d32160b388e555ade130f13821a8322d39c2b6893a8abb0b62c4cf2aa",
+        "oracle_brief_md_sha256": "58b0bdda23304e1e86cb5e1f7ffa1ff83857241c482adb640c1ff1e4e387c40a",
+        "workspace_manifest_sha256": "970d79aa0c1fec2d409a5af9b0cba368b7a9fb34b02400ec290a8b005ecac270"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+        "AGENTS.md": "339620de973fe229ee735c38043232a24a69a35598eb4bdfab7021e645c73e87",
+        "Dockerfile": "e4ab239935601d765219d402782ff23a88849e7f979b2739dfed73d16ef42137",
+        "bin": "0c137d6caa745645970d175fa882870d1d56af9aae82d15e2b2fce4b9f218c78",
+        "incident_context": "c51b7abdab4ab37046eeaa62f19f4d82cd59ea23dfbaa0b21ade898b5047e584",
+        "release_context": "577245629ecde2497d464527e0678e1edc3aced049a9083fef9e6c7f0df46578",
+        "release_notes": "e6fa25e3fd8298a471fc0e6734b92f95c6e154f2286c368e8ce2288e9d35e939",
+        "repo_inventory": "9b0c0eccb980c362a3ed0a2c8c721144c0bb44ff83a45f8c04eb4ac17d2db17c",
+        "tests": "9625bcf0a0e251de55c65a7360d3411d95595e4ba4b9a4e060c6c3eaad7dae3e"
+      }
+    }
+  }
+}

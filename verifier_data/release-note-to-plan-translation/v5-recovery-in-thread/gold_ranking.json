@@ -1,0 +1,117 @@
+{
+  "ceiling_rules": [
+    {
+      "bad_first_milestone_ids": [
+        "RN-103",
+        "RN-105"
+      ],
+      "cap": 30,
+      "id": "incident_blind_reselect"
+    },
+    {
+      "cap": 30,
+      "id": "incident_blind_reselect",
+      "require_all_term_groups": [
+        [
+          "rollback",
+          "incident"
+        ],
+        [
+          "misordered",
+          "support"
+        ]
+      ]
+    }
+  ],
+  "first_milestone_id": "RN-102",
+  "gold_order": [
+    "RN-102",
+    "RN-101",
+    "RN-104",
+    "RN-105",
+    "RN-103"
+  ],
+  "incident_term_groups": [
+    [
+      "rollback",
+      "incident"
+    ],
+    [
+      "misordered",
+      "support"
+    ]
+  ],
+  "large_first_milestone_ids": [
+    "RN-103",
+    "RN-105"
+  ],
+  "matrix_pick_ceiling_id": "RN-103",
+  "min_unique_evidence": 5,
+  "objective_term_groups": [
+    [
+      "safe",
+      "recovery"
+    ],
+    [
+      "rollback",
+      "runbook"
+    ]
+  ],
+  "pass_bar": 40,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "339620de973fe229ee735c38043232a24a69a35598eb4bdfab7021e645c73e87",
+    "Dockerfile": "e4ab239935601d765219d402782ff23a88849e7f979b2739dfed73d16ef42137",
+    "bin": "0c137d6caa745645970d175fa882870d1d56af9aae82d15e2b2fce4b9f218c78",
+    "incident_context": "c51b7abdab4ab37046eeaa62f19f4d82cd59ea23dfbaa0b21ade898b5047e584",
+    "release_context": "577245629ecde2497d464527e0678e1edc3aced049a9083fef9e6c7f0df46578",
+    "release_notes": "e6fa25e3fd8298a471fc0e6734b92f95c6e154f2286c368e8ce2288e9d35e939",
+    "repo_inventory": "9b0c0eccb980c362a3ed0a2c8c721144c0bb44ff83a45f8c04eb4ac17d2db17c",
+    "tests": "9625bcf0a0e251de55c65a7360d3411d95595e4ba4b9a4e060c6c3eaad7dae3e"
+  },
+  "required_dependency_pairs": [
+    {
+      "after": "RN-103",
+      "before": "RN-102"
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-101"
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-104"
+    }
+  ],
+  "required_risk_term_groups": [
+    [
+      "rollback",
+      "incident"
+    ],
+    [
+      "misordered",
+      "incorrect",
+      "wrong"
+    ],
+    [
+      "user",
+      "support",
+      "customer"
+    ]
+  ],
+  "shortcut_first_milestone_id": "RN-103",
+  "tau_threshold": 0.8,
+  "test_plan_brief_sha256": "9a960aa24de7f12924621f2a0c15de13776516c859bd4cc09d711939fe9bf076",
+  "user_visible_risk_term_groups": [
+    [
+      "support",
+      "customer",
+      "user"
+    ],
+    [
+      "misordered",
+      "wrong"
+    ]
+  ],
+  "variant_id": "v5-recovery-in-thread"
+}

@@ -1,0 +1,98 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Repo inventory names the gate but not the final percentage ladder.",
+      "status": "to_verify",
+      "topic": "Exact dashboard traffic split for the kill switch ramp"
+    },
+    {
+      "note": "Current notes imply hidden coupling but do not enumerate every downstream consumer.",
+      "status": "missing",
+      "topic": "Whether any hidden customer workflow still depends on the legacy parser shim"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-103",
+      "before": "RN-101",
+      "reason": "Repo-state evidence says this prerequisite must land first to avoid shipping the wrong user-visible order."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "Repo-state evidence says this prerequisite must land first to avoid shipping the wrong user-visible order."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Repo-state evidence says this prerequisite must land first to avoid shipping the wrong user-visible order."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Freeze the exact prerequisite and produce one reviewable artifact for this step only.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Freeze the step-id schema and map the hidden dependency edges before any downstream rollout work.",
+      "title": "Audit translator schema drift"
+    },
+    {
+      "bounded_deliverable": "Land the minimum scoped change plus the directly blocked follow-on evidence.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Extend plan-contract fixtures so the new dependency edges fail loudly before release.",
+      "title": "Backfill dependency-graph fixtures"
+    },
+    {
+      "bounded_deliverable": "Land the minimum scoped change plus the directly blocked follow-on evidence.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Turn on the translated release-plan summary behind a kill switch once prerequisites are stable.",
+      "title": "Enable gated dashboard summary rollout"
+    },
+    {
+      "bounded_deliverable": "Land the minimum scoped change plus the directly blocked follow-on evidence.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Document the new summary workflow and the rollback path once the rollout path is known.",
+      "title": "Update operator runbook and launch checklist"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "release_notes/release_notes_2026_04.md",
+      "repo_inventory/dependency_map.md",
+      "repo_inventory/repo_state.md"
+    ],
+    "mitigations": [
+      "Keep the summary behind a kill switch until prerequisites are green.",
+      "Use the plan-contract fixtures as the rollout gate for dependency ordering.",
+      "Update the operator runbook before broadening exposure."
+    ],
+    "statement": "If the team ships the dashboard summary before the prerequisite ordering work is locked, users will see a wrong or misleading execution order during release rollout."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}

@@ -1,0 +1,81 @@
+{
+  "ceiling_rules": [
+    {
+      "bad_first_milestone_ids": [
+        "RN-105"
+      ],
+      "cap": 30,
+      "id": "ignored_stale_release_note"
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "gold_order": [
+    "RN-101",
+    "RN-102",
+    "RN-103",
+    "RN-104",
+    "RN-105"
+  ],
+  "incident_term_groups": [],
+  "large_first_milestone_ids": [
+    "RN-103",
+    "RN-104"
+  ],
+  "matrix_pick_ceiling_id": "RN-105",
+  "min_unique_evidence": 4,
+  "objective_term_groups": [],
+  "pass_bar": 40,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "339620de973fe229ee735c38043232a24a69a35598eb4bdfab7021e645c73e87",
+    "Dockerfile": "e4ab239935601d765219d402782ff23a88849e7f979b2739dfed73d16ef42137",
+    "bin": "0c137d6caa745645970d175fa882870d1d56af9aae82d15e2b2fce4b9f218c78",
+    "release_notes": "774546979fd0ba48a04871cf3d4e98559c384a0436e90d87d17055965cfffd48",
+    "repo_inventory": "60e3a54deb19a06819df2a604dba595b26c22a7a55a8bd6cbe5321d28dcea366",
+    "tests": "9625bcf0a0e251de55c65a7360d3411d95595e4ba4b9a4e060c6c3eaad7dae3e"
+  },
+  "required_dependency_pairs": [
+    {
+      "after": "RN-103",
+      "before": "RN-101"
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102"
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103"
+    }
+  ],
+  "required_risk_term_groups": [
+    [
+      "dashboard",
+      "summary"
+    ],
+    [
+      "dependency",
+      "ordering",
+      "order"
+    ],
+    [
+      "stale",
+      "superseded"
+    ]
+  ],
+  "shortcut_first_milestone_id": "RN-105",
+  "tau_threshold": 0.8,
+  "test_plan_brief_sha256": "9a960aa24de7f12924621f2a0c15de13776516c859bd4cc09d711939fe9bf076",
+  "user_visible_risk_term_groups": [
+    [
+      "dashboard",
+      "summary"
+    ],
+    [
+      "incorrect",
+      "wrong",
+      "misordered"
+    ]
+  ],
+  "variant_id": "v2-noisy-distractor"
+}

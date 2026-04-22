@@ -1,0 +1,29 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "bin/cnb55-brief",
+    "incident_context/rollback_incident.md",
+    "release_context/current_objective.md",
+    "release_notes/release_notes_2026_04.md",
+    "repo_inventory/dependency_map.md",
+    "repo_inventory/repo_state.md",
+    "repo_inventory/test_inventory.md",
+    "tests/test_plan_brief.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "339620de973fe229ee735c38043232a24a69a35598eb4bdfab7021e645c73e87",
+    "Dockerfile": "e4ab239935601d765219d402782ff23a88849e7f979b2739dfed73d16ef42137",
+    "bin": "0c137d6caa745645970d175fa882870d1d56af9aae82d15e2b2fce4b9f218c78",
+    "incident_context": "c51b7abdab4ab37046eeaa62f19f4d82cd59ea23dfbaa0b21ade898b5047e584",
+    "release_context": "577245629ecde2497d464527e0678e1edc3aced049a9083fef9e6c7f0df46578",
+    "release_notes": "e6fa25e3fd8298a471fc0e6734b92f95c6e154f2286c368e8ce2288e9d35e939",
+    "repo_inventory": "9b0c0eccb980c362a3ed0a2c8c721144c0bb44ff83a45f8c04eb4ac17d2db17c",
+    "tests": "9625bcf0a0e251de55c65a7360d3411d95595e4ba4b9a4e060c6c3eaad7dae3e"
+  },
+  "test_plan_brief_sha256": "9a960aa24de7f12924621f2a0c15de13776516c859bd4cc09d711939fe9bf076",
+  "variant_id": "v5-recovery-in-thread"
+}
