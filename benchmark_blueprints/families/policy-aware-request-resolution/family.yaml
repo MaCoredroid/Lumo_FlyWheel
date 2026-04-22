@@ -2,8 +2,8 @@
 family_id: policy-aware-request-resolution
 track: 10
 schema_version: cnb55.family.v1
-layer_a_status: implemented_pending_probe
-layer_b_status: implemented_pending_probe
+layer_a_status: red
+layer_b_status: green
 grader_ref: verifiers/policy-aware-request-resolution/score_ranking.py
 milestone_config_ref: verifier_data/policy-aware-request-resolution/{variant_id}/milestones/
 milestones:
@@ -64,8 +64,8 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.0
-  escalation_currently_active: false
+  current_observed_stdev_M_training: 0.1163
+  escalation_currently_active: true
 initial_state:
   workspace_bundle_root: benchmark_blueprints/families/policy-aware-request-resolution/workspace_bundle/
   manifest_lock: benchmark_blueprints/families/policy-aware-request-resolution/manifest.lock.json
