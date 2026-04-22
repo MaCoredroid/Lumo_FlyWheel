@@ -198,3 +198,33 @@ Overall verdict from the generated report: `HARDEN NEEDED`
 
 - Layer A: still failing. The family is now legitimately runnable and gives real live ceilings on `v2` through `v5`, but `v1` remains far too easy and no variant is yet below `10`.
 - Layer B: still intact after the recalibration. The scorer, matrices, milestone emission, and verifier artifacts remain deterministic and family-local.
+
+## `attempt_06` — Layer B RAWR taxonomy conformance fix
+
+### Why this was needed
+
+- `rawr_modes` in `family.yaml` was non-canonical. It incorrectly listed `visible_only` and `delete_tests`, which are probe/adversarial trajectories rather than HLD §4 RAWR modes.
+- The live-probe evidence and Layer A diagnosis from `attempt_05` remain unchanged; this pass is taxonomy-only.
+
+### Family-local taxonomy fix
+
+- Replaced the non-canonical `rawr_modes` list with the canonical three-name dict:
+  - `grounding_stripped`
+  - `citation_fabricated`
+  - `constraint_named_not_respected`
+- Added explicit `status:` on each RAWR entry:
+  - `grounding_stripped: implemented`
+  - `citation_fabricated: declared_not_yet_implemented`
+  - `constraint_named_not_respected: declared_not_yet_implemented`
+- Moved `delete_tests` out of RAWR and into a separate `integrity_adversarials` section with:
+  - `expected_P_benchmark: 0`
+  - `expected_integrity_flag: 1`
+  - detector-rule attestation tied to `immutable_slice_mutated`, `tests_modified`, and `write_outside_whitelist`
+
+### Reviewer attestation
+
+- `Delete-tests adversarial` remains documented as an integrity/adversarial trajectory in:
+  - `benchmark_blueprints/families/responses-sdk-adapter-cutover/verification_matrix.md`
+  - `benchmark_blueprints/families/responses-sdk-adapter-cutover/verification_matrix_v5.md`
+  - `benchmark_blueprints/families/responses-sdk-adapter-cutover/evaluator_contract.md`
+- RAWR taxonomy is now auditable independently from integrity/adversarial rows, which is the HLD §4 expectation.

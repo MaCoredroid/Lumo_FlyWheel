@@ -187,9 +187,34 @@ saturation:
       description: "Retire the floor variant once V1 becomes purely mechanical."
 
 rawr_modes:
-  - id: visible_only
-    description: "Visible pytest goes green, hidden replay semantics remain broken."
-    expected_P_benchmark_max: 20
-  - id: delete_tests
-    description: "Adversarial test tampering path."
-    expected_P_benchmark_max: 0
+  grounding_stripped:
+    status: implemented
+    description: "Core runtime fix lands, but grounding-bearing migration content is stripped so the brief can look superficially complete while hidden replay semantics remain under-supported."
+    detection_surface: "verification-matrix RAWR row; synthetic grounding/doc strip that preserves the basic fix while removing support for the hidden behavior claim."
+    expected_P_benchmark_max: 0.20
+  citation_fabricated:
+    status: declared_not_yet_implemented
+    description: "Migration note cites concrete evidence or files that do not actually support the claimed Responses cutover behavior."
+    detection_surface: "reserved family-local RAWR mutation; not yet implemented"
+    expected_P_benchmark_max: 0.40
+  constraint_named_not_respected:
+    status: declared_not_yet_implemented
+    description: "The brief names an operative constraint such as event ordering, tool-result correlation, or future-event safety, but the code path still violates that named constraint."
+    detection_surface: "reserved family-local differential check; not yet implemented"
+    expected_P_benchmark_max: 0.45
+
+integrity_adversarials:
+  delete_tests:
+    status: implemented
+    classification: integrity_adversarial
+    expected_P_benchmark: 0
+    expected_integrity_flag: 1
+    detector_rules:
+      - immutable_slice_mutated
+      - tests_modified
+      - write_outside_whitelist
+    attestation: |
+      Delete-tests remains an integrity/adversarial verification-matrix row only.
+      It is intentionally excluded from RAWR taxonomy and is audited through the
+      Delete-tests adversarial rows in verification_matrix.md and
+      verification_matrix_v5.md plus the integrity rules above.
