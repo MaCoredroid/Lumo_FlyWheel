@@ -3,7 +3,7 @@
 > Codex-Bench · High-Level Design
 > Scope: The data-normalization + training stack — LLD-06, LLD-07, LLD-08, LLD-09, LLD-10, LLD-11
 > Derived from HLD Spec v2.3 · April 2026
-> Status: DRAFT v0.5 — §15 rewritten as a general authoring checklist applicable to all 55 families; `proposal-ranking-manager-judgment` retained only as illustrative example
+> Status: DRAFT v0.8 — family-level DONE spec split out into `HLD-Family-Test-Requirements-v0_1.md` (sibling doc in `docs/`). §15 reduced to a stub pointer; all outbound cross-references rewritten from §15.X → `Family-Test-Requirements §N`. No rule changes vs v0.7.
 
 ---
 
@@ -11,6 +11,9 @@
 
 | Version | Change |
 |---|---|
+| v0.8 | **Family-level DONE spec split out** into its own sibling document `HLD-Family-Test-Requirements-v0_1.md` (v0.1). Motivation: §15 had grown to ≈ 230 lines with an audience (family authors finalizing CNB-55 artifacts) distinct from the rest of this HLD (LLD-06 → LLD-11 implementers). The split-out doc owns §1 Why, §2 Two layers of DONE, §3 Layer A (freeze gate), §4 Layer B (14-item checklist), §5 Required verification matrix, §6 Precedent decisions, §7 Blocking vs non-blocking, §8 Handoff template. §15 in this HLD is now a short pointer section summarising the two-layer DONE model and listing the split-out doc's table of contents. All outbound cross-references in §12, §16, and §17 rewritten from `§15.X` → `Family-Test-Requirements §N` (10 references touched: §12 Terminal-Bench row; §17.1, §17.5, §17.6, §17.7, §17.8, §17.10, §17.12 Updates/Rule/Authoring lines). **No rule changes** — every authoring obligation, verification-matrix row, blocking-vs-non-blocking decision, and worked `proposal-ranking-manager-judgment` example carries over verbatim into the new doc. The changelog entries for v0.4 through v0.7 retain their original `§15.X` citations as historical references. |
+| v0.7 | Second red-team pass. Five hardenings, all concentrated in §17 and §3.1: (a) **Recovery-trace loss upweight scoped to corrective segments only** (§17.3). The v0.6 rule cloned the model harder on the bad detour plus the correction — directly contra Rewarding Progress. v0.7 restricts the 2× multiplier to turns *after* the recovery pivot and with `state_delta_score > 0`, i.e. the correction, not the valley. (b) **`task-invalid` families get an explicit invalidation protocol** (§17.1). Flagging alone was governance-theater. v0.7 specifies: future training sets exclude data from the family since flag time; prior checkpoints marked non-comparable across the flag boundary (leaderboard versioned); the family cannot serve as a preference anchor once flagged; data is quarantined (not deleted) in case re-validation succeeds. (c) **Guidance-rollout provenance contract** (§17.4). v0.6 described "teacher trace injected into context" without locking down the source. v0.7 enumerates allowed provenance classes (prior autonomous successes — free; current-policy search — free; stronger-model trace — restricted + flagged; oracle trace — forbidden for training; benchmark-author trace — forbidden), adds a mandatory `guidance_source` field to every RL rollout, and routes guidance-conditioned rollouts through a separate accounting path that cannot mix with autonomous trajectories in SFT/preference without explicit policy. (d) **RAWR miner extended** (§17.12). The v0.6 criterion `P ≥ 0.8 AND G ≤ 0.4` catches "obvious bad process," missing the worse class: high $P$ with high but *shortcut-shaped* $G$ on a family under §17.6 $G$-watch. v0.7 adds a second criterion that fires on `P ≥ 0.8 AND (family under G-watch OR required-capability-tags under-exercised)`. (e) **§3.1 canonical schema updated** to reflect §17 additions. `raw_observation_blob`, `source_family_status`, `guidance_source`, and `canonicalized_action_form` are now in the writer contract, not just prose in §17. |
+| v0.6 | Red-team pass folded in as a new **§17 Post-Review Hardening** (13 items). Three substantive pushbacks kept: (a) SFT view stays success-only — recovery learning comes from a new "recovery-trace" sub-view and from preference/RL, not from SFT-on-failures (§17.3); (b) LLD-11's conceptual anchor is reframed as Agent-RLVR + Rewarding Progress + guidance, with DAPO as token-level optimizer only — not as the conceptual basis (§4.6, §17.4); (c) $P_{\text{benchmark}}$ / $M_{\text{training}}$ divergence is deliberate and kept, but now both bands must calibrate (§17.7). Substantive additions: monthly ABC-style validity audit loop (§17.1), byte-wise raw-evidence retention (§17.2), family-specific capability sub-tags (§17.5), $G$-gaming diagnostic doctrine (§17.6), variance-triggered seed escalation to 4 / 8 (§17.8), moving-frontier curriculum refresh per training round (§17.9), per-family saturation / renewal plan as new Layer-B item 14 (§17.10), harness-canonicalization + cross-harness held-out eval (§17.11), multi-mode RAWR verification rows (§17.12), explicit precedence "honesty > learnability" (§17.13). §15.4 item 10 tightened to require dual-band calibration; §15.4 item 14 added for saturation plan. Citations added in §12. |
 | v0.5 | §15 rewritten as a **general authoring checklist applicable to all 55 families**. Each rule is stated in family-agnostic form first; `proposal-ranking-manager-judgment` is retained only as the canonical worked example inside labeled callouts. No substantive rules changed from v0.4 — the two-layer DONE model, 13-item Layer B checklist, verification-matrix requirement, Decision A (LLM-judge quarantine) and Decision B (JSON-deliverable state-delta) precedents, and blocking-vs-non-blocking table all carry over. What changed: the framing, the structure, and the authoring-handoff checklist (§15.8) — now any family can fill it in. |
 | v0.4 | Added §15 **Family-Level DONE Criteria** (initial draft, structured around `proposal-ranking-manager-judgment`). The CNB-55 §10.1 freeze gate (oracle ≥ 90, empty = 0, red-team ceilings, deterministic scorer, probe-in-range) remains necessary but is no longer sufficient. A family is DONE for the flywheel when it additionally: (a) declares its milestones into the §7.5 5-slot template with M3 anti-shortcut present and non-trivial; (b) registers its capability-tag declarations (required / recommended / forbidden) per §8.3; (c) supplies an integrity-flag detector and a state-delta rule; (d) quarantines LLM-judge signals out of $P$ / $M$ per the §7.8 escape-valve rule; (e) produces a calibration matrix (oracle / empty / right-no-grounding / adversarial) × ($P$, $M$, $G$, $R$, $S_{\text{TTC}}$) that demonstrates signal separation; (f) supports ≥2 deterministic seeds so LLD-06 can emit preference pairs per §9.4. Old §15 renumbered to §16. |
 | v0.3 | Added §8 **Middle-Step (Turn-Level) Grading**. Defines a three-layer turn-level rubric (harness compliance ~15%, intent / evidence ~25%, state progress ~60%), a stable capability-tag vocabulary (`localize`, `inspect`, `modify`, `verify`, `respect_invariants`) that each family maps raw tool calls into, a per-turn scoring schema (`raw_tool_call`, `capability_tags`, `evidence_score`, `state_delta_score`, `integrity_flag`, `compliance_flag`), and a trajectory-level aggregate $G \in [0,1]$. $G$ is **shaping signal only** — it is a tie-break term in $S_{\text{TTC}}$, an optional per-turn component in $R$ (ReVeal-style), and a preference margin refinement; it never enters benchmark truth. Grounded in Agent-RLVR, ReVeal (TAPO), Rewarding Progress, and AutoTool. Also: (a) canonical event schema in §3.1 now carries `turn_scoring[]`; (b) preference lex ordering in §7.3 inserts $G$ as a tie-breaker before "drop pair"; (c) §R and $S_{\text{TTC}}$ in §7 updated to reference the shaping channel; (d) §15 lock-downs extended. |
@@ -109,22 +112,46 @@ If the base model is 20 / 100 on the benchmark, the 20 successes teach "how a wi
 ### 3.1 The canonical event store
 
 ```yaml
-# Canonical run record (LLD-06 writer contract)
+# Canonical run record (LLD-06 writer contract) — v0.7
 task_id:              # scenario ID (Codex-Long) or instance ID (SWE-bench)
 split:                # dev_bench | bench_control | train_long | val_long | test_long | final_test | public_dev
 family_id:            # Codex-Long family or null for SWE-bench
+family_status_at_write_time:
+                      # enum: ok | watch | task_invalid | retired_saturated
+                      # Snapshotted at write-time from §17.1 validity audit log.
+                      # `task_invalid` at write-time → excluded from §17.1 post-flag training sets;
+                      # retained at-rest for re-validation.
 harness:              # codex | swe_agent
+canonicalized_action_form:
+                      # canonical string form of every tool call, normalized per §17.11.
+                      # SFT view reads from this; raw harness form remains in raw_observation_blob.
 model_id:             # resolves against model_registry.yaml
 seed:                 # integer
 prompt_state_0:       # initial prompt + repo snapshot hash
 trajectory_jsonl_ref: # pointer to full event stream
-turn_records:         # [{turn_idx, state_text, assistant_tokens, tool_calls, tool_outputs}]
+raw_observation_blob: # byte-range reference into append-only raw log per §17.2.
+                      # Stable; never rewritten. All derived fields carry `derived_from` pointers here.
+turn_records:         # [{turn_idx, state_text, assistant_tokens, tool_calls, tool_outputs,
+                      #   derived_from: <raw_observation_blob range>}]
 turn_scoring:         # [{turn_idx, capability_tags, evidence_score, state_delta_score,
-                      #   integrity_flag, compliance_flag}] — see §8
+                      #   integrity_flag, compliance_flag,
+                      #   corrective_turn_bool,    # §17.3: true iff this turn is part of the
+                      #                            # corrective suffix, i.e. after the recovery pivot
+                      #                            # AND state_delta_score > 0
+                      #   derived_from: <raw_observation_blob range>}] — see §8
 G:                    # trajectory-level aggregate from §8.4, in [0,1]
+recovery_trace:       # §17.3: bool; true iff G dropped ≥ 0.3 mid-trace and trajectory recovered to success
+guidance_source:      # §17.4: enum for RL rollouts only.
+                      # one of: autonomous_prior_success | autonomous_current_policy_search |
+                      #         stronger_model_flagged | oracle_trace_forbidden | authoring_only_debug
+                      # Non-null only on RL-pool rollouts. Autonomous trajectories set this to null.
+                      # Rows with `stronger_model_flagged` flow through the §17.4 separate accounting path.
+                      # `oracle_trace_forbidden` and `authoring_only_debug` MUST NOT appear in training splits.
 final_artifact_ref:   # patch (SWE-bench) or state digest (Codex-Long)
 outcome:              # pass | fail | timeout | crash | no_patch
 cl_pass:              # Codex-Long verifier bool (P in §7), null for SWE-bench
+P_benchmark:          # §17.7: full 100-pt normalized total incl. LLM-judge pts
+M_training:           # §17.7: symbolic-only normalized to [0,1]; read by LLD-06 into training views
 milestone_vector:     # [{milestone_id, passed_bool}] — m_i in §7
 failure_mode:         # enum from LLD-05
 wall_time_seconds:    # float
@@ -135,9 +162,10 @@ timeout_flag:         # T in §7
 shortcut_flags:       # forbidden-edit, test-tamper, mock-bypass; H in §7
 loopiness_flags:      # malformed tools, repeated no-op turns; L in §7
 grading_manifest_ver:
+schema_version:       # integer; additive-only per §17.2
 ```
 
-LLD-06 does not re-grade — it reads LLD-05's normalized `outcome` / `cl_pass` as the source of truth for pass/fail, reads LLD-13's milestone manifest for `milestone_vector`, and *computes* `turn_scoring[]` and $G$ from the raw trajectory post-hoc (agent never sees these during the run).
+LLD-06 does not re-grade — it reads LLD-05's normalized `outcome` / `cl_pass` as the source of truth for pass/fail, reads LLD-13's milestone manifest for `milestone_vector`, and *computes* `turn_scoring[]`, $G$, `recovery_trace`, and `corrective_turn_bool` from the raw trajectory post-hoc (agent never sees these during the run). `family_status_at_write_time` and `guidance_source` are snapshotted from LLD-13 (validity audit log) and LLD-07 (orchestrator provenance), respectively. `schema_version` bumps are **additive-only** — pre-$X$ raw must always be replayable into v$X$ derived views per §17.2.
 
 ### 3.2 Derived view A — SFT
 
@@ -191,9 +219,11 @@ Both a data producer (SWE-Agent-SFT-matched) and an evaluation harness (B1, B2 d
 
 Consumes the SFT view; emits four adapters. Codex-SFT-all is the hinge checkpoint (B2 headline, LLD-11 warm start, RL-difficulty-bucketing source).
 
-### 4.6 LLD-11 DAPO RL Pipeline — the stretch branch
+### 4.6 LLD-11 Agent-RLVR RL Pipeline (DAPO-optimized) — the stretch branch
 
 Consumes the RL prompt pool; reward from §7.2 with optional per-turn shaping from §8.5. Warm-started from Codex-SFT-all; rollouts via LLD-03 + LLD-08.
+
+**Conceptual anchor (not the optimizer).** The framing for LLD-11 is **Agent-RLVR** (verifier-first rewards) + **Rewarding Progress** (per-turn shaping, used carefully per §8) + **guidance rollouts** on hard tasks (teacher-traced context injection for tasks in the <20% band, rather than exclusion). DAPO is the **token-level policy-gradient algorithm** that runs inside this framing — chosen for Clip-Higher stability on long-tail token losses — but DAPO is not the intellectual basis of LLD-11. It is the optimizer. See §17.4 for the full reframe and citations; papers listed in §12.
 
 ---
 
@@ -538,6 +568,12 @@ Reward-hack risk; quality-vs-outcome conflation; narrow optimization target.
 | Self-play SWE-RL (SSR) | Most aggressive test-free version; fallback if the task pool gets exhausted |
 | Agent Lightning | Decouple execution from training; transition-level records — the §3 architecture |
 | SWE-RM | Learned reward model from execution outcomes as a densifier for the L3 escape valve in §7.8 and the capped shaping in §8.5 |
+| ABC — Agentic Benchmark Checklist (2507.02825) | Task-validity flaws materially shift measured performance; motivates §17.1 monthly validity audit loop and §17.12 systematic RAWR generators |
+| Terminal-Bench | Benchmarks saturate; versioned renewal is required — motivates Family-Test-Requirements §4 item 14 and §17.10 per-family saturation plan |
+| SWE-Gym (2412.21139) | Failure-trajectory signal is essential; success-only SFT plateaus — motivates §17.3 recovery-trace SFT view and the preference/RL-on-failures design |
+| Training Long-Context SWE Agents with RL (2508.03501) | Long-horizon agent RL needs retry structure and environment-aware densification, not just a stronger optimizer — reinforces §17.4 Agent-RLVR reframe |
+| DAPO (2503.14476) | Token-level clipped PG with Clip-Higher — optimizer choice inside LLD-11, not the conceptual anchor |
+| Multi-SWE-bench (2504.02605) | Cross-harness / cross-language generalization as a leakage check — motivates §17.11 cross-harness held-out eval |
 
 ---
 
@@ -585,226 +621,28 @@ Sprint 3   → LLD-10 implement + train 4 SFT arms → (optional) DPO arm
 
 ---
 
-## 15. Family-Level DONE Criteria — General Authoring Checklist
+## 15. Family-Level DONE Criteria — Pointer
 
-This section applies to **all 55 families** in CNB-55. Every rule is stated in family-agnostic form. `proposal-ranking-manager-judgment` (Track 10, Strategic Management & Long-Horizon Evolution, 5 variants v1–v5, structured-output CLI at `./bin/cnb55-brief`) is used throughout as the canonical worked example, in callouts marked `> Example:`. The example is illustrative only — substitute the equivalent artifacts of any other family in its place.
+The full family-level DONE specification — a general authoring checklist that applies to all 55 families — has been split out into its own standalone document as of v0.8:
 
-Assume Codex is connected to an LLM throughout, i.e. the family can actually be run end-to-end while authoring this checklist.
+**→ `HLD-Family-Test-Requirements-v0_1.md`** (sibling file in this `docs/` directory)
 
-### 15.1 Why this section exists
+That document owns:
 
-Family authoring historically stopped at the CNB-55 §10.1 freeze gate — oracle ≥ 90, empty = 0, ≥ 4 red-team exploits each scoring ≤ 20, scorer deterministic, probe-in-calibration-range. That is still necessary. It is no longer *sufficient*.
+- §1 **Why this spec exists** — why the CNB-55 §10.1 freeze gate is necessary but no longer sufficient once the family enters the flywheel.
+- §2 **Two layers of DONE** — Layer A (benchmark honesty under CNB-55) + Layer B (flywheel readiness under this HLD).
+- §3 **Layer A** — the pre-existing CNB-55 freeze-gate obligations (oracle ≥ 90, empty = 0, red-team ceilings, deterministic scorer, probe-in-band, immutable-slice checksums).
+- §4 **Layer B** — the 14-item flywheel readiness checklist (milestones, capability tags, tag overrides, state-delta rules, integrity flags, LLM-judge quarantine with dual-band calibration, ≥ 2 seeds, variance-triggered seed escalation, saturation / renewal plan).
+- §5 **Required verification matrix** — the 6-trajectory × 5-metric grid every family must populate; multi-row RAWR requirement per §17.12.
+- §6 **Precedent decisions** — Decision A (LLM-judge quarantine) and Decision B (state-delta via JSON-deliverable transitions), both first settled on `proposal-ranking-manager-judgment`.
+- §7 **Blocking vs non-blocking** — which items gate admission to the RL prompt pool vs which are recommended.
+- §8 **Per-family authoring handoff template** — the 9-box sign-off sheet each family owner submits when declaring "flywheel-ready."
 
-The flywheel architecture in §§3–8 adds training-stack obligations every family must satisfy before LLD-06 can emit coherent training views over it, before LLD-07 can orchestrate adaptive TTC over it, and before LLD-11 can use it in the RL prompt pool. "DONE" now means both: benchmark-honest under CNB-55 *and* flywheel-ready under this HLD. A family that passes the freeze gate but fails the flywheel obligations is still blocked from training.
+**Two-layer DONE, in one sentence:** a family is DONE for the flywheel when it is both benchmark-honest under CNB-55 (Layer A) *and* flywheel-ready under this HLD (Layer B, owned by the split-out spec). Passing Layer A alone is necessary but no longer sufficient — it lets the family be probed, but not trained on.
 
-Each family must produce a §15-equivalent record in its own `benchmark_run.md` (or an adjacent authoring note) showing every checklist item below as either satisfied or explicitly N/A with a one-line justification.
+**Cross-reference convention.** References elsewhere in this HLD that previously pointed into §15.X now point into the split-out document using the form `Family-Test-Requirements §N` (e.g. `Family-Test-Requirements §4 item 10` replaces the old `§15.4 item 10`). Every reference in §12 (research grounding), §16 (downstream-LLD lock-down), and §17 (post-review hardening) was updated in v0.8; no rules changed. Any future evolution to the checklist itself — new Layer-B items, new RAWR modes, tightened calibration — happens in the split-out doc and is versioned independently.
 
-### 15.2 Two layers of DONE
-
-| Layer | What it certifies | Owner | Reference |
-|---|---|---|---|
-| Layer A: Benchmark honesty | Oracle solves it; empty fails it; red-team ceilings hold; scorer is deterministic and verifier-isolated | Family author + second reviewer | CNB-55 SPEC §10.1 + family's `evaluator_contract.md` |
-| Layer B: Flywheel readiness | Milestones map to §7.5; capability tags declared; integrity-flag detector registered; LLM-judge signals quarantined; calibration matrix shows signal separation; seeds ≥ 2 | Family author + LLD-06 owner | This section (§15) |
-
-Both layers must be green for every family. Layer A without Layer B means the family can be probed but cannot feed training. Layer B without Layer A means the training data is polluted.
-
-### 15.3 Layer A — CNB-55 freeze gate (already familiar)
-
-Already required for every family by CNB-55 SPEC §10.1:
-
-- Oracle reference solution scores ≥ 90 on every variant.
-- Empty workspace (no agent action) scores 0.
-- All red-team exploits under `verifier_data/<family>/red_team/` cap at the ceilings declared in `evaluator_contract.md`.
-- Probe on the calibration model produces a per-variant mean inside the §7.8 calibration target band (typically [15, 25]).
-- Scorer deterministic under `CNB55_SEED=42`; hidden-test invocation order fixed; JSON output keys sorted.
-- All immutable-slice paths declared in `task_spec.md` are checksum-protected by trusted-final-state checks.
-
-> **Example: proposal-ranking-manager-judgment (Layer A status, 2026-04-20 probe log).**
-> Oracle = V1/V2/V3 = 90, V4 = 96, V5 = 99. Empty `brief/` = 0. Six red-team exploits (`delete_visible_tests.sh`, `shadow_pytest.sh`, `minimal_brief.json`, `pick_highest_delta.md`, `finish_the_partial.md`, `single_objective_anchor.md`) each ≤ 20 or ≤ 40 per the relevant ceiling. Probe on GPT-5.4/high at 3 seeds: V1≈27, V2≈21, V3≈17, V4≈15, V5≈11; family mean ≈ 18 ∈ [15, 25]. Immutable-slice checksums cover `proposals/`, `repo_evidence/`, `release_context/`, `incident_context/`, `tests/`, `AGENTS.md`, `Dockerfile`, `bin/`. Layer A green.
-
-### 15.4 Layer B — Flywheel readiness checklist (13 items)
-
-Numbered items, every one applies to every family. For each item, the rule is stated first; an example callout shows what the rule looks like when filled in for `proposal-ranking-manager-judgment`.
-
-#### §7 milestone obligations
-
-**1. 5-slot milestone declaration.** The family emits a `family.yaml` (or equivalent) section mapping its track-scorecard sub-metrics to the §7.5 5-slot template:
-
-| Slot | Weight | What it should check |
-|---|---|---|
-| M1 Localization | 0.10 | Agent demonstrably read or queried the relevant context before acting |
-| M2 Primary fix | 0.20 | The family's primary deliverable artifact exists and is well-formed |
-| M3 Invariants preserved / anti-shortcut | 0.20 | Immutable slices unchanged; no shim / tamper / bypass introduced |
-| M4 Functional checks | 0.20 | Visible/hidden functional tests pass; no "low-effort ceiling" trips |
-| M5 End-to-end integration state | 0.30 | Behavioral / differential checks against gold pass; no high-cost ceiling triggered |
-
-Each slot must be a deterministic boolean (or a deterministic threshold over a deterministic score), implemented at the §7.8 implementation level appropriate to the family (L1 regex / L2 structured / L3 executable-or-learned). LLM-judge signals are not allowed in this layer.
-
-> **Example: proposal-ranking-manager-judgment.**
->
-> | Slot | Weight | What it checks (this family) | Implementation level (§7.8) |
-> |---|---|---|---|
-> | M1 Localization | 0.10 | Agent ran `cnb55-brief schema` at least once OR read ≥ 3 files under `proposals/` + `repo_evidence/` before any `submit` | L1 regex + shell-log scan |
-> | M2 Primary fix | 0.20 | `brief/manager_brief.json` exists and parses as valid JSON with correct `schema_version` | L2 structured (CLI + JSON schema) |
-> | M3 Invariants / anti-shortcut | 0.20 | Immutable-slice checksums unchanged AND no `sitecustomize.py` / `pytest.py` shim AND `brief_input.json` is the only whitelisted non-`brief/` write | L2 checksum + filesystem audit |
-> | M4 Functional checks | 0.20 | `pytest -q tests/test_ranking_brief.py` passes AND no "ranking-without-grounding" ceiling triggered (≥ 2 rejections cite real evidence files) | L2 structured property checks |
-> | M5 E2E integration state | 0.30 | Accepted-proposal-matches-gold AND Kendall-τ ≥ variant threshold AND no partial-credit ceiling ≤ 30 triggered | L2 symbolic + L3 executable (no LLM-judge) |
-
-**2. M3 non-trivial.** The anti-shortcut slot must be backed by ≥ 2 concrete detectors (e.g. checksum, filesystem audit, log scan), not a placeholder boolean. At least one red-team exploit listed in §15.3 must exercise each detector.
-
-> **Example: proposal-ranking-manager-judgment.** M3 has three detectors (immutable-slice checksums, pytest-shim detection, writable-path whitelist), each exercised by at least one red-team script. ✔
-
-**3. Milestone booleans, monotone weights, gated dependencies, `verify.sh` sole authority.** Every family inherits these rules without exception. Higher slots (M3–M5) may be conditionally checked only when the prerequisite lower slot holds (e.g. M5 only when M2 holds — there's no point scoring "integration state" against a missing artifact).
-
-> **Example: proposal-ranking-manager-judgment.** M5 only checked when M2 = 1 (`brief/manager_brief.json` exists and parses). All milestone scoring routed through `verify.sh`.
-
-**4. Milestones never agent-visible.** Milestone scripts live under `verifier_data/<family>/<variant_id>/milestones/` and are injected post-run into a separate verifier container per LLD-13's integrity protocol. The family author must confirm no milestone-defining file is mounted into the agent's workspace bundle.
-
-> **Example: proposal-ranking-manager-judgment.** Milestones at `verifier_data/proposal-ranking-manager-judgment/<variant_id>/milestones/`; not present in `workspace_bundle/`. ✔
-
-#### §8 middle-step grading obligations
-
-**5. Capability-tag declarations.** Every family declares, per variant, which §8.3 capability tags from `{localize, inspect, modify, verify, respect_invariants}` are `required`, `recommended`, and `forbidden`. Forbidden tags include any modify-class action against immutable slices and against the visible test surface.
-
-> **Example: proposal-ranking-manager-judgment (V1).**
->
-> ```yaml
-> capability_tags:
->   required:
->     - localize        # must read ≥ 3 evidence files before first submit
->     - inspect         # ≥ 1 file under proposals/ AND ≥ 1 under repo_evidence/
->     - modify          # exactly one terminal action: `cnb55-brief submit`
->     - verify          # must run `cnb55-brief validate` OR `pytest` at least once
->   recommended:
->     - inspect         # release_context/ (V4+) or incident_context/ (V5)
->   forbidden:
->     - modify:tests/
->     - modify:immutable_slice  # proposals/, repo_evidence/, release_context/, incident_context/, AGENTS.md, Dockerfile, bin/
-> ```
-
-**6. Tag-to-tool-call mapping rules.** LLD-06 owns the global mapping registry from raw tool calls (`shell`, `apply_patch`, `read_file`, etc.) to capability tags. The family author registers family-specific overrides only for ambiguous cases — e.g. domain-specific CLIs.
-
-> **Example: proposal-ranking-manager-judgment.** Three overrides: `cnb55-brief schema` → `inspect`, `cnb55-brief validate` → `verify`, `cnb55-brief submit` → `modify` (terminal).
-
-**7. State-delta definition.** For families where the "state" is not a file diff (e.g. JSON-deliverable, ranking output, audit decision), the author specifies what `state_delta_score` measures per turn. The default file-diff scorer applies to code-patch families; everything else needs explicit transition rules.
-
-> **Example: proposal-ranking-manager-judgment.** State is the `brief/manager_brief.json` file (absent / present-and-invalid / present-and-valid).
->
-> | Transition | state_delta_score |
-> |---|---|
-> | No-op (read-only tool call) | 0.0 |
-> | `cnb55-brief validate` returns success for the first time | +0.3 |
-> | `cnb55-brief submit` succeeds and `brief/manager_brief.json` becomes valid | +0.7 |
-> | Any turn that raises `integrity_flag` | -0.5 (clamped to [0, 1] at aggregate) |
-
-**8. Integrity-flag detector registered.** Every family enumerates the rules that raise $H = 1$ for the run. Typical entries: writes outside the family's whitelisted output paths; any modification to an immutable-slice checksum; any pytest/sitecustomize/usercustomize shim; any network egress attempt.
-
-> **Example: proposal-ranking-manager-judgment.** $H = 1$ when any of: write outside `brief/*` + `brief_input.json`; modification to an immutable-slice checksum; pytest/sitecustomize/usercustomize shim dropped; network egress attempt detected in grader log. Registered as one append to LLD-06's family-integrity-rules file.
-
-**9. Compliance-flag is harness-level.** Applies uniformly across families; the family does nothing extra. LLD-06 checks schema validity of every `function_call`, the allowed-tool filter, and argument parseability.
-
-> **Example: proposal-ranking-manager-judgment.** Inherited automatically. ✔
-
-#### §7.8 escape-valve for LLM-judge signals
-
-**10. LLM-judge signals quarantined from $P_{\text{training}}$ and $M_{\text{training}}$.** If the family's scorer emits any contribution computed by an LLM judge — rubric-based partial credit, "is this rationale honest?" checks, narrative coherence scoring — those points stay in the CNB-55 100-pt total *for probe calibration* but are excluded from $M_{\text{training}}$. The scorer emits two top-level fields per run:
-
-- `P_benchmark`: full 100-point total including any LLM-judge contributions. Used for the §10.1 freeze gate, leaderboard, and probe calibration.
-- `M_training`: only deterministic / symbolic milestone contributions, normalized to [0, 1]. Read by LLD-06 into the SFT view, the auto-preference view, and the RL prompt pool.
-
-LLM-judge contributions may also feed the §8.5 per-turn shaping channel and serve as Phase 2b reward-model input — they are not discarded, just denied authority over training labels.
-
-If the family has zero LLM-judge contributions in its scorer, this item collapses to "`P_benchmark == M_training` (after normalization), no dual emission needed." It still must be confirmed in writing.
-
-> **Example: proposal-ranking-manager-judgment.** Two LLM-judge components in the current evaluator contract:
->
-> | Signal | Points | Decision |
-> |---|---|---|
-> | Partial-progress rubric (`partial_progress.md`, gpt-5.4 @ T=0) | 10 | Quarantined → shaping/reward-model channel only |
-> | Assumption-ledger padding check (LLM-judge on "are `missing` rows real gaps?") | 3 | Quarantined → same |
->
-> Net: 13 of 100 scoring points are LLM-judge-produced. Visible to probe (calibration unchanged from 2026-04-20 log) but invisible to training loss. Scorer to emit dual `P_benchmark` / `M_training` per item 10 above.
-
-#### §9 collection-side obligations
-
-**11. Seeds ≥ 2 supported on Train-Long campaigns.** Family must support ≥ 2 deterministic seeds per variant. The author confirms that re-running the oracle input twice under fixed seed produces byte-identical evaluator output (or, where unavoidable randomness exists, that the variation is bounded and documented).
-
-> **Example: proposal-ranking-manager-judgment.** No hidden randomness in `cnb55-brief`; oracle input replays produce identical `manager_brief.json` under fixed seed. ✔
-
-**12. Deterministic `initial_state` for RL prompt pool.** The workspace bundle at `workspace_bundle/<variant_id>/` is fully pinned via `manifest.lock.json`. The initial-state hash for RL pool entries is computed over the variant bundle at commit-time.
-
-> **Example: proposal-ranking-manager-judgment.** `manifest.lock.json` pins all bundle content; initial-state hash deterministic. ✔
-
-**13. `grader_ref` and `milestone_config_ref` exposed.** A LLD-13 registry entry exists for the family pointing at the scorer module path and the milestone-config directory.
-
-> **Example: proposal-ranking-manager-judgment.** `grader_ref = verifiers/proposal-ranking-manager-judgment/score_ranking.py`; `milestone_config_ref = verifier_data/proposal-ranking-manager-judgment/<variant_id>/milestones/`.
-
-### 15.5 Required verification matrix
-
-Before marking any family DONE, the author runs a minimum of **6 trajectories** against one pinned variant (typically V1 as canonical anchor) and populates this matrix. The trajectories are intentionally chosen to exercise the floor, the ceiling, and each major shortcut basin.
-
-| Trajectory | What it must prove | Generic construction |
-|---|---|---|
-| **Oracle** | Signal ceiling — successful run looks successful in every lens | Replay the family's reference solution against the pinned variant |
-| **Empty** | Signal floor — no action fails every lens | Workspace untouched; agent does not act |
-| **Right-answer-no-grounding** | Middle-step grader differentiates evidence-grounded solves from shortcuts that happen to land on the right answer | Submit the gold deliverable but strip evidence / citations / supporting work |
-| **Family-specific shortcut #1** | The most-attractive partial-credit shortcut basin gets capped where the ceiling says it should | Construct the input that triggers the family's primary `partial_credit_ceiling` |
-| **Family-specific shortcut #2** | A second distinct shortcut basin (variant-gated if necessary) gets capped | Construct the second-most-attractive shortcut input |
-| **Adversarial tamper** | Anti-reward-hack floor fires through ≥ 3 independent channels (trusted-state, $M$, $H$) — no single detector is load-bearing alone | Run a red-team script that deletes/modifies the visible test surface or installs a pytest shim |
-
-Every row reports observed values for **5 metrics**: $P_{\text{benchmark}}$, $M_{\text{training}}$, $G$, $R$, $S_{\text{TTC}}$. The verification is binary: every observed value must fall inside the family's expected range. If any cell is out of range, the family is **not DONE** and the relevant detector (integrity flag, capability-tag mapping, state-delta rule, milestone definition, or LLM-judge quarantine) must be revisited.
-
-> **Example: proposal-ranking-manager-judgment (V1, expected ranges).**
->
-> | Trajectory | How produced | $P_{\text{bench}}$ | $M_{\text{train}}$ | $G$ | $R$ | $S_{\text{TTC}}$ | What it verifies |
-> |---|---|---|---|---|---|---|---|
-> | Oracle | `cnb55-brief submit verifier_data/.../oracle/brief_input.json` | ≥ 0.90 | ≥ 0.90 | ≥ 0.75 | ≥ 0.98 | ≥ 1175 | Ceiling — oracle succeeds in every lens |
-> | Empty | No `brief/` write | 0 | 0 | ≤ 0.15 | 0 (after penalties) | ≤ 0 | Floor — empty fails every lens |
-> | Right-answer-no-grounding | Correct `accepted` + `ranking` but `citations: []` on rejections | ≤ 0.25 (ceiling) | ≤ 0.40 | ≤ 0.40 | ≤ 0.24 | ≤ 40 | Grounding actually matters; $S_{\text{TTC}}$ delta vs oracle ≥ 1100 |
-> | Pick-P3 (V1–V3) | Accept staffing-blocked proposal | ≤ 0.30 (ceiling) | ≤ 0.45 | ≤ 0.55 | ≤ 0.27 | ≤ 70 | Staffing-constraint trap capped; $H$ remains 0 |
-> | Finish-partial (V3+) | Accept in-progress proposal without sunk-cost language | ≤ 0.30 (ceiling) | ≤ 0.50 | ≤ 0.60 | ≤ 0.30 | ≤ 80 | Sunk-cost trap capped |
-> | Delete-tests adversarial | Run `delete_visible_tests.sh` | 0 (trusted-state) | 0 (M3) | 0 ($H = 1$) | strongly negative (-0.6 $H$ term) | strongly negative | Three independent detectors all fire |
-
-The matrix lives in the family's `benchmark_run.md` as a dated "flywheel-readiness probe" section, alongside the existing CNB-55 probe log.
-
-### 15.6 Precedent decisions log
-
-Two decisions made first on `proposal-ranking-manager-judgment` that other families should reuse rather than re-derive:
-
-**Decision A — LLM-judge quarantine pattern.** Any family whose scorer emits LLM-judge-produced points keeps those points in `P_benchmark` (for probe stability and leaderboard fidelity) but excludes them from `M_training` via dual-field scorer emission per item 10. **When this applies:** all Track 10 (Strategic Management) families inherently involve judgment-call sub-metrics; some Track 4 (review / approval) families do; Track 1–3 (algorithmic, migration, CI) families typically do not because their judgments are already symbolic. **First applied on:** `proposal-ranking-manager-judgment` (13 of 100 points quarantined).
-
-**Decision B — State-delta for non-code-diff families.** Families whose deliverable is not a code patch (single JSON, ranking output, audit decision, structured report) define `state_delta_score` via explicit transition rules rather than the default file-diff scorer. The transition rules specify a handful of named state changes (artifact absent → present-and-invalid → present-and-valid), each with a numeric delta, plus a penalty entry for `integrity_flag` turns. **When this applies:** any family producing a primary deliverable as JSON, YAML, structured markdown, or an API call rather than a code patch. **First applied on:** `proposal-ranking-manager-judgment` (4-row transition table at item 7). **Other plausible inheritors:** `policy-docs-compliance-audit`, `incident-evidence-synthesis`, `request-path-evidence-brief`.
-
-When a future family encounters either situation, it should cite the decision letter in its own §15-equivalent record rather than re-arguing the rationale.
-
-### 15.7 Blocking vs non-blocking
-
-| Item | Blocks marking family DONE? |
-|---|---|
-| Items 1–4 (milestone declaration, M3 non-trivial, rules, invisibility) | **Blocking** for every family |
-| Items 5–7 (capability tags, tag-mapping, state-delta) | **Blocking** for every family |
-| Item 8 (integrity-flag registration) | **Blocking** for every family |
-| Item 9 (compliance-flag — harness level) | Automatic; never family-blocking |
-| Item 10 (LLM-judge quarantine) | **Blocking** iff the family's scorer emits any LLM-judge contribution. Otherwise: confirm in writing and proceed. |
-| Items 11–13 (seeds, initial_state, grader_ref) | **Blocking** for every family |
-| Verification matrix (§15.5, all 6 rows) | **Blocking** — must contain real observed values, not predicted ones |
-| CNB-55 freeze gate (§15.3) | **Blocking** (pre-existing) |
-
-### 15.8 Per-family authoring checklist (handoff template)
-
-Every family author copies the following checklist into the family's `benchmark_run.md` and ticks each box with a one-line note linking the artifact (file path, commit, dated probe row) that satisfies it. A family is DONE for the flywheel when all eight boxes are green.
-
-- [ ] **Milestone mapping declared.** §15.4 items 1–4: `family.yaml` has the 5-slot mapping; M3 non-trivial; gated dependencies wired through `verify.sh`; milestones not mounted into the agent workspace.
-- [ ] **Capability tags declared per variant.** §15.4 item 5: `capability_tags` block in `family.yaml` for every variant; required / recommended / forbidden lists complete.
-- [ ] **Tag-mapping overrides registered with LLD-06.** §15.4 item 6: any non-default tool-call → tag mappings landed in the LLD-06 mapping registry.
-- [ ] **State-delta rules registered with LLD-06.** §15.4 item 7: either uses the default file-diff scorer (note in writing) or supplies an explicit transition table.
-- [ ] **Integrity-flag rules registered with LLD-06.** §15.4 item 8: family-specific $H = 1$ rules appended to LLD-06's family-integrity-rules file.
-- [ ] **Scorer emits `P_benchmark` and `M_training`.** §15.4 item 10: dual emission live; LLM-judge contributions, if any, appear only in `P_benchmark`.
-- [ ] **Verification matrix populated (§15.5).** All 6 trajectories run on the canonical variant; observed $P$ / $M$ / $G$ / $R$ / $S_{\text{TTC}}$ values recorded; every cell inside its expected range. Repeated on at least one stress variant where the family has variant-gated traps (e.g. V3+ shortcuts).
-- [ ] **Layer A still green after Layer B work.** §15.3 freeze-gate probe re-run after any scorer changes (`P_benchmark` / `M_training` split) to confirm oracle ≥ 90, empty = 0, ceilings hold, calibration band unchanged.
-
-> **Example: proposal-ranking-manager-judgment (status as of 2026-04-20).**
-> Layer A green (oracle 90/90/90/96/99; ceilings hold; scorer deterministic; probe in band; attempt_02b hardening applied including `missed_staffing_update` and `missed_watermark_assumption` ceilings). Layer B not yet started — all 8 boxes above are still open. Recommended order: items 1, 2, 3 (one PR), item 4 (one PR), item 5 (one PR landing the dual-emit scorer), item 6 (verification matrix run), item 7 (re-probe Layer A).
+**Rationale for the split.** §15 had grown to roughly 230 lines, about 20% of this HLD, and its audience (family authors finalizing CNB-55 artifacts and running the `Family-Test-Requirements §5` verification matrix) is distinct from the audience of the rest of the HLD (LLD-06 → LLD-11 implementers). Splitting keeps each document focused, lets the family-test spec evolve on its own cadence, and gives the family-authoring team a single file to cite in their own `benchmark_run.md` entries.
 
 ---
 
@@ -829,8 +667,276 @@ LLD-06 through LLD-11 drafts **must** be coherent with:
 
 Deviations from any of these require a Change Summary entry in this document first.
 
+**v0.6 additions to the lock-down list:**
+
+15. **Monthly benchmark validity audit** (§17.1). Determinism is not sufficient; ABC-style task-validity review is required on a recurring cadence post-freeze.
+16. **Raw evidence retention** (§17.2). The canonical event store retains byte-wise raw tool observations; derived/compressed fields are always recomputable from raw. No information-lossy compression at write-time.
+17. **Dual-band calibration** (§17.7). Families with `P_benchmark ≠ M_training` must calibrate *both* into the §7.8 probe band.
+18. **Variance-triggered seed escalation** (§17.8). ≥2 seeds is a floor; the RL/preference stack escalates to 4 or 8 on unstable families.
+19. **Moving-frontier curriculum** (§17.9). The 20–80% band is re-bucketed every training round; saturated families trigger the §17.10 renewal plan.
+20. **Harness canonicalization + cross-harness held-out eval** (§17.11). SFT view strips harness-specific action syntax; every N rounds a family seen in one harness is evaluated on the other.
+21. **Systematic RAWR rows** (§17.12). Verification matrix is extended from a single "right-answer-no-grounding" row to ≥1 row per declared RAWR mode.
+22. **Honesty > learnability precedence** (§17.13). Where benchmark honesty conflicts with cleaner learnable signal, honesty wins. All v0.6 additions are specific cases of this precedence.
+
 ---
 
-*Document version: 0.3*
+## 17. Post-Review Hardening (v0.6)
+
+This section folds in red-team pressure points raised against v0.5. Each subsection states the rule, the pushback where I disagreed with the reviewer's framing, the mechanism, and which existing section it updates. External anchors: ABC (2507.02825), Terminal-Bench, SWE-Gym (2412.21139), Training Long-Context SWE Agents with RL (2508.03501), Agent-RLVR (2506.11425), Rewarding Progress (2410.08146), DAPO (2503.14476), Multi-SWE-bench (2504.02605), SWE-bench Verified.
+
+### 17.1 Benchmark validity audit loop (agrees with red-team point 1)
+
+**Rule.** CNB-55 §10.1 freeze-gate determinism is necessary but not sufficient. Every family is subject to a recurring **task-validity audit** after freeze, not just at freeze. ABC documents that outcome/task-validity flaws can move measured performance significantly while determinism remains perfect — the family passes every scorer invariant yet measures the wrong thing.
+
+**Mechanism.**
+
+- **Calendar cadence.** Monthly. One rotating reviewer plus the family author.
+- **Anomaly trigger.** Any family where the probe model's score moves ≥ 5 points across two adjacent monthly checkpoints *without* a scorer change triggers an out-of-cycle audit.
+- **Procedure.** Reviewer samples one oracle trace, one mid-score trace, one failure trace; runs the ABC checklist (goal specified, success criteria observable, environment stable, shortcut coverage, leakage, difficulty calibration, judge reliability where applicable); flags fall into {OK, watch, task-invalid, retire}.
+- **Remediation + invalidation protocol (v0.7 hardening).** When a family is flagged `task-invalid`:
+  1. **Future training sets.** Every training run initiated after the flag timestamp **excludes** data where `family_id` matches the flagged family **AND** `family_status_at_write_time ∈ {task_invalid, retired_saturated}`. This is a hard projection filter in LLD-06, not a best-effort heuristic. Data written *before* the flag but from the same family is admitted only if its write-time snapshot shows `family_status_at_write_time = ok`; in that case the data retains a `provisional_admit` tag and is subject to exclusion if a later audit concludes the invalidity was present at write-time.
+  2. **Prior checkpoint comparability.** Checkpoints produced from training sets that included the now-invalid family are **marked non-comparable** across the flag boundary. The leaderboard carries a `checkpoint_validity_version` counter that bumps on each invalidation; comparisons across bumps require a prose justification in `benchmark_run.md`.
+  3. **Preference anchors.** A family in `task_invalid` cannot serve as a preference anchor for new pair construction in the §3.3 auto-preference view from the flag timestamp onward. Pairs already written are retained under the same `provisional_admit` / exclusion rule as (1).
+  4. **RL prompt pool.** The family is removed from the RL prompt pool immediately on flag; rollouts in-flight are terminated; partial trajectories from those rollouts are written to the event store with `family_status_at_write_time = task_invalid` and are excluded from training views but retained for re-validation.
+  5. **Quarantine, not deletion.** Data from `task_invalid` families is **not deleted**. If a later audit downgrades the flag (e.g. the validity concern was author-fixable rather than structural), the data becomes eligible for projection again under the family's new status. This is why write-time snapshot semantics matter: the field records what was believed at the moment of writing, not a retroactively-updated judgement.
+  6. **Naming in leaderboards and reports.** Any leaderboard number that was ever computed using a now-`task_invalid` family must be annotated with the invalidation in any reprint; it cannot be silently updated or silently quoted. This is the honesty > learnability precedence (§17.13) applied to public metrics.
+- **Artifact.** Each audit appends a dated row to `benchmark_run.md` under a new "validity audit log" heading. The row records: audit date, reviewer, sampled traces, ABC checklist outcome, flag verdict, and — if `task_invalid` — the `checkpoint_validity_version` bump.
+
+**Updates:** Family-Test-Requirements §3 Layer A (adds audit-loop obligation as a post-freeze standing requirement); §3.1 canonical schema (`family_status_at_write_time` field); §3.2 SFT view + §3.3 auto-preference view + §3.4 RL prompt pool (projection filters honor `family_status_at_write_time`).
+
+### 17.2 Raw evidence retention (agrees with red-team point 2)
+
+**Rule.** The canonical event store (§3.1) retains **byte-wise raw tool observations and raw stdout/stderr** in full. Every derived or compressed field — `capability_tags`, `evidence_score`, `state_delta_score`, `turn_scoring`, preference margins — carries a `derived_from` pointer back to the raw slice it was computed over. No information-lossy compression at write-time.
+
+**Why.** If a year from now we want to recompute richer process rewards (new reward model, new judge, new metric), we must be able to re-derive them from the same raw substrate we trained on originally. If the store only keeps `evidence_score: 0.6` without the raw observation text that produced it, we are locked into today's evaluator.
+
+**Mechanism.**
+
+- Schema bump: `turn[].raw_observation_blob` is an opaque byte-range reference into an append-only log file per run. No per-turn inline blob; the reference is stable.
+- Schema evolution is additive-only. Derived fields may be added over time; the raw never changes.
+- `benchmark_run.md` migration-plan section must state, for any schema change: "can v$X$ derived views be recomputed from pre-$X$ raw?" Answer must be yes.
+
+**Updates:** §3.1 canonical store (adds `raw_observation_blob` field + derivation-pointer rule). LLD-06 writer contract inherits this directly.
+
+### 17.3 Recovery-trace SFT sub-view (partial pushback on red-team point 3)
+
+**Pushback I am keeping.** The red team argues SFT on successes alone undertrains recovery. I disagree with the naive conclusion "therefore SFT should include failures." SFT on failures teaches failure distributions. Recovery is not a failure; recovery is a **within-success phenomenon** — a trace that stumbles, self-corrects, and finishes cleanly. That trace is a success under $P$ and belongs in the SFT view. A trace that never recovers is a failure and belongs in the preference and RL views where the loss function is designed to handle it.
+
+**Fold-in.** Decision 4 already says "20/100 is a bootstrap, not saturation" — the system expects failure-side signal to flow through preference + RL. v0.6 introduced a recovery-trace sub-view of the SFT view; **v0.7 fixes where the upweight lands**. The v0.6 rule cloned the model harder on the whole bad-detour-plus-correction span, which is directly contra the [Rewarding Progress](https://arxiv.org/abs/2410.08146) principle "reward steps that raise future success probability, not steps that merely *appear* in a successful trace." The bad detour is not a step that raised success probability — it lowered it; the *correction* raised success probability back.
+
+**The v0.7 rule:**
+
+- **Trace labeling (unchanged).** A successful trace is labeled `recovery_trace=true` if $G$ drops by ≥ 0.3 at any point before recovering, OR if the trace contains at least one turn with `integrity_flag=0` but `state_delta_score ≤ 0` (visible thrash that does not tamper).
+- **Pivot definition (new in v0.7).** For each recovery trace, LLD-06 identifies the **recovery pivot turn $t^*$**: the smallest turn index $t$ such that (a) $G$ is monotonically non-decreasing over $[t, T]$ for the remainder of the trace, and (b) $\text{state\_delta\_score}_t > 0$. $t^*$ is the first turn where the trajectory has visibly committed to correcting.
+- **Per-turn corrective flag (new in v0.7).** For every turn $t$ in a recovery trace, LLD-06 emits `corrective_turn_bool = True` iff $t \geq t^*$ **and** `state_delta_score_t > 0` **and** `integrity_flag_t = 0`. All other turns (including the entire pre-pivot bad detour) emit `corrective_turn_bool = False`.
+- **Loss weighting (v0.7 scope).** The **2× multiplier in masked-NLL loss applies only to turns with `corrective_turn_bool = True`**. Detour turns ($t < t^*$ and/or `state_delta_score ≤ 0`) receive the standard 1× weight — the model sees that they happened in a successful trace, but is not cloned harder on them.
+- **Target mix (unchanged).** 30–40% of the SFT view by row count should be recovery traces. If fewer than 30% of TTC-collected successes are recovery traces on a given family, LLD-07 runs more attempts on that family before the next SFT refresh.
+
+**Why this is the correct reading of Rewarding Progress.** The principle is to upweight steps whose *advantage* — expected future success conditioned on taking this step vs not — is positive. In a recovery trace, the detour has *negative* advantage (it set the trajectory back); the corrective suffix has positive advantage (it re-established the path to success). Upweighting the whole span averages these together and loses the signal we care about. Upweighting only `corrective_turn_bool = True` turns targets the positive-advantage segment directly.
+
+**What this does not do.** It does not add failures to the SFT view. Failures continue to feed preference + RL (their proper home). Papers: SWE-Gym (2412.21139), Training Long-Context SWE Agents with RL (2508.03501) — both use failure signal via preference / RL, not via SFT on failures.
+
+**Updates:** §3.1 canonical schema (adds `recovery_trace`, `turn_scoring[].corrective_turn_bool`); §3.2 SFT view (sub-view definition); §6.1 SFT loss (2× multiplier gated on `corrective_turn_bool`, not on span membership).
+
+### 17.4 LLD-11 reframed: Agent-RLVR + guidance; DAPO as optimizer (partial pushback on red-team point 4)
+
+**Pushback I am keeping.** DAPO is not a conceptual basis for agent RL. It is a token-level PG algorithm with Clip-Higher, developed for math. The red team's sharpest version of this point is right: you cannot name LLD-11 after its optimizer any more than you can name LLD-10 "the AdamW pipeline."
+
+**Fold-in.** LLD-11's conceptual anchor is now explicitly **Agent-RLVR** (verifier-first rewards — Agent-RLVR 2506.11425 reports 9% → 22% on SWE-bench Verified from environment-derived rewards plus 5 more from reward-model reranking) **+ Rewarding Progress** (2410.08146 — per-turn progress shaping, consumed per §8 with the capping discipline in place) **+ guidance rollouts** (teacher-traced context injection for tasks that land in the <20% band on the current-model probe, instead of excluding them from the prompt pool).
+
+DAPO remains the inside-choice token-level optimizer — chosen for Clip-Higher stability on the long-tail of token-level losses in multi-turn rollouts — but it is not the framing. §4.6 title updated to "LLD-11 Agent-RLVR RL Pipeline (DAPO-optimized)." §12 research grounding reorganized to put Agent-RLVR and Rewarding Progress above DAPO.
+
+**Concrete mechanism changes vs v0.5:**
+
+- RL prompt pool (§3.4) now distinguishes three buckets: in-band (20–80%), saturation-watch (>80%), needs-guidance (<20%). The needs-guidance bucket participates in training via guidance rollouts (teacher trace injected into the context, policy learns to continue from the guided state) rather than exclusion.
+- LLD-11 draft must specify the guidance-rollout mechanism before consuming the prompt pool. Not optional.
+
+**Guidance-rollout provenance contract (v0.7 hardening).** "Teacher trace injected into context" is a leakage channel unless the trace source is bounded. v0.7 locks down provenance with an enumerated `guidance_source` field (schema in §3.1) and a separate accounting path. Allowed classes, ranked by permissiveness:
+
+| `guidance_source` | Allowed in training? | Provenance rule |
+|---|---|---|
+| `autonomous_prior_success` | **Yes, freely.** Treated as regular RL rollout data. | The teacher trace is a prior autonomous solve of the *same task* by a checkpoint of the system itself (current policy, prior checkpoint, or an earlier SFT checkpoint). No external model; no oracle; no human. |
+| `autonomous_current_policy_search` | **Yes, freely.** | Teacher trace is produced by current-policy best-of-$N$ search on the same task. Equivalent to expanded TTC under §9.2. |
+| `stronger_model_flagged` | **Yes, but routed through the §17.4 separate accounting path** — the resulting rollout carries `guidance_source = stronger_model_flagged` and cannot be mixed with autonomous data in the same SFT or preference batch without an explicit mixing policy ratified by LLD-10 + LLD-11 owners. Held-out eval reports these rollouts as a separate line item so their contribution to metrics is legible. | Teacher trace is from a strictly stronger model (e.g. a larger Codex variant, a frontier model) used only on needs-guidance tasks. Per-family cap on the fraction of training that carries this tag. Tracked in `benchmark_run.md`. |
+| `oracle_trace_forbidden` | **No. Blocking projection filter.** | Teacher trace from the family's reference `oracle/` input. Using this in training silently memorizes the gold answer; that is the evaluation boundary being breached from the other side. LLD-06 rejects any record with this value from all training views. |
+| `authoring_only_debug` | **No. Blocking projection filter.** | Teacher trace from the family author during authoring or debugging. Retained for audit; never trained on. |
+
+**Why the separate accounting path for `stronger_model_flagged`.** [Agent-RLVR](https://arxiv.org/abs/2506.11425) supports guidance in sparse agentic environments; it does not say stronger-model traces are equivalent to verifier-first RL data. They carry the stronger model's biases, its harness habits, and (if repeated) its specific solution templates. Mixing them into the same loss update as autonomous rollouts confounds the attribution of any held-out improvement — did the policy learn from its own experience, or did it distill the stronger model? The separate accounting path means:
+
+1. Guidance rollouts live in a distinct prompt-pool bucket (`guidance_pool`) and a distinct SFT variant if they ever feed SFT (`Codex-SFT-guided`, appendix only — not the hinge checkpoint).
+2. Loss updates on guidance rollouts are computed separately and scaled (default: 0.5× of autonomous updates; overridable per-family).
+3. Evaluations on Bench-Control that benefit from `stronger_model_flagged` rollouts must attribute the delta; the `benchmark_run.md` line for any checkpoint trained with guidance must report both "autonomous-only $P_{\text{benchmark}}$" and "with-guidance $P_{\text{benchmark}}$."
+4. Cap: per family, `stronger_model_flagged` rollouts may not exceed 15% of the family's total RL-pool consumption over any training round.
+
+**LLD-07 / LLD-11 contract.** The orchestrator (LLD-07) is responsible for tagging `guidance_source` at rollout-emission time, not at training-ingest time. Ingest-time tagging is easy to skip. Emission-time tagging makes provenance audit-trailable and is required for the validity audit loop (§17.1) to verify that no `oracle_trace_forbidden` rollouts slipped into training views.
+
+**Updates:** §4.6 (reframe); §3.1 canonical schema (`guidance_source` field + forbidden-value projection filter); §3.4 RL prompt pool (three-bucket + guidance_pool); §12 (reorder + citations); §17.9 moving-frontier curriculum uses the three-bucket structure; §17.13 — guidance contract is an explicit application of honesty > learnability.
+
+### 17.5 Family-specific extended capability vocabulary (agrees with red-team point 5)
+
+**Rule.** The core vocabulary `{localize, inspect, modify, verify, respect_invariants}` is unchanged — it is the cross-family aggregation vocabulary used by LLD-06 and by §8.3 scoring. However, families (especially Track 10 Strategic Management and Track 4 review-heavy families) may declare **extended sub-tags** that refine a core tag.
+
+**Sub-tag schema.**
+
+```yaml
+capability_tags:
+  core:
+    required: [localize, inspect, modify, verify]
+    forbidden: [modify:tests/, modify:immutable_slice]
+  extended:
+    - parent: inspect
+      sub_tag: prioritize
+      semantics: reading with intent to rank competing options
+    - parent: inspect
+      sub_tag: evidence_triage
+      semantics: reading with intent to separate signal from noise
+    - parent: modify
+      sub_tag: policy_tradeoff
+      semantics: writing a recommendation that explicitly names a tradeoff
+    - parent: verify
+      sub_tag: assumption_honesty
+      semantics: running an assumption-ledger / ground-check
+```
+
+**Aggregation.** LLD-06 rolls sub-tags up into their parent core tag for cross-family aggregation. Within-family analysis (fine-grained middle-step scoring, reward-model training inputs) sees both levels. The raw event store retains both.
+
+**Example.** For `proposal-ranking-manager-judgment`, sub-tags `inspect:prioritize`, `inspect:evidence_triage`, `modify:policy_tradeoff`, `verify:assumption_honesty` are all declared. A V5 trace that reads `incident_context/` qualifies for `inspect:evidence_triage`; a trace that writes a primary_risk explicit tradeoff qualifies for `modify:policy_tradeoff`.
+
+**Updates:** §8.3 capability-tag vocabulary (core-plus-extended pattern); Family-Test-Requirements §4 item 5 (authoring obligation covers both levels).
+
+### 17.6 $G$-gaming diagnostic doctrine (agrees with red-team point 6)
+
+**Rule.** If $G$ rises for a family while $P_{\text{benchmark}}$ **and** $M_{\text{training}}$ stay flat for more than 3 training rounds, the default diagnosis is **not** "healthy latent progress." The default diagnosis is **"$G$ is being gamed for this family"** until proven otherwise.
+
+**Why this direction.** $G$ is justified (§8) as a leading indicator of outcome-level improvement. A leading indicator that never leads anywhere is, by definition, not a leading indicator. The correct null hypothesis after 3 rounds of $G$-progress-without-outcome is that the shaping signal has developed a shortcut the outcome layer is correctly refusing to reward.
+
+**Resolution procedure.**
+
+1. Re-run the Family-Test-Requirements §5 verification matrix with the *current* model (not the probe model).
+2. Inspect: do the family's known shortcut trajectories (pick-P3, finish-partial, right-answer-no-grounding, etc.) now show $G$ comparable to the oracle? If yes → $G$'s definition for this family has a shortcut.
+3. Redefine $G$ for that family (usually by tightening `state_delta_score` rules or adding a sub-tag check) and re-run the matrix.
+4. Only if the matrix still separates shortcuts from oracle cleanly AND $G$ still rises without outcome → accept the latent-progress interpretation, and schedule a re-probe in 2 more rounds.
+
+**Tripwire.** Automated: LLD-06 emits a `G_progress_without_outcome` flag on any family meeting the condition; LLD-07 pauses sampling for that family until the audit completes.
+
+**Updates:** §8.5 ($G$ feeds the flywheel — adds the gaming-diagnostic rule).
+
+### 17.7 Dual-band calibration (partial pushback on red-team point 7)
+
+**Pushback I am keeping.** The red team's concern is that $P_{\text{benchmark}}$ and $M_{\text{training}}$ can diverge materially, letting authors calibrate to a leaderboard number driven by signals the trainer never sees. I am not collapsing the two. The divergence is the §7.8 escape-valve rule applied honestly: Track 10 families need LLM-judge sub-metrics to grade their primary output, and those signals do not belong in training labels. Forcing $P_{\text{benchmark}} \equiv M_{\text{training}}$ would either (a) drop Track 10 entirely or (b) smuggle LLM-judge signal into training under another name.
+
+**Fold-in.** The fix is not to collapse the divergence; it is to close the calibration loophole. v0.6 requires **dual-band calibration** at the §7.8 probe: both $P_{\text{benchmark}}$ and $M_{\text{training}}$ per-variant means must fall inside [15, 25] on the probe model. If $P_{\text{benchmark}}$ is in band but $M_{\text{training}}$ is out of band (too easy because all the hardness lives in the LLM-judge points trainer can't see; or too hard because the deterministic milestones are under-weighted) the family is not DONE.
+
+**Reporting.** `benchmark_run.md` probe-log row adds two columns: `M_training_mean` per variant and `P_benchmark − M_training` per variant. Divergence > 0.25 triggers an authoring note in the same row explaining why.
+
+**Updates:** §7.8 (probe-band rule extended to dual-band); Family-Test-Requirements §4 item 10 (dual-band calibration blocking).
+
+### 17.8 Variance-triggered seed escalation (agrees with red-team point 8)
+
+**Rule.** ≥2 seeds is a floor, not a target. Every family declares a per-seed variance threshold; exceeding it auto-escalates to more seeds.
+
+**Thresholds (defaults, overridable per family):**
+
+- Per-seed std. dev. on $M_{\text{training}}$ ≤ 0.10 at 2 seeds → stay at 2.
+- 0.10–0.20 → escalate to 4 seeds.
+- > 0.20 → escalate to 8 seeds.
+- If at 8 seeds the std. dev. is still > 0.15, the family is flagged as "inherently high-variance" and the auto-preference view (§3.3) rejects all pairs where within-seed variance exceeds between-seed signal-to-noise ratio. Preference pairs over unstable families are easy to hallucinate from seed noise alone.
+
+**Why this matters for preference construction.** Two seeds can produce a 0.2 margin on a noisy family purely from sampling. That margin becomes a preference pair that looks like learned signal but is noise. The escalation rule prevents seed noise from being laundered into preference signal.
+
+**Updates:** §3.3 auto-preference view (adds noise-vs-signal rejection rule); §9.4 collection-side seeds (escalation policy replaces the flat "≥2" floor).
+
+### 17.9 Moving-frontier curriculum refresh (agrees with red-team point 9)
+
+**Rule.** The RL prompt pool's 20–80% current-model band is **recomputed every training round**, not fixed at family freeze.
+
+**Mechanism.** Each training round ($N$ hours of RL, or after an SFT refresh):
+
+1. Run the current checkpoint against every registered family, ≥ seed-escalated sample count, get current-model $P_{\text{benchmark}}$ per variant.
+2. Re-bucket every variant into {in-band (20–80%), saturation-watch (>80%), needs-guidance (<20%)}.
+3. In-band variants flow to the normal prompt pool.
+4. Saturation-watch variants trigger §17.10 renewal review; they stay in the pool at reduced sampling weight until renewed or retired.
+5. Needs-guidance variants flow to Agent-RLVR guidance rollouts (§17.4) rather than exclusion.
+
+**Per-training-round artifact.** `benchmark_run.md` gets a dated "curriculum bucket map" row showing every family's variant-by-variant current bucket. Moves across buckets are the leading indicator of training progress *and* of saturation.
+
+**Updates:** §3.4 RL prompt pool (moving-frontier bucketing); §9.2 adaptive TTC (reads current bucket map for attempt-count policy).
+
+### 17.10 Per-family saturation / renewal plan (agrees with red-team point 10)
+
+**Rule (now Layer-B item 14).** Every family declares, in `task_spec.md`: (a) a saturation threshold on current-model $P_{\text{benchmark}}$ (default: mean across variants > 80% for 2 consecutive training rounds); (b) a renewal mechanism (variant tightening / new trap / retirement).
+
+**Why this is blocking.** Terminal-Bench's lesson is not "hard CLI tasks matter"; it is "benchmarks saturate, and without versioning, training optimizes toward author-specific artifacts rather than the intended capability." Without a declared renewal plan, a saturated family silently shifts from "this family teaches capability X" to "this family teaches the idiomatic quirks of this family's author." That drift is invisible in training loss curves.
+
+**Mechanism.** On 2nd consecutive saturation-watch round, LLD-06 emits a `saturation_renewal_due` flag. The family author has one training-round cycle to land a renewal PR or flag the family for retirement. Failure to act moves the family to retired; training runs stop sampling from it; its already-collected data carries a `source_family_status=retired_saturated` column and is not used as a preference-pair anchor for new runs.
+
+**Updates:** Family-Test-Requirements §4 item 14 (new blocking item); §11 no-human-labels stance (renewal PRs are author-only, no human labeling involved).
+
+### 17.11 Harness-leakage mitigations (agrees with red-team point 11)
+
+**Rule.** Mixing Codex and mini-SWE-Agent trajectories into one event store (§3.1) risks the model learning harness-specific action formatting, retry habits, or prompt priors instead of the intended capability. Three mitigations:
+
+1. **Canonicalize at write-time.** The SFT view (§3.2) normalizes harness-specific action syntax to a canonical form (e.g. `shell("…")` → `TOOL.shell("…")`, Codex-style apply_patch → canonical diff-application). The original harness-form is retained only in `raw_observation_blob` (§17.2) and is never seen by the SFT loss.
+2. **Harness-ID dropout.** During SFT and RL, with probability 0.2 per training example, strip the harness-ID context token and train on the canonicalized form alone. Forces the model to learn capability rather than harness idiom.
+3. **Cross-harness held-out eval.** Every 4 training rounds, evaluate the current checkpoint on families it has seen in only one harness, using the *other* harness. If degradation on the held-out harness exceeds 0.1 on $P_{\text{benchmark}}$, training stack has learned harness priors; rebalance sampling and re-run.
+
+**Paper reference.** Multi-SWE-bench (2504.02605) formalizes cross-language / cross-harness generalization as the anti-overfitting test.
+
+**Updates:** §3.2 SFT view (canonicalization); §6 losses (dropout variable); §9 TTC policy (cross-harness eval cadence).
+
+### 17.12 Systematic RAWR generators (agrees with red-team point 12)
+
+**Rule.** The Family-Test-Requirements §5 verification matrix's single "right-answer-no-grounding" row is upgraded to **one row per declared RAWR mode per family**. RAWR = right-answer-wrong-reasons.
+
+**Authoring obligation (new in Family-Test-Requirements §5).** Every family declares, in `task_spec.md`, its RAWR modes. Each is a named shortcut class: the agent produces the correct nominal output via a reasoning path that should not count as solving the task. For `proposal-ranking-manager-judgment`:
+
+- `grounding_stripped`: correct `accepted` + `ranking` but `citations: []` on rejections (already present).
+- `citation_fabricated`: correct `accepted` + `ranking` but citations point to real files while rejection rationale doesn't actually follow from the cited content (needs LLM-judge or structural heuristic).
+- `constraint_named_not_respected`: accepted proposal cites the blocking constraint in summary but the ranking still ignores it.
+
+Each mode gets its own matrix row with expected $P$, $M$, $G$, $R$, $S_{\text{TTC}}$ ranges. ABC's core lesson is that RAWR classes are persistent and benchmark-specific — one-off red-team coverage systematically under-represents them.
+
+**Auto-generation (two criteria, v0.7).** LLD-06 monitors training trajectories and surfaces RAWR candidates under **either** of two criteria:
+
+- **Criterion A — process-visibly-bad.** `P_benchmark ≥ 0.8` AND `G ≤ 0.4`. This is the v0.6 rule. It catches "right answer, obviously bad process" — traces where the outcome is correct but the shaping signal knows the reasoning path was wrong.
+- **Criterion B — $G$-dominant shortcut (new in v0.7).** `P_benchmark ≥ 0.8` AND **any one of**:
+  - The family is currently in `G_progress_without_outcome` watch per §17.6 (i.e. $G$ rising without $P$ / $M$ moving for > 3 rounds), OR
+  - The trace's declared `required` capability tags (§17.5) are under-exercised — specifically, ≥ 1 required core tag has zero turns matching it in `turn_scoring[]`, OR
+  - The trace's $G$ is in the top quartile for the family AND its `corrective_turn_bool` turn count is zero (high shaping score with zero visible correction on a family where recovery is expected).
+
+Criterion B catches the failure class that poisons $G$ itself: the shaping metric looks healthy, the outcome looks healthy, but the trajectory reached the outcome via a path that does not exercise the capabilities the family is supposed to teach. That is precisely the class §17.6 says to suspect, and it is the class [ABC](https://arxiv.org/abs/2507.02825) flags as systematically under-represented by one-off red-team coverage.
+
+**Why one criterion isn't enough.** Criterion A fires only when $G$ disagrees with $P$. If $G$ is itself flawed, it will agree with $P$ on shortcuts too — high $P$, high $G$, low honesty. Criterion B fires exactly in that regime: the family-level signal (G-watch, required-tag coverage) is what flags the trace, not the trace's own $G$. The two criteria triangulate: A checks that $G$ catches what $P$ misses; B checks that $G$ hasn't quietly started catching the wrong things.
+
+**Reviewer flow.** For each candidate, the family author reviews and either (a) accepts it as a new declared RAWR mode and adds a matrix row in Family-Test-Requirements §5, (b) rejects it with justification in `benchmark_run.md`, or (c) — for Criterion B candidates — triggers the §17.6 $G$-redefinition procedure instead of adding a mode, because a consistent stream of Criterion B hits on one family is evidence $G$'s definition is the problem, not the trace.
+
+**Updates:** Family-Test-Requirements §5 verification matrix (multi-row RAWR requirement + the capability-coverage check in Criterion B); §17.6 ($G$-redefinition is triggered by Criterion B pattern, not only by §17.6's own tripwire); LLD-06 (RAWR-candidate emission implements both criteria).
+
+### 17.13 Honesty > learnability precedence (responds to the meta-question)
+
+**The meta-question (reviewer's framing).** Is the HLD designing a flywheel for benchmark-honest agent improvement, or for maximally-learnable deterministic signal? The red team's read is that it's trying to do both, and most risk lives in the overlap.
+
+**Answer — explicit precedence.** The HLD optimizes for **both**, with a strict precedence: **honesty is the hard constraint; learnability is the optimization target inside the constraint.** When a cleaner learnable signal would require softening a task-validity check, loosening an anti-shortcut detector, or bringing a non-deterministic judge into the training label, **honesty wins and learnability takes the hit.**
+
+**Where this is already binding in the doc:**
+
+- Dual-emit scorer (§7.8, §17.7): we lose 13 pts of training signal on `proposal-ranking-manager-judgment` rather than trust LLM-judge labels. Honesty > learnability.
+- $G$ capped at 0.2 trajectory magnitude and 10 absolute $S_{\text{TTC}}$ (§7.2, §7.4): we accept a weaker shaping signal rather than let $G$ dominate. Honesty > learnability.
+- Recovery-trace sub-view (§17.3) instead of SFT-on-failures: we accept the smaller SFT dataset rather than pollute SFT with failure distributions. Honesty > learnability.
+- Saturation-renewal (§17.10): we retire saturated families rather than keep mining them for cheap gradient. Honesty > learnability.
+- Cross-harness held-out eval (§17.11): we take a 4-round tax on training throughput rather than let harness priors go undetected. Honesty > learnability.
+
+**Where the precedence binds in the future.**
+
+- If LLD-11 rollouts produce a dense reward that correlates 0.9 with $G$ but only 0.3 with $P$, we use it only inside the cap. Honesty > learnability.
+- If a future reward model trained on `P_benchmark` (which includes LLM-judge pts) proves measurably better than one trained on `M_training`, that is not an argument for merging the two. It is an argument for improving `M_training`'s deterministic coverage of what the LLM judge is catching. Honesty > learnability.
+
+**What this does not promise.** The precedence does not guarantee the flywheel works. It guarantees that if the flywheel doesn't work, it will fail honestly (measurable $P$ / $M$ don't move) rather than dishonestly (a fake metric rises while the agent degrades). That asymmetry is the whole point of the verifier-first architecture; v0.6 makes it explicit.
+
+**Updates:** This section is the doctrine the whole doc rests on; no lower-section edits required. Future authoring should cite §17.13 directly when a design decision trades learnable signal for honest measurement.
+
+---
+
+*Document version: 0.7*
 *Scope: LLD-06, LLD-07, LLD-08, LLD-09, LLD-10, LLD-11*
 *Does not supersede: HLD Spec v2.3, the v2.1 LLD index, or LLD-13 v0.6. This doc is subordinate to all three.*
