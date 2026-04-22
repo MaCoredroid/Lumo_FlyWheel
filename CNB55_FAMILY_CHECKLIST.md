@@ -56,7 +56,7 @@ Repo-level checklist for the canonical 55 CNB-55 families.
 - [ ] `mcp-routing-parameter-fidelity`
 - [ ] `multi-tool-transaction-repair`
 - [ ] `partial-failure-rollback-recovery`
-- [ ] `policy-aware-request-resolution`
+- [x] `policy-aware-request-resolution`
 
 ## Track 08 Skills Tooling
 
@@ -76,16 +76,16 @@ Repo-level checklist for the canonical 55 CNB-55 families.
 
 ## Track 10 Strategic Management & Long-Horizon Evolution
 
-- [ ] `backlog-decomposition-scheduler`
-- [ ] `multi-round-software-evolution`
+- [x] `backlog-decomposition-scheduler`
+- [x] `multi-round-software-evolution`
 - [ ] `objective-driven-repo-improvement`
 - [x] `proposal-ranking-manager-judgment`
-- [ ] `release-note-to-plan-translation`
+- [x] `release-note-to-plan-translation`
 
 ## Track 11 Subagents Orchestration
 
 - [ ] `candidate-worktree-shootout`
 - [ ] `delegation-merge-salvage`
 - [ ] `fanout-fullstack-release-blocker`
-- [ ] `incident-retro-runbook-closure`
+- [x] `incident-retro-runbook-closure`
 - [ ] `nightly-regression-watch`
