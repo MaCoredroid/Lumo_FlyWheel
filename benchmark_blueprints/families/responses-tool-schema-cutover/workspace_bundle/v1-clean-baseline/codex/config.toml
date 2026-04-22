@@ -1,0 +1,4 @@
+[runtime]
+transport = "chat_completions"
+tool_result_join_key = "tool_name"
+replay_mode = "legacy_assistant_blob"

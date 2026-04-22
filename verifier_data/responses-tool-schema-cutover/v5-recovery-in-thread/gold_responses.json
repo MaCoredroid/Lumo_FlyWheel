@@ -1,0 +1,54 @@
+{
+  "allowed_write_paths": [
+    "gateway/adapter.py",
+    "gateway/reducer.py",
+    "tests/test_adapter_contract.py",
+    "tests/test_replay_render.py",
+    "codex/config.toml",
+    "docs/migrations/responses-cutover.md"
+  ],
+  "core_paths": [
+    "gateway/adapter.py",
+    "gateway/reducer.py"
+  ],
+  "forbidden_config_terms": [
+    "chat_completions",
+    "tool_result_join_key = \"tool_name\"",
+    "legacy_assistant_blob"
+  ],
+  "hidden_cases": [
+    {
+      "expected_call_ids": [
+        "call-route-primary",
+        "call-route-fallback"
+      ],
+      "expected_render": "assistant: Rebuild the replay after the chronology-blind rollback.\ntool_call[call-route-primary] route_lookup {\"route\":\"primary\"}\ntool_result[call-route-primary] route_lookup => primary ready\ntool_call[call-route-fallback] route_lookup {\"route\":\"fallback\"}\ntool_result[call-route-fallback] route_lookup => fallback warming",
+      "fixture": "fixtures/responses_stream/hidden_incident_regression.jsonl",
+      "id": "incident-regression"
+    }
+  ],
+  "partial_progress_points": 10,
+  "required_config_terms": [
+    "transport = \"responses\"",
+    "tool_result_join_key = \"call_id\"",
+    "replay_mode = \"response_output_items\""
+  ],
+  "required_doc_phrases": [
+    "response.output_item.added",
+    "response.completed",
+    "call_id",
+    "tool result"
+  ],
+  "required_test_markers": [
+    "call_id",
+    "render_replay",
+    "visible_same_name_out_of_order"
+  ],
+  "variant_id": "v5-recovery-in-thread",
+  "visible_call_ids": [
+    "call-weather-sf",
+    "call-weather-nyc"
+  ],
+  "visible_fixture": "fixtures/responses_stream/visible_same_name_out_of_order.jsonl",
+  "visible_render": "assistant: Need weather for SF and NYC before I answer.\ntool_call[call-weather-sf] weather_lookup {\"city\":\"San Francisco\"}\ntool_result[call-weather-sf] weather_lookup => San Francisco is 58F and foggy.\ntool_call[call-weather-nyc] weather_lookup {\"city\":\"New York\"}\ntool_result[call-weather-nyc] weather_lookup => New York is 71F and sunny."
+}

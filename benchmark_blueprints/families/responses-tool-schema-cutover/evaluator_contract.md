@@ -1,62 +1,100 @@
-# Evaluator Contract
+# `responses-tool-schema-cutover` Evaluator Contract
 
-## Scope
-- Family: `responses-tool-schema-cutover`
-- Task: `cnb55-core-responses-tool-schema-cutover-router-replay`
-- Runtime class: small Python gateway repo using Responses-style event fixtures
+**Family:** `responses-tool-schema-cutover`
+**Verifier result schema:** `cnb55.verify_result.v3`
 
-## Evaluation Intent
-Measure whether the solver can repair a Responses-native adapter and replay stack without collapsing repeated tool calls, faking chronology, or fixing only docs and config. The evaluator should reward real `call_id`-scoped reasoning and punish visible-fixture-only join logic.
+## Evaluation Goal
 
-## Required Submission Artifacts
-- Code patch touching adapter or reducer logic as needed
-- Test changes or additions that protect replay semantics
-- `codex/config.toml` alignment to Responses runtime
-- Migration note update
+Reward a real Responses cutover repair that keeps repeated same-name tool invocations distinct by `call_id`, preserves the stable replay summary, and updates the repo-local runtime/documentation contract. Punish code-free analysis, tool-name joins, visible-fixture-only ordinal hacks, and contract drift.
 
-## Scoring Model
-- `100` total points, awarded by category:
-  - `45`: functional repair of adapter and reducer semantics
-  - `20`: regression protection and test quality
-  - `15`: non-code contract alignment across config and migration note
-  - `10`: verification quality and evidence-backed reasoning
-  - `10`: robustness against hidden traces and shortcut resistance
+## Dual-Band Result
 
-## Score Caps
-- Cap at `10/100` for docs-only, config-only, or analysis-only submissions.
-- Cap at `20/100` if the solver proposes a plausible patch shape but provides no real code-level repair or test evidence.
-- Cap at `20/100` if repeated same-name tool calls can still collapse.
-- Cap at `25/100` if `call_id` is recognized but chronology remains heuristic or visible-fixture-shaped.
-- Cap at `30/100` if only one of adapter or reducer is actually repaired.
-- Cap at `50/100` if code is correct but config or docs remain stale.
+- `P_benchmark`: full 0-100 family score
+- `M_training`: deterministic-only score normalized to `[0, 1]`
+- `score`: alias of `P_benchmark`
+- `partial_progress.heuristic`: quarantined into `P_benchmark_only`
 
-## Visible Gates
-- Run:
-  - `pytest -q tests/test_adapter_contract.py tests/test_replay_render.py`
-- Required visible scenario:
-  - a fixture with two same-name tool calls and out-of-order tool results
-  - transcript render must preserve both invocations in order
+## 100-Point Breakdown
 
-## Hidden Gates
-- Withheld replay where same tool name is invoked multiple times and only `call_id` disambiguates joins
-- Withheld chronology case where tool results arrive after other output items
-- Differential render oracle for a hidden JSONL trace
-- Grep or AST guard ensuring reducer does not dedupe by tool name alone
-- Config and docs checks for Responses-native terms such as `call_id` and event items
+Deterministic M-band (`90` points total):
 
-## Integrity And Shortcut Checks
-- Reject if tests were deleted or materially weakened
-- Reject if reducer sorts output to hide arrival-order defects
-- Reject if `call_id` is reconstructed from visible-fixture ordinals instead of event data
-- Reject if docs and config are updated while code remains legacy-shaped
+- `20`: visible pytest gate passes
+- `10`: visible replay render matches the stable expected summary
+- `15`: hidden call-id joins are correct
+- `15`: hidden replay renders match oracle strings
+- `10`: repeated same-name tool calls survive in hidden transcript outputs
+- `10`: `codex/config.toml` advertises Responses-native routing
+- `10`: `docs/migrations/responses-cutover.md` documents the new operator contract
+- `10`: regression tests were strengthened relative to the seeded baseline
 
-## Variant Hardness Notes
-- `V1`: visible repeated-call fixture is enough to expose naive name-based joins
-- `V2`: stale replay fixtures and misleading warnings should not affect grading
-- `V3`: dirty transcript-fixture edits must be preserved
-- `V4`: code, config, and migration note all required
-- `V5`: follow-up injects a regression caused by an earlier chronology-blind fix
+Probe-only P-band (`10` points total):
 
-## Current Hardness Judgment
-- Actual recorded solver run: `20/100`
-- Naive `gpt-5.4/high` above `30/100`: `unlikely under current rubric`
+- `10`: partial-progress heuristic for touching the right surfaces even before the full repair closes
+
+## Visible Gate
+
+```bash
+pytest -q tests/test_adapter_contract.py tests/test_replay_render.py
+```
+
+## Hidden Checks
+
+- exact replay oracle string match on hidden fixtures
+- repeated same-name tool calls remain distinct in transcript output
+- ordinal-trap fixture preserves original stream `call_id` values
+- config contains:
+  - `transport = "responses"`
+  - `tool_result_join_key = "call_id"`
+  - `replay_mode = "response_output_items"`
+- config does **not** contain:
+  - `chat_completions`
+  - `tool_result_join_key = "tool_name"`
+  - `legacy_assistant_blob`
+- docs mention:
+  - `response.output_item.added`
+  - `response.completed`
+  - `call_id`
+  - `tool result`
+
+## Hard Ceilings
+
+- `no_submission` → `0`
+- `no_visible_green` → `20`
+- `analysis_only` → `20`
+- `tool_name_only_join` → `20`
+- `call_id_ordinal_shortcut` → `25`
+- `adapter_or_reducer_gap` → `30`
+- `contract_drift` → `50`
+- `no_test_regression_guard` → `60`
+
+## Integrity Rules
+
+Any integrity hit sets `integrity_flag = 1`, zeroes M3/M4/M5, and forces `score = 0`.
+
+- `write_outside_whitelist`: writes outside the allowed repair surface
+- `immutable_slice_mutated`: edits fixtures, notes, release context, incident context, or the seeded scratch artifact
+- `pytest_shim`: introduces `sitecustomize.py`, `usercustomize.py`, or `pytest.py`
+- `tests_modified`: modifies visible tests while dropping required replay markers
+- `network_egress`: `.network_egress_detected` marker present
+
+## Allowed Write Surface
+
+- `gateway/adapter.py`
+- `gateway/reducer.py`
+- `tests/test_adapter_contract.py`
+- `tests/test_replay_render.py`
+- `codex/config.toml`
+- `docs/migrations/responses-cutover.md`
+
+Everything else is immutable.
+
+## Baseline Expectations
+
+From the local verification matrices generated in this rollout:
+
+- oracle: `100`
+- empty: `0`
+- RAWR grounding_stripped: `50`
+- adapter-only shortcut: `19`
+- chronology-blind fix: `20`
+- delete-tests adversarial: `0` with integrity

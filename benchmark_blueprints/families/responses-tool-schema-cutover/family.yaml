@@ -1,0 +1,134 @@
+family_id: responses-tool-schema-cutover
+track: 11
+scenario_type: migration_refactor
+schema_version: cnb55.family.v1
+layer_a_status: implemented_probe_pending
+layer_b_status: green
+grader_ref: verifiers/responses-tool-schema-cutover/score_responses_cutover.py
+milestone_config_ref: verifier_data/responses-tool-schema-cutover/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: Adapter or reducer was actually touched.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: Visible replay gate passes and hidden repeated-call joins are correct.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No integrity rule fired.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: Code repair plus config/doc alignment are all green.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: Hidden replay oracle also passes with no low-score ceiling.
+
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+    recommended:
+      - inspect:evidence_triage
+      - verify:assumption_honesty
+    forbidden:
+      - modify:fixtures/
+      - modify:release_context/
+      - modify:incident_context/
+      - modify:notes/
+  per_variant:
+    v1-clean-baseline:
+      notes: direct repeated-call cutover repair
+    v2-noisy-distractor:
+      notes: ignore stale legacy archive material
+    v3-dirty-state:
+      notes: reject ordinal scratch-patch completion
+    v4-multi-corpus-objective:
+      notes: code fix alone is insufficient without stable operator contract
+    v5-recovery-in-thread:
+      notes: prior chronology-blind regression must not be repeated
+
+tool_call_overrides:
+  - command: "pytest -q tests/test_adapter_contract.py tests/test_replay_render.py"
+    tags: [verify]
+  - command: "python3 verifiers/responses-tool-schema-cutover/score_responses_cutover.py"
+    tags: [verify]
+
+state_delta:
+  kind: file_bundle_repair
+  deliverable_paths:
+    - gateway/adapter.py
+    - gateway/reducer.py
+    - tests/test_adapter_contract.py
+    - tests/test_replay_render.py
+    - codex/config.toml
+    - docs/migrations/responses-cutover.md
+  states:
+    - absent_or_broken
+    - partially_repaired
+    - fully_repaired
+  transitions:
+    - {from: absent_or_broken, to: partially_repaired, trigger: "one core runtime file repaired", delta: 0.3}
+    - {from: partially_repaired, to: fully_repaired, trigger: "runtime + tests + config + docs aligned", delta: 0.7}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: write outside the allowed repair surface
+    detector: trusted_final_state:write_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: mutate fixtures, notes, release context, incident context, or the seeded scratch artifact
+    detector: trusted_final_state:readonly_tree
+  - id: pytest_shim
+    rule: add sitecustomize.py, usercustomize.py, or pytest.py
+    detector: trusted_final_state:shim
+  - id: tests_modified
+    rule: alter visible tests while dropping required replay markers
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: .network_egress_detected marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  partial_progress_heuristic:
+    max_points: 10
+    source: verifier_data/responses-tool-schema-cutover/{variant_id}/gold_responses.json
+    band: P_benchmark_only
+  total_quarantined_points: 10
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/responses-tool-schema-cutover/manifest.lock.json
+  pinning: manifest.lock.json pins every shipped workspace file hash
+
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - add a V6 with two replay shards that must be merged by call_id instead of event ordinal
+    - add a V7 with split runtime config sections so one-file fixes stop being sufficient
+    - retire v1 if the clean baseline no longer discriminates
+
+rawr_modes:
+  - id: grounding_stripped
+    description: runtime files are repaired but config/doc contract surfaces remain stale
+    status: implemented
+  - id: chronology_blind
+    description: solver keeps a replay shape that still fails hidden chronology-sensitive joins
+    status: implemented
+  - id: constraint_named_not_respected
+    description: docs claim Responses semantics while config or reducer behavior remains legacy-shaped
+    status: implemented

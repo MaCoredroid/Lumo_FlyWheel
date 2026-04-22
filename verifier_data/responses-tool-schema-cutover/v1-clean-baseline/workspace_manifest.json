@@ -1,0 +1,27 @@
+{
+  "file_hashes": {
+    ".scenario_variant": "862d289ccc8f205cc1fcd6605334a45a0fc6292424b98eeb9b227c4a2f8fa4ee",
+    "AGENTS.md": "666194a6d297cc3b517429a904ca91fe5d1916c53beccf23efa3cb2364744215",
+    "Dockerfile": "8076b7a63a4a6d9afa5f5938ea2421245870612d830b306b48d0f46dc98ef5c4",
+    "codex/config.toml": "a63a9d4dbc6d052b0a5833985a72bda391841851817df6f6c2609ef614b76fe8",
+    "docs/migrations/responses-cutover.md": "3bd6e3a3393f88de6bcbc91813dc6e5c3dd2f0e33532f0a3ab249a67c8e2e523",
+    "fixtures/responses_stream/hidden_incident_regression.jsonl": "503d1a01d2863cdc7e532225d0dd0f2e618bb0e644378ccb996b5cc2e540b70d",
+    "fixtures/responses_stream/hidden_ordinal_trap.jsonl": "d9932a8e90545c4822f69336945381ebe1edf60f45a480b2adef5be0a142e945",
+    "fixtures/responses_stream/hidden_same_name.jsonl": "6b018451bee8e4acba3424310c3b058a83f816c72e6f5475787e2e1f29b9fe13",
+    "fixtures/responses_stream/hidden_stable_summary.jsonl": "df62f634cb610f2f10055299633fbd3fb4077cfe7cb01fd8284ae9509d1479a9",
+    "fixtures/responses_stream/hidden_three_same_name.jsonl": "3708d26f15b708a06299b8e6b4ba86bd0e834fff5785490840db38ec71640d6d",
+    "fixtures/responses_stream/visible_same_name_out_of_order.jsonl": "89b0b4111e476126dfcb5acbed5df893c1dceef49eac2b6f61a53b78d0c5628f",
+    "gateway/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "gateway/adapter.py": "1ac833335f6f70646c74f67df9aaf639b54b33af59c9b94f7b0c613e12e40fb3",
+    "gateway/reducer.py": "be938a4ec61d73e56d9fd15acf0b8dede72e76addbc577faf4302dbc6b30f3b8",
+    "tests/test_adapter_contract.py": "c87dbb3d3f2953f8490133ff49aa29026804b3c2a1d8a21f93b792e5e3835016",
+    "tests/test_replay_render.py": "00f8f5c567082cf8085fe9d4cd0493d603d2b73d8884cf1107ca0332a0034383"
+  },
+  "readonly_tree_hashes": {
+    "fixtures": "aa95a382c47da31d4d22f16eeef0a1c4d1a7802072c0264ab22eb32d1c15a7f0",
+    "gateway/_scratch_patch.py": "MISSING",
+    "incident_context": "MISSING",
+    "notes": "MISSING",
+    "release_context": "MISSING"
+  }
+}
