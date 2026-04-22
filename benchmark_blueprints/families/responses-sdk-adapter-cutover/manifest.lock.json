@@ -1,0 +1,30 @@
+{
+  "family_id": "responses-sdk-adapter-cutover",
+  "grader": {
+    "score_responses_cutover_py_sha256": "079db7869e3f669926dea65e66e94bf64fc518435516c51b80900eee0112286b",
+    "verify_sh_sha256": "f28e897b46accd7ec866fbd8a27c003eecd3faeb724aba635a8be4a48c1393db"
+  },
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_reference_sha256": "c4912aa8b772508ce641f52badb2d928783fc5fe5731320b9b97e8c17d515b77",
+      "workspace_manifest_sha256": "9e3d89a3908184ae0c9262cb2f90b161f4ef981729b2d70e1bfec92a1e618e62"
+    },
+    "v2-noisy-distractor": {
+      "gold_reference_sha256": "c2a842d5739410b7cc6b45326d24f135c749c5ab1c1e86df997853c7842771af",
+      "workspace_manifest_sha256": "f5754fdf66f24e4a7c363cbc75e1cecdf6b7888be1427d46d624a8af3f38d9f7"
+    },
+    "v3-dirty-state": {
+      "gold_reference_sha256": "79504da65049b3ed6703afc8329d50f24e876e17f2d139e2ede56ea3124a0759",
+      "workspace_manifest_sha256": "a8b03d863c9c81dd7faebe4e7749f930e430c4d46402b4be98499735aba7bf59"
+    },
+    "v4-multi-corpus-objective": {
+      "gold_reference_sha256": "93eef1e0a75db0b6306adbd39d846820d1053059c45c85318537ff16f21c851a",
+      "workspace_manifest_sha256": "4440f3f483c4de51bce91fde8bb9dfd155d762b71eb8832a768069743d7dd1b6"
+    },
+    "v5-recovery-in-thread": {
+      "gold_reference_sha256": "d73b8be4a750d37b07a2472f6b8177d9f75b5d589fca3701b0d6911cd1345586",
+      "workspace_manifest_sha256": "8ff886f6cd570cfd56c22377f43123e417822d276061ffb4da0d1b11eabea25f"
+    }
+  }
+}

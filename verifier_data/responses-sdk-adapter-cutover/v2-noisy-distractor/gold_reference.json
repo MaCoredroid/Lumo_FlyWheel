@@ -1,0 +1,41 @@
+{
+  "allowed_writes": [
+    ".codex/config.toml",
+    "docs/migrations/responses-cutover.md",
+    "src/incident_handoff/client.py",
+    "src/incident_handoff/adapter.py",
+    "src/incident_handoff/replay.py",
+    "src/incident_handoff/render.py"
+  ],
+  "legacy_live_markers": [
+    "chat_completions",
+    "legacy wrapper",
+    "legacy_messages"
+  ],
+  "pass_bar": 40,
+  "readonly_roots": [
+    "tests/",
+    "transcripts/",
+    "release_context/",
+    "incident_context/"
+  ],
+  "required_doc_keywords": [
+    "event ordering",
+    "tool-result correlation"
+  ],
+  "variant_id": "v2-noisy-distractor",
+  "weights": {
+    "config.responses_mode": 5,
+    "config.responses_wire": 5,
+    "docs.event_ordering": 5,
+    "docs.tool_result_correlation": 5,
+    "docs.variant_complete": 10,
+    "hidden.future_event_passthrough": 0,
+    "hidden.interleaved_order": 10,
+    "hidden.legacy_path_removed": 20,
+    "hidden.multi_block_message": 15,
+    "hidden.reordered_chunk_stability": 0,
+    "hidden.replay_roundtrip": 15,
+    "visible.pytest": 10
+  }
+}

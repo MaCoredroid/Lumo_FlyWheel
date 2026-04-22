@@ -1,29 +1,18 @@
 # `responses-sdk-adapter-cutover` Task Spec
 
-## Task Prompt
+**Track:** 06 — Integration Cutovers & Runtime Migrations
+**Family id:** `responses-sdk-adapter-cutover`
+**Spec version:** CNB-55 v1.0
+**Variants:** 5 (`v1-clean-baseline` through `v5-recovery-in-thread`)
+
+## Task Prompt (canonical)
+
 Migrate the `incident-handoff` assistant service from a legacy chat-wrapper integration to the Responses event model. Keep tool routing, transcript rendering, and replay behavior correct under streamed multi-event turns. Do not preserve the legacy wrapper on the serving path. Update the repo-local Codex config and the operator migration note so they match the new runtime.
 
-## Workspace Bundle
-- `src/incident_handoff/client.py`: current SDK wrapper and request entrypoint.
-- `src/incident_handoff/adapter.py`: converts provider output into internal events.
-- `src/incident_handoff/replay.py`: transcript serializer and replay reducer.
-- `src/incident_handoff/render.py`: operator-facing transcript renderer.
-- `transcripts/legacy_chat_turn.json`: stale pre-Responses fixture.
-- `transcripts/interleaved_tool_turn.json`: streamed tool-call and tool-result fixture.
-- `transcripts/reordered_chunks.json`: assistant chunks arrive out of display order if naively sorted.
-- `transcripts/future_event_passthrough.json`: includes an unknown event type that must not corrupt replay.
-- `.codex/config.toml`: still points at legacy wire semantics.
-- `docs/migrations/responses-cutover.md`: operator note with outdated examples.
-- `tests/test_adapter.py`, `tests/test_replay.py`, `tests/test_render.py`: visible test slice.
-
-## Seeded Modernization Breakage
-- The SDK dependency was bumped and now returns Responses-style event items instead of legacy message objects.
-- `adapter.py` still expects flattened `message.content` and loses tool metadata on multi-event turns.
-- `replay.py` rebuilds history from rendered transcript lines instead of raw events, so replay order becomes unstable.
-- `.codex/config.toml` still advertises legacy chat wiring.
-- The doc examples still describe the deprecated wrapper and wrong transcript shape.
+The workspace is a small Python service with broken migration code. The agent is expected to edit code and docs directly in-place and verify the result with the visible pytest slice. Hidden checks then stress replay determinism, event ordering, and future-safe handling beyond the visible happy path.
 
 ## Required Surfaces
+
 - `shell`
 - `apply_patch`
 - `terminal_tests`
@@ -31,46 +20,169 @@ Migrate the `incident-handoff` assistant service from a legacy chat-wrapper inte
 - `.codex/config.toml` editing
 - docs update
 
-## Expected Deliverables
-- Code patch across the adapter, replay, and render surfaces.
-- Updated `.codex/config.toml` setting the repo to the Responses wire path.
-- Updated migration note describing the event model and replay expectations.
-- Preserved or regenerated transcript fixtures only where semantics actually changed.
+No network, browser, or subagents are needed for the benchmark itself.
 
-## Grader Contract
-- Phase 2 visible checks:
-  - `pytest -q tests/test_adapter.py tests/test_replay.py tests/test_render.py`
-- Hidden checks:
-  - Multi-tool turn preserves event order and role boundaries.
-  - Tool routing is driven from event objects, not transcript text.
-  - Replay is deterministic across `serialize -> render -> replay -> render`.
-  - Unknown future-safe event types are preserved or ignored safely, not dropped destructively.
-  - `.codex/config.toml` declares the Responses runtime path.
-- Trusted final-state checks:
-  - No legacy wrapper import or compatibility shim remains on the serving path.
-  - `replay.py` is event-sourced rather than transcript-sourced.
-  - Docs mention event ordering and tool-result correlation, not only command syntax.
-- Scoring intent:
-  - Docs/config changes alone cannot exceed `0.10`.
-  - A happy-path adapter shim without replay correctness cannot exceed `0.25`.
-  - Scores above `0.50` require hidden replay-order and anti-flattening checks to pass.
+## Workspace Bundle (per variant)
+
+Every variant ships the following under `workspace_bundle/<variant_id>/`:
+
+```text
+AGENTS.md
+Dockerfile
+.scenario_variant
+.codex/config.toml
+docs/migrations/responses-cutover.md
+src/incident_handoff/client.py
+src/incident_handoff/adapter.py
+src/incident_handoff/replay.py
+src/incident_handoff/render.py
+tests/test_adapter.py
+tests/test_replay.py
+tests/test_render.py
+transcripts/*.json
+release_context/*            # V4+ only
+incident_context/*           # V5 only
+```
+
+## Seeded Modernization Breakage
+
+The starting workspace is intentionally broken in the same family-wide ways:
+
+- `client.py` still advertises the legacy `chat_completions` serving path.
+- `adapter.py` assumes flattened chat-message content and loses event metadata.
+- `replay.py` serializes a lossy textual form, so replay is not event-faithful.
+- `render.py` drops tool-result call ids.
+- `.codex/config.toml` still declares legacy wire semantics.
+- `docs/migrations/responses-cutover.md` still tells operators to preserve the wrapper.
+
+## Variant Progression
+
+### `v1-clean-baseline`
+
+Minimal cutover. The only visible transcript is an interleaved assistant/tool turn. The solver must normalize Responses items into event objects, preserve tool call ids, fix rendering, and move config/docs to the Responses path.
+
+- Primary stress: basic migration correctness.
+- Expected capable-model mean after hardening: about `28`.
+
+### `v2-noisy-distractor`
+
+Adds a stale `legacy_chat_turn.json` fixture and a multi-block assistant message fixture. The stale file is present as a read-only distractor; the correct fix is to modernize the live path, not to build a compatibility shim around the legacy shape.
+
+- Primary stress: avoiding legacy-wrapper anchoring.
+- New ceiling: `compatibility_shim_left_live`.
+- Expected capable-model mean: about `23`.
+
+### `v3-dirty-state`
+
+Adds `transcripts/reordered_chunks.json` plus a partial-cutover note describing an abandoned replay shim. A solver that patches only the visible fixture still fails replay determinism under out-of-order event chunks.
+
+- Primary stress: event ordering and replay determinism.
+- New ceiling: `reordered_chunk_instability`.
+- Expected capable-model mean: about `18`.
+
+### `v4-multi-corpus-objective`
+
+Adds `release_context/` notes showing the operational objective shifted from merely “render a readable transcript” to “preserve event fidelity for postmortem replay and audit”. The correct fix is now explicitly event-sourced replay, not a nicer string renderer.
+
+- Primary stress: objective shift under additional corpus evidence.
+- New ceiling: `objective_drift_to_render_only`.
+- Expected capable-model mean: about `15`.
+
+### `v5-recovery-in-thread`
+
+Adds `incident_context/` and `transcripts/future_event_passthrough.json` after a rollback caused by unknown event handling during an earlier cutover. The solver must preserve or safely ignore unknown event types without corrupting order, and the migration note must acknowledge the incident-driven recovery semantics.
+
+- Primary stress: recovery-aware correctness under future event types.
+- New ceiling: `future_event_corruption`.
+- Expected capable-model mean: about `10`.
+
+### Ladder Monotonicity Target
+
+Calibration target for GPT-5.4/high after hardening:
+
+- `v1-clean-baseline`: `28`
+- `v2-noisy-distractor`: `23`
+- `v3-dirty-state`: `18`
+- `v4-multi-corpus-objective`: `15`
+- `v5-recovery-in-thread`: `10`
+
+Family mean target: `18.8`, within the Layer A freeze window `[15, 25]`.
+
+## Expected Deliverables
+
+- Code patch across `client.py`, `adapter.py`, `replay.py`, and `render.py` as needed.
+- Updated `.codex/config.toml` setting the repo to the Responses wire path.
+- Updated migration note describing event ordering, tool-result correlation, and future-event safety.
+- Preserved transcript fixtures. Editing benchmark-owned tests or transcripts is forbidden.
+
+## Visible Checks
+
+```bash
+pytest -q tests/test_adapter.py tests/test_replay.py tests/test_render.py
+```
+
+The visible slice only checks:
+
+- single-message Responses content normalization,
+- tool-call id preservation on replay,
+- tool-result call id rendering.
+
+Visible success is intentionally insufficient for a passing score.
+
+## Hidden Checks
+
+Hidden checks live under `verifier_data/responses-sdk-adapter-cutover/<variant>/hidden_tests/` and are deterministic code-backed checks only. No LLM judge is used anywhere in this family.
+
+Hidden surfaces by variant:
+
+- `v1`: interleaved tool-call and tool-result ordering, basic anti-flattening.
+- `v2`: multi-block assistant message normalization, no legacy live-path fallback.
+- `v3`: reordered chunk stability and deterministic replay of the canonical event stream.
+- `v4`: replay remains event-sourced rather than transcript-sourced under release-context pressure.
+- `v5`: unknown future event types are preserved or ignored safely without corrupting replay order, and docs acknowledge incident-driven recovery.
+
+## Trusted Final-State Checks
+
+- No edits to `tests/`, `transcripts/`, `release_context/`, or `incident_context/`.
+- No `sitecustomize.py`, `usercustomize.py`, or `pytest.py` shim.
+- No files written outside the allowed solver write surface:
+  - `src/incident_handoff/client.py`
+  - `src/incident_handoff/adapter.py`
+  - `src/incident_handoff/replay.py`
+  - `src/incident_handoff/render.py`
+  - `.codex/config.toml`
+  - `docs/migrations/responses-cutover.md`
+- No live-path `chat_completions` or legacy-wrapper marker remains in `client.py` or `.codex/config.toml`.
+
+## Partial-Credit Ceilings
+
+- `visible_only_cutover` ≤ `20`
+  Trigger: visible pytest passes but fewer than two hidden behavior packs pass.
+- `flattened_multi_event_turn` ≤ `25`
+  Trigger: assistant message content is still flattened or nested incorrectly under multi-block Responses payloads.
+- `compatibility_shim_left_live` ≤ `30`
+  Trigger: live path still advertises `chat_completions`, legacy wrapper semantics, or a legacy-only client contract.
+- `reordered_chunk_instability` ≤ `35`
+  Trigger: replay result depends on chunk arrival order rather than event sequence.
+- `objective_drift_to_render_only` ≤ `40`
+  Trigger: rendering looks correct but replay is still not event-sourced in V4+.
+- `future_event_corruption` ≤ `30`
+  Trigger: unknown event types are destructively dropped or reorder neighboring events in V5.
 
 ## Red-Team Traps
-- Flatten all assistant chunks into final text and lose intermediate events.
-- Route tools by parsing rendered transcript strings.
-- Rebuild replay from transcript lines instead of raw event objects.
-- Update fixtures only, without fixing ordering semantics.
-- Keep a legacy compatibility shim and translate only the visible happy path.
-- Overwrite nearby doc edits in dirty-workspace variants.
 
-## Quality Gate
-- GPT-5.4/high adversarial probe judgment before hardening: `under_30_for_naive_solver = no`.
-- Probe found an easy partial-credit path via a thin compatibility shim plus docs/config churn.
-- Hardening applied in this spec:
-  - Added interleaved, reordered, and future-event fixtures.
-  - Elevated replay determinism and anti-compatibility-shim checks into the grader contract.
-  - Capped docs/config-only credit and kept replay correctness as the score separator.
-  - Explicitly banned transcript-sourced replay and text-driven tool routing.
-- Actual run evidence: [benchmark_run.md](./benchmark_run.md) records an overperforming first attempt, then a hardened rerun scored at `20/100`.
-- Final quality judgment after hardening: `under_30_for_naive_solver = yes`.
-- Rationale: a naive solver can still patch the visible adapter path, but without true event-sourced replay and temporal semantics it should stay below the 30-point band.
+1. Edit visible tests instead of fixing the migration.
+2. Add a local pytest shim.
+3. Patch only the visible fixture path and ignore multi-block / reordered / future-event hidden paths.
+4. Reconstruct replay from lossy rendered text rather than event objects.
+5. Keep a legacy compatibility shim on the serving path.
+
+## Saturation And Renewal Plan
+
+Per Layer B readiness, this family is renewed when `mean P_benchmark > 80` for two consecutive probe rounds.
+
+Renewal queue:
+
+1. Add a V6 with mid-stream event cancellation and restarted tool call ids.
+2. Add a V7 with assistant reasoning blocks interleaved around tool results.
+3. Retire V1 once it becomes purely mechanical and promote V2 as the new floor.
