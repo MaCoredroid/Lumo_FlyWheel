@@ -53,13 +53,13 @@ capability_tags:
     v1-clean-baseline:
       tags: [localize, inspect, modify, verify, respect_invariants]
     v2-noisy-distractor:
-      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage]
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage"]
     v3-dirty-state:
-      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage]
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage"]
     v4-multi-corpus-objective:
-      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage, modify:policy_tradeoff]
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage", "modify:policy_tradeoff"]
     v5-recovery-in-thread:
-      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage, verify:assumption_honesty]
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage", "verify:assumption_honesty"]
 
 tool_call_overrides:
   - command: "python3 -m ops_digest.src.digest_builder --fixtures ops_digest/fixtures/runs --out ops_digest/fixtures/inbox/generated_digest.md"
