@@ -17,7 +17,7 @@ milestones:
   M2_primary_fix:
     weight: 0.20
     implementation_level: L2
-    description: `make ci` passes on the repaired repo.
+    description: "`make ci` passes on the repaired repo."
   M3_invariants:
     weight: 0.20
     implementation_level: L2
