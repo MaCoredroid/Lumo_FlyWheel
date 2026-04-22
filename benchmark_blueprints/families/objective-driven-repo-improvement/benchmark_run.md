@@ -125,21 +125,64 @@ Interpretation:
   emit a brief within the bounded run.
 - This is an honest hard-failure signal, not a rubric trap.
 
+## attempt_04 — real whole-family live probe on committed assets
+
+Family-local probe artifact:
+
+- `benchmark_blueprints/families/objective-driven-repo-improvement/live_probe/attempt_04/summary.json`
+- `benchmark_blueprints/families/objective-driven-repo-improvement/live_probe/attempt_04/summary.md`
+
+Exact command:
+
+```bash
+python3 verifiers/objective-driven-repo-improvement/run_live_probe.py --attempt attempt_04 --timeout-seconds 900 --variants v1-clean-baseline v2-noisy-distractor v3-dirty-state v4-multi-corpus-objective v5-recovery-in-thread
+```
+
+Per-variant live results:
+
+| Variant | Accepted | Seconds | Score | M_training | Pass | Integrity | Errors |
+|---|---|---:|---:|---:|---|---:|---|
+| `v1-clean-baseline` | `P1` | 88 | 87 | 0.77 | True | 0 | `primary_risk malformed` |
+| `v2-noisy-distractor` | `P1` | 137 | 92 | 0.82 | True | 0 | — |
+| `v3-dirty-state` | `P1` | 101 | 92 | 0.82 | True | 0 | — |
+| `v4-multi-corpus-objective` | `P5` | 123 | 88 | 0.78 | True | 0 | `primary_risk malformed` |
+| `v5-recovery-in-thread` | `P2` | 100 | 100 | 0.91 | True | 0 | — |
+
+Layer A gate values from the actual live probe:
+
+- family mean: `91.8`
+- max variant score: `100`
+- min variant score: `87`
+- monotonicity within `±3`: `False`
+
+Acceptance judgment:
+
+- `family_mean ∈ [15,25]`: failed
+- `max ≤ 40`: failed
+- `min ≤ 10`: failed
+- monotonic `V1 ≥ V2 ≥ V3 ≥ V4 ≥ V5 ±3`: failed
+- overall: `Layer A freeze gate not yet passed`
+
+What attempt_04 taught:
+
+1. The family's current task/scorer pair is far too easy for a live model run;
+   every variant passed and the minimum score was still `87`.
+2. The intended discriminators are visible in top-pick changes (`P1` → `P5` →
+   `P2`), but they do not yet bind the score.
+3. The honest next step is hardening the rubric / evidence path inside this
+   family, not claiming acceptance on the current calibration.
+
 ## Current status
 
 ### Layer A
 
-Not green yet. The family now has:
+Not green. The real whole-family post-fix live probe now exists, and it failed
+the freeze gate decisively:
 
-- deterministic oracle / empty / shortcut baselines
-- one clean post-fix live baseline run (`v1`)
-- one clean post-fix hard-failure stress run (`v5`)
-
-What is still missing for §10.1 freeze-gate acceptance:
-
-- a fresh post-fix full-family live sweep (`v1` … `v5`) scored against the
-  current manifest / scorer state
-- family mean / monotonicity numbers computed from that post-fix sweep
+- family mean `91.8` vs target `[15,25]`
+- max `100` vs target `≤ 40`
+- min `87` vs target `≤ 10`
+- monotonicity `False`
 
 ### Layer B
 
@@ -153,8 +196,7 @@ Implemented and materially complete for this family:
 - state-delta declaration
 - capability tags
 - V1 + stress verification matrices
+- family-local whole-family live probe artifacts under `live_probe/attempt_04/`
 
-Residual follow-up:
-
-- run the full post-fix live five-variant probe before claiming `layer_a_status:
-  green`
+Residual follow-up is now calibration hardening inside this family, not missing
+instrumentation.

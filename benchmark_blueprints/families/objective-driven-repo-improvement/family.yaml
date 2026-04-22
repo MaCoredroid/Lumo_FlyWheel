@@ -2,7 +2,7 @@
 family_id: objective-driven-repo-improvement
 track: 10
 schema_version: cnb55.family.v1
-layer_a_status: pending_probe_freeze_gate
+layer_a_status: probe_attempt_04_failed_too_easy
 layer_b_status: implemented_pending_review
 grader_ref: verifiers/objective-driven-repo-improvement/score_objective_delta.py
 milestone_config_ref: verifier_data/objective-driven-repo-improvement/{variant_id}/milestones/

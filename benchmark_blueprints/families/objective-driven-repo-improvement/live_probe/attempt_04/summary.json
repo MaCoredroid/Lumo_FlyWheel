@@ -1,0 +1,94 @@
+{
+  "acceptance_judgment": "Layer A freeze gate not yet passed",
+  "attempt": "attempt_04",
+  "command": "python3 verifiers/objective-driven-repo-improvement/run_live_probe.py --attempt attempt_04 --timeout-seconds 900 --variants v1-clean-baseline v2-noisy-distractor v3-dirty-state v4-multi-corpus-objective v5-recovery-in-thread",
+  "family_id": "objective-driven-repo-improvement",
+  "prompt": "Read AGENTS.md in this directory and follow it exactly. Write brief_input.json at the workspace root and run ./bin/cnb55-brief submit brief_input.json to produce brief/manager_brief.json. Do not modify anything outside brief/ or brief_input.json.",
+  "results": [
+    {
+      "M_training": 0.77,
+      "accepted": "P1",
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [
+        "primary_risk malformed"
+      ],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/objective-driven-repo-improvement/live_probe/attempt_04/codex_logs/v1-clean-baseline.log",
+      "pass": true,
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/objective-driven-repo-improvement_v1-clean-baseline_yb60l71d/verify_result.json",
+      "score": 87,
+      "seconds": 88,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "M_training": 0.82,
+      "accepted": "P1",
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/objective-driven-repo-improvement/live_probe/attempt_04/codex_logs/v2-noisy-distractor.log",
+      "pass": true,
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/objective-driven-repo-improvement_v2-noisy-distractor__egbem_4/verify_result.json",
+      "score": 92,
+      "seconds": 137,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "M_training": 0.82,
+      "accepted": "P1",
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/objective-driven-repo-improvement/live_probe/attempt_04/codex_logs/v3-dirty-state.log",
+      "pass": true,
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/objective-driven-repo-improvement_v3-dirty-state_zroee7cf/verify_result.json",
+      "score": 92,
+      "seconds": 101,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "M_training": 0.78,
+      "accepted": "P5",
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [
+        "primary_risk malformed"
+      ],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/objective-driven-repo-improvement/live_probe/attempt_04/codex_logs/v4-multi-corpus-objective.log",
+      "pass": true,
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/objective-driven-repo-improvement_v4-multi-corpus-objective_v5y19nqe/verify_result.json",
+      "score": 88,
+      "seconds": 123,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "M_training": 0.91,
+      "accepted": "P2",
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/objective-driven-repo-improvement/live_probe/attempt_04/codex_logs/v5-recovery-in-thread.log",
+      "pass": true,
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/objective-driven-repo-improvement_v5-recovery-in-thread_q5jyjs_l/verify_result.json",
+      "score": 100,
+      "seconds": 100,
+      "variant": "v5-recovery-in-thread"
+    }
+  ],
+  "summary": {
+    "family_mean": 91.8,
+    "freeze_gate_window": [
+      15,
+      25
+    ],
+    "max_variant_score": 100,
+    "min_variant_score": 87,
+    "monotonicity_tolerance_3": false,
+    "oracle_floor": null
+  }
+}
