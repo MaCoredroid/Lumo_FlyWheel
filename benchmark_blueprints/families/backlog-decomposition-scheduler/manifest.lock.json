@@ -5,7 +5,7 @@
     "score_schedule_py_sha256": "391cfde8661d8e529a2b71e63ad079b240f48f91432c28eaeecf527d2909e7cc",
     "verify_sh_sha256": "702077546911d0c8e9c502ea277d899db930354084221c8241b92f08d66d4faa"
   },
-  "last_regen_utc": "2026-04-22T04:50:34Z",
+  "last_regen_utc": "2026-04-22T18:11:48Z",
   "schema_version": "cnb55.manifest.v2",
   "variants": {
     "v1-clean-baseline": {

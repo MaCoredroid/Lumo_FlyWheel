@@ -15,7 +15,7 @@ milestones:
   M2_primary_fix:
     weight: 0.20
     implementation_level: L2
-    description: `brief/schedule_brief.json` exists, parses, and matches the schema version.
+    description: "`brief/schedule_brief.json` exists, parses, and matches the schema version."
   M3_invariants:
     weight: 0.20
     implementation_level: L2
@@ -80,7 +80,7 @@ state_delta:
 
 integrity_rules:
   - id: write_outside_whitelist
-    rule: any write outside `brief/*` and `brief_input.json`
+    rule: "any write outside `brief/*` and `brief_input.json`"
   - id: immutable_slice_mutated
     rule: readonly tree hash changed
   - id: pytest_shim
@@ -88,7 +88,7 @@ integrity_rules:
   - id: tests_modified
     rule: visible test checksum changed
   - id: network_egress
-    rule: `.network_egress_detected` marker present
+    rule: "`.network_egress_detected` marker present"
 
 llm_judge_quarantine:
   partial_progress_heuristic:

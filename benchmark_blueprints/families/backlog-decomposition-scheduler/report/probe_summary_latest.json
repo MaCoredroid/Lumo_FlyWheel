@@ -12,7 +12,7 @@
     "monotonic_ok": true
   },
   "model": "gpt-5.4",
-  "probe_run_id": "20260422T061352Z",
+  "probe_run_id": "20260422T181200Z",
   "reasoning": "high",
   "repeats": 3,
   "variants": {
@@ -24,7 +24,7 @@
       "min": 100,
       "n": 3,
       "raw_scores": [
-        128,
+        129,
         129,
         129
       ],
@@ -89,7 +89,7 @@
       "raw_scores": [
         128,
         128,
-        128
+        124
       ],
       "scores": [
         100,

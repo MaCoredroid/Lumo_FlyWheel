@@ -1,0 +1,26 @@
+probe_run_id=20260422T181200Z
+model=gpt-5.4 reasoning=high repeats=3
+
+Per-variant summary
+===================
+
+v1-clean-baseline: n=3 mean=100.00 stdev=0.00 min=100 max=100 scores=[100, 100, 100] raw=[129, 129, 129] mean_M=0.9091 stdev_M=0.0000 ceilings=-
+v2-noisy-distractor: n=3 mean=100.00 stdev=0.00 min=100 max=100 scores=[100, 100, 100] raw=[125, 125, 125] mean_M=0.9091 stdev_M=0.0000 ceilings=-
+v3-dirty-state: n=3 mean=100.00 stdev=0.00 min=100 max=100 scores=[100, 100, 100] raw=[125, 125, 125] mean_M=0.9091 stdev_M=0.0000 ceilings=-
+v4-multi-corpus-objective: n=3 mean=100.00 stdev=0.00 min=100 max=100 scores=[100, 100, 100] raw=[128, 128, 124] mean_M=0.9091 stdev_M=0.0000 ceilings=-
+v5-recovery-in-thread: n=3 mean=45.00 stdev=0.00 min=45 max=45 scores=[45, 45, 45] raw=[111, 111, 111] mean_M=0.4091 stdev_M=0.0000 ceilings=objective_driftx3
+
+Layer A gate
+============
+
+family_mean=89.00
+max_variant_mean=100.00
+min_variant_mean=45.00
+max_observed_stdev_M_training=0.0000
+
+- [FAIL] family_mean in [15,25]: 89.00
+- [FAIL] max variant mean <= 40: 100.00
+- [FAIL] at least one variant mean <= 10: 45.00
+- [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-3: ok
+
+overall=LAYER_A_FAIL_HARDEN_NEEDED

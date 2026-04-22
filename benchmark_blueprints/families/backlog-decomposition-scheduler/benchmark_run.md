@@ -166,3 +166,94 @@ Next hardening direction, not launched in this turn:
 - preserve legitimate-difficulty constraints; do not add fake ambiguity just to force the scores down
 
 Per coordinator instruction, no additional hardening loop was launched from this attempt. This file records the completed whole-family live verification and the resulting explicit Layer A failure state.
+
+## attempt_02 — YAML parse blocker repair and full family rerun (`probe_run_id=20260422T181200Z`)
+
+Change made:
+
+- repaired `family.yaml` by quoting the backtick-bearing scalar values in the M2 description and integrity-rule strings so the file is valid YAML without changing the benchmark contract, rubric, or thresholds
+
+Commands run:
+
+```bash
+ruby -e 'require "yaml"; YAML.load_file("benchmark_blueprints/families/backlog-decomposition-scheduler/family.yaml"); puts "YAML_OK"'
+python3 verifiers/backlog-decomposition-scheduler/regen_family.py
+python3 verifiers/backlog-decomposition-scheduler/run_verification_matrix.py --variant v1-clean-baseline --out benchmark_blueprints/families/backlog-decomposition-scheduler/verification_matrix.md
+python3 verifiers/backlog-decomposition-scheduler/run_verification_matrix.py --variant v4-multi-corpus-objective --out benchmark_blueprints/families/backlog-decomposition-scheduler/verification_matrix_v4.md
+python3 verifiers/backlog-decomposition-scheduler/probe_family.py \
+  --repeats 3 \
+  --jsonl-out benchmark_blueprints/families/backlog-decomposition-scheduler/report/probe_runs.jsonl \
+  --summary-out benchmark_blueprints/families/backlog-decomposition-scheduler/report/probe_summary_latest.json
+python3 verifiers/backlog-decomposition-scheduler/probe_report.py \
+  benchmark_blueprints/families/backlog-decomposition-scheduler/report/probe_summary_latest.json \
+  --out benchmark_blueprints/families/backlog-decomposition-scheduler/report/attempt_02_probe_report.txt
+```
+
+Parse / validation outcome:
+
+- `family.yaml`: `YAML_OK`
+- family-local regen completed successfully and refreshed `manifest.lock.json`
+
+Observed static sanity after the parse repair:
+
+| variant | oracle | empty | shortcut |
+| --- | ---: | ---: | ---: |
+| v1-clean-baseline | 100 | 0 | 25 |
+| v2-noisy-distractor | 100 | 0 | 25 |
+| v3-dirty-state | 100 | 0 | 25 |
+| v4-multi-corpus-objective | 100 | 0 | 25 |
+| v5-recovery-in-thread | 100 | 0 | 25 |
+
+Verification matrix headline results after rerun:
+
+V1 matrix:
+
+| trajectory | P_benchmark | M_training | integrity | ceilings |
+| --- | ---: | ---: | ---: | --- |
+| Oracle | 100 | 0.9091 | 0 | none |
+| Empty | 0 | 0.0000 | 0 | `no_schedule_file` |
+| RAWR grounding_stripped | 25 | 0.2273 | 0 | `schedule_without_grounding` |
+| Shortcut risky rollout | 25 | 0.2273 | 0 | `ignored_dependency_blocker`, `overloaded_scarce_specialist`, `risky_rollout_frontloaded` |
+| Near-miss slot swap | 100 | 0.9091 | 0 | none |
+| Delete-tests adversarial | 0 | 0.0000 | 1 | `tests_modified`, `immutable_slice_mutated` |
+
+V4 matrix:
+
+| trajectory | P_benchmark | M_training | integrity | ceilings |
+| --- | ---: | ---: | ---: | --- |
+| Oracle | 100 | 0.9091 | 0 | none |
+| Empty | 0 | 0.0000 | 0 | `no_schedule_file` |
+| RAWR grounding_stripped | 25 | 0.2273 | 0 | `schedule_without_grounding` |
+| Shortcut risky rollout | 25 | 0.2273 | 0 | `ignored_dependency_blocker`, `overloaded_scarce_specialist`, `risky_rollout_frontloaded`, `objective_drift` |
+| Near-miss slot swap | 45 | 0.4091 | 0 | `objective_drift` |
+| Delete-tests adversarial | 0 | 0.0000 | 1 | `tests_modified`, `immutable_slice_mutated` |
+
+Observed per-variant live probe results:
+
+| variant | n | mean | stdev | scores | raw scores | ceiling hits |
+| --- | --- | --- | --- | --- | --- | --- |
+| v1-clean-baseline | 3 | 100.00 | 0.00 | [100, 100, 100] | [129, 129, 129] | none |
+| v2-noisy-distractor | 3 | 100.00 | 0.00 | [100, 100, 100] | [125, 125, 125] | none |
+| v3-dirty-state | 3 | 100.00 | 0.00 | [100, 100, 100] | [125, 125, 125] | none |
+| v4-multi-corpus-objective | 3 | 100.00 | 0.00 | [100, 100, 100] | [128, 128, 124] | none |
+| v5-recovery-in-thread | 3 | 45.00 | 0.00 | [45, 45, 45] | [111, 111, 111] | `objective_drift x3` |
+
+Layer A gate check after rerun:
+
+- `[FAIL]` family mean in `[15,25]`: `89.00`
+- `[FAIL]` max variant mean `<= 40`: `100.00`
+- `[FAIL]` at least one variant mean `<= 10`: `45.00`
+- `[PASS]` monotonic `V1>=V2>=V3>=V4>=V5 +/-3`: yes
+- `[PASS]` oracle `>= 90`: yes
+- `[PASS]` empty `= 0`: yes
+- `[PASS]` shortcut `<= 30`: yes
+
+Explicit Layer A judgment:
+
+- `LAYER_A_FAIL_HARDEN_NEEDED`
+
+Interpretation:
+
+1. The reviewer blocker is real and fixed: `family.yaml` now parses cleanly as YAML and the family-local regen / verification / probe flow runs end to end against the repaired file.
+2. The parse repair did not weaken the benchmark and did not materially change calibration. The family remains saturated on `v1`-`v4`, with `v5` still capped by `objective_drift` at `45`.
+3. `manifest.lock.json` was refreshed as part of the post-fix family-local regen, and the new live probe artifacts are recorded under `report/`.
