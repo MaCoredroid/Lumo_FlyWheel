@@ -1,0 +1,23 @@
+{
+  "accepted_strategy": "candidate_b_service_layer",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "0f0cd6fb21b2047456874d9aed5a44226342a4686e43667588f072b764e594cb",
+    "Dockerfile": "a728e1870cba9b10bc658b173f24bde0ef13b2f2a4aed3be7db92da0f77353a0",
+    "artifacts/candidates": "bac501bec575266d1a5084734443d7da46f20514f72242ad28395063845cc51e",
+    "incident_context": "MISSING",
+    "release_context": "MISSING",
+    "repo_evidence": "15ab78522bbe675131bd221b39f066e446ee30932451380c97b3424baede03f7",
+    "src/report_filters/__init__.py": "6c2a51111d0b1a3f4fecf0c141c7ee8518429f336e8a7e2748ea62304b764703",
+    "src/report_filters/normalization.py": "9aee536b7dff45475dff25f9eae0af28f9e6d51eeb7898415ee8c78f637352e1",
+    "tests/test_cli.py": "ce6d40ad443071d5297e0f6084301bc0f2cdd2987642a0a1de2b0465884e3c56"
+  },
+  "rejected_strategy": "candidate_a_cli_local",
+  "required_summary_keywords": [
+    "stale",
+    "archived",
+    "repo_evidence/stale/cli_hotfix_memo_2026_01.md"
+  ],
+  "variant_ceiling": "anchored_on_stale_cli_memo",
+  "variant_id": "v2-noisy-distractor"
+}

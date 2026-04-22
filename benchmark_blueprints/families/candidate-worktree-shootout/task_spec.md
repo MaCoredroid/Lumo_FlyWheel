@@ -1,81 +1,167 @@
-# Task Spec: `candidate-worktree-shootout`
+# `candidate-worktree-shootout` Task Spec
 
-## Task Prompt
+**Track:** 11 — Subagents Orchestration
+**Family id:** `candidate-worktree-shootout`
+**Spec version:** CNB-55 v1.0
+**Variants:** 5 (`v1` through `v5`)
 
-Choose the stronger of two plausible fixes for a report-filter normalization bug by evaluating them in isolated worktrees. Candidate A keeps normalization local to the CLI entrypoint. Candidate B moves normalization into the shared service layer. You may generate or inspect both in separate worktrees, but the final branch should land only one approach plus a comparison note that explains why the rejected option is weaker.
+## Canonical Task Prompt
 
-The bug appears in one visible CLI path, but at least one hidden regression exercises non-CLI callers.
+Repair the report-filter normalization bug by evaluating two plausible fixes in
+isolated worktree directories and then landing one coherent final patch in the
+main workspace.
+
+- **Candidate A** keeps normalization local to `src/report_filters/cli.py`.
+- **Candidate B** moves normalization ownership to
+  `src/report_filters/service.py`.
+
+The visible regression sits on the CLI path, but the repo evidence shows at
+least two non-CLI callers also depend on the shared service contract. A good
+solution proves both candidates were evaluated in isolation, rejects the weaker
+one with concrete evidence, and lands only one final ownership model.
+
+Distinct isolated directories are sufficient for the benchmark's "worktree"
+surface. The grader checks for concrete isolated paths plus per-candidate
+commands and outcomes; it does not require the literal `git worktree` subcommand.
+
+## Required Deliverables
+
+The solver must create all four files under `artifacts/comparison/`:
+
+- `candidate_a_eval.md`
+- `candidate_b_eval.md`
+- `comparison_summary.md`
+- `verification_note.md`
+
+Each candidate evaluation file must include:
+
+- a concrete `Worktree Path`
+- exact commands run
+- touched files
+- observed results
+- evidence explaining why the candidate is strong or weak
+
+`comparison_summary.md` must name the chosen strategy and the rejected strategy.
+`verification_note.md` must record both isolated worktree paths and the
+validation command used in each worktree and in the final workspace.
+
+## Expected Final Edit Surface
+
+The final integrated patch is intentionally narrow:
+
+- `src/report_filters/service.py`
+- `src/report_filters/cli.py`
+- `tests/test_service.py`
+- `docs/filter_contract.md`
+- `artifacts/comparison/*`
+
+Everything else is immutable for scoring purposes, especially:
+
+- `src/report_filters/normalization.py`
+- `tests/test_cli.py`
+- `artifacts/candidates/*`
+- `repo_evidence/*`
+- `release_context/*`
+- `incident_context/*`
+
+## Required Verification Command
+
+```bash
+python -m pytest -q tests/test_cli.py tests/test_service.py
+```
+
+The visible contract is only `tests/test_cli.py`, but a high-scoring solution
+must add or preserve a service-level regression in `tests/test_service.py` and
+must make the direct service caller behavior correct.
 
 ## Workspace Bundle
 
-- Small Python service repo with:
-  - `src/report_filters/cli.py`
-  - `src/report_filters/service.py`
-  - `src/report_filters/normalization.py`
-  - `tests/test_cli.py`
-  - `tests/test_service.py`
-  - `docs/filter_contract.md`
-  - `artifacts/candidates/strategy_a_notes.md`
-  - `artifacts/candidates/strategy_b_notes.md`
-- Visible checks:
-  - CLI tests fail on separator-heavy labels
-  - broader service tests are partially hidden in the benchmark harness
+Every variant ships the same repo-shaped workspace:
 
-## Seeded Orchestration Problem
+```text
+.scenario_variant
+AGENTS.md
+Dockerfile
+src/report_filters/__init__.py
+src/report_filters/normalization.py
+src/report_filters/service.py
+src/report_filters/cli.py
+tests/test_cli.py
+tests/test_service.py
+docs/filter_contract.md
+artifacts/candidates/strategy_a_notes.md
+artifacts/candidates/strategy_b_notes.md
+artifacts/comparison/README.md
+repo_evidence/caller_matrix.md
+repo_evidence/contract_history.md
+```
 
-The parent agent should isolate candidate implementations so local experimentation does not pollute the main workspace. The seeded trap is that one candidate can make visible CLI tests pass quickly while still leaving hidden non-CLI regressions; the stronger candidate must be identified from repo evidence rather than prompt hints. A naive solver that never evaluates alternatives can accidentally ship the shallow fix.
+Variant-gated context is additive:
 
-## Required Surfaces
+- **V2** adds `repo_evidence/stale/cli_hotfix_memo_2026_01.md`
+- **V3** adds `repo_evidence/dirty_state/unfinished_cli_patch.md` and
+  `artifacts/partial_work/cli_local_patch.diff`
+- **V4** adds `release_context/importer_callers.md` and
+  `release_context/release_gate.md`
+- **V5** adds `incident_context/rollback_2026_07.md` and
+  `incident_context/prior_selection.md`
 
-- `subagents`
-- `worktree`
-- `shell`
-- `apply_patch`
+## Variant Progression
 
-Preferred:
+### v1 — clean baseline
 
-- `review`
-- `screenshots`
+The caller matrix alone makes Candidate B correct: the scheduled importer and
+saved-view repair job already call `service.compile_filters(...)` directly.
 
-## Deliverables
+### v2 — noisy distractor
 
-- Final integrated patch for the chosen strategy
-- `artifacts/comparison/candidate_a_eval.md` with worktree path, exact commands run, touched files, and observed pass or fail results
-- `artifacts/comparison/candidate_b_eval.md` with worktree path, exact commands run, touched files, and observed pass or fail results
-- Comparison note summarizing both candidates, evidence gathered, and final selection
-- Verification note naming both worktree directories and the exact validation command run in each
+Adds a stale archived memo that still argues for the CLI-only hotfix. The memo
+is true historically, but false for the current repo state.
 
-## Grader Contract
+### v3 — dirty state
 
-The task scores well only if the submission:
+Adds abandoned partial work for the CLI-local strategy. The right move is to
+recognize sunk cost, not "finish what's already started."
 
-- evaluates both candidate strategies with concrete per-candidate evidence captured from isolated worktrees; unsupported narrative reasoning does not count
-- lands the fix that satisfies both CLI and non-CLI callers, as demonstrated by repo evidence and validation
-- explains why the rejected option passes visible tests but is still wrong
-- adds or preserves a service-level regression test that fails under CLI-local normalization and passes under the chosen fix
-- preserves workspace cleanliness by avoiding cross-candidate contamination
-- updates docs if the chosen strategy changes the normalization contract location
+### v4 — multi-corpus objective
 
-Low-score behavior includes implementing only the visible quick fix, inventing a comparison note with no evidence, or mixing both strategies into an incoherent patch.
+Adds release context that makes the batch importer the active release blocker.
+The solver must re-weight toward the direct-caller objective, not just the
+visible CLI failure.
 
-## Red-Team Traps
+### v5 — recovery in thread
 
-- Make visible CLI tests pass by normalizing only in `cli.py`
-- Skip isolated worktrees and overwrite the main branch during experimentation
-- Claim both candidates were considered without any concrete evidence
-- Update docs to match the shallow fix instead of fixing the shared contract
-- Blend partial pieces of both approaches into a hard-to-review patch
-- Omit isolated worktree proof or leave normalization materially duplicated in `cli.py`
+Adds incident context proving the last CLI-only hotfix was rolled back. A good
+solution must not re-select the same strategy without incident-aware reasoning.
 
-## Quality Gate
+## Quality Targets
 
-- Probe target: naive GPT-5.4/high should not exceed 30/100 with a one-path visible-test fix.
-- Hardening applied after adversarial probe:
-  - removed prompt leakage that named the winning strategy too directly
-  - made per-worktree evidence artifacts mandatory rather than optional narrative comparison
-  - added a service-level regression-test requirement for the non-CLI caller path
-  - made isolated-worktree proof and shared-layer ownership part of correctness, with score caps implied by missing evidence
-- Probe record:
-  - probe model: child GPT-5.4/high adversarial review
-  - initial verdict: over 30 too easy because the first draft leaked the likely winner and let comparison be faked in prose
-- Current difficulty judgment: under 30 likely for a naive GPT-5.4/high solver after hardening
+Deterministic baselines implemented in this repo:
+
+- oracle overlay: `100 / 100` on every variant
+- empty workspace: `0 / 100` on every variant
+- CLI-local shortcut: `25 / 100` on every variant
+
+The family has Layer B artifacts implemented locally:
+
+- dual-band scorer at
+  `verifiers/candidate-worktree-shootout/score_shootout.py`
+- milestone scripts under
+  `verifier_data/candidate-worktree-shootout/{variant}/milestones/`
+- verification matrices at
+  [`verification_matrix.md`](./verification_matrix.md) and
+  [`verification_matrix_v5.md`](./verification_matrix_v5.md)
+
+Layer A remains intentionally open: the next step is a live `codex exec` probe
+loop against the family. That loop was not launched in this handoff.
+
+## Saturation and Renewal Plan
+
+This family saturates when mean `P_benchmark > 80` for two consecutive probe
+rounds. Renewal queue:
+
+1. `v6_midrun_owner_flip` — a new direct caller appears after the first
+   candidate evaluation.
+2. `v7_conflicting_hotfix_audit` — rollout notes conflict on whether a local
+   hotfix actually shipped.
+3. `retire_v1` — retire the clean baseline once it becomes a pure floor check.

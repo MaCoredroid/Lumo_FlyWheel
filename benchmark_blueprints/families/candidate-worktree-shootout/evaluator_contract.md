@@ -1,90 +1,104 @@
-# Evaluator Contract: `candidate-worktree-shootout`
+# `candidate-worktree-shootout` Evaluator Contract
 
-## Purpose
+**Track:** 11 — Subagents Orchestration
+**Spec conformance:** CNB-55 v1.0 §7
+**Scorer:** `verifiers/candidate-worktree-shootout/score_shootout.py`
 
-Score a worktree-isolated candidate comparison where the solver must evaluate two bounded implementations, reject the shallower one with evidence, and land the stronger option cleanly.
+## Evaluation Goal
 
-## Required Submission Artifacts
+Score whether the solver:
 
-- final integrated patch
-- `artifacts/comparison/candidate_a_eval.md`
-- `artifacts/comparison/candidate_b_eval.md`
-- comparison note
-- verification note
+1. evaluates both candidate fixes in isolated worktree directories,
+2. rejects the shallow CLI-local fix with evidence,
+3. lands the shared service-layer repair cleanly,
+4. adds a service-level regression test,
+5. keeps the final workspace coherent and invariant-respecting.
 
-## 100-Point Breakdown
+## Visible Checks — 30 Points Max
 
-- 15 points: Candidate A isolated evaluation quality
-- 15 points: Candidate B isolated evaluation quality
-- 30 points: final strategy correctness across CLI and non-CLI callers
-- 15 points: service-level regression-test coverage
-- 15 points: comparison reasoning and rejected-candidate analysis
-- 10 points: workspace cleanliness and docs alignment
+Visible checks stay under the CNB-55 30-point budget.
 
-## Trusted Evaluation Phases
+| Check | Points |
+| --- | ---: |
+| `candidate_a_eval.md` exists with the required sections | 7 |
+| `candidate_b_eval.md` exists with the required sections | 7 |
+| `comparison_summary.md` and `verification_note.md` both exist | 4 |
+| Candidate A and Candidate B use distinct worktree paths | 4 |
+| `python -m pytest -q tests/test_cli.py` passes | 8 |
 
-### Phase 1: Isolation Gate
+The scorer treats missing worktree paths, missing command lists, or missing
+observed results as a structural failure, not just a small formatting miss.
 
-Cap at 20 if either candidate evaluation is missing a worktree path, exact commands run, touched files, or observed results.
+## Hidden Checks — 70 Points
 
-Scoring:
+| Check | Points |
+| --- | ---: |
+| direct service callers are fixed (`service.compile_filters(...)`) | 20 |
+| `comparison_summary.md` selects Candidate B and rejects Candidate A | 8 |
+| `tests/test_service.py` contains the separator-heavy regression | 10 |
+| `docs/filter_contract.md` explicitly restores service-layer ownership | 6 |
+| Candidate A evaluation names the direct-caller failure | 6 |
+| Candidate B evaluation names the shared-owner repair and touched files | 6 |
+| `cli.py` does not duplicate `normalize_label(...)` after the final fix | 4 |
+| `verification_note.md` records the final full validation command | 4 |
+| variant-specific reasoning handles the active distractor / state / objective / incident correctly | 6 |
 
-- 15 points: Candidate A evidence quality
-- 15 points: Candidate B evidence quality
+## Partial-Credit Ceilings
 
-### Phase 2: Correctness Gate
+These are hard caps applied after point aggregation.
 
-Award correctness credit only if the landed patch:
+| Ceiling | Max Score | Trigger |
+| --- | ---: | --- |
+| `missing_worktree_proof` | 20 | one or both candidate evaluation files lack worktree path, commands, touched files, or observed results |
+| `cli_only_fix` | 25 | visible CLI path is repaired but direct service callers still fail |
+| `no_service_regression_test` | 35 | no separator-heavy service regression exists in `tests/test_service.py` |
+| `blended_ownership` | 40 | both the service layer and `cli.py` normalize labels, leaving duplicate ownership |
+| `docs_drift` | 55 | docs do not explicitly restore service-layer ownership |
+| `anchored_on_stale_cli_memo` | 45 | V2 summary ignores the archived memo's staleness |
+| `sunk_cost_finish` | 40 | V3 reasoning treats abandoned CLI-local partial work as a head start |
+| `objective_drift` | 45 | V4 summary fails to reflect the importer release blocker |
+| `incident_blind_reselect` | 30 | V5 reasoning ignores the prior rollback / incident context |
 
-- satisfies visible CLI behavior
-- satisfies hidden non-CLI caller behavior
-- establishes service-layer ownership of normalization
-- includes or preserves a service-level regression test covering the non-CLI path
+## Trusted Final-State Checks
 
-If normalization remains materially duplicated in `cli.py`, cap at 25.
+These checks force `integrity_flag = 1` and `score = 0` when tripped.
 
-Scoring:
+| Check | Consequence |
+| --- | --- |
+| immutable trees drift (`AGENTS.md`, `normalization.py`, evidence trees, visible tests) | `integrity_flag = 1` |
+| `tests/test_cli.py` hash changes | `integrity_flag = 1` |
+| `sitecustomize.py`, `usercustomize.py`, or `pytest.py` appears | `integrity_flag = 1` |
+| files are written outside the allowed mutable surfaces or `artifacts/comparison/*` | `integrity_flag = 1` |
+| `.network_egress_detected` exists | `integrity_flag = 1` |
 
-- 20 points: final strategy fixes visible CLI and hidden non-CLI behavior
-- 10 points: normalization ownership moved to the correct layer
-- 15 points: service-level regression test exists and targets the non-CLI path
+## Layer B Emission
 
-### Phase 3: Comparison Gate
+The scorer emits:
 
-Award comparative judgment credit only if the submission:
+- `P_benchmark`
+- `M_training`
+- `score` aliasing `P_benchmark`
+- milestone booleans `M1` through `M5`
+- `milestone_vector`
+- integrity flags
+- ceiling list
 
-- explains why the rejected candidate can look attractive on visible checks
-- ties rejection to concrete evidence from the isolated evaluation
-- avoids cross-candidate contamination in the final patch
+This family keeps `llm_judge_quarantine.total_quarantined_points = 0`; all
+points are deterministic today.
 
-Narrative claims without per-worktree evidence do not count.
+## Deterministic Baselines
 
-Scoring:
+Measured against the current family-local scorer:
 
-- 10 points: evidence-backed rejection of the weaker candidate
-- 5 points: clean final patch and docs consistency
+| Trajectory | Expected Score |
+| --- | ---: |
+| Oracle overlay | 100 |
+| Empty workspace | 0 |
+| CLI-local shortcut | 25 |
+| Grounding stripped | 20 |
+| Blended ownership | 40 |
+| Delete-tests adversarial | 0 with `integrity_flag = 1` |
 
-## Hidden Checks
-
-- hidden non-CLI regression case fails under CLI-local normalization
-- diff inspection checks that the final patch does not blend both strategies incoherently
-- docs check ensures the contract location matches the chosen design
-
-## Red-Team Defenses
-
-- one-path visible-test fixes cap low
-- “I considered both” prose without evidence caps low
-- in-place experimentation that ignores worktree isolation caps low
-
-## Score Caps
-
-- Missing one candidate evaluation artifact: max 20
-- No per-worktree evidence for both candidates: max 20
-- CLI-local quick fix that misses non-CLI path: max 25
-- Cross-candidate blended patch: max 30
-- No service-level regression test: max 35
-
-## Hardness Judgment
-
-- Current judgment: under 30 likely for a naive `gpt-5.4` / `high` solver
-- Why: meaningful credit requires per-worktree evidence plus the hidden non-CLI fix
+The stress verification matrix for V5 additionally confirms the incident-aware
+ceiling fires on weak trajectories; see
+[`verification_matrix_v5.md`](./verification_matrix_v5.md).

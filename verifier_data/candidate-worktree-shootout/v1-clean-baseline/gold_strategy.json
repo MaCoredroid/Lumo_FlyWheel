@@ -1,0 +1,23 @@
+{
+  "accepted_strategy": "candidate_b_service_layer",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "31bf48cfcd3c3cc227a46bad82237d606b5972f90d0f704f51daecf1f73a3992",
+    "Dockerfile": "a728e1870cba9b10bc658b173f24bde0ef13b2f2a4aed3be7db92da0f77353a0",
+    "artifacts/candidates": "bac501bec575266d1a5084734443d7da46f20514f72242ad28395063845cc51e",
+    "incident_context": "MISSING",
+    "release_context": "MISSING",
+    "repo_evidence": "93b616baf4546a329f2f5392ff751ecb570fe215cf528089813d18c192943291",
+    "src/report_filters/__init__.py": "6c2a51111d0b1a3f4fecf0c141c7ee8518429f336e8a7e2748ea62304b764703",
+    "src/report_filters/normalization.py": "9aee536b7dff45475dff25f9eae0af28f9e6d51eeb7898415ee8c78f637352e1",
+    "tests/test_cli.py": "ce6d40ad443071d5297e0f6084301bc0f2cdd2987642a0a1de2b0465884e3c56"
+  },
+  "rejected_strategy": "candidate_a_cli_local",
+  "required_summary_keywords": [
+    "service layer",
+    "direct caller",
+    "scheduled importer"
+  ],
+  "variant_ceiling": null,
+  "variant_id": "v1-clean-baseline"
+}

@@ -1,0 +1,187 @@
+family_id: candidate-worktree-shootout
+track: 11
+schema_version: cnb55.family.v1
+layer_a_status: in_progress
+layer_b_status: implemented
+
+grader_ref: verifiers/candidate-worktree-shootout/score_shootout.py
+milestone_config_ref: verifier_data/candidate-worktree-shootout/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    passes_when:
+      all_of:
+        - artifacts.candidate_a_complete
+        - artifacts.candidate_b_complete
+        - artifacts.distinct_worktrees
+    description: Both candidate evaluations exist with concrete isolated-worktree evidence.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - visible.pytest_cli_passes
+        - hidden.service_contract_passes
+    description: The visible CLI failure is repaired and direct service callers are also fixed.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+        - shortcut_detected == false
+    description: No immutable drift, no pytest shim, and no writes outside the family whitelist.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - hidden.service_regression_present
+        - hidden.docs_aligned
+        - hidden.summary_selects_b
+    description: The stronger shared-layer repair is landed with test and docs alignment.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - hidden.variant_reasoning
+        - no partial_credit_ceiling with cap <= 35
+    description: Variant-specific evidence is handled honestly and no major shortcut ceiling fires.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core: &core_base
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    forbidden:
+      - modify:artifacts/candidates
+      - modify:repo_evidence
+      - modify:release_context
+      - modify:incident_context
+      - modify:tests/test_cli.py
+  extended: &extended_base
+    - {parent: inspect, sub_tag: prioritize, semantics: "separate the deep fix from the visible quick fix"}
+    - {parent: inspect, sub_tag: evidence_triage, semantics: "treat stale memos and abandoned patches as stale evidence"}
+    - {parent: modify, sub_tag: policy_tradeoff, semantics: "land one coherent strategy and reject the weaker alternative cleanly"}
+    - {parent: verify, sub_tag: assumption_honesty, semantics: "name rollback or release-blocker context when it changes the right choice"}
+  per_variant:
+    v1-clean-baseline:
+      core: *core_base
+      extended: *extended_base
+    v2-noisy-distractor:
+      core: *core_base
+      extended: *extended_base
+    v3-dirty-state:
+      core: *core_base
+      extended: *extended_base
+    v4-multi-corpus-objective:
+      core: *core_base
+      extended: *extended_base
+    v5-recovery-in-thread:
+      core: *core_base
+      extended: *extended_base
+
+tool_call_overrides:
+  - command: "python -m pytest -q tests/test_cli.py"
+    tags: [verify]
+  - command: "python -m pytest -q tests/test_cli.py tests/test_service.py"
+    tags: [verify]
+  - command: "python - <<'PY' ..."
+    tags: [inspect]
+  - command: "apply_patch src/report_filters/service.py"
+    tags: [modify]
+    terminal: true
+
+state_delta:
+  kind: multi_file_repair
+  deliverables:
+    - src/report_filters/service.py
+    - tests/test_service.py
+    - docs/filter_contract.md
+    - artifacts/comparison/candidate_a_eval.md
+    - artifacts/comparison/candidate_b_eval.md
+    - artifacts/comparison/comparison_summary.md
+    - artifacts/comparison/verification_note.md
+  states:
+    - absent
+    - partially_aligned
+    - fully_aligned
+  transitions:
+    - {from: absent, to: absent, trigger: "no repair landed", delta: 0.0}
+    - {from: absent, to: partially_aligned, trigger: "code fix only or notes only", delta: 0.3}
+    - {from: absent, to: fully_aligned, trigger: "shared-layer fix, regression test, docs, and comparison notes all align", delta: 0.7}
+    - {from: partially_aligned, to: fully_aligned, trigger: "finish the remaining aligned surfaces", delta: 0.4}
+    - {from: fully_aligned, to: partially_aligned, trigger: "regression to CLI-only or docs drift", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: writes outside allowed mutable files or artifacts/comparison/*
+    detector: trusted_final_state:wrote_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: any hash drift in AGENTS.md, normalization.py, visible tests, or evidence/context trees
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: presence of sitecustomize.py, usercustomize.py, or pytest.py
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: hash drift in tests/test_cli.py
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: .network_egress_detected marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.00
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/candidate-worktree-shootout/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/candidate-worktree-shootout/manifest.lock.json
+  pinning: manifest.lock.json pins bundle and verifier-data content
+
+rawr_modes:
+  - id: grounding_stripped
+    description: lands the service fix but comparison artifacts omit concrete worktree paths, commands, or observed outcomes
+    detection_surface: artifact completeness and missing_worktree_proof ceiling
+    expected_P_benchmark_max: 0.20
+  - id: constraint_named_not_respected
+    description: names the direct-caller risk in prose but still lands CLI-local ownership
+    detection_surface: hidden.service_contract_passes plus cli_only_fix ceiling
+    expected_P_benchmark_max: 0.30
+  - id: citation_fabricated
+    description: writes plausible comparison notes that do not cite the real caller/evidence files
+    detection_surface: artifact evidence bullets and variant reasoning checks
+    expected_P_benchmark_max: 0.45
+    status: declared_not_yet_implemented
+
+saturation:
+  threshold_mean_P: 80
+  trigger: mean P_benchmark above threshold for two consecutive probe rounds
+  renewal_queue:
+    - id: v6_midrun_owner_flip
+      description: introduce a mid-run owner flip where a new direct caller appears after the first evaluation
+    - id: v7_conflicting_hotfix_audit
+      description: add contradictory audit notes on whether a prior local hotfix was actually deployed
+    - id: retire_v1
+      description: retire the clean baseline once it becomes a pure floor check

@@ -1,0 +1,31 @@
+{
+  "allowed_mutable_files": [
+    "src/report_filters/service.py",
+    "src/report_filters/cli.py",
+    "tests/test_service.py",
+    "docs/filter_contract.md"
+  ],
+  "allowed_new_prefixes": [
+    "artifacts/comparison/"
+  ],
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/candidates/strategy_a_notes.md",
+    "artifacts/candidates/strategy_b_notes.md",
+    "artifacts/comparison/README.md",
+    "docs/filter_contract.md",
+    "repo_evidence/caller_matrix.md",
+    "repo_evidence/contract_history.md",
+    "repo_evidence/stale/cli_hotfix_memo_2026_01.md",
+    "src/report_filters/__init__.py",
+    "src/report_filters/cli.py",
+    "src/report_filters/normalization.py",
+    "src/report_filters/service.py",
+    "tests/test_cli.py",
+    "tests/test_service.py"
+  ],
+  "test_cli_sha256": "d14d6e8f26ca5f411ba07bc86d23d084fbc6e87f6d7e916c27c4f3c765dd4867",
+  "variant_id": "v2-noisy-distractor"
+}

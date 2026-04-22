@@ -1,0 +1,23 @@
+{
+  "accepted_strategy": "candidate_b_service_layer",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+    "AGENTS.md": "32082c43039c5eeb2dad13b73e2d6014000678a4462a9e83726b7ac120b43e0c",
+    "Dockerfile": "a728e1870cba9b10bc658b173f24bde0ef13b2f2a4aed3be7db92da0f77353a0",
+    "artifacts/candidates": "bac501bec575266d1a5084734443d7da46f20514f72242ad28395063845cc51e",
+    "incident_context": "MISSING",
+    "release_context": "cc6e6ad711f1aada79aadce70d371bf4ab402dddef2b0b728e8fa5721e9c949e",
+    "repo_evidence": "93b616baf4546a329f2f5392ff751ecb570fe215cf528089813d18c192943291",
+    "src/report_filters/__init__.py": "6c2a51111d0b1a3f4fecf0c141c7ee8518429f336e8a7e2748ea62304b764703",
+    "src/report_filters/normalization.py": "9aee536b7dff45475dff25f9eae0af28f9e6d51eeb7898415ee8c78f637352e1",
+    "tests/test_cli.py": "ce6d40ad443071d5297e0f6084301bc0f2cdd2987642a0a1de2b0465884e3c56"
+  },
+  "rejected_strategy": "candidate_a_cli_local",
+  "required_summary_keywords": [
+    "release blocker",
+    "batch importer",
+    "release_context/importer_callers.md"
+  ],
+  "variant_ceiling": "objective_drift",
+  "variant_id": "v4-multi-corpus-objective"
+}

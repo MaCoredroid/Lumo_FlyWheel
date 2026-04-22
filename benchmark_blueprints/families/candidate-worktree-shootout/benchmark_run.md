@@ -1,61 +1,99 @@
-# Benchmark Run: `candidate-worktree-shootout`
+# Benchmark Run — `candidate-worktree-shootout`
 
-## Run Metadata
+Family run log for CNB-55 Track 11, family `candidate-worktree-shootout`.
 
-- Run type: child-subagent benchmark attempt
-- Model: `gpt-5.4`
-- Reasoning effort: `high`
-- Agent id: `019da330-ea57-7572-83a1-d054aa1b799c`
-- Context restriction: family-local artifacts only under this family directory
+## Model Under Test
 
-## Attempt Summary
+Planned live probe target:
 
-The solver produced two candidate evaluations, a final strategy summary, a comparison note, and a verification note. It followed the intended reasoning pattern well and selected the stronger service-layer strategy. The weakness is that the worktree paths, commands, and outcomes were asserted from family-doc context rather than backed by benchmark-workspace artifacts or captured stdout.
+```bash
+codex exec --model gpt-5.4 --reasoning-effort high
+```
 
-Most important failure mode:
+That live probe loop is **not** part of this handoff. The work below brings the
+family to a runnable Layer-B state and records deterministic baselines only.
 
-- no actual captured stdout or failure excerpts from either worktree
-- no benchmark-workspace patch artifact
-- worktree evidence was claimed rather than demonstrated
+## Attempt History
 
-## Scoring Against `evaluator_contract.md`
+### `attempt_00` — baseline design
 
-### Candidate A Isolated Evaluation Quality: 6 / 15
+Scoped the family around one legitimate orchestration judgment:
 
-- worktree path, commands, and intended result were provided
-- no concrete stdout or failure excerpt was provided
+- a visible CLI-only bug fix exists,
+- a stronger shared service-layer fix exists,
+- the solver must evaluate both in isolation,
+- the grader should reward concrete worktree evidence instead of prose claims.
 
-### Candidate B Isolated Evaluation Quality: 6 / 15
+Variant ladder chosen:
 
-- worktree path, commands, and intended result were provided
-- no concrete stdout or success excerpt was provided
+- `v1-clean-baseline`: direct-caller evidence only
+- `v2-noisy-distractor`: stale archived CLI memo
+- `v3-dirty-state`: abandoned CLI-local partial patch
+- `v4-multi-corpus-objective`: importer release gate shifts the right objective
+- `v5-recovery-in-thread`: prior CLI-local hotfix rollback / incident context
 
-### Final Strategy Correctness Across CLI And Non-CLI Callers: 5 / 30
+### `attempt_01` — family-local implementation and deterministic verification
 
-- the chosen strategy was conceptually correct, but no actual benchmark-workspace patch or hidden-path proof was provided
+Implemented inside the family scope only:
 
-### Service-Level Regression-Test Coverage: 2 / 15
+- workspace bundle for all five variants under `workspace_bundle/`
+- deterministic scorer at `verifiers/candidate-worktree-shootout/score_shootout.py`
+- verifier data, oracle overlays, hidden test stubs, workspace manifests, and milestone scripts
+- Layer-B declaration at `family.yaml`
+- verification matrices for `v1-clean-baseline` and `v5-recovery-in-thread`
 
-- regression-test intent was named, but no concrete test artifact or diff was supplied
+Deterministic baseline results across all five variants:
 
-### Comparison Reasoning And Rejected-Candidate Analysis: 5 / 15
+| Variant | Oracle `P_benchmark` | Empty `P_benchmark` | Shortcut `P_benchmark` |
+| --- | ---: | ---: | ---: |
+| `v1-clean-baseline` | 100 | 0 | 25 |
+| `v2-noisy-distractor` | 100 | 0 | 25 |
+| `v3-dirty-state` | 100 | 0 | 25 |
+| `v4-multi-corpus-objective` | 100 | 0 | 25 |
+| `v5-recovery-in-thread` | 100 | 0 | 25 |
 
-- the rejected candidate analysis was coherent and aligned with the family goal
+Interpretation:
 
-### Workspace Cleanliness And Docs Alignment: 0 / 10
+- oracle is cleanly above the ≥90 Layer-A sanity bar
+- empty is exactly 0 on every variant
+- the shallow CLI-local shortcut is capped at 25 on every variant
 
-- no actual final diff or docs artifact was available
+Verification matrix snapshots:
 
-## Caps Applied
+- V1 matrix:
+  - Oracle `100`
+  - Empty `0`
+  - Grounding stripped `20`
+  - Pick ceiling `25`
+  - Blended ownership `40`
+  - Delete-tests adversarial `0` with `integrity_flag = 1`
+- V5 matrix:
+  - Oracle `100`
+  - Empty `0`
+  - Grounding stripped `20` with `incident_blind_reselect`
+  - Pick ceiling `25` with `incident_blind_reselect`
+  - Blended ownership `40`
+  - Delete-tests adversarial `0` with `integrity_flag = 1`
 
-- Effective cap triggered by evaluator intent: no stdout or failure excerpt from either candidate evaluation
+Files produced by this attempt:
 
-## Final Score
+- [`family.yaml`](./family.yaml)
+- [`manifest.lock.json`](./manifest.lock.json)
+- [`verification_matrix.md`](./verification_matrix.md)
+- [`verification_matrix_v5.md`](./verification_matrix_v5.md)
 
-- Final score: `24 / 100`
+## Layer Status After `attempt_01`
 
-## Final Judgment
+- **Layer A:** `in_progress`
+  - deterministic baselines are wired and sane
+  - live `codex exec` probe data is still missing
+- **Layer B:** `implemented`
+  - dual-band scorer, milestones, capability tags, state-delta rules,
+    integrity rules, rawr modes, manifests, and verification matrices are all
+    present inside the family scope
 
-- Target judgment: acceptable
-- Reason: the task remains coherent, but a solver cannot score well without real per-worktree evidence
+## Next Step
 
+Run the live probe loop against all five variants and append the measured family
+mean / per-variant means to this file. That step was intentionally not launched
+from this handoff.

@@ -1,0 +1,32 @@
+{
+  "family_id": "candidate-worktree-shootout",
+  "last_regen_utc": "2026-04-22T00:00:00Z",
+  "schema_version": "cnb55.manifest_lock.v1",
+  "variants": [
+    {
+      "gold_sha256": "3187bf97e777b85281591bc1dbe74b98e2bc7df54ccae477a9573ca63664fde0",
+      "manifest_sha256": "0f9b0276df7a18bfc8c7b6222bf84a1fe83b361a9ddc96fbe6b70a3c1377de5f",
+      "variant_id": "v1-clean-baseline"
+    },
+    {
+      "gold_sha256": "018e018910d8ac3ebb45f0a0da505694bb0d37e93ba82c0a8e1fae089247b1c5",
+      "manifest_sha256": "845f7cccce4d65e97321a0c1bfd8ad1a7c810ea546c26f5dedef94ebbaa7139b",
+      "variant_id": "v2-noisy-distractor"
+    },
+    {
+      "gold_sha256": "a962dc9dd4b45c6b5a4f548802ec758f6883fde7f81d9c24870f8f16bbd4be8f",
+      "manifest_sha256": "454c437e67ecda161016841fdaff23386c40fdd85a115edb56462493a51fff30",
+      "variant_id": "v3-dirty-state"
+    },
+    {
+      "gold_sha256": "1e103a6d956ed725188cc0e218e554715a7e788cbafdcacaf48f8109c89438be",
+      "manifest_sha256": "d1c0cc3bf6cbac9045178c716f072c96e5b1dd995f6af0bab092a8ae46e8d54b",
+      "variant_id": "v4-multi-corpus-objective"
+    },
+    {
+      "gold_sha256": "9c845b0ebac0265cf94fe44e06d44018403a1be2dd99477d5e52f8dcc46b88dc",
+      "manifest_sha256": "a3798e4a8e448f1d8e794ed33702ccf742db7c449e02e7ad8558a6fab6cc80b1",
+      "variant_id": "v5-recovery-in-thread"
+    }
+  ]
+}
