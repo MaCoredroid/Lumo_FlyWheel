@@ -1,0 +1,37 @@
+{
+  "allowed_write_paths": [
+    "replay/merge.py",
+    "replay/render.py",
+    "replay/incident_summary.py",
+    "reports/incidents/transcript-merge.md",
+    "tests/test_merge.py",
+    "tests/test_render.py",
+    "tests/test_incident_summary.py"
+  ],
+  "file_hashes": {
+    ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+    "AGENTS.md": "0c99f3b0f788e29c6bcd5d2506442b45a5b2dfc0b89c60a4d34c50613c9252ee",
+    "Dockerfile": "8076b7a63a4a6d9afa5f5938ea2421245870612d830b306b48d0f46dc98ef5c4",
+    "artifacts/sessions/debug_after_completion.jsonl": "24f003aadbd7600b1ae6e9e6334eb323a0b51df786040e7be6498f51bebebec9",
+    "artifacts/sessions/visible_collision_part1.jsonl": "fa710c0ce2f3eb3327142cfd297dd9362b13af116ed6b7646fc0c5b2517e33f2",
+    "artifacts/sessions/visible_collision_part2.jsonl": "b6000ed12b8596ae792a22a3a28f5cdb2b7a98a09ee5b715243ca29459c518d6",
+    "release_context/reliability_directive.md": "cd0e420a950fa0b13357afa1b3167a238b6d700f92301b56c96d16a83284f3a3",
+    "replay/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "replay/incident_summary.py": "d91e233e011d1ce9a184403adb53127f29352bfcbf95f74788b85151cb1d11ff",
+    "replay/merge.py": "b45c47fd548bbcc4335a1ec032cdfd1db8d16817f0e6cda4e8ed825ee6eb95ab",
+    "replay/render.py": "faeeee2ca198017c290d505953ce1bc88d32a7a583864e3e6b7f110c1c0aa733",
+    "reports/incidents/transcript-merge.md": "935a68eb03060cbf79d328ea80301e0aecce30fbbc596f2fa8782774ac53a5ba",
+    "tests/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "tests/locked/contract.txt": "62ea66e8e9c1fa91aa7d5f817b9b66188e0c8a2648a23b0605ada653d045a0ad",
+    "tests/test_incident_summary.py": "84a06c7910695b2aa79b8dd6f95a17d7902594ee6c31d6ac1dac96ff52e8e176",
+    "tests/test_merge.py": "de9774f1754b38988368aaaa79721684025754823adb643cfb45f993d59dfc0e",
+    "tests/test_render.py": "c42d6f31319d6b8690986c0d3de61a55dcb65dc459a78674187f974e026801a6"
+  },
+  "readonly_tree_hashes": {
+    "AGENTS.md": "0c99f3b0f788e29c6bcd5d2506442b45a5b2dfc0b89c60a4d34c50613c9252ee",
+    "Dockerfile": "8076b7a63a4a6d9afa5f5938ea2421245870612d830b306b48d0f46dc98ef5c4",
+    "artifacts/sessions": "d0019879dcc951360de9ef783799c6ebb107ea23476b50f6f687c60412311e0a",
+    "release_context/reliability_directive.md": "cd0e420a950fa0b13357afa1b3167a238b6d700f92301b56c96d16a83284f3a3",
+    "tests/locked": "6148f991ce3a136bc8f59c47be75799452e4a955f3c1da95c286199db76ac434"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "family_id": "transcript-merge-regression",
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_solution_sha256": "fb241cbb03b24ab9b3ea11e216659738006bfa777e61f44fa788e5e88cf64907",
+      "hidden_tests_tree_sha256": "911abcb011237c5a4723098695d27feba135ef2ee2d861042e0ce1c1c3102b1e",
+      "workspace_manifest_sha256": "7c1944fbe9c881071b5ea015e89697635c8bbb357244acc30f2d2586b7d183c8"
+    },
+    "v2-noisy-distractor": {
+      "gold_solution_sha256": "ec854f1f7fb7a0fb6ec8ced50ea4d1c115ad3352bcfd58e5c7bb7ebb5b241a8c",
+      "hidden_tests_tree_sha256": "911abcb011237c5a4723098695d27feba135ef2ee2d861042e0ce1c1c3102b1e",
+      "workspace_manifest_sha256": "c551ef7a261995baf47dbbf605d48f859ee7041b85345bd884764ef50f9fb27f"
+    },
+    "v3-dirty-state": {
+      "gold_solution_sha256": "8cd44fc50d785cbcf45bc778396024461ba2b66cba96911371362f08ff80bcaa",
+      "hidden_tests_tree_sha256": "911abcb011237c5a4723098695d27feba135ef2ee2d861042e0ce1c1c3102b1e",
+      "workspace_manifest_sha256": "ab22d7b4a7cbd7fcc1db19241cf5b2570569771de5dcb54cf4f4bcec294702b7"
+    },
+    "v4-multi-corpus-objective": {
+      "gold_solution_sha256": "6c1c2df22669cf17e7805ac96940a73e55495677ac340407f474ab67a69fd924",
+      "hidden_tests_tree_sha256": "911abcb011237c5a4723098695d27feba135ef2ee2d861042e0ce1c1c3102b1e",
+      "workspace_manifest_sha256": "dbd1d2c9c3469d00d14c0fa49ff8eaa354f8eadb6b9b0f31d0f7bdff68443411"
+    },
+    "v5-recovery-in-thread": {
+      "gold_solution_sha256": "81e6e454c6806adc5d44053c4ecf711e5107f648558d5203b9342613cfac36ae",
+      "hidden_tests_tree_sha256": "911abcb011237c5a4723098695d27feba135ef2ee2d861042e0ce1c1c3102b1e",
+      "workspace_manifest_sha256": "247118a36bd28665dd4347450fa1c2349dc695146d91635d8d02db495df99bfe"
+    }
+  }
+}

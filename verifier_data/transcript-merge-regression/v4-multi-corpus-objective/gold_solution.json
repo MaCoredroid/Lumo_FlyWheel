@@ -1,0 +1,36 @@
+{
+  "allowed_write_paths": [
+    "replay/merge.py",
+    "replay/render.py",
+    "replay/incident_summary.py",
+    "reports/incidents/transcript-merge.md",
+    "tests/test_merge.py",
+    "tests/test_render.py",
+    "tests/test_incident_summary.py"
+  ],
+  "hidden_expectations": {
+    "deferred_ids": [
+      "tool-log-01",
+      "tool-log-02"
+    ],
+    "interleaved_content": {
+      "tool-query-01": "alpha tail",
+      "tool-query-02": "bravo tail"
+    },
+    "same_name_ids": [
+      "tool-hidden-01",
+      "tool-hidden-02"
+    ]
+  },
+  "required_note_phrases": [
+    "stable event identity",
+    "event_id",
+    "deferred tool output",
+    "merged events"
+  ],
+  "variant_id": "v4-multi-corpus-objective",
+  "variant_note_phrases": [
+    "reliability directive",
+    "merged events"
+  ]
+}

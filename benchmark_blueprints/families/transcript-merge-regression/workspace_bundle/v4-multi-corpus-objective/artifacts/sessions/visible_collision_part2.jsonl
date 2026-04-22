@@ -1,0 +1,2 @@
+{"chunk_index": 0, "content": "Seattle 55F; ", "event_id": "tool-weather-02", "kind": "tool_output", "role": "tool", "sequence": 3, "tool_name": "fetch_weather"}
+{"chunk_index": 0, "content": "", "event_id": "done-01", "kind": "response.completed", "role": "system", "sequence": 4}

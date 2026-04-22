@@ -1,0 +1,9 @@
+diff --git a/replay/merge.py b/replay/merge.py
+@@
+-    if seen_completion and event.get("debug_only"):
+-        continue
++    if seen_completion:
++        continue
+
+# Abandoned patch: it drops every post-completion fragment, including
+# legitimate deferred tool output. Do not complete this patch.

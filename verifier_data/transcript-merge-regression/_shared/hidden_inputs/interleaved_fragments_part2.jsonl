@@ -1,0 +1,2 @@
+{"chunk_index": 1, "content": "tail", "event_id": "tool-query-01", "kind": "tool_output", "role": "tool", "sequence": 3, "tool_name": "query_logs"}
+{"chunk_index": 1, "content": "tail", "event_id": "tool-query-02", "kind": "tool_output", "role": "tool", "sequence": 4, "tool_name": "query_logs"}

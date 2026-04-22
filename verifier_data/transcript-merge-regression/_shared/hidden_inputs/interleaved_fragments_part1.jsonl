@@ -1,0 +1,2 @@
+{"chunk_index": 0, "content": "alpha ", "event_id": "tool-query-01", "kind": "tool_output", "role": "tool", "sequence": 1, "tool_name": "query_logs"}
+{"chunk_index": 0, "content": "bravo ", "event_id": "tool-query-02", "kind": "tool_output", "role": "tool", "sequence": 2, "tool_name": "query_logs"}
