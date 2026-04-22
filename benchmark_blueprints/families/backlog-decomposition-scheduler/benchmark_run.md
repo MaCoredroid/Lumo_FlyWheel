@@ -45,11 +45,45 @@ pytest -q tests/test_schedule_brief.py
 
 Observed static sanity:
 
-- oracle scores: `100 / 100 / 100 / 100 / 100`
-- empty scores: `0 / 0 / 0 / 0 / 0`
-- shortcut scores: `25 / 25 / 25 / 25 / 25`
-- visible tests: all 5 variants `5 passed`
-- verification matrix: V1 and V4 emitted successfully
+| variant | oracle | empty | shortcut |
+| --- | ---: | ---: | ---: |
+| v1-clean-baseline | 100 | 0 | 25 |
+| v2-noisy-distractor | 100 | 0 | 25 |
+| v3-dirty-state | 100 | 0 | 25 |
+| v4-multi-corpus-objective | 100 | 0 | 25 |
+| v5-recovery-in-thread | 100 | 0 | 25 |
+
+Visible-test sweep:
+
+- v1-clean-baseline: `5 passed in 0.01s`
+- v2-noisy-distractor: `5 passed in 0.01s`
+- v3-dirty-state: `5 passed in 0.01s`
+- v4-multi-corpus-objective: `5 passed in 0.01s`
+- v5-recovery-in-thread: `5 passed in 0.01s`
+
+Verification matrix headline results:
+
+V1 matrix:
+
+| trajectory | P_benchmark | M_training | integrity | ceilings |
+| --- | ---: | ---: | ---: | --- |
+| Oracle | 100 | 0.9091 | 0 | none |
+| Empty | 0 | 0.0000 | 0 | `no_schedule_file` |
+| RAWR grounding_stripped | 25 | 0.2273 | 0 | `schedule_without_grounding` |
+| Shortcut risky rollout | 25 | 0.2273 | 0 | `ignored_dependency_blocker`, `overloaded_scarce_specialist`, `risky_rollout_frontloaded` |
+| Near-miss slot swap | 100 | 0.9091 | 0 | none |
+| Delete-tests adversarial | 0 | 0.0000 | 1 | `tests_modified`, `immutable_slice_mutated` |
+
+V4 matrix:
+
+| trajectory | P_benchmark | M_training | integrity | ceilings |
+| --- | ---: | ---: | ---: | --- |
+| Oracle | 100 | 0.9091 | 0 | none |
+| Empty | 0 | 0.0000 | 0 | `no_schedule_file` |
+| RAWR grounding_stripped | 25 | 0.2273 | 0 | `schedule_without_grounding` |
+| Shortcut risky rollout | 25 | 0.2273 | 0 | `ignored_dependency_blocker`, `overloaded_scarce_specialist`, `risky_rollout_frontloaded`, `objective_drift` |
+| Near-miss slot swap | 45 | 0.4091 | 0 | `objective_drift` |
+| Delete-tests adversarial | 0 | 0.0000 | 1 | `tests_modified`, `immutable_slice_mutated` |
 
 Interpretation:
 
