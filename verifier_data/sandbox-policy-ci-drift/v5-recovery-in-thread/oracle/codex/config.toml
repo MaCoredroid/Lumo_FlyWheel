@@ -1,0 +1,4 @@
+
+[policy]
+sandbox = "workspace_write"
+approval_policy = "on_request"

@@ -1,0 +1,25 @@
+{
+  "family_id": "sandbox-policy-ci-drift",
+  "variants": {
+    "v1-clean-baseline": {
+      "manifest": "verifier_data/sandbox-policy-ci-drift/v1-clean-baseline/workspace_manifest.json",
+      "workspace_tree_hash": "8fca5068e9799beb6e701c308e28c1e879ff4944d460a0369da8e8f131866c37"
+    },
+    "v2-noisy-distractor": {
+      "manifest": "verifier_data/sandbox-policy-ci-drift/v2-noisy-distractor/workspace_manifest.json",
+      "workspace_tree_hash": "f57b3cf3da8332fec1e71e215d86ee3cea1742aa5ed4de0725a0f4590b823245"
+    },
+    "v3-dirty-state": {
+      "manifest": "verifier_data/sandbox-policy-ci-drift/v3-dirty-state/workspace_manifest.json",
+      "workspace_tree_hash": "9952ef36b529e099f700dc3d90f144f2017e71eb9ea9906bce6c541db518648f"
+    },
+    "v4-multi-corpus-objective": {
+      "manifest": "verifier_data/sandbox-policy-ci-drift/v4-multi-corpus-objective/workspace_manifest.json",
+      "workspace_tree_hash": "3e7230153eedd4442bdf23e3fca2be727cc760aa3b8e64d63bf35aa1fc538cf3"
+    },
+    "v5-recovery-in-thread": {
+      "manifest": "verifier_data/sandbox-policy-ci-drift/v5-recovery-in-thread/workspace_manifest.json",
+      "workspace_tree_hash": "a26dd260e851f7aa0a46ade8f10a1cd16a355045e2e5828893c1a0353f296abb"
+    }
+  }
+}

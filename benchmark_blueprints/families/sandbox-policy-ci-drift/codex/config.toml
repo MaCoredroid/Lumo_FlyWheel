@@ -1,3 +1,4 @@
+
 [benchmark]
 family_id = "sandbox-policy-ci-drift"
 task_id = "cnb55-core-sandbox-policy-ci-drift-local-ci-contract"
@@ -12,18 +13,11 @@ max_turns = 18
 [workspace]
 primary_languages = ["python", "yaml", "toml"]
 root_hint = "/workspace"
-dirty_workspace_variant = true
 
 [surfaces]
 required = ["shell", "apply_patch", "terminal_tests"]
-preferred = ["review", "worktree", "ci_logs"]
+preferred = ["review", "ci_logs"]
 
 [grading]
-visible_gate = "make ci + targeted parser/workflow-preview tests"
+visible_gate = "make ci"
 non_code_requirements = ["codex/config.toml", "docs/releases/policy-rename.md"]
-fail_on = [
-  "remove_deprecated_compatibility",
-  "helper_fixture_specific_normalization",
-  "deprecated_preview_output",
-]
-

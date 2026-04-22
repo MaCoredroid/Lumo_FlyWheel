@@ -1,0 +1,26 @@
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  policy-smoke:
+    runs-on: ubuntu-latest
+    env:
+      SANDBOX_POLICY: workspace_write
+      APPROVAL_POLICY: on_request
+    steps:
+      - uses: actions/checkout@v4
+      - run: make ci
+
+  preview-render:
+    runs-on: ubuntu-latest
+    env:
+      SANDBOX_POLICY: workspace_write
+      APPROVAL_POLICY: manual-review
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/render_workflow_preview.py --config codex/config.toml

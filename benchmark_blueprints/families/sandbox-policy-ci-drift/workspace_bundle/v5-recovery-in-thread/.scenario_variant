@@ -1,0 +1,1 @@
+incident_context/ records a rollback caused by removing the deprecated alias. Preserve compatibility while keeping emitted output canonical.

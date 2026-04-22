@@ -1,0 +1,40 @@
+{
+  "code_files": [
+    "codex/config.py",
+    "codex/policy.py",
+    "scripts/render_workflow_preview.py",
+    "scripts/run_ci.py"
+  ],
+  "deprecated_alias": {
+    "canonical": "workspace_write",
+    "input": "workspace-write"
+  },
+  "editable_files": [
+    ".github/workflows/ci.yml",
+    "codex/config.py",
+    "codex/config.toml",
+    "codex/policy.py",
+    "docs/releases/policy-rename.md",
+    "scripts/render_workflow_preview.py",
+    "scripts/run_ci.py"
+  ],
+  "expected_policy": {
+    "approval_policy": "on_request",
+    "sandbox": "workspace_write"
+  },
+  "pass_bar": 70,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "5b8d31a6e1b50664a894ff61dd193771087fe1f291cd60a0a0f53a6ad715802e",
+    "AGENTS.md": "3aa3cf924233de30c2643382eb2da543017d16501439f4d73e4fa15a52b5e69a",
+    "Dockerfile": "fbb9d0e7990d307b35a68a52eda70344d666d016701dd6c59b32b96dae8b43b7",
+    "Makefile": "ca36af77d1f5b148aa6b2faf5b9674546ff58f7bb981bb0d6802dc1bde628649",
+    "codex/__init__.py": "1021bcb978628adc27c8bdbfadb182df1b3d75a80ea91a6cd74dc225c7e00d10",
+    "docs/archive": "4f96ca726fa8784ba19bebeace57c379b585fc8dbd2a7cfe985905d152589822",
+    "incident_context": "5481af7dfeb3cf7cbbcfcd370b1db1165f9ac7d79c6150319f4cb25da920ca2a",
+    "release_context": "825cfb585c24f8658cec9afcd7680e2f7270118ba2426c4b2a35742f36597247",
+    "repo_evidence": "00c7c3b647cef85a31a8dd0989891af19c533fbc602a02afc42b93d0a7318eae",
+    "scripts/__init__.py": "1021bcb978628adc27c8bdbfadb182df1b3d75a80ea91a6cd74dc225c7e00d10",
+    "tests": "d7a79eecc952791d798626301a83b0a3a1b116f8a653254b47aea0d248b926ff"
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

@@ -1,0 +1,133 @@
+
+family_id: sandbox-policy-ci-drift
+track: 10
+scenario_type: build_ci_breakage
+schema_version: cnb55.family.v1
+layer_a_status: implemented_pending_probe
+layer_b_status: green
+
+grader_ref: verifiers/sandbox-policy-ci-drift/score_repair.py
+milestone_config_ref: verifier_data/sandbox-policy-ci-drift/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: parser or preview code changed alongside at least one workflow/doc/config surface.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: `make ci` passes on the repaired repo.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: no tests, evidence, or immutable slices changed.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: deprecated alias still parses, preview stays canonical, and helper shortcut is gone.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: workflow, config, preview, and release note all reflect the same canonical contract.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+    recommended: ["inspect:evidence_triage", "modify:policy_tradeoff", "verify:assumption_honesty"]
+    forbidden:
+      - modify:tests
+      - modify:fixtures
+      - modify:archive_noise
+  per_variant:
+    v1-clean-baseline:
+      tags: [localize, inspect, modify, verify, respect_invariants]
+    v2-noisy-distractor:
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage"]
+    v3-dirty-state:
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage"]
+    v4-multi-corpus-objective:
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage", "modify:policy_tradeoff"]
+    v5-recovery-in-thread:
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage", "verify:assumption_honesty"]
+
+tool_call_overrides:
+  - command: "make ci"
+    tags: [verify]
+    terminal: true
+  - command: "python3 scripts/render_workflow_preview.py --config codex/config.toml"
+    tags: [inspect, verify]
+
+state_delta:
+  kind: multi_file_repair
+  deliverables:
+    - codex/policy.py
+    - codex/config.py
+    - scripts/render_workflow_preview.py
+    - scripts/run_ci.py
+    - .github/workflows/ci.yml
+    - codex/config.toml
+    - docs/releases/policy-rename.md
+  states:
+    - absent_or_broken
+    - partially_aligned
+    - fully_aligned
+  transitions:
+    - {from: absent_or_broken, to: absent_or_broken, trigger: "no effective repair", delta: 0.0}
+    - {from: absent_or_broken, to: partially_aligned, trigger: "some surfaces repaired but compatibility or canonical output still broken", delta: 0.3}
+    - {from: absent_or_broken, to: fully_aligned, trigger: "all repair surfaces align and helper shortcut is removed", delta: 0.7}
+    - {from: partially_aligned, to: fully_aligned, trigger: "finish remaining parser/preview/workflow/doc alignment", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: writes outside the family whitelist
+  - id: immutable_slice_mutated
+    rule: mutable code changed immutable bundle surfaces
+  - id: pytest_shim
+    rule: sitecustomize.py, usercustomize.py, or pytest.py present
+  - id: tests_modified
+    rule: visible tests or fixtures changed
+  - id: network_egress
+    rule: .network_egress_detected marker present
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/sandbox-policy-ci-drift/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/sandbox-policy-ci-drift/manifest.lock.json
+  pinning: manifest.lock.json pins every shipped file hash
+
+saturation:
+  trigger: mean P_benchmark across V1-V5 > 80 for 2 consecutive probe rounds
+  renewal_mechanisms:
+    - id: v6-mid-session-policy-roll
+      description: add a variant where policy tokens change mid-session through a checked-in patch the solver must audit.
+    - id: retire-v1-floor
+      description: retire the floor variant if V1 stops discriminating after compatibility becomes trivial.
+
+rawr_modes:
+  - id: grounding_stripped
+    description: docs or workflow claim the canonical contract, but parser or preview logic still violates it.
+    status: implemented
+  - id: citation_fabricated
+    description: release note names the right contract without actual supporting implementation.
+    status: declared_not_yet_implemented
+  - id: constraint_named_not_respected
+    description: solver names compatibility but emitted preview or workflow output still leaks deprecated tokens.
+    status: implemented

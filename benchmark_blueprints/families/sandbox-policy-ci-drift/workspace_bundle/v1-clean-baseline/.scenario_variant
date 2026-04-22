@@ -1,0 +1,1 @@
+Baseline: repair parser, preview, CI workflow, config, and release note without dropping the deprecated input alias.
