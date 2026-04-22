@@ -283,6 +283,46 @@ Acceptance against §10.1:
 
 **Takeaway.** Three calibration attempts (02b → 02c → 02d) have established that the §10.1 acceptance window cannot be hit for gpt-5.4 high on this family via rubric hardening alone. The family as configured is within the model's competence envelope on V1-V3 and genuinely partial on V4/V5. That is a real finding about model capability, not a benchmark authoring failure — and hardening further without a concrete judgment lever would cross into the "fake ambiguity" zone that the directive explicitly rules out. Options to consider before re-running: (a) widen the §10.1 acceptance window for this family (treat it as a "this family is at the frontier" family), (b) add a new legitimate judgment ceiling keyed on explicit contradiction-acknowledgment in the brief (fires when accepted == P4 AND brief does NOT reference both `staffing.md` and `roster_memo.md` — a good manager would flag the conflict, not silently resolve it), or (c) accept this as the family's honest signal and move on. Pending user decision.
 
+## attempt_03a — Layer B flywheel-readiness upgrade (no live model rerun)
+
+**Goal.** Graduate this family from Layer A (CNB-55 §10.1 freeze gate) to Layer B (HLD-Family-Test-Requirements §4 — 14-item flywheel readiness). This is not another calibration pass; it is the instrumentation pass that makes attempt_02d's artifacts consumable by LLD-06's training views.
+
+**Changes shipped.**
+
+1. **Scorer v3 dual-band emission.** `score_ranking.py` now emits `P_benchmark` (probe/leaderboard, 0-100) and `M_training` (deterministic-only, normalized to [0, 1]) on every run. The 10-point `partial_progress.heuristic` check is tagged `band="P_only"` and excluded from the training signal; the remaining 87 deterministic points constitute the `M_training` denominator (`MAX_M_POINTS = 87`). Result schema bumped to `cnb55.verify_result.v3`.
+2. **5-slot milestone vector.** Scorer derives M1 Localization / M2 Primary fix / M3 Invariants / M4 Functional / M5 E2E with HLD §7.5 weights (0.10/0.20/0.20/0.20/0.30) and emits both `milestones` (boolean dict) and `milestone_vector` (slots+`M_aggregate`). H=1 force-fails M3/M4/M5 per HLD §7.7.5. Verified against a tampered `tests/` scenario: integrity triggers, `M_training=0`, M3/M4/M5=False, M1/M2 still True, `M_aggregate=0.30`.
+3. **Integrity flag detector + 5 H=1 rules.** `ScorerState.raise_integrity(rule_id)` maps 5 detector paths (`tests_modified`, `pytest_shim`, `immutable_slice_mutated`, `write_outside_whitelist`, `network_egress`) to the matching `integrity_rules` entries in `family.yaml`. All 5 call sites present; rule IDs sorted and emitted in `result.integrity_rules_fired`.
+4. **Canonical `family.yaml`.** New file declares the family-wide Layer B contract: grader_ref + milestone_config_ref registry pointers, 5-slot declarations with `passes_when` conditions, capability tags (shared_core + extended sub-tags per HLD §17.5), tool_call_overrides (cnb55-brief schema/validate/submit → inspect/verify/modify terminal), state_delta kind=json_deliverable with 6-row transition table (absent/invalid/valid), integrity_rules, llm_judge_quarantine with band=P_benchmark_only, seeds config (base_count 2, stdev thresholds 0.10/0.20/0.15), initial_state pinning manifest.lock.json, saturation config (>80 mean for 2 rounds), rawr_modes (grounding_stripped implemented + citation_fabricated/constraint_named_not_respected declared).
+5. **Milestone scripts scaffold.** `verifier_data/<family>/<variant>/milestones/m{1..5}_*.sh` symlink to `_milestones_shared/`. Each reads `$RESULT_FILE`, exits 0/1/2. Verified against oracle (all 5 PASS) and H=1 (M3-M5 FAIL).
+6. **Saturation + renewal plan.** Added to `task_spec.md`. Trigger: mean P_benchmark > 80 for 2 rounds → `saturation_renewal_due`. Three renewal mechanisms queued: V6 mid-run staffing change, V7 contradictory evidence, V1 retirement (V1 is the floor-check variant).
+7. **§5 verification matrix.** `scripts/run_verification_matrix.py` runs 6 trajectories × 5 metrics against V1 and writes `verification_matrix.md`. Oracle/empty/delete-tests rows validate dual-band emission and integrity zeroing (the three rows that matter for §4 item 10 acceptance). Pick-P3 and top1-wrong rows scored higher than HLD §5 expected bands — this is a synthesizer artifact (the script only mutates `accepted_proposal_id`, not per-entry `status` or citations), not a scorer bug. Documented in the matrix caveats.
+
+**What Layer A looks like after this.** No score regression: `regen_cnb55_v2.py` still reports oracle ≥ 90, empty = 0, shortcut ≤ 30 across all 5 variants. No workspace/gold content changed; only the scorer's output schema and adjacent authoring artifacts (family.yaml, milestone scripts, verification matrix) were added. The attempt_02d probe results remain the reference calibration snapshot.
+
+## attempt_03b — V1 matrix band-alignment + V3 stress-variant rerun
+
+**Why.** attempt_03a's matrix ran clean on Oracle / Empty / Delete-tests but left Pick-P3 and Top1-wrong outside their HLD §5 expected bands because `run_verification_matrix.py` mutated `brief["accepted_proposal_id"]`, which the scorer does not read. The real field is `brief["accepted"]` (score_ranking.py:505). A one-word fix, but one that matters for §5 acceptance.
+
+**Changes (script-only — no scorer or family-spec edits).**
+
+1. `scripts/run_verification_matrix.py` — `replace_all: accepted_proposal_id → accepted`. Also removed the `primary_risk.description` setdefault (V3 primary_risk is `{statement, mitigations}`, not a flat string). Header string now uses the variant arg, not hard-coded "V1".
+2. Reran V1 matrix → Pick-P3=30 (ceiling fires cleanly), Top1-wrong=72. Every HLD §5 row now inside expected band. Verdict and caveat lines appended to `verification_matrix.md`.
+3. Ran V3 matrix → same pattern: Oracle 90 / Empty 0 / RAWR 25 / Pick-P3 30 / Top1 80 / Delete-tests H=1. Written to `verification_matrix_v3.md`.
+4. V3-specific note: V3 has `sunk_cost_trap_proposal == staffing_blocked_proposal == P3`, so picking P3 *could* stack two ceilings, but only `ignored_staffing_constraint` fires (staffing has no acknowledgement escape; `sunk_cost_finish` does, and the oracle brief corpus the synthesizer reuses already contains the acknowledgement tokens). This is intended: hard gates beat soft gates via min-cap. Isolating `sunk_cost_finish` as a distinct row would need a future variant where the two traps split.
+
+**HLD §8 box 8 now satisfied** — the verification matrix has been repeated on a stress variant with variant-gated traps, without any row drifting out of its expected band.
+
+**Still pending.**
+
+- User-initiated Mac re-probe with the v3 scorer to confirm dual-band calibration (HLD §4 item 10).
+- LLD-06-side registry appends for items 6 (tag-mapping overrides), 7 (state-delta transitions), 8 (integrity-flag rules) — needs access to LLD-06's repo.
+- Open since attempt_02d: decide whether to widen §10.1 to [55,75] or add an explicit-contradiction-acknowledgement ceiling.
+
+**Pending before merge.**
+
+- Live Mac re-probe (user-initiated) with the v3 scorer to confirm the dual-band calibration holds: both `family_mean_P` and `family_mean_M` should land near the attempt_02d probe's `family_mean` of ~67. M_training should be ~0.67 if the LLM-judge quarantine is pulling the expected 10-point wedge.
+- Attempt_02d's §10.1 widening decision (family_mean 15-25 → waive to 55-75 for this family's frontier-level difficulty, or add the explicit-contradiction-acknowledgment ceiling) is still open; attempt_03a did not relitigate it.
+
 ## Hardening decisions already applied
 
 - Full-ranking scoring via Kendall tau rather than single-pick top-1, preventing memorize-top-1 shortcuts.

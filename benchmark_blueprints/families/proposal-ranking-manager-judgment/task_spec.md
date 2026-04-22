@@ -235,3 +235,21 @@ Named shortcuts authors expect agents to try. Each must have a corresponding exp
 - Human-verification gate (CNB-55 SPEC §10.2): two-reviewer sign-off.
 
 The concrete probe run log and hardening evidence live in [`benchmark_run.md`](./benchmark_run.md).
+
+## Saturation and renewal plan
+
+Per HLD-Family-Test-Requirements §4 item 14 and HLD-Training-Flywheel §17.10. This family is a non-expiring training signal, so we commit to an explicit refresh cadence the moment the population distinguishes it.
+
+**Saturation trigger.** When the mean `P_benchmark` across this family exceeds **80** for two consecutive probe rounds at the probe's default model tier (GPT-5.4/high at time of spec), the family is flagged `saturation_renewal_due` in `benchmark_run.md`. The probe harness reads this from `family.yaml#saturation.threshold_mean_P` so changing the threshold does not require a spec edit.
+
+**Renewal mechanisms (applied in order, one per renewal cycle).**
+
+1. **V6 mid-run staffing change.** A new variant that injects a staffing update *during* the agent's session (the model must re-rank given new availability data it did not have at first read). Tests `inspect:evidence_triage` and `verify:assumption_honesty` against a moving target.
+2. **V7 contradictory evidence.** Two first-party evidence files disagree by design (release_context/ vs. incident_context/). The correct move is to flag the contradiction in the brief's `assumption_ledger` with status `"conflict"` rather than silently picking one corpus. Tests `verify:assumption_honesty` and `modify:policy_tradeoff`.
+3. **V1 retirement.** V1 was authored as a floor-check (oracle ≥ 90, capable model ≈ 85–95). Once saturated it contributes only gradient noise to RL, so it is retired and replaced with a harder floor-check derived from V2 minus the perf-staleness trap.
+
+**Renewal does not reset the history.** Old variants remain in the event store as `family_status_at_write_time=retired` rows per HLD §3.1. Downstream RL pipelines filter on `family_status_at_write_time=active` rather than deleting old events. This preserves longitudinal regressions tests.
+
+**Out-of-cycle renewal.** If a model exceeds 80 P_benchmark on a single variant for three consecutive rounds (even if the family mean has not saturated), that variant is retired and a replacement is drawn from the renewal queue. The variant-level check catches per-trap overfitting that the family-level mean hides.
+
+**Dual-band saturation.** The trigger is on `P_benchmark`, not `M_training`. If `M_training` saturates independently (mean > 0.80 for 2 rounds) while `P_benchmark` stays below 80, that is a diagnostic signal that the LLM-judge quarantined points are absorbing the remaining variance — investigate the rubric or move quarantined checks into the deterministic band before renewing.

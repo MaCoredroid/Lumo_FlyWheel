@@ -1,9 +1,18 @@
 ---
 name: benchmark-family-authoring
-description: Author and calibrate a CNB-55-style benchmark family (task spec + workspace bundle + deterministic evaluator + variant progression V1-V5) and drive it through the probe → harden → re-probe loop until §10.1 freeze-gate acceptance, or until the family's honest signal is understood. Use when the user asks to "create a new family", "add a track-N family", "build a benchmark", "write an evaluator", "harden a family", "fail the freeze gate", or "calibrate the probe".
+description: Author and calibrate a CNB-55-style benchmark family (task spec + workspace bundle + deterministic evaluator + variant progression V1-V5) AND make it flywheel-ready for RL training (dual-band emission, 5-slot milestones, capability tags, integrity rules, verification matrix). Drive it through the probe → harden → re-probe loop until §10.1 freeze-gate acceptance (Layer A) AND through the HLD Family-Test-Requirements §4 14-item readiness list (Layer B), or until the family's honest signal is understood. Use when the user asks to "create a new family", "add a track-N family", "build a benchmark", "write an evaluator", "harden a family", "fail the freeze gate", "calibrate the probe", "make the family RL-ready", or "wire the family into the flywheel".
 ---
 
 # Benchmark-family authoring & calibration
+
+## Two layers of DONE — read this first
+
+Families in this repo must satisfy **both** of the following before they ship. Missing either one silently ships an asymmetric artifact that calibrates the probe but is unusable as a training signal (or vice versa).
+
+- **Layer A — §10.1 freeze gate** (CNB-55 authoring spec). Family_mean ∈ [15, 25], max ≤ 40, ≥ 1 variant ≤ 10, monotonic V1≥V2≥V3≥V4≥V5 ±3, oracle ≥ 90, empty = 0, shortcut ≤ 30. This is the leaderboard/probe acceptance gate.
+- **Layer B — 14-item flywheel readiness** (HLD-Family-Test-Requirements §4). Dual-band scorer (P_benchmark + M_training), 5-slot milestones (M1…M5 with HLD §7.5 weights), capability tags, state-delta rules, integrity-flag detector, LLM-judge quarantine, seeds + variance escalation, verification matrix (6 trajectories × 5 metrics), grader_ref/milestone_config_ref registry entries, saturation + renewal plan. This is the LLD-06 ingestion gate.
+
+A reference implementation of both layers lives at `benchmark_blueprints/families/proposal-ranking-manager-judgment/` (see `family.yaml`, `verifiers/.../score_ranking.py`, `verification_matrix.md`, and `benchmark_run.md` attempt_03a).
 
 ## When to use this skill
 
@@ -96,9 +105,32 @@ Before adding any hardening lever, diagnose. Load the probe log and read the var
 
 Apply one change per attempt. Multiple simultaneous changes make diagnosis impossible across the `benchmark_run.md` history.
 
-### Phase 7 — Acceptance
+### Phase 7 — Layer A acceptance
 
-A family ships when either (a) all four §10.1 gates pass with the current calibration model, or (b) the `benchmark_run.md` log documents why a narrower window isn't achievable without fake ambiguity AND the user has explicitly sized the window for this family's frontier difficulty. The latter is a legitimate outcome — do not treat "gate failed" as always meaning "family broken". See `references/acceptance-gate-calibration.md` for the decision tree.
+A family ships **Layer A** when either (a) all four §10.1 gates pass with the current calibration model, or (b) the `benchmark_run.md` log documents why a narrower window isn't achievable without fake ambiguity AND the user has explicitly sized the window for this family's frontier difficulty. The latter is a legitimate outcome — do not treat "gate failed" as always meaning "family broken". See `references/acceptance-gate-calibration.md` for the decision tree.
+
+### Phase 8 — Layer B flywheel readiness
+
+After Layer A is green (or explicitly waived), make the family ingestable by LLD-06's training views. This is not optional — ship Layer A without Layer B and the event-store rows this family produces are unreadable from the SFT/DPO/RL side.
+
+Read `references/flywheel-readiness.md` before starting. The short version — do all 14:
+
+1. **Dual-band scorer.** Emit `P_benchmark` (probe-facing 0-100) and `M_training` (deterministic-only, normalized to [0, 1]) on every run. Tag every breakdown key with `band="M"` or `band="P_only"` (Decision A — LLM-judge quarantine pattern). Keep `score` as alias for `P_benchmark` for backward compat. Bump schema_version to `cnb55.verify_result.v3`.
+2. **5-slot milestones.** M1 Localization 0.10, M2 Primary fix 0.20, M3 Invariants 0.20, M4 Functional 0.20, M5 E2E 0.30. Emit both `milestones` (bool dict) and `milestone_vector.slots[].passed_bool` with weights. Implement at L1/L2/L3 (HLD §7.8) — **never** an LLM-judge in the milestone layer.
+3. **Integrity-flag detector.** 5 rules minimum (`write_outside_whitelist`, `immutable_slice_mutated`, `pytest_shim`, `tests_modified`, `network_egress`). One `raise_integrity(rule_id)` call per detected rule. H=1 force-fails M3/M4/M5 per HLD §7.7.5. Rule IDs in `family.yaml#integrity_rules` must match scorer call sites 1:1.
+4. **Milestone scripts.** `verifier_data/<family>/<variant>/milestones/m{1..5}_*.sh` symlinking to shared scripts. Each reads `$RESULT_FILE`, exits 0/1/2. This is the **declarative** surface LLD-06's milestone grader reads.
+5. **Capability tags.** {localize, inspect, modify, verify, respect_invariants} as the shared core + extended sub-tags per HLD §17.5 (inspect:prioritize, inspect:evidence_triage, modify:policy_tradeoff, verify:assumption_honesty). Per-variant tag blocks override the default if the variant tests a specific sub-capability.
+6. **Tool-call overrides.** Map family-specific CLI subcommands to the 5-capability taxonomy (e.g. `cnb55-brief schema` → inspect, `validate` → verify, `submit` → modify terminal).
+7. **State-delta rules (Decision B).** Declare the brief/deliverable as `kind: json_deliverable` with a 6-row transition table (absent → present_and_invalid → present_and_valid) + `aggregate_clamp: [0,1]`. This is what LLD-06 uses to decide whether a corrective turn is worth the gradient update.
+8. **LLM-judge quarantine.** Any check whose correctness depends on a language model (partial_progress rubric, assumption-ledger padding) goes in the `P_only` band. Document total quarantined points in `family.yaml#llm_judge_quarantine`.
+9. **Seeds + variance escalation.** Base count 2 seeds. Thresholds: `stdev_threshold_to_4=0.10`, `to_8=0.20`, `flag_high_variance=0.15` at 8. Record `current_observed_stdev_M_training` from the latest probe.
+10. **Initial state.** Pin `manifest.lock.json` and declare `initial_state: {type: manifest_locked, ref: manifest.lock.json}` in `family.yaml`.
+11. **Verification matrix — V1 AND at least one stress variant.** `scripts/run_verification_matrix.py` runs 6 trajectories (Oracle, Empty, RAWR grounding_stripped, Pick-ceiling, Top1-wrong, Delete-tests adversarial) × 5 metrics (P_benchmark, M_training, G, R, S_TTC). Write `verification_matrix.md` (V1) AND `verification_matrix_<stress>.md` (any variant that introduces variant-gated traps: stale-perf, sunk-cost, objective-drift, incident-reselect). HLD §8 box 8 requires the stress-variant rerun — V1-only acceptance is incomplete. At minimum, Oracle / Empty / Delete-tests rows must match HLD §5 bands; the other rows may drift for synthesizer reasons and can be documented as caveats. **Field-name gotcha:** the synthesizer must mutate the exact keys the scorer reads (e.g. `brief["accepted"]`, not `brief["accepted_proposal_id"]`). Always re-run the Pick-ceiling row and confirm the expected ceiling fires; if P_benchmark > 35 on a Pick-ceiling row, the synthesizer is mutating the wrong field.
+12. **Multi-mode RAWR.** The family declares at least `grounding_stripped` as implemented. `citation_fabricated` and `constraint_named_not_respected` may be declared as `declared_not_yet_implemented` pending a later attempt.
+13. **Saturation + renewal plan.** Add to `task_spec.md`. Trigger: `mean P_benchmark > saturation.threshold_mean_P` for 2 consecutive probe rounds → `saturation_renewal_due`. Enumerate at least 2 renewal mechanisms (new variant slot + retire-floor-check) in `family.yaml#saturation.renewal_queue`.
+14. **Registry entries.** `family.yaml#grader_ref` and `milestone_config_ref` point at the canonical scorer path and milestone-config path. LLD-06 uses these to lazy-load the grader at event-store ingestion time.
+
+Acceptance signal for Layer B: a reviewer can run `python3 scripts/run_verification_matrix.py --variant <v1-id>`, read `verification_matrix.md`, and trace every row's P / M / integrity / ceiling numbers back to a single `family.yaml` declaration. No loose ends.
 
 ## Reference material
 
@@ -109,7 +141,8 @@ Additional reference files live under `references/`. Read the relevant one befor
 - `references/acceptance-gate-calibration.md` — §10.1 gate math, probe loop, and the accept-or-widen decision tree.
 - `references/pitfalls.md` — disclosure paradox, rubric leakage, adversarial-evidence limits, mechanical score floor, AppleScript/osascript probe-launch gotchas, and the `readonly_tree_hashes` → `shortcut_detected` debug loop.
 - `references/checklist.md` — pre-merge checklist for a new family. Run through it before declaring a family shipped.
+- `references/flywheel-readiness.md` — Layer B (HLD Family-Test-Requirements §4) detail: dual-band emission, 5-slot milestones, capability tags, state-delta rules (Decision B), integrity flags, LLM-judge quarantine (Decision A), verification matrix, saturation plan. Read this before Phase 8.
 
 ## Keywords
 
-benchmark family, new family, track N family, evaluator, scorer, freeze gate, §10.1, probe, calibration, variant progression, V1 V2 V3 V4 V5, partial-credit ceiling, rubric leakage, disclosure paradox, adversarial evidence, CNB-55.
+benchmark family, new family, track N family, evaluator, scorer, freeze gate, §10.1, probe, calibration, variant progression, V1 V2 V3 V4 V5, partial-credit ceiling, rubric leakage, disclosure paradox, adversarial evidence, CNB-55, flywheel readiness, Layer A, Layer B, dual-band, P_benchmark, M_training, 5-slot milestone, capability tags, integrity flag, H=1, LLM-judge quarantine, Decision A, Decision B, state delta, RAWR, verification matrix, saturation, grader_ref, LLD-06, RL training, RL-ready.

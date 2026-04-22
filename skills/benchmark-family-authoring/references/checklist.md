@@ -64,6 +64,23 @@ Run through this before declaring a family shipped. Every item must be either ch
 - [ ] Any §10.1 widening recorded explicitly with rationale under the legitimate-difficulty test.
 - [ ] Any family-specific scripts under `scripts/` are named and purpose-commented.
 
+## Layer B (flywheel readiness) — HLD Family-Test-Requirements §4
+
+See `references/flywheel-readiness.md` for the full rationale on each item. Every box below must be checked before LLD-06 will ingest this family's event-store rows.
+
+- [ ] Scorer emits `P_benchmark` (0-100) AND `M_training` (normalized 0-1) with `schema_version: "cnb55.verify_result.v3"`.
+- [ ] `breakdown.__bands` is present and tags every key as `"M"` or `"P_only"` (Decision A — LLM-judge quarantine).
+- [ ] 5-slot milestone vector emitted with HLD §7.5 weights (M1=0.10, M2=0.20, M3=0.20, M4=0.20, M5=0.30).
+- [ ] Milestone graders are L1/L2/L3 only — no LLM judge in the milestone layer.
+- [ ] `verifier_data/<family>/<variant>/milestones/m{1..5}_*.sh` exist (via symlink) and agree with `milestone_vector.slots[*].passed_bool` in both Oracle and H=1 cases.
+- [ ] `integrity_flag == 1` zeroes M3/M4/M5 per HLD §7.7.5.
+- [ ] Every `raise_integrity("<id>")` call site matches an `integrity_rules[].id` in `family.yaml` 1:1.
+- [ ] `family.yaml` declares capability tags (core `{required, recommended, forbidden}` + HLD §17.5 extended sub-tags), tool-call overrides, state-delta rules (`kind: json_deliverable` with transition table), `llm_judge_quarantine` section, seeds + variance thresholds, `initial_state: {type: manifest_locked}`, saturation + renewal queue, `rawr_modes`, `grader_ref`, `milestone_config_ref`.
+- [ ] `scripts/run_verification_matrix.py --variant <v1-id>` produces `verification_matrix.md` with all 6 rows in HLD §5 expected bands.
+- [ ] `scripts/run_verification_matrix.py --variant <stress-id>` produces `verification_matrix_<stress>.md` with all 6 rows in band (HLD §8 box 8).
+- [ ] `task_spec.md` has a `## Saturation and renewal plan` section with trigger and ≥ 2 renewal mechanisms.
+- [ ] `benchmark_run.md` has an `attempt_NN — Layer B flywheel-readiness upgrade` section enumerating shipped changes.
+
 ## Waiver section (if needed)
 
 If any checklist item is waived, record in `benchmark_run.md`:

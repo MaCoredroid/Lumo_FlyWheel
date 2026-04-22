@@ -118,3 +118,26 @@ All three must agree on the new evidence layout per variant. Re-run the regen sc
 **Fix.** One lever per attempt. Always. Even if you're confident both are needed. The `benchmark_run.md` log is only useful if each attempt has a single attributable cause.
 
 The one exception: a scorer bug fix that unblocks a previous lever. Document the bug in the attempt description and apply both changes as one attempt — but note explicitly that this is an exception.
+
+## Verification-matrix synthesizer mutates the wrong field
+
+**Symptom.** The Pick-ceiling row (e.g. "Pick-P3 staffing-blocked") in `verification_matrix.md` scores well above the HLD §5 expected band — often in the 60–80s instead of ≈ 30 — and the expected ceiling does not appear in `ceilings_applied`. Oracle, Empty, and Delete-tests rows all look fine.
+
+**Why.** The synthesizer in `scripts/run_verification_matrix.py` is mutating a field the scorer does not read. Typical version of the bug: the schema has `accepted_proposal_id` somewhere in the ranking entries but the scorer's ceiling logic reads top-level `brief["accepted"]`, and the synthesizer sets `accepted_proposal_id` because that name "looks more complete". The scorer never sees the mutation; the oracle's real `accepted` stays, ceiling never fires, score stays high.
+
+**Fix.** Grep the scorer for `brief.get(...)` and `brief[...]` — the field names the synthesizer has to mutate are exactly those. Do the same for `gold.get(...)` when a synthesizer has to align a gold-side field. Running the Pick-ceiling row against the Oracle brief with only `accepted` changed is enough to prove the ceiling fires before wiring the full matrix.
+
+**Debug recipe.** Print `result["ceilings_applied"]` for the Pick row. If it's empty, the condition did not trigger — the synthesizer is editing the wrong field.
+
+## Ceiling stacking: hard gate always beats soft gate
+
+**Symptom.** You added a new soft ceiling (acknowledgement-aware) for a trap that happens to sit on the same proposal ID as an existing hard ceiling. The verification matrix only ever reports the hard ceiling, never the new soft one, even with synthesizers that should trip it.
+
+**Why.** When two ceilings fire on the same brief, the scorer applies the minimum cap (lowest value wins). Hard gates (no acknowledgement escape, e.g. `ignored_staffing_constraint`) generally cap lower or equal to soft gates (acknowledgement-aware, e.g. `sunk_cost_finish`). Even if both fire, only the hard ceiling shows in `ceilings_applied` because the soft ceiling's apply-step is suppressed by a stricter earlier cap. And the soft ceiling's acknowledgement-escape may already be satisfied by language the synthesizer unintentionally carries over from the Oracle brief, so it never fires to begin with.
+
+**This is intended, not a bug.** Do not add logic to force the soft ceiling to fire — you would weaken the harder constraint. Two legitimate responses:
+
+1. **Document the stacking** in `verification_matrix_<variant>.md`. Note that on this variant the soft ceiling is subsumed by the hard one, and that isolated testing would require a future variant where the traps split.
+2. **Split the traps in a new variant.** If the family needs to exercise the soft ceiling as a distinct training signal, author a new variant where the soft-trap proposal is different from the hard-trap proposal.
+
+**Do NOT** tune down the hard ceiling's cap to let the soft ceiling show through. That is rubric corruption — the hard ceiling is the higher-confidence signal and has to stay authoritative.

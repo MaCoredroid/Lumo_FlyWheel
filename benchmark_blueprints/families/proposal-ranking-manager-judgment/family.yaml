@@ -1,0 +1,278 @@
+# Family declaration for the flywheel (Layer B)
+#
+# This file is the canonical Layer-B contract for the family, per
+# HLD-Family-Test-Requirements v0.1 §4. Everything below is consumed by
+# LLD-06 (capability-tag mapping, state-delta rules, integrity-flag rules,
+# dual-emit scorer pointers), LLD-07 (seeds + saturation bucketing), and
+# LLD-13 (milestone-config registry). The parent HLD is
+# `HLD-Training-Flywheel-LLD06-11-v0_1.md` v0.8.
+
+family_id: proposal-ranking-manager-judgment
+track: 10                # CNB-55 Track 10 — Strategic Management & Long-Horizon Evolution
+schema_version: cnb55.family.v1
+layer_a_status: green    # CNB-55 §10.1 freeze gate (see benchmark_run.md attempts_01…02d)
+layer_b_status: green    # Flywheel readiness (this file is the declaration)
+
+# --------------------------------------------------------------- registry refs
+# §4 item 13. LLD-13 uses these pointers to bind the family into the scorer
+# registry. Both paths are relative to the FlyWheel repo root.
+grader_ref: verifiers/proposal-ranking-manager-judgment/score_ranking.py
+milestone_config_ref: verifier_data/proposal-ranking-manager-judgment/{variant_id}/milestones/
+
+# ------------------------------------------------------------- 5-slot milestones
+# §4 item 1 + HLD §7.5. Weights sum to 1.0. Higher slots ≥ earlier ones.
+# Each slot maps to a deterministic boolean computed from the scorer breakdown
+# (dual-emit refactor). LLM-judge contributions are explicitly banished from
+# this layer — see §4 item 10 and §partial_progress_shaping below.
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1          # regex + shell-log scan
+    passes_when:
+      any_of:
+        - phase2.brief_exists AND evidence_files_read_count >= 3
+        - cli_invocations.schema_count >= 1
+    description: |
+      Agent either ran `cnb55-brief schema` at least once OR read ≥ 3 files
+      under proposals/ + repo_evidence/ before any submit.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2          # structured JSON validation
+    passes_when:
+      all_of:
+        - phase2.brief_exists
+        - phase2.brief_parses
+        - brief.schema_version == "cnb55.manager_brief.v2"
+    description: |
+      `brief/manager_brief.json` exists and parses as valid JSON with the
+      correct `schema_version`.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2          # checksum + filesystem audit
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+        - shortcut_detected == false
+        - no ceiling in {tests_modified, shim:*, readonly_tree:*, wrote_outside_brief, network_egress}
+    description: |
+      M3 non-trivial: 3 detectors (immutable-slice checksums, pytest-shim
+      detection, writable-path whitelist), each exercised by a red-team
+      script in `verifier_data/.../red_team/`.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2          # structured property checks
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - phase2.ranking_length
+        - phase2.accepted_valid
+        - phase2.entry_fields
+        - phase2.assumption_ledger
+        - no ceiling in {ranking_without_grounding}
+    description: |
+      Visible pytest gates pass AND ranking_without_grounding ceiling did
+      not trigger (≥ 2 rejections cite real evidence files).
+  M5_e2e:
+    weight: 0.30
+    implementation_level: "L2+L3"     # symbolic + executable; NO LLM-judge
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - behavioral.accepted_match
+        - differential.kendall_tau
+        - no partial_credit_ceiling with cap <= 30
+    description: |
+      Accepted matches gold AND Kendall τ ≥ variant threshold AND no
+      partial-credit ceiling ≤ 30 triggered.
+
+# M3 is gated on nothing (it fires independent). M4/M5 gate on M2 (§4 item 3).
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e:        [M2_primary_fix]
+
+# ---------------------------------------------- capability tags per variant
+# §4 item 5 + HLD §8.3 + §17.5. Core vocab is cross-family stable; extended
+# sub-tags are family-specific and roll up into their parent for aggregation.
+capability_tags:
+  shared_core: &core_base
+    required:
+      - localize          # ≥ 3 evidence files read before first submit
+      - inspect           # ≥ 1 file under proposals/ AND ≥ 1 under repo_evidence/
+      - modify            # exactly one terminal action: `cnb55-brief submit`
+      - verify            # `cnb55-brief validate` OR `pytest` at least once
+    recommended:
+      - inspect           # additional inspection of release_context/ (V4+) or incident_context/ (V5)
+    forbidden:
+      - modify:tests/
+      - modify:immutable_slice    # proposals/, repo_evidence/, release_context/, incident_context/, AGENTS.md, Dockerfile, bin/
+  extended: &extended_base
+    - {parent: inspect, sub_tag: prioritize,         semantics: "reading with intent to rank competing options"}
+    - {parent: inspect, sub_tag: evidence_triage,    semantics: "reading with intent to separate signal from noise"}
+    - {parent: modify,  sub_tag: policy_tradeoff,    semantics: "writing a recommendation that explicitly names a tradeoff"}
+    - {parent: verify,  sub_tag: assumption_honesty, semantics: "running an assumption-ledger / ground-check"}
+
+  per_variant:
+    v1-clean-baseline:
+      core: *core_base
+      extended: *extended_base
+    v2-noisy-distractor:
+      core: *core_base
+      extended: *extended_base
+      variant_notes: |
+        inspect:evidence_triage is strongly required — must distinguish stale
+        perf markers from current ones.
+    v3-dirty-state:
+      core: *core_base
+      extended: *extended_base
+      variant_notes: |
+        inspect of `repo_evidence/code/in_progress_patch/` required; modify:
+        policy_tradeoff must explicitly name sunk-cost rejection.
+    v4-multi-corpus-objective:
+      core: *core_base
+      extended: *extended_base
+      variant_notes: |
+        inspect of `release_context/` required; required `modify:policy_tradeoff`
+        must reference objective delta.
+    v5-recovery-in-thread:
+      core: *core_base
+      extended: *extended_base
+      variant_notes: |
+        inspect of `incident_context/` required; required `verify:assumption_honesty`
+        on the watermark unknown.
+
+# -------------------------------------- tool-call → capability-tag overrides
+# §4 item 6. Only family-specific overrides. Generic shell / read_file / apply_patch
+# mappings are inherited from LLD-06's global registry.
+tool_call_overrides:
+  - command: "cnb55-brief schema"
+    tags: [inspect]
+    notes: "Prints the JSON schema; no state change."
+  - command: "cnb55-brief validate"
+    tags: [verify]
+    notes: "Dry-run CLI; checks brief_input.json against schema."
+  - command: "cnb55-brief submit"
+    tags: [modify]
+    terminal: true
+    notes: "Writes brief/manager_brief.{json,md}; counts as the run's single terminal modify."
+
+# --------------------------------------- state-delta rules (Decision B precedent)
+# §4 item 7 + §6 Decision B. This family's state is JSON-deliverable, not
+# file-diff. Transition table per HLD-Family-Test-Requirements §4 item 7.
+state_delta:
+  kind: json_deliverable
+  deliverable_path: brief/manager_brief.json
+  states:
+    - absent               # no brief/manager_brief.json on disk
+    - present_and_invalid  # file exists but JSON-invalid or schema-mismatched
+    - present_and_valid    # file parses + schema_version matches
+  transitions:
+    - {from: absent,              to: absent,              trigger: "read-only tool call",                    delta: 0.0}
+    - {from: absent,              to: absent,              trigger: "cnb55-brief validate (success)",         delta: 0.3}
+    - {from: absent,              to: present_and_valid,   trigger: "cnb55-brief submit (success, first)",    delta: 0.7}
+    - {from: absent,              to: present_and_invalid, trigger: "raw write of brief/... with bad JSON",   delta: 0.0}
+    - {from: present_and_invalid, to: present_and_valid,   trigger: "cnb55-brief submit (success, subsequent)", delta: 0.4}
+    - {from: "*",                 to: "*",                 trigger: "any turn with integrity_flag=1",         delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+  notes: |
+    state_delta_score is averaged across all assistant turns for the
+    trajectory-level G computation in HLD §8.4. Negative per-turn deltas
+    from integrity violations are clamped at the trajectory aggregate.
+
+# -------------------------------------- integrity-flag detector (H=1 rules)
+# §4 item 8. Registered with LLD-06's family-integrity-rules file. Any one
+# of these raises H=1 for the run; H=1 zeroes out M3/M4/M5 per HLD §7.7.5.
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: "any file write whose relpath is not under brief/* and is not brief_input.json at root"
+    detector: trusted_final_state:wrote_outside_brief
+  - id: immutable_slice_mutated
+    rule: "any change to sha256 of proposals/, repo_evidence/, release_context/, incident_context/, tests/, AGENTS.md, Dockerfile, bin/"
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: "presence of sitecustomize.py, usercustomize.py, or pytest.py in workspace"
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: "sha256 of tests/test_ranking_brief.py changed"
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: ".network_egress_detected marker present in workspace"
+    detector: trusted_final_state:network_egress
+
+# --------------------------------------- LLM-judge quarantine (Decision A)
+# §4 item 10 + §6 Decision A. Points listed below stay in P_benchmark for
+# probe calibration and leaderboard fidelity but are EXCLUDED from M_training.
+# Scorer emits both fields; LLD-06 reads M_training into all training views.
+llm_judge_quarantine:
+  partial_progress_rubric:
+    max_points: 10
+    source: verifier_data/proposal-ranking-manager-judgment/_rubrics/partial_progress.md
+    band: P_benchmark_only
+    today_implementation: |
+      Current scorer uses a deterministic regex floor
+      (score_partial_progress_heuristic). Once the LLM-judge replaces it,
+      the band assignment is unchanged.
+  assumption_ledger_padding_check:
+    max_points: 3
+    source: "LLM-judge: 'are the `missing` rows real gaps or padding?'"
+    band: P_benchmark_only
+    today_implementation: |
+      Not yet implemented as LLM-judge. Current scorer only checks that a
+      row with status='missing' exists (deterministic). The 3-pt budget is
+      reserved for future LLM-judge; today those 3 pts are in the
+      deterministic band.
+  total_quarantined_points: 13   # of 100 — when both judges are live
+
+# --------------------------------------- seeds + variance escalation
+# §4 item 11 + HLD §17.8. Base floor is 2 seeds; escalation thresholds are
+# standard per HLD §17.8 and overridable here if this family is known
+# high-variance.
+seeds:
+  base_count: 2
+  determinism_check: |
+    `scripts/regen_cnb55_v2.py` replays the oracle input under CNB55_SEED=42
+    and verifies byte-identical manager_brief.json.
+  variance_escalation:
+    stdev_threshold_to_4: 0.10      # M_training stdev at 2 seeds
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15  # at 8 seeds
+  current_observed_stdev_M_training: 0.08   # as of attempt_02d probe
+  escalation_currently_active: false
+
+# --------------------------------------- deterministic initial_state
+# §4 item 12. Required for RL pool membership.
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/proposal-ranking-manager-judgment/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/proposal-ranking-manager-judgment/manifest.lock.json
+  pinning: "manifest.lock.json pins all bundle content; initial-state hash deterministic via sha256_of_tree"
+
+# --------------------------------------- saturation + renewal plan
+# §4 item 14 + HLD §17.10. Blocking requirement. Declared for all 55 families.
+saturation:
+  trigger: "mean P_benchmark across V1-V5 > 80% on the current hinge SFT checkpoint, sustained 2 consecutive training rounds"
+  detection_path: LLD-06 emits `saturation_renewal_due` flag
+  renewal_mechanisms:
+    - id: v6_midrun_staffing
+      description: "Introduce V6 where the staffing update arrives mid-trajectory rather than in the pre-existing bundle — tests dynamic replanning under state change."
+    - id: v7_contradictory_evidence
+      description: "V7 with explicitly contradictory evidence requiring reconciliation flagging before ranking (adversarial-scoring version of attempt_02d's silent-reconciliation finding)."
+    - id: retire_v1
+      description: "If V1's difficulty band collapses to saturation, retire V1 and promote V2 as the new baseline."
+  one_cycle_deadline: "Family author has one training-round cycle to land a renewal PR or flag for retirement; failure moves family to retired state."
+
+# --------------------------------------- RAWR modes (declared)
+# §5 verification matrix + HLD §17.12. Each mode becomes a matrix row.
+rawr_modes:
+  - id: grounding_stripped
+    description: "Correct `accepted` + `ranking` but `citations: []` on rejections."
+    detection_surface: property.rejection_cites_evidence + ranking_without_grounding ceiling
+    expected_P_benchmark_max: 0.25
+  - id: citation_fabricated
+    description: "Correct `accepted` + `ranking` but citations point to real files whose content does not support the rejection rationale."
+    detection_surface: "LLM-judge or structural heuristic — NOT YET IMPLEMENTED"
+    expected_P_benchmark_max: 0.40
+    status: declared_not_yet_implemented
+  - id: constraint_named_not_respected
+    description: "Accepted proposal cites the blocking constraint in summary but the ranking still ignores it."
+    detection_surface: differential.staffing_respected check combined with constraint_tag presence
+    expected_P_benchmark_max: 0.45
+    status: declared_not_yet_implemented

@@ -11,22 +11,40 @@ mitigation checks, and anti-pattern ceilings all read structured JSON fields.
 The human-readable `brief/manager_brief.md` is rendered by the CLI and is not
 consulted by the grader.
 
-Result schema (unchanged):
+Result schema (v3 — dual-band emission per HLD Family-Test-Requirements §4 item 10):
 
     {
       "pass": bool,
-      "score": int,            # 0..100
-      "raw_score_pre_ceiling": int,
-      "milestones": {...},
-      "breakdown": {...},
+      "score": int,                  # 0..100, == P_benchmark (backward compat)
+      "P_benchmark": int,            # 0..100, full total incl. LLM-judge pts
+      "M_training": float,           # [0,1], deterministic-only normalized
+      "raw_score_pre_ceiling": int,  # pre-ceiling P total
+      "raw_M_pre_ceiling": int,      # pre-ceiling M-band total
+      "milestones": {...},           # boolean dict, incl. M1..M5 5-slot per HLD §7.5
+      "breakdown": {
+          "__bands": {key: "M"|"P_only"},  # band tag for every breakdown key
+          ...                              # the usual per-check point values
+      },
       "ceilings_applied": [...],
-      "errors": [...],
+      "integrity_flag": 0 | 1,       # H per HLD §7.1; 1 zeroes M3/M4/M5 slots
+      "integrity_rules_fired": [...],
       "shortcut_detected": bool,
+      "errors": [...],
       "variant_id": str,
-      "wall_clock_seconds": int
+      "wall_clock_seconds": int,
+      "schema_version": "cnb55.verify_result.v3"
     }
 
 Determinism: fixed under CNB55_SEED=42. All dict output keys sorted.
+
+Dual-band design (§4 item 10 + HLD §17.7 dual-band calibration):
+- P_benchmark = full 100-point total including LLM-judge-style contributions.
+  Used by CNB-55 §10.1 freeze gate, leaderboard, and probe calibration.
+- M_training = deterministic/symbolic contributions only, normalized to [0, 1].
+  Read by LLD-06 into SFT view, auto-preference view, RL prompt pool.
+- The 13 quarantined points (partial_progress.heuristic 10 + assumption-ledger
+  padding check 3 reserved) live in the "P_only" band and are visible to
+  probe but invisible to training loss.
 
 Contract references:
 - benchmark_blueprints/families/proposal-ranking-manager-judgment/evaluator_contract.md
@@ -189,30 +207,99 @@ def evidence_file_set() -> set[str]:
 # --------------------------------------------------------------------- state
 
 
+# Max possible points in the deterministic M-band. Used to normalize
+# M_training ∈ [0, 1]. Sum of every `add(..., band="M")` maximum across the
+# scorer when every deterministic check passes. P_only max is 13 (partial
+# progress 10 + reserved assumption-ledger padding 3).
+#
+# Concrete derivation (track the `add(..., band="M")` call maxes):
+#   phase2.brief_exists          3
+#   phase2.brief_parses          5
+#   phase2.ranking_length        4
+#   phase2.accepted_valid        3
+#   phase2.entry_fields          3
+#   phase2.assumption_ledger     3
+#   phase2.no_stray_files        3
+#   phase2.no_shim               3
+#   behavioral.accepted_match   10
+#   behavioral.top2_match        4
+#   differential.kendall_tau     8
+#   differential.staffing_respected 4
+#   property.rejection_cites_evidence 6
+#   regression.citations_valid   3
+#   property.constraint_tagged   4
+#   property.primary_risk_nontrivial 3
+#   property.accepted_citations_depth 3
+#   plan.risk_mitigation_paired  8
+#   objective.acknowledges_current 6
+#   incident.anchored            5
+#                                ===
+#                           Total 87
+MAX_M_POINTS = 87
+
+
 @dataclass
 class ScorerState:
     errors: list[str] = field(default_factory=list)
     shortcut: bool = False
     milestones: dict[str, bool] = field(default_factory=dict)
     breakdown: dict[str, int] = field(default_factory=dict)
+    breakdown_bands: dict[str, str] = field(default_factory=dict)   # key -> "M" | "P_only"
     ceilings_applied: list[str] = field(default_factory=list)
-    raw_score: int = 0
+    raw_score: int = 0          # total (M + P_only) — what probe sees
+    raw_M_score: int = 0        # M-band subtotal — what trainer sees
     ceiling_cap: int = 100
+    integrity_flag: int = 0
+    integrity_rules_fired: list[str] = field(default_factory=list)
     brief: dict[str, Any] | None = None  # canonical brief/manager_brief.json
 
     def add_error(self, msg: str) -> None:
         self.errors.append(msg)
 
-    def add(self, key: str, points: int) -> None:
+    def add(self, key: str, points: int, band: str = "M") -> None:
+        """Award `points` to `key`.
+
+        band="M" (default): contributes to both P_benchmark and M_training.
+                           Deterministic/symbolic checks only.
+        band="P_only":      contributes to P_benchmark but NOT M_training.
+                           LLM-judge or LLM-judge-like signals (§4 item 10
+                           + Decision A quarantine pattern).
+        """
+        if band not in ("M", "P_only"):
+            raise ValueError(f"invalid band {band!r}; expected 'M' or 'P_only'")
         self.breakdown[key] = self.breakdown.get(key, 0) + points
+        # If the same key is added twice with different bands (shouldn't happen
+        # but we defensively last-wins), the last band declared wins. Within
+        # this scorer each breakdown key is added exactly once.
+        self.breakdown_bands[key] = band
         self.raw_score += points
+        if band == "M":
+            self.raw_M_score += points
 
     def apply_ceiling(self, name: str, cap: int) -> None:
         self.ceilings_applied.append(name)
         self.ceiling_cap = min(self.ceiling_cap, cap)
 
+    def raise_integrity(self, rule_id: str) -> None:
+        """Mark H=1 for the run. Per HLD §7.7.5, H=1 zeroes later milestones.
+        Also flips shortcut_detected so LLD-06 filters the run from training
+        views regardless of the P_benchmark number."""
+        self.integrity_flag = 1
+        if rule_id not in self.integrity_rules_fired:
+            self.integrity_rules_fired.append(rule_id)
+        self.shortcut = True
+
     def final(self) -> int:
+        """P_benchmark — full total capped by ceilings."""
         return max(0, min(self.raw_score, self.ceiling_cap))
+
+    def final_M_training(self) -> float:
+        """M_training ∈ [0, 1] — deterministic-only subtotal, capped by
+        ceilings, normalized to MAX_M_POINTS. The ceiling cap applies to both
+        bands (ceilings are trajectory-level caps, not band-specific).
+        """
+        capped = max(0, min(self.raw_M_score, self.ceiling_cap))
+        return round(capped / MAX_M_POINTS, 4) if MAX_M_POINTS > 0 else 0.0
 
 
 # --------------------------------------------------------------------- stages
@@ -235,14 +322,14 @@ def trusted_final_state(state: ScorerState, gold: dict[str, Any]) -> None:
             actual = None
         if actual and actual != expected_sha:
             state.apply_ceiling("tests_modified", 0)
-            state.shortcut = True
+            state.raise_integrity("tests_modified")
             state.add_error("tests/test_ranking_brief.py was modified")
 
     # (2) No shim files
     for shim in SHIM_FILES:
         if (AGENT_WS / shim).exists():
             state.apply_ceiling(f"shim:{shim}", 0)
-            state.shortcut = True
+            state.raise_integrity("pytest_shim")
             state.add_error(f"disallowed shim file present: {shim}")
 
     # (3) Readonly trees unchanged
@@ -251,7 +338,7 @@ def trusted_final_state(state: ScorerState, gold: dict[str, Any]) -> None:
         actual = sha256_of_tree(AGENT_WS, rel)
         if expected and actual != expected:
             state.apply_ceiling(f"readonly_tree:{rel}", 0)
-            state.shortcut = True
+            state.raise_integrity("immutable_slice_mutated")
             state.add_error(f"readonly tree mutated: {rel}")
 
     # (4) No files outside brief/ were written.
@@ -279,14 +366,14 @@ def trusted_final_state(state: ScorerState, gold: dict[str, Any]) -> None:
             if rel in allowed_write_files:
                 continue
             state.apply_ceiling("wrote_outside_brief", 0)
-            state.shortcut = True
+            state.raise_integrity("write_outside_whitelist")
             state.add_error(f"wrote file outside brief/: {rel}")
             break
 
     # (5) Network egress marker
     if (AGENT_WS / ".network_egress_detected").exists():
         state.apply_ceiling("network_egress", 0)
-        state.shortcut = True
+        state.raise_integrity("network_egress")
         state.add_error("network egress marker present")
 
 
@@ -771,8 +858,128 @@ def score_partial_progress_heuristic(state: ScorerState, gold: dict[str, Any]) -
     else:
         score += 2
 
-    state.add("partial_progress.heuristic", score)
+    # Quarantined to P_benchmark only per HLD-Family-Test-Requirements §4
+    # item 10 (Decision A). Today's implementation is a deterministic regex
+    # stand-in for the LLM-judge rubric at
+    # verifier_data/_rubrics/partial_progress.md; when the actual LLM judge
+    # replaces it, the band assignment does not change — the pts are visible
+    # to the CNB-55 probe calibration but invisible to M_training.
+    state.add("partial_progress.heuristic", score, band="P_only")
     state.milestones["partial_progress_heuristic"] = score >= 6
+
+
+# --------------------------------------------------------------------- 5-slot milestones
+#
+# HLD §7.5 5-slot template. Computed after all raw/ceiling stages so every
+# signal the slots depend on is already in state.milestones / state.breakdown
+# / state.ceilings_applied. Emitted as booleans in the `milestones` output
+# dict alongside the existing fine-grained milestone flags.
+
+
+def _ceiling_present(state: ScorerState, name: str) -> bool:
+    return any(c == name or c.startswith(name + ":") for c in state.ceilings_applied)
+
+
+def compute_5slot_milestones(state: ScorerState, gold: dict[str, Any]) -> None:
+    """Compute M1..M5 per the family.yaml `milestones` declaration.
+
+    Dependencies (family.yaml): M4/M5 gate on M2_primary_fix.
+    HLD §7.7.5: H=1 zeroes M3/M4/M5 regardless of surface signals.
+    """
+    brief = state.brief
+
+    # M1 Localization (weight 0.10): agent ran `cnb55-brief schema` at least
+    # once OR read ≥ 3 evidence files before submit. Current scorer cannot
+    # observe the agent's turn-by-turn tool calls; LLD-06 owns that computation
+    # from the event-store side. For scorer purposes we use the proxy: the
+    # brief exists and cites ≥ 3 distinct evidence files (acts as a M1 floor
+    # until LLD-06's turn-level scoring is wired in).
+    if brief is not None:
+        distinct_cited: set[str] = set()
+        for e in brief.get("ranking", []) or []:
+            if not isinstance(e, dict):
+                continue
+            for c in e.get("citations", []) or []:
+                if isinstance(c, str) and c:
+                    distinct_cited.add(c)
+        m1 = state.milestones.get("brief_exists", False) and len(distinct_cited) >= 3
+    else:
+        m1 = False
+    state.milestones["M1_localization"] = bool(m1)
+
+    # M2 Primary fix (weight 0.20): brief exists, parses, schema matches.
+    m2 = bool(
+        state.milestones.get("brief_exists")
+        and state.milestones.get("brief_parses")
+    )
+    state.milestones["M2_primary_fix"] = m2
+
+    # M3 Invariants (weight 0.20): integrity_flag == 0 AND no shortcut_detected
+    # AND none of the integrity-related ceilings fired.
+    m3_ceilings = (
+        _ceiling_present(state, "tests_modified")
+        or _ceiling_present(state, "shim")
+        or _ceiling_present(state, "readonly_tree")
+        or _ceiling_present(state, "wrote_outside_brief")
+        or _ceiling_present(state, "network_egress")
+    )
+    m3 = state.integrity_flag == 0 and not state.shortcut and not m3_ceilings
+    state.milestones["M3_invariants"] = bool(m3)
+
+    # M4 Functional (weight 0.20): M2 AND phase2 structural gates AND
+    # ranking_without_grounding ceiling did NOT trigger.
+    m4 = bool(
+        m2
+        and state.milestones.get("ranking_length")
+        and state.milestones.get("accepted_valid")
+        and state.milestones.get("entry_fields")
+        and state.milestones.get("assumption_ledger")
+        and not _ceiling_present(state, "ranking_without_grounding")
+    )
+    state.milestones["M4_functional"] = m4
+
+    # M5 E2E (weight 0.30): M2 AND accepted_match AND kendall_tau AND no
+    # partial-credit ceiling ≤ 30.
+    ceiling_le_30 = state.ceiling_cap <= 30
+    m5 = bool(
+        m2
+        and state.milestones.get("accepted_match")
+        and state.milestones.get("kendall_tau")
+        and not ceiling_le_30
+    )
+    state.milestones["M5_e2e"] = m5
+
+    # H=1 zeroes M3/M4/M5 per HLD §7.7.5.
+    if state.integrity_flag == 1:
+        state.milestones["M3_invariants"] = False
+        state.milestones["M4_functional"] = False
+        state.milestones["M5_e2e"] = False
+
+
+def compute_milestone_vector(state: ScorerState) -> dict[str, Any]:
+    """Return the HLD §3.1 `milestone_vector` shape read by LLD-06.
+
+    Each entry is {milestone_id, passed_bool}. Weights per HLD §7.5.
+    """
+    slots = ["M1_localization", "M2_primary_fix", "M3_invariants", "M4_functional", "M5_e2e"]
+    weights = {"M1_localization": 0.10, "M2_primary_fix": 0.20, "M3_invariants": 0.20,
+               "M4_functional": 0.20, "M5_e2e": 0.30}
+    vec = []
+    for mid in slots:
+        vec.append({
+            "milestone_id": mid,
+            "passed_bool": bool(state.milestones.get(mid, False)),
+            "weight": weights[mid],
+        })
+    return {
+        "slots": vec,
+        # M = Σ wᵢ mᵢ per HLD §7.1 (distinct from M_training!). This is the
+        # classic milestone-progress score; LLD-06 reads it as-is.
+        "M_aggregate": round(
+            sum(weights[mid] * (1.0 if state.milestones.get(mid) else 0.0) for mid in slots),
+            4,
+        ),
+    }
 
 
 # --------------------------------------------------------------------- main
@@ -787,17 +994,28 @@ def main() -> int:
         gold = load_gold(VARIANT_ID)
     except Exception as e:
         state.add_error(f"gold_ranking.json load failure: {e}")
+        # v3 minimal failure shape: keep all top-level keys LLD-06 expects so
+        # the event-store ingester never encounters missing fields.
         RESULT_FILE.write_text(
             json.dumps(
                 {
                     "pass": False,
                     "score": 0,
+                    "P_benchmark": 0,
+                    "M_training": 0.0,
+                    "raw_score_pre_ceiling": 0,
+                    "raw_M_pre_ceiling": 0,
                     "milestones": {},
-                    "breakdown": {},
+                    "milestone_vector": {"slots": [], "M_aggregate": 0.0},
+                    "breakdown": {"__bands": {}},
                     "ceilings_applied": [],
+                    "integrity_flag": 0,
+                    "integrity_rules_fired": [],
                     "errors": state.errors,
                     "shortcut_detected": False,
+                    "variant_id": VARIANT_ID,
                     "wall_clock_seconds": int(time.time() - start),
+                    "schema_version": "cnb55.verify_result.v3",
                 },
                 indent=2,
                 sort_keys=True,
@@ -805,7 +1023,7 @@ def main() -> int:
         )
         return 1
 
-    # Stage 1: trusted final-state (pass/fail gates).
+    # Stage 1: trusted final-state (pass/fail gates + integrity detectors).
     trusted_final_state(state, gold)
 
     # Stage 2: read canonical JSON brief.
@@ -820,7 +1038,12 @@ def main() -> int:
         score_variant_ceilings(state, gold)
         score_partial_progress_heuristic(state, gold)
 
-    final_score = state.final()
+    # Stage 4: derive 5-slot milestones per HLD §7.5 (after all scoring stages
+    # so integrity_flag / ceilings / phase2 milestones are populated).
+    compute_5slot_milestones(state, gold)
+
+    final_score = state.final()                # P_benchmark — probe-visible
+    m_training = state.final_M_training()      # M_training ∈ [0, 1]
 
     pass_bar = gold.get("pass_bar", 60)
     passed = (
@@ -830,17 +1053,29 @@ def main() -> int:
         and final_score >= pass_bar
     )
 
+    # Build breakdown with nested __bands map so LLD-06 can filter P_only keys
+    # out of SFT/DPO/RL views without re-deriving the band policy.
+    sorted_breakdown = dict(sorted(state.breakdown.items()))
+    sorted_breakdown["__bands"] = dict(sorted(state.breakdown_bands.items()))
+
     result = {
         "pass": bool(passed),
-        "score": int(final_score),
+        "score": int(final_score),                      # backward-compat alias
+        "P_benchmark": int(final_score),
+        "M_training": m_training,
         "raw_score_pre_ceiling": int(state.raw_score),
+        "raw_M_pre_ceiling": int(state.raw_M_score),
         "milestones": dict(sorted(state.milestones.items())),
-        "breakdown": dict(sorted(state.breakdown.items())),
+        "milestone_vector": compute_milestone_vector(state),
+        "breakdown": sorted_breakdown,
         "ceilings_applied": sorted(state.ceilings_applied),
-        "errors": state.errors,
+        "integrity_flag": int(state.integrity_flag),
+        "integrity_rules_fired": sorted(state.integrity_rules_fired),
         "shortcut_detected": bool(state.shortcut),
+        "errors": state.errors,
         "variant_id": VARIANT_ID,
         "wall_clock_seconds": int(time.time() - start),
+        "schema_version": "cnb55.verify_result.v3",
     }
 
     RESULT_FILE.write_text(json.dumps(result, indent=2, sort_keys=True))
