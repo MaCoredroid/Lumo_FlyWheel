@@ -1,0 +1,5 @@
+Repaired the reducer boundary in [merge.py](/tmp/transcript_merge_probe/20260422T214650Z-v3-dirty-state-run1/workspace/replay/merge.py), aligned [render.py](/tmp/transcript_merge_probe/20260422T214650Z-v3-dirty-state-run1/workspace/replay/render.py) and [incident_summary.py](/tmp/transcript_merge_probe/20260422T214650Z-v3-dirty-state-run1/workspace/replay/incident_summary.py), and corrected the incident note in [transcript-merge.md](/tmp/transcript_merge_probe/20260422T214650Z-v3-dirty-state-run1/workspace/reports/incidents/transcript-merge.md). The reducer now keys tool outputs by explicit event identity first instead of `role + tool_name`, uses a structured fallback when IDs are missing, and suppresses only debug-only fragments that arrive after completion while preserving legitimate deferred tool output.
+
+`render.py` now follows merged event semantics instead of papering over duplicates at render time, and `incident_summary.py` now counts visible merged events rather than rendered lines.
+
+Verification passed: `python3 -m unittest tests.test_merge tests.test_render tests.test_incident_summary`

@@ -1,0 +1,8 @@
+Patched the reducer/render/summary path so the invariant now lives in `replay/merge.py`, not in post-render cleanup. `replay/merge.py` now keys events from intrinsic IDs when present, falls back to a logical event tuple instead of fixture order, and suppresses only `debug_only` fragments that arrive after `response.completed` while preserving legitimate deferred post-completion output. `replay/render.py` now renders only merged events that remain visible under those reducer semantics, and `replay/incident_summary.py` counts merged visible events directly instead of counting rendered lines.
+
+I also updated [reports/incidents/transcript-merge.md](/tmp/transcript_merge_probe/20260422T214650Z-v1-clean-baseline-run2/workspace/reports/incidents/transcript-merge.md) to describe the actual bug boundary: reducer identity collapse plus over-broad post-completion handling, not renderer-level dedupe.
+
+Verification passed with:
+```bash
+python3 -m unittest tests.test_merge tests.test_render tests.test_incident_summary
+```

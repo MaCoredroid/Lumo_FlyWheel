@@ -1,0 +1,56 @@
+CNB-55 Track 10 probe report — 1 runs probe_run_id=20260422T214149Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  1    0.00    0.00     0     0  [0]  stale_incident_notex1
+v2-noisy-distractor                -       -       -     -     -   (no runs)
+v3-dirty-state                     -       -       -     -     -   (no runs)
+v4-multi-corpus-objective          -       -       -     -     -   (no runs)
+v5-recovery-in-thread              -       -       -     -     -   (no runs)
+
+family_mean = 0.00   (window 15.0-25.0)
+max_variant_mean = 0.00   (cap 40.0)
+min_variant_mean = 0.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 0.00
+  [PASS] max variant <= cap: 0.00
+  [PASS] at least one variant <= hard floor: min variant mean = 0.00
+  [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: ok
+
+overall: HARDEN NEEDED
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 0,
+    "family_mean_ok": false,
+    "hard_variant_ok": true,
+    "max_variant_mean": 0,
+    "max_variant_ok": true,
+    "min_variant_mean": 0,
+    "monotonic_breaks": [],
+    "monotonic_ok": true
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "stale_incident_note": 1
+      },
+      "max": 0,
+      "mean": 0,
+      "min": 0,
+      "n": 1,
+      "scores": [
+        0
+      ],
+      "shortcut_runs": 1,
+      "stdev": 0.0
+    },
+    "v2-noisy-distractor": null,
+    "v3-dirty-state": null,
+    "v4-multi-corpus-objective": null,
+    "v5-recovery-in-thread": null
+  }
+}

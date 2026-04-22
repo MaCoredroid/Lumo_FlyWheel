@@ -1,0 +1,119 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=20260422T214650Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   86.67    2.89    85    90  [85,90,85]  -
+v2-noisy-distractor                3   68.33   14.43    60    85  [60,85,60]  stale_incident_notex2
+v3-dirty-state                     3   65.00    8.66    60    75  [75,60,60]  stale_incident_notex2
+v4-multi-corpus-objective          3   68.33   14.43    60    85  [60,60,85]  stale_incident_notex2
+v5-recovery-in-thread              3   75.00   15.00    60    90  [60,75,90]  stale_incident_notex1
+
+family_mean = 72.67   (window 15.0-25.0)
+max_variant_mean = 86.67   (cap 40.0)
+min_variant_mean = 65.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 72.67
+  [FAIL] max variant <= cap: 86.67
+  [FAIL] at least one variant <= hard floor: min variant mean = 65.00
+  [FAIL] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: v3-dirty-state (65.0) < v4-multi-corpus-objective (68.3) beyond +/-3.0; v4-multi-corpus-objective (68.3) < v5-recovery-in-thread (75.0) beyond +/-3.0
+
+overall: HARDEN NEEDED
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 72.66666666666667,
+    "family_mean_ok": false,
+    "hard_variant_ok": false,
+    "max_variant_mean": 86.66666666666667,
+    "max_variant_ok": false,
+    "min_variant_mean": 65,
+    "monotonic_breaks": [
+      "v3-dirty-state (65.0) < v4-multi-corpus-objective (68.3) beyond +/-3.0",
+      "v4-multi-corpus-objective (68.3) < v5-recovery-in-thread (75.0) beyond +/-3.0"
+    ],
+    "monotonic_ok": false
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {},
+      "max": 90,
+      "mean": 86.66666666666667,
+      "min": 85,
+      "n": 3,
+      "scores": [
+        85,
+        90,
+        85
+      ],
+      "shortcut_runs": 0,
+      "stdev": 2.8867513459481287
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {
+        "stale_incident_note": 2
+      },
+      "max": 85,
+      "mean": 68.33333333333333,
+      "min": 60,
+      "n": 3,
+      "scores": [
+        60,
+        85,
+        60
+      ],
+      "shortcut_runs": 0,
+      "stdev": 14.433756729740644
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {
+        "stale_incident_note": 2
+      },
+      "max": 75,
+      "mean": 65,
+      "min": 60,
+      "n": 3,
+      "scores": [
+        75,
+        60,
+        60
+      ],
+      "shortcut_runs": 0,
+      "stdev": 8.660254037844387
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "stale_incident_note": 2
+      },
+      "max": 85,
+      "mean": 68.33333333333333,
+      "min": 60,
+      "n": 3,
+      "scores": [
+        60,
+        60,
+        85
+      ],
+      "shortcut_runs": 0,
+      "stdev": 14.433756729740644
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "stale_incident_note": 1
+      },
+      "max": 90,
+      "mean": 75,
+      "min": 60,
+      "n": 3,
+      "scores": [
+        60,
+        75,
+        90
+      ],
+      "shortcut_runs": 0,
+      "stdev": 15.0
+    }
+  }
+}

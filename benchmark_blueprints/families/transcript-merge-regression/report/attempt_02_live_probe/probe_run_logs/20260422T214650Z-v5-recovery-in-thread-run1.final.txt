@@ -1,0 +1,10 @@
+Updated [replay/merge.py](/tmp/transcript_merge_probe/20260422T214650Z-v5-recovery-in-thread-run1/workspace/replay/merge.py), [replay/render.py](/tmp/transcript_merge_probe/20260422T214650Z-v5-recovery-in-thread-run1/workspace/replay/render.py), [replay/incident_summary.py](/tmp/transcript_merge_probe/20260422T214650Z-v5-recovery-in-thread-run1/workspace/replay/incident_summary.py), and [reports/incidents/transcript-merge.md](/tmp/transcript_merge_probe/20260422T214650Z-v5-recovery-in-thread-run1/workspace/reports/incidents/transcript-merge.md).
+
+The reducer now keys events by `event_id` when present, with a metadata-based fallback instead of collapsing tool outputs by `(role, tool_name)`. Debug-only fragments that arrive after `response.completed` are suppressed in `merge.py`, while legitimate non-debug deferred output still survives and renders normally. `render.py` now stays aligned with merged-event semantics instead of acting as a downstream patch point, and `incident_summary.py` counts merged renderable events directly with `count_source="merged_events"`.
+
+Verification passed with:
+```bash
+python3 -m unittest tests.test_merge tests.test_render tests.test_incident_summary
+```
+
+I also attempted a final `git status` scope check, but this workspace is not a git repository.

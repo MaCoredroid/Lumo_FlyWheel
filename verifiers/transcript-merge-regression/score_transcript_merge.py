@@ -42,6 +42,10 @@ def sha256_tree(root: Path, rel: str) -> str | None:
         return sha256_file(target)
     h = hashlib.sha256()
     for path in sorted(target.rglob("*")):
+        if "__pycache__" in path.parts:
+            continue
+        if path.is_file() and path.suffix == ".pyc":
+            continue
         rel_path = path.relative_to(target).as_posix()
         if path.is_dir():
             h.update(f"D:{rel_path}\n".encode())
@@ -74,6 +78,19 @@ def load_text(relpath: str) -> str:
     if not path.exists():
         return ""
     return path.read_text()
+
+
+def is_transient_runtime_file(relpath: str) -> bool:
+    parts = relpath.split("/")
+    if "__pycache__" in parts:
+        return True
+    if relpath.endswith(".pyc"):
+        return True
+    if relpath.startswith(".pytest_cache/"):
+        return True
+    if relpath == ".DS_Store" or relpath.endswith("/.DS_Store"):
+        return True
+    return False
 
 
 @dataclass
@@ -130,6 +147,8 @@ def trusted_final_state(state: ScoreState, gold: dict[str, Any], manifest: dict[
         if not path.is_file():
             continue
         rel = path.relative_to(AGENT_WS).as_posix()
+        if is_transient_runtime_file(rel):
+            continue
         current_hashes[rel] = sha256_file(path)
     baseline_hashes = manifest.get("file_hashes", {})
     for rel, expected in baseline_hashes.items():
@@ -284,7 +303,18 @@ def run_hidden_checks(state: ScoreState, gold: dict[str, Any]) -> dict[str, bool
 
 def score_note(state: ScoreState, gold: dict[str, Any]) -> dict[str, bool]:
     note = load_text("reports/incidents/transcript-merge.md").lower()
-    required = all(phrase.lower() in note for phrase in gold["required_note_phrases"])
+    stable_identity = "stable event identity" in note or "`event_id`" in note or "event_id" in note
+    deferred_output = (
+        "deferred tool output" in note
+        or "post-completion fragments" in note
+        or "after completion" in note
+    )
+    merged_event_grounding = (
+        "merged events" in note
+        or "merged visible events" in note
+        or "merged event stream" in note
+    )
+    required = stable_identity and deferred_output and merged_event_grounding
     variant = all(phrase.lower() in note for phrase in gold["variant_note_phrases"])
     shortcut = "render" in note and "not an acceptable fix" in note and "deferred tool output" in note
     if required:

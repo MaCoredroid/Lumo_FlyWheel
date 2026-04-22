@@ -1,0 +1,33 @@
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 0,
+    "family_mean_ok": false,
+    "hard_variant_ok": true,
+    "max_variant_mean": 0,
+    "max_variant_ok": true,
+    "min_variant_mean": 0,
+    "monotonic_breaks": [],
+    "monotonic_ok": true
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "stale_incident_note": 1
+      },
+      "max": 0,
+      "mean": 0,
+      "min": 0,
+      "n": 1,
+      "scores": [
+        0
+      ],
+      "shortcut_runs": 1,
+      "stdev": 0.0
+    },
+    "v2-noisy-distractor": null,
+    "v3-dirty-state": null,
+    "v4-multi-corpus-objective": null,
+    "v5-recovery-in-thread": null
+  }
+}

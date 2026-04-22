@@ -1,0 +1,5 @@
+Updated the reducer boundary in [replay/merge.py](/tmp/transcript_merge_probe/20260422T214650Z-v2-noisy-distractor-run3/workspace/replay/merge.py), [replay/render.py](/tmp/transcript_merge_probe/20260422T214650Z-v2-noisy-distractor-run3/workspace/replay/render.py), [replay/incident_summary.py](/tmp/transcript_merge_probe/20260422T214650Z-v2-noisy-distractor-run3/workspace/replay/incident_summary.py), and [reports/incidents/transcript-merge.md](/tmp/transcript_merge_probe/20260422T214650Z-v2-noisy-distractor-run3/workspace/reports/incidents/transcript-merge.md).
+
+The reducer now keys events by stable event identity instead of collapsing tool outputs by tool name, drops only `debug_only` fragments that appear after `response.completed`, and still preserves legitimate deferred post-completion output. `render.py` now just renders the merged event set honestly, and `incident_summary.py` counts merged assistant/tool-output blocks directly instead of inferring counts from rendered lines.
+
+Verification: `python3 -m unittest tests.test_merge tests.test_render tests.test_incident_summary` passed.
