@@ -3,7 +3,7 @@ track: 11
 scenario_type: parallel_cross_surface_repair
 schema_version: cnb55.family.v1
 layer_a_status: in_progress
-layer_b_status: implemented_pending_probe
+layer_b_status: implemented_harden_needed
 grader_ref: verifiers/fanout-fullstack-release-blocker/score_release_blocker.py
 milestone_config_ref: verifier_data/fanout-fullstack-release-blocker/{variant_id}/milestones/
 
@@ -32,7 +32,7 @@ milestones:
 capability_tags:
   shared_core:
     required: [localize, inspect, modify, verify, respect_invariants]
-    recommended: [inspect:evidence_triage, verify:assumption_honesty]
+    recommended: ["inspect:evidence_triage", "verify:assumption_honesty"]
     forbidden:
       - modify:tests/
       - modify:fixtures/

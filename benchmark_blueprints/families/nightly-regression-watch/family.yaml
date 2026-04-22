@@ -3,6 +3,7 @@ track: 10
 schema_version: cnb55.family.v1
 layer_a_status: red
 layer_b_status: green
+layer_b_status_note: green means instrumentation-complete, not calibration-accepted
 
 grader_ref: verifiers/nightly-regression-watch/score_ranking.py
 milestone_config_ref: verifier_data/nightly-regression-watch/{variant_id}/milestones/

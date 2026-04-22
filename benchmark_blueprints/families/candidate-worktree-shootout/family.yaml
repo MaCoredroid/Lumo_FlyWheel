@@ -165,10 +165,12 @@ rawr_modes:
     description: lands the service fix but comparison artifacts omit concrete worktree paths, commands, or observed outcomes
     detection_surface: artifact completeness and missing_worktree_proof ceiling
     expected_P_benchmark_max: 0.20
+    status: implemented
   - id: constraint_named_not_respected
     description: names the direct-caller risk in prose but still lands CLI-local ownership
     detection_surface: hidden.service_contract_passes plus cli_only_fix ceiling
     expected_P_benchmark_max: 0.30
+    status: implemented
   - id: citation_fabricated
     description: writes plausible comparison notes that do not cite the real caller/evidence files
     detection_surface: artifact evidence bullets and variant reasoning checks
