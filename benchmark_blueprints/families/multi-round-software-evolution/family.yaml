@@ -148,6 +148,22 @@ initial_state:
   manifest_lock: benchmark_blueprints/families/multi-round-software-evolution/manifest.lock.json
   pinning: manifest.lock.json pins all bundle content
 
+rawr_modes:
+  - id: grounding_stripped
+    description: Correct `selected_focus` and bounded next-round plan, but leaves grounding citations empty or unsupported.
+    detection_surface: grounding.focus_citations_valid plus shortcut and boundary ceilings staying inactive
+    expected_P_benchmark_max: 0.25
+  - id: citation_fabricated
+    description: Correct `selected_focus`, but cites workspace files that do not actually support the stated reason or guardrail.
+    detection_surface: "LLM-judge or structural heuristic - NOT YET IMPLEMENTED"
+    expected_P_benchmark_max: 0.40
+    status: declared_not_yet_implemented
+  - id: constraint_named_not_respected
+    description: Names the true blocker in prose, but the chosen focus or do-not-touch boundary still violates the active objective or rollback constraint.
+    detection_surface: behavioral.focus_match combined with boundary/objective ceiling checks
+    expected_P_benchmark_max: 0.45
+    status: declared_not_yet_implemented
+
 saturation:
   threshold_mean_P: 80
   trigger: mean P_benchmark above threshold for two consecutive probe rounds

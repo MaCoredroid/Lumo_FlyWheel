@@ -1,0 +1,140 @@
+{
+  "runs": [
+    {
+      "run_index": 1,
+      "variant": "v1-clean-baseline",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "-round focus is `schema-snapshot-alignment`, with explicit do-not-touch exclusions for pager cleanup, cold-start cache tuning, and streaming watermark follow-up. `./bin/cnb55-evolution validate brief_input.json` and `./bin/cnb55-evolution submit brief_input.json` both completed successfully.\n\n`git status` could not be used for file-scope verification because this workspace is not a Git repository.",
+      "codex_stderr_tail": "\",\n+      \"note\": \"The frozen evidence reports 7 / 10 divergent runs but does not identify the concrete snapshot classes or restore cases causing those failures.\"\n+    }\n+  ]\n+}\n\n2026-04-22T18:14:24.346096Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db664-989c-70a2-940f-f00dd638e4af hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n71,594",
+      "selected_focus_id": "schema-snapshot-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    },
+    {
+      "run_index": 1,
+      "variant": "v2-noisy-distractor",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "a-snapshot-alignment`, with explicit evidence-backed `do_not_touch` entries, a concrete baseline/target/guardrail metric, and an assumption ledger that includes a `missing` row.\n\nPer `AGENTS.md`, the only non-`brief/` file I wrote was the required root [brief_input.json](/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/mrse_probe_v2-noisy-distractor_r1_0kxutxw2/workspace/brief_input.json).",
+      "codex_stderr_tail": "e does not say whether any secondary contributors remain after ordering is aligned, so the plan should leave room to confirm that divergence truly falls to zero.\"\n+    }\n+  ]\n+}\n\n2026-04-22T18:16:15.048570Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db666-823c-7510-99d3-610e228665d1 hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n25,174",
+      "selected_focus_id": "schema-snapshot-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    },
+    {
+      "run_index": 1,
+      "variant": "v3-dirty-state",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "/mrse_probe_v3-dirty-state_r1_2xdx5e25/workspace/brief/round_plan.json) and [brief/round_plan.md](/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/mrse_probe_v3-dirty-state_r1_2xdx5e25/workspace/brief/round_plan.md). The selected next-round focus is `schema-snapshot-alignment`, with explicit do-not-touch fences around pager cleanup, the abandoned cache patch, and downstream watermark work.",
+      "codex_stderr_tail": "\n+      \"note\": \"The priority map marks watermark alignment as downstream, but the next round should confirm that no hidden coupling invalidates that sequencing.\"\n+    }\n+  ]\n+}\n\n2026-04-22T18:17:57.746605Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db668-32b8-7011-9a9b-5d4e02431e39 hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n69,283",
+      "selected_focus_id": "schema-snapshot-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    },
+    {
+      "run_index": 1,
+      "variant": "v4-multi-corpus-objective",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "on) and [brief/round_plan.md](/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/mrse_probe_v4-multi-corpus-objective_r1_49wc2a_s/workspace/brief/round_plan.md). The selected next-round focus is `streaming-watermark-alignment`, with explicit evidence-backed `do_not_touch` entries, a concrete watermark mismatch baseline/target/guardrail, and an assumption ledger that includes a `missing` row.",
+      "codex_stderr_tail": "status\": \"missing\",\n+      \"note\": \"The frozen evidence does not show whether the 6 / 20 mismatches share one root cause or multiple replay-stream failure modes.\"\n+    }\n+  ]\n+}\n\n2026-04-22T18:19:26.365505Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db669-c554-70f2-bcfc-cbb3f70699b7 hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n70,062",
+      "selected_focus_id": "streaming-watermark-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    },
+    {
+      "run_index": 1,
+      "variant": "v5-recovery-in-thread",
+      "timed_out": false,
+      "codex_exit": 0,
+      "codex_stdout_tail": "read_r1_lt2bhkqb/workspace/brief/round_plan.json) and [brief/round_plan.md](/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/mrse_probe_v5-recovery-in-thread_r1_lt2bhkqb/workspace/brief/round_plan.md). The selected next-round focus is `schema-snapshot-alignment`, with evidence-backed `do_not_touch` boundaries, a concrete replay-divergence metric, and a `missing` assumption row as required.",
+      "codex_stderr_tail": "vidence bundle does not state the exact snapshot restore ordering contract or tie-break rule that must hold for deterministic replay.\",\n+      \"status\": \"missing\"\n+    }\n+  ]\n+}\n\n2026-04-22T18:21:17.272118Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019db66b-1e4b-7171-8409-79a509f75cf1 hook_name=legacy_notify error=No such file or directory (os error 2)\ntokens used\n71,647",
+      "selected_focus_id": "schema-snapshot-alignment",
+      "P_benchmark": 86,
+      "M_training": 0.9348,
+      "pass": true,
+      "ceilings_applied": []
+    }
+  ],
+  "summary": {
+    "variants": [
+      {
+        "variant": "v1-clean-baseline",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "schema-snapshot-alignment"
+        ]
+      },
+      {
+        "variant": "v2-noisy-distractor",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "schema-snapshot-alignment"
+        ]
+      },
+      {
+        "variant": "v3-dirty-state",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "schema-snapshot-alignment"
+        ]
+      },
+      {
+        "variant": "v4-multi-corpus-objective",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "streaming-watermark-alignment"
+        ]
+      },
+      {
+        "variant": "v5-recovery-in-thread",
+        "runs": 1,
+        "mean_P_benchmark": 86.0,
+        "min_P_benchmark": 86,
+        "max_P_benchmark": 86,
+        "mean_M_training": 0.9348,
+        "selected_focuses": [
+          "schema-snapshot-alignment"
+        ]
+      }
+    ],
+    "family_mean_P_benchmark": 86.0,
+    "max_variant_mean": 86.0,
+    "min_variant_mean": 86.0,
+    "monotonic_with_tolerance_3": true,
+    "oracle_gate_reference": "oracle>=90 empty=0 shortcut<=30 checked separately by regen_family.py",
+    "observed_stdev_M_training": 0.0,
+    "layer_a_gate": {
+      "family_mean_in_range_15_25": false,
+      "max_variant_mean_le_40": false,
+      "min_variant_mean_le_10": false,
+      "monotonic_with_tolerance_3": true
+    }
+  }
+}
