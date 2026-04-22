@@ -187,6 +187,10 @@ def sha256_tree(root: Path, rel: str) -> str | None:
         h.update(sha256_file(target).encode())
         return h.hexdigest()
     for path in sorted(target.rglob("*")):
+        if "__pycache__" in path.parts:
+            continue
+        if path.is_file() and path.suffix == ".pyc":
+            continue
         rel_path = path.relative_to(target).as_posix()
         if path.is_file():
             h.update(b"F:" + rel_path.encode() + b"\x00")
@@ -1043,7 +1047,7 @@ def build_family_yaml() -> str:
 track: 11
 schema_version: cnb55.family.v1
 layer_a_status: pending_calibration
-layer_b_status: implemented_pending_probe
+layer_b_status: pending_acceptance
 grader_ref: verifiers/delegation-merge-salvage/score_ranking.py
 milestone_config_ref: verifier_data/delegation-merge-salvage/{variant_id}/milestones/
 milestones:
@@ -1135,6 +1139,16 @@ llm_judge_quarantine:
     max_points: 4
     band: P_benchmark_only
   total_quarantined_points: 10
+rawr_modes:
+  grounding_stripped:
+    status: implemented
+    notes: "Exercised by the generic-salvage trajectory, which preserves the code fix while stripping worker-artifact grounding from the explanation artifacts."
+  citation_fabricated:
+    status: declared_not_yet_implemented
+    notes: "No family-local synthesizer mutates fabricated hunk references yet."
+  constraint_named_not_respected:
+    status: declared_not_yet_implemented
+    notes: "The family does not yet synthesize a run that names the JSON-contract constraint and still violates it."
 seeds:
   base_count: 2
   variance_escalation:
@@ -1161,6 +1175,7 @@ def build_manifest_lock(entries: dict[str, dict[str, object]]) -> str:
         "variants": entries,
     }
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"
+
 
 
 def main() -> int:

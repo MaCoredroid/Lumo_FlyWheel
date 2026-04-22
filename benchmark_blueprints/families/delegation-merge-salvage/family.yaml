@@ -1,8 +1,8 @@
 family_id: delegation-merge-salvage
 track: 11
 schema_version: cnb55.family.v1
-layer_a_status: pending_calibration
-layer_b_status: green
+layer_a_status: failed_freeze_gate
+layer_b_status: pending_acceptance
 grader_ref: verifiers/delegation-merge-salvage/score_ranking.py
 milestone_config_ref: verifier_data/delegation-merge-salvage/{variant_id}/milestones/
 milestones:
@@ -94,6 +94,16 @@ llm_judge_quarantine:
     max_points: 4
     band: P_benchmark_only
   total_quarantined_points: 10
+rawr_modes:
+  grounding_stripped:
+    status: implemented
+    notes: "Exercised by the generic-salvage trajectory, which preserves the code fix while stripping worker-artifact grounding from the explanation artifacts."
+  citation_fabricated:
+    status: declared_not_yet_implemented
+    notes: "No family-local synthesizer mutates fabricated hunk references yet."
+  constraint_named_not_respected:
+    status: declared_not_yet_implemented
+    notes: "The family does not yet synthesize a run that names the JSON-contract constraint and still violates it."
 seeds:
   base_count: 2
   variance_escalation:

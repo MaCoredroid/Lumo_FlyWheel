@@ -69,6 +69,7 @@ Commands run:
 Results:
 
 - initial V1 workspace: `1/3` tests failed (`tests.test_cli` failed on missing `## Watchlist Follow-Up`)
+- that V1 visible failure was an intentional negative control on the seeded starting workspace, not an expected passing state
 - oracle V1 overlay: `3/3` tests passed
 - interrupted live probe records:
   - V1: `score=0`, `M_training=0.0`, `integrity_flag=1`, ceilings=`missing_postmortem,integrity_violation`
@@ -82,3 +83,43 @@ Interpretation:
 - the family implementation is runnable and the deterministic verifier behaves as intended
 - the live probe attempt was interrupted before any variant reached a completed salvage state, so those `0` scores are not valid Layer A calibration data
 - Layer A therefore remains pending a dedicated uninterrupted live probe window
+
+## attempt_03 — valid whole-family live probe
+
+Commands run:
+
+- `python3 verifiers/delegation-merge-salvage/run_verification_matrix.py --variant v1-clean-baseline --out benchmark_blueprints/families/delegation-merge-salvage/verification_matrix.md`
+- `python3 verifiers/delegation-merge-salvage/run_verification_matrix.py --variant v5-recovery-in-thread --out benchmark_blueprints/families/delegation-merge-salvage/verification_matrix_v5.md`
+- `python3 verifiers/delegation-merge-salvage/run_live_probe.py --variants v1-clean-baseline v2-noisy-distractor v3-dirty-state v4-multi-corpus-objective v5-recovery-in-thread --timeout-sec 180 --run-id live20260422b`
+
+Artifact locations:
+
+- live probe JSONL: `benchmark_blueprints/families/delegation-merge-salvage/report/live_probe_live20260422b.jsonl`
+- live probe summary: `benchmark_blueprints/families/delegation-merge-salvage/report/live_probe_live20260422b_summary.json`
+- live probe logs: `benchmark_blueprints/families/delegation-merge-salvage/report/live_probe_live20260422b/`
+- verification matrices: `benchmark_blueprints/families/delegation-merge-salvage/verification_matrix.md`, `benchmark_blueprints/families/delegation-merge-salvage/verification_matrix_v5.md`
+
+Per-variant live results:
+
+| variant | score | M_training | integrity | timed_out | ceilings | wall_clock_seconds |
+| --- | ---: | ---: | ---: | --- | --- | ---: |
+| v1-clean-baseline | 30 | 0.3000 | 0 | False | `generic_postmortem,generic_postmortem` | 151.79 |
+| v2-noisy-distractor | 30 | 0.3000 | 0 | False | `generic_postmortem,generic_postmortem` | 150.99 |
+| v3-dirty-state | 30 | 0.3000 | 0 | False | `generic_postmortem,generic_postmortem` | 128.13 |
+| v4-multi-corpus-objective | 30 | 0.3000 | 0 | False | `generic_postmortem,generic_postmortem` | 126.10 |
+| v5-recovery-in-thread | 30 | 0.3000 | 0 | False | `generic_postmortem,generic_postmortem` | 142.97 |
+
+Layer A gate values from the valid live probe:
+
+- family mean: `30.0`
+- max variant mean: `30.0`
+- min variant mean: `30.0`
+- monotonic within ±3: `pass`
+- max <= 40: `pass`
+- mean in [15, 25]: `fail`
+- at least one variant <= 10: `fail`
+
+Acceptance judgment:
+
+- Layer A remains `failed_freeze_gate` after the valid live probe
+- the real frontier signal is a flat `30/100` across all five variants, so the current family is too easy and too non-discriminating for the freeze target even though it is now probed honestly and reproducibly
