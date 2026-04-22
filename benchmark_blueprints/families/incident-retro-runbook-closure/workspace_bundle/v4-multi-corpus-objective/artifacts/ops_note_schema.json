@@ -1,0 +1,8 @@
+{
+  "required_lines": [
+    "## Applied repair",
+    "- verification_command:",
+    "- escalation_target:",
+    "## Deferred informational retro notes"
+  ]
+}

@@ -1,0 +1,10 @@
+name = "queue-drain-watch"
+kind = "heartbeat"
+destination = "thread"
+schedule_minutes = 30
+prompt = """
+Wake up in this thread and verify queue-drain closure.
+1. Run `queue-drain quiesce --cluster atlas-a`
+2. Run `queue-drain audit-post-drain --cluster atlas-a --include-stuck-shards`
+3. Escalate unresolved stuck shards to `#queue-drain-war-room`
+"""

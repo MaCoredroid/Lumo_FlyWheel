@@ -1,0 +1,1 @@
+../_shared/test_hidden_contract.py

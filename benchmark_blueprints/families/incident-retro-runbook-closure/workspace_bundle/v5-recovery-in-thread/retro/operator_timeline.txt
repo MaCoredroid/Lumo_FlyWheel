@@ -1,0 +1,6 @@
+        09:10 queue depth hit zero on atlas-a
+        09:16 on-call copied the previous helper output into the incident thread
+        09:21 stuck shard persisted after closure draft
+
+09:51 rollback note: the thread wake cadence was changed to 60 minutes in a prior attempt and the follow-up sequence was missed.
+

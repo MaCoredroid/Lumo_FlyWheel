@@ -1,0 +1,24 @@
+{
+  "automation_expectations": {
+    "destination": "thread",
+    "expected_prompt_command": "queue-drain verify-post-drain",
+    "expected_prompt_target": "#storage-sre",
+    "kind": "heartbeat",
+    "schedule_minutes": 30
+  },
+  "editable_files": [
+    "repo/runbooks/queue_drain.md",
+    "repo/scripts/queue_drain_helper.py",
+    "repo/.codex/automations/queue-drain-watch/automation.toml",
+    "repo/ops/notes/queue_drain_followup.md"
+  ],
+  "pass_bar": 65,
+  "readonly_tree_hashes": {
+    "artifacts": "0402d536450352e0c457463c4155f67ed194ea212e21b659da3df9931634f2c8",
+    "incident_context": "MISSING",
+    "release_context": "MISSING",
+    "repo/tests": "02b07de48d2338863ff8376270374fd33fb37649f5a8b8f63fec889decfd2d93",
+    "retro": "8ea78eec2738dbe36080488f05f046508a0ebdcb30dc97093dd10bd8b6d9bf54"
+  },
+  "variant_id": "v2-noisy-distractor"
+}

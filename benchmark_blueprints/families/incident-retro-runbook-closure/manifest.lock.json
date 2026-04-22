@@ -1,0 +1,31 @@
+{
+  "family_id": "incident-retro-runbook-closure",
+  "schema_version": "cnb55.manifest.v1",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_repair_sha256": "269d02f6bc93d573f923245a62b7c100dbf51f293a0321f9f386c6b9e94b1781",
+      "workspace_manifest_sha256": "3d29d128e305bda347775350b63b113f42e7e1eaf8e3406bb2e5b19a6e0b4f1c",
+      "workspace_tree_sha256": "87fea5f577b2df5338ebe6a9d7db6a885984342d3ab556978efd99725298bb65"
+    },
+    "v2-noisy-distractor": {
+      "gold_repair_sha256": "64adba0a71d037b6f28e70efd44fb32bfd09732405ae8ad74f19e196c50ec7a0",
+      "workspace_manifest_sha256": "81e27113b7cefd6701b8e33a88d1a61e30c5bbbec43e1e6b463a2021fe0e18fa",
+      "workspace_tree_sha256": "83263567caacbd64af618ee49c33f1216e576816827f7291feaa84e78bc3791b"
+    },
+    "v3-dirty-state": {
+      "gold_repair_sha256": "610d477dd785d62bf780cce82ed0bb2caa116c96b994afef408f2559e7b19a04",
+      "workspace_manifest_sha256": "defcf7740eec6dc0641f1c0d7884756c5a5348cf7b42728e5350e4829e2268ef",
+      "workspace_tree_sha256": "cb7a45ddb7a7bb24f456e7c490deacb9b85d332f123838f6571ea855339a3fb0"
+    },
+    "v4-multi-corpus-objective": {
+      "gold_repair_sha256": "b50ee7474bad8614fa156df9be8c213415b56f6b78f3f98212e3a8ffbf0927e6",
+      "workspace_manifest_sha256": "5e4ef924eea61831a97aa1764abb920cd27d5e2a375a76fb649ef53a22834762",
+      "workspace_tree_sha256": "e9a51b0c33b5b859c4b48ae32e626c4f075830dcd2a9f14689ab26f4df4b15a4"
+    },
+    "v5-recovery-in-thread": {
+      "gold_repair_sha256": "4dc3bed2a882b6e81d7b04e3e2deccf0deb6c2ab68e6b9779c7f0281a706ee57",
+      "workspace_manifest_sha256": "d99bc053bef290ec6de014b2111d68c61f164eee99fe85bd5381f07d6965ff06",
+      "workspace_tree_sha256": "638c47f248be4d175364be41449e0f414e9a8bb724e7c6f37de29d63161365d3"
+    }
+  }
+}

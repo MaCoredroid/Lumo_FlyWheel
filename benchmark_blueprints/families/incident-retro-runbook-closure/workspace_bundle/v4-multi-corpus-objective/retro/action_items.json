@@ -1,0 +1,17 @@
+{
+  "escalation_target": "#storage-sre",
+  "family_id": "incident-retro-runbook-closure",
+  "informational_note_tokens": [
+    "mirror-screenshot-only",
+    "timeline-typo-only"
+  ],
+  "retired_command": "queue-drain audit-post-drain",
+  "retired_escalation_target": "#queue-drain-war-room",
+  "verification_command": "queue-drain verify-post-drain",
+  "verification_sequence": [
+    "queue-drain quiesce --cluster atlas-a",
+    "queue-drain verify-post-drain --cluster atlas-a --include-stuck-shards",
+    "python3 repo/scripts/queue_drain_helper.py --emit-shard-report atlas-a",
+    "Escalate to #storage-sre with the shard report if any shard remains stuck"
+  ]
+}

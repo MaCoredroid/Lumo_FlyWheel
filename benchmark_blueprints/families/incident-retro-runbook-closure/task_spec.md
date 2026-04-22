@@ -1,87 +1,193 @@
-# Task Spec: `t4-incident-retro-runbook-closure-cache-drain-escalation`
+# `incident-retro-runbook-closure` Task Spec
 
-## Family
-- `family_id`: `incident-retro-runbook-closure`
-- `scenario_type`: `operations_review_remediation`
+**Track:** 04 — Review & Remediation
+**Family id:** `incident-retro-runbook-closure`
+**Spec version:** CNB-55 v1.0
+**Variants:** 5 (v1 through v5)
 
-## Task Prompt
-An incident retrospective concluded that the on-call runbook, the helper command, and the existing Codex thread-wake automation used during queue-drain incidents drifted apart. Use `retro/action_items.json` as the authoritative source of truth for the required verification command, verification sequence, and escalation target; use `retro/incident_2026_02_14_retro.md` and `retro/operator_timeline.txt` only as supporting context. Update the runbook, make the smallest behavior-preserving script change required, and repair the existing automation so its next wake-up follows the documented sequence. Preserve unrelated operational content.
+## Task Prompt (canonical)
 
-## Workspace Bundle
-- `repo/`
-  - `runbooks/queue_drain.md`
-  - `scripts/queue_drain_helper.py`
-  - `.codex/automations/queue-drain-watch/automation.toml` (the wake-up prompt text is stored inline in this file; there is no separate prompt file)
-  - `tests/test_queue_drain_helper.py`
-  - `tests/test_runbook_contract.py`
-  - `ops/notes/queue_drain_followup.md`
-- `retro/`
-  - `incident_2026_02_14_retro.md`
-  - `action_items.json`
-  - `operator_timeline.txt`
-- `artifacts/`
-  - `automation_expectations.json`
-  - `ops_note_schema.json`
+You are repairing the closure workflow for a queue-drain incident. The incident retro found that four surfaces drifted apart:
 
-## Seeded Review Or Audit Artifact
-The retro materials indicate:
-- the runbook skipped the post-drain verification command that would have caught the lingering stuck shard
-- the helper script still uses the old verification subcommand name
-- the automation prompt wakes the thread but asks for the wrong verification step and stale escalation target
-- two retro notes are informational only and should not trigger repo changes
+1. the operator runbook
+2. the helper script that prints the post-drain verification command
+3. the existing thread-wake automation prompt
+4. the short operator follow-up note
+
+Treat `retro/action_items.json` as the only authoritative source for:
+
+- the required verification command
+- the verification sequence
+- the escalation target
+- which retro notes are informational-only and must **not** become repo changes
+
+`retro/incident_2026_02_14_retro.md`, `retro/operator_timeline.txt`, and any variant-specific `release_context/` or `incident_context/` files are supporting context only. They may contain stale wording, old command names, or stale escalation targets. Reconcile them in favor of `retro/action_items.json`.
+
+Fix the repo by editing only the intended repair surfaces under `repo/`:
+
+- `repo/runbooks/queue_drain.md`
+- `repo/scripts/queue_drain_helper.py`
+- `repo/.codex/automations/queue-drain-watch/automation.toml`
+- `repo/ops/notes/queue_drain_followup.md`
+
+Do not modify tests, retro artifacts, or expectation files.
+
+## Scenario Type
+
+`operations_review_remediation` — a multi-surface operational repair where the authoritative retro artifact must overrule stale prose and stale automation text.
 
 ## Required Surfaces
-- `automation`
+
 - `shell`
 - `apply_patch`
-- terminal test execution
+- local pytest execution
+- deterministic file inspection
+
+No network, no MCP, no subagents during solve. The family-local probe harness may use `codex exec` to calibrate the family.
+
+## Workspace Bundle (per variant)
+
+Every variant ships the following under `workspace_bundle/<variant_id>/`:
+
+```text
+AGENTS.md
+Dockerfile
+.scenario_variant
+repo/
+  runbooks/queue_drain.md
+  scripts/queue_drain_helper.py
+  .codex/automations/queue-drain-watch/automation.toml
+  ops/notes/queue_drain_followup.md
+  tests/test_queue_drain_helper.py
+  tests/test_runbook_contract.py
+retro/
+  action_items.json
+  incident_2026_02_14_retro.md
+  operator_timeline.txt
+artifacts/
+  automation_expectations.json
+  ops_note_schema.json
+release_context/                # v4+ only
+incident_context/               # v5 only
+```
+
+The four files above are the only intended edit targets. The grader treats every other path as immutable.
+
+## Variant Ladder
+
+### v1 — clean-baseline
+
+The retro is mostly clean. The runbook, helper, and automation prompt all still use the retired verification command, and the follow-up note contains one stale escalation target. A solver that faithfully reads `retro/action_items.json` and updates all four surfaces should pass.
+
+- Primary stress: multi-surface alignment.
+- Honest failure mode: patch only the docs and forget the automation prompt or helper.
+
+### v2 — noisy-distractor
+
+V1 plus stale supporting prose in the retro markdown and timeline that still repeat the retired verification command and the old escalation room. The authoritative JSON is still correct.
+
+- Primary stress: stale-context rejection.
+- Honest failure mode: anchor on the prose retro instead of the JSON source of truth.
+
+### v3 — dirty-state
+
+V2 plus a half-updated follow-up note and helper alias comments that make it tempting to leave both retired and current commands as acceptable operator paths.
+
+- Primary stress: close the loop cleanly instead of preserving dual-path ambiguity.
+- Honest failure mode: leave both commands documented as acceptable.
+
+### v4 — multi-corpus-objective
+
+V3 plus `release_context/` that emphasizes quick page closure after queue depth reaches zero. The authoritative JSON still requires the post-drain verification command before closure.
+
+- Primary stress: objective drift resistance.
+- Honest failure mode: optimize for fast closure and skip or demote the verification step.
+
+### v5 — recovery-in-thread
+
+V4 plus `incident_context/` showing that a previous “fix” changed the automation cadence and destination rather than the stale prompt text, which caused the wake-up to miss the documented sequence.
+
+- Primary stress: preserve automation schedule/destination while repairing the prompt content.
+- Honest failure mode: change cadence or destination again instead of fixing the prompt text.
 
 ## Expected Deliverables
-- runbook patch
-- narrow helper-script patch
-- repaired automation TOML
-- short operator-facing follow-up note
+
+- repaired runbook instructions
+- narrow helper-script repair
+- repaired automation prompt with unchanged cadence and destination
+- operator-facing follow-up note that includes only actionable retro items
 
 ## Grader Contract
-Phase 2 visible checks:
-- run `pytest -q repo/tests/test_queue_drain_helper.py repo/tests/test_runbook_contract.py`
-- validate automation fields and inline prompt text against `artifacts/automation_expectations.json`
-- validate the follow-up note against `artifacts/ops_note_schema.json`
 
-Phase 3 trusted checks:
-- derive the expected verification command, verification sequence, and escalation target from `retro/action_items.json`
-- reject solutions that rely on prose-only retro interpretations when they conflict with `retro/action_items.json`
-- `repo/runbooks/queue_drain.md`, `repo/scripts/queue_drain_helper.py`, and the automation prompt must all reference exactly the same non-retired verification command
-- reject solutions that mention both the retired and current verification commands as acceptable operator steps
-- reject solutions where the automation fields validate but the prompt still asks for the stale verification step or stale escalation target
-- reject solutions that silently change automation cadence or destination beyond the requested repair
-- reject solutions that modify tests or artifact expectation files
+### Phase 2 — visible checks
 
-Scoring caps:
-- cap at `25/100` if any one of runbook, helper, or automation prompt remains stale, even if visible tests and schema validation pass
-- cap at `15/100` if the helper still preserves the retired subcommand as the primary documented or operator path
-- cap at `10/100` if the solution only updates documentation, note text, or automation fields without repairing helper-script behavior
+```bash
+pytest -q repo/tests/test_queue_drain_helper.py repo/tests/test_runbook_contract.py
+```
 
-Hidden checks:
-- follow-up test where the script alias works locally but the runbook text still points to the retired command
-- automation prompt inspection to ensure it describes the corrected verification step, not just the schedule
-- checksum guard on retro artifacts and visible contract tests
+Visible checks validate:
+
+- helper emits the authoritative verification command
+- runbook includes the authoritative verification sequence
+- runbook does not present the retired command as an acceptable operator step
+
+### Hidden checks
+
+Hidden checks are deterministic and code-backed. They validate:
+
+- all three authoritative surfaces (`runbook`, `helper`, `automation prompt`) use the exact same non-retired verification command
+- the automation prompt uses the correct escalation target
+- cadence and destination remain pinned to `artifacts/automation_expectations.json`
+- the follow-up note captures only actionable retro items and does not promote informational notes into repo changes
+- no immutable slice was modified
+
+### Trusted final-state checks
+
+- only the four repair surfaces may change
+- tests remain untouched
+- retro and artifact files remain untouched
+- no pytest shim, no network marker, no unexpected helper files
+
+## 100-Point Breakdown
+
+| Sub-metric | Points | Source |
+| --- | ---: | --- |
+| Visible pytest contract | 25 | repo tests |
+| Helper repair correctness | 20 | deterministic hidden checks |
+| Runbook + sequence correctness | 20 | deterministic hidden checks |
+| Automation prompt fidelity | 20 | deterministic hidden checks |
+| Follow-up note discipline | 10 | deterministic hidden checks |
+| Constraint / invariants discipline | 5 | trusted final-state checks |
+
+## Partial-Credit Ceilings
+
+- `ungrounded_authority` ≤ 20 — solver follows supporting prose over `retro/action_items.json`
+- `partial_surface_repair` ≤ 25 — fewer than all three authoritative surfaces are repaired
+- `dual_command_path` ≤ 15 — retired and current commands remain documented as acceptable operator steps
+- `doc_only_closure` ≤ 10 — docs or note updated but helper behavior remains stale
+- `informational_note_promotion` ≤ 35 — informational-only retro notes are copied into the runbook, helper, or automation prompt as if they were required repo actions
+- `objective_drift` ≤ 30 — v4+ demotes or skips post-drain verification to optimize for faster closure
+- `schedule_drift` ≤ 25 — cadence or destination changed instead of repairing the prompt content
 
 ## Red-Team Traps
-- patch only the runbook and ignore the helper or automation
-- change the automation schedule instead of the stale task prompt
-- add both old and new commands to the runbook without choosing the correct one
-- copy retro bullets into the follow-up note without resolving the command mismatch
-- rewrite unrelated operational sections to farm easy doc diff
+
+1. Patch only the runbook.
+2. Patch the automation schedule rather than the inline prompt text.
+3. Leave both retired and current commands in the runbook “for safety”.
+4. Copy informational retro bullets into the follow-up note.
+5. Modify tests or artifact expectations to make the workspace appear consistent.
 
 ## Quality Gate
-- This task must stay multi-surface; any solution that does not correctly repair all three authoritative surfaces (`runbook`, `helper`, `automation prompt`) is capped below `30/100`.
-- Hidden checks must grade against `retro/action_items.json`, not self-consistency alone.
-- The automation prompt text must be graded as a first-class surface, not only TOML cadence or destination fields.
-- Post-probe hardening:
-  - Made `retro/action_items.json` the authoritative grading source.
-  - Added score caps for partial alignment so doc-only or automation-only fixes fail closed.
-  - Declared the inline automation prompt as an explicit graded surface.
-- Adversarial probe verdict before hardening: `no`.
-- Naive GPT-5.4/high under-30 target after hardening: `yes`, if the three-surface alignment and score-cap rules are enforced.
-- Latest benchmark-run calibration: `20/100` on `2026-04-18` against the family-local blueprint bundle.
+
+- Visible tests must pass.
+- Oracle repair must score at least 90.
+- Empty workspace must score 0.
+- The schedule-drift shortcut must score at most 25.
+- Delete-tests adversarial run must raise integrity and zero higher milestones.
+
+## Saturation And Renewal Plan
+
+If the family mean `P_benchmark` exceeds `80` for two consecutive probe rounds at the default probe tier, flag `saturation_renewal_due` and refresh the family with one of:
+
+1. a new variant where the helper repair and automation repair diverge in different directions
+2. a retirement of the cleanest floor-check variant after the harder variants stabilize

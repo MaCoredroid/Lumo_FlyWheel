@@ -1,0 +1,18 @@
+{
+  "files": {
+    ".scenario_variant": "fdc62f17d056667cff21d79f952b69698e909ea4d276ac5b4fff4947912b2301",
+    "AGENTS.md": "53240ce5bd6d05fc5946205cc0ad8af21977912c3445fb7541eb4f7f5d171472",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "artifacts/automation_expectations.json": "f68ec94eb69d52f7b51e46722b3c765fe4de8192bce1842c9b51c961ab3f45d4",
+    "artifacts/ops_note_schema.json": "65698f5b1e85450587c6acdb1f5def053894bb24b55df7e78acb4fab460a6d59",
+    "repo/.codex/automations/queue-drain-watch/automation.toml": "7002b50c49937643966b9397df7f63a500e6e128c1c5f32a03c0fd4510718a3f",
+    "repo/ops/notes/queue_drain_followup.md": "5ef301cb77bda1dc82988dbd22e3768a5e50e3aa46bd27af231f71056140f9a7",
+    "repo/runbooks/queue_drain.md": "4899c7ee38703a1e6e0154e5ad2deffc8aabbe98459fc57d37dcea8797164bba",
+    "repo/scripts/queue_drain_helper.py": "208a30254a4133ec77c72db705e2e42870e7dd86aea621343e5af7a4c56c0fd7",
+    "repo/tests/test_queue_drain_helper.py": "d7288ca291c4d1e235837431bdcd0b3fed5a880c484306826ba95194c9347c88",
+    "repo/tests/test_runbook_contract.py": "b49a247bd015a6794a0f8669c2cfa613d4e7fe4478b04a639c8f9a9a962a9b74",
+    "retro/action_items.json": "e1e265a313f808bb9c8a8f53427e604d1dfe91ac5c98b2553effe75428eabd61",
+    "retro/incident_2026_02_14_retro.md": "5e46c34e443fd98056f1171975a4882eb3b6e9679a8609023162d23015f1df32",
+    "retro/operator_timeline.txt": "4e966db1b3676c9f68223eb3e9a54d4331ba5b4d30553d84f8aeeb1a6673648e"
+  }
+}

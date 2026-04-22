@@ -1,0 +1,7 @@
+{
+  "destination": "thread",
+  "expected_prompt_command": "queue-drain verify-post-drain",
+  "expected_prompt_target": "#storage-sre",
+  "kind": "heartbeat",
+  "schedule_minutes": 30
+}

@@ -1,0 +1,24 @@
+{
+  "automation_expectations": {
+    "destination": "thread",
+    "expected_prompt_command": "queue-drain verify-post-drain",
+    "expected_prompt_target": "#storage-sre",
+    "kind": "heartbeat",
+    "schedule_minutes": 30
+  },
+  "editable_files": [
+    "repo/runbooks/queue_drain.md",
+    "repo/scripts/queue_drain_helper.py",
+    "repo/.codex/automations/queue-drain-watch/automation.toml",
+    "repo/ops/notes/queue_drain_followup.md"
+  ],
+  "pass_bar": 65,
+  "readonly_tree_hashes": {
+    "artifacts": "0402d536450352e0c457463c4155f67ed194ea212e21b659da3df9931634f2c8",
+    "incident_context": "6e9ea19ccb2e6f5cccb9954114f06f325e7794aae8070723eac867eb765b017e",
+    "release_context": "8b930996ba29e047858df6e3f32e8f1f7f0ea20c901f11d6369c0d9f83e893bd",
+    "repo/tests": "02b07de48d2338863ff8376270374fd33fb37649f5a8b8f63fec889decfd2d93",
+    "retro": "bfbf3c94fe03037999fdb236e161f2e6aba3e6284887b4763fe8cb7990ee189e"
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

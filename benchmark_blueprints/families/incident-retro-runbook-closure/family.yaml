@@ -1,0 +1,178 @@
+family_id: incident-retro-runbook-closure
+track: 4
+schema_version: cnb55.family.v1
+layer_a_status: in_progress
+layer_b_status: in_progress
+
+grader_ref: verifiers/incident-retro-runbook-closure/score_ranking.py
+milestone_config_ref: verifier_data/incident-retro-runbook-closure/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    passes_when:
+      all_of:
+        - helper.command_matches_authority
+        - runbook.command_matches_authority
+    description: |
+      Agent localized the authoritative command and propagated it into the
+      helper and runbook.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - visible.pytest_passes
+        - helper.command_matches_authority
+    description: |
+      Helper repair landed and the repo's visible contract tests pass.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+        - shortcut_detected == false
+    description: |
+      No immutable-slice mutation, no pytest shim, no network egress, and no
+      write outside the intended repair surfaces.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - runbook.sequence_matches_authority
+        - automation.prompt_matches_authority
+        - followup.note_is_actionable_only
+    description: |
+      All user-facing repaired surfaces are functionally aligned to the
+      authoritative retro action items.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - automation.schedule_preserved
+        - no partial_credit_ceiling with cap <= 30
+    description: |
+      Full closure repair is correct, does not drift the automation schedule,
+      and avoids the family's major judgment ceilings.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    recommended:
+      - inspect:evidence_triage
+      - verify:assumption_honesty
+    forbidden:
+      - modify:tests
+      - modify:retro
+      - modify:artifacts
+  per_variant:
+    v1-clean-baseline:
+      tags: [localize, inspect, modify, verify, respect_invariants]
+    v2-noisy-distractor:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage]
+    v3-dirty-state:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage]
+    v4-multi-corpus-objective:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage, modify:policy_tradeoff]
+    v5-recovery-in-thread:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage, verify:assumption_honesty]
+
+tool_call_overrides:
+  - command: "pytest -q repo/tests/test_queue_drain_helper.py repo/tests/test_runbook_contract.py"
+    tags: [verify]
+  - command: "python repo/scripts/queue_drain_helper.py --emit-verification"
+    tags: [inspect]
+  - command: "apply_patch repo/runbooks/queue_drain.md"
+    tags: [modify]
+  - command: "apply_patch repo/.codex/automations/queue-drain-watch/automation.toml"
+    tags: [modify]
+    terminal: true
+
+state_delta:
+  kind: multi_file_repair
+  deliverables:
+    - repo/runbooks/queue_drain.md
+    - repo/scripts/queue_drain_helper.py
+    - repo/.codex/automations/queue-drain-watch/automation.toml
+    - repo/ops/notes/queue_drain_followup.md
+  states:
+    - absent
+    - partially_aligned
+    - fully_aligned
+  transitions:
+    - {from: absent, to: absent, trigger: "no repair landed", delta: 0.0}
+    - {from: absent, to: partially_aligned, trigger: "one or two surfaces aligned", delta: 0.3}
+    - {from: absent, to: fully_aligned, trigger: "all four surfaces aligned", delta: 0.7}
+    - {from: partially_aligned, to: partially_aligned, trigger: "re-edit without new alignment", delta: 0.0}
+    - {from: partially_aligned, to: fully_aligned, trigger: "finish remaining alignment", delta: 0.4}
+    - {from: fully_aligned, to: partially_aligned, trigger: "regression or schedule drift", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: any modified file outside the four repair surfaces and ignored runtime caches
+    detector: trusted_final_state:wrote_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: any hash drift under retro/, artifacts/, repo/tests/, release_context/, or incident_context/
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: presence of sitecustomize.py, usercustomize.py, or pytest.py
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: hash drift in repo/tests/*
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: .network_egress_detected marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.00
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/incident-retro-runbook-closure/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/incident-retro-runbook-closure/manifest.lock.json
+  pinning: manifest.lock.json pins the generated bundle content and oracle artifacts
+
+saturation:
+  trigger: mean P_benchmark across V1-V5 > 80 for 2 consecutive probe rounds
+  detection_path: family-local probe report
+  renewal_mechanisms:
+    - id: v6_split_authority
+      description: add a variant where the helper's preserved alias path and the automation prompt diverge independently
+    - id: retire_v1
+      description: retire the cleanest baseline once it becomes a pure floor-check
+  one_cycle_deadline: one calibration cycle
+
+rawr_modes:
+  - id: action_items_ignored
+    description: repair follows supporting prose instead of retro/action_items.json
+    detection_surface: helper/runbook/automation mismatch vs gold_repair.json
+    expected_P_benchmark_max: 0.20
+  - id: schedule_drift
+    description: prompt repaired but cadence or destination changed
+    detection_surface: automation schedule-preservation checks
+    expected_P_benchmark_max: 0.25
