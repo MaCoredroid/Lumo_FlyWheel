@@ -2,60 +2,97 @@
 
 ## Run Metadata
 
-- Run type: child-subagent benchmark attempt
+- Run type: child-subagent family implementation pass
 - Model: `gpt-5.4`
 - Reasoning effort: `high`
-- Agent id: `019da330-e9d7-73c0-8f0b-fccf0567984a`
-- Context restriction: family-local artifacts only under this family directory
+- Scope restriction:
+  - `benchmark_blueprints/families/fanout-fullstack-release-blocker/**`
+  - `verifiers/fanout-fullstack-release-blocker/**`
+  - `verifier_data/fanout-fullstack-release-blocker/**`
 
-## Attempt Summary
+## attempt_00 — prose-only family stub
 
-The solver produced a strong narrative submission: backend summary, frontend summary, rollout-note update summary, integration report, and a proof-artifact description. The response mirrored the intended cross-surface migration shape well, but it did not supply an actual patch, intercepted request evidence, or a real proof artifact from the benchmark workspace.
+Initial state before this pass:
 
-Most important failure mode:
+- `task_spec.md`, `evaluator_contract.md`, and `benchmark_run.md` existed
+- no workspace bundle
+- no family-local scorer / verifier wrapper
+- no verifier data
+- no `family.yaml`
+- no `manifest.lock.json`
 
-- no actual code diff or file-level patch manifest
-- no concrete runtime payload excerpt from the benchmark workspace
-- proof artifact was only described, not produced
+Recorded baseline from the earlier prose-only child attempt:
 
-## Scoring Against `evaluator_contract.md`
+- final score: `20 / 100`
+- strongest signal: good migration narrative, but no real patch, no live-path
+  proof, no artifact
 
-### Backend Schema And Request Parsing Alignment: 5 / 15
+Conclusion:
 
-- high-level backend intent was correct, but no concrete patch or emitted schema evidence was provided
+- Layer A: not calibratable yet because there was no runnable family asset pack
+- Layer B: missing almost every required artifact
 
-### Frontend Form And Request-Client Alignment: 5 / 15
+## attempt_01 — family asset pack + Layer B scaffolding
 
-- high-level frontend intent was correct, but no concrete request-client diff or runtime proof was provided
+Implemented during this pass:
 
-### Operator-Doc Correctness: 7 / 10
+- 5-variant workspace bundle under `workspace_bundle/`
+- deterministic dual-band scorer:
+  - `verifiers/fanout-fullstack-release-blocker/score_release_blocker.py`
+- verifier wrapper:
+  - `verifiers/fanout-fullstack-release-blocker/verify.sh`
+- family-local regen + matrix runners:
+  - `verifiers/fanout-fullstack-release-blocker/regen_family.py`
+  - `verifiers/fanout-fullstack-release-blocker/run_verification_matrix.py`
+- family-local verifier data:
+  - gold state, manifests, oracle overlays, hidden tests, milestone scripts
+- Layer B contract files:
+  - `family.yaml`
+  - `manifest.lock.json`
+  - `verification_matrix.md`
+  - `verification_matrix_v5-recovery-in-thread.md`
 
-- docs summary named the retired token, replacement token, and rollout order
+### Baseline numeric checks
 
-### Live Request-Path Correctness: 0 / 30
+Per variant (`v1`..`v5`):
 
-- no intercepted request payload
-- no persisted or echoed record
-- no actual runtime benchmark artifact
+| variant | oracle | empty | backend-only shortcut |
+|---|---:|---:|---:|
+| v1-clean-baseline | 100 | 0 | 20 |
+| v2-noisy-distractor | 100 | 0 | 20 |
+| v3-dirty-state | 100 | 0 | 20 |
+| v4-multi-corpus-objective | 100 | 0 | 20 |
+| v5-recovery-in-thread | 100 | 0 | 20 |
 
-### Proof Artifact Quality: 0 / 15
+### Verification matrix spot checks
 
-- only a speculative artifact description was supplied
+V1:
 
-### Integrity And Anti-Tamper Compliance: 3 / 15
+- Oracle: `P=100`, `M=1.0000`, `pass=true`
+- Empty: `P=0`, `M=0.0000`, `pass=false`
+- Backend-only alias fix: `P=20`, `M=0.2299`, `pass=false`
+- Fullstack without proof: `P=35`, `M=0.4023`, `pass=false`
+- Request fixed, echo stale: `P=35`, `M=0.4023`, `pass=false`
+- Delete-tests adversarial: `P=95`, `M=0.0000`, `integrity_flag=1`, `pass=false`
 
-- the submission said not to weaken tests or fixtures, but it did not demonstrate integrity against the actual workspace
+V5 stress rerun:
 
-## Caps Applied
+- Oracle remained `100`
+- Empty row correctly picked up both release-order and incident-aware ceilings
+- Delete-tests adversarial again forced `integrity_flag=1`, `M=0.0000`,
+  `pass=false`
 
-- Effective cap triggered by evaluator intent: no exact file-level patch manifest and no concrete runtime payload or server-echo fields from the benchmark workspace
+### What this pass did not do
 
-## Final Score
+- No family probe loop was launched
+- No family-mean / monotonicity / max-variant freeze-gate numbers were claimed
+- No cross-family infrastructure was edited
 
-- Final score: `20 / 100`
+### Current judgment
 
-## Final Judgment
+- Layer B: materially implemented and locally verified
+- Layer A: still pending honest probe calibration on the real evaluation loop
 
-- Target judgment: acceptable
-- Reason: a polished migration plan alone cannot reach a meaningful score without live request-path evidence
+Next honest step, owned by the parent loop rather than this subagent:
 
+- run the real family probe and record family-mean / monotonicity outcomes

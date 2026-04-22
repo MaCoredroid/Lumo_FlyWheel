@@ -1,0 +1,40 @@
+{
+  "file_hashes": {
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "181669081d68446b3d61196ef13b104957cf1781ffc0d424b9507c7f9a269a9d",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "apps/admin/src/components/ReleaseGateForm.tsx": "62b1b8a033ce56c402e52e594d481a368207a4de335cf767a7916e40ea77c2fe",
+    "apps/admin/src/lib/api.ts": "006383bafba34b686c95ac5c4d2fe3ef907ea7db379ad97a23e8b5814c28da20",
+    "apps/admin/tests/release-gate.spec.ts": "a59a9cc8547a5cc6ba1c5bd9d59cd7bbf7cdf7c4a161cd3faf2802bdbefd59e8",
+    "artifacts/dom/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/preview/expected_screenshot_contract.md": "a7f1b9c9e0e3d744b8b3c0c3084af34146eed03fec9aa1180201139623e98846",
+    "artifacts/report/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "docs/runbooks/release_gating.md": "e9238747550b33955942c7424f9d27cd09e8e8be6424de239405790a5ac4702f",
+    "fixtures/release_payloads/current_release_seed.json": "9d5d7ee5aa1232c3c2c7f2c7ede21f80b87c03acf3e22942271f5788201fc5c4",
+    "fixtures/release_payloads/legacy_manual_review_snapshot.json": "97b5e80aac187766f4560b1588baba46d7a50c319702dd51c6fb956bb2594fce",
+    "incident_context/inc_204_dual_write.md": "d2e5eab3d74008613d3d5255b0c125ee65ca6320d900f451547ee846d4bb3d37",
+    "release_context/migration_order.md": "ace7b0b170eb95f955883e21080e8864b4a1fa22b860c4d44cafc1b08df3ca01",
+    "services/api/src/review_state.py": "08c4ded097ef9c343b81bda0afd614601f3176a4ad8ff5d8c68a41cb467ae7e3",
+    "services/api/src/routes/releases.py": "59c0d0af65b3a3526a693b1da64fb1491c2f202ba42d397712f8d8682b251496",
+    "services/api/tests/test_release_payloads.py": "cfad58005ccc7ed6a28fcba9100e8a7afe194583fcd22911e33b00af971226ce"
+  },
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "apps/admin/src/components/ReleaseGateForm.tsx",
+    "apps/admin/src/lib/api.ts",
+    "apps/admin/tests/release-gate.spec.ts",
+    "artifacts/dom/.gitkeep",
+    "artifacts/preview/expected_screenshot_contract.md",
+    "artifacts/report/.gitkeep",
+    "docs/runbooks/release_gating.md",
+    "fixtures/release_payloads/current_release_seed.json",
+    "fixtures/release_payloads/legacy_manual_review_snapshot.json",
+    "incident_context/inc_204_dual_write.md",
+    "release_context/migration_order.md",
+    "services/api/src/review_state.py",
+    "services/api/src/routes/releases.py",
+    "services/api/tests/test_release_payloads.py"
+  ]
+}

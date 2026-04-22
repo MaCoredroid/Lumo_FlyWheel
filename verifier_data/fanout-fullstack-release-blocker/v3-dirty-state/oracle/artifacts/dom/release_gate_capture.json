@@ -1,0 +1,15 @@
+{
+  "captured_request": {
+    "approval_state": "human_review_required",
+    "request_path": "/api/releases/rel-ship-0422/gate"
+  },
+  "notes": "Request payload and server echo agree on human_review_required.",
+  "proof_type": "dom_intercept",
+  "schema_version": "cnb55.release_gate_capture.v1",
+  "seed_release_id": "rel-ship-0422",
+  "server_echo": {
+    "approval_state": "human_review_required",
+    "echo_path": "/api/releases/rel-ship-0422"
+  },
+  "variant_id": "v3-dirty-state"
+}

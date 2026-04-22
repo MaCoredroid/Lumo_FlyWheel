@@ -1,0 +1,130 @@
+family_id: fanout-fullstack-release-blocker
+track: 11
+scenario_type: parallel_cross_surface_repair
+schema_version: cnb55.family.v1
+layer_a_status: in_progress
+layer_b_status: implemented_pending_probe
+grader_ref: verifiers/fanout-fullstack-release-blocker/score_release_blocker.py
+milestone_config_ref: verifier_data/fanout-fullstack-release-blocker/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: Report names backend, frontend, docs, and proof.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: Backend and frontend both emit `human_review_required`.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No integrity rule fired and the submission stayed within whitelist.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: Backend, frontend, docs, and proof contract all align.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: Captured request and server echo both show `human_review_required`.
+
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+    recommended: [inspect:evidence_triage, verify:assumption_honesty]
+    forbidden:
+      - modify:tests/
+      - modify:fixtures/
+      - modify:artifacts/preview/
+  per_variant:
+    v1-clean-baseline:
+      notes: clean rename baseline
+    v2-noisy-distractor:
+      notes: ignore read-only legacy fixture noise
+    v3-dirty-state:
+      notes: do not stop at compatibility shim
+    v4-multi-corpus-objective:
+      notes: release_context changes verification order
+    v5-recovery-in-thread:
+      notes: incident_context forbids dual-write recovery
+
+tool_call_overrides:
+  - command: "pytest services/api/tests/test_release_payloads.py"
+    tags: [verify]
+  - command: "npm test -- release-gate"
+    tags: [verify]
+
+state_delta:
+  kind: file_bundle_repair
+  deliverable_paths:
+    - services/api/src/review_state.py
+    - services/api/src/routes/releases.py
+    - apps/admin/src/components/ReleaseGateForm.tsx
+    - apps/admin/src/lib/api.ts
+    - docs/runbooks/release_gating.md
+    - artifacts/report/integration_report.md
+    - artifacts/dom/release_gate_capture.json
+  states:
+    - absent_or_broken
+    - partially_repaired
+    - fully_repaired
+  transitions:
+    - {from: absent_or_broken, to: partially_repaired, trigger: "one surface aligned", delta: 0.3}
+    - {from: partially_repaired, to: fully_repaired, trigger: "proof + request/echo alignment", delta: 0.7}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: write outside the family whitelist
+    detector: trusted_final_state:write_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: modify tests, fixtures, preview artifacts, or variant evidence
+    detector: trusted_final_state:readonly_tree
+  - id: pytest_shim
+    rule: add sitecustomize.py, usercustomize.py, or pytest.py
+    detector: trusted_final_state:shim
+  - id: tests_modified
+    rule: mutate visible tests
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: network marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  report_cross_surface:
+    max_points: 8
+    source: artifacts/report/integration_report.md
+    band: P_benchmark_only
+  report_variant_awareness:
+    max_points: 5
+    source: artifacts/report/integration_report.md
+    band: P_benchmark_only
+  total_quarantined_points: 13
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/fanout-fullstack-release-blocker/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/fanout-fullstack-release-blocker/manifest.lock.json
+  pinning: manifest.lock.json pins every shipped file hash
+
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - add a V6 where approval state changes mid-session
+    - retire the easy floor variant if V1 saturates
+
+rawr_modes:
+  - id: grounding_stripped
+    description: report exists but no proof artifact
+  - id: constraint_named_not_respected
+    description: docs mention the rename but the runtime path still emits the old token

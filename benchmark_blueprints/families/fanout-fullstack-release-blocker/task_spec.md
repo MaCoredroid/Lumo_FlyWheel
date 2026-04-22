@@ -1,89 +1,157 @@
 # Task Spec: `fanout-fullstack-release-blocker`
 
-## Task Prompt
+## Track And Family
 
-Unblock a staged release where a new approval-state rollout spans backend schema, frontend form submission, and operator documentation. You may delegate by write scope, but the final result must be integrated and coherent. The backend now expects `human_review_required`, while the admin form still posts `manual_review`, and the rollout note still tells operators to watch for the retired field name.
+- Track: 11 — Subagents Orchestration
+- Family id: `fanout-fullstack-release-blocker`
+- Scenario type: `parallel_cross_surface_repair`
+- Variants: 5 (`v1-clean-baseline` through `v5-recovery-in-thread`)
 
-Repair the code and docs, verify the combined flow, and capture one proof artifact from the UI or preview surface.
+## Canonical Task Prompt
+
+Repair a staged release blocker where a token rename spans backend parsing,
+frontend form submission, and operator documentation. The backend must accept
+and emit `human_review_required`; the admin UI must submit
+`approval_state: "human_review_required"`; the runbook must tell operators to
+verify that exact token on the live request path.
+
+The seeded failure mode is fanout incoherence: a backend-only compatibility
+shim can normalize stale UI traffic and make one visible test look healthy
+while the live request payload, server echo, and operator instructions still
+disagree.
+
+The task is only complete when all four surfaces align:
+
+1. backend parser + echo
+2. frontend seeded form + request client
+3. runbook verification order
+4. proof artifact from the seeded live path
+
+## Required Outputs
+
+- Code changes in:
+  - `services/api/src/review_state.py`
+  - `services/api/src/routes/releases.py`
+  - `apps/admin/src/components/ReleaseGateForm.tsx`
+  - `apps/admin/src/lib/api.ts`
+- Docs change in:
+  - `docs/runbooks/release_gating.md`
+- Integration report:
+  - `artifacts/report/integration_report.md`
+- Proof artifact:
+  - `artifacts/dom/release_gate_capture.json`
+
+The proof artifact must follow the contract in
+`artifacts/preview/expected_screenshot_contract.md` and show the seeded release
+`rel-ship-0422` with:
+
+- `captured_request.request_path = "/api/releases/rel-ship-0422/gate"`
+- `captured_request.approval_state = "human_review_required"`
+- `server_echo.echo_path = "/api/releases/rel-ship-0422"`
+- `server_echo.approval_state = "human_review_required"`
 
 ## Workspace Bundle
 
-- Small monorepo with:
-  - `services/api/src/review_state.py`
-  - `services/api/src/routes/releases.py`
-  - `services/api/tests/test_release_payloads.py`
-  - `apps/admin/src/components/ReleaseGateForm.tsx`
-  - `apps/admin/src/lib/api.ts`
-  - `apps/admin/tests/release-gate.spec.ts`
-  - `docs/runbooks/release_gating.md`
-  - `fixtures/release_payloads/`
-  - `artifacts/preview/expected_screenshot_contract.md`
-- Visible checks:
-  - backend contract test
-  - frontend integration test
-  - one screenshot or DOM-proof capture check
+Every variant ships the same writable repair surfaces:
 
-## Seeded Orchestration Problem
+```text
+services/api/src/review_state.py
+services/api/src/routes/releases.py
+apps/admin/src/components/ReleaseGateForm.tsx
+apps/admin/src/lib/api.ts
+docs/runbooks/release_gating.md
+artifacts/report/
+artifacts/dom/
+```
 
-The parent agent should split the task into clean ownership slices such as:
+And the same immutable evidence / integrity surfaces:
 
-- backend schema and serializer repair
-- frontend form and request-shape repair
-- docs and release-note repair
+```text
+services/api/tests/test_release_payloads.py
+apps/admin/tests/release-gate.spec.ts
+fixtures/release_payloads/
+artifacts/preview/expected_screenshot_contract.md
+AGENTS.md
+Dockerfile
+.scenario_variant
+```
 
-The seeded orchestration failure is that a backend-only compatibility shim can make one visible test pass while leaving the UI posting stale data and the operator doc instructing the wrong rollout check. The task is only complete when the field rename is coherent across all surfaces.
+Variant-specific evidence:
+
+- `v1-clean-baseline`: no extra context, straight rename repair
+- `v2-noisy-distractor`: legacy fixture noise under `fixtures/release_payloads/`
+- `v3-dirty-state`: half-finished compatibility-shim path in the visible code
+- `v4-multi-corpus-objective`: `release_context/migration_order.md` changes the
+  correct operator verification order
+- `v5-recovery-in-thread`: `incident_context/inc_204_dual_write.md` explains
+  why dual-write recovery is forbidden
+
+## Variant Progression
+
+### V1 — Clean Baseline
+
+Minimal cross-surface rename. The solver must repair backend, frontend, docs,
+and produce the fixed-path proof artifact.
+
+### V2 — Noisy Distractor
+
+Adds a read-only legacy fixture that still contains `manual_review`. The right
+move is to leave fixtures untouched and repair the live runtime path.
+
+### V3 — Dirty State
+
+Adds a tempting half-finished compatibility direction. The right move is to
+remove the live-path dependency on the shim, not stop at the shim.
+
+### V4 — Multi-Corpus Objective
+
+Adds `release_context/` showing that operator verification order matters:
+request payload must be checked before the server echo because the release
+fanout reads the request path first.
+
+### V5 — Recovery In Thread
+
+Adds `incident_context/` showing a prior dual-write rollback (`INC-204`). The
+solver must keep the live path single-token and call out the incident in the
+integration report.
 
 ## Required Surfaces
 
-- `subagents`
 - `shell`
 - `apply_patch`
+- `subagents` as a reasoning surface only; the workspace itself remains a
+  single integrated patch
 
 Preferred:
 
+- `review`
 - `browser_preview`
 - `screenshots`
-- `review`
 
-## Deliverables
+## Trusted-Final-State Rules
 
-- Integrated code patch across API and admin UI
-- Updated rollout or deploy note in `docs/runbooks/release_gating.md`
-- Short integration report describing the cross-surface fix
-- One proof artifact at a fixed path under `artifacts/screenshots/` or `artifacts/dom/` showing the seeded form state plus either the captured request payload or the rendered server echo
+The grader treats the following as immutable:
 
-## Grader Contract
+- visible tests
+- fixtures
+- preview proof contract
+- variant context files
+- `AGENTS.md`, `Dockerfile`, `.scenario_variant`
 
-The task scores well only if the submission:
+Any mutation there raises integrity and force-fails the invariants milestone.
 
-- updates backend request parsing and emitted schema to the new approval-state token
-- updates the admin form and request client to send the same token
-- updates operator-facing docs so rollout verification names the new field and migration order
-- preserves backward-safe behavior only where explicitly required by tests
-- passes a hidden browser flow that submits the seeded release gate, intercepts the outgoing request, and asserts the payload contains `human_review_required` and not `manual_review`
-- passes a hidden API or persistence check showing the same seeded item emits `human_review_required` after submission
-- includes proof that the UI and API now agree on the live request path, not just labels or fixtures
+## Quality Gate And Current Status
 
-Low-score outcomes include backend-only alias shims, frontend-only string swaps, doc-only edits, or proof artifacts that do not demonstrate the renamed field flowing through the real submission path.
+Implemented family-local baselines now verify:
 
-## Red-Team Traps
+- oracle overlay: `100 / 100` on all 5 variants
+- empty submission: `0 / 100` on all 5 variants
+- backend-only shortcut: `20 / 100` on all 5 variants
+- V1 verification matrix:
+  - backend-only alias fix: `20`
+  - fullstack without proof: `35`
+  - request fixed, echo stale: `35`
+  - delete-tests adversarial: `integrity_flag = 1`, `M_training = 0.0`, `pass = false`
 
-- Add a permissive backend alias and stop there
-- Hardcode the new string in a test fixture without wiring the real form submission path
-- Update docs and screenshot text only, leaving runtime payloads stale
-- Patch frontend labels but not the API client payload key
-- Produce a canned screenshot unrelated to the repaired flow
-- Weaken visible tests, rewrite seeded fixtures, or retain runtime `manual_review` references outside explicitly allowed legacy coverage
-
-## Quality Gate
-
-- Probe target: naive GPT-5.4/high should not clear 30/100 with a backend-only or frontend-only patch.
-- Hardening applied after adversarial probe:
-  - added hidden intercepted-request and persisted-record checks so shim-only fixes fail
-  - tightened the proof artifact contract to a fixed path with runtime request or server-echo evidence
-  - added anti-tamper expectations for visible tests, seeded fixtures, and stale-token runtime references
-  - required docs to name both the retired token and rollout verification order explicitly
-- Probe record:
-  - probe model: child GPT-5.4/high adversarial review
-  - initial verdict: over 30 too easy because backend shims and screenshot theater could still earn credit
-- Current difficulty judgment: under 30 likely for a naive GPT-5.4/high solver after hardening
+Layer B scaffolding is implemented. Layer A family-mean calibration is still
+pending a real probe loop; this subagent did not launch that next loop step.

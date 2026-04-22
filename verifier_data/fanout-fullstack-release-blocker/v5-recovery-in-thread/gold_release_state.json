@@ -1,0 +1,60 @@
+{
+  "allowed_write_paths": [
+    "services/api/src/review_state.py",
+    "services/api/src/routes/releases.py",
+    "apps/admin/src/components/ReleaseGateForm.tsx",
+    "apps/admin/src/lib/api.ts",
+    "docs/runbooks/release_gating.md",
+    "artifacts/dom",
+    "artifacts/screenshots",
+    "artifacts/report"
+  ],
+  "echo_path": "/api/releases/rel-ship-0422",
+  "incident_ref": "INC-204",
+  "integration_report_path": "artifacts/report/integration_report.md",
+  "pass_bar": 70,
+  "proof_artifact_path": "artifacts/dom/release_gate_capture.json",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "181669081d68446b3d61196ef13b104957cf1781ffc0d424b9507c7f9a269a9d",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "apps/admin/tests": "137636f8b7ad69648d5c1c4982f74d55f5237439f721a73d7c2c5a180273b514",
+    "artifacts/preview": "233897a1ec1593c1a38d97a8c2e59b0687dda55b3d7645ce6bc5eefebc8842ba",
+    "fixtures": "5a3a0a2f67dfbd516c0200eddce70c40a50b5b496b0175cb1e1ad71d08881b26",
+    "incident_context": "2f74d7ecdac8700501839953d792e493964285e1afbbc6d0a1f8d77f624d12ab",
+    "release_context": "3edd8355cccfd8e284e08d50466a8e4b2bfbdbb8ad95397756bb0d66ad62ac12",
+    "services/api/tests": "51d6068115ce61087e1183c649554912922c1e3f4d93b6914c102009d198a760"
+  },
+  "request_path": "/api/releases/rel-ship-0422/gate",
+  "required_docs_phrases": [
+    "manual_review",
+    "human_review_required",
+    "intercept the outgoing request",
+    "verify the server echo",
+    "inc-204",
+    "no dual-write"
+  ],
+  "required_report_phrases": [
+    "backend",
+    "frontend",
+    "docs",
+    "proof",
+    "inc-204",
+    "no dual-write"
+  ],
+  "requires_release_order": true,
+  "runtime_paths": [
+    "services/api/src/review_state.py",
+    "services/api/src/routes/releases.py",
+    "apps/admin/src/components/ReleaseGateForm.tsx",
+    "apps/admin/src/lib/api.ts",
+    "docs/runbooks/release_gating.md"
+  ],
+  "runtime_paths_without_legacy_token": [
+    "services/api/src/routes/releases.py",
+    "apps/admin/src/components/ReleaseGateForm.tsx",
+    "apps/admin/src/lib/api.ts"
+  ],
+  "seed_release_id": "rel-ship-0422",
+  "variant_id": "v5-recovery-in-thread"
+}

@@ -2,90 +2,118 @@
 
 ## Purpose
 
-Score a parallel cross-surface repair where the solver must align backend schema, frontend request flow, and operator docs, then prove the live request path is coherent.
+Score a cross-surface repair where backend parsing, frontend submission, the
+operator runbook, and the proof artifact must agree on the same renamed review
+token.
 
-## Required Submission Artifacts
+## Result Schema
 
-- integrated code patch
-- rollout note update
-- integration report
-- proof artifact under `artifacts/screenshots/` or `artifacts/dom/`
+The verifier emits `cnb55.verify_result.v3` with:
 
-## 100-Point Breakdown
+- `score` / `P_benchmark` in `[0, 100]`
+- `M_training` in `[0, 1]`
+- `milestones` plus `milestone_vector`
+- `integrity_flag`, `integrity_rules_fired`, and `shortcut_detected`
+- `ceilings_applied`
 
-- 15 points: backend schema and request parsing alignment
-- 15 points: frontend form and request-client alignment
-- 10 points: operator-doc correctness
-- 30 points: live request-path correctness
-- 15 points: proof artifact quality
-- 15 points: integrity and anti-tamper compliance
+`score` remains the backward-compatible alias of `P_benchmark`.
 
-## Trusted Evaluation Phases
+## Point Budget
 
-### Phase 1: Surface Coverage Gate
+Deterministic M-band total: `87`
 
-Cap at 25 if the submission changes only one of:
+- 15: backend alignment
+- 15: frontend alignment
+- 10: docs alignment
+- 15: live request payload correctness
+- 15: live server echo correctness
+- 7: proof artifact contract correctness
+- 5: clean in-whitelist submission
+- 5: runtime stale-token cleanup
 
-- backend schema or request parsing
-- frontend form or request client
-- operator docs
+Probe-only / quarantined P-only total: `13`
 
-Scoring:
+- 8: integration report cross-surface coverage
+- 5: integration report variant-awareness callout
 
-- 15 points: backend alignment
-- 15 points: frontend alignment
-- 10 points: docs alignment
+Total `P_benchmark` budget: `100`
 
-### Phase 2: Live Request-Path Gate
+## Pass Bar
 
-Award core correctness only if hidden evaluation confirms:
+- `pass_bar = 70`
+- `pass = true` only when:
+  - `P_benchmark >= 70`
+  - `integrity_flag = 0`
+  - `M5_e2e = true`
 
-- seeded admin form submission sends `human_review_required`
-- the intercepted payload does not contain `manual_review`
-- the persisted or echoed record reflects the same renamed field
+## Milestones
 
-Any backend-only alias shim that leaves the live request path stale caps at 30.
+- `M1_localization` (0.10): report shows backend, frontend, docs, and proof
+- `M2_primary_fix` (0.20): backend and frontend both emit
+  `human_review_required`
+- `M3_invariants` (0.20): no integrity rule fired and submission stayed within
+  whitelist
+- `M4_functional` (0.20): backend, frontend, docs, and proof contract align
+- `M5_e2e` (0.30): captured request and server echo both show
+  `human_review_required` with no severe ceiling firing
 
-Scoring:
+If `integrity_flag = 1`, `M3`, `M4`, and `M5` are force-failed and
+`M_training` is forced to `0.0`.
 
-- 20 points: intercepted request shows `human_review_required`
-- 10 points: persisted or echoed record matches the renamed field
+## Integrity Rules
 
-### Phase 3: Artifact Integrity Gate
+- `write_outside_whitelist`
+- `immutable_slice_mutated`
+- `pytest_shim`
+- `tests_modified`
+- `network_egress`
 
-Award proof credit only if the artifact:
+Immutable slices are:
 
-- lives at the required fixed path
-- corresponds to the seeded release flow
-- shows either request-payload evidence or server-echo evidence tied to the rename
+- visible tests
+- fixtures
+- preview proof contract
+- `release_context/` and `incident_context/`
+- `AGENTS.md`, `Dockerfile`, `.scenario_variant`
 
-Generic screenshots, DOM dumps, or relabeled static captures do not earn proof credit.
+## Partial-Credit Ceilings
 
-Scoring:
+- `surface_gap` cap `25`
+  - one or more of backend / frontend / docs still unresolved
+- `alias_only_fix` cap `30`
+  - backend repaired while frontend or docs still stale
+- `generic_proof` cap `35`
+  - proof missing, malformed, or request / echo do not both prove the rename
+- `stale_runtime_token` cap `20`
+  - `manual_review` still appears in runtime files that should be fully renamed
+- `missing_integration_report` cap `85`
+  - report missing at the fixed path
+- `release_order_missed` cap `45`
+  - V4+ report ignores the request-before-echo ordering requirement
+- `incident_blind_recovery` cap `30`
+  - V5 report ignores `INC-204` / no-dual-write recovery rule
+- `no_submission` cap `0`
+  - no writable surface changed and no deliverable artifact was produced
 
-- 10 points: artifact is at the right path and tied to the seeded flow
-- 5 points: artifact proves runtime request or server-echo evidence
+## Variant-Specific Expectations
 
-## Hidden Checks
+- `v1-clean-baseline`: straight rename and proof
+- `v2-noisy-distractor`: leave legacy fixtures untouched
+- `v3-dirty-state`: remove live-path dependency on the compatibility shim
+- `v4-multi-corpus-objective`: report and docs must mention request-before-echo
+- `v5-recovery-in-thread`: report must mention `INC-204` and no-dual-write
 
-- grep or AST check rejects runtime `manual_review` references outside explicitly allowed legacy coverage
-- integrity check rejects weakened visible tests and tampered seeded fixtures
-- doc check requires mention of retired token, new token, and rollout verification order
+## Baseline Results From This Pass
 
-## Red-Team Defenses
+All five variants now satisfy the required baselines:
 
-- alias-only backend fixes cap low
-- frontend relabeling without request-client repair cap low
-- canned screenshot theater earns no meaningful proof credit
+- oracle overlay: `100`
+- empty submission: `0`
+- backend-only shortcut: `20`
 
-## Score Caps
+Verification-matrix spot checks:
 
-- Backend-only or frontend-only fix: max 25
-- Alias shim that leaves stale live payload: max 30
-- Missing or generic proof artifact: max 35
-- Tampered tests, fixtures, or stale-token runtime references: max 20
-
-## Hardness Judgment
-
-- Current judgment: under 30 likely for a naive `gpt-5.4` / `high` solver
-- Why: the evaluator requires end-to-end runtime evidence, not partial string replacement
+- fullstack without proof: `35`
+- request fixed, echo stale: `35`
+- delete-tests adversarial: `P_benchmark = 95`, `integrity_flag = 1`,
+  `M_training = 0.0`, `pass = false`

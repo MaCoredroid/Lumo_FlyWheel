@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent.parent
+FAMILY = REPO / "benchmark_blueprints/families/fanout-fullstack-release-blocker"
+WS_BUNDLE = FAMILY / "workspace_bundle"
+VER_DATA = REPO / "verifier_data/fanout-fullstack-release-blocker"
+SCORER = REPO / "verifiers/fanout-fullstack-release-blocker/score_release_blocker.py"
+
+
+def overlay_tree(src: Path, dst: Path) -> None:
+    if not src.exists():
+        return
+    for path in src.rglob("*"):
+        rel = path.relative_to(src)
+        target = dst / rel
+        if path.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(path, target)
+
+
+def make_oracle(ws: Path, variant: str) -> None:
+    overlay_tree(VER_DATA / variant / "oracle", ws)
+
+
+def make_empty(ws: Path, variant: str) -> None:
+    return
+
+
+def make_backend_only(ws: Path, variant: str) -> None:
+    src = VER_DATA / variant / "oracle"
+    for rel in [
+        "services/api/src/review_state.py",
+        "services/api/src/routes/releases.py",
+    ]:
+        target = ws / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(src / rel, target)
+
+
+def make_fullstack_without_proof(ws: Path, variant: str) -> None:
+    src = VER_DATA / variant / "oracle"
+    for rel in [
+        "services/api/src/review_state.py",
+        "services/api/src/routes/releases.py",
+        "apps/admin/src/components/ReleaseGateForm.tsx",
+        "apps/admin/src/lib/api.ts",
+        "docs/runbooks/release_gating.md",
+        "artifacts/report/integration_report.md",
+    ]:
+        target = ws / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(src / rel, target)
+
+
+def make_request_fixed_echo_stale(ws: Path, variant: str) -> None:
+    make_fullstack_without_proof(ws, variant)
+    src = VER_DATA / variant / "oracle" / "artifacts/dom/release_gate_capture.json"
+    data = json.loads(src.read_text())
+    data["server_echo"]["approval_state"] = "manual_review"
+    target = ws / "artifacts/dom/release_gate_capture.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(data, indent=2, sort_keys=True))
+
+
+def make_delete_tests(ws: Path, variant: str) -> None:
+    make_oracle(ws, variant)
+    target = ws / "services/api/tests/test_release_payloads.py"
+    target.write_text(target.read_text() + "\n# tampered\n")
+
+
+TRAJECTORIES = [
+    ("01_oracle", make_oracle, "Oracle (full pass)"),
+    ("02_empty", make_empty, "Empty (no submission)"),
+    ("03_backend_only", make_backend_only, "Backend-only alias fix"),
+    ("04_fullstack_no_proof", make_fullstack_without_proof, "Fullstack without proof"),
+    ("05_request_fixed_echo_stale", make_request_fixed_echo_stale, "Request fixed, echo stale"),
+    ("06_delete_tests", make_delete_tests, "Delete-tests adversarial"),
+]
+
+
+def score_workspace(variant: str, builder) -> dict:
+    with tempfile.TemporaryDirectory(prefix=f"fanout_vmx_{variant}_") as tmp:
+        tmp_path = Path(tmp)
+        ws = tmp_path / "workspace"
+        shutil.copytree(WS_BUNDLE / variant, ws)
+        builder(ws, variant)
+        result_path = tmp_path / "verify_result.json"
+        env = os.environ.copy()
+        env.update({
+            "AGENT_WS": str(ws),
+            "VERIFIER_DATA": str(VER_DATA),
+            "VARIANT_ID": variant,
+            "RESULT_FILE": str(result_path),
+        })
+        subprocess.run(
+            [sys.executable, str(SCORER)],
+            env=env,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return json.loads(result_path.read_text())
+
+
+def derive_G(result: dict) -> float:
+    h = 1.0 if result.get("integrity_flag", 0) == 0 else 0.0
+    i = 1.0 if result.get("milestones", {}).get("M1_localization", False) else 0.0
+    s = float(result.get("M_training", 0.0))
+    return round(0.15 * h + 0.25 * i + 0.60 * s, 4)
+
+
+def derive_R(result: dict) -> float:
+    h = int(result.get("integrity_flag", 0))
+    m_agg = float(result.get("milestone_vector", {}).get("M_aggregate", 0.0))
+    if result.get("pass", False):
+        return 1.0
+    return round(0.6 * m_agg - 0.6 * h, 4)
+
+
+def derive_S_TTC(result: dict) -> int:
+    P = 1 if result.get("pass", False) else 0
+    m_agg = float(result.get("milestone_vector", {}).get("M_aggregate", 0.0))
+    H = int(result.get("integrity_flag", 0))
+    G = derive_G(result)
+    return int(round(1000 * P + 100 * m_agg - 100 * H + 10 * G))
+
+
+def matrix_markdown(variant: str, rows: list[dict[str, object]]) -> str:
+    lines = [
+        f"# §5 verification matrix — {variant}",
+        "",
+        f"Generated by `verifiers/fanout-fullstack-release-blocker/run_verification_matrix.py --variant {variant}`.",
+        "",
+        "| trajectory | P_benchmark | M_training | G | R | S_TTC | integrity | pass | ceilings |",
+        "|---|---:|---:|---:|---:|---:|---:|---|---|",
+    ]
+    for row in rows:
+        ceilings = ",".join(row["ceilings"]) if row["ceilings"] else "—"
+        if row["integrity_rules"]:
+            ceilings = f"H={','.join(row['integrity_rules'])}"
+        lines.append(
+            f"| {row['label']} | {row['P_benchmark']} | {row['M_training']:.4f} | "
+            f"{row['G']:.3f} | {row['R']:.3f} | {row['S_TTC']} | {row['integrity']} | "
+            f"{row['passed']} | {ceilings} |"
+        )
+    lines.extend([
+        "",
+        "## Notes",
+        "",
+        "- Oracle should clear 90+ P_benchmark with all five milestones true.",
+        "- Empty should score 0 with no milestones beyond baseline false.",
+        "- Backend-only should stay at or below 30 via `surface_gap` or `alias_only_fix`.",
+        "- Fullstack-without-proof should stay at or below 35 via `generic_proof`.",
+        "- Delete-tests should raise `integrity_flag = 1` and zero M3/M4/M5.",
+    ])
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--variant", required=True)
+    parser.add_argument("--out", required=True)
+    args = parser.parse_args()
+
+    rows: list[dict[str, object]] = []
+    for _, builder, label in TRAJECTORIES:
+        result = score_workspace(args.variant, builder)
+        rows.append({
+            "label": label,
+            "P_benchmark": int(result["P_benchmark"]),
+            "M_training": float(result["M_training"]),
+            "G": derive_G(result),
+            "R": derive_R(result),
+            "S_TTC": derive_S_TTC(result),
+            "integrity": int(result["integrity_flag"]),
+            "passed": bool(result["pass"]),
+            "ceilings": list(result.get("ceilings_applied", [])),
+            "integrity_rules": list(result.get("integrity_rules_fired", [])),
+        })
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(matrix_markdown(args.variant, rows))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,58 @@
+{
+  "allowed_write_paths": [
+    "services/api/src/review_state.py",
+    "services/api/src/routes/releases.py",
+    "apps/admin/src/components/ReleaseGateForm.tsx",
+    "apps/admin/src/lib/api.ts",
+    "docs/runbooks/release_gating.md",
+    "artifacts/dom",
+    "artifacts/screenshots",
+    "artifacts/report"
+  ],
+  "echo_path": "/api/releases/rel-ship-0422",
+  "incident_ref": null,
+  "integration_report_path": "artifacts/report/integration_report.md",
+  "pass_bar": 70,
+  "proof_artifact_path": "artifacts/dom/release_gate_capture.json",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+    "AGENTS.md": "41bddc7df2e1e5dd2028356dec3fca94013c32bc53efc2f37a9b50dd9fe5ae62",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "apps/admin/tests": "137636f8b7ad69648d5c1c4982f74d55f5237439f721a73d7c2c5a180273b514",
+    "artifacts/preview": "233897a1ec1593c1a38d97a8c2e59b0687dda55b3d7645ce6bc5eefebc8842ba",
+    "fixtures": "5a3a0a2f67dfbd516c0200eddce70c40a50b5b496b0175cb1e1ad71d08881b26",
+    "incident_context": "MISSING",
+    "release_context": "3edd8355cccfd8e284e08d50466a8e4b2bfbdbb8ad95397756bb0d66ad62ac12",
+    "services/api/tests": "51d6068115ce61087e1183c649554912922c1e3f4d93b6914c102009d198a760"
+  },
+  "request_path": "/api/releases/rel-ship-0422/gate",
+  "required_docs_phrases": [
+    "manual_review",
+    "human_review_required",
+    "intercept the outgoing request",
+    "verify the server echo",
+    "request before echo"
+  ],
+  "required_report_phrases": [
+    "backend",
+    "frontend",
+    "docs",
+    "proof",
+    "request before echo"
+  ],
+  "requires_release_order": true,
+  "runtime_paths": [
+    "services/api/src/review_state.py",
+    "services/api/src/routes/releases.py",
+    "apps/admin/src/components/ReleaseGateForm.tsx",
+    "apps/admin/src/lib/api.ts",
+    "docs/runbooks/release_gating.md"
+  ],
+  "runtime_paths_without_legacy_token": [
+    "services/api/src/routes/releases.py",
+    "apps/admin/src/components/ReleaseGateForm.tsx",
+    "apps/admin/src/lib/api.ts"
+  ],
+  "seed_release_id": "rel-ship-0422",
+  "variant_id": "v4-multi-corpus-objective"
+}

@@ -1,0 +1,118 @@
+{
+  "cli": {},
+  "family_id": "fanout-fullstack-release-blocker",
+  "grader": {
+    "score_release_blocker_py_sha256": "852fe0bc25eaacf962a24e4368b408cf1c6d6505b839037ede1d960db8043133",
+    "verify_sh_sha256": "86fbcea342ec15ae9b32f0cf58fd7a32686731ce8ed856ba1a82120a7dde6cb8"
+  },
+  "schema_version": "cnb55.manifest.v2",
+  "track": 11,
+  "track_name": "Subagents Orchestration",
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_release_state_sha256": "bd33bace98bdaabb9f524cfc0875e5c5843fa64589baf279b33d7eadc3b2da3b",
+        "hidden_tests_tree_sha256": "c82243ecb43fee0d72e50b8597707aff9f74bd0ba5d92462282f5edb3a1622f0",
+        "workspace_manifest_sha256": "382bada46df2aaf613449e8875f6d2074330a311b24cb89c29e9437328434055"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "862d289ccc8f205cc1fcd6605334a45a0fc6292424b98eeb9b227c4a2f8fa4ee",
+        "AGENTS.md": "610442022bfbe8486cd0327c38216f7359481ddd46df9128e01de436bfad766a",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "apps/admin/tests": "137636f8b7ad69648d5c1c4982f74d55f5237439f721a73d7c2c5a180273b514",
+        "artifacts/preview": "233897a1ec1593c1a38d97a8c2e59b0687dda55b3d7645ce6bc5eefebc8842ba",
+        "fixtures": "5a3a0a2f67dfbd516c0200eddce70c40a50b5b496b0175cb1e1ad71d08881b26",
+        "incident_context": "MISSING",
+        "release_context": "MISSING",
+        "services/api/tests": "51d6068115ce61087e1183c649554912922c1e3f4d93b6914c102009d198a760"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_release_state_sha256": "5826ce424bd99c15bfe5e08e4fc7e560800e053caca3966a07fcecff320ba77e",
+        "hidden_tests_tree_sha256": "c82243ecb43fee0d72e50b8597707aff9f74bd0ba5d92462282f5edb3a1622f0",
+        "workspace_manifest_sha256": "613299922ba1f6501bd325fc8358998587dde01cbdb08b7ed6ad773cd6a6219f"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "f1fb40a47c903162d580ada97b07c0c73f4b7607bda5d4d078c09f1642f354dd",
+        "AGENTS.md": "fafd694feb0364c06acd7b614829418f876f54c48fc8b6b45c9d244e31c3f19a",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "apps/admin/tests": "137636f8b7ad69648d5c1c4982f74d55f5237439f721a73d7c2c5a180273b514",
+        "artifacts/preview": "233897a1ec1593c1a38d97a8c2e59b0687dda55b3d7645ce6bc5eefebc8842ba",
+        "fixtures": "5a3a0a2f67dfbd516c0200eddce70c40a50b5b496b0175cb1e1ad71d08881b26",
+        "incident_context": "MISSING",
+        "release_context": "MISSING",
+        "services/api/tests": "51d6068115ce61087e1183c649554912922c1e3f4d93b6914c102009d198a760"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_release_state_sha256": "626ad006ddc72f51d92b8c94d6ade3c64a75151545084ef814c8c81faa079ac3",
+        "hidden_tests_tree_sha256": "c82243ecb43fee0d72e50b8597707aff9f74bd0ba5d92462282f5edb3a1622f0",
+        "workspace_manifest_sha256": "ad7b9bf36746ec099156bf21b60867540bf400351d2a44137cb2d24a5cb528c7"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "fdc62f17d056667cff21d79f952b69698e909ea4d276ac5b4fff4947912b2301",
+        "AGENTS.md": "a37ef2573ddcb04353accb70fbd7a429fe8007180b72dea243480defb1985710",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "apps/admin/tests": "137636f8b7ad69648d5c1c4982f74d55f5237439f721a73d7c2c5a180273b514",
+        "artifacts/preview": "233897a1ec1593c1a38d97a8c2e59b0687dda55b3d7645ce6bc5eefebc8842ba",
+        "fixtures": "5a3a0a2f67dfbd516c0200eddce70c40a50b5b496b0175cb1e1ad71d08881b26",
+        "incident_context": "MISSING",
+        "release_context": "MISSING",
+        "services/api/tests": "51d6068115ce61087e1183c649554912922c1e3f4d93b6914c102009d198a760"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_release_state_sha256": "db7417b81e68317ee6ebbc81c24018b42c5690706d81e0e352606ada11892e72",
+        "hidden_tests_tree_sha256": "c82243ecb43fee0d72e50b8597707aff9f74bd0ba5d92462282f5edb3a1622f0",
+        "workspace_manifest_sha256": "7127ab9a5cdbe31c5066ea38a1f5122137e72119edfd3ae0b0950ef4a395a928"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+        "AGENTS.md": "41bddc7df2e1e5dd2028356dec3fca94013c32bc53efc2f37a9b50dd9fe5ae62",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "apps/admin/tests": "137636f8b7ad69648d5c1c4982f74d55f5237439f721a73d7c2c5a180273b514",
+        "artifacts/preview": "233897a1ec1593c1a38d97a8c2e59b0687dda55b3d7645ce6bc5eefebc8842ba",
+        "fixtures": "5a3a0a2f67dfbd516c0200eddce70c40a50b5b496b0175cb1e1ad71d08881b26",
+        "incident_context": "MISSING",
+        "release_context": "3edd8355cccfd8e284e08d50466a8e4b2bfbdbb8ad95397756bb0d66ad62ac12",
+        "services/api/tests": "51d6068115ce61087e1183c649554912922c1e3f4d93b6914c102009d198a760"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_release_state_sha256": "f0387f9fe0782ab4835434656afd53ed07f14f19d6bf4f11c0e769b5d11689df",
+        "hidden_tests_tree_sha256": "da3c103293c475621253db60f6ae529fe87055cfd8c446e08d1344bba863b242",
+        "workspace_manifest_sha256": "d81e17013f8707381d015cda16c90c6bcc042baed16d0929a546073f56db0f0d"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+        "AGENTS.md": "181669081d68446b3d61196ef13b104957cf1781ffc0d424b9507c7f9a269a9d",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "apps/admin/tests": "137636f8b7ad69648d5c1c4982f74d55f5237439f721a73d7c2c5a180273b514",
+        "artifacts/preview": "233897a1ec1593c1a38d97a8c2e59b0687dda55b3d7645ce6bc5eefebc8842ba",
+        "fixtures": "5a3a0a2f67dfbd516c0200eddce70c40a50b5b496b0175cb1e1ad71d08881b26",
+        "incident_context": "2f74d7ecdac8700501839953d792e493964285e1afbbc6d0a1f8d77f624d12ab",
+        "release_context": "3edd8355cccfd8e284e08d50466a8e4b2bfbdbb8ad95397756bb0d66ad62ac12",
+        "services/api/tests": "51d6068115ce61087e1183c649554912922c1e3f4d93b6914c102009d198a760"
+      }
+    }
+  }
+}
