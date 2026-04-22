@@ -3,7 +3,7 @@
 > Codex-Bench · High-Level Design
 > Scope: The data-normalization + training stack — LLD-06, LLD-07, LLD-08, LLD-09, LLD-10, LLD-11
 > Derived from HLD Spec v2.3 · April 2026
-> Status: DRAFT v0.4 — adds family-level DONE criteria tying CNB-55 freeze gate to the flywheel training obligations
+> Status: DRAFT v0.5 — §15 rewritten as a general authoring checklist applicable to all 55 families; `proposal-ranking-manager-judgment` retained only as illustrative example
 
 ---
 
@@ -11,7 +11,8 @@
 
 | Version | Change |
 |---|---|
-| v0.4 | Added §15 **Family-Level DONE Criteria**, worked through `proposal-ranking-manager-judgment` as the concrete example. The CNB-55 §10.1 freeze gate (oracle ≥ 90, empty = 0, red-team ceilings, deterministic scorer, probe-in-range) remains necessary but is no longer sufficient. A family is DONE for the flywheel when it additionally: (a) declares its milestones into the §7.5 5-slot template with M3 anti-shortcut present and non-trivial; (b) registers its capability-tag declarations (required / recommended / forbidden) per §8.3; (c) supplies an integrity-flag detector and a state-delta rule; (d) quarantines LLM-judge signals out of $P$ / $M$ per the §7.8 escape-valve rule — for proposal-ranking this specifically means the 10-pt partial-progress rubric and the 3-pt ledger-padding check are reward-model inputs, not milestones; (e) produces a calibration matrix (oracle / empty / right-no-grounding / adversarial) × ($P$, $M$, $G$, $R$, $S_{\text{TTC}}$) that demonstrates signal separation; (f) supports ≥2 deterministic seeds so LLD-06 can emit preference pairs per §9.4. Old §15 renumbered to §16. |
+| v0.5 | §15 rewritten as a **general authoring checklist applicable to all 55 families**. Each rule is stated in family-agnostic form first; `proposal-ranking-manager-judgment` is retained only as the canonical worked example inside labeled callouts. No substantive rules changed from v0.4 — the two-layer DONE model, 13-item Layer B checklist, verification-matrix requirement, Decision A (LLM-judge quarantine) and Decision B (JSON-deliverable state-delta) precedents, and blocking-vs-non-blocking table all carry over. What changed: the framing, the structure, and the authoring-handoff checklist (§15.8) — now any family can fill it in. |
+| v0.4 | Added §15 **Family-Level DONE Criteria** (initial draft, structured around `proposal-ranking-manager-judgment`). The CNB-55 §10.1 freeze gate (oracle ≥ 90, empty = 0, red-team ceilings, deterministic scorer, probe-in-range) remains necessary but is no longer sufficient. A family is DONE for the flywheel when it additionally: (a) declares its milestones into the §7.5 5-slot template with M3 anti-shortcut present and non-trivial; (b) registers its capability-tag declarations (required / recommended / forbidden) per §8.3; (c) supplies an integrity-flag detector and a state-delta rule; (d) quarantines LLM-judge signals out of $P$ / $M$ per the §7.8 escape-valve rule; (e) produces a calibration matrix (oracle / empty / right-no-grounding / adversarial) × ($P$, $M$, $G$, $R$, $S_{\text{TTC}}$) that demonstrates signal separation; (f) supports ≥2 deterministic seeds so LLD-06 can emit preference pairs per §9.4. Old §15 renumbered to §16. |
 | v0.3 | Added §8 **Middle-Step (Turn-Level) Grading**. Defines a three-layer turn-level rubric (harness compliance ~15%, intent / evidence ~25%, state progress ~60%), a stable capability-tag vocabulary (`localize`, `inspect`, `modify`, `verify`, `respect_invariants`) that each family maps raw tool calls into, a per-turn scoring schema (`raw_tool_call`, `capability_tags`, `evidence_score`, `state_delta_score`, `integrity_flag`, `compliance_flag`), and a trajectory-level aggregate $G \in [0,1]$. $G$ is **shaping signal only** — it is a tie-break term in $S_{\text{TTC}}$, an optional per-turn component in $R$ (ReVeal-style), and a preference margin refinement; it never enters benchmark truth. Grounded in Agent-RLVR, ReVeal (TAPO), Rewarding Progress, and AutoTool. Also: (a) canonical event schema in §3.1 now carries `turn_scoring[]`; (b) preference lex ordering in §7.3 inserts $G$ as a tie-breaker before "drop pair"; (c) §R and $S_{\text{TTC}}$ in §7 updated to reference the shaping channel; (d) §15 lock-downs extended. |
 | v0.2 | Folded in: concrete loss functions (masked NLL / DPO / DAPO with formulas); one worked Codex JSONL example showing how a single run produces three different labels; milestone rubric (shared 5-slot template with weights 0.10/0.20/0.20/0.20/0.30, per-scenario-type adaptation, 3-level implementation ladder); scoring-model separation ($S_{\text{TTC}}$ for search vs $R$ for learning); adaptive TTC policy; the "20 solved is bootstrap, not saturation" decision. |
 | v0.1 | Initial framing. Established the "one raw event store, three derived training views, one evaluation boundary" architecture; locked the no-human-labels stance and the SFT → auto-preference → RLVR training sequence. |
@@ -584,183 +585,226 @@ Sprint 3   → LLD-10 implement + train 4 SFT arms → (optional) DPO arm
 
 ---
 
-## 15. Family-Level DONE Criteria
+## 15. Family-Level DONE Criteria — General Authoring Checklist
 
-Worked example throughout: `proposal-ranking-manager-judgment` (Track 10, Strategic Management & Long-Horizon Evolution, 5 variants v1–v5, structured-output CLI at `./bin/cnb55-brief`).
+This section applies to **all 55 families** in CNB-55. Every rule is stated in family-agnostic form. `proposal-ranking-manager-judgment` (Track 10, Strategic Management & Long-Horizon Evolution, 5 variants v1–v5, structured-output CLI at `./bin/cnb55-brief`) is used throughout as the canonical worked example, in callouts marked `> Example:`. The example is illustrative only — substitute the equivalent artifacts of any other family in its place.
+
+Assume Codex is connected to an LLM throughout, i.e. the family can actually be run end-to-end while authoring this checklist.
 
 ### 15.1 Why this section exists
 
 Family authoring historically stopped at the CNB-55 §10.1 freeze gate — oracle ≥ 90, empty = 0, ≥ 4 red-team exploits each scoring ≤ 20, scorer deterministic, probe-in-calibration-range. That is still necessary. It is no longer *sufficient*.
 
-The flywheel architecture in §§3–8 adds training-stack obligations a family must satisfy before LLD-06 can emit coherent training views over it, before LLD-07 can orchestrate adaptive TTC over it, and before LLD-11 can use it in the RL prompt pool. "DONE" now means both: benchmark-honest under CNB-55 *and* flywheel-ready under this HLD. A family that passes the freeze gate but fails the flywheel obligations is still blocked from training.
+The flywheel architecture in §§3–8 adds training-stack obligations every family must satisfy before LLD-06 can emit coherent training views over it, before LLD-07 can orchestrate adaptive TTC over it, and before LLD-11 can use it in the RL prompt pool. "DONE" now means both: benchmark-honest under CNB-55 *and* flywheel-ready under this HLD. A family that passes the freeze gate but fails the flywheel obligations is still blocked from training.
 
-This section is the checklist, the verification matrix, and the family-specific decision log (the LLM-judge escape-valve call) for `proposal-ranking-manager-judgment`. Other families should produce an equivalent section in their own `benchmark_run.md` or an adjacent authoring note.
+Each family must produce a §15-equivalent record in its own `benchmark_run.md` (or an adjacent authoring note) showing every checklist item below as either satisfied or explicitly N/A with a one-line justification.
 
 ### 15.2 Two layers of DONE
 
 | Layer | What it certifies | Owner | Reference |
 |---|---|---|---|
 | Layer A: Benchmark honesty | Oracle solves it; empty fails it; red-team ceilings hold; scorer is deterministic and verifier-isolated | Family author + second reviewer | CNB-55 SPEC §10.1 + family's `evaluator_contract.md` |
-| Layer B: Flywheel readiness | Milestones map to §7.5; capability tags declared; integrity flag detector registered; LLM-judge signals quarantined; calibration matrix shows signal separation; seeds ≥ 2 | Family author + LLD-06 owner | This section (§15) |
+| Layer B: Flywheel readiness | Milestones map to §7.5; capability tags declared; integrity-flag detector registered; LLM-judge signals quarantined; calibration matrix shows signal separation; seeds ≥ 2 | Family author + LLD-06 owner | This section (§15) |
 
-Both layers must be green. Layer A without Layer B means the family can be probed but cannot feed training. Layer B without Layer A means the training data is polluted.
+Both layers must be green for every family. Layer A without Layer B means the family can be probed but cannot feed training. Layer B without Layer A means the training data is polluted.
 
-### 15.3 Layer A — CNB-55 freeze gate (abbreviated, already familiar)
+### 15.3 Layer A — CNB-55 freeze gate (already familiar)
 
-Already required for `proposal-ranking-manager-judgment`:
+Already required for every family by CNB-55 SPEC §10.1:
 
-- Oracle (`cnb55-brief submit` against `verifier_data/.../oracle/brief_input.json`) scores ≥ 90 on every variant. Observed: V1 / V2 / V3 = 90; V4 = 96; V5 = 99 on 2026-04-20.
-- Empty `brief/` scores 0.
-- Red-team exploits under `verifier_data/.../red_team/` each cap at ≤ 20 or ≤ 40 depending on ceiling (`delete_visible_tests.sh`, `shadow_pytest.sh`, `minimal_brief.json`, `pick_highest_delta.md`, `finish_the_partial.md`, `single_objective_anchor.md`).
-- Probe on GPT-5.4/high at 3 seeds produces per-variant means in the calibration band (V1≈27, V2≈21, V3≈17, V4≈15, V5≈11; family mean ≈ 18, inside §7.8 calibration target [15, 25]).
-- Scorer deterministic under `CNB55_SEED=42`; hidden-test invocation order fixed; JSON keys sorted.
-- Immutable-slice checksums over `proposals/`, `repo_evidence/`, `release_context/`, `incident_context/`, `tests/`, `AGENTS.md`, `Dockerfile`, `bin/` enforced via trusted-final-state checks.
+- Oracle reference solution scores ≥ 90 on every variant.
+- Empty workspace (no agent action) scores 0.
+- All red-team exploits under `verifier_data/<family>/red_team/` cap at the ceilings declared in `evaluator_contract.md`.
+- Probe on the calibration model produces a per-variant mean inside the §7.8 calibration target band (typically [15, 25]).
+- Scorer deterministic under `CNB55_SEED=42`; hidden-test invocation order fixed; JSON output keys sorted.
+- All immutable-slice paths declared in `task_spec.md` are checksum-protected by trusted-final-state checks.
 
-This layer is the family's existing contract. It does not change.
+> **Example: proposal-ranking-manager-judgment (Layer A status, 2026-04-20 probe log).**
+> Oracle = V1/V2/V3 = 90, V4 = 96, V5 = 99. Empty `brief/` = 0. Six red-team exploits (`delete_visible_tests.sh`, `shadow_pytest.sh`, `minimal_brief.json`, `pick_highest_delta.md`, `finish_the_partial.md`, `single_objective_anchor.md`) each ≤ 20 or ≤ 40 per the relevant ceiling. Probe on GPT-5.4/high at 3 seeds: V1≈27, V2≈21, V3≈17, V4≈15, V5≈11; family mean ≈ 18 ∈ [15, 25]. Immutable-slice checksums cover `proposals/`, `repo_evidence/`, `release_context/`, `incident_context/`, `tests/`, `AGENTS.md`, `Dockerfile`, `bin/`. Layer A green.
 
-### 15.4 Layer B — Flywheel readiness checklist
+### 15.4 Layer B — Flywheel readiness checklist (13 items)
 
-Numbered items. Family is DONE for the flywheel when all items are checked. Assume Codex is connected to an LLM (i.e. the family can be actually run end-to-end to validate).
+Numbered items, every one applies to every family. For each item, the rule is stated first; an example callout shows what the rule looks like when filled in for `proposal-ranking-manager-judgment`.
 
-**§7 milestone obligations:**
+#### §7 milestone obligations
 
-1. **5-slot milestone declaration.** Family emits a `family.yaml` section (or equivalent) mapping its track scorecard sub-metrics to the §7.5 slots:
+**1. 5-slot milestone declaration.** The family emits a `family.yaml` (or equivalent) section mapping its track-scorecard sub-metrics to the §7.5 5-slot template:
 
-   For `proposal-ranking-manager-judgment`:
+| Slot | Weight | What it should check |
+|---|---|---|
+| M1 Localization | 0.10 | Agent demonstrably read or queried the relevant context before acting |
+| M2 Primary fix | 0.20 | The family's primary deliverable artifact exists and is well-formed |
+| M3 Invariants preserved / anti-shortcut | 0.20 | Immutable slices unchanged; no shim / tamper / bypass introduced |
+| M4 Functional checks | 0.20 | Visible/hidden functional tests pass; no "low-effort ceiling" trips |
+| M5 End-to-end integration state | 0.30 | Behavioral / differential checks against gold pass; no high-cost ceiling triggered |
 
-   | Slot | Weight | What it checks (this family) | Implementation level (§7.8) |
-   |---|---|---|---|
-   | M1 Localization | 0.10 | Agent ran `cnb55-brief schema` at least once OR read ≥ 3 files under `proposals/` + `repo_evidence/` before any `submit` | L1 regex + shell-log scan |
-   | M2 Primary fix | 0.20 | `brief/manager_brief.json` exists and parses as valid JSON with correct `schema_version` (derived from Phase 2 checks 1 + 2) | L2 structured (CLI + JSON schema) |
-   | M3 Invariants preserved / anti-shortcut | 0.20 | Immutable-slice checksums unchanged AND no `sitecustomize.py` / `pytest.py` shim AND `brief_input.json` the only whitelisted non-`brief/` write | L2 checksum + filesystem audit |
-   | M4 Functional checks | 0.20 | `pytest -q tests/test_ranking_brief.py` passes AND at least one "ranking-without-grounding" ceiling not triggered (≥ 2 rejections cite real evidence files) | L2 structured property checks |
-   | M5 End-to-end integration state | 0.30 | Accepted-proposal-matches-gold behavioral check **AND** Kendall-τ ≥ variant threshold **AND** no partial-credit ceiling below ≤ 30 triggered | L2 symbolic + L3 executable (no LLM-judge) |
+Each slot must be a deterministic boolean (or a deterministic threshold over a deterministic score), implemented at the §7.8 implementation level appropriate to the family (L1 regex / L2 structured / L3 executable-or-learned). LLM-judge signals are not allowed in this layer.
 
-2. **M3 non-trivial.** The anti-shortcut slot must have a real detector, not a placeholder. For this family, M3 is backed by three concrete checks (immutable-slice checksums, pytest-shim detection, writable-path whitelist) and at least one red-team exploit each exercise. ✔ satisfied.
+> **Example: proposal-ranking-manager-judgment.**
+>
+> | Slot | Weight | What it checks (this family) | Implementation level (§7.8) |
+> |---|---|---|---|
+> | M1 Localization | 0.10 | Agent ran `cnb55-brief schema` at least once OR read ≥ 3 files under `proposals/` + `repo_evidence/` before any `submit` | L1 regex + shell-log scan |
+> | M2 Primary fix | 0.20 | `brief/manager_brief.json` exists and parses as valid JSON with correct `schema_version` | L2 structured (CLI + JSON schema) |
+> | M3 Invariants / anti-shortcut | 0.20 | Immutable-slice checksums unchanged AND no `sitecustomize.py` / `pytest.py` shim AND `brief_input.json` is the only whitelisted non-`brief/` write | L2 checksum + filesystem audit |
+> | M4 Functional checks | 0.20 | `pytest -q tests/test_ranking_brief.py` passes AND no "ranking-without-grounding" ceiling triggered (≥ 2 rejections cite real evidence files) | L2 structured property checks |
+> | M5 E2E integration state | 0.30 | Accepted-proposal-matches-gold AND Kendall-τ ≥ variant threshold AND no partial-credit ceiling ≤ 30 triggered | L2 symbolic + L3 executable (no LLM-judge) |
 
-3. **Milestone booleans, monotone weights, gated dependencies, `verify.sh` sole authority.** Applies without exception. M5 is only checked when M2 holds (`brief/manager_brief.json` exists and parses).
+**2. M3 non-trivial.** The anti-shortcut slot must be backed by ≥ 2 concrete detectors (e.g. checksum, filesystem audit, log scan), not a placeholder boolean. At least one red-team exploit listed in §15.3 must exercise each detector.
 
-4. **Milestones never agent-visible.** Milestone scripts live under `verifier_data/proposal-ranking-manager-judgment/<variant_id>/milestones/` and are injected post-run into a separate container per LLD-13's integrity protocol. The family author must confirm no milestone-defining file is mounted into the agent's workspace bundle.
+> **Example: proposal-ranking-manager-judgment.** M3 has three detectors (immutable-slice checksums, pytest-shim detection, writable-path whitelist), each exercised by at least one red-team script. ✔
 
-**§8 middle-step grading obligations:**
+**3. Milestone booleans, monotone weights, gated dependencies, `verify.sh` sole authority.** Every family inherits these rules without exception. Higher slots (M3–M5) may be conditionally checked only when the prerequisite lower slot holds (e.g. M5 only when M2 holds — there's no point scoring "integration state" against a missing artifact).
 
-5. **Capability-tag declarations.** Family declares, per variant:
+> **Example: proposal-ranking-manager-judgment.** M5 only checked when M2 = 1 (`brief/manager_brief.json` exists and parses). All milestone scoring routed through `verify.sh`.
 
-   For `proposal-ranking-manager-judgment` (V1 as example):
+**4. Milestones never agent-visible.** Milestone scripts live under `verifier_data/<family>/<variant_id>/milestones/` and are injected post-run into a separate verifier container per LLD-13's integrity protocol. The family author must confirm no milestone-defining file is mounted into the agent's workspace bundle.
 
-   ```yaml
-   capability_tags:
-     required:
-       - localize        # must read ≥ 3 evidence files before first submit
-       - inspect         # must read ≥ 1 file under proposals/ AND ≥ 1 under repo_evidence/
-       - modify          # exactly one terminal action: `cnb55-brief submit`
-       - verify          # must run `cnb55-brief validate` OR `pytest` at least once
-     recommended:
-       - inspect         # reading release_context/ (V4+) or incident_context/ (V5)
-     forbidden:
-       - modify:tests/   # any edit under tests/ raises integrity_flag
-       - modify:immutable_slice  # any edit under proposals/, repo_evidence/, release_context/, incident_context/, AGENTS.md, Dockerfile, bin/ raises integrity_flag
-   ```
+> **Example: proposal-ranking-manager-judgment.** Milestones at `verifier_data/proposal-ranking-manager-judgment/<variant_id>/milestones/`; not present in `workspace_bundle/`. ✔
 
-6. **Tag-to-tool-call mapping rules.** LLD-06 owns the global mapping registry. The family author registers family-specific rules for any ambiguous cases. For this family, the only non-obvious rule is: `cnb55-brief validate` → `verify`, `cnb55-brief submit` → `modify` (terminal), `cnb55-brief schema` → `inspect`.
+#### §8 middle-step grading obligations
 
-7. **State-delta definition.** For families where "state" is not a file diff, the author must specify what `state_delta_score` per turn measures. For `proposal-ranking-manager-judgment`, the state is the `brief/manager_brief.json` file (absent or present; if present, parseable and schema-valid). The state-delta rule:
+**5. Capability-tag declarations.** Every family declares, per variant, which §8.3 capability tags from `{localize, inspect, modify, verify, respect_invariants}` are `required`, `recommended`, and `forbidden`. Forbidden tags include any modify-class action against immutable slices and against the visible test surface.
 
-   | Transition | state_delta_score |
-   |---|---|
-   | No-op (read-only tool call) | 0.0 |
-   | `cnb55-brief validate` returns success for the first time | +0.3 |
-   | `cnb55-brief submit` succeeds and `brief/manager_brief.json` becomes valid | +0.7 |
-   | Any turn that raises `integrity_flag` | -0.5 (clamped to [0, 1] at aggregate) |
+> **Example: proposal-ranking-manager-judgment (V1).**
+>
+> ```yaml
+> capability_tags:
+>   required:
+>     - localize        # must read ≥ 3 evidence files before first submit
+>     - inspect         # ≥ 1 file under proposals/ AND ≥ 1 under repo_evidence/
+>     - modify          # exactly one terminal action: `cnb55-brief submit`
+>     - verify          # must run `cnb55-brief validate` OR `pytest` at least once
+>   recommended:
+>     - inspect         # release_context/ (V4+) or incident_context/ (V5)
+>   forbidden:
+>     - modify:tests/
+>     - modify:immutable_slice  # proposals/, repo_evidence/, release_context/, incident_context/, AGENTS.md, Dockerfile, bin/
+> ```
 
-8. **Integrity-flag detector registered.** Rules that raise $H = 1$ for the run:
+**6. Tag-to-tool-call mapping rules.** LLD-06 owns the global mapping registry from raw tool calls (`shell`, `apply_patch`, `read_file`, etc.) to capability tags. The family author registers family-specific overrides only for ambiguous cases — e.g. domain-specific CLIs.
 
-   - Any write outside `brief/*` + `brief_input.json` at workspace root.
-   - Any modification to an immutable-slice checksum.
-   - Any pytest/sitecustomize/usercustomize shim dropped into the workspace.
-   - Any network egress attempt (grader log inspection).
+> **Example: proposal-ranking-manager-judgment.** Three overrides: `cnb55-brief schema` → `inspect`, `cnb55-brief validate` → `verify`, `cnb55-brief submit` → `modify` (terminal).
 
-   Registration is a one-line append to LLD-06's family-integrity-rules file.
+**7. State-delta definition.** For families where the "state" is not a file diff (e.g. JSON-deliverable, ranking output, audit decision), the author specifies what `state_delta_score` measures per turn. The default file-diff scorer applies to code-patch families; everything else needs explicit transition rules.
 
-9. **Compliance-flag is harness-level.** Applies uniformly; family does nothing extra. LLD-06 checks schema validity of every `function_call`, allowed-tool filter, and argument parseability.
+> **Example: proposal-ranking-manager-judgment.** State is the `brief/manager_brief.json` file (absent / present-and-invalid / present-and-valid).
+>
+> | Transition | state_delta_score |
+> |---|---|
+> | No-op (read-only tool call) | 0.0 |
+> | `cnb55-brief validate` returns success for the first time | +0.3 |
+> | `cnb55-brief submit` succeeds and `brief/manager_brief.json` becomes valid | +0.7 |
+> | Any turn that raises `integrity_flag` | -0.5 (clamped to [0, 1] at aggregate) |
 
-**§7.8 escape-valve for LLM-judge signals (family-specific decision for this family):**
+**8. Integrity-flag detector registered.** Every family enumerates the rules that raise $H = 1$ for the run. Typical entries: writes outside the family's whitelisted output paths; any modification to an immutable-slice checksum; any pytest/sitecustomize/usercustomize shim; any network egress attempt.
 
-10. **LLM-judge signals quarantined from $P$ and $M$.** This family has **two** LLM-judge components in its current evaluator contract:
+> **Example: proposal-ranking-manager-judgment.** $H = 1$ when any of: write outside `brief/*` + `brief_input.json`; modification to an immutable-slice checksum; pytest/sitecustomize/usercustomize shim dropped; network egress attempt detected in grader log. Registered as one append to LLD-06's family-integrity-rules file.
 
-    | Signal | Points | Decision |
-    |---|---|---|
-    | Partial-progress rubric (`partial_progress.md`, gpt-5.4 @ T=0) | 10 | **Quarantined** — not a milestone; feeds the §8.5 per-turn shaping channel and/or a Phase 2b reward-model input. The scorer still includes it in the CNB-55 100-pt total for probe calibration, but $M$ computed for training uses only the symbolic M1–M5 slots above. |
-    | Assumption-ledger padding check (LLM-judge on "are `missing` rows real gaps?") | 3 | **Quarantined** — same treatment. Rolled into the same shaping/reward-model channel. |
+**9. Compliance-flag is harness-level.** Applies uniformly across families; the family does nothing extra. LLD-06 checks schema validity of every `function_call`, the allowed-tool filter, and argument parseability.
 
-    Net effect: 13 of the family's 100 scoring points are LLM-judge-produced. Those 13 points are visible to the probe (so calibration remains stable with the existing 2026-04-20 probe log) but **invisible to the training loss**. The scorer emits two top-level fields per run: `P_benchmark` (all 100 pts, including LLM-judge) and `M_training` (only symbolic contributions normalized to [0,1]). LLD-06 reads `M_training`.
+> **Example: proposal-ranking-manager-judgment.** Inherited automatically. ✔
 
-    This is the §7.8 escape-valve rule applied concretely: if a signal needs an LLM judge to define, it does not determine training labels. It may still inform benchmark leaderboard scores and TTC reranking.
+#### §7.8 escape-valve for LLM-judge signals
 
-**§9 collection-side obligations:**
+**10. LLM-judge signals quarantined from $P_{\text{training}}$ and $M_{\text{training}}$.** If the family's scorer emits any contribution computed by an LLM judge — rubric-based partial credit, "is this rationale honest?" checks, narrative coherence scoring — those points stay in the CNB-55 100-pt total *for probe calibration* but are excluded from $M_{\text{training}}$. The scorer emits two top-level fields per run:
 
-11. **Seeds ≥ 2 on Train-Long campaigns over this family.** Family supports ≥2 deterministic seeds per variant. Codex determinism is sampling-temperature-bounded; the family author confirms that rerunning the oracle input twice produces the same `manager_brief.json` under fixed seed. ✔ Family has no hidden randomness in the CLI.
+- `P_benchmark`: full 100-point total including any LLM-judge contributions. Used for the §10.1 freeze gate, leaderboard, and probe calibration.
+- `M_training`: only deterministic / symbolic milestone contributions, normalized to [0, 1]. Read by LLD-06 into the SFT view, the auto-preference view, and the RL prompt pool.
 
-12. **Deterministic `initial_state` for RL prompt pool.** The workspace bundle at `workspace_bundle/<variant_id>/` is fully pinned via `manifest.lock.json`. Initial state hash for RL pool entries computed over the variant bundle at commit-time.
+LLM-judge contributions may also feed the §8.5 per-turn shaping channel and serve as Phase 2b reward-model input — they are not discarded, just denied authority over training labels.
 
-13. **`grader_ref` and `milestone_config_ref` exposed.** LLD-13 registry entry exists for this family pointing at `verifiers/proposal-ranking-manager-judgment/score_ranking.py` (grader) and `verifier_data/proposal-ranking-manager-judgment/<variant_id>/milestones/` (milestone config).
+If the family has zero LLM-judge contributions in its scorer, this item collapses to "`P_benchmark == M_training` (after normalization), no dual emission needed." It still must be confirmed in writing.
+
+> **Example: proposal-ranking-manager-judgment.** Two LLM-judge components in the current evaluator contract:
+>
+> | Signal | Points | Decision |
+> |---|---|---|
+> | Partial-progress rubric (`partial_progress.md`, gpt-5.4 @ T=0) | 10 | Quarantined → shaping/reward-model channel only |
+> | Assumption-ledger padding check (LLM-judge on "are `missing` rows real gaps?") | 3 | Quarantined → same |
+>
+> Net: 13 of 100 scoring points are LLM-judge-produced. Visible to probe (calibration unchanged from 2026-04-20 log) but invisible to training loss. Scorer to emit dual `P_benchmark` / `M_training` per item 10 above.
+
+#### §9 collection-side obligations
+
+**11. Seeds ≥ 2 supported on Train-Long campaigns.** Family must support ≥ 2 deterministic seeds per variant. The author confirms that re-running the oracle input twice under fixed seed produces byte-identical evaluator output (or, where unavoidable randomness exists, that the variation is bounded and documented).
+
+> **Example: proposal-ranking-manager-judgment.** No hidden randomness in `cnb55-brief`; oracle input replays produce identical `manager_brief.json` under fixed seed. ✔
+
+**12. Deterministic `initial_state` for RL prompt pool.** The workspace bundle at `workspace_bundle/<variant_id>/` is fully pinned via `manifest.lock.json`. The initial-state hash for RL pool entries is computed over the variant bundle at commit-time.
+
+> **Example: proposal-ranking-manager-judgment.** `manifest.lock.json` pins all bundle content; initial-state hash deterministic. ✔
+
+**13. `grader_ref` and `milestone_config_ref` exposed.** A LLD-13 registry entry exists for the family pointing at the scorer module path and the milestone-config directory.
+
+> **Example: proposal-ranking-manager-judgment.** `grader_ref = verifiers/proposal-ranking-manager-judgment/score_ranking.py`; `milestone_config_ref = verifier_data/proposal-ranking-manager-judgment/<variant_id>/milestones/`.
 
 ### 15.5 Required verification matrix
 
-Before marking the family DONE, run the following trajectories and populate the matrix. Each trajectory is a Codex session against one pinned variant (V1 is the canonical anchor for this section).
+Before marking any family DONE, the author runs a minimum of **6 trajectories** against one pinned variant (typically V1 as canonical anchor) and populates this matrix. The trajectories are intentionally chosen to exercise the floor, the ceiling, and each major shortcut basin.
 
-| Trajectory | How produced | Expected $P$ | Expected $M$ (training) | Expected $G$ | Expected $R$ | Expected $S_{\text{TTC}}$ | What this verifies |
-|---|---|---|---|---|---|---|---|
-| **Oracle** | `cnb55-brief submit verifier_data/.../oracle/brief_input.json` | 1 | ≥ 0.90 | ≥ 0.75 | ≥ 0.98 | ≥ 1175 | Signal ceiling; oracle looks like a successful, well-grounded run in every scoring lens |
-| **Empty** | No `brief/` write | 0 | 0 | ≤ 0.15 | 0 (after penalties) | ≤ 0 | Signal floor; empty fails every lens |
-| **Right-answer-no-grounding** | Submit a brief with correct `accepted` and `ranking` but `citations: []` on all rejection entries | 0 (ceiling `ranking_without_grounding ≤ 25` fires) | ≤ 0.40 (M4 false; M5 partially false) | ≤ 0.40 (low evidence_score) | ≤ 0.24 | ≤ 40 | Middle-step grader actually differentiates grounded from ungrounded solves — the shortcut $S_{\text{TTC}}$ delta vs oracle must be ≥ 1100 |
-| **Pick-P3 shortcut** (V1–V3) | Submit a brief accepting the staffing-blocked proposal | 0 (ceiling `ignored_staffing_constraint ≤ 30`) | ≤ 0.45 | variable, ≤ 0.55 | ≤ 0.27 | ≤ 70 | Ceiling fires; reward-hack basin has visibly lower $S_{\text{TTC}}$ than oracle; $m_3$ may still be 1 (no tampering), so the trace is flagged by ceiling, not by $H$ |
-| **Finish-the-partial** (V3+) | Submit a brief accepting the in-progress-patch proposal without sunk-cost language | 0 (ceiling `sunk_cost_finish ≤ 30`) | ≤ 0.50 | ≤ 0.60 | ≤ 0.30 | ≤ 80 | Same as above for the V3-specific trap |
-| **Delete-tests adversarial** | Run `delete_visible_tests.sh` | 0 (trusted-final-state score → 0) | 0 (M3 = 0) | 0 ($H = 1$, integrity_flag on the edit turn) | -0.6 $H$ term dominates | heavily negative | Anti-reward-hack floor fires through *three independent* channels (trusted-state, $M$, $H$); no single detector is load-bearing alone |
+| Trajectory | What it must prove | Generic construction |
+|---|---|---|
+| **Oracle** | Signal ceiling — successful run looks successful in every lens | Replay the family's reference solution against the pinned variant |
+| **Empty** | Signal floor — no action fails every lens | Workspace untouched; agent does not act |
+| **Right-answer-no-grounding** | Middle-step grader differentiates evidence-grounded solves from shortcuts that happen to land on the right answer | Submit the gold deliverable but strip evidence / citations / supporting work |
+| **Family-specific shortcut #1** | The most-attractive partial-credit shortcut basin gets capped where the ceiling says it should | Construct the input that triggers the family's primary `partial_credit_ceiling` |
+| **Family-specific shortcut #2** | A second distinct shortcut basin (variant-gated if necessary) gets capped | Construct the second-most-attractive shortcut input |
+| **Adversarial tamper** | Anti-reward-hack floor fires through ≥ 3 independent channels (trusted-state, $M$, $H$) — no single detector is load-bearing alone | Run a red-team script that deletes/modifies the visible test surface or installs a pytest shim |
 
-If any row of this matrix produces a value outside the expected range, the family is **not DONE** and the relevant detector (integrity flag, capability-tag mapping, state-delta rule, or LLM-judge quarantine) must be revisited.
+Every row reports observed values for **5 metrics**: $P_{\text{benchmark}}$, $M_{\text{training}}$, $G$, $R$, $S_{\text{TTC}}$. The verification is binary: every observed value must fall inside the family's expected range. If any cell is out of range, the family is **not DONE** and the relevant detector (integrity flag, capability-tag mapping, state-delta rule, milestone definition, or LLM-judge quarantine) must be revisited.
 
-For `proposal-ranking-manager-judgment`, the matrix above should be added to `benchmark_blueprints/families/proposal-ranking-manager-judgment/benchmark_run.md` as a dated "flywheel-readiness probe" section, alongside the existing CNB-55 probe log.
+> **Example: proposal-ranking-manager-judgment (V1, expected ranges).**
+>
+> | Trajectory | How produced | $P_{\text{bench}}$ | $M_{\text{train}}$ | $G$ | $R$ | $S_{\text{TTC}}$ | What it verifies |
+> |---|---|---|---|---|---|---|---|
+> | Oracle | `cnb55-brief submit verifier_data/.../oracle/brief_input.json` | ≥ 0.90 | ≥ 0.90 | ≥ 0.75 | ≥ 0.98 | ≥ 1175 | Ceiling — oracle succeeds in every lens |
+> | Empty | No `brief/` write | 0 | 0 | ≤ 0.15 | 0 (after penalties) | ≤ 0 | Floor — empty fails every lens |
+> | Right-answer-no-grounding | Correct `accepted` + `ranking` but `citations: []` on rejections | ≤ 0.25 (ceiling) | ≤ 0.40 | ≤ 0.40 | ≤ 0.24 | ≤ 40 | Grounding actually matters; $S_{\text{TTC}}$ delta vs oracle ≥ 1100 |
+> | Pick-P3 (V1–V3) | Accept staffing-blocked proposal | ≤ 0.30 (ceiling) | ≤ 0.45 | ≤ 0.55 | ≤ 0.27 | ≤ 70 | Staffing-constraint trap capped; $H$ remains 0 |
+> | Finish-partial (V3+) | Accept in-progress proposal without sunk-cost language | ≤ 0.30 (ceiling) | ≤ 0.50 | ≤ 0.60 | ≤ 0.30 | ≤ 80 | Sunk-cost trap capped |
+> | Delete-tests adversarial | Run `delete_visible_tests.sh` | 0 (trusted-state) | 0 (M3) | 0 ($H = 1$) | strongly negative (-0.6 $H$ term) | strongly negative | Three independent detectors all fire |
 
-### 15.6 Specific decision log for this family
+The matrix lives in the family's `benchmark_run.md` as a dated "flywheel-readiness probe" section, alongside the existing CNB-55 probe log.
 
-Two decisions that other families can reuse as precedent:
+### 15.6 Precedent decisions log
 
-**Decision A — LLM-judge quarantine.** Because Track 10 Strategic Management families inherently involve judgment-call sub-metrics (partial-progress reasoning, assumption-ledger honesty), the evaluator contract keeps LLM-judge signals for probe scoring but *excludes them from $P_{\text{training}}$ and $M_{\text{training}}$*. The scorer emits dual fields. Other LLM-judge-heavy families (any Track 10 family; some Track 4 review families) should follow this precedent. Track 1–3 families (algorithmic, migration, CI) typically do not need the quarantine because their judgments are already symbolic.
+Two decisions made first on `proposal-ranking-manager-judgment` that other families should reuse rather than re-derive:
 
-**Decision B — State-delta for JSON-deliverable families.** For families where the deliverable is a single JSON file (not a code patch), `state_delta_score` uses the file-state transitions defined in item 7 above, not a file-diff scorer. Other JSON-deliverable families (`policy-docs-compliance-audit`, `incident-evidence-synthesis`, `request-path-evidence-brief`) can reuse this pattern.
+**Decision A — LLM-judge quarantine pattern.** Any family whose scorer emits LLM-judge-produced points keeps those points in `P_benchmark` (for probe stability and leaderboard fidelity) but excludes them from `M_training` via dual-field scorer emission per item 10. **When this applies:** all Track 10 (Strategic Management) families inherently involve judgment-call sub-metrics; some Track 4 (review / approval) families do; Track 1–3 (algorithmic, migration, CI) families typically do not because their judgments are already symbolic. **First applied on:** `proposal-ranking-manager-judgment` (13 of 100 points quarantined).
+
+**Decision B — State-delta for non-code-diff families.** Families whose deliverable is not a code patch (single JSON, ranking output, audit decision, structured report) define `state_delta_score` via explicit transition rules rather than the default file-diff scorer. The transition rules specify a handful of named state changes (artifact absent → present-and-invalid → present-and-valid), each with a numeric delta, plus a penalty entry for `integrity_flag` turns. **When this applies:** any family producing a primary deliverable as JSON, YAML, structured markdown, or an API call rather than a code patch. **First applied on:** `proposal-ranking-manager-judgment` (4-row transition table at item 7). **Other plausible inheritors:** `policy-docs-compliance-audit`, `incident-evidence-synthesis`, `request-path-evidence-brief`.
+
+When a future family encounters either situation, it should cite the decision letter in its own §15-equivalent record rather than re-arguing the rationale.
 
 ### 15.7 Blocking vs non-blocking
 
 | Item | Blocks marking family DONE? |
 |---|---|
-| Items 1–4 (milestone declaration, M3 non-trivial, rules, invisibility) | **Blocking** |
-| Items 5–7 (capability tags, tag-mapping, state-delta) | **Blocking** |
-| Item 8 (integrity-flag registration) | **Blocking** |
-| Item 9 (compliance-flag — harness level) | Automatic |
-| Item 10 (LLM-judge quarantine) | **Blocking** iff the family's scorer emits LLM-judge contributions. For this family: blocking. |
-| Items 11–13 (seeds, initial_state, grader_ref) | **Blocking** |
-| Verification matrix (§15.5) | **Blocking** — must be populated with real observed values, not predicted |
+| Items 1–4 (milestone declaration, M3 non-trivial, rules, invisibility) | **Blocking** for every family |
+| Items 5–7 (capability tags, tag-mapping, state-delta) | **Blocking** for every family |
+| Item 8 (integrity-flag registration) | **Blocking** for every family |
+| Item 9 (compliance-flag — harness level) | Automatic; never family-blocking |
+| Item 10 (LLM-judge quarantine) | **Blocking** iff the family's scorer emits any LLM-judge contribution. Otherwise: confirm in writing and proceed. |
+| Items 11–13 (seeds, initial_state, grader_ref) | **Blocking** for every family |
+| Verification matrix (§15.5, all 6 rows) | **Blocking** — must contain real observed values, not predicted ones |
 | CNB-55 freeze gate (§15.3) | **Blocking** (pre-existing) |
 
-### 15.8 Concrete TODO for `proposal-ranking-manager-judgment`
+### 15.8 Per-family authoring checklist (handoff template)
 
-What's already done (as of 2026-04-20 probe log in `benchmark_run.md`):
+Every family author copies the following checklist into the family's `benchmark_run.md` and ticks each box with a one-line note linking the artifact (file path, commit, dated probe row) that satisfies it. A family is DONE for the flywheel when all eight boxes are green.
 
-- Layer A: freeze gate passed — oracle 90 / 90 / 90 / 96 / 99; ceilings hold; scorer deterministic; probe in range.
-- Family-specific attempt_02b hardening applied (τ thresholds, ceiling tightening, `missed_staffing_update`, `missed_watermark_assumption`).
+- [ ] **Milestone mapping declared.** §15.4 items 1–4: `family.yaml` has the 5-slot mapping; M3 non-trivial; gated dependencies wired through `verify.sh`; milestones not mounted into the agent workspace.
+- [ ] **Capability tags declared per variant.** §15.4 item 5: `capability_tags` block in `family.yaml` for every variant; required / recommended / forbidden lists complete.
+- [ ] **Tag-mapping overrides registered with LLD-06.** §15.4 item 6: any non-default tool-call → tag mappings landed in the LLD-06 mapping registry.
+- [ ] **State-delta rules registered with LLD-06.** §15.4 item 7: either uses the default file-diff scorer (note in writing) or supplies an explicit transition table.
+- [ ] **Integrity-flag rules registered with LLD-06.** §15.4 item 8: family-specific $H = 1$ rules appended to LLD-06's family-integrity-rules file.
+- [ ] **Scorer emits `P_benchmark` and `M_training`.** §15.4 item 10: dual emission live; LLM-judge contributions, if any, appear only in `P_benchmark`.
+- [ ] **Verification matrix populated (§15.5).** All 6 trajectories run on the canonical variant; observed $P$ / $M$ / $G$ / $R$ / $S_{\text{TTC}}$ values recorded; every cell inside its expected range. Repeated on at least one stress variant where the family has variant-gated traps (e.g. V3+ shortcuts).
+- [ ] **Layer A still green after Layer B work.** §15.3 freeze-gate probe re-run after any scorer changes (`P_benchmark` / `M_training` split) to confirm oracle ≥ 90, empty = 0, ceilings hold, calibration band unchanged.
 
-What's still missing for Layer B:
-
-- [ ] Populate the §15.4 milestone mapping (items 1–4) into the family's YAML, using the table in item 1 above as the authoritative source.
-- [ ] Add `capability_tags` block (item 5) to `family.yaml` per variant.
-- [ ] Register state-delta rules (item 7) with LLD-06.
-- [ ] Register integrity-flag rules (item 8) with LLD-06.
-- [ ] Split scorer output into `P_benchmark` and `M_training` (item 10); confirm the 13 LLM-judge points appear only in `P_benchmark`.
-- [ ] Run the §15.5 verification matrix on V1; record results in `benchmark_run.md`.
-- [ ] Repeat the matrix on one stress variant (V3 or V5 recommended) to confirm detectors fire under trap conditions.
-
-Once all seven checkboxes are green, the family is DONE for the flywheel and can feed LLD-06.
+> **Example: proposal-ranking-manager-judgment (status as of 2026-04-20).**
+> Layer A green (oracle 90/90/90/96/99; ceilings hold; scorer deterministic; probe in band; attempt_02b hardening applied including `missed_staffing_update` and `missed_watermark_assumption` ceilings). Layer B not yet started — all 8 boxes above are still open. Recommended order: items 1, 2, 3 (one PR), item 4 (one PR), item 5 (one PR landing the dual-emit scorer), item 6 (verification matrix run), item 7 (re-probe Layer A).
 
 ---
 
