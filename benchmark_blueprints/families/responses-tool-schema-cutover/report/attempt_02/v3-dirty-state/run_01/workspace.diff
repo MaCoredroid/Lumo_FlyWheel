@@ -1,0 +1,171 @@
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/v3-dirty-state/codex/config.toml b/tmp/responses_tool_schema_cutover_probe/20260422T214841Z-v3-dirty-state-run01/workspace/codex/config.toml
+index 08a25e5..5ff47e9 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/v3-dirty-state/codex/config.toml
++++ b/tmp/responses_tool_schema_cutover_probe/20260422T214841Z-v3-dirty-state-run01/workspace/codex/config.toml
+@@ -1,4 +1,4 @@
+ [runtime]
+-transport = "chat_completions"
+-tool_result_join_key = "tool_name"
+-replay_mode = "legacy_assistant_blob"
++transport = "responses"
++tool_result_join_key = "call_id"
++replay_mode = "response_output_items"
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/v3-dirty-state/docs/migrations/responses-cutover.md b/tmp/responses_tool_schema_cutover_probe/20260422T214841Z-v3-dirty-state-run01/workspace/docs/migrations/responses-cutover.md
+index fb4ff7d..1e72288 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/v3-dirty-state/docs/migrations/responses-cutover.md
++++ b/tmp/responses_tool_schema_cutover_probe/20260422T214841Z-v3-dirty-state-run01/workspace/docs/migrations/responses-cutover.md
+@@ -1,7 +1,13 @@
+ # Responses Cutover
+ 
+-The local adapter still mirrors the legacy Chat Completions contract.
++The local adapter now follows the Responses-native replay contract.
+ 
+-- Inspect `function_call.arguments` to recover tool arguments.
+-- Treat repeated tool invocations as one logical tool step in snapshots.
+-- `response.completed` is only a footer marker; no per-item replay contract exists.
++- Rebuild replays from `response.output_item.added` records and inspect `item.type`
++  to recover `message`, `tool_call`, and `tool_result` items.
++- Join tool results back to calls by the original `call_id` from the stream.
++  Repeated same-name tool invocations remain distinct and must not be deduped by
++  `tool_name` or by visible ordinal position.
++- Keep the public CLI summary output stable: render assistant text first, then
++  emit each tool call in call order with its matched tool result when present.
++- Treat `response.completed` as a footer marker only after the per-item replay
++  state has already been reconstructed from output items.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/v3-dirty-state/gateway/adapter.py b/tmp/responses_tool_schema_cutover_probe/20260422T214841Z-v3-dirty-state-run01/workspace/gateway/adapter.py
+index 4d766c1..5ff3d18 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/v3-dirty-state/gateway/adapter.py
++++ b/tmp/responses_tool_schema_cutover_probe/20260422T214841Z-v3-dirty-state-run01/workspace/gateway/adapter.py
+@@ -15,28 +15,39 @@ def load_events(path: str | Path) -> list[dict]:
+ def normalize_events(path: str | Path) -> list[dict]:
+     events = load_events(path)
+     assistant_chunks: list[str] = []
+-    calls_by_tool: dict[str, dict] = {}
+-    results_by_tool: dict[str, str] = {}
++    tool_calls: list[dict] = []
++    tool_results: list[dict] = []
+ 
+-    for sequence, event in enumerate(events, start=1):
++    for fallback_sequence, event in enumerate(events, start=1):
+         if event.get("type") != "response.output_item.added":
+             continue
+         item = event.get("item", {})
++        sequence = event.get("sequence", fallback_sequence)
+         item_type = item.get("type")
+         if item_type == "message":
+             for part in item.get("content", []):
+                 if part.get("type") == "output_text":
+                     assistant_chunks.append(part.get("text", ""))
+         elif item_type == "tool_call":
+-            tool_name = item.get("tool_name")
+-            calls_by_tool[tool_name] = {
+-                "kind": "tool_call",
+-                "sequence": sequence,
+-                "tool_name": tool_name,
+-                "arguments": item.get("arguments", ""),
+-            }
++            tool_calls.append(
++                {
++                    "kind": "tool_call",
++                    "sequence": sequence,
++                    "tool_name": item.get("tool_name"),
++                    "call_id": item.get("call_id"),
++                    "arguments": item.get("arguments", ""),
++                }
++            )
+         elif item_type == "tool_result":
+-            results_by_tool[item.get("tool_name")] = item.get("output", "")
++            tool_results.append(
++                {
++                    "kind": "tool_result",
++                    "sequence": sequence,
++                    "tool_name": item.get("tool_name"),
++                    "call_id": item.get("call_id"),
++                    "output": item.get("output", ""),
++                }
++            )
+ 
+     normalized: list[dict] = []
+     if assistant_chunks:
+@@ -48,15 +59,6 @@ def normalize_events(path: str | Path) -> list[dict]:
+             }
+         )
+ 
+-    for tool_name, call in calls_by_tool.items():
+-        normalized.append(call)
+-        if tool_name in results_by_tool:
+-            normalized.append(
+-                {
+-                    "kind": "tool_result",
+-                    "sequence": call["sequence"] + 100,
+-                    "tool_name": tool_name,
+-                    "output": results_by_tool[tool_name],
+-                }
+-            )
++    normalized.extend(tool_calls)
++    normalized.extend(tool_results)
+     return normalized
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/v3-dirty-state/gateway/reducer.py b/tmp/responses_tool_schema_cutover_probe/20260422T214841Z-v3-dirty-state-run01/workspace/gateway/reducer.py
+index bad36f5..a38aba4 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/responses-tool-schema-cutover/workspace_bundle/v3-dirty-state/gateway/reducer.py
++++ b/tmp/responses_tool_schema_cutover_probe/20260422T214841Z-v3-dirty-state-run01/workspace/gateway/reducer.py
+@@ -5,36 +5,41 @@ from gateway.adapter import normalize_events
+ 
+ def build_replay(path: str) -> list[dict]:
+     transcript: list[dict] = []
+-    pending_by_tool: dict[str, str] = {}
++    tool_calls: list[dict] = []
++    results_by_call_id: dict[str, dict] = {}
++
+     for item in normalize_events(path):
+         kind = item.get("kind")
+         if kind == "assistant_text":
+             transcript.append({"type": "assistant", "text": item.get("text", "")})
+             continue
+         if kind == "tool_result":
+-            pending_by_tool[item.get("tool_name")] = item.get("output", "")
++            call_id = item.get("call_id")
++            if call_id is not None:
++                results_by_call_id[call_id] = item
+             continue
+         if kind == "tool_call":
+-            tool_name = item.get("tool_name")
+-            if any(row.get("tool_name") == tool_name for row in transcript):
+-                continue
++            tool_calls.append(item)
++
++    for item in tool_calls:
++        transcript.append(
++            {
++                "type": "tool_call",
++                "tool_name": item.get("tool_name"),
++                "arguments": item.get("arguments", ""),
++                "call_id": item.get("call_id"),
++            }
++        )
++        result = results_by_call_id.get(item.get("call_id"))
++        if result is not None:
+             transcript.append(
+                 {
+-                    "type": "tool_call",
+-                    "tool_name": tool_name,
+-                    "arguments": item.get("arguments", ""),
+-                    "call_id": item.get("call_id"),
++                    "type": "tool_result",
++                    "tool_name": result.get("tool_name"),
++                    "output": result.get("output", ""),
++                    "call_id": result.get("call_id"),
+                 }
+             )
+-            if tool_name in pending_by_tool:
+-                transcript.append(
+-                    {
+-                        "type": "tool_result",
+-                        "tool_name": tool_name,
+-                        "output": pending_by_tool[tool_name],
+-                        "call_id": item.get("call_id"),
+-                    }
+-                )
+     return transcript
+ 
+ 

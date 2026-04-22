@@ -54,3 +54,63 @@ python3 verifiers/responses-tool-schema-cutover/run_verification_matrix.py --var
 ### Honest next step
 
 Run the family probe loop against the implemented bundle to measure actual per-variant means and verify the §10.1 freeze-gate math with live solver attempts. That step is deliberately left unlaunched here.
+
+## Attempt 02 — whole-family live `codex exec` probe
+
+### Commands run
+
+```bash
+python3 verifiers/responses-tool-schema-cutover/run_live_probe.py --attempt attempt_02 --n 3 --model gpt-5.4 --reasoning-effort high
+python3 scripts/probe_report.py benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/probe_runs.jsonl --probe-run-id 20260422T214841Z --emit-json | tee benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/probe_report.txt
+```
+
+### Probe artifacts
+
+- run ledger: `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/probe_runs.jsonl`
+- text report: `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/probe_report.txt`
+- metadata: `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/probe_meta.json`
+- per-run verifier outputs / diffs / logs: `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/<variant>/run_0{1,2,3}/`
+
+### Whole-family live results
+
+Probe run id: `20260422T214841Z`
+
+| Variant | Scores | Mean | Stdev | Ceiling hits |
+| --- | --- | ---: | ---: | --- |
+| `v1-clean-baseline` | `[50, 0, 0]` | `16.67` | `28.87` | `contract_drift x3`, `no_test_regression_guard x2` |
+| `v2-noisy-distractor` | `[50, 60, 60]` | `56.67` | `5.77` | `contract_drift x1`, `no_test_regression_guard x3` |
+| `v3-dirty-state` | `[60, 50, 50]` | `53.33` | `5.77` | `contract_drift x2`, `no_test_regression_guard x3` |
+| `v4-multi-corpus-objective` | `[50, 60, 0]` | `36.67` | `32.15` | `contract_drift x2`, `no_test_regression_guard x2` |
+| `v5-recovery-in-thread` | `[60, 50, 60]` | `56.67` | `5.77` | `contract_drift x1`, `no_test_regression_guard x3` |
+
+### Layer A gate values
+
+- `family_mean = 44.00` vs required `[15, 25]` -> `FAIL`
+- `max_variant_mean = 56.67` vs required `<= 40` -> `FAIL`
+- `min_variant_mean = 16.67` vs required `<= 10` -> `FAIL`
+- monotonic `V1 >= V2 >= V3 >= V4 >= V5` within `+/- 3` -> `FAIL`
+  - `v1-clean-baseline (16.7) < v2-noisy-distractor (56.7)` beyond `+/- 3.0`
+  - `v4-multi-corpus-objective (36.7) < v5-recovery-in-thread (56.7)` beyond `+/- 3.0`
+
+### Spot-check diagnosis from live artifacts
+
+- `v2-noisy-distractor/run_02` scored `60` because the solver repaired adapter/reducer/config/docs and passed visible + hidden replay checks, but it did not strengthen either visible regression test file. The run therefore stayed capped by `no_test_regression_guard`. See:
+  - `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/v2-noisy-distractor/run_02/verify_result.json`
+  - `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/v2-noisy-distractor/run_02/workspace.diff`
+- `v1-clean-baseline/run_02` and `v4-multi-corpus-objective/run_03` collapsed to `0` because the solver wrote helper pytest files outside the whitelist (`tests/conftest.py` / `conftest.py`). Those runs were correctly forced to `integrity_flag = 1` by `write_outside_whitelist`. See:
+  - `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/v1-clean-baseline/run_02/verify_result.json`
+  - `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_02/v4-multi-corpus-objective/run_03/verify_result.json`
+
+### Verification matrix status at the time of live probe
+
+The scorer and manifests used for the live probe matched the family-local Layer B matrices already generated in attempt 01:
+
+- `benchmark_blueprints/families/responses-tool-schema-cutover/verification_matrix.md`
+  - Oracle `100`, Empty `0`, RAWR `50`, Adapter-only `19`, Chronology-blind `20`, Delete-tests `0` with integrity `1`
+- `benchmark_blueprints/families/responses-tool-schema-cutover/verification_matrix_v5-recovery-in-thread.md`
+  - Oracle `100`, Empty `0`, RAWR `50`, Adapter-only `19`, Chronology-blind `20`, Delete-tests `0` with integrity `1`
+
+### Outcome
+
+- Layer B remains implemented and evidenced locally.
+- Layer A is still open after the first real whole-family live probe. The measured signal is not a missing-artifact problem anymore; it is a calibration problem driven mainly by `no_test_regression_guard` / `contract_drift` ceilings plus integrity variance from out-of-whitelist pytest helper writes.
