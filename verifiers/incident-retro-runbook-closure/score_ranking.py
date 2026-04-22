@@ -213,20 +213,25 @@ def main() -> int:
 
     if surfaces.automation_prompt_matches_authority:
         state.add("automation.prompt_matches_authority", 12)
+        if surfaces.automation_schedule_preserved:
+            state.add("automation.schedule_preserved", 4)
+        else:
+            state.apply_ceiling("schedule_drift", 25)
+            state.add_error("automation schedule changed")
+
+        if surfaces.automation_destination_preserved:
+            state.add("automation.destination_preserved", 4)
+        else:
+            state.apply_ceiling("schedule_drift", 25)
+            state.add_error("automation destination changed")
     else:
         state.add_error("automation prompt does not match authoritative command/target")
-
-    if surfaces.automation_schedule_preserved:
-        state.add("automation.schedule_preserved", 4)
-    else:
-        state.apply_ceiling("schedule_drift", 25)
-        state.add_error("automation schedule changed")
-
-    if surfaces.automation_destination_preserved:
-        state.add("automation.destination_preserved", 4)
-    else:
-        state.apply_ceiling("schedule_drift", 25)
-        state.add_error("automation destination changed")
+        if not surfaces.automation_schedule_preserved:
+            state.apply_ceiling("schedule_drift", 25)
+            state.add_error("automation schedule changed")
+        if not surfaces.automation_destination_preserved:
+            state.apply_ceiling("schedule_drift", 25)
+            state.add_error("automation destination changed")
 
     if surfaces.note_is_actionable_only:
         state.add("note.actionable_only", 5)

@@ -1,7 +1,7 @@
 family_id: incident-retro-runbook-closure
 track: 4
 schema_version: cnb55.family.v1
-layer_a_status: in_progress   # latest whole-family live probe is attempt_02 in benchmark_run.md; Layer A still needs hardening
+layer_a_status: in_progress   # latest whole-family live probe is attempt_04 in benchmark_run.md; Layer A still needs hardening
 layer_b_status: implemented   # family-local dual-band scorer, milestones, matrices, and probe/report flow are in place
 
 grader_ref: verifiers/incident-retro-runbook-closure/score_ranking.py
@@ -149,7 +149,7 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.37
+  current_observed_stdev_M_training: 0.36
   escalation_currently_active: false
 
 initial_state:
