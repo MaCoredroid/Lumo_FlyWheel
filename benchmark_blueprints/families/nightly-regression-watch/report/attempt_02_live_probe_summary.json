@@ -1,0 +1,73 @@
+{
+  "acceptance": false,
+  "attempt_id": "attempt_02_live_probe",
+  "current_observed_stdev_M_training": 0.18,
+  "family_mean": 56,
+  "max_variant_mean": 65,
+  "min_variant_mean": 20,
+  "monotonic_within_plus_3": false,
+  "per_variant": [
+    {
+      "m_training_mean": 0.65,
+      "max": 65,
+      "mean": 65,
+      "min": 65,
+      "scores": [
+        65
+      ],
+      "stdev": 0.0,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "m_training_mean": 0.65,
+      "max": 65,
+      "mean": 65,
+      "min": 65,
+      "scores": [
+        65
+      ],
+      "stdev": 0.0,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "m_training_mean": 0.65,
+      "max": 65,
+      "mean": 65,
+      "min": 65,
+      "scores": [
+        65
+      ],
+      "stdev": 0.0,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "m_training_mean": 0.2,
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "scores": [
+        20
+      ],
+      "stdev": 0.0,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "m_training_mean": 0.65,
+      "max": 65,
+      "mean": 65,
+      "min": 65,
+      "scores": [
+        65
+      ],
+      "stdev": 0.0,
+      "variant": "v5-recovery-in-thread"
+    }
+  ],
+  "variants": [
+    "v1-clean-baseline",
+    "v2-noisy-distractor",
+    "v3-dirty-state",
+    "v4-multi-corpus-objective",
+    "v5-recovery-in-thread"
+  ]
+}

@@ -1,7 +1,7 @@
 family_id: nightly-regression-watch
 track: 10
 schema_version: cnb55.family.v1
-layer_a_status: implemented_pending_probe
+layer_a_status: red
 layer_b_status: green
 
 grader_ref: verifiers/nightly-regression-watch/score_ranking.py
@@ -108,7 +108,7 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.0000
+  current_observed_stdev_M_training: 0.1800
   escalation_currently_active: false
 
 initial_state:

@@ -1,0 +1,1 @@
+python3 benchmark_blueprints/families/nightly-regression-watch/tools/probe_family_live.py --attempt-id attempt_02_live_probe --n 1 --timeout-seconds 600
