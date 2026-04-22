@@ -1,0 +1,32 @@
+{
+  "attempt": "attempt_02_rawr_modes_followup",
+  "codex_command": [
+    "codex",
+    "exec",
+    "--cd",
+    "<workspace>",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "workspace-write",
+    "--color",
+    "never",
+    "--ephemeral",
+    "--model",
+    "gpt-5.4",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "Read AGENTS.md in this directory and follow it exactly. Author brief_input.json at the workspace root and run ./bin/cnb55-brief submit brief_input.json to produce brief/manager_brief.json. Do not modify any file outside brief/."
+  ],
+  "created_at_epoch": 1776881578,
+  "model": "gpt-5.4",
+  "n": 3,
+  "prompt": "Read AGENTS.md in this directory and follow it exactly. Author brief_input.json at the workspace root and run ./bin/cnb55-brief submit brief_input.json to produce brief/manager_brief.json. Do not modify any file outside brief/.",
+  "reasoning_effort": "high",
+  "variants": [
+    "v1-clean-baseline",
+    "v2-noisy-distractor",
+    "v3-dirty-state",
+    "v4-multi-corpus-objective",
+    "v5-recovery-in-thread"
+  ]
+}

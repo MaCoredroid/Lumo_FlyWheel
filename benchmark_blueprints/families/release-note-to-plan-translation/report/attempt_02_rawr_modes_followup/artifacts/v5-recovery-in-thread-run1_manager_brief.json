@@ -1,0 +1,131 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "The notes require a kill switch, but the repo evidence does not confirm whether every user-visible summary path is currently disabled.",
+      "status": "missing",
+      "topic": "Kill-switch state in production"
+    },
+    {
+      "note": "The rollback incident explicitly requires fixture backfill first, then schema audit, then runbook instructions, then any re-enable decision.",
+      "status": "observed",
+      "topic": "Rollback sequencing requirement"
+    },
+    {
+      "note": "Repo state says the release dashboard is still user-visible, so sequencing mistakes can leak to operators immediately.",
+      "status": "observed",
+      "topic": "Dashboard exposure remains user-visible"
+    },
+    {
+      "note": "The release notes call for auditing schema drift before removing the shim, but they do not define the exact threshold for removal after the audit.",
+      "status": "to_verify",
+      "topic": "Legacy parser shim exit criteria"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-101",
+      "before": "RN-102",
+      "reason": "Schema-drift decisions are only trustworthy once fixture coverage can detect the known misordering regression."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-101",
+      "reason": "The operator runbook should document the recovered dependency order that survives the schema audit, not the stale pre-incident flow."
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-102",
+      "reason": "The dependency map says re-approval depends on fixture backfill before rollout can be reconsidered."
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-104",
+      "reason": "Re-approval also depends on an updated rollback and runbook path, because recovery readiness is now part of the gate."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-105",
+      "reason": "Any dashboard-summary re-enable is deferred until the recovery review approves the sequence and safeguards."
+    }
+  ],
+  "first_milestone_id": "RN-102",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Fixture coverage that reproduces and blocks the misordered execution-plan regression.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md",
+        "incident_context/rollback_incident.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-102",
+      "summary": "Backfill the missing dependency-graph fixtures first so the translator contract can catch the exact ordering regression that triggered the rollback. This is the smallest bounded milestone that restores trustworthy sequencing evidence without attempting a rollout.",
+      "title": "Backfill dependency-order fixtures"
+    },
+    {
+      "bounded_deliverable": "A schema-audit decision on drift and parser-shim handling tied to updated ordering fixtures.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "incident_context/rollback_incident.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-101",
+      "summary": "Run the schema-drift audit only after fixture coverage exists, so decisions about the legacy parser shim are anchored to verified dependency ordering rather than the invalidated rollout-first path.",
+      "title": "Audit translator schema drift"
+    },
+    {
+      "bounded_deliverable": "A structured launch and rollback checklist that reflects the recovered dependency order.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "release_context/current_objective.md",
+        "incident_context/rollback_incident.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-104",
+      "summary": "Move the runbook work ahead of rollout because the current objective shifted to safe recovery. The frozen note placed this after canary, but the incident now requires the verified dependency order and rollback instructions to be folded into operator guidance before any re-enable decision.",
+      "title": "Update the operator runbook and rollback checklist"
+    },
+    {
+      "bounded_deliverable": "A re-approval package that cites fixture coverage, schema findings, and rollback-ready operator guidance.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-105",
+      "summary": "Hold the re-approval review only after fixtures, schema audit, and the updated rollback/runbook path land. The dependency map makes those prerequisites explicit, so approval becomes a readiness checkpoint instead of a guess.",
+      "title": "Re-approve the summary rollout on recovery evidence"
+    },
+    {
+      "bounded_deliverable": "A kill-switch-protected canary with explicit stop criteria for any renewed ordering regression.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "release_context/current_objective.md",
+        "repo_inventory/repo_state.md",
+        "incident_context/rollback_incident.md"
+      ],
+      "rank": 5,
+      "step_id": "RN-103",
+      "summary": "Push the gated dashboard-summary enablement to the end even though the frozen notes listed it earlier. The rollback invalidated that ordering, so any canary restore happens only after the recovery gates and re-approval are complete.",
+      "title": "Canary re-enable the translated summary behind the kill switch"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "incident_context/rollback_incident.md",
+      "repo_inventory/dependency_map.md",
+      "repo_inventory/repo_state.md"
+    ],
+    "mitigations": [
+      "Keep the translated summary behind the kill switch until fixture backfill and schema audit are complete.",
+      "Require the updated rollback and launch checklist in the re-approval review packet.",
+      "Use the new dependency-order fixtures as the gating proof before any canary restore."
+    ],
+    "statement": "If the summary is approved or re-enabled before fixture-backed ordering and rollback guidance land, users will again see a misordered execution plan on the live dashboard and support will escalate."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v5-recovery-in-thread"
+}

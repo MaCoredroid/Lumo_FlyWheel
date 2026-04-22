@@ -1,0 +1,115 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "No incident_context directory is present, so the plan assumes the current objective shift captures the relevant rollback lessons.",
+      "status": "missing",
+      "topic": "incident_context availability"
+    },
+    {
+      "note": "Repo state explicitly says the release dashboard remains visible to users.",
+      "status": "observed",
+      "topic": "dashboard visibility"
+    },
+    {
+      "note": "Dependency map says enterprise change-window communication is blocked on correct ordering guarantees.",
+      "status": "observed",
+      "topic": "change-window communication gate"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-101",
+      "before": "RN-102",
+      "reason": "The schema audit should run after dependency-order fixtures exist, because the current gap is the missing safety check for ordering regressions."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-101",
+      "reason": "The dashboard canary is only safe once schema stability is audited and the legacy shim decision is explicit."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Operator guidance must reflect the proven canary path rather than the stale pre-escalation rollout assumptions."
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-104",
+      "reason": "The enterprise change-window update should be sent only after operators have a validated launch and rollback checklist to execute."
+    }
+  ],
+  "first_milestone_id": "RN-102",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Dependency-fixture coverage is present for translated release-plan ordering and serves as the first customer-facing safety gate.",
+      "evidence": [
+        "release_context/current_objective.md",
+        "repo_inventory/test_inventory.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-102",
+      "summary": "Add the missing dependency-graph fixtures so ordering regressions are caught before any user-visible rollout or enterprise communication proceeds.",
+      "title": "Backfill dependency-order fixtures and lock the safe plan contract"
+    },
+    {
+      "bounded_deliverable": "A schema-stability audit with a documented shim decision that downstream rollout steps can rely on.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-101",
+      "summary": "Use the new fixture coverage to verify schema stability and make an explicit keep-or-remove decision on the legacy parser shim before downstream rollout work.",
+      "title": "Audit translator schema drift and decide legacy parser shim disposition"
+    },
+    {
+      "bounded_deliverable": "A kill-switched canary result that demonstrates the translated dashboard summary can be rolled back safely.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Only after ordering guardrails and schema stability are in place, prove the translated summary path in a reversible canary while keeping rollout gated behind the kill switch.",
+      "title": "Canary the translated dashboard summary behind the kill switch"
+    },
+    {
+      "bounded_deliverable": "Runbook and checklist reflect the proven safe order and rollback steps for guarded change windows.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Capture the validated execution order, rollback posture, and launch checklist after the canary proves the summary path so operators are not working from stale rollout assumptions.",
+      "title": "Update the operator runbook and launch checklist from the proven canary path"
+    },
+    {
+      "bounded_deliverable": "Enterprise change-window update references a validated execution order instead of a stale or dashboard-first sequence.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 5,
+      "step_id": "RN-105",
+      "summary": "Communicate externally only once the safe plan order, rollback posture, and operator guidance are all locked so the enterprise message reflects the actual guarded rollout path.",
+      "title": "Send the enterprise change-window update after the order is locked"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "release_context/current_objective.md",
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md"
+    ],
+    "mitigations": [
+      "Make dependency-fixture backfill the first milestone so ordering regressions are blocked before rollout.",
+      "Keep dashboard exposure behind the kill switch until the schema audit and canary are complete.",
+      "Update the operator runbook and checklist before sending the enterprise change-window notice."
+    ],
+    "statement": "If dashboard rollout or enterprise communication happens before dependency fixtures and updated operator guidance land, users can see incorrect release-plan ordering during guarded change windows with no reliable safety gate or rollback playbook."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v4-multi-corpus-objective"
+}

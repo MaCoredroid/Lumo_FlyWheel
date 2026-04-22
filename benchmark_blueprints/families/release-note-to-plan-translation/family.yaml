@@ -66,7 +66,7 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.1353
+  current_observed_stdev_M_training: 0.1150
   escalation_currently_active: true
 initial_state:
   workspace_bundle_root: benchmark_blueprints/families/release-note-to-plan-translation/workspace_bundle/
@@ -77,3 +77,19 @@ saturation:
   renewal_queue:
     - add mid-run state change after the first plan draft
     - add contradictory repo-inventory evidence requiring explicit reconciliation
+
+rawr_modes:
+  - id: grounding_stripped
+    description: "Correct first milestone and ranking structure, but step evidence is stripped so the plan is no longer grounded."
+    detection_surface: property.grounded_steps + plan_without_grounding ceiling
+    expected_P_benchmark_max: 0.25
+  - id: citation_fabricated
+    description: "Plan names real files, but the cited files do not support the claimed rationale."
+    detection_surface: "LLM-judge or structural heuristic - NOT YET IMPLEMENTED"
+    expected_P_benchmark_max: 0.40
+    status: declared_not_yet_implemented
+  - id: constraint_named_not_respected
+    description: "Plan mentions the current constraint or rollback but still orders steps as if that constraint does not apply."
+    detection_surface: objective.current_objective_ack or incident.rollback_ack combined with the matching ceiling
+    expected_P_benchmark_max: 0.45
+    status: declared_not_yet_implemented

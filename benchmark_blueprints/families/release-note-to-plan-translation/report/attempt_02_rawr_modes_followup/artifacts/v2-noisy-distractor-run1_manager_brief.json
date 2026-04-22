@@ -1,0 +1,122 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Repo state explicitly says the user-visible dashboard summary is still the current objective.",
+      "status": "observed",
+      "topic": "Release objective"
+    },
+    {
+      "note": "The January cache experiment is superseded and should not drive the critical path.",
+      "status": "observed",
+      "topic": "January cache work"
+    },
+    {
+      "note": "The workspace does not define the exact canary success metrics or rollback threshold for RN-103.",
+      "status": "missing",
+      "topic": "Canary exit criteria"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "Fixture backfill must target the audited translator schema or it will freeze the wrong step-id contract."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "The dashboard rollout is gated on schema audit plus fixture coverage so ordering regressions are caught before users see them."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Operators should document the canary-proven summary path, not a pre-rollout draft sequence."
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-104",
+      "reason": "The stale cache experiment is outside the release-critical path and should stay behind the validated dashboard and runbook work."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "A signed-off schema drift audit with the legacy parser shim removal decision captured.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/test_inventory.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Start with the schema audit because the current contract is already drifting on step ids, and the dashboard summary remains the live release objective. This is the smallest milestone that reduces ambiguity without attempting launch.",
+      "title": "Audit translator schema drift before any rollout work"
+    },
+    {
+      "bounded_deliverable": "Dependency-graph fixture coverage that fails on ordering regressions and stale-note misranking.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Once the schema is audited, add the fixture coverage that catches ordering regressions and step-id drift. The dashboard path should stay blocked until this contract is testable, because no current test forces stale experiments to the end.",
+      "title": "Backfill dependency-graph fixtures to lock the ordering contract"
+    },
+    {
+      "bounded_deliverable": "Kill-switched canary rollout of the translated dashboard summary with rollback still available.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Only after schema and fixture gates are stable should the user-visible dashboard summary be exposed behind the kill switch. Canary proof belongs here because the release notes tie activation to a stable schema, and repo state says the dashboard summary is the current objective.",
+      "title": "Enable the translated dashboard summary behind the kill switch in canary"
+    },
+    {
+      "bounded_deliverable": "Operator runbook and launch checklist updated to match the validated canary path.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "The runbook and checklist should follow the canary, not lead it, so operators document the path that was actually proven. Sequencing this earlier would codify an unverified rollout order and amplify user-facing confusion during launch.",
+      "title": "Update the operator runbook and launch checklist after canary proof"
+    },
+    {
+      "bounded_deliverable": "A clearly deprioritized cache follow-up, reopened only if the dashboard path is already stable.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "release_notes/stale_note_jan_2026.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 5,
+      "step_id": "RN-105",
+      "summary": "Keep the January cache experiment last because both the stale note and repo inventory say it predates the schema rewrite and does not solve the current dashboard ordering bug. It is a possible later optimization, not part of the critical path.",
+      "title": "Revisit the January cache experiment only after the dashboard path is safe"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/dependency_map.md",
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "release_notes/stale_note_jan_2026.md"
+    ],
+    "mitigations": [
+      "Keep RN-103 blocked on completion of RN-101 and RN-102.",
+      "Add fixture coverage that fails when stale experiments are ranked ahead of the dashboard path.",
+      "Use the kill switch and canary proof before updating operator-facing runbooks."
+    ],
+    "statement": "If the dashboard summary is enabled before schema drift is audited and dependency fixtures are backfilled, users can see a release dashboard with incorrect step ordering or stale work ranked too early, which makes the current release objective look ready when it is not."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v2-noisy-distractor"
+}

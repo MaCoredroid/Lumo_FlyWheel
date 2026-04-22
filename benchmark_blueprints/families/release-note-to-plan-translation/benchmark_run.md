@@ -96,6 +96,57 @@ Layer A freeze gate follows the benchmark-family-authoring skill: family mean in
     - No live runs fired any variant-specific ceiling. The current scorer rewards high-quality grounded briefs, but the workspace variants are not yet forcing the documented failure modes under real `codex exec` behavior.
     - `V2` shows the largest variance (`M_training` stdev `0.1434`), so the family now legitimately crosses the variance-escalation threshold for follow-up hardening work.
 
+- `attempt_02_rawr_modes_followup` — reviewer-blocker metadata fix + fresh family-local rerun.
+  - Reviewer issue addressed:
+    - `family.yaml` now declares the required `rawr_modes` block explicitly.
+    - Honest status after the fix remains `layer_b_status: green`: this family already had implemented `grounding_stripped` coverage in the verification matrix and family-local tools, while `citation_fabricated` and `constraint_named_not_respected` are now declared honestly as `declared_not_yet_implemented`.
+  - Family-local reruns completed before the live probe:
+    - `python3 benchmark_blueprints/families/release-note-to-plan-translation/tools/build_family.py`
+    - `python3 benchmark_blueprints/families/release-note-to-plan-translation/tools/run_verification_matrix.py --variant v1-clean-baseline`
+    - `python3 benchmark_blueprints/families/release-note-to-plan-translation/tools/run_verification_matrix.py --variant v5-recovery-in-thread`
+    - `python3 benchmark_blueprints/families/release-note-to-plan-translation/tools/probe_family.py --attempt attempt_02_rawr_modes_followup --n 3 --timeout-seconds 240`
+    - `python3 benchmark_blueprints/families/release-note-to-plan-translation/tools/probe_report.py --attempt-dir benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_02_rawr_modes_followup`
+  - Baseline sanity after rerun:
+    - Oracle checks remain `100 / 97 / 100 / 100 / 100` on V1-V5.
+    - Empty brief checks remain `0 / 0 / 0 / 0 / 0`.
+    - Shortcut checks remain `35 / 30 / 30 / 30 / 30`.
+  - Verification matrix rerun results remain stable:
+    - `verification_matrix.md` (V1): Oracle `100`, Empty `0`, RAWR `25`, Pick ceiling `35`, Top1 wrong `84`, Delete-tests adversarial `100` with `integrity = 1`.
+    - `verification_matrix_v5-recovery-in-thread.md` (V5): Oracle `100`, Empty `0`, RAWR `25`, Pick ceiling `30`, Top1 wrong `88`, Delete-tests adversarial `100` with `integrity = 1`.
+  - Probe artifacts recorded under:
+    - `benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_02_rawr_modes_followup/probe_runs.jsonl`
+    - `benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_02_rawr_modes_followup/summary.json`
+    - `benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_02_rawr_modes_followup/attempt_02_rawr_modes_followup_probe_report.txt`
+    - `benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_02_rawr_modes_followup/logs/`
+    - `benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_02_rawr_modes_followup/artifacts/`
+
+  | Variant | n | mean P | stdev P | mean M | stdev M | scores | ceilings hit |
+  |---|---:|---:|---:|---:|---:|---|---|
+  | v1-clean-baseline | 3 | 93.33 | 3.40 | 0.9320 | 0.0347 | [90, 98, 92] | none |
+  | v2-noisy-distractor | 3 | 80.00 | 14.14 | 0.7959 | 0.1443 | [90, 90, 60] | none |
+  | v3-dirty-state | 3 | 92.67 | 3.77 | 0.9252 | 0.0385 | [98, 90, 90] | none |
+  | v4-multi-corpus-objective | 3 | 83.67 | 0.94 | 0.8333 | 0.0096 | [85, 83, 83] | none |
+  | v5-recovery-in-thread | 3 | 82.00 | 15.90 | 0.8163 | 0.1622 | [97, 89, 60] | none |
+
+  - Family-level probe summary:
+    - `family_mean = 86.33`
+    - `family_mean_M_training = 0.8606`
+    - `current_observed_stdev_M_training = 0.1150`
+    - `max_variant_mean = 93.33`
+    - `min_variant_mean = 80.00`
+
+  - Layer A verdict:
+    - `[FAIL]` family mean in `[15, 25]`
+    - `[FAIL]` max variant mean `<= 40`
+    - `[FAIL]` at least one variant mean `<= 10`
+    - `[FAIL]` monotonic `V1 >= V2 >= V3 >= V4 >= V5 +/-3`
+
+  - Interpretation:
+    - The reviewer blocker was real and is now fixed at the metadata-contract layer, but it did not change the family's actual calibration behavior.
+    - The family remains decisively outside the Layer A freeze window; the easiest variant still averages above `80`.
+    - No live run hit a family-specific ceiling in this rerun either, so the current stress variants still are not reliably provoking the documented failure modes under `codex exec`.
+    - Variance is now concentrated in `v2` and `v5`, with `v5` the highest `M_training` stdev at `0.1622`.
+
 ## Explicit judgment
 
-Layer A is **red** as of `attempt_01_live_probe`. The family has a usable whole-family probe/report loop and a green Layer B packaging surface, but it does not satisfy the skill's freeze-gate acceptance criteria yet. The honest next move is hardening the variants and/or ceilings so that at least one stress variant reliably collapses without introducing fake ambiguity.
+Layer A is **red** as of `attempt_02_rawr_modes_followup`. The family has a usable whole-family probe/report loop and a green Layer B packaging surface, but it does not satisfy the skill's freeze-gate acceptance criteria yet. The honest next move is hardening the variants and/or ceilings so that at least one stress variant reliably collapses without introducing fake ambiguity.

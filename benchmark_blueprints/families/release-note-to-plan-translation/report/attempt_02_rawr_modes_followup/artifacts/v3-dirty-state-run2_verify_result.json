@@ -1,0 +1,91 @@
+{
+  "M_training": 0.898,
+  "P_benchmark": 90,
+  "breakdown": {
+    "__bands": {
+      "behavioral.first_milestone_match": "M",
+      "dependency.required_pairs": "M",
+      "differential.kendall_tau": "M",
+      "incident.rollback_ack": "M",
+      "objective.current_objective_ack": "M",
+      "partial_progress.markdown_shape": "P_only",
+      "phase2.assumption_ledger": "M",
+      "phase2.brief_exists": "M",
+      "phase2.brief_parses": "M",
+      "phase2.dependency_notes": "M",
+      "phase2.evidence_paths_valid": "M",
+      "phase2.first_milestone_valid": "M",
+      "phase2.risk_register": "M",
+      "phase2.step_count": "M",
+      "plan.user_visible_risk_specific": "M",
+      "property.grounded_steps": "M",
+      "property.risk_surface": "M"
+    },
+    "behavioral.first_milestone_match": 10,
+    "dependency.required_pairs": 8,
+    "differential.kendall_tau": 12,
+    "incident.rollback_ack": 4,
+    "objective.current_objective_ack": 5,
+    "partial_progress.markdown_shape": 2,
+    "phase2.assumption_ledger": 3,
+    "phase2.brief_exists": 4,
+    "phase2.brief_parses": 4,
+    "phase2.dependency_notes": 4,
+    "phase2.evidence_paths_valid": 4,
+    "phase2.first_milestone_valid": 4,
+    "phase2.risk_register": 4,
+    "phase2.step_count": 4,
+    "plan.user_visible_risk_specific": 4,
+    "property.grounded_steps": 6,
+    "property.risk_surface": 8
+  },
+  "ceilings_applied": [],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 1.0,
+    "slots": [
+      {
+        "passed_bool": true,
+        "slot_id": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": true
+  },
+  "pass": true,
+  "raw_M_pre_ceiling": 88,
+  "raw_score_pre_ceiling": 90,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 90,
+  "shortcut_detected": false,
+  "variant_id": "v3-dirty-state",
+  "wall_clock_seconds": 0
+}

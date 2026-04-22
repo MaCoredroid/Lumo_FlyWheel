@@ -1,0 +1,117 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "The repo state explicitly says the user-visible dashboard summary remains the release objective.",
+      "status": "observed",
+      "topic": "Current objective"
+    },
+    {
+      "note": "The January cache experiment is superseded by the translator rewrite and should be ranked after the active dashboard path.",
+      "status": "observed",
+      "topic": "January cache note priority"
+    },
+    {
+      "note": "The workspace evidence does not define the exact success criteria or metrics that must be met before promoting the canary summary path.",
+      "status": "missing",
+      "topic": "Canary acceptance criteria"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "fixture-backfill-ordering-guardrails",
+      "before": "schema-contract-audit",
+      "reason": "The fixture set has to encode the audited schema and step IDs; otherwise it will just lock in the current drift."
+    },
+    {
+      "after": "dashboard-summary-canary",
+      "before": "fixture-backfill-ordering-guardrails",
+      "reason": "The dashboard rollout depends on ordering regressions being caught in tests before users see translated plans."
+    },
+    {
+      "after": "operator-runbook-launch-checklist",
+      "before": "dashboard-summary-canary",
+      "reason": "Operators need documentation for the behavior that was actually proven in canary, including kill-switch handling."
+    },
+    {
+      "after": "cache-experiment-revisit",
+      "before": "dashboard-summary-canary",
+      "reason": "The cache work is optimization-only and should not distract from the active dashboard release objective."
+    }
+  ],
+  "first_milestone_id": "schema-contract-audit",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "A confirmed schema/step-id delta list plus an explicit keep-or-remove decision for the legacy parser shim.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 1,
+      "step_id": "schema-contract-audit",
+      "summary": "Compare the rewritten translator output against the current plan contract so step IDs and schema expectations are stable before any rollout-facing work proceeds.",
+      "title": "Audit translator schema drift and preserve the legacy shim decision"
+    },
+    {
+      "bounded_deliverable": "Dependency-graph fixtures covering the expected step order, including protection against stale experimental notes outranking the current release path.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "fixture-backfill-ordering-guardrails",
+      "summary": "Add or refresh fixtures that encode the intended dependency order so ordering regressions and stale-note promotion are caught before dashboard exposure.",
+      "title": "Backfill dependency-graph fixtures and ordering guardrails"
+    },
+    {
+      "bounded_deliverable": "A canary-only dashboard summary path with a kill switch and a verified rollback path.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 3,
+      "step_id": "dashboard-summary-canary",
+      "summary": "Expose the user-visible summary only after schema and ordering guardrails are stable, and keep rollback control through the kill switch during canary.",
+      "title": "Enable the translated dashboard summary behind a kill switch in canary"
+    },
+    {
+      "bounded_deliverable": "An updated runbook and launch checklist aligned to the canary-approved summary flow.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md"
+      ],
+      "rank": 4,
+      "step_id": "operator-runbook-launch-checklist",
+      "summary": "Document the canary-proven behavior, kill-switch operation, and launch sequence only after the summary path is validated.",
+      "title": "Update the operator runbook and launch checklist for the proven summary path"
+    },
+    {
+      "bounded_deliverable": "A go/no-go note on whether any cache idea is still relevant after the current release path is stabilized.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "release_notes/stale_note_jan_2026.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 5,
+      "step_id": "cache-experiment-revisit",
+      "summary": "Treat the January cache note as explicitly stale and only reconsider it after the dashboard path is stable, since it does not solve the current ordering defect.",
+      "title": "Revisit the January cache experiment only as a later optimization pass"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "repo_inventory/dependency_map.md",
+      "release_notes/stale_note_jan_2026.md"
+    ],
+    "mitigations": [
+      "Stabilize translator schema and step IDs before any summary rollout.",
+      "Backfill fixtures that catch ordering regressions and stale-note promotion before canary.",
+      "Keep the summary behind a kill switch during canary so rollback is immediate if ordering still leaks through."
+    ],
+    "statement": "If the dashboard summary is enabled before schema drift and ordering guardrails are fixed, users will see a release plan summary with misordered or stale steps, which makes the release dashboard point them at the wrong work."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v2-noisy-distractor"
+}

@@ -1,0 +1,127 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Current objective explicitly prioritizes safety and rollback confidence over dashboard speed.",
+      "status": "observed",
+      "topic": "Objective priority"
+    },
+    {
+      "note": "Release notes mention auditing drift before shim removal, but the repo evidence does not show whether removing the shim is still in scope for this change window.",
+      "status": "to_verify",
+      "topic": "Legacy parser shim removal scope"
+    },
+    {
+      "note": "The provided evidence names a canary and kill switch but does not define the exact success or rollback thresholds for promoting the dashboard summary.",
+      "status": "missing",
+      "topic": "Canary exit criteria"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "The repo has no customer-facing safety check until dependency-fixture coverage lands, so the visible dashboard path should not expand before ordering regressions are catchable."
+    },
+    {
+      "after": "RN-101",
+      "before": "RN-102",
+      "reason": "Fixture backfill defines the safe ordering contract the later schema audit must validate against after the objective shift."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-101",
+      "reason": "The translated dashboard summary should only run behind the kill switch once schema stability is confirmed for the updated contract."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Operators need documentation for the proven canary path and kill-switch behavior, not a speculative pre-canary checklist."
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-104",
+      "reason": "Enterprise change-window communication depends on both correct ordering guarantees and operator rollback clarity."
+    }
+  ],
+  "first_milestone_id": "RN-102",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Dependency-graph fixtures and contract coverage that catch ordering regressions before any wider rollout change.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "release_context/current_objective.md",
+        "repo_inventory/test_inventory.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-102",
+      "summary": "Make the missing dependency-fixture coverage the first bounded milestone because the current objective shifted toward safety and rollback confidence, and the repo still lacks a customer-facing safety check until this backfill lands.",
+      "title": "Backfill dependency-graph fixtures first"
+    },
+    {
+      "bounded_deliverable": "A schema-drift audit result and shim decision note tied to the updated ordering contract, not a full parser cutover.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-101",
+      "summary": "Run the schema-drift audit once the ordering fixtures are in place so the audit is judged against the current safe-plan contract, while explicitly keeping legacy parser shim removal out of the first milestone.",
+      "title": "Audit translator schema drift after fixtures exist"
+    },
+    {
+      "bounded_deliverable": "A canary-ready dashboard summary path that can be disabled quickly if the translated ordering is wrong.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Only after fixture coverage and schema audit are both complete should the translated dashboard summary move behind the kill switch, because dashboard speed is no longer the dominant objective and the dashboard is already user-visible.",
+      "title": "Gate dashboard summary behind kill switch"
+    },
+    {
+      "bounded_deliverable": "Operator instructions and launch checklist that reflect proven canary behavior and rollback posture.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "release_context/current_objective.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Refresh the runbook and launch checklist after the canary proves the gated summary path so operators have rollback and guarded-change-window guidance aligned with the new safety-first objective.",
+      "title": "Update operator runbook and launch checklist"
+    },
+    {
+      "bounded_deliverable": "A customer-facing change-window update anchored on a locked safe order and concrete rollback guidance.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 5,
+      "step_id": "RN-105",
+      "summary": "Hold the enterprise communication until ordering guarantees, operator guidance, and rollback handling are all locked, because external change-window messaging is blocked on correct ordering guarantees rather than on dashboard availability.",
+      "title": "Send enterprise change-window update last"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "repo_inventory/dependency_map.md",
+      "release_context/current_objective.md"
+    ],
+    "mitigations": [
+      "Land dependency-graph fixture coverage before any broader dashboard rollout step.",
+      "Require schema-drift audit completion before trusting the translated summary path.",
+      "Update the operator runbook before external change-window messaging goes out."
+    ],
+    "statement": "If the dashboard or enterprise communication moves ahead of fixture-backed ordering checks and updated operator guidance, users can see and act on an incorrect release sequence during guarded change windows with no clear rollback path."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v4-multi-corpus-objective"
+}

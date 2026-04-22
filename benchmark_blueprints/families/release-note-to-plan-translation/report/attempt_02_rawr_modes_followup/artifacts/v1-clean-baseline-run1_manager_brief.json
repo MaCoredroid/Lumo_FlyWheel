@@ -1,0 +1,93 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "No release_context/ or incident_context/ directory is present, so this plan assumes the frozen notes were not superseded by a later objective shift or rollback lesson.",
+      "status": "missing",
+      "topic": "release_context_or_incident_override"
+    },
+    {
+      "note": "The dashboard summary appears to be the first user-visible surface for translated plans, so ordering risk is prioritized there.",
+      "status": "observed",
+      "topic": "dashboard_surface_scope"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "Fixture backfill depends on knowing the real translator step-id schema; otherwise tests keep encoding the shim-masked contract."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "The dashboard summary must not ship until dependency-graph fixtures reflect the new schema and can catch ordering regressions."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Operator guidance should be written from observed canary and rollback behavior, not from an unproven summary path."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "A verified schema-drift audit that names the translator step-id contract and confirms whether the legacy parser shim can be safely removed.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Start by exposing the schema drift currently hidden by the legacy parser shim so the team knows the real translator output before any downstream rollout expands blast radius.",
+      "title": "Audit translator schema drift and retire the shim only after parity is proven"
+    },
+    {
+      "bounded_deliverable": "Dependency-graph fixtures aligned to the audited step-id schema, with ordering regressions caught by contract coverage.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Once the translator contract is explicit, update the dependency-graph fixtures so plan-contract tests fail on future ordering regressions instead of passing under stale fixtures.",
+      "title": "Backfill dependency-graph fixtures against the audited schema"
+    },
+    {
+      "bounded_deliverable": "A kill-switch-protected canary of the dashboard summary using the audited schema and refreshed fixtures.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Only after schema and fixtures agree should the translated release-plan dashboard summary be exposed in canary, and it should stay behind the kill switch because ordering failures are still weakly covered.",
+      "title": "Canary the dashboard summary behind the kill switch"
+    },
+    {
+      "bounded_deliverable": "A runbook and launch checklist that reflect the proven canary and rollback procedure rather than a pre-canary guess.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Document rollout and rollback steps last, after canary reveals the actual operational shape of the summary path and kill-switch handling.",
+      "title": "Update the operator runbook and launch checklist from canary-proven behavior"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md"
+    ],
+    "mitigations": [
+      "Hold dashboard exposure behind RN-101 and RN-102 so translator output and fixtures agree before users see it.",
+      "Keep RN-103 under the kill switch during canary so incorrect ordering can be rolled back quickly.",
+      "Delay runbook finalization until canary proves the actual rollback path."
+    ],
+    "statement": "If the dashboard summary is canaried before the translator schema audit and fixture backfill, users can see a release-plan order that looks valid in smoke runs but is actually wrong, because the dashboard renders whatever order the translator emits and current coverage does not reliably catch bad dependency ordering."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}
