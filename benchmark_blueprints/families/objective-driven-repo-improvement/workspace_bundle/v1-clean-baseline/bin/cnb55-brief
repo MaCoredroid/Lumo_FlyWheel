@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+SCHEMA_VERSION = "cnb55.objective_delta_brief.v1"
+EVIDENCE_ROOTS = ("allowed_interventions", "repo_snapshot", "objective_history", "release_context", "incident_context")
+VALID_TAGS = {"governance", "regression", "dependency", "rollout", "objective", "incident"}
+CONFIDENCE = {"low", "medium", "high"}
+STATUSES = {"observed", "to_verify", "missing"}
+
+
+def schema() -> dict:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "CNB55 objective delta brief",
+        "type": "object",
+        "required": ["schema_version", "variant_id", "accepted", "expected_delta", "primary_risk", "ranking", "assumption_ledger"],
+    }
+
+
+def read_json(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError:
+        raise SystemExit(2)
+    except Exception:
+        raise SystemExit(2)
+
+
+def validate(doc: dict, ws: Path) -> list[str]:
+    errors: list[str] = []
+    if doc.get("schema_version") != SCHEMA_VERSION:
+        errors.append("schema_version mismatch")
+    variant = (ws / ".scenario_variant").read_text().strip()
+    if doc.get("variant_id") != variant:
+        errors.append("variant_id mismatch")
+    ranking = doc.get("ranking")
+    if not isinstance(ranking, list) or not ranking:
+        errors.append("ranking missing")
+        return errors
+    allowed = sorted(p.stem for p in (ws / "allowed_interventions").glob("P*.md"))
+    ranks = set()
+    seen = set()
+    for entry in ranking:
+        if not isinstance(entry, dict):
+            errors.append("ranking entry must be object")
+            continue
+        pid = entry.get("proposal_id")
+        if pid not in allowed or pid in seen:
+            errors.append("ranking proposal ids invalid")
+        seen.add(pid)
+        rank = entry.get("rank")
+        if not isinstance(rank, int):
+            errors.append("rank must be int")
+        else:
+            ranks.add(rank)
+        summary = entry.get("summary")
+        citations = entry.get("citations")
+        tags = entry.get("guardrail_tags")
+        if not isinstance(summary, str) or len(summary.strip()) < 18:
+            errors.append("summary too short")
+        if not isinstance(citations, list):
+            errors.append("citations must be list")
+        else:
+            for citation in citations:
+                if not isinstance(citation, str):
+                    errors.append("citation must be string")
+                    continue
+                if not any(citation.startswith(root + "/") for root in EVIDENCE_ROOTS):
+                    errors.append("citation outside evidence roots")
+                elif not (ws / citation).exists():
+                    errors.append(f"missing citation path: {citation}")
+        if not isinstance(tags, list) or not tags or not set(tags).issubset(VALID_TAGS):
+            errors.append("invalid guardrail_tags")
+    if seen != set(allowed) or ranks != set(range(1, len(allowed) + 1)):
+        errors.append("ranking must cover all interventions with contiguous ranks")
+    accepted = doc.get("accepted")
+    rank1 = next((entry["proposal_id"] for entry in ranking if entry.get("rank") == 1), None)
+    if accepted != rank1:
+        errors.append("accepted must equal rank-1 proposal")
+    delta = doc.get("expected_delta")
+    if not isinstance(delta, dict):
+        errors.append("expected_delta missing")
+    else:
+        if delta.get("metric") != "objective_delta_index":
+            errors.append("expected_delta.metric mismatch")
+        if delta.get("direction") != "up":
+            errors.append("expected_delta.direction mismatch")
+        low = delta.get("low")
+        high = delta.get("high")
+        if not isinstance(low, int) or not isinstance(high, int) or low <= 0 or low > high:
+            errors.append("expected_delta low/high invalid")
+        if delta.get("confidence") not in CONFIDENCE:
+            errors.append("expected_delta.confidence invalid")
+        if not isinstance(delta.get("rationale"), str) or len(delta["rationale"].strip()) < 18:
+            errors.append("expected_delta.rationale too short")
+    risk = doc.get("primary_risk")
+    if not isinstance(risk, dict):
+        errors.append("primary_risk missing")
+    else:
+        if not isinstance(risk.get("statement"), str) or len(risk["statement"].strip()) < 24:
+            errors.append("primary_risk.statement too short")
+        mitigations = risk.get("mitigations")
+        if not isinstance(mitigations, list) or len(mitigations) < 2 or not all(isinstance(x, str) and x.strip() for x in mitigations):
+            errors.append("primary_risk.mitigations invalid")
+    ledger = doc.get("assumption_ledger")
+    if (
+        not isinstance(ledger, list)
+        or not ledger
+        or not all(
+            isinstance(item, dict)
+            and isinstance(item.get("topic"), str)
+            and isinstance(item.get("note"), str)
+            and item.get("status") in STATUSES
+            for item in ledger
+        )
+        or not any(isinstance(item, dict) and item.get("status") == "missing" for item in ledger)
+    ):
+        errors.append("assumption_ledger requires a missing row")
+    return errors
+
+
+def render_markdown(doc: dict) -> str:
+    lines = [
+        "# Objective Delta Brief",
+        "",
+        f"- Variant: `{doc['variant_id']}`",
+        f"- Accepted intervention: `{doc['accepted']}`",
+        f"- Expected delta: `{doc['expected_delta']['low']}..{doc['expected_delta']['high']}` points up ({doc['expected_delta']['confidence']} confidence)",
+        "",
+        "## Ranking",
+        "",
+    ]
+    for entry in sorted(doc["ranking"], key=lambda item: item["rank"]):
+        lines.append(f"{entry['rank']}. `{entry['proposal_id']}` - {entry['summary']}")
+        lines.append(f"   - Guardrails: {', '.join(entry['guardrail_tags'])}")
+        lines.append(f"   - Citations: {', '.join(entry['citations'])}")
+    lines.extend([
+        "",
+        "## Primary Risk",
+        "",
+        doc["primary_risk"]["statement"],
+        "",
+        "Mitigations:",
+    ])
+    for item in doc["primary_risk"]["mitigations"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Assumption Ledger", ""])
+    for item in doc["assumption_ledger"]:
+        lines.append(f"- `{item['status']}` {item['topic']}: {item['note']}")
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("schema")
+    v = sub.add_parser("validate")
+    v.add_argument("file")
+    s = sub.add_parser("submit")
+    s.add_argument("file")
+    args = ap.parse_args()
+    ws = Path.cwd()
+    if args.cmd == "schema":
+        print(json.dumps(schema(), indent=2, sort_keys=True))
+        return 0
+    doc = read_json(Path(args.file))
+    errors = validate(doc, ws)
+    if errors:
+        for err in errors:
+            print(err, file=sys.stderr)
+        return 3
+    if args.cmd == "validate":
+        return 0
+    brief = ws / "brief"
+    brief.mkdir(parents=True, exist_ok=True)
+    (brief / "manager_brief.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    (brief / "manager_brief.md").write_text(render_markdown(doc))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

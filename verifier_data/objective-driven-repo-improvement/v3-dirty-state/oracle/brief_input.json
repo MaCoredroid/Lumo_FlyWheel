@@ -1,0 +1,112 @@
+{
+  "accepted": "P1",
+  "assumption_ledger": [
+    {
+      "note": "The notes under repo_snapshot/in_progress_patch explicitly call the patch abandoned.",
+      "status": "observed",
+      "topic": "P3 patch validity"
+    },
+    {
+      "note": "Need to confirm who archives the abandoned branch after this cycle.",
+      "status": "to_verify",
+      "topic": "Ownership for follow-up cleanup"
+    },
+    {
+      "note": "There is no named reviewer for reviving P3 next cycle.",
+      "status": "missing",
+      "topic": "Dependency review slot after freeze"
+    }
+  ],
+  "expected_delta": {
+    "confidence": "medium",
+    "direction": "up",
+    "high": 8,
+    "low": 6,
+    "metric": "objective_delta_index",
+    "rationale": "P1 still compounds with the landed checkpoint, while the abandoned P3 patch is sunk cost and should not reset the governance or dependency calculus."
+  },
+  "primary_risk": {
+    "mitigations": [
+      "document that the in-progress P3 patch is explicitly out of scope for this window",
+      "checkpoint P1 behind a feature flag so it does not inherit P3 assumptions",
+      "rollback if parity or dependency ownership diverges during canary"
+    ],
+    "statement": "Leaving the abandoned optimizer patch in the tree can bias future discussions, so the main risk is accidental re-anchoring on the sunk-cost path after P1 starts to land."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "allowed_interventions/P1.md",
+        "repo_snapshot/changes/already_landed_foundation.md",
+        "repo_snapshot/in_progress_patch/README.md",
+        "objective_history/objective_delta_index.md"
+      ],
+      "guardrail_tags": [
+        "governance",
+        "objective",
+        "rollout"
+      ],
+      "proposal_id": "P1",
+      "rank": 1,
+      "summary": "P1 remains the right move because it compounds with the landed checkpoint and avoids treating the abandoned P3 patch as a free head start."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P2.md",
+        "repo_snapshot/dependency_map.md",
+        "repo_snapshot/in_progress_patch/README.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "objective",
+        "rollout"
+      ],
+      "proposal_id": "P2",
+      "rank": 2,
+      "summary": "P2 is still viable but slower; it is cleaner than finishing the abandoned patch yet does not compound as directly as P1."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P5.md",
+        "objective_history/q1_shadow_metric.md",
+        "objective_history/objective_delta_index.md"
+      ],
+      "guardrail_tags": [
+        "objective",
+        "regression"
+      ],
+      "proposal_id": "P5",
+      "rank": 3,
+      "summary": "P5 still leans on the superseded Q1 shadow graph, so it stays behind the current-window checkpoint path."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P3.md",
+        "repo_snapshot/in_progress_patch/README.md",
+        "repo_snapshot/dependency_map.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "regression"
+      ],
+      "proposal_id": "P3",
+      "rank": 4,
+      "summary": "P3 is now an explicit sunk-cost trap: the patch is abandoned, unreviewed, and still blocked by missing dependency ownership."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P4.md",
+        "repo_snapshot/governance_window.md"
+      ],
+      "guardrail_tags": [
+        "governance",
+        "regression"
+      ],
+      "proposal_id": "P4",
+      "rank": 5,
+      "summary": "P4 remains frozen by governance regardless of the abandoned patch nearby."
+    }
+  ],
+  "schema_version": "cnb55.objective_delta_brief.v1",
+  "variant_id": "v3-dirty-state"
+}

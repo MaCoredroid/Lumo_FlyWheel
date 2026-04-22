@@ -1,0 +1,115 @@
+{
+  "accepted": "P5",
+  "assumption_ledger": [
+    {
+      "note": "The release memo is newer than the base objective window and references live customer-impacting reliability incidents.",
+      "status": "observed",
+      "topic": "Priority shift recency"
+    },
+    {
+      "note": "The release note names the holdback but not the exact percentage.",
+      "status": "to_verify",
+      "topic": "Holdback cohort sizing"
+    },
+    {
+      "note": "The release context does not name the final escalation owner for a weekend rollback.",
+      "status": "missing",
+      "topic": "Final rollback owner if reliability slips again"
+    }
+  ],
+  "expected_delta": {
+    "confidence": "medium",
+    "direction": "up",
+    "high": 7,
+    "low": 5,
+    "metric": "objective_delta_index",
+    "rationale": "The release-context documents re-center the objective on reliability, so P5 becomes the best next delta even though P1 was the right latency-first choice earlier."
+  },
+  "primary_risk": {
+    "mitigations": [
+      "staged rollout with a holdback cohort on the old path",
+      "shadow compare reliability error buckets before widening",
+      "kill switch back to the checkpoint-only path on incident regression"
+    ],
+    "statement": "P5 changes the objective hierarchy rather than the old latency-first plan, so the main risk is rolling it out without proving the new reliability holdback does not starve the checkpoint path."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "allowed_interventions/P5.md",
+        "release_context/priority_shift_2026_06.md",
+        "release_context/open_reliability_incidents.md",
+        "objective_history/objective_delta_index.md"
+      ],
+      "guardrail_tags": [
+        "objective",
+        "rollout",
+        "incident"
+      ],
+      "proposal_id": "P5",
+      "rank": 1,
+      "summary": "P5 moves to the top because the release context redefines success around streaming reliability rather than pure latency, and P5 addresses that objective directly."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P2.md",
+        "release_context/priority_shift_2026_06.md",
+        "repo_snapshot/dependency_map.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "objective",
+        "rollout"
+      ],
+      "proposal_id": "P2",
+      "rank": 2,
+      "summary": "P2 is the runner-up reliability move: safer than P3 and more aligned to the new objective than P1, but smaller immediate delta than P5."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P1.md",
+        "repo_snapshot/changes/already_landed_foundation.md",
+        "release_context/priority_shift_2026_06.md"
+      ],
+      "guardrail_tags": [
+        "objective",
+        "governance"
+      ],
+      "proposal_id": "P1",
+      "rank": 3,
+      "summary": "P1 was the old answer, but under the new reliability objective it optimizes the wrong thing even though it still compounds with the landed checkpoint."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P3.md",
+        "repo_snapshot/in_progress_patch/README.md",
+        "release_context/open_reliability_incidents.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "regression",
+        "objective"
+      ],
+      "proposal_id": "P3",
+      "rank": 4,
+      "summary": "P3 remains a dependency-heavy sunk-cost path and still does not target the new objective cleanly."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P4.md",
+        "repo_snapshot/governance_window.md",
+        "release_context/open_reliability_incidents.md"
+      ],
+      "guardrail_tags": [
+        "governance",
+        "incident",
+        "regression"
+      ],
+      "proposal_id": "P4",
+      "rank": 5,
+      "summary": "P4 is still governance-blocked and would worsen the incident posture if rushed during the freeze."
+    }
+  ],
+  "schema_version": "cnb55.objective_delta_brief.v1",
+  "variant_id": "v4-multi-corpus-objective"
+}

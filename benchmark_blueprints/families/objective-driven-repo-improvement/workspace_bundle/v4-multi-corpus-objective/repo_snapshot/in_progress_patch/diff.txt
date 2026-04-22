@@ -1,0 +1,3 @@
+
+optimizer.enable_speculative_branch = true
+TODO: re-check dependency owners before reviving this path

@@ -1,0 +1,139 @@
+{
+  "cli": {
+    "cnb55_brief_sha256": "fd293b2af73bc00ce7277dbc6ab54331aafc6b06d68f9028888eb16fabdc2a2b"
+  },
+  "created_at_utc": "2026-04-22T00:00:00Z",
+  "family_id": "objective-driven-repo-improvement",
+  "grader": {
+    "score_objective_delta_py_sha256": "5af64f928ae6754a41938738b17244f9a17fe4d469c7154da59a16951d99e6df",
+    "verify_sh_sha256": "9e61cfb5193ef316c1e58b4c457df4e9b3fe4773f41a193cb47f2d8d689eca01"
+  },
+  "last_regen_utc": "2026-04-22T00:00:00Z",
+  "schema_version": "cnb55.manifest.v2",
+  "track": 10,
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_ranking_sha256": "5a7c11b8cecd8258280c07e82a1eb4e7c113462ec379d4a4d23d371823aff78a",
+        "hidden_tests_tree_sha256": "7fce72b667da733f3b0da62566125f764b19ac0eb5d477f2a10a6696af5076aa",
+        "oracle_brief_json_sha256": "9c4d462912cfb2271d2ed878099d216010a3dc097eee7873f7c2c51b82c256e9",
+        "oracle_brief_md_sha256": "b067fab5c9ce40ac84758fcb5464c533f3a10b50d123586729eabbf576e2e8e5",
+        "workspace_manifest_sha256": "079c4e38695ffefdf81018a5eb77c8c02bf1fbb913ba28ee0732f143b39da3c6"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+        "AGENTS.md": "f622e995f46382705cd0bea20633bf505fda9fd488ba6708ab9eb516c809cbe6",
+        "Dockerfile": "2a5097774b201b515ea07d57923d1d8d00dffad7ae79eead9cd183ddf2f25380",
+        "allowed_interventions": "302f47609c64590162b27f4eb0833b83cb6b3f496292212e69ed1e0ef87d6290",
+        "artifacts": "7c4b00159dbf60b1419991f05ecead92f793d07ed6027b47a4a0be1e52c2bb6c",
+        "bin": "86c5f3e0a6cd7059be8705d1e6adc7ba5662dbffe2239c0b6fe86db0f240927c",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "objective_history": "0b919aec04605ba90883c2a9a88b5e1b7be08ddd6e41d970c392a9e29ec36a87",
+        "repo_snapshot": "25c61a772e947035db2b4ab418d37425863886dbaad5e24f88dbda1ae604d636",
+        "tests": "fc414e3e394536087ba6f49cde7faef002b27e7f72abec970544df4fc6b478dd"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_ranking_sha256": "6a8a5552c586c65f6c3297ed02fc3d8e9e10fdae5be585ae978a68b83a98c359",
+        "hidden_tests_tree_sha256": "7fce72b667da733f3b0da62566125f764b19ac0eb5d477f2a10a6696af5076aa",
+        "oracle_brief_json_sha256": "8a905da7b8bed4ec0c0c64ece588a4117936a708273da9edb72c2d906aaa396b",
+        "oracle_brief_md_sha256": "9c19bb5cb5f36a59be8e743f2132d026006cbad557d7d7397b1fec475044dfbe",
+        "workspace_manifest_sha256": "b154d81b03ab5dc52b69dcae02186a0921a8dec09a671a31c3eec847488a181b"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+        "AGENTS.md": "f622e995f46382705cd0bea20633bf505fda9fd488ba6708ab9eb516c809cbe6",
+        "Dockerfile": "2a5097774b201b515ea07d57923d1d8d00dffad7ae79eead9cd183ddf2f25380",
+        "allowed_interventions": "b62953c4af505de1f4def8e5cdea89958c5e894312ea6246e396df38df578ceb",
+        "artifacts": "7c4b00159dbf60b1419991f05ecead92f793d07ed6027b47a4a0be1e52c2bb6c",
+        "bin": "86c5f3e0a6cd7059be8705d1e6adc7ba5662dbffe2239c0b6fe86db0f240927c",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "objective_history": "10fa5001ef43a6528926758095e938bf7ad190d962830da2b253c1f040702d46",
+        "repo_snapshot": "25c61a772e947035db2b4ab418d37425863886dbaad5e24f88dbda1ae604d636",
+        "tests": "fc414e3e394536087ba6f49cde7faef002b27e7f72abec970544df4fc6b478dd"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_ranking_sha256": "6133c1f0594174295513ee29289f9620311d05028bca785cc1f6b9d68285f3a1",
+        "hidden_tests_tree_sha256": "7fce72b667da733f3b0da62566125f764b19ac0eb5d477f2a10a6696af5076aa",
+        "oracle_brief_json_sha256": "72ee4230bd9120f02d8d9282d90034acb309ce7574d90e566c51aa9c0a75c5a7",
+        "oracle_brief_md_sha256": "30db9df2f0826e7ae77f9c5a2d68afd65888b745bf83ff23f76082e11dc3c5f2",
+        "workspace_manifest_sha256": "4d06e418491f95d90b51050cafcf68e19698e2c2e32a2ee56b677e71e1956982"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+        "AGENTS.md": "f622e995f46382705cd0bea20633bf505fda9fd488ba6708ab9eb516c809cbe6",
+        "Dockerfile": "2a5097774b201b515ea07d57923d1d8d00dffad7ae79eead9cd183ddf2f25380",
+        "allowed_interventions": "b62953c4af505de1f4def8e5cdea89958c5e894312ea6246e396df38df578ceb",
+        "artifacts": "7c4b00159dbf60b1419991f05ecead92f793d07ed6027b47a4a0be1e52c2bb6c",
+        "bin": "86c5f3e0a6cd7059be8705d1e6adc7ba5662dbffe2239c0b6fe86db0f240927c",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "objective_history": "10fa5001ef43a6528926758095e938bf7ad190d962830da2b253c1f040702d46",
+        "repo_snapshot": "6bba7d03bbdd42fc568a0b38a8f956839ff5231872ebb1ad5b7bc3f46b926667",
+        "tests": "fc414e3e394536087ba6f49cde7faef002b27e7f72abec970544df4fc6b478dd"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_ranking_sha256": "f22fb1869e51d81006f6a40321291efb29075054e26dcc5278c78958f65cff6b",
+        "hidden_tests_tree_sha256": "7fce72b667da733f3b0da62566125f764b19ac0eb5d477f2a10a6696af5076aa",
+        "oracle_brief_json_sha256": "ea514583928613c09872db23a3f1004c849e433b89cddc1ea3e5f0d21c3d2bb9",
+        "oracle_brief_md_sha256": "afbbb2ce0a9b51586fe9123568b7825b33fe28caf2efb6673103baf93dbaa18b",
+        "workspace_manifest_sha256": "6f3fe49bbf7f2efe68377a16afe24c9c771623a259f62acbebcc620397b262cf"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+        "AGENTS.md": "f622e995f46382705cd0bea20633bf505fda9fd488ba6708ab9eb516c809cbe6",
+        "Dockerfile": "2a5097774b201b515ea07d57923d1d8d00dffad7ae79eead9cd183ddf2f25380",
+        "allowed_interventions": "b62953c4af505de1f4def8e5cdea89958c5e894312ea6246e396df38df578ceb",
+        "artifacts": "7c4b00159dbf60b1419991f05ecead92f793d07ed6027b47a4a0be1e52c2bb6c",
+        "bin": "86c5f3e0a6cd7059be8705d1e6adc7ba5662dbffe2239c0b6fe86db0f240927c",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "objective_history": "10fa5001ef43a6528926758095e938bf7ad190d962830da2b253c1f040702d46",
+        "release_context": "cc1051f42ec27b3f25aac829f151b7d37bb8d0d9bc823e3d942a5cf096831377",
+        "repo_snapshot": "6bba7d03bbdd42fc568a0b38a8f956839ff5231872ebb1ad5b7bc3f46b926667",
+        "tests": "fc414e3e394536087ba6f49cde7faef002b27e7f72abec970544df4fc6b478dd"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_ranking_sha256": "125b09e7a9a2a9be3b8f301bfe7d0aaa1a06b6df9eeca065441d22bf1ae2c19f",
+        "hidden_tests_tree_sha256": "7fce72b667da733f3b0da62566125f764b19ac0eb5d477f2a10a6696af5076aa",
+        "oracle_brief_json_sha256": "bdbfccb9c9577535deb4079200849abad71a1ec723e5df2468757bcb53b9b45a",
+        "oracle_brief_md_sha256": "170bbd085e1b6f334d70a387dc39a4615cb999881fd74362476e8af9d1f81114",
+        "workspace_manifest_sha256": "a99abbde4c3cbfa1649dcaa33e4f0d7eedd2bff6ab15bc8797a6a2a8f07e75ba"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+        "AGENTS.md": "f622e995f46382705cd0bea20633bf505fda9fd488ba6708ab9eb516c809cbe6",
+        "Dockerfile": "2a5097774b201b515ea07d57923d1d8d00dffad7ae79eead9cd183ddf2f25380",
+        "allowed_interventions": "b62953c4af505de1f4def8e5cdea89958c5e894312ea6246e396df38df578ceb",
+        "artifacts": "7c4b00159dbf60b1419991f05ecead92f793d07ed6027b47a4a0be1e52c2bb6c",
+        "bin": "86c5f3e0a6cd7059be8705d1e6adc7ba5662dbffe2239c0b6fe86db0f240927c",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "incident_context": "6ae1fa1628f34024686617b272238119bf0f8ca023d0f82c1cc28c7471b703be",
+        "objective_history": "10fa5001ef43a6528926758095e938bf7ad190d962830da2b253c1f040702d46",
+        "release_context": "cc1051f42ec27b3f25aac829f151b7d37bb8d0d9bc823e3d942a5cf096831377",
+        "repo_snapshot": "6bba7d03bbdd42fc568a0b38a8f956839ff5231872ebb1ad5b7bc3f46b926667",
+        "tests": "fc414e3e394536087ba6f49cde7faef002b27e7f72abec970544df4fc6b478dd"
+      }
+    }
+  }
+}

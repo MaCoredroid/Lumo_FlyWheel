@@ -1,0 +1,59 @@
+{
+  "accepted": "P2",
+  "expected_delta": {
+    "high": 6,
+    "low": 4
+  },
+  "governance_blocked_proposal": "P4",
+  "incident_context": {
+    "keyword": "rollback",
+    "required_citations": [
+      "incident_context/rollback_2026_07_P5.md",
+      "incident_context/compatibility_gap_notes.md"
+    ],
+    "rolled_back_pick": "P5"
+  },
+  "metric_name": "objective_delta_index",
+  "pass_bar": 40,
+  "ranking": [
+    {
+      "proposal_id": "P2",
+      "rank": 1,
+      "reason": "P2 is the correct recovery choice because it advances the reliability objective without reselecting the P5 path that was rolled back in the incident packet."
+    },
+    {
+      "proposal_id": "P1",
+      "rank": 2,
+      "reason": "P1 remains legal and still compounds with the landed checkpoint, but after the rollback it is less aligned to the active reliability recovery objective than P2."
+    },
+    {
+      "proposal_id": "P3",
+      "rank": 3,
+      "reason": "P3 is still dependency-heavy and remains a sunk-cost trap after the rollback."
+    },
+    {
+      "proposal_id": "P5",
+      "rank": 4,
+      "reason": "P5 must be demoted because the incident packet says it was rolled back for a compatibility bug with the landed checkpoint."
+    },
+    {
+      "proposal_id": "P4",
+      "rank": 5,
+      "reason": "P4 remains governance-blocked and would magnify the same recovery risk if rushed during the freeze."
+    }
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "f622e995f46382705cd0bea20633bf505fda9fd488ba6708ab9eb516c809cbe6",
+    "Dockerfile": "2a5097774b201b515ea07d57923d1d8d00dffad7ae79eead9cd183ddf2f25380",
+    "allowed_interventions": "b62953c4af505de1f4def8e5cdea89958c5e894312ea6246e396df38df578ceb",
+    "bin": "86c5f3e0a6cd7059be8705d1e6adc7ba5662dbffe2239c0b6fe86db0f240927c",
+    "incident_context": "6ae1fa1628f34024686617b272238119bf0f8ca023d0f82c1cc28c7471b703be",
+    "objective_history": "10fa5001ef43a6528926758095e938bf7ad190d962830da2b253c1f040702d46",
+    "release_context": "cc1051f42ec27b3f25aac829f151b7d37bb8d0d9bc823e3d942a5cf096831377",
+    "repo_snapshot": "6bba7d03bbdd42fc568a0b38a8f956839ff5231872ebb1ad5b7bc3f46b926667",
+    "tests": "fc414e3e394536087ba6f49cde7faef002b27e7f72abec970544df4fc6b478dd"
+  },
+  "tau_threshold": 0.8,
+  "variant_id": "v5-recovery-in-thread"
+}

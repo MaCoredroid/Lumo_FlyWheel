@@ -1,0 +1,111 @@
+{
+  "accepted": "P1",
+  "assumption_ledger": [
+    {
+      "note": "The graph is explicitly marked superseded by the April objective window.",
+      "status": "observed",
+      "topic": "Freshness of Q1 shadow graph"
+    },
+    {
+      "note": "Dependency map says one reviewer is shared with the release branch.",
+      "status": "to_verify",
+      "topic": "Second guardrail lane for P2"
+    },
+    {
+      "note": "The governance memo lists the audit as required but not who signs it.",
+      "status": "missing",
+      "topic": "Exact owner for post-freeze audit on P4"
+    }
+  ],
+  "expected_delta": {
+    "confidence": "medium",
+    "direction": "up",
+    "high": 9,
+    "low": 7,
+    "metric": "objective_delta_index",
+    "rationale": "The stale Q1 shadow measurement overstates P5, while P1 still compounds with the landed checkpoint and stays legal during the governance freeze."
+  },
+  "primary_risk": {
+    "mitigations": [
+      "shadow compare against the current window not the stale Q1 run",
+      "holdback traffic behind a feature flag until parity settles",
+      "rollback on any checkpoint divergence alert"
+    ],
+    "statement": "P1 still depends on parity telemetry, and anchoring on the stale Q1 shadow graph could cause the team to over-ramp before the current window proves the adapter is stable."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "allowed_interventions/P1.md",
+        "repo_snapshot/changes/already_landed_foundation.md",
+        "objective_history/objective_delta_index.md",
+        "objective_history/q1_shadow_metric.md"
+      ],
+      "guardrail_tags": [
+        "governance",
+        "objective",
+        "rollout"
+      ],
+      "proposal_id": "P1",
+      "rank": 1,
+      "summary": "P1 remains the best legal step because it compounds with the landed checkpoint and uses current-window metrics rather than the superseded Q1 shadow graph."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P2.md",
+        "repo_snapshot/dependency_map.md",
+        "objective_history/objective_delta_index.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "rollout",
+        "objective"
+      ],
+      "proposal_id": "P2",
+      "rank": 2,
+      "summary": "P2 is still second: safer than P5 but slower than P1 because it waits on the extra guardrail lane before moving the objective."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P5.md",
+        "objective_history/q1_shadow_metric.md",
+        "objective_history/objective_delta_index.md"
+      ],
+      "guardrail_tags": [
+        "objective",
+        "regression"
+      ],
+      "proposal_id": "P5",
+      "rank": 3,
+      "summary": "P5 looks attractive on the stale Q1 shadow graph, but that graph predates the landed checkpoint and overstates the current delta."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P3.md",
+        "repo_snapshot/dependency_map.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "regression"
+      ],
+      "proposal_id": "P3",
+      "rank": 4,
+      "summary": "P3 still depends on reviving the speculative branch and remains wider than the current objective window needs."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P4.md",
+        "repo_snapshot/governance_window.md"
+      ],
+      "guardrail_tags": [
+        "governance",
+        "regression"
+      ],
+      "proposal_id": "P4",
+      "rank": 5,
+      "summary": "P4 is still governance-blocked regardless of the headline delta in the fast-path note."
+    }
+  ],
+  "schema_version": "cnb55.objective_delta_brief.v1",
+  "variant_id": "v2-noisy-distractor"
+}

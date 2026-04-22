@@ -1,0 +1,115 @@
+{
+  "accepted": "P2",
+  "assumption_ledger": [
+    {
+      "note": "The incident write-up explicitly names the compatibility bug between P5 and the landed checkpoint change.",
+      "status": "observed",
+      "topic": "P5 rollback scope"
+    },
+    {
+      "note": "Need to confirm the gate covers the same tenant mix that triggered the rollback.",
+      "status": "to_verify",
+      "topic": "P2 successor gate coverage"
+    },
+    {
+      "note": "The incident packet stops at technical mitigation and does not name the business approver.",
+      "status": "missing",
+      "topic": "Who signs off if the successor also regresses on Friday"
+    }
+  ],
+  "expected_delta": {
+    "confidence": "medium",
+    "direction": "up",
+    "high": 6,
+    "low": 4,
+    "metric": "objective_delta_index",
+    "rationale": "After the P5 rollback, P2 is the incident-safe successor: it still serves the reliability objective without reselecting the rolled-back intervention."
+  },
+  "primary_risk": {
+    "mitigations": [
+      "checkpoint the compatibility gate before any rollout",
+      "canary the successor path with rollback ready",
+      "shadow compare error buckets against the post-incident baseline"
+    ],
+    "statement": "P2 now inherits the reliability objective after the P5 rollback, so the main risk is under-specifying the compatibility gate and repeating the same failure mode through a different path."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "allowed_interventions/P2.md",
+        "incident_context/rollback_2026_07_P5.md",
+        "incident_context/prior_decision.md",
+        "release_context/priority_shift_2026_06.md"
+      ],
+      "guardrail_tags": [
+        "incident",
+        "objective",
+        "rollout"
+      ],
+      "proposal_id": "P2",
+      "rank": 1,
+      "summary": "P2 is the correct recovery choice because it advances the reliability objective without reselecting the P5 path that was rolled back in the incident packet."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P1.md",
+        "repo_snapshot/changes/already_landed_foundation.md",
+        "incident_context/prior_decision.md"
+      ],
+      "guardrail_tags": [
+        "objective",
+        "governance"
+      ],
+      "proposal_id": "P1",
+      "rank": 2,
+      "summary": "P1 remains legal and still compounds with the landed checkpoint, but after the rollback it is less aligned to the active reliability recovery objective than P2."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P3.md",
+        "repo_snapshot/in_progress_patch/README.md",
+        "incident_context/compatibility_gap_notes.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "regression",
+        "incident"
+      ],
+      "proposal_id": "P3",
+      "rank": 3,
+      "summary": "P3 is still dependency-heavy and remains a sunk-cost trap after the rollback."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P5.md",
+        "incident_context/rollback_2026_07_P5.md",
+        "incident_context/compatibility_gap_notes.md"
+      ],
+      "guardrail_tags": [
+        "incident",
+        "regression",
+        "objective"
+      ],
+      "proposal_id": "P5",
+      "rank": 4,
+      "summary": "P5 must be demoted because the incident packet says it was rolled back for a compatibility bug with the landed checkpoint."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P4.md",
+        "repo_snapshot/governance_window.md",
+        "incident_context/rollback_2026_07_P5.md"
+      ],
+      "guardrail_tags": [
+        "governance",
+        "incident",
+        "regression"
+      ],
+      "proposal_id": "P4",
+      "rank": 5,
+      "summary": "P4 remains governance-blocked and would magnify the same recovery risk if rushed during the freeze."
+    }
+  ],
+  "schema_version": "cnb55.objective_delta_brief.v1",
+  "variant_id": "v5-recovery-in-thread"
+}

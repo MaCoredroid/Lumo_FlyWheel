@@ -1,0 +1,99 @@
+{
+  "accepted": "P1",
+  "assumption_ledger": [
+    {
+      "note": "The landed checkpoint covers the top two objective-loss callsites from the last three weeks.",
+      "status": "observed",
+      "topic": "Normalization checkpoint coverage"
+    },
+    {
+      "note": "Need one canary window to confirm low-volume tenants do not diverge.",
+      "status": "to_verify",
+      "topic": "Tenant skew after adapter enablement"
+    },
+    {
+      "note": "The governance memo does not name the exact weekend rollback owner.",
+      "status": "missing",
+      "topic": "Rollback ownership on Friday freeze"
+    }
+  ],
+  "expected_delta": {
+    "confidence": "medium",
+    "direction": "up",
+    "high": 9,
+    "low": 7,
+    "metric": "objective_delta_index",
+    "rationale": "P1 compounds with the landed normalization checkpoint and improves the tracked objective without violating the frozen governance window."
+  },
+  "primary_risk": {
+    "mitigations": [
+      "feature flag the adapter behind the existing rollout gate",
+      "shadow compare checkpoint output before increasing traffic",
+      "canary on a single tenant until parity stays green for 24h"
+    ],
+    "statement": "The checkpoint adapter can hide state-shape regressions if it is rolled out before parity telemetry confirms the landed normalization path is stable."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "allowed_interventions/P1.md",
+        "repo_snapshot/changes/already_landed_foundation.md",
+        "repo_snapshot/governance_window.md",
+        "objective_history/objective_delta_index.md"
+      ],
+      "guardrail_tags": [
+        "governance",
+        "objective",
+        "rollout"
+      ],
+      "proposal_id": "P1",
+      "rank": 1,
+      "summary": "P1 compounds with the already-landed normalization checkpoint and is the highest legal delta inside the current governance window."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P2.md",
+        "repo_snapshot/dependency_map.md",
+        "objective_history/objective_delta_index.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "rollout",
+        "objective"
+      ],
+      "proposal_id": "P2",
+      "rank": 2,
+      "summary": "P2 is safe and reversible but yields a smaller immediate objective move because it waits on a second guardrail lane before paying back latency."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P3.md",
+        "repo_snapshot/dependency_map.md",
+        "repo_snapshot/risk_register.md"
+      ],
+      "guardrail_tags": [
+        "dependency",
+        "regression",
+        "objective"
+      ],
+      "proposal_id": "P3",
+      "rank": 3,
+      "summary": "P3 has raw upside but needs the speculative optimizer branch to be revived and is too wide for the current checkpoint-first objective window."
+    },
+    {
+      "citations": [
+        "allowed_interventions/P4.md",
+        "repo_snapshot/governance_window.md"
+      ],
+      "guardrail_tags": [
+        "governance",
+        "regression"
+      ],
+      "proposal_id": "P4",
+      "rank": 4,
+      "summary": "P4 is blocked outright because the governance freeze forbids turning on the unsafe global fast-path until the post-freeze audit is complete."
+    }
+  ],
+  "schema_version": "cnb55.objective_delta_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}

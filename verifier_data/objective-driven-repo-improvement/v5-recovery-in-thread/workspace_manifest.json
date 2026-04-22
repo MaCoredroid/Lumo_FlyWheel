@@ -1,0 +1,29 @@
+{
+  "files": {
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "97b0ed62c3598dddd273e2642e2821ba85bb96b07126aff1b2c5419f6f78e207",
+    "Dockerfile": "3c28924da3e161bc91c89ae0d48111e107a320b3b3f5de51864fe7de4af22876",
+    "allowed_interventions/P1.md": "4473dcf1c82d64db35f7af94e639c5f888808c55fc9dcb43a6c1b5f4febbc7fe",
+    "allowed_interventions/P2.md": "ee568e39fc0556a3b46818ea9a82defb614e173a1d437f253ab368d34bf31ca7",
+    "allowed_interventions/P3.md": "ce86466487491a3fda7c251ec3a0e3466c56436c89b83d2593f74ca77c29a3a8",
+    "allowed_interventions/P4.md": "e5a76bdf5898cb8cd9019cf8814201849d3017497d3dfed908a2c126811f42c3",
+    "allowed_interventions/P5.md": "bba34d00344b193e1de30436afad3e8d083a33b3ae1cbaa691b1a5741dedcd51",
+    "artifacts/README.md": "57eebfda2728e2fd969db3a99a33eff5b8c6ad92f3255cd5d1c4e282cd9d2566",
+    "bin/cnb55-brief": "fd293b2af73bc00ce7277dbc6ab54331aafc6b06d68f9028888eb16fabdc2a2b",
+    "incident_context/compatibility_gap_notes.md": "462521f959c3791f9f20295312fbcb268a762592d59f5a458b89e5159ac72d86",
+    "incident_context/prior_decision.md": "c645387ecf84b508a9c9cadd295791657541750073c070bd90e250332d852124",
+    "incident_context/rollback_2026_07_P5.md": "2b4b072af4c4ef734b25e3e6548f0458c3c0c86f56e683e2367794a8555566bf",
+    "objective_history/objective_delta_index.md": "88d1594ada390613151881a2834537cf6d3bee27760802c1caac8c7e11518994",
+    "objective_history/q1_shadow_metric.md": "bb96049987f6e304e33e5ea4be8983f99f0280262e863cc1ab2e527f7d0db15c",
+    "release_context/open_reliability_incidents.md": "0a84c504649236183a82f27445fc29b2d88daa4501eb78b5da02d67122dc255e",
+    "release_context/priority_shift_2026_06.md": "11213febc8cd282314f396820a2545817d75b10de9b075dc4f8dcdc954b60a67",
+    "repo_snapshot/changes/already_landed_foundation.md": "070cad653e6d193b9779c44dd0cfa85e113c0f977fb23b97a91dc46d3416fbcf",
+    "repo_snapshot/dependency_map.md": "17c3768fd1bd30da149cae1c4360e5d24469fcbc322cc394c001616e96a67ca3",
+    "repo_snapshot/governance_window.md": "f32e5df2fe6624477131f3a059a9c5d7daa808bce25231722bfc269c44ae6235",
+    "repo_snapshot/in_progress_patch/README.md": "5e03885da1b9f439a77f9535e866da71b4e1ad4b5037fe974aeff6297a770a91",
+    "repo_snapshot/in_progress_patch/diff.txt": "7466c25124d24767d0fc1b8c445f37fa396c8f6c0b47f0dc8f1f5087d575f7b5",
+    "repo_snapshot/risk_register.md": "f57088143d9857a7a1ba5e3a31308cd5b7863748c855137d4e3b5fda6f3df516",
+    "tests/test_objective_plan.py": "b3e2887d39a00529f976a3361290a46c96e15ef0688306804351dc19db824dcb"
+  },
+  "variant_id": "v5-recovery-in-thread"
+}
