@@ -1,70 +1,134 @@
-# Benchmark Run
+# Benchmark Run — backlog-decomposition-scheduler
 
-- `family_id`: `backlog-decomposition-scheduler`
-- `task_id`: `backlog-decomposition-scheduler/dependency-schedule`
-- `run_date`: `2026-04-19`
-- `thread_id`: `019da8bc-bdc7-7a01-87e0-88a014731d31`
-- `model`: `gpt-5.4`
-- `reasoning_effort`: `high`
-- `bundle_root`: `benchmark_blueprints/families/backlog-decomposition-scheduler`
-- `run_type`: family-bundle-only `codex exec` solve attempt
-- `command`: `codex -a never -s danger-full-access exec --json -m gpt-5.4 -c 'reasoning_effort=\"high\"' -c 'model_reasoning_effort=\"high\"' -C benchmark_blueprints/families/backlog-decomposition-scheduler`
+Family run protocol for CNB-55 Track 10, family `backlog-decomposition-scheduler`.
 
-## Actual Attempt
+## Model under test
 
-The solver read only `task_spec.md`, `evaluator_contract.md`, and `skills/backlog-dependency-plan/SKILL.md`, then produced a concrete but abstract schedule skeleton:
+```bash
+codex exec --model gpt-5.4 --reasoning-effort high
+```
 
-- prerequisite work before the blocked high-value initiative
-- observability or guardrail work before risky rollout work
-- serialized scarce-specialist work to avoid the invalid parallel path
-- an explicit assumption ledger instead of invented backlog identifiers or fake validation
+## Layer A target
 
-This is the intended family-bundle-only attack path. A strong model can infer the strategic shape of the schedule, but it cannot ground exact backlog IDs, dependency edges, or capacity limits without the held-out runtime fixtures.
+- family mean in `[15, 25]`
+- max variant mean `<= 40`
+- at least one variant mean `<= 10`
+- monotonic `V1 >= V2 >= V3 >= V4 >= V5` within `+/-3`
+- oracle `>= 90`
+- empty `= 0`
+- shortcut `<= 30`
 
-## Solver Output Summary
+## attempt_00 — runtime family build and static verification
 
-- Ordered schedule: `yes`
-- Dependency rationale: `yes`
-- Capacity note: `yes`
-- Risk-isolation note: `yes`
-- Assumption ledger: `yes`
-- Claimed missing fixtures were observed: `no`
-- Claimed tests or gold schedule were validated: `no`
+Scope completed inside the family-owned write surface:
 
-## Scoring Against Final Evaluator
+- authored `workspace_bundle/v1..v5`
+- added family-local CLI `bin/cnb55-schedule`
+- added deterministic scorer `verifiers/backlog-decomposition-scheduler/score_schedule.py`
+- added family-local regen / matrix / probe scripts
+- generated `verifier_data/backlog-decomposition-scheduler/v1..v5`
+- added `family.yaml`, `manifest.lock.json`, and verification-matrix artifacts
 
-- Dependency correctness: `16/20`
-  - The submission respected the prerequisite-first structure and delayed the high-value initiative until after its blockers.
-- Capacity and resource compliance: `16/20`
-  - It explicitly serialized scarce-specialist work and rejected the tempting invalid parallel path, but could not prove capacity numbers without fixtures.
-- Risk isolation and regression avoidance: `15/15`
-  - It correctly delayed risky rollout work until after observability or guardrail work.
-- Objective-delta quality: `14/20`
-  - It optimized for near-term objective progress rather than raw throughput, but remained abstract because the runtime backlog was absent.
-- Evidence and assumption discipline: `15/15`
-  - It clearly separated observed constraints from assumptions and did not fabricate validation.
-- Partial-progress milestone score: `8/10`
-  - The milestone prefix was directionally correct, but not fixture-grounded enough for full credit.
+Commands run:
 
-Raw score: `84/100`
+```bash
+python3 verifiers/backlog-decomposition-scheduler/regen_family.py
+python3 verifiers/backlog-decomposition-scheduler/run_verification_matrix.py --variant v1-clean-baseline --out benchmark_blueprints/families/backlog-decomposition-scheduler/verification_matrix.md
+python3 verifiers/backlog-decomposition-scheduler/run_verification_matrix.py --variant v4-multi-corpus-objective --out benchmark_blueprints/families/backlog-decomposition-scheduler/verification_matrix_v4.md
+```
 
-## Caps Applied
+Visible-test sweep run against oracle briefs for all 5 variants:
 
-- Runtime-fixture grounding cap from [evaluator_contract.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/backlog-decomposition-scheduler/evaluator_contract.md): `20/100` maximum when the attempt is not grounded in concrete backlog, capacity, and rollout fixtures from the provided runtime bundle.
+```bash
+pytest -q tests/test_schedule_brief.py
+```
 
-Final score: `20/100`
+Observed static sanity:
 
-## Hardening From Design Doc And Web Research
+- oracle scores: `100 / 100 / 100 / 100 / 100`
+- empty scores: `0 / 0 / 0 / 0 / 0`
+- shortcut scores: `25 / 25 / 25 / 25 / 25`
+- visible tests: all 5 variants `5 passed`
+- verification matrix: V1 and V4 emitted successfully
 
-- Following [benchmark_deisgn.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_deisgn.md), the family now treats backlog decomposition as a strategic-management benchmark that should be offline, replayable, and judged on more than a generic planning answer.
-- Following [SWE-Lancer](https://openai.com/index/swe-lancer/), the family now distinguishes strategic judgment from implementation-style execution and explicitly avoids live-Internet dependence in the canonical score path.
-- Following [BrowseComp-Plus](https://github.com/texttron/BrowseComp-Plus), the family now makes held-out fixed runtime fixtures and bundle-only evidence rules explicit so reproducibility does not depend on live external surfaces.
-- Following [SWE-EVO](https://arxiv.org/abs/2512.18470) and [CodeClash](https://arxiv.org/abs/2511.00839), the evaluator now scores objective progress and partial progress rather than pretending exact-string gold schedule matching is the only meaningful signal.
-- Following [ToolSandbox](https://arxiv.org/abs/2408.04682) and [CCTU](https://arxiv.org/abs/2603.15309), the rubric now separates dependency, resource, risk, and evidence-discipline failures, with hard caps when constraint grounding is missing.
-- Following [Why SWE-bench Verified no longer measures frontier coding capabilities](https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/), the family now states that hidden runtime fixtures and gold schedules should stay held out to reduce contamination and benchmark leakage risk.
+Interpretation:
 
-## Final Judgment
+- Layer B scaffolding exists and is executable.
+- Even before the live family probe, the oracle / shortcut spread already suggested the family was likely too easy because every oracle hits the scorer ceiling of `100` and the shortcut floor only reaches `25`, not the intended frontier-shaped ladder.
 
-- Meaningful after hardening: `yes`
-- Calibration target met: `yes`
-- Rerun required: `no`
+## attempt_01 — whole-family live probe (`probe_run_id=20260422T061352Z`)
+
+Family-owned probe flow used:
+
+```bash
+python3 verifiers/backlog-decomposition-scheduler/probe_family.py \
+  --repeats 3 \
+  --jsonl-out benchmark_blueprints/families/backlog-decomposition-scheduler/report/probe_runs.jsonl \
+  --summary-out benchmark_blueprints/families/backlog-decomposition-scheduler/report/probe_summary_latest.json
+
+python3 verifiers/backlog-decomposition-scheduler/probe_report.py \
+  benchmark_blueprints/families/backlog-decomposition-scheduler/report/probe_summary_latest.json \
+  --out benchmark_blueprints/families/backlog-decomposition-scheduler/report/attempt_01_probe_report.txt
+```
+
+Per-run live solver command template used by the family-local probe driver:
+
+```bash
+codex -a never -s danger-full-access exec \
+  --skip-git-repo-check \
+  --json \
+  -m gpt-5.4 \
+  -c 'reasoning_effort="high"' \
+  -c 'model_reasoning_effort="high"' \
+  -C <temp workspace copy of workspace_bundle/<variant>> \
+  'Read AGENTS.md, inspect the workspace evidence, and solve the task completely.'
+```
+
+Artifacts:
+
+- per-run JSONL: [report/probe_runs.jsonl](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/backlog-decomposition-scheduler/report/probe_runs.jsonl)
+- latest summary: [report/probe_summary_latest.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/backlog-decomposition-scheduler/report/probe_summary_latest.json)
+- human-readable report: [report/attempt_01_probe_report.txt](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/backlog-decomposition-scheduler/report/attempt_01_probe_report.txt)
+
+Observed per-variant results:
+
+| variant | n | mean | stdev | scores | raw scores | ceiling hits |
+| --- | --- | --- | --- | --- | --- | --- |
+| v1-clean-baseline | 3 | 100.00 | 0.00 | [100, 100, 100] | [128, 129, 129] | none |
+| v2-noisy-distractor | 3 | 100.00 | 0.00 | [100, 100, 100] | [125, 125, 125] | none |
+| v3-dirty-state | 3 | 100.00 | 0.00 | [100, 100, 100] | [125, 125, 125] | none |
+| v4-multi-corpus-objective | 3 | 100.00 | 0.00 | [100, 100, 100] | [128, 128, 128] | none |
+| v5-recovery-in-thread | 3 | 45.00 | 0.00 | [45, 45, 45] | [111, 111, 111] | `objective_drift x3` |
+
+Layer A gate check:
+
+- `[FAIL]` family mean in `[15,25]`: `89.00`
+- `[FAIL]` max variant mean `<= 40`: `100.00`
+- `[FAIL]` at least one variant mean `<= 10`: `45.00`
+- `[PASS]` monotonic `V1>=V2>=V3>=V4>=V5 +/-3`: yes
+- `[PASS]` oracle `>= 90`: yes
+- `[PASS]` empty `= 0`: yes
+- `[PASS]` shortcut `<= 30`: yes
+
+Explicit Layer A judgment:
+
+- `LAYER_A_FAIL_HARDEN_NEEDED`
+
+Diagnosis:
+
+1. `v1` through `v4` are fully saturated under live `gpt-5.4/high` probe. No variant-specific ceiling fires at all on those 12 runs.
+2. `v5` is the only live variant that still exerts any meaningful pressure, and it bottoms out at the existing `objective_drift` ceiling of `45`, which is still far above the required hard-floor target.
+3. The current scorer is effectively a ceiling-at-100 instrument for most of the family. That means the family has runtime assets and deterministic grading, but it does not yet have a legitimate-difficulty ladder near the CNB-55 Layer A target band.
+4. This is an honest failure of calibration, not a harness issue:
+   - all 15 live runs completed successfully
+   - no shortcut/integrity violations occurred
+   - the family-local probe/report flow produced coherent, deterministic outputs
+   - late-variant pressure is real only on V5, and even there it is too weak
+
+Next hardening direction, not launched in this turn:
+
+- add real variant-specific pressure to `v2` through `v4` instead of relying on general schedule correctness
+- lower the easy-variant reward surface so correct-but-shallow schedules do not clip to `100`
+- preserve legitimate-difficulty constraints; do not add fake ambiguity just to force the scores down
+
+Per coordinator instruction, no additional hardening loop was launched from this attempt. This file records the completed whole-family live verification and the resulting explicit Layer A failure state.

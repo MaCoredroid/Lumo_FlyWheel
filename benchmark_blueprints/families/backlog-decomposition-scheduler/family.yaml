@@ -1,7 +1,7 @@
 family_id: backlog-decomposition-scheduler
 track: 10
 schema_version: cnb55.family.v1
-layer_a_status: in_progress
+layer_a_status: harden_needed
 layer_b_status: in_progress
 
 grader_ref: verifiers/backlog-decomposition-scheduler/score_schedule.py
