@@ -1,0 +1,21 @@
+CNB-55 incident-retro-runbook-closure probe report — probe_run_id=20260422T061257Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+------------------------------------------------------------------------------------------------
+v1-clean-baseline                  3    8.00    0.00     8     8  [8,8,8]  doc_only_closurex3,dual_command_pathx3,informational_note_promotionx3,partial_surface_repairx3,ungrounded_authorityx3
+v2-noisy-distractor                3    8.00    0.00     8     8  [8,8,8]  doc_only_closurex3,dual_command_pathx3,informational_note_promotionx3,partial_surface_repairx3,ungrounded_authorityx3
+v3-dirty-state                     3    8.00    0.00     8     8  [8,8,8]  doc_only_closurex3,dual_command_pathx3,informational_note_promotionx3,partial_surface_repairx3,ungrounded_authorityx3
+v4-multi-corpus-objective          3    8.00    0.00     8     8  [8,8,8]  doc_only_closurex3,dual_command_pathx3,informational_note_promotionx3,objective_driftx3,partial_surface_repairx3,ungrounded_authorityx3
+v5-recovery-in-thread              3    8.00    0.00     8     8  [8,8,8]  doc_only_closurex3,dual_command_pathx3,informational_note_promotionx3,objective_driftx3,partial_surface_repairx3,ungrounded_authorityx3
+
+family_mean = 8.00   (window 15.0-25.0)
+max_variant_mean = 8.00   (cap 40.0)
+min_variant_mean = 8.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 8.00
+  [PASS] max variant <= cap: 8.00
+  [PASS] at least one variant <= hard floor: 8.00
+  [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: ok
+
+overall: HARDEN NEEDED

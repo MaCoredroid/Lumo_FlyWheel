@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FAMILY_ID="incident-retro-runbook-closure"
-N="${N:-1}"
+N="${N:-3}"
 CODEX_TIMEOUT="${CODEX_TIMEOUT:-1200}"
+MODEL="${MODEL:-gpt-5.4}"
 VARIANTS="${VARIANTS:-v1-clean-baseline v2-noisy-distractor v3-dirty-state v4-multi-corpus-objective v5-recovery-in-thread}"
 WORK_ROOT="${WORK_ROOT:-$SCRIPT_DIR/_probe_tmp}"
 RUNS_JSONL="$SCRIPT_DIR/probe_runs.jsonl"
@@ -36,6 +37,7 @@ for variant in $VARIANTS; do
         --sandbox workspace-write \
         --color never \
         --ephemeral \
+        --model "$MODEL" \
         "$prompt" >"$log" 2>&1
     )
     codex_exit=$?
@@ -56,9 +58,15 @@ record = {
     "codex_exit": int(os.environ["CODEX_EXIT"]),
     "workspace_path": os.environ["WORK"],
     "score": int(data.get("score", 0)),
+    "P_benchmark": int(data.get("P_benchmark", data.get("score", 0))),
+    "M_training": float(data.get("M_training", float(data.get("score", 0)) / 100.0)),
     "raw_score_pre_ceiling": int(data.get("raw_score_pre_ceiling", 0)),
+    "raw_M_pre_ceiling": float(data.get("raw_M_pre_ceiling", float(data.get("raw_score_pre_ceiling", 0)) / 100.0)),
     "pass": bool(data.get("pass", False)),
     "shortcut_detected": bool(data.get("shortcut_detected", False)),
+    "integrity_flag": int(data.get("integrity_flag", 0)),
+    "integrity_rules_fired": list(data.get("integrity_rules_fired", [])),
+    "milestones": dict(data.get("milestones", {})),
     "ceilings_applied": list(data.get("ceilings_applied", [])),
     "errors": list(data.get("errors", [])),
 }
