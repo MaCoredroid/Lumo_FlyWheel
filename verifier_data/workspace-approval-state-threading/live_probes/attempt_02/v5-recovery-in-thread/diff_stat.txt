@@ -1,0 +1,45 @@
+ .../artifacts/preview/workspace_admin_capture.json |  15 ++++----
+ .../rollout/approval_state_rollout_note.json}      |  21 +++++++++++
+ .../workspace/backend/__init__.py}                 |   1 +
+ .../backend/__pycache__/__init__.cpython-314.pyc}  | Bin 0 -> 267 bytes
+ .../workspace/backend/api/__init__.py}             |   1 +
+ .../api/__pycache__/__init__.cpython-314.pyc}      | Bin 0 -> 271 bytes
+ .../api/__pycache__/serializers.cpython-314.pyc}   | Bin 0 -> 813 bytes
+ .../workspace}/backend/api/serializers.py          |   3 +-
+ .../workspace/backend/workspaces/__init__.py}      |   1 +
+ .../__pycache__/__init__.cpython-314.pyc}          | Bin 0 -> 278 bytes
+ .../workspaces/__pycache__/models.cpython-314.pyc} | Bin 0 -> 501 bytes
+ .../__pycache__/service.cpython-314.pyc}           | Bin 0 -> 1586 bytes
+ .../workspace}/backend/workspaces/models.py        |   5 +++
+ .../workspace}/backend/workspaces/service.py       |  23 ++++++++----
+ .../workspace/cli/__init__.py}                     |   1 +
+ .../cli/__pycache__/__init__.cpython-314.pyc}      | Bin 0 -> 263 bytes
+ .../__pycache__/export_workspace.cpython-314.pyc}  | Bin 0 -> 2742 bytes
+ .../workspace}/cli/export_workspace.py             |  24 +++++++++----
+ .../workspace}/config/defaults.toml                |   2 +-
+ .../docs/runbooks/workspace-approvals.md           |   5 +--
+ .../frontend/src/components/WorkspaceTable.tsx     |  18 ++++++++--
+ .../frontend/src/pages/WorkspaceAdmin.tsx          |   6 ++--
+ ...backend_service_and_serializer.cpython-314.pyc} | Bin 0 -> 2244 bytes
+ .../test_cli_export_workspace.cpython-314.pyc}     | Bin 0 -> 1990 bytes
+ ...test_mixed_dataset_consistency.cpython-314.pyc} | Bin 0 -> 2059 bytes
+ .../test_workspace_admin_preview.cpython-314.pyc}  | Bin 0 -> 1761 bytes
+ .../test_workspace_table_contract.cpython-314.pyc} | Bin 0 -> 1524 bytes
+ .../backend/__pycache__/__init__.cpython-314.pyc}  | Bin 0 -> 273 bytes
+ .../test_service_and_serializer.cpython-314.pyc}   | Bin 0 -> 2244 bytes
+ .../tests/backend/test_service_and_serializer.py   |  13 +++++++
+ .../cli/__pycache__/__init__.cpython-314.pyc}      | Bin 0 -> 269 bytes
+ .../test_export_workspace.cpython-314.pyc}         | Bin 0 -> 1990 bytes
+ .../workspace/tests/cli/test_export_workspace.py}  |  39 +++++++++++++++++++++
+ .../e2e/__pycache__/__init__.cpython-314.pyc}      | Bin 0 -> 269 bytes
+ .../test_workspace_admin_preview.cpython-314.pyc}  | Bin 0 -> 1765 bytes
+ .../tests/e2e/test_workspace_admin_preview.py      |   6 ++--
+ .../frontend/__pycache__/__init__.cpython-314.pyc} | Bin 0 -> 274 bytes
+ .../test_workspace_table_contract.cpython-314.pyc} | Bin 0 -> 1533 bytes
+ .../frontend/test_workspace_table_contract.py      |   4 ++-
+ .../tests/test_backend_service_and_serializer.py}  |  28 +++++++++++++++
+ .../workspace/tests/test_cli_export_workspace.py}  |  39 +++++++++++++++++++++
+ .../tests/test_mixed_dataset_consistency.py        |  14 ++++++--
+ .../tests/test_workspace_admin_preview.py}         |  15 ++++++++
+ .../tests/test_workspace_table_contract.py}        |  14 ++++++++
+ 44 files changed, 262 insertions(+), 36 deletions(-)

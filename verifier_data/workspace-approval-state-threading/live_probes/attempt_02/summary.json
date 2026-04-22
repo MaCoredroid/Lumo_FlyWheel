@@ -1,0 +1,143 @@
+{
+  "attempt_id": "attempt_02",
+  "model": "gpt-5.4",
+  "reasoning_effort": "high",
+  "variants": [
+    {
+      "variant_id": "v1-clean-baseline",
+      "codex_command": "codex exec --ephemeral --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v1-clean-baseline/workspace -m gpt-5.4 -o /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v1-clean-baseline/codex_last_message.txt Read AGENTS.md and complete the task fully in this workspace only. Run bin/run-visible-tests before finishing. Update code, tests, docs, preview artifact, and rollout note. Do not modify read-only context files.",
+      "codex_exit_code": 0,
+      "duration_seconds": 282.801,
+      "score": 16,
+      "P_benchmark": 16,
+      "M_training": 0.1778,
+      "pass": false,
+      "visible_tests_ok": false,
+      "ceilings_applied": [
+        "risk_level_alias_shortcut",
+        "missing_legacy_fallback",
+        "stale_config_or_runbook",
+        "missing_preview_or_rollout_evidence"
+      ],
+      "integrity_flag": 0,
+      "milestones": {
+        "M1_localization": false,
+        "M2_primary_fix": false,
+        "M3_invariants": false,
+        "M4_functional": false,
+        "M5_e2e": false
+      },
+      "artifact_root": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v1-clean-baseline"
+    },
+    {
+      "variant_id": "v2-noisy-distractor",
+      "codex_command": "codex exec --ephemeral --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v2-noisy-distractor/workspace -m gpt-5.4 -o /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v2-noisy-distractor/codex_last_message.txt Read AGENTS.md and complete the task fully in this workspace only. Run bin/run-visible-tests before finishing. Update code, tests, docs, preview artifact, and rollout note. Do not modify read-only context files.",
+      "codex_exit_code": 0,
+      "duration_seconds": 223.527,
+      "score": 20,
+      "P_benchmark": 20,
+      "M_training": 0.2222,
+      "pass": false,
+      "visible_tests_ok": true,
+      "ceilings_applied": [
+        "risk_level_alias_shortcut",
+        "missing_legacy_fallback",
+        "missing_preview_or_rollout_evidence"
+      ],
+      "integrity_flag": 0,
+      "milestones": {
+        "M1_localization": false,
+        "M2_primary_fix": false,
+        "M3_invariants": false,
+        "M4_functional": false,
+        "M5_e2e": false
+      },
+      "artifact_root": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v2-noisy-distractor"
+    },
+    {
+      "variant_id": "v3-dirty-state",
+      "codex_command": "codex exec --ephemeral --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v3-dirty-state/workspace -m gpt-5.4 -o /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v3-dirty-state/codex_last_message.txt Read AGENTS.md and complete the task fully in this workspace only. Run bin/run-visible-tests before finishing. Update code, tests, docs, preview artifact, and rollout note. Do not modify read-only context files.",
+      "codex_exit_code": 0,
+      "duration_seconds": 224.599,
+      "score": 20,
+      "P_benchmark": 20,
+      "M_training": 0.2222,
+      "pass": false,
+      "visible_tests_ok": false,
+      "ceilings_applied": [
+        "risk_level_alias_shortcut",
+        "missing_legacy_fallback",
+        "missing_preview_or_rollout_evidence"
+      ],
+      "integrity_flag": 0,
+      "milestones": {
+        "M1_localization": false,
+        "M2_primary_fix": false,
+        "M3_invariants": false,
+        "M4_functional": false,
+        "M5_e2e": false
+      },
+      "artifact_root": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v3-dirty-state"
+    },
+    {
+      "variant_id": "v4-multi-corpus-objective",
+      "codex_command": "codex exec --ephemeral --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v4-multi-corpus-objective/workspace -m gpt-5.4 -o /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v4-multi-corpus-objective/codex_last_message.txt Read AGENTS.md and complete the task fully in this workspace only. Run bin/run-visible-tests before finishing. Update code, tests, docs, preview artifact, and rollout note. Do not modify read-only context files.",
+      "codex_exit_code": 0,
+      "duration_seconds": 275.43,
+      "score": 20,
+      "P_benchmark": 20,
+      "M_training": 0.2222,
+      "pass": false,
+      "visible_tests_ok": false,
+      "ceilings_applied": [
+        "risk_level_alias_shortcut",
+        "missing_legacy_fallback",
+        "missing_preview_or_rollout_evidence"
+      ],
+      "integrity_flag": 0,
+      "milestones": {
+        "M1_localization": false,
+        "M2_primary_fix": false,
+        "M3_invariants": false,
+        "M4_functional": false,
+        "M5_e2e": false
+      },
+      "artifact_root": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v4-multi-corpus-objective"
+    },
+    {
+      "variant_id": "v5-recovery-in-thread",
+      "codex_command": "codex exec --ephemeral --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v5-recovery-in-thread/workspace -m gpt-5.4 -o /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v5-recovery-in-thread/codex_last_message.txt Read AGENTS.md and complete the task fully in this workspace only. Run bin/run-visible-tests before finishing. Update code, tests, docs, preview artifact, and rollout note. Do not modify read-only context files.",
+      "codex_exit_code": 0,
+      "duration_seconds": 310.109,
+      "score": 20,
+      "P_benchmark": 20,
+      "M_training": 0.2222,
+      "pass": false,
+      "visible_tests_ok": false,
+      "ceilings_applied": [
+        "risk_level_alias_shortcut",
+        "missing_legacy_fallback",
+        "missing_preview_or_rollout_evidence",
+        "rollback_ack_missing"
+      ],
+      "integrity_flag": 0,
+      "milestones": {
+        "M1_localization": false,
+        "M2_primary_fix": false,
+        "M3_invariants": false,
+        "M4_functional": false,
+        "M5_e2e": false
+      },
+      "artifact_root": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_02/v5-recovery-in-thread"
+    }
+  ],
+  "layer_a_gates": {
+    "family_mean": 19.2,
+    "max_variant_mean": 20,
+    "min_variant_mean": 16,
+    "family_mean_gate": true,
+    "max_gate": true,
+    "min_gate": false,
+    "monotonic_gate": false
+  }
+}

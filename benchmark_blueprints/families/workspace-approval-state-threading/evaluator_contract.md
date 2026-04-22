@@ -3,60 +3,85 @@
 ## Scope
 - Family: `workspace-approval-state-threading`
 - Task: `cnb55-core-workspace-approval-state-threading-admin-ui`
-- Runtime class: small monorepo with backend, CLI export, React admin UI, config, and runbook
+- Runtime class: repo-edit monorepo with backend, CLI, frontend, config, docs, preview contract, and rollout-note JSON
 
 ## Evaluation Intent
-Measure whether the solver can thread a new field across backend, API, CLI, frontend, config, and docs without relying on serializer aliases or UI fabrication. The evaluator should reward true cross-surface consistency and backward compatibility.
+Measure whether the solver can thread `approval_state` across real surfaces without relying on `risk_level` aliases, frontend-only fabrication, or stale `approval_mode` artifacts. The family should reward cross-surface consistency plus legacy-row fallback, and it should punish cosmetic-only fixes.
 
-## Required Submission Artifacts
-- Backend and frontend code patch
-- Tests for legacy-row fallback and UI rendering
-- `config/defaults.toml` update
-- Runbook update and screenshot artifact reference
-- Short rollout note
+## Submission Artifact Requirements
+- Updated backend normalization and serializer
+- Updated CLI export
+- Updated frontend admin table/page
+- Updated tests
+- Updated config and runbook
+- Updated preview contract JSON
+- Valid rollout note JSON
 
-## Scoring Model
-- `100` total points, awarded by category:
-  - `35`: backend plus serializer correctness
-  - `20`: CLI and API consistency
-  - `20`: frontend and screenshot-backed UI correctness
-  - `15`: config plus runbook alignment
-  - `10`: backward compatibility and anti-shortcut robustness
+## Scoring Budget
+Total `100` points.
 
-## Score Caps
-- Cap at `10/100` for docs-only, screenshot-only, or frontend-mock-only submissions.
-- Cap at `20/100` for serializer-only or UI-only threading.
-- Cap at `20/100` if the solver proposes reasonable edits but cannot prove service/API/CLI consistency.
-- Cap at `25/100` if `approval_state` is threaded visibly but legacy-row fallback is missing or vague.
-- Cap at `30/100` if config or runbook remain stale.
-- Cap at `50/100` if code is correct but screenshot or rollout evidence is missing.
+Deterministic M-band (`90` total):
+- `10`: backend normalization threads `approval_state`
+- `10`: API serializer threads `approval_state`
+- `10`: CLI export threads `approval_state`
+- `12`: same mixed dataset is consistent across service, API, and CLI
+- `8`: legacy-row fallback is implemented and surfaced
+- `8`: frontend table adds `Approval state` column
+- `6`: frontend badge rendering uses `approval_state` plus fallback, not `risk_level`
+- `6`: visible tests updated to assert the new contract
+- `6`: preview contract artifact matches the variant expectation
+- `4`: config uses `approval_state`
+- `4`: runbook updated to the new terminology
+- `3`: runbook documents legacy-row fallback
+- `3`: rollout note JSON is valid and variant-aware
 
-## Visible Gates
-- Backend serializer tests pass
-- Frontend table tests pass
-- Screenshot harness produces the expected image
-- Same-dataset consistency test compares service, API, and CLI export values
+Probe-only P-band (`10` total, quarantined from training):
+- `10`: partial-progress heuristic for submissions that update multiple surfaces coherently but fail a hidden contract check
 
-## Hidden Gates
-- Legacy rows missing `approval_state` still render via documented fallback
-- API and CLI export must agree for mixed datasets
-- Screenshot diff checks column label, badge text, and filtered row state
-- Grep or AST guard rejects stale alias logic that papers over missing schema threading
-- Config and runbook must use `approval_state`, not `approval_mode`
+## Ceiling Rules
+- `risk_level_alias_shortcut`: cap `20`
+  - Fires when serializer or frontend derives `approval_state` from `risk_level`.
+- `frontend_only_fabrication`: cap `20`
+  - Fires when frontend and preview update but backend plus CLI remain stale.
+- `missing_legacy_fallback`: cap `25`
+  - Fires when `approval_state` is threaded for explicit rows but legacy rows still break.
+- `stale_config_or_runbook`: cap `30`
+  - Fires when `approval_mode` remains in config or docs.
+- `missing_preview_or_rollout_evidence`: cap `35`
+  - Fires when code looks substantially correct but preview contract or rollout note is absent or invalid.
+- `release_objective_missed`: cap `35`
+  - V4 only; fires when launch-readiness preview requirements are ignored.
+- `rollback_ack_missing`: cap `35`
+  - V5 only; fires when the rollout note does not acknowledge the earlier alias rollback.
 
-## Integrity And Shortcut Checks
-- Reject frontend-only fabricated state
-- Reject serializer aliasing that merely mirrors `risk_level`
-- Reject screenshot-name hardcoding without visual correctness
-- Reject removal of fallback coverage
+## Visible Checks
+- `python3 -m unittest discover -s tests -p 'test_*.py'` succeeds.
+- Mixed-dataset test asserts consistent `approval_state` values plus fallback.
+- Frontend test asserts `Approval state` column and fallback badge text.
+- Preview test asserts screenshot filename and filtered-row badge contract.
 
-## Variant Hardness Notes
-- `V1`: straightforward rollout, but cross-surface consistency is still required
-- `V2`: stale mocks and warnings should not change the target behavior
-- `V3`: unrelated local edits must survive
-- `V4`: screenshot and rollout note are mandatory
-- `V5`: follow-up injects inconsistency between serializer and UI
+## Hidden Checks
+- Service output contains `approval_state` and `approval_state_source`.
+- Serializer output includes `approval_state` for all rows and does not alias `risk_level`.
+- CLI output equals the API-shaped rows for the mixed dataset.
+- Preview contract matches the active variant gold contract.
+- Rollout note JSON carries variant-required keywords.
+- Immutable context trees are unchanged.
 
-## Current Hardness Judgment
-- Actual recorded solver run: `20/100`
-- Naive `gpt-5.4/high` above `30/100`: `unlikely under current rubric`
+## Integrity Rules
+- `write_outside_whitelist`
+- `immutable_context_mutated`
+- `bin_wrapper_mutated`
+- `pytest_shim`
+- `network_egress`
+
+Integrity flag `H=1` force-fails M3/M4/M5 and clamps `M_training` to `0.0`.
+
+## Baseline Targets
+- Oracle: `>= 90`
+- Empty / untouched bundle: `0`
+- Shortcut / alias solution: `<= 30`
+- Naive single-surface solver target: around `20`
+
+## Current Calibration Intent
+The family is trying to sit in the honest-difficulty band where a strong but non-persistent model proposes the right cross-layer fix but fails to deliver the full repo patch, preview artifact, and rollout-note evidence in one pass.

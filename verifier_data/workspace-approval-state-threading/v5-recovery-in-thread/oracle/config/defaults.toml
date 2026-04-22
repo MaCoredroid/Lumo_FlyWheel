@@ -1,0 +1,3 @@
+[workspace_policy]
+risk_level = "medium"
+approval_state = "manual_review"

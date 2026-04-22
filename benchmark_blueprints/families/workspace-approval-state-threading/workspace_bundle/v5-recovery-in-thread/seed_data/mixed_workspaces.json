@@ -1,0 +1,19 @@
+[
+  {
+    "workspace_id": "ws-approved-01",
+    "workspace_name": "Northwind",
+    "risk_level": "medium",
+    "approval_state": "approved"
+  },
+  {
+    "workspace_id": "ws-blocked-02",
+    "workspace_name": "Redwood",
+    "risk_level": "high",
+    "approval_state": "blocked"
+  },
+  {
+    "workspace_id": "ws-legacy-03",
+    "workspace_name": "Legacy Labs",
+    "risk_level": "low"
+  }
+]

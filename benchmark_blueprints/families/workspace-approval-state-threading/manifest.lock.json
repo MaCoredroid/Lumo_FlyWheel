@@ -1,0 +1,30 @@
+{
+  "family_id": "workspace-approval-state-threading",
+  "variants": [
+    {
+      "file_count": 18,
+      "tree_hash": "c7b80fd3897f1a4b93c91a20fae02d77b31770302560f8cd44e3bf853346032a",
+      "variant_id": "v1-clean-baseline"
+    },
+    {
+      "file_count": 20,
+      "tree_hash": "c5cc4fc3048760b436f9b38ecc409bd70d620cbb08c82c0e0c80bfa5926eba3f",
+      "variant_id": "v2-noisy-distractor"
+    },
+    {
+      "file_count": 19,
+      "tree_hash": "f99224da0ae5a6e5c9fe233cfe0f2a0493c7b784b0f06173488d4ca58cb60c8b",
+      "variant_id": "v3-dirty-state"
+    },
+    {
+      "file_count": 19,
+      "tree_hash": "e6aaa9c2cc510e50e4ca5cab19019227fa7608fd9643d4f54b1050b045409cf0",
+      "variant_id": "v4-multi-corpus-objective"
+    },
+    {
+      "file_count": 19,
+      "tree_hash": "df4bd0eff9fb01b35efde3d76b941d9d3c8f1cdf11dcb75430ced1773bde7525",
+      "variant_id": "v5-recovery-in-thread"
+    }
+  ]
+}

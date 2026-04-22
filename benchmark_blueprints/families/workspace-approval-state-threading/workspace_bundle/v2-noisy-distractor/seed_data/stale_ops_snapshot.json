@@ -1,0 +1,9 @@
+{
+  "generated_at": "2026-02-01T14:00:00Z",
+  "fields": [
+    "workspace_id",
+    "risk_level",
+    "approval_mode"
+  ],
+  "note": "stale export; do not treat as current schema"
+}

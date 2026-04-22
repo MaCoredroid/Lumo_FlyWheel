@@ -1,0 +1,25 @@
+{
+  "default_approval_state": "manual_review",
+  "legacy_row_id": "ws-legacy-03",
+  "pass_bar": 40,
+  "preview_filtered_row": {
+    "approval_state": "manual_review",
+    "source": "legacy_fallback",
+    "workspace_id": "ws-legacy-03"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "887f38d090900bc6e0077bd7c0e3c4e8a5e6c1ee8d61c86a32158951d5973219",
+    "Dockerfile": "e2bba12236fb2b470c45d813e64f0ea44bc758b7e6e5ca85395251d62fc1bd22",
+    "bin": "2bacd51ff2b38842ce01c1bd0b2764aa06bf1b2e19569379c75fc6cca98e846b",
+    "incident_context": "c40417d10cad529531e480be2849ced11376e473ab3908c57d8c940bb8b2bbe8",
+    "seed_data": "3424bd71db989bf06416218c3e80a4c8142b6c6876c2194d42c4798c5f0cb48c"
+  },
+  "rollout_note_keywords": [
+    "rollback",
+    "risk_level alias",
+    "legacy_fallback"
+  ],
+  "variant_id": "v5-recovery-in-thread",
+  "visible_test_sha256": "4078c837fcfbe65fa328455d6d41dfbd4f6b427b63f6bf34a90e1ed6b653adb0"
+}

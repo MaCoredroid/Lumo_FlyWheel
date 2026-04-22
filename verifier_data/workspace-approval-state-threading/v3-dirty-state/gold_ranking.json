@@ -1,0 +1,27 @@
+{
+  "default_approval_state": "manual_review",
+  "legacy_row_id": "ws-legacy-03",
+  "pass_bar": 40,
+  "preview_filtered_row": {
+    "approval_state": "manual_review",
+    "source": "legacy_fallback",
+    "workspace_id": "ws-legacy-03"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+    "AGENTS.md": "887f38d090900bc6e0077bd7c0e3c4e8a5e6c1ee8d61c86a32158951d5973219",
+    "Dockerfile": "e2bba12236fb2b470c45d813e64f0ea44bc758b7e6e5ca85395251d62fc1bd22",
+    "bin": "2bacd51ff2b38842ce01c1bd0b2764aa06bf1b2e19569379c75fc6cca98e846b",
+    "incident_context": "4d8755d6581b0b219fa56af93fc23d592493de8b9c02490023a2d1d3bfeb6b64",
+    "seed_data": "3424bd71db989bf06416218c3e80a4c8142b6c6876c2194d42c4798c5f0cb48c"
+  },
+  "rollout_note_keywords": [
+    "frontend-only alias patch",
+    "legacy_fallback",
+    "service",
+    "api",
+    "cli"
+  ],
+  "variant_id": "v3-dirty-state",
+  "visible_test_sha256": "4078c837fcfbe65fa328455d6d41dfbd4f6b427b63f6bf34a90e1ed6b653adb0"
+}

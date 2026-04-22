@@ -1,0 +1,26 @@
+{
+  "default_approval_state": "manual_review",
+  "legacy_row_id": "ws-legacy-03",
+  "pass_bar": 40,
+  "preview_filtered_row": {
+    "approval_state": "manual_review",
+    "source": "legacy_fallback",
+    "workspace_id": "ws-legacy-03"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "887f38d090900bc6e0077bd7c0e3c4e8a5e6c1ee8d61c86a32158951d5973219",
+    "Dockerfile": "e2bba12236fb2b470c45d813e64f0ea44bc758b7e6e5ca85395251d62fc1bd22",
+    "bin": "2bacd51ff2b38842ce01c1bd0b2764aa06bf1b2e19569379c75fc6cca98e846b",
+    "seed_data": "5cc86a69729757311b8be3172a3575ab66883bb8f0328979312d79ddfdf3a54d"
+  },
+  "rollout_note_keywords": [
+    "stale approval_mode",
+    "legacy_fallback",
+    "service",
+    "api",
+    "cli"
+  ],
+  "variant_id": "v2-noisy-distractor",
+  "visible_test_sha256": "4078c837fcfbe65fa328455d6d41dfbd4f6b427b63f6bf34a90e1ed6b653adb0"
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": "cnb55.rollout_note.v1",
+  "legacy_row_fallback": "Rows missing approval_state render as manual_review with legacy_fallback provenance until the backfill completes.",
+  "consistency_surfaces": [
+    "service",
+    "api",
+    "cli",
+    "frontend",
+    "preview"
+  ],
+  "screenshot_name": "workspace-admin-approval-state.png",
+  "variant_notes": "Reject the abandoned frontend-only alias patch and thread the real field."
+}

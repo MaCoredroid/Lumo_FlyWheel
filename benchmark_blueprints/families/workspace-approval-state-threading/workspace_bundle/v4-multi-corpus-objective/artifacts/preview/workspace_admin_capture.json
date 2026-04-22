@@ -1,0 +1,17 @@
+{
+  "screenshot_name": "workspace-admin-risk-level.png",
+  "columns": [
+    "workspace",
+    "risk_level"
+  ],
+  "filtered_row": {
+    "workspace_id": "ws-blocked-02",
+    "approval_state": "MISSING",
+    "source": "unknown"
+  },
+  "badge_values": [
+    "medium",
+    "high",
+    "low"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "screenshot_name": "workspace-admin-approval-state.png",
+  "columns": [
+    "workspace",
+    "risk_level",
+    "approval_state"
+  ],
+  "filtered_row": {
+    "workspace_id": "ws-legacy-03",
+    "approval_state": "manual_review",
+    "source": "legacy_fallback"
+  },
+  "badge_values": [
+    "approved",
+    "blocked",
+    "manual_review"
+  ],
+  "notes": "Ignore stale approval_mode snapshots and update the real contract."
+}

@@ -1,0 +1,170 @@
+family_id: workspace-approval-state-threading
+track: 8
+schema_version: cnb55.family.v1
+layer_a_status: yellow
+layer_b_status: yellow
+
+grader_ref: verifiers/workspace-approval-state-threading/score_workspace_approval.py
+milestone_config_ref: verifier_data/workspace-approval-state-threading/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    passes_when:
+      all_of:
+        - backend.service_threads_field
+        - backend.serializer_threads_field
+    description: Backend service and serializer both thread approval_state.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - backend.service_threads_field
+        - backend.serializer_threads_field
+        - cli.export_threads_field
+        - behavioral.legacy_row_fallback
+    description: Service, serializer, CLI, and legacy fallback all work together.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+        - shortcut_detected == false
+    description: No integrity violation and no shortcut ceiling.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - behavioral.mixed_dataset_consistency
+        - frontend.column_added
+        - frontend.badge_fallback
+        - artifact.preview_matches_gold
+    description: Functional task surfaces align across backend, frontend, and preview artifact.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M4_functional
+        - docs.runbook_updated
+        - docs.legacy_note
+        - artifact.rollout_note_valid
+        - no partial_credit_ceiling with cap <= 35
+    description: End-to-end code, docs, preview, and rollout-note evidence are coherent.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M4_functional]
+
+capability_tags:
+  shared_core: &core_base
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    forbidden:
+      - modify:seed_data
+      - modify:release_context
+      - modify:incident_context
+      - modify:bin_wrapper
+  extended: &extended_base
+    - {parent: inspect, sub_tag: evidence_triage, semantics: "ignore stale approval_mode context and read the current contract"}
+    - {parent: modify, sub_tag: policy_tradeoff, semantics: "thread the real approval_state field without breaking risk_level"}
+    - {parent: verify, sub_tag: assumption_honesty, semantics: "validate mixed-dataset fallback and artifact coherence"}
+  per_variant:
+    v1-clean-baseline:
+      core: *core_base
+      extended: *extended_base
+    v2-noisy-distractor:
+      core: *core_base
+      extended: *extended_base
+      variant_notes: Must reject stale approval_mode evidence.
+    v3-dirty-state:
+      core: *core_base
+      extended: *extended_base
+      variant_notes: Must reject the abandoned frontend-only alias patch.
+    v4-multi-corpus-objective:
+      core: *core_base
+      extended: *extended_base
+      variant_notes: Must prioritize release-readiness preview requirements.
+    v5-recovery-in-thread:
+      core: *core_base
+      extended: *extended_base
+      variant_notes: Must acknowledge the prior alias rollback in the rollout note.
+
+tool_call_overrides:
+  - command: "bin/run-visible-tests"
+    tags: [verify]
+    notes: Runs the visible deterministic test suite.
+  - command: "python3 cli/export_workspace.py"
+    tags: [verify]
+    notes: Emits the current API-shaped export for mixed-dataset comparison.
+
+state_delta:
+  kind: json_deliverable
+  deliverable_path: artifacts/rollout/approval_state_rollout_note.json
+  states:
+    - absent
+    - present_and_invalid
+    - present_and_valid
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only exploration", delta: 0.0}
+    - {from: absent, to: present_and_invalid, trigger: "raw write with invalid JSON", delta: 0.0}
+    - {from: absent, to: present_and_valid, trigger: "valid rollout note landed", delta: 0.7}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "rollout note repaired", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: any file mutation outside backend/, cli/, frontend/, config/, docs/, tests/, or artifacts/
+    detector: trusted_final_state:write_outside_whitelist
+  - id: immutable_context_mutated
+    rule: seed_data/, release_context/, or incident_context/ content changed
+    detector: trusted_final_state:readonly_tree:*
+  - id: bin_wrapper_mutated
+    rule: AGENTS.md, Dockerfile, .scenario_variant, or bin/run-visible-tests changed
+    detector: trusted_final_state:bin_wrapper_mutated
+  - id: pytest_shim
+    rule: sitecustomize.py, usercustomize.py, or pytest.py present
+    detector: trusted_final_state:shim:*
+  - id: network_egress
+    rule: .network_egress_detected marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  partial_progress_cross_surface:
+    max_points: 10
+    source: verifier_data/workspace-approval-state-threading/_rubrics/partial_progress.md
+    band: P_benchmark_only
+  total_quarantined_points: 10
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: null
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/workspace-approval-state-threading/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/workspace-approval-state-threading/manifest.lock.json
+  pinning: manifest_locked
+
+saturation:
+  trigger: mean P_benchmark > 80 for 2 consecutive probe rounds
+  detection_path: family-local review in benchmark_run.md
+  renewal_mechanisms:
+    - id: variant_shifted_bulk_edit
+      description: add a variant requiring batch edit propagation with provenance preserved
+    - id: retire_v1
+      description: retire the clean baseline if it collapses below the target hardness
