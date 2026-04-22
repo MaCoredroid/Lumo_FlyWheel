@@ -1,0 +1,59 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Release context names it as the blocker for the next customer rollout.",
+      "status": "observed",
+      "topic": "The release gate makes watermark parity the immediate objective"
+    },
+    {
+      "note": "The release context elevates watermark parity, but repo-state still warns about the invariant under it.",
+      "status": "to_verify",
+      "topic": "Snapshot drift may still be a prerequisite risk for the watermark fix"
+    },
+    {
+      "note": "The bundle states the blocker, but not the exact acceptability threshold short of zero.",
+      "status": "missing",
+      "topic": "Whether the launch can tolerate partial improvement instead of zero mismatches"
+    }
+  ],
+  "do_not_touch": [
+    {
+      "area": "contained-pager-cleanup",
+      "citations": [
+        "round_history/round_log.md",
+        "objective_metrics/scoreboard.md"
+      ],
+      "reason": "Still contained and not release-blocking."
+    },
+    {
+      "area": "cold-start-cache-tuning",
+      "citations": [
+        "repo_state/open_threads.md",
+        "release_context/release_gate.md"
+      ],
+      "reason": "The partial cache patch remains a side quest relative to the release gate."
+    }
+  ],
+  "partial_progress_metric": {
+    "baseline": "Streaming watermark mismatch reproduces in 6 of 20 release-gate replay runs and blocks the customer launch checklist.",
+    "guardrail": "Do not treat the abandoned cache patch as progress and do not let snapshot replay drift get worse while chasing watermark parity.",
+    "measurement_plan": [
+      "Run the release-gate replay pack and count watermark mismatches after every candidate fix.",
+      "Track the base snapshot-drift replay counter in parallel so the objective shift does not hide invariant regressions."
+    ],
+    "metric_id": "watermark-mismatch-repros",
+    "target": "Streaming watermark mismatch reproduces in 0 of 20 release-gate replay runs while snapshot drift does not regress above its current 7 of 10 baseline."
+  },
+  "schema_version": "cnb55.evolution_plan.v1",
+  "selected_focus": {
+    "citations": [
+      "focus_candidates/priority_map.md",
+      "objective_metrics/scoreboard.md",
+      "release_context/release_gate.md"
+    ],
+    "focus_id": "streaming-watermark-alignment",
+    "title": "Streaming Watermark Alignment",
+    "why_now": "The release gate shifts the primary objective: the next launch is blocked more by streaming watermark mismatches than by raw replay drift. This round should move the gating customer objective first, while still respecting the invariant risk noted in the bundle."
+  },
+  "variant_id": "v4-multi-corpus-objective"
+}

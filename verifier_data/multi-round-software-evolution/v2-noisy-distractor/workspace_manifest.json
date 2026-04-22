@@ -1,0 +1,27 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "bin/cnb55-evolution",
+    "focus_candidates/priority_map.md",
+    "objective_metrics/scoreboard.md",
+    "repo_state/open_threads.md",
+    "round_history/round_log.md",
+    "tests/test_evolution_plan.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+    "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+    "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+    "focus_candidates": "84704d693700243ce1e778876535cbd874cbcc257cbbc1674db53e853f08563c",
+    "objective_metrics": "123e174a07753caf111cda7ab3f7aec556c2f90201b06ba3bca1e5fd5533870c",
+    "repo_state": "45852da4debba81b55a17f2db947114c2e0e23dcc98d1548f9c35089e01515fe",
+    "round_history": "1ef528cbe6c5b9716b2d87ae9bdf650d8a3caffe2b3a90c3aea1f49eeddad7e1",
+    "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+  },
+  "test_evolution_plan_sha256": "b0776c13a0504d6d967681e001cb4602cc235c0fb6bd900a4af8493363680640",
+  "variant_id": "v2-noisy-distractor"
+}

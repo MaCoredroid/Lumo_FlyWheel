@@ -1,0 +1,51 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Repo-state note ties the launch checklist directly to stable snapshot replay.",
+      "status": "observed",
+      "topic": "Adaptive batching launch stays blocked until snapshot restore is stable"
+    },
+    {
+      "note": "The perf win matters, but the current scoreboard says it is not the gating dependency.",
+      "status": "to_verify",
+      "topic": "Cold-start cache tuning remains secondary once snapshot drift is fixed"
+    },
+    {
+      "note": "The current bundle does not say if the same snapshot fix is sufficient for all watermark edge cases.",
+      "status": "missing",
+      "topic": "Whether watermark parity still needs extra fixtures after snapshot alignment"
+    }
+  ],
+  "do_not_touch": [
+    {
+      "area": "contained-pager-cleanup",
+      "citations": [
+        "round_history/round_log.md",
+        "objective_metrics/scoreboard.md"
+      ],
+      "reason": "The pager storm is already rate-limited and no longer blocks the roadmap; reopening it this round would burn time without unlocking the blocked follow-on work."
+    }
+  ],
+  "partial_progress_metric": {
+    "baseline": "Replay diverges in 7 of 10 seeded restore runs after round 3.",
+    "guardrail": "Do not regress watermark mismatch rate above 1 in 20 replay runs while fixing snapshot ordering.",
+    "measurement_plan": [
+      "Run the seeded restore replay suite on every snapshot writer change.",
+      "Compare the byte diff summary and watermark mismatch counter before declaring the round complete."
+    ],
+    "metric_id": "snapshot-drift-repros",
+    "target": "Replay diverges in 0 of 10 seeded restore runs and adaptive-batching shadow runs stay byte-stable."
+  },
+  "schema_version": "cnb55.evolution_plan.v1",
+  "selected_focus": {
+    "citations": [
+      "focus_candidates/priority_map.md",
+      "objective_metrics/scoreboard.md",
+      "repo_state/open_threads.md"
+    ],
+    "focus_id": "schema-snapshot-alignment",
+    "title": "Schema Snapshot Alignment",
+    "why_now": "Round 4 replay still diverges because the snapshot writer and restore path disagree on field ordering. Fixing that invariant unblocks adaptive batching and keeps future streaming work from being built on sand."
+  },
+  "variant_id": "v1-clean-baseline"
+}

@@ -1,0 +1,27 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "bin/cnb55-evolution",
+    "focus_candidates/priority_map.md",
+    "objective_metrics/scoreboard.md",
+    "repo_state/open_threads.md",
+    "round_history/round_log.md",
+    "tests/test_evolution_plan.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+    "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+    "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+    "focus_candidates": "4ff2b2f5985a624d2d99e8c62d5827bd7d86890ec8a90be83720a5491a8cdbff",
+    "objective_metrics": "b5e97158abbf0df52c1c1b02cd741c366fa77dfd95b4cbd1308b757dafb44f1d",
+    "repo_state": "d5daa85e936328b46678aa76b9811485303c91a114c57b7f43069fdbd1b6621a",
+    "round_history": "1f297fc9d7595227f48ddb94fc7dfa5c05c252f2dbb1d3c3863907e2da2b19ae",
+    "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+  },
+  "test_evolution_plan_sha256": "b0776c13a0504d6d967681e001cb4602cc235c0fb6bd900a4af8493363680640",
+  "variant_id": "v1-clean-baseline"
+}

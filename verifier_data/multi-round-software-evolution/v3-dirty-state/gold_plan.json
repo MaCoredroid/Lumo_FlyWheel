@@ -1,0 +1,29 @@
+{
+  "accepted_focus_id": "schema-snapshot-alignment",
+  "expected_assumption_keywords": [
+    "safe-to-reuse"
+  ],
+  "expected_boundary_ids": [
+    "contained-pager-cleanup",
+    "cold-start-cache-tuning"
+  ],
+  "pass_bar": 70,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+    "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+    "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+    "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+    "focus_candidates": "ae7a11e8d55acd699a8816ddcecda86d2abf06ed73d784c2e95c3ddf0f099ec1",
+    "objective_metrics": "4a2c6ec73add0c3da098e4beeaa8f825447e85e51dbc89a4c2324223855d15b4",
+    "repo_state": "9e22e5390e836f449b97e9b893f68955d4afa9eaf0a78af21933613f70270f5e",
+    "round_history": "fbee7077f41916cce643df7cbb483d639fd47a065c0cc4e6420ed23d407be1cd",
+    "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+  },
+  "shortcut_focus_id": "cold-start-cache-tuning",
+  "test_evolution_plan_sha256": "b0776c13a0504d6d967681e001cb4602cc235c0fb6bd900a4af8493363680640",
+  "unlock_keywords": [
+    "prerequisite",
+    "future"
+  ],
+  "variant_id": "v3-dirty-state"
+}

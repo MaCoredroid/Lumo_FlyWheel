@@ -1,0 +1,162 @@
+{
+  "calibration_targets": {
+    "family_mean_center": 20,
+    "family_mean_window": [
+      15,
+      25
+    ],
+    "max_variant_score": 40,
+    "min_hard_variant_score": 10,
+    "monotonicity_tolerance": 3
+  },
+  "cli": {
+    "cnb55_evolution_sha256": "5c6429c6f8845a28a56fdf32cc0c96d4f42de778c49d775d9a870910929a364a"
+  },
+  "determinism": {
+    "cnb55_seed": 42,
+    "result_key_sort": "sorted"
+  },
+  "family_id": "multi-round-software-evolution",
+  "grader": {
+    "score_round_plan_py_sha256": "b105569db96dfa23bf3c1d8e34f4db82a8ad62cec4f7ebc82ce64ac75a5da609",
+    "verify_sh_sha256": "56e3bd9323adb3a742e6abd39715a4bbdef82ea42d590cf3aaeb30d23e9047f8"
+  },
+  "schema_version": "cnb55.manifest.v2",
+  "track": 10,
+  "track_name": "Strategic Management & Long-Horizon Evolution",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_pass_bar": 70,
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 92,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_plan_sha256": "cedd9ab5549b1d984d81c5ad4e396ba4bc21bfb554d833a0f91df3546031b02f",
+        "hidden_tests_tree_sha256": "e0bb75bb326383a28b84905c1ebeeb9dda4246fff0e5b5344b0706569d5b8d94",
+        "oracle_round_plan_json_sha256": "f1eb31393a2bb491f795539dffa4b2846c1a7056f6f2b814d0c097566a4e8b6a",
+        "oracle_round_plan_md_sha256": "fe85b4318d36454ec0c2170117c74399e156cd88597a89b30a1422a2737f9046",
+        "workspace_manifest_sha256": "443a76afbea11b947cf0a83886af02d1da38cc5c37e6fe1ae9fab39dd8d79eac"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+        "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+        "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+        "artifacts": "e55f3d1e25e53d4410946ae520b60179c1a125b0b63ce886998e5b72eac6325e",
+        "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "focus_candidates": "4ff2b2f5985a624d2d99e8c62d5827bd7d86890ec8a90be83720a5491a8cdbff",
+        "objective_metrics": "b5e97158abbf0df52c1c1b02cd741c366fa77dfd95b4cbd1308b757dafb44f1d",
+        "repo_state": "d5daa85e936328b46678aa76b9811485303c91a114c57b7f43069fdbd1b6621a",
+        "round_history": "1f297fc9d7595227f48ddb94fc7dfa5c05c252f2dbb1d3c3863907e2da2b19ae",
+        "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+      }
+    },
+    "v2-noisy-distractor": {
+      "gold_pass_bar": 70,
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 92,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_plan_sha256": "e17977d7d8f575c6aea6fffa2759b4d79d1b18ca7c7444084f7f3d5edbc2aa1f",
+        "hidden_tests_tree_sha256": "e0bb75bb326383a28b84905c1ebeeb9dda4246fff0e5b5344b0706569d5b8d94",
+        "oracle_round_plan_json_sha256": "03621f84e3298d2f933858c6bc250ba876eab388469b40bd005d2126b8294b03",
+        "oracle_round_plan_md_sha256": "cbf413d2249af8fd6b79438b52eaa8fc1ab216a8eaa7459962c1ed3e1a1396dc",
+        "workspace_manifest_sha256": "b943bcbc8d6f9ebd43e1ba7128ada9601be015d645307a97942d354e22875d87"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+        "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+        "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+        "artifacts": "e55f3d1e25e53d4410946ae520b60179c1a125b0b63ce886998e5b72eac6325e",
+        "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "focus_candidates": "84704d693700243ce1e778876535cbd874cbcc257cbbc1674db53e853f08563c",
+        "objective_metrics": "123e174a07753caf111cda7ab3f7aec556c2f90201b06ba3bca1e5fd5533870c",
+        "repo_state": "45852da4debba81b55a17f2db947114c2e0e23dcc98d1548f9c35089e01515fe",
+        "round_history": "1ef528cbe6c5b9716b2d87ae9bdf650d8a3caffe2b3a90c3aea1f49eeddad7e1",
+        "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+      }
+    },
+    "v3-dirty-state": {
+      "gold_pass_bar": 70,
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 92,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_plan_sha256": "81edcaa46ced17419e1521d0357fdfd537559fd117c1bfdf28a6d63ebc71da97",
+        "hidden_tests_tree_sha256": "e0bb75bb326383a28b84905c1ebeeb9dda4246fff0e5b5344b0706569d5b8d94",
+        "oracle_round_plan_json_sha256": "d3e312cfa7ee7a831e6df9a75f469195402112bf53f5b1e363c92e6dadf95656",
+        "oracle_round_plan_md_sha256": "c7097884f094f18bfd0839a49a398c2a5590592ed5bd205637fc7c0e53358967",
+        "workspace_manifest_sha256": "67cdc562df55bc3a4ab9a2befe0ce0cb79b60271778b4fd0229a4cf0e48ec38c"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+        "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+        "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+        "artifacts": "e55f3d1e25e53d4410946ae520b60179c1a125b0b63ce886998e5b72eac6325e",
+        "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "focus_candidates": "ae7a11e8d55acd699a8816ddcecda86d2abf06ed73d784c2e95c3ddf0f099ec1",
+        "objective_metrics": "4a2c6ec73add0c3da098e4beeaa8f825447e85e51dbc89a4c2324223855d15b4",
+        "repo_state": "9e22e5390e836f449b97e9b893f68955d4afa9eaf0a78af21933613f70270f5e",
+        "round_history": "fbee7077f41916cce643df7cbb483d639fd47a065c0cc4e6420ed23d407be1cd",
+        "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "gold_pass_bar": 70,
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 92,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_plan_sha256": "ef4879ff25ca97dfcf62f792e173e3875ab106da0f76aebbc00cf79dc7332f89",
+        "hidden_tests_tree_sha256": "e0bb75bb326383a28b84905c1ebeeb9dda4246fff0e5b5344b0706569d5b8d94",
+        "oracle_round_plan_json_sha256": "74e780a27af369e907035f3bc68232814ffcf1cbe3b8547aec7bdf3804c105f2",
+        "oracle_round_plan_md_sha256": "60d57911fbd0f1032798e5a35c7587a8b106bb34ca471b539b8e49a442c8e3d5",
+        "workspace_manifest_sha256": "6a171f3f9a6c1ef269a6710f29ecc3e6ebd9672ea264d36f126a36cbe9bcd665"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+        "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+        "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+        "artifacts": "e55f3d1e25e53d4410946ae520b60179c1a125b0b63ce886998e5b72eac6325e",
+        "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "focus_candidates": "78b42b94a44d80d39b0af022bb3466896259c3583ce1ede4b2a1b0ea1c2baf92",
+        "objective_metrics": "afed80546abfa1b37b6f091051ec4269177a076846db142707e0dabf176dd9cb",
+        "release_context": "9163f88830c1f09cf88a5ab09ccc55361b79c2feb9562f01c0e8de793422328c",
+        "repo_state": "157c34b0e290cd2cb4a9f4486f2eb57de06cced5692f111c9cf77e5a835bb0fc",
+        "round_history": "0bcb42f0101c2c0b89358d22aa25e7b05a691a573db386a93de896d543c209bf",
+        "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "gold_pass_bar": 70,
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 92,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_plan_sha256": "f0a39474f35c2b803feed94b81b94890e4b1cf214d57a282666b5a538301a03d",
+        "hidden_tests_tree_sha256": "e0bb75bb326383a28b84905c1ebeeb9dda4246fff0e5b5344b0706569d5b8d94",
+        "oracle_round_plan_json_sha256": "276717b2cbc75cf66fc0c8cd4571fafe19e9a7476e89391d6e7a10bb2a4f29a3",
+        "oracle_round_plan_md_sha256": "8a062a8b9eda606cc9c75a8031ff61c09e04f521f580104106e77c66b3777969",
+        "workspace_manifest_sha256": "c839801546af830ad28c0a682038451b4c8e24ca246c9860c1f48fb4304ad3c4"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+        "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+        "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+        "artifacts": "e55f3d1e25e53d4410946ae520b60179c1a125b0b63ce886998e5b72eac6325e",
+        "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+        "brief": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "focus_candidates": "87712df027f6d6366e4b5d10bcd91b55ecbec5d6f25e3d01affe9602697f1b9d",
+        "incident_context": "0c2d73f89650ba6de6c4575797f42577abb3cb4c9576d176637cd9fb16a03a50",
+        "objective_metrics": "2794707cc46613da836eb9a5ba363f3ae797504f1fd14804b82c584d3c656bb6",
+        "release_context": "a59bc147de44712de3a82b90df6a6bd0b37456a9bcd29d505bc8437db1288b52",
+        "repo_state": "7a593c817455a840ef3a26af6a3946970a576a9a0e3ba67327e7c69b00353be2",
+        "round_history": "fbb39ac9eccc26075849120a0b42c7931c4a7b59374e8119bf4a61483ec3264b",
+        "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+      }
+    }
+  }
+}

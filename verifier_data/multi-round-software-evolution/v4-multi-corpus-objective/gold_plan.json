@@ -1,0 +1,30 @@
+{
+  "accepted_focus_id": "streaming-watermark-alignment",
+  "expected_assumption_keywords": [
+    "acceptability threshold"
+  ],
+  "expected_boundary_ids": [
+    "contained-pager-cleanup",
+    "cold-start-cache-tuning"
+  ],
+  "pass_bar": 70,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+    "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+    "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+    "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+    "focus_candidates": "78b42b94a44d80d39b0af022bb3466896259c3583ce1ede4b2a1b0ea1c2baf92",
+    "objective_metrics": "afed80546abfa1b37b6f091051ec4269177a076846db142707e0dabf176dd9cb",
+    "release_context": "9163f88830c1f09cf88a5ab09ccc55361b79c2feb9562f01c0e8de793422328c",
+    "repo_state": "157c34b0e290cd2cb4a9f4486f2eb57de06cced5692f111c9cf77e5a835bb0fc",
+    "round_history": "0bcb42f0101c2c0b89358d22aa25e7b05a691a573db386a93de896d543c209bf",
+    "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+  },
+  "shortcut_focus_id": "schema-snapshot-alignment",
+  "test_evolution_plan_sha256": "b0776c13a0504d6d967681e001cb4602cc235c0fb6bd900a4af8493363680640",
+  "unlock_keywords": [
+    "release",
+    "customer"
+  ],
+  "variant_id": "v4-multi-corpus-objective"
+}

@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+SCHEMA_VERSION = "cnb55.evolution_plan.v1"
+VALID_STATUSES = {"observed", "to_verify", "missing"}
+
+SCHEMA = {
+    "schema_version": SCHEMA_VERSION,
+    "type": "object",
+    "required": [
+        "schema_version",
+        "variant_id",
+        "selected_focus",
+        "do_not_touch",
+        "partial_progress_metric",
+        "assumption_ledger",
+    ],
+}
+
+
+def error(msg: str) -> int:
+    print(msg, file=sys.stderr)
+    return 1
+
+
+def load_json(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def validate_payload(data: dict) -> list[str]:
+    errs: list[str] = []
+    if data.get("schema_version") != SCHEMA_VERSION:
+        errs.append(f"schema_version must be {SCHEMA_VERSION}")
+    if not isinstance(data.get("variant_id"), str) or not data["variant_id"]:
+        errs.append("variant_id must be a non-empty string")
+
+    focus = data.get("selected_focus")
+    if not isinstance(focus, dict):
+        errs.append("selected_focus must be an object")
+    else:
+        for key in ("focus_id", "title", "why_now"):
+            if not isinstance(focus.get(key), str) or not focus[key].strip():
+                errs.append(f"selected_focus.{key} must be a non-empty string")
+        cites = focus.get("citations")
+        if not isinstance(cites, list) or len(cites) < 2 or not all(isinstance(x, str) and x for x in cites):
+            errs.append("selected_focus.citations must be a list of at least 2 file paths")
+
+    dnt = data.get("do_not_touch")
+    if not isinstance(dnt, list) or not dnt:
+        errs.append("do_not_touch must be a non-empty list")
+    else:
+        for idx, row in enumerate(dnt):
+            if not isinstance(row, dict):
+                errs.append(f"do_not_touch[{idx}] must be an object")
+                continue
+            for key in ("area", "reason"):
+                if not isinstance(row.get(key), str) or not row[key].strip():
+                    errs.append(f"do_not_touch[{idx}].{key} must be a non-empty string")
+            cites = row.get("citations")
+            if not isinstance(cites, list) or not cites or not all(isinstance(x, str) and x for x in cites):
+                errs.append(f"do_not_touch[{idx}].citations must be a non-empty list of file paths")
+
+    metric = data.get("partial_progress_metric")
+    if not isinstance(metric, dict):
+        errs.append("partial_progress_metric must be an object")
+    else:
+        for key in ("metric_id", "baseline", "target", "guardrail"):
+            if not isinstance(metric.get(key), str) or not metric[key].strip():
+                errs.append(f"partial_progress_metric.{key} must be a non-empty string")
+        plan = metric.get("measurement_plan")
+        if not isinstance(plan, list) or len(plan) < 2 or not all(isinstance(x, str) and x for x in plan):
+            errs.append("partial_progress_metric.measurement_plan must have at least 2 non-empty entries")
+
+    ledger = data.get("assumption_ledger")
+    if not isinstance(ledger, list) or not ledger:
+        errs.append("assumption_ledger must be a non-empty list")
+    else:
+        has_missing = False
+        for idx, row in enumerate(ledger):
+            if not isinstance(row, dict):
+                errs.append(f"assumption_ledger[{idx}] must be an object")
+                continue
+            for key in ("topic", "note"):
+                if not isinstance(row.get(key), str) or not row[key].strip():
+                    errs.append(f"assumption_ledger[{idx}].{key} must be a non-empty string")
+            status = row.get("status")
+            if status not in VALID_STATUSES:
+                errs.append(f"assumption_ledger[{idx}].status must be one of {sorted(VALID_STATUSES)}")
+            if status == "missing":
+                has_missing = True
+        if not has_missing:
+            errs.append("assumption_ledger must include at least one row with status='missing'")
+
+    return errs
+
+
+def render_markdown(data: dict) -> str:
+    focus = data["selected_focus"]
+    metric = data["partial_progress_metric"]
+    out = [
+        "# Round Plan",
+        "",
+        f"## Selected Focus: {focus['title']} (`{focus['focus_id']}`)",
+        "",
+        focus["why_now"],
+        "",
+        "### Focus Citations",
+    ]
+    out.extend(f"- `{c}`" for c in focus["citations"])
+    out.extend(["", "## Do Not Touch"])
+    for row in data["do_not_touch"]:
+        out.append(f"- `{row['area']}`: {row['reason']}")
+    out.extend(
+        [
+            "",
+            "## Partial-Progress Metric",
+            f"- Metric id: `{metric['metric_id']}`",
+            f"- Baseline: {metric['baseline']}",
+            f"- Target: {metric['target']}",
+            f"- Guardrail: {metric['guardrail']}",
+            "- Measurement plan:",
+        ]
+    )
+    out.extend(f"  - {step}" for step in metric["measurement_plan"])
+    out.extend(["", "## Assumption Ledger"])
+    for row in data["assumption_ledger"]:
+        out.append(f"- `{row['status']}` {row['topic']}: {row['note']}")
+    return "\n".join(out) + "\n"
+
+
+def cmd_schema() -> int:
+    print(json.dumps(SCHEMA, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_validate(path: Path) -> int:
+    try:
+        data = load_json(path)
+    except FileNotFoundError:
+        return error(f"missing file: {path}")
+    except json.JSONDecodeError as exc:
+        return error(f"invalid json: {exc}")
+    errs = validate_payload(data)
+    if errs:
+        for msg in errs:
+            print(f"- {msg}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_submit(path: Path) -> int:
+    if cmd_validate(path) != 0:
+        return 1
+    data = load_json(path)
+    brief_dir = Path("brief")
+    brief_dir.mkdir(exist_ok=True)
+    (brief_dir / "round_plan.json").write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    (brief_dir / "round_plan.md").write_text(render_markdown(data))
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 2:
+        return error("usage: cnb55-evolution <schema|validate|submit> [file]")
+    cmd = argv[1]
+    if cmd == "schema":
+        return cmd_schema()
+    if cmd in {"validate", "submit"}:
+        if len(argv) != 3:
+            return error(f"usage: cnb55-evolution {cmd} FILE.json")
+        path = Path(argv[2])
+        return cmd_validate(path) if cmd == "validate" else cmd_submit(path)
+    return error(f"unknown command: {cmd}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

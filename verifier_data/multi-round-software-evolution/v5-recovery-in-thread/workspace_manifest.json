@@ -1,0 +1,31 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "bin/cnb55-evolution",
+    "focus_candidates/priority_map.md",
+    "incident_context/rollback.md",
+    "objective_metrics/scoreboard.md",
+    "release_context/release_gate.md",
+    "repo_state/open_threads.md",
+    "round_history/round_log.md",
+    "tests/test_evolution_plan.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "43f05c728103e25e3cd4728bd4305950157011884c870aad1a16826ead94bdaa",
+    "Dockerfile": "1cf640c1fcdee04b6aa6a6cd3e5b1f6e08b9bdd61099c5383b529be32bb3cab5",
+    "bin": "57beb8df4f316eae4e248eb7abccd8c56fdca1d51b63757d0aaf2edf96bd2876",
+    "focus_candidates": "87712df027f6d6366e4b5d10bcd91b55ecbec5d6f25e3d01affe9602697f1b9d",
+    "incident_context": "0c2d73f89650ba6de6c4575797f42577abb3cb4c9576d176637cd9fb16a03a50",
+    "objective_metrics": "2794707cc46613da836eb9a5ba363f3ae797504f1fd14804b82c584d3c656bb6",
+    "release_context": "a59bc147de44712de3a82b90df6a6bd0b37456a9bcd29d505bc8437db1288b52",
+    "repo_state": "7a593c817455a840ef3a26af6a3946970a576a9a0e3ba67327e7c69b00353be2",
+    "round_history": "fbb39ac9eccc26075849120a0b42c7931c4a7b59374e8119bf4a61483ec3264b",
+    "tests": "3943ac1aa63621197fe9ffb9792fa820a423a085ea30454f207a370b9e2d1cff"
+  },
+  "test_evolution_plan_sha256": "b0776c13a0504d6d967681e001cb4602cc235c0fb6bd900a4af8493363680640",
+  "variant_id": "v5-recovery-in-thread"
+}

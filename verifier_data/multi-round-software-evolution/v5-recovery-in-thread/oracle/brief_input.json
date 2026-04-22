@@ -1,0 +1,59 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Incident context names snapshot ordering as the prerequisite that was skipped.",
+      "status": "observed",
+      "topic": "The rollback was caused by retrying watermark work on top of unstable snapshot state"
+    },
+    {
+      "note": "That depends on whether the rollback reproduction stays clean after the invariant fix.",
+      "status": "to_verify",
+      "topic": "Watermark alignment may become the immediate next round once snapshot restore is stable"
+    },
+    {
+      "note": "The incident writeup explains why the retry failed, but not the formal retry gate.",
+      "status": "missing",
+      "topic": "Exact exit criteria for safely retrying the rolled-back watermark plan"
+    }
+  ],
+  "do_not_touch": [
+    {
+      "area": "contained-pager-cleanup",
+      "citations": [
+        "round_history/round_log.md",
+        "objective_metrics/scoreboard.md"
+      ],
+      "reason": "Still contained and still not the thing that failed the last attempt."
+    },
+    {
+      "area": "streaming-watermark-alignment",
+      "citations": [
+        "incident_context/rollback.md",
+        "repo_state/open_threads.md"
+      ],
+      "reason": "Do not retry the rolled-back watermark plan until snapshot restore ordering is stable; otherwise the team repeats the same incident path."
+    }
+  ],
+  "partial_progress_metric": {
+    "baseline": "The watermark round rolled back and replay still diverges in 7 of 10 seeded restore runs.",
+    "guardrail": "Do not reopen the rolled-back watermark plan until the rollback reproduction passes cleanly and fresh customer streaming regressions stay flat.",
+    "measurement_plan": [
+      "Re-run the rollback reproduction after every snapshot-ordering change.",
+      "Require both zero restore divergence and a clean rollback replay before re-queuing watermark alignment."
+    ],
+    "metric_id": "snapshot-drift-repros",
+    "target": "Replay diverges in 0 of 10 runs and the rollback reproduction no longer corrupts recovery state before any watermark retry is scheduled."
+  },
+  "schema_version": "cnb55.evolution_plan.v1",
+  "selected_focus": {
+    "citations": [
+      "focus_candidates/priority_map.md",
+      "repo_state/open_threads.md",
+      "incident_context/rollback.md"
+    ],
+    "focus_id": "schema-snapshot-alignment",
+    "title": "Schema Snapshot Alignment",
+    "why_now": "The watermark plan was already tried and rolled back because the unstable snapshot invariant underneath it corrupted recovery state. The next round should step back to the prerequisite invariant fix before retrying watermark work."
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

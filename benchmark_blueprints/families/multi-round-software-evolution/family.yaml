@@ -1,0 +1,160 @@
+family_id: multi-round-software-evolution
+track: 10
+schema_version: cnb55.family.v1
+layer_a_status: in_progress
+layer_b_status: in_progress
+
+grader_ref: verifiers/multi-round-software-evolution/score_round_plan.py
+milestone_config_ref: verifier_data/multi-round-software-evolution/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    passes_when:
+      all_of:
+        - phase2.focus_exists
+        - grounding.focus_citations_valid
+    description: Focus selected and grounded in real workspace files.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - phase2.brief_exists
+        - phase2.brief_parses
+        - phase2.variant_matches
+    description: Canonical deliverable exists and validates.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+        - shortcut_detected == false
+    description: No forbidden writes or integrity violations.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - boundaries.required_present
+        - metric.concrete
+    description: Bounded plan with concrete progress metric.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - behavioral.focus_match
+        - no partial_credit_ceiling with cap <= 35
+    description: Correct next-round focus and no shortcut ceiling fired.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core: &core_base
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    forbidden:
+      - modify:tests/
+      - modify:immutable_slice
+  extended: &extended_base
+    - {parent: inspect, sub_tag: prioritize, semantics: "separate the true blocker from visible noise"}
+    - {parent: inspect, sub_tag: evidence_triage, semantics: "treat stale evidence as stale"}
+    - {parent: modify, sub_tag: policy_tradeoff, semantics: "name what should not be touched this round"}
+    - {parent: verify, sub_tag: assumption_honesty, semantics: "surface the unresolved dependency honestly"}
+  per_variant:
+    v1-clean-baseline:
+      core: *core_base
+      extended: *extended_base
+    v2-noisy-distractor:
+      core: *core_base
+      extended: *extended_base
+    v3-dirty-state:
+      core: *core_base
+      extended: *extended_base
+    v4-multi-corpus-objective:
+      core: *core_base
+      extended: *extended_base
+    v5-recovery-in-thread:
+      core: *core_base
+      extended: *extended_base
+
+tool_call_overrides:
+  - command: "cnb55-evolution schema"
+    tags: [inspect]
+  - command: "cnb55-evolution validate"
+    tags: [verify]
+  - command: "cnb55-evolution submit"
+    tags: [modify]
+    terminal: true
+
+state_delta:
+  kind: json_deliverable
+  deliverable_path: brief/round_plan.json
+  states:
+    - absent
+    - present_and_invalid
+    - present_and_valid
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only tool call", delta: 0.0}
+    - {from: absent, to: absent, trigger: "cnb55-evolution validate (success)", delta: 0.3}
+    - {from: absent, to: present_and_valid, trigger: "cnb55-evolution submit (success, first)", delta: 0.7}
+    - {from: absent, to: present_and_invalid, trigger: "raw write of brief/... with bad JSON", delta: 0.0}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "cnb55-evolution submit (success, subsequent)", delta: 0.4}
+    - {from: "*", to: "*", trigger: "any turn with integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: "any file write whose relpath is not under brief/* and is not brief_input.json at root"
+    detector: trusted_final_state:wrote_outside_brief
+  - id: immutable_slice_mutated
+    rule: "any change to readonly workspace slices"
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: "presence of sitecustomize.py, usercustomize.py, or pytest.py in workspace"
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: "sha256 of tests/test_evolution_plan.py changed"
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: ".network_egress_detected marker present in workspace"
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.00
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/multi-round-software-evolution/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/multi-round-software-evolution/manifest.lock.json
+  pinning: manifest.lock.json pins all bundle content
+
+saturation:
+  threshold_mean_P: 80
+  trigger: mean P_benchmark above threshold for two consecutive probe rounds
+  renewal_queue:
+    - id: v6_midrun_objective_shift
+      description: release gate changes after the first read
+    - id: v7_contradictory_corpus
+      description: release and incident corpora disagree and the agent must flag it
+    - id: retire_v1
+      description: retire the baseline if it collapses into pure floor signal

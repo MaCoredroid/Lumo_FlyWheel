@@ -1,0 +1,59 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Repo-state explicitly says the downstream work is still blocked by replay determinism.",
+      "status": "observed",
+      "topic": "The partial cache patch does not unlock the blocked launch items"
+    },
+    {
+      "note": "The focus map still lists it as worthwhile, just not first.",
+      "status": "to_verify",
+      "topic": "Cache tuning may be the follow-on round once snapshot replay is stable"
+    },
+    {
+      "note": "The bundle shows the patch but not which pieces could be cleanly salvaged later.",
+      "status": "missing",
+      "topic": "Whether the abandoned patch contains any safe-to-reuse benchmark harness pieces"
+    }
+  ],
+  "do_not_touch": [
+    {
+      "area": "contained-pager-cleanup",
+      "citations": [
+        "round_history/round_log.md",
+        "objective_metrics/scoreboard.md"
+      ],
+      "reason": "Still contained and not the gating dependency."
+    },
+    {
+      "area": "cold-start-cache-tuning",
+      "citations": [
+        "repo_state/open_threads.md",
+        "focus_candidates/priority_map.md"
+      ],
+      "reason": "The in-progress patch is abandoned partial work, not a head start; finishing it before the invariant is fixed would optimize a path that still replays incorrectly."
+    }
+  ],
+  "partial_progress_metric": {
+    "baseline": "Replay diverges in 7 of 10 seeded restore runs and the cache patch still sits half-wired behind a local flag.",
+    "guardrail": "Do not merge or extend the cold-start cache patch until replay determinism is proven stable.",
+    "measurement_plan": [
+      "Run the seeded restore replay suite after every ordering change.",
+      "Verify the cache patch diff hash stays unchanged while replay divergence drops to zero."
+    ],
+    "metric_id": "snapshot-drift-repros",
+    "target": "Replay diverges in 0 of 10 runs while the abandoned cache patch remains deferred and untouched this round."
+  },
+  "schema_version": "cnb55.evolution_plan.v1",
+  "selected_focus": {
+    "citations": [
+      "focus_candidates/priority_map.md",
+      "objective_metrics/scoreboard.md",
+      "repo_state/open_threads.md"
+    ],
+    "focus_id": "schema-snapshot-alignment",
+    "title": "Schema Snapshot Alignment",
+    "why_now": "The abandoned cache-tuning patch is tempting, but it does not remove the replay invariant that keeps future work from sticking. The next round should fix the prerequisite before touching the partial perf path."
+  },
+  "variant_id": "v3-dirty-state"
+}
