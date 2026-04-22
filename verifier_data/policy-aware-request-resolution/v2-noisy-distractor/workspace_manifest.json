@@ -1,0 +1,34 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "bin/cnb55-brief",
+    "proposals/P1.md",
+    "proposals/P2.md",
+    "proposals/P3.md",
+    "proposals/P4.md",
+    "proposals/P5.md",
+    "repo_evidence/history/prior_exceptions.md",
+    "repo_evidence/policies/access_policy_v2_1.md",
+    "repo_evidence/policies/data_handling_matrix.md",
+    "repo_evidence/requests/current_request.json",
+    "repo_evidence/runbooks/request_resolution_runbook_current.md",
+    "repo_evidence/runbooks/stale_vendor_override_runbook.md",
+    "repo_evidence/tooling/audit_log_rules.md",
+    "repo_evidence/tooling/local_admin_tool.md",
+    "tests/test_policy_resolution.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "f81f370f4bd4c70f2473c10a99d957b74692efce3c4313f6cdcb1c0064c92b83",
+    "Dockerfile": "948f6895f27a64a4d510e6c4e05f22c27b2ba19ec2b430d4c63890cbc0a7347c",
+    "bin": "bcc98a1dfa8e24c1b6e10c5804c42c3625fd3298ca226c92f69ce6f109dc8335",
+    "proposals": "bf38c9edac1da52db2c34824a7a98880a6d8b1cc67b2530e8814fb554843ef58",
+    "repo_evidence": "b06ea62f00ac0405ff29a30e0349d68247c52fa846e40ed7c2fa876e71281bdf",
+    "tests": "3da199406a33d0d7909cd4b9a3c5ce0a823c127db950e30d855c44b4d3c67f26"
+  },
+  "test_policy_resolution_sha256": "234a52545766f22697241056db102f9efd9bbb7f5021ae1f826e1bfef50beb75",
+  "variant_id": "v2-noisy-distractor"
+}

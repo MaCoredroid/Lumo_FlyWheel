@@ -1,0 +1,102 @@
+{
+  "accepted": "P4",
+  "assumption_ledger": [
+    {
+      "note": "The request does not say whether a one-day delay for approvals is acceptable.",
+      "status": "to_verify",
+      "topic": "Vendor deadline flexibility"
+    },
+    {
+      "note": "The isolated mirror or broader replay redesign schedule is not pinned down in the current evidence.",
+      "status": "missing",
+      "topic": "Future mirror timeline"
+    }
+  ],
+  "primary_risk": {
+    "mitigations": [
+      "24h expiry recorded on the ticket",
+      "audit log linked before activation",
+      "least privilege scope only to the vendor sandbox",
+      "rollback to the sanitized fallback if approval or controls are missing"
+    ],
+    "statement": "Choosing the pre-freeze exception path would violate the current stability objective even though it was the right answer earlier."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "proposals/P4.md",
+        "release_context/freeze_notice.md",
+        "release_context/demo_scope.md",
+        "repo_evidence/policies/access_policy_v2_1.md"
+      ],
+      "constraint_tags": [
+        "release",
+        "policy",
+        "operational"
+      ],
+      "proposal_id": "P4",
+      "rank": 1,
+      "summary": "Choose the sanitized fallback because the demo freeze explicitly suspends new vendor replay exceptions in favor of stability."
+    },
+    {
+      "citations": [
+        "proposals/P1.md",
+        "release_context/freeze_notice.md"
+      ],
+      "constraint_tags": [
+        "release",
+        "policy"
+      ],
+      "proposal_id": "P1",
+      "rank": 2,
+      "summary": "Outright denial is compliant but less helpful than the freeze-compatible sanitized fallback."
+    },
+    {
+      "citations": [
+        "proposals/P2.md",
+        "repo_evidence/policies/access_policy_v2_1.md",
+        "release_context/freeze_notice.md",
+        "release_context/demo_scope.md"
+      ],
+      "constraint_tags": [
+        "release",
+        "policy"
+      ],
+      "proposal_id": "P2",
+      "rank": 3,
+      "summary": "The sandbox exception was the pre-freeze answer, but it no longer fits the current no-new-exceptions objective."
+    },
+    {
+      "citations": [
+        "proposals/P5.md",
+        "repo_evidence/tooling/in_progress_override_patch/README.md",
+        "release_context/freeze_notice.md"
+      ],
+      "constraint_tags": [
+        "release",
+        "operational"
+      ],
+      "proposal_id": "P5",
+      "rank": 4,
+      "summary": "The abandoned patch ignores both freeze context and maintainability risk."
+    },
+    {
+      "citations": [
+        "proposals/P3.md",
+        "repo_evidence/tooling/local_admin_tool.md",
+        "release_context/freeze_notice.md",
+        "repo_evidence/policies/access_policy_v2_1.md"
+      ],
+      "constraint_tags": [
+        "policy",
+        "release",
+        "security"
+      ],
+      "proposal_id": "P3",
+      "rank": 5,
+      "summary": "Direct override remains the clearest policy miss and fights the explicit freeze objective."
+    }
+  ],
+  "schema_version": "cnb55.manager_brief.v2",
+  "variant_id": "v4-multi-corpus-objective"
+}

@@ -1,0 +1,76 @@
+
+family_id: policy-aware-request-resolution
+track: 10
+schema_version: cnb55.family.v1
+layer_a_status: implemented_pending_probe
+layer_b_status: implemented_pending_probe
+grader_ref: verifiers/policy-aware-request-resolution/score_ranking.py
+milestone_config_ref: verifier_data/policy-aware-request-resolution/{variant_id}/milestones/
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: Brief exists and cites multiple evidence files.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: Structured brief exists and parses.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No immutable slices or tests were changed.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: Structural fields pass and the brief is grounded.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: Accepted option and ranking align with the gold policy outcome.
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+  extended:
+    - {parent: inspect, sub_tag: evidence_triage, semantics: "separate current policy from stale guidance"}
+    - {parent: modify, sub_tag: policy_tradeoff, semantics: "select the narrowest compliant resolution"}
+    - {parent: verify, sub_tag: assumption_honesty, semantics: "flag what remains unknown"}
+tool_call_overrides:
+  - command: "cnb55-brief schema"
+    tags: [inspect]
+  - command: "cnb55-brief validate"
+    tags: [verify]
+  - command: "cnb55-brief submit"
+    tags: [modify]
+    terminal: true
+state_delta:
+  kind: json_deliverable
+  deliverable_path: brief/manager_brief.json
+  states: [absent, present_and_invalid, present_and_valid]
+  aggregate_clamp: [0.0, 1.0]
+integrity_rules:
+  - {id: write_outside_whitelist, rule: "writes outside brief/* or brief_input.json"}
+  - {id: immutable_slice_mutated, rule: "readonly inputs changed"}
+  - {id: pytest_shim, rule: "sitecustomize.py, usercustomize.py, or pytest.py added"}
+  - {id: tests_modified, rule: "visible tests changed"}
+  - {id: network_egress, rule: ".network_egress_detected marker present"}
+llm_judge_quarantine:
+  partial_progress_rubric:
+    max_points: 10
+    band: P_benchmark_only
+  total_quarantined_points: 10
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/policy-aware-request-resolution/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/policy-aware-request-resolution/manifest.lock.json
+saturation:
+  trigger: "mean P_benchmark > 80 for 2 consecutive probe rounds"
+  renewal_mechanisms:
+    - {id: v6-live-approval-race, description: "add live approval race against deadline pressure"}
+    - {id: v7-conflicting-privacy-annotations, description: "introduce contradictory policy annotations that must be reconciled"}

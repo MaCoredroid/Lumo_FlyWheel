@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+"""
+Family-local structured-output CLI for `policy-aware-request-resolution`.
+
+Agents author `brief_input.json`, validate it, then submit it:
+
+  ./bin/cnb55-brief schema
+  ./bin/cnb55-brief validate brief_input.json
+  ./bin/cnb55-brief submit brief_input.json
+
+`submit` writes:
+  - brief/manager_brief.json
+  - brief/manager_brief.md
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+SCHEMA_VERSION = "cnb55.manager_brief.v2"
+CONSTRAINT_TAGS = (
+    "policy",
+    "privacy",
+    "security",
+    "operational",
+    "release",
+    "incident",
+)
+ASSUMPTION_STATUSES = ("observed", "to_verify", "missing")
+MITIGATION_KEYWORDS = (
+    "expiry",
+    "audit log",
+    "redact",
+    "redaction",
+    "least privilege",
+    "ticket",
+    "rollback",
+)
+EVIDENCE_ROOTS = ("proposals", "repo_evidence", "release_context", "incident_context")
+
+
+def schema_object() -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "CNB-55 Policy Resolution Brief Input",
+        "type": "object",
+        "required": [
+            "schema_version",
+            "variant_id",
+            "accepted",
+            "primary_risk",
+            "ranking",
+            "assumption_ledger",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {"type": "string", "const": SCHEMA_VERSION},
+            "variant_id": {"type": "string", "minLength": 1},
+            "accepted": {"type": "string", "pattern": "^P[0-9]+$"},
+            "primary_risk": {
+                "type": "object",
+                "required": ["statement", "mitigations"],
+                "additionalProperties": False,
+                "properties": {
+                    "statement": {"type": "string", "minLength": 24},
+                    "mitigations": {
+                        "type": "array",
+                        "minItems": 2,
+                        "items": {"type": "string", "minLength": 3},
+                    },
+                },
+            },
+            "ranking": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "proposal_id",
+                        "rank",
+                        "summary",
+                        "citations",
+                        "constraint_tags",
+                    ],
+                    "additionalProperties": False,
+                    "properties": {
+                        "proposal_id": {"type": "string", "pattern": "^P[0-9]+$"},
+                        "rank": {"type": "integer", "minimum": 1},
+                        "summary": {"type": "string", "minLength": 16},
+                        "citations": {
+                            "type": "array",
+                            "items": {"type": "string", "minLength": 1},
+                        },
+                        "constraint_tags": {
+                            "type": "array",
+                            "items": {"enum": list(CONSTRAINT_TAGS)},
+                        },
+                    },
+                },
+            },
+            "assumption_ledger": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "required": ["topic", "status", "note"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "topic": {"type": "string", "minLength": 3},
+                        "status": {"enum": list(ASSUMPTION_STATUSES)},
+                        "note": {"type": "string", "minLength": 3},
+                    },
+                },
+            },
+        },
+    }
+
+
+class ValidationError(Exception):
+    def __init__(self, code: int, messages: list[str]):
+        super().__init__("\n".join(messages))
+        self.code = code
+        self.messages = messages
+
+
+def _load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise ValidationError(2, [f"input file not found: {path}"]) from None
+    except json.JSONDecodeError as exc:
+        raise ValidationError(2, [f"input file is not valid JSON: {exc}"]) from None
+
+
+def _type_ok(value: Any, kind: str) -> bool:
+    if kind == "object":
+        return isinstance(value, dict)
+    if kind == "array":
+        return isinstance(value, list)
+    if kind == "string":
+        return isinstance(value, str)
+    if kind == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    return False
+
+
+def validate_schema(doc: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(doc, dict):
+        return ["top-level value must be a JSON object"]
+
+    required = set(schema_object()["required"])
+    missing = sorted(required - set(doc))
+    extra = sorted(set(doc) - required)
+    for field in missing:
+        errors.append(f"missing required field: {field}")
+    for field in extra:
+        errors.append(f"unexpected top-level field: {field}")
+    if missing or extra:
+        return errors
+
+    if doc["schema_version"] != SCHEMA_VERSION:
+        errors.append(f"schema_version must equal {SCHEMA_VERSION}")
+    if not _type_ok(doc["variant_id"], "string") or not doc["variant_id"].strip():
+        errors.append("variant_id must be a non-empty string")
+    if not _type_ok(doc["accepted"], "string") or not re.match(r"^P[0-9]+$", doc["accepted"]):
+        errors.append("accepted must match ^P[0-9]+$")
+
+    primary_risk = doc["primary_risk"]
+    if not _type_ok(primary_risk, "object"):
+        errors.append("primary_risk must be an object")
+    else:
+        if set(primary_risk) != {"statement", "mitigations"}:
+            errors.append("primary_risk must contain exactly statement and mitigations")
+        statement = primary_risk.get("statement")
+        if not _type_ok(statement, "string") or len(statement.strip()) < 24:
+            errors.append("primary_risk.statement must be a string >=24 chars")
+        mitigations = primary_risk.get("mitigations")
+        if not _type_ok(mitigations, "array") or len(mitigations) < 2:
+            errors.append("primary_risk.mitigations must contain at least two strings")
+        elif not all(_type_ok(item, "string") and item.strip() for item in mitigations):
+            errors.append("every mitigation must be a non-empty string")
+
+    ranking = doc["ranking"]
+    if not _type_ok(ranking, "array") or len(ranking) < 2:
+        errors.append("ranking must be a list with at least two entries")
+    else:
+        seen_ids: set[str] = set()
+        seen_ranks: set[int] = set()
+        for idx, entry in enumerate(ranking):
+            if not _type_ok(entry, "object"):
+                errors.append(f"ranking[{idx}] must be an object")
+                continue
+            required_entry = {"proposal_id", "rank", "summary", "citations", "constraint_tags"}
+            if set(entry) != required_entry:
+                errors.append(
+                    f"ranking[{idx}] must contain exactly {sorted(required_entry)}"
+                )
+                continue
+            pid = entry["proposal_id"]
+            if not _type_ok(pid, "string") or not re.match(r"^P[0-9]+$", pid):
+                errors.append(f"ranking[{idx}].proposal_id must match ^P[0-9]+$")
+            elif pid in seen_ids:
+                errors.append(f"proposal_id {pid} appears more than once")
+            else:
+                seen_ids.add(pid)
+            rank = entry["rank"]
+            if not _type_ok(rank, "integer") or rank < 1:
+                errors.append(f"ranking[{idx}].rank must be an integer >=1")
+            elif rank in seen_ranks:
+                errors.append(f"rank {rank} appears more than once")
+            else:
+                seen_ranks.add(rank)
+            summary = entry["summary"]
+            if not _type_ok(summary, "string") or len(summary.strip()) < 16:
+                errors.append(f"ranking[{idx}].summary must be a string >=16 chars")
+            citations = entry["citations"]
+            if not _type_ok(citations, "array"):
+                errors.append(f"ranking[{idx}].citations must be an array")
+            elif not all(_type_ok(c, "string") and c.strip() for c in citations):
+                errors.append(f"ranking[{idx}].citations must contain non-empty strings")
+            tags = entry["constraint_tags"]
+            if not _type_ok(tags, "array"):
+                errors.append(f"ranking[{idx}].constraint_tags must be an array")
+            elif not all(tag in CONSTRAINT_TAGS for tag in tags):
+                errors.append(
+                    f"ranking[{idx}].constraint_tags must be in {', '.join(CONSTRAINT_TAGS)}"
+                )
+
+        contiguous = set(range(1, len(ranking) + 1))
+        if seen_ranks and seen_ranks != contiguous:
+            errors.append(f"ranks must be contiguous 1..{len(ranking)}")
+        top_rank = next((e for e in ranking if e.get("rank") == 1), None)
+        if not isinstance(top_rank, dict) or top_rank.get("proposal_id") != doc["accepted"]:
+            errors.append("accepted must equal the proposal_id of the rank=1 entry")
+
+    ledger = doc["assumption_ledger"]
+    if not _type_ok(ledger, "array") or not ledger:
+        errors.append("assumption_ledger must be a non-empty array")
+    else:
+        has_missing = False
+        for idx, row in enumerate(ledger):
+            if not _type_ok(row, "object"):
+                errors.append(f"assumption_ledger[{idx}] must be an object")
+                continue
+            if set(row) != {"topic", "status", "note"}:
+                errors.append(f"assumption_ledger[{idx}] must contain topic/status/note only")
+                continue
+            topic = row["topic"]
+            note = row["note"]
+            status = row["status"]
+            if not _type_ok(topic, "string") or len(topic.strip()) < 3:
+                errors.append(f"assumption_ledger[{idx}].topic must be a string >=3 chars")
+            if status not in ASSUMPTION_STATUSES:
+                errors.append(
+                    f"assumption_ledger[{idx}].status must be one of {ASSUMPTION_STATUSES}"
+                )
+            if not _type_ok(note, "string") or len(note.strip()) < 3:
+                errors.append(f"assumption_ledger[{idx}].note must be a string >=3 chars")
+            has_missing = has_missing or status == "missing"
+        if not has_missing:
+            errors.append("assumption_ledger must include at least one row with status=missing")
+    return errors
+
+
+def validate_workspace(doc: dict[str, Any], workspace: Path) -> list[str]:
+    errors: list[str] = []
+    variant_path = workspace / ".scenario_variant"
+    if variant_path.exists():
+        variant_id = variant_path.read_text(encoding="utf-8").strip()
+        if doc.get("variant_id") != variant_id:
+            errors.append(
+                f"variant_id mismatch: input={doc.get('variant_id')!r}, workspace={variant_id!r}"
+            )
+
+    ranking = doc.get("ranking", [])
+    for idx, entry in enumerate(ranking):
+        for citation in entry.get("citations", []):
+            candidate = citation.lstrip("./")
+            if not any(candidate == root or candidate.startswith(root + "/") for root in EVIDENCE_ROOTS):
+                errors.append(
+                    f"ranking[{idx}].citations contains path outside allowed roots: {citation}"
+                )
+                continue
+            if not (workspace / candidate).exists():
+                errors.append(f"ranking[{idx}].citations path does not exist: {citation}")
+    return errors
+
+
+def render_markdown(doc: dict[str, Any]) -> str:
+    accepted = doc["accepted"]
+    lines = [
+        f"# Policy Resolution Brief — {doc['variant_id']}",
+        "",
+        f"Accepted resolution: `{accepted}`",
+        "",
+        "## Ranked Options",
+        "",
+    ]
+    for entry in sorted(doc["ranking"], key=lambda item: item["rank"]):
+        lines.extend(
+            [
+                f"### {entry['rank']}. {entry['proposal_id']}",
+                entry["summary"],
+                "",
+                f"- Constraint tags: {', '.join(entry['constraint_tags']) or 'none'}",
+                f"- Citations: {', '.join(entry['citations']) or 'none'}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Primary Risk",
+            "",
+            doc["primary_risk"]["statement"],
+            "",
+            "Mitigations:",
+        ]
+    )
+    for item in doc["primary_risk"]["mitigations"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Assumption Ledger", ""])
+    for row in doc["assumption_ledger"]:
+        lines.append(f"- `{row['status']}` {row['topic']}: {row['note']}")
+    lines.extend(
+        [
+            "",
+            "## Resolution Note",
+            "",
+            f"The selected path is `{accepted}` because it best satisfies the current policy and operating context for `{doc['variant_id']}`.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _handle_validate_or_submit(input_path: Path, submit: bool) -> int:
+    doc = _load_json(input_path)
+    errors = validate_schema(doc)
+    errors.extend(validate_workspace(doc, Path.cwd()))
+    if errors:
+        raise ValidationError(3 if any("schema" in e or "missing" in e or "must" in e for e in errors) else 4, errors)
+
+    if not submit:
+        return 0
+
+    out_dir = Path("brief")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    json_path = out_dir / "manager_brief.json"
+    md_path = out_dir / "manager_brief.md"
+    payload = json.dumps(doc, indent=2, sort_keys=True) + "\n"
+    json_path.write_text(payload, encoding="utf-8")
+    md_path.write_text(render_markdown(doc), encoding="utf-8")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="CNB-55 policy resolution brief CLI")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("schema")
+    validate = sub.add_parser("validate")
+    validate.add_argument("path")
+    submit = sub.add_parser("submit")
+    submit.add_argument("path")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        if args.command == "schema":
+            print(json.dumps(schema_object(), indent=2, sort_keys=True))
+            return 0
+        if args.command == "validate":
+            return _handle_validate_or_submit(Path(args.path), submit=False)
+        if args.command == "submit":
+            return _handle_validate_or_submit(Path(args.path), submit=True)
+        raise AssertionError(f"unexpected command {args.command!r}")
+    except ValidationError as exc:
+        for msg in exc.messages:
+            print(msg, file=sys.stderr)
+        return exc.code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
