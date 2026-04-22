@@ -1,0 +1,121 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "The current objective explicitly changed from dashboard speed to safety and rollback confidence after enterprise escalations.",
+      "status": "observed",
+      "topic": "Objective priority"
+    },
+    {
+      "note": "No incident_context directory is present, so the plan cannot cite a concrete prior rollback artifact beyond the current objective shift.",
+      "status": "missing",
+      "topic": "Incident-specific rollback evidence"
+    },
+    {
+      "note": "The frozen notes require a schema-drift audit before shim removal, but the inputs do not show whether downstream tooling still depends on the shim.",
+      "status": "to_verify",
+      "topic": "Legacy parser shim blast radius"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-101",
+      "before": "RN-102",
+      "reason": "Ordering-fixture coverage closes the current safety gap first, so the later schema audit is evaluated against the full contract instead of a partial gate."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-101",
+      "reason": "Operators need the validated schema and shim posture before the runbook can describe a trustworthy rollback path."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-104",
+      "reason": "The objective shift makes operator clarity a prerequisite for dashboard canary work, even though the frozen notes placed runbook updates later."
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-103",
+      "reason": "Enterprise change-window communication is blocked until the safe ordering guarantees and kill-switch rollout path are proven."
+    }
+  ],
+  "first_milestone_id": "RN-102",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "A dependency-fixture suite that fails on wrong ordering and restores the missing customer-facing safety check.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-102",
+      "summary": "Make dependency-fixture coverage the first milestone because the current objective shifted to safety and rollback confidence, and the repo still lacks a customer-facing check that catches incorrect release-plan ordering.",
+      "title": "Backfill ordering fixtures as the safety gate"
+    },
+    {
+      "bounded_deliverable": "A schema-drift audit outcome that confirms whether the legacy shim can stay, be narrowed, or be removed safely.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-101",
+      "summary": "Once ordering regressions are covered, audit translator schema drift and explicitly hold any legacy parser shim removal until the plan contract is proven stable across both schema and dependency dimensions.",
+      "title": "Audit schema drift before any parser-shim decision"
+    },
+    {
+      "bounded_deliverable": "An operator-facing checklist that documents the safe plan order, rollback triggers, and what to do if ordering confidence degrades.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-104",
+      "summary": "Move the runbook and launch-checklist work ahead of dashboard expansion, because the frozen note order predates the enterprise escalations and the updated objective now prioritizes operator clarity over dashboard speed.",
+      "title": "Update operator runbook and rollback checklist early"
+    },
+    {
+      "bounded_deliverable": "A constrained canary of the summary path with the kill switch ready and operators trained on rollback handling.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-103",
+      "summary": "Only after ordering fixtures, schema validation, and operator guidance are in place should the translated dashboard summary advance behind its kill switch, so the already-visible dashboard does not amplify a known sequencing hazard.",
+      "title": "Canary the dashboard summary behind the kill switch"
+    },
+    {
+      "bounded_deliverable": "A change-window update that reflects the locked safe order, current rollback posture, and proven rollout path.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 5,
+      "step_id": "RN-105",
+      "summary": "Keep enterprise communication last, because the dependency map explicitly blocks the change-window message on correct ordering guarantees and the safe sequence is not locked until the earlier safeguards and canary are complete.",
+      "title": "Send the enterprise change-window update last"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "repo_inventory/dependency_map.md",
+      "release_context/current_objective.md"
+    ],
+    "mitigations": [
+      "Land dependency-fixture coverage before any broader rollout or external communication.",
+      "Document the safe order and rollback procedure for operators before summary canary exposure expands.",
+      "Use the dashboard kill switch as a containment step, not as the primary safety mechanism."
+    ],
+    "statement": "If dashboard or communication work moves ahead of fixture backfill and operator guidance, enterprise users can see or act on incorrect release-plan ordering during guarded change windows with no clear rollback response."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v4-multi-corpus-objective"
+}

@@ -1,0 +1,128 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Current objective explicitly prioritizes safe recovery over rollout velocity.",
+      "status": "observed",
+      "topic": "Rollback priority"
+    },
+    {
+      "note": "Repo state says the release dashboard remains user-visible, so ordering mistakes are externally visible.",
+      "status": "observed",
+      "topic": "Dashboard exposure"
+    },
+    {
+      "note": "The repo evidence does not identify who owns the kill-switch canary exit decision or the exact success criteria for re-enable.",
+      "status": "missing",
+      "topic": "Canary exit criteria ownership"
+    },
+    {
+      "note": "Release notes require a schema drift audit before removing the shim, but the evidence set does not confirm whether removal is still in scope for this recovery window.",
+      "status": "to_verify",
+      "topic": "Legacy parser shim disposition"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-101",
+      "before": "RN-102",
+      "reason": "The schema audit must run against recovered dependency-order fixtures so drift decisions do not repeat the stale rollout-first failure."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-101",
+      "reason": "Rollback instructions and the launch checklist need the verified schema and ordering contract, otherwise the operator path documents the wrong dependency behavior."
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-104",
+      "reason": "The dependency map says re-approval depends on an updated rollback and runbook path, so approval cannot close before the checklist and rollback guidance exist."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-105",
+      "reason": "The current objective explicitly blocks restoring the summary until rollback review finishes and the recovery path is approved."
+    }
+  ],
+  "first_milestone_id": "RN-102",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Fixture-backed dependency-order contract exists and is ready to gate downstream schema and rollout review work.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md",
+        "incident_context/rollback_incident.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-102",
+      "summary": "Restore missing dependency-graph fixture coverage so ordering regressions are caught before any schema or rollout decision is trusted. This is the smallest meaningful recovery milestone because the rollback was triggered by enabling the summary without updated fixtures.",
+      "title": "Backfill dependency-order fixtures first"
+    },
+    {
+      "bounded_deliverable": "Schema drift is audited with fixture-backed evidence, and the legacy parser shim decision is grounded in the recovered ordering contract.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "release_context/current_objective.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-101",
+      "summary": "Run the translator schema drift audit only after the fixture backfill is in place, so legacy parser shim decisions are checked against the dependency-order contract instead of stale expectations.",
+      "title": "Audit schema drift against the recovered contract"
+    },
+    {
+      "bounded_deliverable": "Rollback-aware runbook and structured launch checklist are updated to reflect the verified dependency order and safe recovery path.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md",
+        "release_context/current_objective.md",
+        "incident_context/rollback_incident.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-104",
+      "summary": "Treat the original runbook timing as stale. The current objective and rollback follow-up both require folding rollback instructions and a structured launch checklist into the operator path before any summary restore decision, not after canary proof.",
+      "title": "Move runbook and checklist updates ahead of re-enable"
+    },
+    {
+      "bounded_deliverable": "Rollback review is closed with an approval decision tied to recovered fixtures, audited schema, and updated operational guidance.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md",
+        "incident_context/rollback_incident.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-105",
+      "summary": "Use re-approval as the explicit gate after fixture recovery, schema audit, and rollback-aware runbook/checklist updates are complete. The prior rollout-first plan was invalidated, so approval must happen on the corrected order.",
+      "title": "Re-approve rollout after rollback review closes"
+    },
+    {
+      "bounded_deliverable": "A kill-switch-gated canary re-enable is allowed only after recovery prerequisites and formal re-approval are complete.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md",
+        "release_context/current_objective.md",
+        "incident_context/rollback_incident.md"
+      ],
+      "rank": 5,
+      "step_id": "RN-103",
+      "summary": "Restore the translated release-plan summary only after re-approval. The release note that frames this as merely a post-schema step is incomplete after the incident; the user-visible dashboard should stay off until the recovery chain is finished.",
+      "title": "Re-enable the dashboard summary behind the kill switch"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "incident_context/rollback_incident.md",
+      "release_context/current_objective.md"
+    ],
+    "mitigations": [
+      "Gate all downstream work on fixture-backed dependency-order coverage before schema or rollout decisions.",
+      "Require rollback-aware runbook and launch checklist updates before re-approval and any canary restore.",
+      "Keep the summary behind the kill switch until the rollback review formally re-approves the corrected sequence."
+    ],
+    "statement": "If the dashboard summary is re-enabled before fixture recovery, schema audit, and rollback-aware runbook updates are complete, users will again see a misordered execution plan on a still-visible dashboard and support escalation will recur."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v5-recovery-in-thread"
+}

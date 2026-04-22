@@ -1,0 +1,32 @@
+# Probe Report — attempt_01_live_probe
+
+Model: `codex exec --model gpt-5.4 -c 'model_reasoning_effort="high"'`
+Runs per variant: `3`
+Variants: `v1-clean-baseline, v2-noisy-distractor, v3-dirty-state, v4-multi-corpus-objective, v5-recovery-in-thread`
+
+| Variant | n | mean P | stdev P | mean M | stdev M | min | max | scores | ceilings |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| v1-clean-baseline | 3 | 92.67 | 3.77 | 0.9252 | 0.0385 | 90 | 98 | [98, 90, 90] | — |
+| v2-noisy-distractor | 3 | 84.33 | 14.06 | 0.8402 | 0.1434 | 65 | 98 | [65, 98, 90] | — |
+| v3-dirty-state | 3 | 92.67 | 3.77 | 0.9252 | 0.0385 | 90 | 98 | [90, 90, 98] | — |
+| v4-multi-corpus-objective | 3 | 65.67 | 8.01 | 0.6496 | 0.0818 | 60 | 77 | [77, 60, 60] | — |
+| v5-recovery-in-thread | 3 | 94.33 | 3.77 | 0.9422 | 0.0385 | 89 | 97 | [97, 89, 97] | — |
+
+## Layer A checks
+
+- family_mean in [15, 25]: `85.93` -> `FAIL`
+- max variant mean <= 40: `94.33` -> `FAIL`
+- at least one variant mean <= 10: `65.67` -> `FAIL`
+- monotonic V1>=V2>=V3>=V4>=V5 within +/-3: `FAIL`
+
+## Layer B probe metadata
+
+- family mean M_training: `0.8565`
+- current observed stdev M_training: `0.1353`
+
+## Artifacts
+
+- Runs JSONL: `families/release-note-to-plan-translation/report/attempt_01_live_probe/probe_runs.jsonl`
+- Summary JSON: `families/release-note-to-plan-translation/report/attempt_01_live_probe/summary.json`
+- Logs: `families/release-note-to-plan-translation/report/attempt_01_live_probe/logs`
+- Saved briefs/results: `families/release-note-to-plan-translation/report/attempt_01_live_probe/artifacts`

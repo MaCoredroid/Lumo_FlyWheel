@@ -1,0 +1,120 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "The repo state says the user-visible dashboard summary is still the active release target.",
+      "status": "observed",
+      "topic": "Current objective"
+    },
+    {
+      "note": "The notes require auditing schema drift before removing the legacy parser shim, but they do not confirm whether shim removal itself is in this release cut.",
+      "status": "to_verify",
+      "topic": "Shim removal scope"
+    },
+    {
+      "note": "The workspace does not include explicit canary success metrics or rollback thresholds for promoting the kill-switched dashboard summary.",
+      "status": "missing",
+      "topic": "Canary exit criteria"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102-fixture-backfill",
+      "before": "RN-101-schema-audit",
+      "reason": "Fixture backfill must target the audited schema and stable step identifiers or it will encode the same drift now breaking the plan contract."
+    },
+    {
+      "after": "RN-103-dashboard-canary",
+      "before": "RN-102-fixture-backfill",
+      "reason": "The dashboard rollout should wait for dependency fixtures so ordering regressions are caught before users see the translated summary."
+    },
+    {
+      "after": "RN-104-runbook-update",
+      "before": "RN-103-dashboard-canary",
+      "reason": "Operational guidance should describe the path that actually survived canary, not an unproven rollout sequence."
+    },
+    {
+      "after": "RN-105-cache-followup",
+      "before": "RN-104-runbook-update",
+      "reason": "Performance tuning is secondary until the current dashboard objective and operator workflow are stable."
+    }
+  ],
+  "first_milestone_id": "RN-101-schema-audit",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "A signed-off schema audit that names any remaining shim dependency and confirms the canonical step identifiers for downstream consumers.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101-schema-audit",
+      "summary": "Start by reconciling the rewritten translator schema with the legacy parser shim so the release plan uses one stable contract before any user-facing rollout work proceeds.",
+      "title": "Audit translator schema drift and freeze the step identifiers"
+    },
+    {
+      "bounded_deliverable": "Fixture coverage that exercises the dependency chain used by the translated release-plan summary and protects against step-id drift.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102-fixture-backfill",
+      "summary": "Once the schema is stable, add the missing dependency-graph fixtures so the plan contract can catch ordering regressions and step-id drift before rollout.",
+      "title": "Backfill dependency-graph fixtures to lock the ordering contract"
+    },
+    {
+      "bounded_deliverable": "A canary-ready dashboard summary path that can be disabled quickly if the translated ordering still diverges from the verified contract.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103-dashboard-canary",
+      "summary": "Only after the schema audit and fixture backfill are complete should the translated dashboard summary be exposed behind a kill switch and proven on a canary path.",
+      "title": "Enable the dashboard summary behind a kill switch for canary users"
+    },
+    {
+      "bounded_deliverable": "An updated runbook and launch checklist aligned with the proven canary sequence rather than the pre-rewrite notes.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104-runbook-update",
+      "summary": "Refresh operational guidance only after the canary demonstrates that the kill-switched summary path is the correct launch path for the current release objective.",
+      "title": "Update the operator runbook and launch checklist after canary proof"
+    },
+    {
+      "bounded_deliverable": "A documented decision on whether any cache idea still helps after the release summary path is stable and launched safely.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "release_notes/stale_note_jan_2026.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 5,
+      "step_id": "RN-105-cache-followup",
+      "summary": "Keep the January cache experiment last because the notes and repo inventory both say it predates the schema rewrite and does not fix the current dashboard ordering problem.",
+      "title": "Revisit the January cache experiment only as a post-path optimization"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/dependency_map.md",
+      "repo_inventory/test_inventory.md",
+      "release_notes/stale_note_jan_2026.md"
+    ],
+    "mitigations": [
+      "Freeze the translator schema and remaining shim dependency before any dashboard exposure.",
+      "Backfill dependency fixtures so step-id drift and ordering regressions fail before rollout.",
+      "Use the kill switch to constrain the dashboard summary to canary users until the sequence is proven."
+    ],
+    "statement": "If the dashboard summary is rolled out before the schema audit and fixture backfill, users can see the wrong implementation order in the release dashboard while operators follow a checklist that reflects an invalid sequence."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v2-noisy-distractor"
+}

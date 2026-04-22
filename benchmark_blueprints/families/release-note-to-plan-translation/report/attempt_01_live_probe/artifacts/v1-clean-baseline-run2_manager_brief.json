@@ -1,0 +1,101 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "No release_context/ directory is present, so there is no newer objective override to supersede the frozen April release notes in this workspace.",
+      "status": "observed",
+      "topic": "Release objective stability"
+    },
+    {
+      "note": "No incident_context/ directory is present, so there is no local evidence of a rollback that would reorder RN-101 through RN-104.",
+      "status": "observed",
+      "topic": "Prior rollback impact"
+    },
+    {
+      "note": "The repo inventory states canary-only coverage exists, but it does not define the concrete success or rollback thresholds required before the runbook is finalized.",
+      "status": "missing",
+      "topic": "Canary exit criteria"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "Fixture backfill has to target the audited translator step-id/schema contract; otherwise tests are updated against a moving or incorrect shape."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "The dashboard summary must not ship until dependency-graph fixtures reflect the new schema and ordering regressions are caught before users see them."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "The runbook depends on the observed canary rollout and rollback path, so documenting operations earlier would encode unproven steps."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "A confirmed translator step-id/schema contract and a documented decision on whether the legacy parser shim can be removed without hiding drift.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Use the existing shim-masked smoke gap to identify the exact translator step-id/schema drift and lock the new contract before any downstream consumer work proceeds.",
+      "title": "Audit translator schema drift before removing legacy parser shim"
+    },
+    {
+      "bounded_deliverable": "Dependency-graph fixtures aligned to the audited step-id schema, with plan-contract coverage no longer failing on introduced step ids.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Update fixture coverage immediately after the schema audit so contract tests catch ordering regressions before any user-visible summary consumes the new translator output.",
+      "title": "Backfill dependency-graph fixtures for the new plan contract"
+    },
+    {
+      "bounded_deliverable": "A canary-gated dashboard summary path wired behind a kill switch, using the audited translator schema and updated fixtures.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Only after the schema and fixtures are stable, expose the user-visible dashboard summary in canary with a kill switch so bad ordering can be rolled back quickly.",
+      "title": "Enable the translated release-plan dashboard summary behind a kill switch"
+    },
+    {
+      "bounded_deliverable": "An operator runbook and launch checklist that reflect the actual canary rollout and rollback behavior of the translated summary path.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Document rollout and rollback instructions only once the canary behavior and rollback shape are known from the gated dashboard path.",
+      "title": "Update the operator runbook and launch checklist after canary proves the path"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "repo_inventory/dependency_map.md"
+    ],
+    "mitigations": [
+      "Keep RN-101 as the first milestone so the translator contract is explicit before downstream work.",
+      "Complete RN-102 before RN-103 so fixture-backed contract tests catch ordering regressions ahead of canary exposure.",
+      "Ship RN-103 behind a kill switch so canary rollback remains immediate if user-visible ordering is wrong."
+    ],
+    "statement": "If the dashboard summary is enabled before schema drift is audited and fixtures are backfilled, users will see a release plan ordered by incorrect translator output, with no reliable automated signal for bad dependency ordering."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}

@@ -1,0 +1,116 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "The in-progress patch explicitly assumes the schema is frozen, and repo evidence says that assumption is false today.",
+      "status": "observed",
+      "topic": "Translator schema drift scope"
+    },
+    {
+      "note": "The notes require proving the summary path in canary, but the repo evidence does not identify the target environment or pass criteria.",
+      "status": "to_verify",
+      "topic": "Canary target and success criteria"
+    },
+    {
+      "note": "The test inventory says the draft never added rollback coverage, so the cost and safety of finishing it cannot be assessed from the current evidence.",
+      "status": "missing",
+      "topic": "Rollback behavior of the abandoned draft"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "The fixture backfill has to target the audited translator schema; otherwise it will lock in the same false frozen-schema assumption called out in the in-progress patch."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "The dashboard summary is already user-visible, so ordering-regression coverage needs to exist before any canary exposure of translated plans."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Operator guidance should be written from the kill-switched canary path that actually worked, not from pre-canary expectations."
+    },
+    {
+      "after": "RN-105",
+      "before": "RN-103",
+      "reason": "Repo evidence marks the draft as optional cleanup on the same unresolved path, so it should only be reconsidered after the safer dashboard path is proven."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "A documented schema audit with explicit freeze criteria and shim-removal exit conditions.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/in_progress_patch/README.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Start by reconciling the frozen notes with the current translator contract and keep the legacy parser shim in place until the drift is understood, because the in-progress patch currently assumes the schema is already frozen when repo evidence says it is not.",
+      "title": "Audit translator schema drift before touching exposure paths"
+    },
+    {
+      "bounded_deliverable": "Fixture-backed regression coverage that fails on dependency-order drift and exposes rollback-sensitive gaps.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Once the schema target is known, add the dependency-graph fixtures and regression checks that catch hidden reordering so later rollout work is validated against the right contract instead of today\u2019s unguarded behavior.",
+      "title": "Backfill dependency-order fixtures and rollback-sensitive coverage"
+    },
+    {
+      "bounded_deliverable": "A kill-switched canary of the translated dashboard summary on the stabilized contract.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "After schema drift and ordering guards are under control, expose the translated release-plan summary behind a kill switch so the user-visible dashboard can be exercised without committing to a broad launch path.",
+      "title": "Enable the translated dashboard summary only as a kill-switched canary"
+    },
+    {
+      "bounded_deliverable": "A runbook and launch checklist aligned to the proven canary workflow and kill-switch expectations.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Update the operator checklist and launch guidance only after the canary path is proven, so the runbook reflects actual summary behavior rather than assumptions carried forward from the frozen notes.",
+      "title": "Refresh the operator runbook after canary behavior is proven"
+    },
+    {
+      "bounded_deliverable": "A documented decision on whether the abandoned draft is discarded or respecified for follow-on work.",
+      "evidence": [
+        "release_notes/release_notes_2026_04.md",
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/test_inventory.md",
+        "repo_inventory/in_progress_patch/README.md"
+      ],
+      "rank": 5,
+      "step_id": "RN-105",
+      "summary": "Treat the transferred engineer\u2019s draft as optional cleanup after the safe path is clear, because it shares the unresolved schema and fixture dependencies and still lacks rollback coverage evidence.",
+      "title": "Make an explicit keep-or-drop decision on the abandoned rollout draft"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "repo_inventory/in_progress_patch/README.md"
+    ],
+    "mitigations": [
+      "Keep the legacy parser shim in place until the schema audit produces explicit freeze criteria.",
+      "Add dependency-order fixtures before any canary so hidden reordering regressions fail in test rather than on the live dashboard.",
+      "Defer any decision on reviving the abandoned draft until the kill-switched safe path is proven."
+    ],
+    "statement": "If the user-visible dashboard summary or the abandoned rollout draft advances before schema drift and dependency-order coverage are closed, operators can be shown a translated implementation order that is wrong and cannot be rolled back safely."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v3-dirty-state"
+}

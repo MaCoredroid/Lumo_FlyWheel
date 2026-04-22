@@ -1,0 +1,125 @@
+{
+  "acceptance": {
+    "at_least_one_variant_le_10": false,
+    "family_mean_window": false,
+    "max_variant_le_40": false,
+    "monotonic_with_tolerance_3": false
+  },
+  "current_observed_stdev_M_training": 0.1353,
+  "family_mean": 85.93,
+  "family_mean_M_training": 0.8565,
+  "max_variant_mean": 94.33,
+  "min_variant_mean": 65.67,
+  "rows": [
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.9796,
+        0.898,
+        0.898
+      ],
+      "max": 98,
+      "mean": 92.67,
+      "mean_M_training": 0.9252,
+      "min": 90,
+      "n": 3,
+      "scores": [
+        98,
+        90,
+        90
+      ],
+      "stdev": 3.77,
+      "stdev_M_training": 0.0385,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.6429,
+        0.9796,
+        0.898
+      ],
+      "max": 98,
+      "mean": 84.33,
+      "mean_M_training": 0.8402,
+      "min": 65,
+      "n": 3,
+      "scores": [
+        65,
+        98,
+        90
+      ],
+      "stdev": 14.06,
+      "stdev_M_training": 0.1434,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.898,
+        0.898,
+        0.9796
+      ],
+      "max": 98,
+      "mean": 92.67,
+      "mean_M_training": 0.9252,
+      "min": 90,
+      "n": 3,
+      "scores": [
+        90,
+        90,
+        98
+      ],
+      "stdev": 3.77,
+      "stdev_M_training": 0.0385,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.7653,
+        0.5918,
+        0.5918
+      ],
+      "max": 77,
+      "mean": 65.67,
+      "mean_M_training": 0.6496,
+      "min": 60,
+      "n": 3,
+      "scores": [
+        77,
+        60,
+        60
+      ],
+      "stdev": 8.01,
+      "stdev_M_training": 0.0818,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.9694,
+        0.8878,
+        0.9694
+      ],
+      "max": 97,
+      "mean": 94.33,
+      "mean_M_training": 0.9422,
+      "min": 89,
+      "n": 3,
+      "scores": [
+        97,
+        89,
+        97
+      ],
+      "stdev": 3.77,
+      "stdev_M_training": 0.0385,
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}
