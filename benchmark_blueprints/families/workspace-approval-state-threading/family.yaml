@@ -1,8 +1,8 @@
 family_id: workspace-approval-state-threading
 track: 8
 schema_version: cnb55.family.v1
-layer_a_status: yellow
-layer_b_status: yellow
+layer_a_status: failed_freeze_gate
+layer_b_status: implemented_pending_acceptance
 
 grader_ref: verifiers/workspace-approval-state-threading/score_workspace_approval.py
 milestone_config_ref: verifier_data/workspace-approval-state-threading/{variant_id}/milestones/
@@ -168,3 +168,17 @@ saturation:
       description: add a variant requiring batch edit propagation with provenance preserved
     - id: retire_v1
       description: retire the clean baseline if it collapses below the target hardness
+
+rawr_modes:
+  grounding_stripped:
+    status: implemented
+    detector: verification_matrix grounding_stripped row plus missing_preview_or_rollout_evidence ceiling in score_workspace_approval.py
+    notes: The family-local matrix already exercises stripped-grounding behavior and caps it below the acceptance band.
+  citation_fabricated:
+    status: declared_not_yet_implemented
+    blocker: No family-local generator or detector yet mutates citations into unsupported file claims for this workspace-shaped task.
+    notes: Live probe evidence is preserved as-is; this mode is declared but not yet synthesized.
+  constraint_named_not_respected:
+    status: declared_not_yet_implemented
+    blocker: The scorer detects shortcut and rollback-miss ceilings, but there is no dedicated family-local variant that explicitly names the constraint and still violates it.
+    notes: Current evidence covers stale alias and rollback misses, not the full named-but-not-respected RAWR mode.
