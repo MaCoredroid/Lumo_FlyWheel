@@ -1,0 +1,21 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=20260422T200932Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   25.00    0.00    25    25  [25,25,25]  alias_only_fixx1,generic_proofx3,missing_integration_reportx3,surface_gapx3
+v2-noisy-distractor                3   23.33    2.89    20    25  [25,20,25]  alias_only_fixx1,generic_proofx3,missing_integration_reportx3,stale_runtime_tokenx1,surface_gapx3
+v3-dirty-state                     3   25.00    0.00    25    25  [25,25,25]  alias_only_fixx1,generic_proofx3,missing_integration_reportx3,surface_gapx3
+v4-multi-corpus-objective          3   18.33   11.55     5    25  [25,5,25]  alias_only_fixx1,generic_proofx2,missing_integration_reportx2,release_order_missedx3,stale_runtime_tokenx1,surface_gapx3
+v5-recovery-in-thread              3   25.00    0.00    25    25  [25,25,25]  alias_only_fixx1,generic_proofx2,incident_blind_recoveryx3,missing_integration_reportx1,release_order_missedx3,surface_gapx3
+
+family_mean = 23.33   (window 15.0-25.0)
+max_variant_mean = 25.00   (cap 40.0)
+min_variant_mean = 18.33   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [PASS] family_mean in window: 23.33
+  [PASS] max variant <= cap: 25.00
+  [FAIL] at least one variant <= hard floor: min variant mean = 18.33
+  [FAIL] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: v4-multi-corpus-objective (18.3) < v5-recovery-in-thread (25.0) beyond +/-3.0
+
+overall: HARDEN NEEDED

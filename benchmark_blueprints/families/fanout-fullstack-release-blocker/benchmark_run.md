@@ -147,3 +147,107 @@ Other matrix rows were unchanged:
 - Delete-tests anomaly: fixed and rerun
 - Layer B status: unchanged, still locally verified
 - Layer A status: unchanged, still pending the real probe loop
+
+## attempt_03 — real live `codex exec` family probe
+
+This pass ran the real whole-family live probe locally across all 5 variants.
+
+### Exact commands
+
+Family-local live probe command:
+
+```bash
+python3 verifiers/fanout-fullstack-release-blocker/run_live_probe.py --n 3 --timeout 120
+```
+
+Family-local report generation:
+
+```bash
+python3 scripts/probe_report.py \
+  benchmark_blueprints/families/fanout-fullstack-release-blocker/report/probe_runs.jsonl \
+  --probe-run-id 20260422T200932Z \
+  > benchmark_blueprints/families/fanout-fullstack-release-blocker/report/attempt_03_probe_report.txt
+```
+
+Implementation detail:
+
+- `run_live_probe.py` stages a fresh workspace per run
+- each run invokes real `codex exec --model gpt-5.4 -c 'model_reasoning_effort="high"'`
+- scorer: `verifiers/fanout-fullstack-release-blocker/score_release_blocker.py`
+- probe artifacts:
+  - `benchmark_blueprints/families/fanout-fullstack-release-blocker/report/probe_runs.jsonl`
+  - `benchmark_blueprints/families/fanout-fullstack-release-blocker/report/attempt_03_probe_report.txt`
+  - `benchmark_blueprints/families/fanout-fullstack-release-blocker/report/live_probe_logs/*.log`
+
+### Probe run id
+
+- `probe_run_id`: `20260422T200932Z`
+- `N`: `3`
+- total live runs: `15`
+- per-run timeout: `120s`
+
+### Per-run scores
+
+| variant | run1 | run2 | run3 | mean | stdev |
+|---|---:|---:|---:|---:|---:|
+| v1-clean-baseline | 25 | 25 | 25 | 25.00 | 0.00 |
+| v2-noisy-distractor | 25 | 20 | 25 | 23.33 | 2.89 |
+| v3-dirty-state | 25 | 25 | 25 | 25.00 | 0.00 |
+| v4-multi-corpus-objective | 25 | 5 | 25 | 18.33 | 11.55 |
+| v5-recovery-in-thread | 25 | 25 | 25 | 25.00 | 0.00 |
+
+Raw-score notes:
+
+- V1:
+  - run2 hit `raw=40` but still capped to `25` by `surface_gap`
+- V2:
+  - run2 dropped to `20` from `stale_runtime_token`
+- V3:
+  - run3 hit `raw=40` but still capped to `25`
+- V4:
+  - run2 dropped to `5` from the combined `release_order_missed` + `stale_runtime_token` path
+  - run3 reached `raw=85` but still capped to `25`
+- V5:
+  - all three runs were capped to `25`; every run fired `incident_blind_recovery`
+
+### Layer A gate values
+
+- `family_mean = 23.33`
+- `max_variant_mean = 25.00`
+- `min_variant_mean = 18.33`
+- monotonicity check:
+  - `v1 25.00 >= v2 23.33 >= v3 25.00` is acceptable within ±3
+  - `v4 18.33 < v5 25.00` breaks monotonicity beyond ±3
+
+Acceptance checks:
+
+- `[PASS]` family mean in `[15, 25]` — `23.33`
+- `[PASS]` max variant mean `<= 40` — `25.00`
+- `[FAIL]` at least one variant mean `<= 10` — best floor was `18.33`
+- `[FAIL]` monotonic `V1 >= V2 >= V3 >= V4 >= V5 ±3` — `v4 18.33 < v5 25.00`
+
+### Acceptance judgment
+
+- verdict: `HARDEN NEEDED`
+
+Why:
+
+- the family mean and max are already in the target band
+- but the family does **not** yet produce a sufficiently hard variant on mean
+- and `v5` remains easier than `v4`, so the tail is not calibrated honestly for
+  the required monotonic difficulty ladder
+
+Most repeated ceiling patterns in the live run:
+
+- `surface_gap` on all 15 runs
+- `missing_integration_report` on 12/15 runs
+- `generic_proof` on 13/15 runs
+- `release_order_missed` on all 3 `v4` runs and all 3 `v5` runs
+- `incident_blind_recovery` on all 3 `v5` runs
+
+Conclusion from the live run:
+
+- Layer A remains **not accepted**
+- the next honest family-local step is to harden `v5` relative to `v4` and to
+  make the hard-floor variant durable on mean, not just as a single `5/100`
+  outlier run
