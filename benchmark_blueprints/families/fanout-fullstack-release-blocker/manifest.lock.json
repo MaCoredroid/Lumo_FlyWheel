@@ -2,7 +2,7 @@
   "cli": {},
   "family_id": "fanout-fullstack-release-blocker",
   "grader": {
-    "score_release_blocker_py_sha256": "852fe0bc25eaacf962a24e4368b408cf1c6d6505b839037ede1d960db8043133",
+    "score_release_blocker_py_sha256": "c0b912b2637b0f5fe0a884529b93932f043728ccf2e85b9694b0410d2af8b5e7",
     "verify_sh_sha256": "86fbcea342ec15ae9b32f0cf58fd7a32686731ce8ed856ba1a82120a7dde6cb8"
   },
   "schema_version": "cnb55.manifest.v2",

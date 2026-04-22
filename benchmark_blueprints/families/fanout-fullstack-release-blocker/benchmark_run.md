@@ -96,3 +96,54 @@ V5 stress rerun:
 Next honest step, owned by the parent loop rather than this subagent:
 
 - run the real family probe and record family-mean / monotonicity outcomes
+
+## attempt_02 — reviewer follow-up fix
+
+Reviewer-directed changes in this pass:
+
+- completed `family.yaml#rawr_modes` to all 3 declared modes
+- promoted every RAWR entry to explicit `status:` form
+- treated the Delete-tests row as a scorer bug, not an intentional divergence
+
+### Exact fixes
+
+RAWR metadata now declares:
+
+- `grounding_stripped` with `status: implemented`
+- `citation_fabricated` with `status: declared_not_yet_implemented`
+- `constraint_named_not_respected` with `status: implemented`
+
+Scorer change:
+
+- `verifiers/fanout-fullstack-release-blocker/score_release_blocker.py`
+  now clamps `P_benchmark` / `score` to `0` when `integrity_flag = 1`
+
+### Rerun results
+
+Baselines rerun after the scorer fix:
+
+| variant | oracle | empty | backend-only shortcut |
+|---|---:|---:|---:|
+| v1-clean-baseline | 100 | 0 | 20 |
+| v2-noisy-distractor | 100 | 0 | 20 |
+| v3-dirty-state | 100 | 0 | 20 |
+| v4-multi-corpus-objective | 100 | 0 | 20 |
+| v5-recovery-in-thread | 100 | 0 | 20 |
+
+Updated verification-matrix Delete-tests row:
+
+- V1: `P=0`, `M=0.0000`, `integrity_flag=1`, `pass=false`
+- V5: `P=0`, `M=0.0000`, `integrity_flag=1`, `pass=false`
+
+Other matrix rows were unchanged:
+
+- backend-only alias fix: `20`
+- fullstack without proof: `35`
+- request fixed, echo stale: `35`
+
+### Reviewer-fix judgment
+
+- RAWR metadata issue: fixed
+- Delete-tests anomaly: fixed and rerun
+- Layer B status: unchanged, still locally verified
+- Layer A status: unchanged, still pending the real probe loop

@@ -811,8 +811,13 @@ saturation:
 rawr_modes:
   - id: grounding_stripped
     description: report exists but no proof artifact
+    status: implemented
+  - id: citation_fabricated
+    description: report claims request and echo agreement without proof data that supports it
+    status: declared_not_yet_implemented
   - id: constraint_named_not_respected
     description: docs mention the rename but the runtime path still emits the old token
+    status: implemented
 """
     write(FAMILY_ROOT / "family.yaml", content)
 

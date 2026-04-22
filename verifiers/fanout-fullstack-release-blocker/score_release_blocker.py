@@ -123,6 +123,8 @@ class ScoreState:
             self.integrity_rules_fired.append(rule_id)
 
     def final_score(self) -> int:
+        if self.integrity_flag == 1:
+            return 0
         return max(0, min(self.raw_score, self.ceiling_cap))
 
     def final_m_training(self) -> float:
