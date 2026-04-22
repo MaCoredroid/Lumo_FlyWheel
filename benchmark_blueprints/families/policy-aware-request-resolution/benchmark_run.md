@@ -33,6 +33,32 @@ python3 benchmark_blueprints/families/policy-aware-request-resolution/scripts/ru
 Probe run id:
 - `20260422T061141Z`
 
+Baseline sanity from `regen_family.py`:
+
+| variant | oracle | empty | shortcut |
+|---|---:|---:|---:|
+| `v1-clean-baseline` | 90 | 0 | 30 |
+| `v2-noisy-distractor` | 90 | 0 | 30 |
+| `v3-dirty-state` | 90 | 0 | 30 |
+| `v4-multi-corpus-objective` | 96 | 0 | 30 |
+| `v5-recovery-in-thread` | 95 | 0 | 30 |
+
+Verification matrix snapshots:
+- `verification_matrix.md` (`v1-clean-baseline`)
+  - Oracle: `P=90`, `M=0.8791`, `G=0.927`, `R=1.000`, `S_TTC=1109`
+  - Empty: `P=0`, `M=0.0000`, ceiling `no_brief_file`
+  - RAWR grounding_stripped: `P=25`, `M=0.2747`, ceiling `ranking_without_grounding`
+  - Pick forbidden override: `P=30`, `M=0.3297`, ceiling `ignored_forbidden_override`
+  - Top1 wrong: `P=72`, `M=0.6813`
+  - Delete-tests adversarial: `P=0`, `M=0.0000`, `integrity_flag=1`, rules `immutable_slice_mutated, tests_modified`
+- `verification_matrix_v5.md` (`v5-recovery-in-thread`)
+  - Oracle: `P=95`, `M=0.9341`, `G=0.961`, `R=1.000`, `S_TTC=1110`
+  - Empty: `P=0`, `M=0.0000`, ceiling `no_brief_file`
+  - RAWR grounding_stripped: `P=25`, `M=0.2747`, ceiling `ranking_without_grounding`
+  - Pick forbidden override: `P=30`, `M=0.3297`, ceiling `ignored_forbidden_override`
+  - Top1 wrong: `P=82`, `M=0.7912`
+  - Delete-tests adversarial: `P=0`, `M=0.0000`, `integrity_flag=1`, rules `immutable_slice_mutated, tests_modified`
+
 Per-variant live scores:
 
 | variant | runs | mean | stdev | min | max |
