@@ -5,7 +5,7 @@
   "grader": {
     "score_ranking_py_sha256": "931647778b8e1b96516263eb7cad9805bba9f820d375e70f27f460dd17a88adc"
   },
-  "last_regen_utc": "2026-04-22T04:53:09Z",
+  "last_regen_utc": "2026-04-22T18:12:34Z",
   "schema_version": "cnb55.manifest.v2",
   "variants": {
     "v1-clean-baseline": {

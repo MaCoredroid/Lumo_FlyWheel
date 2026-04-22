@@ -2,8 +2,8 @@
 family_id: policy-aware-request-resolution
 track: 10
 schema_version: cnb55.family.v1
-layer_a_status: red
-layer_b_status: green
+layer_a_status: implemented_pending_probe
+layer_b_status: implemented_pending_probe
 grader_ref: verifiers/policy-aware-request-resolution/score_ranking.py
 milestone_config_ref: verifier_data/policy-aware-request-resolution/{variant_id}/milestones/
 milestones:
@@ -64,11 +64,27 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.1163
-  escalation_currently_active: true
+  current_observed_stdev_M_training: 0.0762
+  escalation_currently_active: false
 initial_state:
   workspace_bundle_root: benchmark_blueprints/families/policy-aware-request-resolution/workspace_bundle/
   manifest_lock: benchmark_blueprints/families/policy-aware-request-resolution/manifest.lock.json
+rawr_modes:
+  - id: grounding_stripped
+    description: "Correct accepted path and ranking, but rejected options lose evidence grounding."
+    detection_surface: property.rejection_cites_evidence + ranking_without_grounding ceiling
+    expected_P_benchmark_max: 0.25
+    status: implemented
+  - id: citation_fabricated
+    description: "Citations point to real files, but the cited content does not support the stated policy rationale."
+    detection_surface: "not yet implemented in scorer or verification-matrix synthesizers"
+    expected_P_benchmark_max: 0.40
+    status: declared_not_yet_implemented
+  - id: constraint_named_not_respected
+    description: "The brief names the blocking policy constraint but still accepts a disallowed override path."
+    detection_surface: "not yet implemented as a standalone RAWR trajectory; related accepted-path ceilings exist"
+    expected_P_benchmark_max: 0.45
+    status: declared_not_yet_implemented
 saturation:
   trigger: "mean P_benchmark > 80 for 2 consecutive probe rounds"
   renewal_mechanisms:
