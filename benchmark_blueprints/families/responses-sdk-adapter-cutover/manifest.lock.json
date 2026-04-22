@@ -1,30 +1,30 @@
 {
   "family_id": "responses-sdk-adapter-cutover",
   "grader": {
-    "score_responses_cutover_py_sha256": "079db7869e3f669926dea65e66e94bf64fc518435516c51b80900eee0112286b",
+    "score_responses_cutover_py_sha256": "1ced1fd6698d239c4c38bc38049f21cf212935f34f75a549637ea350090254cc",
     "verify_sh_sha256": "f28e897b46accd7ec866fbd8a27c003eecd3faeb724aba635a8be4a48c1393db"
   },
   "schema_version": "cnb55.manifest.v2",
   "variants": {
     "v1-clean-baseline": {
-      "gold_reference_sha256": "c4912aa8b772508ce641f52badb2d928783fc5fe5731320b9b97e8c17d515b77",
-      "workspace_manifest_sha256": "9e3d89a3908184ae0c9262cb2f90b161f4ef981729b2d70e1bfec92a1e618e62"
+      "gold_reference_sha256": "937c66e1449b699d7faaf0a9b41fdf01f8026645cbead469cc44ea1b3979732e",
+      "workspace_manifest_sha256": "b169e95a88db81c7076317cea3caf8b772ec10707da3109be40520864d1b3436"
     },
     "v2-noisy-distractor": {
-      "gold_reference_sha256": "c2a842d5739410b7cc6b45326d24f135c749c5ab1c1e86df997853c7842771af",
-      "workspace_manifest_sha256": "f5754fdf66f24e4a7c363cbc75e1cecdf6b7888be1427d46d624a8af3f38d9f7"
+      "gold_reference_sha256": "a892da7e62a55337b5aaf432e1c80511685aff1acc36f50fed23ff05b9bbaf8b",
+      "workspace_manifest_sha256": "707fe085f3c3135a498b8125c3c17e6bc97ce9888c80a9dd843d01722d68f316"
     },
     "v3-dirty-state": {
-      "gold_reference_sha256": "79504da65049b3ed6703afc8329d50f24e876e17f2d139e2ede56ea3124a0759",
-      "workspace_manifest_sha256": "a8b03d863c9c81dd7faebe4e7749f930e430c4d46402b4be98499735aba7bf59"
+      "gold_reference_sha256": "92674656484db5fe74393c6b6b1bce036de1d1279790c46da3880c53a24a8ea3",
+      "workspace_manifest_sha256": "4abff7a1d69a64ff5b294b1e353653ff1a6d682ffd1fccfca96b94ebf499712a"
     },
     "v4-multi-corpus-objective": {
-      "gold_reference_sha256": "93eef1e0a75db0b6306adbd39d846820d1053059c45c85318537ff16f21c851a",
-      "workspace_manifest_sha256": "4440f3f483c4de51bce91fde8bb9dfd155d762b71eb8832a768069743d7dd1b6"
+      "gold_reference_sha256": "70f076ad36873cf291e38dad273d2f2e1c1a41b6e420da87889adf2b8014f76c",
+      "workspace_manifest_sha256": "414bfb259ac87e61f59f1c7ac256dad01de28a0e2cf3e9c0dd45be0a96351cf5"
     },
     "v5-recovery-in-thread": {
-      "gold_reference_sha256": "d73b8be4a750d37b07a2472f6b8177d9f75b5d589fca3701b0d6911cd1345586",
-      "workspace_manifest_sha256": "8ff886f6cd570cfd56c22377f43123e417822d276061ffb4da0d1b11eabea25f"
+      "gold_reference_sha256": "9195b19204fc81543d55617ddd27a9ad5a25339f7ed90bc37cc761746f49454f",
+      "workspace_manifest_sha256": "945c9e3453a5f64bc7a432a1f9359505262569201d3e5a9159ef3455af7ba78d"
     }
   }
 }

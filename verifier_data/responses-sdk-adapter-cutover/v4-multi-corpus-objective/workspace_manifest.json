@@ -2,8 +2,9 @@
   "files": {
     ".codex/config.toml": "58817eb6518dc2ac7ab048776adf11cd9accfa3d4cfe258caf6dfeddb245041a",
     ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
-    "AGENTS.md": "79dbc30a4566762312854c296a1c3145684619c5fa7c5e26d1c65212ae5d1842",
+    "AGENTS.md": "7625cf82b0149ef39e02262881b745900249d0e50e0a34b9b04a0cabb36a2c40",
     "Dockerfile": "444541e8fe2313639efc16dda32a956bf1a8e9f3745e467fa46c4d5165c83b08",
+    "config/runtime.toml": "58817eb6518dc2ac7ab048776adf11cd9accfa3d4cfe258caf6dfeddb245041a",
     "docs/migrations/responses-cutover.md": "162038c88634671116ca6dadc23f5e9b112d7dcd70a8f8f424912ec4a6cf3ea8",
     "release_context/priority_shift.md": "5c13a8453a042a0647294c76047523c5b03a4594f9157f7c2d67b0567e799694",
     "release_context/test_inventory.md": "1dfa9aa16acdb05d51971f14cede8990e403f7d9c8a821a114806c5561e4b02e",

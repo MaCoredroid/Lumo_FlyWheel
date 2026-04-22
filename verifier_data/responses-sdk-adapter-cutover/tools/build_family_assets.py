@@ -104,7 +104,7 @@ VARIANTS = {
 }
 
 ALLOWED_WRITES = [
-    ".codex/config.toml",
+    "config/runtime.toml",
     "docs/migrations/responses-cutover.md",
     "src/incident_handoff/client.py",
     "src/incident_handoff/adapter.py",

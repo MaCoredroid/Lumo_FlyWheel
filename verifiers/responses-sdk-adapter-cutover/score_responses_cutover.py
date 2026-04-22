@@ -90,6 +90,13 @@ def parse_simple_toml(path: Path) -> dict[str, str]:
     return data
 
 
+def resolve_runtime_config_path() -> Path:
+    preferred = AGENT_WS / "config/runtime.toml"
+    if preferred.exists():
+        return preferred
+    return AGENT_WS / ".codex/config.toml"
+
+
 def read_workspace_files() -> dict[str, str]:
     files = {}
     for rel in (
@@ -98,7 +105,7 @@ def read_workspace_files() -> dict[str, str]:
         "src/incident_handoff/replay.py",
         "src/incident_handoff/render.py",
         "docs/migrations/responses-cutover.md",
-        ".codex/config.toml",
+        "config/runtime.toml",
     ):
         path = AGENT_WS / rel
         files[rel] = path.read_text() if path.exists() else ""
@@ -203,7 +210,7 @@ def normalize_and_check(files: dict[str, str], gold: dict[str, Any]) -> dict[str
     else:
         checks["hidden.future_event_passthrough"] = True
 
-    config = parse_simple_toml(AGENT_WS / ".codex/config.toml")
+    config = parse_simple_toml(resolve_runtime_config_path())
     checks["config.responses_wire"] = config.get("wire_api") == "responses"
     checks["config.responses_mode"] = config.get("transcript_mode") == "responses_events"
 
@@ -215,7 +222,7 @@ def normalize_and_check(files: dict[str, str], gold: dict[str, Any]) -> dict[str
 
     legacy_markers = tuple(marker.lower() for marker in gold.get("legacy_live_markers", []))
     client_text = files["src/incident_handoff/client.py"].lower()
-    config_text = files[".codex/config.toml"].lower()
+    config_text = files["config/runtime.toml"].lower()
     checks["hidden.legacy_path_removed"] = not any(
         marker in client_text or marker in config_text for marker in legacy_markers
     )

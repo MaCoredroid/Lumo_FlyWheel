@@ -1,0 +1,100 @@
+{
+  "M_training": 0.25,
+  "P_benchmark": 25,
+  "breakdown": {
+    "__bands": {
+      "config.responses_mode": "M",
+      "config.responses_wire": "M",
+      "docs.event_ordering": "M",
+      "hidden.interleaved_order": "M",
+      "hidden.legacy_path_removed": "M",
+      "hidden.replay_roundtrip": "M",
+      "visible.pytest": "M"
+    },
+    "config.responses_mode": 5,
+    "config.responses_wire": 5,
+    "docs.event_ordering": 5,
+    "hidden.interleaved_order": 10,
+    "hidden.legacy_path_removed": 10,
+    "hidden.replay_roundtrip": 10,
+    "visible.pytest": 10
+  },
+  "ceilings_applied": [
+    "flattened_multi_event_turn",
+    "future_event_corruption",
+    "reordered_chunk_instability"
+  ],
+  "changed_paths": [
+    "config/runtime.toml",
+    "docs/migrations/responses-cutover.md",
+    "src/incident_handoff/adapter.py",
+    "src/incident_handoff/client.py",
+    "src/incident_handoff/render.py",
+    "src/incident_handoff/replay.py"
+  ],
+  "checks": {
+    "config.responses_mode": true,
+    "config.responses_wire": true,
+    "docs.event_ordering": true,
+    "docs.tool_result_correlation": false,
+    "docs.variant_complete": false,
+    "hidden.all_variant_checks": false,
+    "hidden.future_event_passthrough": false,
+    "hidden.interleaved_order": true,
+    "hidden.legacy_path_removed": true,
+    "hidden.multi_block_message": false,
+    "hidden.render_mentions_call_id": true,
+    "hidden.reordered_chunk_stability": false,
+    "hidden.reordered_roundtrip": true,
+    "hidden.replay_roundtrip": true
+  },
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "max_m_points": 100,
+  "milestone_vector": {
+    "M_aggregate": 0.7,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": false,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 55,
+  "raw_score_pre_ceiling": 55,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 25,
+  "shortcut_detected": false,
+  "variant_id": "v5-recovery-in-thread",
+  "visible_output": "...                                                                      [100%]\n3 passed in 0.02s"
+}

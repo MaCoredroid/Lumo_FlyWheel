@@ -1,0 +1,21 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=attempt_05b_full_live_runtime_config_20260422T2207Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   95.00    8.66    85   100  [85,100,100]  -
+v2-noisy-distractor                3   25.00    0.00    25    25  [25,25,25]  flattened_multi_event_turnx3
+v3-dirty-state                     3   25.00    0.00    25    25  [25,25,25]  flattened_multi_event_turnx3,reordered_chunk_instabilityx3
+v4-multi-corpus-objective          3   25.00    0.00    25    25  [25,25,25]  flattened_multi_event_turnx3,reordered_chunk_instabilityx3
+v5-recovery-in-thread              3   26.67    2.89    25    30  [25,30,25]  flattened_multi_event_turnx2,future_event_corruptionx3,reordered_chunk_instabilityx2
+
+family_mean = 39.33   (window 15.0-25.0)
+max_variant_mean = 95.00   (cap 40.0)
+min_variant_mean = 25.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 39.33
+  [FAIL] max variant <= cap: 95.00
+  [FAIL] at least one variant <= hard floor: min variant mean = 25.00
+  [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: ok
+
+overall: HARDEN NEEDED

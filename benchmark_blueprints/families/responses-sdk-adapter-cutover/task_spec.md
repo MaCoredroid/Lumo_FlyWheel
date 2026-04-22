@@ -7,7 +7,7 @@
 
 ## Task Prompt (canonical)
 
-Migrate the `incident-handoff` assistant service from a legacy chat-wrapper integration to the Responses event model. Keep tool routing, transcript rendering, and replay behavior correct under streamed multi-event turns. Do not preserve the legacy wrapper on the serving path. Update the repo-local Codex config and the operator migration note so they match the new runtime.
+Migrate the `incident-handoff` assistant service from a legacy chat-wrapper integration to the Responses event model. Keep tool routing, transcript rendering, and replay behavior correct under streamed multi-event turns. Do not preserve the legacy wrapper on the serving path. Update the repo-local runtime config and the operator migration note so they match the new runtime.
 
 The workspace is a small Python service with broken migration code. The agent is expected to edit code and docs directly in-place and verify the result with the visible pytest slice. Hidden checks then stress replay determinism, event ordering, and future-safe handling beyond the visible happy path.
 
@@ -17,7 +17,7 @@ The workspace is a small Python service with broken migration code. The agent is
 - `apply_patch`
 - `terminal_tests`
 - JSON fixture inspection
-- `.codex/config.toml` editing
+- `config/runtime.toml` editing
 - docs update
 
 No network, browser, or subagents are needed for the benchmark itself.
@@ -30,7 +30,7 @@ Every variant ships the following under `workspace_bundle/<variant_id>/`:
 AGENTS.md
 Dockerfile
 .scenario_variant
-.codex/config.toml
+config/runtime.toml
 docs/migrations/responses-cutover.md
 src/incident_handoff/client.py
 src/incident_handoff/adapter.py
@@ -52,7 +52,7 @@ The starting workspace is intentionally broken in the same family-wide ways:
 - `adapter.py` assumes flattened chat-message content and loses event metadata.
 - `replay.py` serializes a lossy textual form, so replay is not event-faithful.
 - `render.py` drops tool-result call ids.
-- `.codex/config.toml` still declares legacy wire semantics.
+- `config/runtime.toml` still declares legacy wire semantics.
 - `docs/migrations/responses-cutover.md` still tells operators to preserve the wrapper.
 
 ## Variant Progression
@@ -111,7 +111,7 @@ Family mean target: `18.8`, within the Layer A freeze window `[15, 25]`.
 ## Expected Deliverables
 
 - Code patch across `client.py`, `adapter.py`, `replay.py`, and `render.py` as needed.
-- Updated `.codex/config.toml` setting the repo to the Responses wire path.
+- Updated `config/runtime.toml` setting the repo to the Responses wire path.
 - Updated migration note describing event ordering, tool-result correlation, and future-event safety.
 - Preserved transcript fixtures. Editing benchmark-owned tests or transcripts is forbidden.
 
@@ -150,9 +150,9 @@ Hidden surfaces by variant:
   - `src/incident_handoff/adapter.py`
   - `src/incident_handoff/replay.py`
   - `src/incident_handoff/render.py`
-  - `.codex/config.toml`
+  - `config/runtime.toml`
   - `docs/migrations/responses-cutover.md`
-- No live-path `chat_completions` or legacy-wrapper marker remains in `client.py` or `.codex/config.toml`.
+- No live-path `chat_completions` or legacy-wrapper marker remains in `client.py` or `config/runtime.toml`.
 
 ## Partial-Credit Ceilings
 

@@ -1,0 +1,15 @@
+import json
+
+
+def serialize_events(events):
+    lines = []
+    for event in events:
+        lines.append(json.dumps(event, separators=(",", ":")))
+    return "\n".join(lines)
+
+
+def replay_from_serialized(serialized):
+    events = []
+    for line in serialized.splitlines():
+        events.append(json.loads(line))
+    return events

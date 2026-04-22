@@ -1,0 +1,23 @@
+[
+  {
+    "type": "message",
+    "sequence": 0,
+    "content": [
+      {"type": "output_text", "text": "Checking current responders."},
+      {"type": "output_text", "text": "Escalating if ownership is missing."}
+    ]
+  },
+  {
+    "type": "tool_call",
+    "sequence": 1,
+    "call_id": "call-7",
+    "name": "lookup_owner",
+    "arguments": "{\"service\": \"incident-handoff\"}"
+  },
+  {
+    "type": "tool_result",
+    "sequence": 2,
+    "call_id": "call-7",
+    "output": "primary-owner"
+  }
+]

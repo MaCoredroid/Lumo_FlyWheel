@@ -1,7 +1,7 @@
 family_id: responses-sdk-adapter-cutover
 track: 6
 schema_version: cnb55.family.v1
-layer_a_status: in_progress
+layer_a_status: harden_needed
 layer_b_status: implemented_local
 
 grader_ref: verifiers/responses-sdk-adapter-cutover/score_responses_cutover.py
@@ -168,8 +168,8 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.00
-  escalation_currently_active: false
+  current_observed_stdev_M_training: 0.29
+  escalation_currently_active: true
 
 initial_state:
   type: manifest_locked

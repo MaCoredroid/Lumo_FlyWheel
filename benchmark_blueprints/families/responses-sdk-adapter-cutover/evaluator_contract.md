@@ -19,8 +19,8 @@ Visible-check budget: `30` points max.
 | Check | Points |
 | --- | ---: |
 | Visible pytest slice passes | 10 |
-| `.codex/config.toml` declares `wire_api = "responses"` | 5 |
-| `.codex/config.toml` declares `transcript_mode = "responses_events"` | 5 |
+| `config/runtime.toml` declares `wire_api = "responses"` | 5 |
+| `config/runtime.toml` declares `transcript_mode = "responses_events"` | 5 |
 | Migration doc mentions event ordering | 5 |
 | Migration doc mentions tool-result correlation | 5 |
 

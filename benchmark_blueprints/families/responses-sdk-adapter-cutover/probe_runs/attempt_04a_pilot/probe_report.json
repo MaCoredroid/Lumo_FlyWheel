@@ -1,0 +1,57 @@
+CNB-55 Track 10 probe report — 1 runs probe_run_id=attempt_04a_pilot
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  1   20.00    0.00    20    20  [20]  compatibility_shim_left_livex1,visible_only_cutoverx1
+v2-noisy-distractor                -       -       -     -     -   (no runs)
+v3-dirty-state                     -       -       -     -     -   (no runs)
+v4-multi-corpus-objective          -       -       -     -     -   (no runs)
+v5-recovery-in-thread              -       -       -     -     -   (no runs)
+
+family_mean = 20.00   (window 15.0-25.0)
+max_variant_mean = 20.00   (cap 40.0)
+min_variant_mean = 20.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [PASS] family_mean in window: 20.00
+  [PASS] max variant <= cap: 20.00
+  [FAIL] at least one variant <= hard floor: min variant mean = 20.00
+  [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: ok
+
+overall: HARDEN NEEDED
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 20,
+    "family_mean_ok": true,
+    "hard_variant_ok": false,
+    "max_variant_mean": 20,
+    "max_variant_ok": true,
+    "min_variant_mean": 20,
+    "monotonic_breaks": [],
+    "monotonic_ok": true
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "compatibility_shim_left_live": 1,
+        "visible_only_cutover": 1
+      },
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 1,
+      "scores": [
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v2-noisy-distractor": null,
+    "v3-dirty-state": null,
+    "v4-multi-corpus-objective": null,
+    "v5-recovery-in-thread": null
+  }
+}
