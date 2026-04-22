@@ -2,8 +2,8 @@ family_id: responses-tool-schema-cutover
 track: 11
 scenario_type: migration_refactor
 schema_version: cnb55.family.v1
-layer_a_status: implemented_probe_pending
-layer_b_status: green
+layer_a_status: failed_freeze_gate
+layer_b_status: implemented_pending_review
 grader_ref: verifiers/responses-tool-schema-cutover/score_responses_cutover.py
 milestone_config_ref: verifier_data/responses-tool-schema-cutover/{variant_id}/milestones/
 
@@ -126,9 +126,9 @@ rawr_modes:
   - id: grounding_stripped
     description: runtime files are repaired but config/doc contract surfaces remain stale
     status: implemented
-  - id: chronology_blind
-    description: solver keeps a replay shape that still fails hidden chronology-sensitive joins
-    status: implemented
+  - id: citation_fabricated
+    description: canonical HLD audit slot reserved; this family does not yet ship an honest citation_fabricated synthesizer, and the legacy chronology_blind row in older family-local matrices must not be read as equivalent evidence
+    status: declared_not_yet_implemented
   - id: constraint_named_not_respected
-    description: docs claim Responses semantics while config or reducer behavior remains legacy-shaped
+    description: config, docs, or test naming claims the Responses call_id constraint while reducer behavior or replay joins still violate it
     status: implemented
