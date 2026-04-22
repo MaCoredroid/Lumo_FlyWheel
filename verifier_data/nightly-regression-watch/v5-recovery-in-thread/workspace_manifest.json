@@ -1,0 +1,26 @@
+{
+  "files": {
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "fe1b34feaa0a06d542ccee7d47469476bfee1e8efde703dc401a9f55812d29dd",
+    "Dockerfile": "8023b0cfe1337b2c7f2cce9ee13e9912a44954b7afee6127a01c9280e44ac829",
+    "incident_context/delivery_wording_regression.md": "b664767f9647a6521060b28c37756d5af194b47b1cb1e954a74cf8d24dd72163",
+    "incident_context/rollback_2026_04_17.md": "9154cf15422608002a2da63374bdcb72cab59c57fba9b0b23fb48734a331ceb6",
+    "ops_digest/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ops_digest/automation/nightly_regression_watch.toml": "a33ca801560835e16f6ace9e4cc700e27f702c0d6fa17aab82d2f5f6729879f0",
+    "ops_digest/docs/escalation_runbook.md": "b950372b6ebc6b45f763b58654e183bcbf9d2b90578bc680a806cd512695f712",
+    "ops_digest/fixtures/inbox/generated_digest.md": "4d2d83235e7feccbf5dbe34d840b4f588fdee818a8f2ea014ae94e5d586591ae",
+    "ops_digest/fixtures/inbox/local_operator_notes.md": "0604fe106ff19c43fba3fa5880d746b993c2374c11d1bae6d4076d1844de76b8",
+    "ops_digest/fixtures/runs/2026-04-18T043000Z_clean.json": "7d2e258c739ec6a7dc46683ee2a428a5df92badd9d230efe6c8400a8e1797852",
+    "ops_digest/fixtures/runs/2026-04-19T030000Z_missing_required.json": "24ba04d77d3a815fa5ece176c1d50c64163f77ea97fc9dbc906882496ab64044",
+    "ops_digest/fixtures/runs/2026-04-20T030000Z_advisory.json": "4a16f50b3afde579183e886b0a1384d9ee89e9a13e6a4ce89b460fc7df33b5b2",
+    "ops_digest/fixtures/runs/2026-04-20T030000Z_failed.json": "5d72631b621f15787e97c6b1c1c463fbe226dd2c859f59a78731b3fbe05c7b83",
+    "ops_digest/src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ops_digest/src/digest_builder.py": "a9ab0ce67a300d189929151b877b01e28275d8314ffd49da46a82562cb272c17",
+    "ops_digest/src/schema.py": "6f81fcc27b211d4b7d6210ab09baefc4b1bc3822510497733fadcc4f62dd7613",
+    "ops_digest/tests/test_automation_contract.py": "54fc06be824a08377ada73ae24df48c52d1fd3d29a6f26502e2e2f2badb491ac",
+    "ops_digest/tests/test_digest_builder.py": "dc4137aa11e0e8e3c1ec57a64d1174918e00254d8f021cdfcfcff1e41319de93",
+    "ops_digest/tests/test_schema.py": "7663afb062b9b3c552c657d19fd62c26222357eecb9bb6dd43408c26bf3a51d0",
+    "release_context/delivery_contract.md": "d9b185df78b3c6dec02911edb38dca22821b16cfd6064c5116b33c6d5f732a2d"
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

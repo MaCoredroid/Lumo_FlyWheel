@@ -1,0 +1,28 @@
+{
+  "completed_at": "2026-04-19T03:00:00Z",
+  "final_verdict": {
+    "pass": true,
+    "summary": "healthy nightly after parser repair"
+  },
+  "milestones": {
+    "results": {
+      "M2_primary_fix": {
+        "required": true,
+        "status": "passed"
+      },
+      "M4_functional": {
+        "required": true,
+        "status": "passed"
+      },
+      "M5_e2e": {
+        "required": true,
+        "status": "passed"
+      }
+    }
+  },
+  "report_date": "2026-04-19",
+  "run_id": "nightly-2026-04-19-0300",
+  "warnings": [
+    "advisory: retry budget dipped for one shard but recovered"
+  ]
+}

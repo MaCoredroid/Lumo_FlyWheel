@@ -1,0 +1,19 @@
+{
+  "completed_at": "2026-04-18T04:30:00Z",
+  "final_verdict": {
+    "pass": true,
+    "summary": "latest rerun succeeded"
+  },
+  "milestones": {
+    "results": {
+      "M2_primary_fix": true,
+      "M4_functional": true,
+      "M5_e2e": true
+    }
+  },
+  "report_date": "2026-04-18",
+  "run_id": "nightly-2026-04-18-0430",
+  "warnings": [
+    "advisory: stale failure already superseded"
+  ]
+}

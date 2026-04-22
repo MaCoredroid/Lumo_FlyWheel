@@ -1,0 +1,26 @@
+{
+  "completed_at": "2026-04-18T02:15:00Z",
+  "final_verdict": {
+    "pass": false,
+    "summary": "older failure before rerun"
+  },
+  "milestones": {
+    "results": {
+      "M2_primary_fix": {
+        "required": true,
+        "status": "failed"
+      },
+      "M4_functional": {
+        "required": true,
+        "status": "failed"
+      },
+      "M5_e2e": {
+        "required": true,
+        "status": "failed"
+      }
+    }
+  },
+  "report_date": "2026-04-18",
+  "run_id": "nightly-2026-04-18-0215",
+  "warnings": []
+}

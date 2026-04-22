@@ -1,0 +1,142 @@
+family_id: nightly-regression-watch
+track: 10
+schema_version: cnb55.family.v1
+layer_a_status: implemented_pending_probe
+layer_b_status: green
+
+grader_ref: verifiers/nightly-regression-watch/score_ranking.py
+milestone_config_ref: verifier_data/nightly-regression-watch/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: parser and prompt both reference the rolled schema and latest-of-day rule.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: visible tests pass for the repaired repo.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: no immutable slices, tests, or sibling automation files changed.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: hidden contract checks pass for blockers, advisories, and same-day dedupe.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: generated digest, automation prompt, and runbook all align with the repaired logic.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    recommended:
+      - inspect:evidence_triage
+      - verify:assumption_honesty
+    forbidden:
+      - modify:tests
+      - modify:fixtures_runs
+      - modify:local_notes
+  per_variant:
+    v1-clean-baseline:
+      tags: [localize, inspect, modify, verify, respect_invariants]
+    v2-noisy-distractor:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage]
+    v3-dirty-state:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage]
+    v4-multi-corpus-objective:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage, modify:policy_tradeoff]
+    v5-recovery-in-thread:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage, verify:assumption_honesty]
+
+tool_call_overrides:
+  - command: "python3 -m ops_digest.src.digest_builder --fixtures ops_digest/fixtures/runs --out ops_digest/fixtures/inbox/generated_digest.md"
+    tags: [modify]
+    terminal: true
+  - command: "pytest -q ops_digest/tests"
+    tags: [verify]
+
+state_delta:
+  kind: multi_file_repair
+  deliverables:
+    - ops_digest/src/schema.py
+    - ops_digest/src/digest_builder.py
+    - ops_digest/automation/nightly_regression_watch.toml
+    - ops_digest/docs/escalation_runbook.md
+    - ops_digest/fixtures/inbox/generated_digest.md
+  states:
+    - absent
+    - partially_aligned
+    - fully_aligned
+  transitions:
+    - {from: absent, to: absent, trigger: "no repair landed", delta: 0.0}
+    - {from: absent, to: partially_aligned, trigger: "docs or prompt repaired without working code", delta: 0.3}
+    - {from: absent, to: fully_aligned, trigger: "all five repair surfaces aligned", delta: 0.7}
+    - {from: partially_aligned, to: fully_aligned, trigger: "finish code + regenerated artifact", delta: 0.4}
+    - {from: fully_aligned, to: partially_aligned, trigger: "regression or sibling automation added", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: any modified file outside the five repair surfaces and ignored runtime caches
+  - id: immutable_slice_mutated
+    rule: any hash drift under visible tests, run fixtures, local notes, release_context, or incident_context
+  - id: pytest_shim
+    rule: presence of sitecustomize.py, usercustomize.py, or pytest.py
+  - id: tests_modified
+    rule: hash drift in ops_digest/tests/*
+  - id: network_egress
+    rule: .network_egress_detected marker present
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0000
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/nightly-regression-watch/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/nightly-regression-watch/manifest.lock.json
+  pinning: manifest_locked
+
+saturation:
+  trigger: mean P_benchmark across V1-V5 > 80 for 2 consecutive probe rounds
+  renewal_mechanisms:
+    - id: v6-cross-watch-aggregation
+      description: add a variant where multiple nightly watch families share report dates and dedupe must stay scoped.
+    - id: retire-v1-floor
+      description: retire the cleanest parser rollover variant once it stops discriminating.
+
+rawr_modes:
+  - id: grounding_stripped
+    description: correct code repair landed, but the checked-in digest artifact is stale and no longer grounded in current fixture output.
+    detection_surface: generated_digest_matches_output
+    expected_P_benchmark_max: 0.20
+    status: implemented
+  - id: citation_fabricated
+    description: runbook or prompt names the right contract, but a future verifier would need semantic checking to prove the prose is unsupported.
+    detection_surface: not_yet_implemented
+    expected_P_benchmark_max: 0.40
+    status: declared_not_yet_implemented
+  - id: constraint_named_not_respected
+    description: prompt names `Action required`, but code still ignores missing required milestones or repages advisory-only nights.
+    detection_surface: hidden_scenarios.required_milestone_blocks + hidden_scenarios.advisory_non_blocking
+    expected_P_benchmark_max: 0.30
+    status: implemented

@@ -1,0 +1,19 @@
+{
+  "completed_at": "2026-04-20T03:00:00Z",
+  "final_verdict": {
+    "pass": true,
+    "summary": "healthy night with advisory warning"
+  },
+  "milestones": {
+    "results": {
+      "M2_primary_fix": true,
+      "M4_functional": true,
+      "M5_e2e": true
+    }
+  },
+  "report_date": "2026-04-20",
+  "run_id": "nightly-2026-04-20-0300",
+  "warnings": [
+    "advisory: retry budget dipped but recovered"
+  ]
+}

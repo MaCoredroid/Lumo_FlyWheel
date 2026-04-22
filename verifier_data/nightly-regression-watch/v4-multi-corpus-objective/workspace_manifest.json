@@ -1,0 +1,25 @@
+{
+  "files": {
+    ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+    "AGENTS.md": "c83a222345c5a54d428088eef17a3a5c66d4d2c5390580fc9b15cadcf2bf75e5",
+    "Dockerfile": "8023b0cfe1337b2c7f2cce9ee13e9912a44954b7afee6127a01c9280e44ac829",
+    "ops_digest/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ops_digest/automation/nightly_regression_watch.toml": "a33ca801560835e16f6ace9e4cc700e27f702c0d6fa17aab82d2f5f6729879f0",
+    "ops_digest/docs/escalation_runbook.md": "b950372b6ebc6b45f763b58654e183bcbf9d2b90578bc680a806cd512695f712",
+    "ops_digest/fixtures/inbox/generated_digest.md": "1d0ee358a2f7967f4862a2198b369d5db226301458a4e8caa27f5035bbbbc039",
+    "ops_digest/fixtures/inbox/local_operator_notes.md": "3c5bf4789acca495c8a7ba37b948f73276eef4572b8eecb9a6b03599d9830902",
+    "ops_digest/fixtures/runs/2026-04-18T043000Z_clean.json": "3cc3c2a361f300b7ab22e54c342ecfa5b9eef83aef440889c53caef3d147854d",
+    "ops_digest/fixtures/runs/2026-04-19T030000Z_missing_required.json": "33f369a0937932992c80315f6dc82a67758af0f00f9c6f7e7b537f087ba33a3a",
+    "ops_digest/fixtures/runs/2026-04-20T030000Z_advisory.json": "4a16f50b3afde579183e886b0a1384d9ee89e9a13e6a4ce89b460fc7df33b5b2",
+    "ops_digest/fixtures/runs/2026-04-20T030000Z_failed.json": "32ec16cb36f3c36f26e52642577fa2908e08bfe80fb7e307cc132eb8521b902a",
+    "ops_digest/src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ops_digest/src/digest_builder.py": "a9ab0ce67a300d189929151b877b01e28275d8314ffd49da46a82562cb272c17",
+    "ops_digest/src/schema.py": "6f81fcc27b211d4b7d6210ab09baefc4b1bc3822510497733fadcc4f62dd7613",
+    "ops_digest/tests/test_automation_contract.py": "54fc06be824a08377ada73ae24df48c52d1fd3d29a6f26502e2e2f2badb491ac",
+    "ops_digest/tests/test_digest_builder.py": "dc4137aa11e0e8e3c1ec57a64d1174918e00254d8f021cdfcfcff1e41319de93",
+    "ops_digest/tests/test_schema.py": "7663afb062b9b3c552c657d19fd62c26222357eecb9bb6dd43408c26bf3a51d0",
+    "release_context/ops_load_budget.md": "109fc17056407e00fab52a8e85448a64bf940858961e9643d6e9678010fd89b3",
+    "release_context/pager_fatigue_memo.md": "914eb3ec2a399bb311f046ad183289fe0066dc90ad41f211abf11e3230742c7c"
+  },
+  "variant_id": "v4-multi-corpus-objective"
+}

@@ -1,0 +1,28 @@
+{
+  "completed_at": "2026-04-19T03:00:00Z",
+  "final_verdict": {
+    "pass": true,
+    "summary": "requires human follow-up despite final pass"
+  },
+  "milestones": {
+    "results": {
+      "M2_primary_fix": {
+        "required": true,
+        "status": "passed"
+      },
+      "M4_functional": {
+        "required": true,
+        "status": "missing"
+      },
+      "M5_e2e": {
+        "required": true,
+        "status": "passed"
+      }
+    }
+  },
+  "report_date": "2026-04-19",
+  "run_id": "nightly-2026-04-19-0300",
+  "warnings": [
+    "advisory: pager-fatigue override memo exists"
+  ]
+}

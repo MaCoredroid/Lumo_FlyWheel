@@ -1,0 +1,33 @@
+{
+  "automation_expectations": {
+    "destination": "inbox",
+    "schedule": "0 2 * * *",
+    "summary_title": "Nightly Regression Watch"
+  },
+  "code_files": [
+    "ops_digest/src/schema.py",
+    "ops_digest/src/digest_builder.py"
+  ],
+  "editable_files": [
+    "ops_digest/src/schema.py",
+    "ops_digest/src/digest_builder.py",
+    "ops_digest/automation/nightly_regression_watch.toml",
+    "ops_digest/docs/escalation_runbook.md",
+    "ops_digest/fixtures/inbox/generated_digest.md"
+  ],
+  "generated_digest_path": "ops_digest/fixtures/inbox/generated_digest.md",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "ee38aef286a9132be0ccb4a4f77cb522ddd1e598c66d7327b2feb595a48698f6",
+    "Dockerfile": "f04bd9d9e51d3dbb2672c83d7db2e76e86485dd6140c20803e75cf6d9556edd4",
+    "incident_context": "62f9b7f57816dcdaaed24da1ce2043260594b1bee98197951f7dc4d62a4ec85e",
+    "ops_digest/fixtures/inbox/local_operator_notes.md": "20d8b8ca87309ff8a6e79ec1498649c642d2db4da3805a37430ebd3a87f2f18b",
+    "ops_digest/fixtures/runs": "58b269c82277b89afd4dfd28c6939d6d727f4c2322a7413d5387b99f595e440a",
+    "ops_digest/tests": "f85b7d190b7c98fb7d4126a82b092b4f2db0a9f627fb4a23bea8c001e9d44f82",
+    "release_context": "9855d77244a0a20319489399db18c4c4848d0b96249338cf31ff97fd5c8b790a"
+  },
+  "runbook_expectations": {
+    "command": "python3 -m ops_digest.src.digest_builder --fixtures ops_digest/fixtures/runs --out ops_digest/fixtures/inbox/generated_digest.md"
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

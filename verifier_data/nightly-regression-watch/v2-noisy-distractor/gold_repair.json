@@ -1,0 +1,31 @@
+{
+  "automation_expectations": {
+    "destination": "inbox",
+    "schedule": "0 2 * * *",
+    "summary_title": "Nightly Regression Watch"
+  },
+  "code_files": [
+    "ops_digest/src/schema.py",
+    "ops_digest/src/digest_builder.py"
+  ],
+  "editable_files": [
+    "ops_digest/src/schema.py",
+    "ops_digest/src/digest_builder.py",
+    "ops_digest/automation/nightly_regression_watch.toml",
+    "ops_digest/docs/escalation_runbook.md",
+    "ops_digest/fixtures/inbox/generated_digest.md"
+  ],
+  "generated_digest_path": "ops_digest/fixtures/inbox/generated_digest.md",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "7f239153bb7901844522b69c37d8ed14a528239403754cbf097be75036e04562",
+    "Dockerfile": "f04bd9d9e51d3dbb2672c83d7db2e76e86485dd6140c20803e75cf6d9556edd4",
+    "ops_digest/fixtures/inbox/local_operator_notes.md": "435acd2390210eb71bc3af7e321f8ca4a871316c2953f84ab808050bdc6e6353",
+    "ops_digest/fixtures/runs": "f5cbe504b5c925f989f380855c005e1f41b64b2ef20ed67da7294eb9c9189d83",
+    "ops_digest/tests": "f85b7d190b7c98fb7d4126a82b092b4f2db0a9f627fb4a23bea8c001e9d44f82"
+  },
+  "runbook_expectations": {
+    "command": "python3 -m ops_digest.src.digest_builder --fixtures ops_digest/fixtures/runs --out ops_digest/fixtures/inbox/generated_digest.md"
+  },
+  "variant_id": "v2-noisy-distractor"
+}

@@ -1,0 +1,14 @@
+        name = "nightly_regression_watch"
+        kind = "cron"
+        status = "ACTIVE"
+        schedule = "0 2 * * *"
+        destination = "inbox"
+        summary_title = "Nightly Regression Watch"
+        prompt = """
+        Review the latest verifier outputs and regenerate the nightly digest.
+Use the literal label `Action required` only when `final_verdict.pass` is false
+or any required milestone is missing.
+Pick the latest completed run for each `report_date`.
+Keep advisory warnings under the healthy section and do not create a second automation.
+Regenerate `ops_digest/fixtures/inbox/generated_digest.md`.
+        """

@@ -1,0 +1,26 @@
+{
+  "completed_at": "2026-04-19T03:00:00Z",
+  "final_verdict": {
+    "pass": true,
+    "summary": "final verdict passed but required milestone missing"
+  },
+  "milestones": {
+    "results": {
+      "M2_primary_fix": {
+        "passed": true,
+        "required": true
+      },
+      "M4_functional": {
+        "required": true,
+        "status": "missing"
+      },
+      "M5_e2e": {
+        "passed_bool": true,
+        "required": true
+      }
+    }
+  },
+  "report_date": "2026-04-19",
+  "run_id": "nightly-2026-04-19-0300",
+  "warnings": []
+}

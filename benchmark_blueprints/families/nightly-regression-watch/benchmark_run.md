@@ -1,40 +1,40 @@
 # Benchmark Run: Nightly Regression Watch
 
-## Run metadata
-- Model: `gpt-5.4`
-- Reasoning effort: `high`
-- Agent id: `019da330-ccae-7e80-b752-59a4f4bc56ac`
-- Attempt scope: family bundle only
-- Solver-visible files:
-  - `task_spec.md`
-  - `evaluator_contract.md`
-  - `codex/config.toml`
-  - `skills/nightly-regression-digest/SKILL.md`
+## attempt_00 — baseline bundle-only calibration
 
-## Actual solver attempt summary
-The child agent correctly diagnosed the schema rollover, blocker semantics, duplicate-day selection rule, and the need to repair the existing automation in place. It proposed concrete edits for `schema.py`, `digest_builder.py`, the automation TOML, and the runbook, including a plausible blocker predicate and latest-of-day dedupe strategy. It did not modify a real `ops_digest/` workspace, regenerate a digest artifact, or execute tests because those concrete files were not present in the family bundle.
+The family started as a doc-only bundle. The prior child-agent run diagnosed the schema rollover, blocking contract, latest-of-day rule, and single-watch constraint, but it did not patch a concrete `ops_digest/` workspace or regenerate artifacts. That left the family in a valid low-20s design state but not Layer B ready.
 
-## Scoring against the current evaluator
-| Category | Max | Score | Notes |
-|---|---:|---:|---|
-| Diagnosis of schema and blocker drift | 20 | 13 | Good diagnosis, but still bundle-level rather than file-grounded. |
-| Observed parser/classification fix | 25 | 4 | Proposed normalization is concrete, but no actual patch or test evidence. |
-| Observed duplicate-day handling | 15 | 2 | Correct strategy described; no executed dedupe behavior. |
-| Observed automation repair | 10 | 1 | Correct in-place repair intent; no concrete automation file update. |
-| Regenerated digest artifact | 10 | 0 | No artifact regenerated. |
-| Runbook alignment | 10 | 1 | Correct intended doc change, but no modified runbook. |
-| Hidden robustness | 10 | 0 | No executed evidence against hidden variations. |
-| **Total** | **100** | **21** | |
+## attempt_01 — family implementation and Layer B wiring
 
-## Caps considered
-- Plan-only submission cap: applicable.
-- Final score after cap: `21/100`.
+Shipped in this attempt:
 
-## Target judgment
-- Target band: around `20/100`.
-- Result: on target.
-- Naive GPT-5.4/high over-30 risk: low under the current evaluator.
+- concrete five-variant `workspace_bundle/` with broken-but-runnable `ops_digest/` repos
+- deterministic scorer at `verifiers/nightly-regression-watch/score_ranking.py`
+- family declaration `family.yaml`
+- verifier data with hidden tests, oracle repairs, manifests, and milestone scripts
+- verification matrices for `v1-clean-baseline` and `v5-recovery-in-thread`
 
-## Follow-up decision
-- No rerun required.
-- Reason: the actual solver attempt already lands near the intended low-20s band once implementation-backed points are withheld.
+Baseline scores after regen:
+- `v1-clean-baseline`: oracle `100/100`, empty `0/100`, shortcut `20/100`
+- `v2-noisy-distractor`: oracle `100/100`, empty `0/100`, shortcut `20/100`
+- `v3-dirty-state`: oracle `100/100`, empty `0/100`, shortcut `20/100`
+- `v4-multi-corpus-objective`: oracle `100/100`, empty `0/100`, shortcut `20/100`
+- `v5-recovery-in-thread`: oracle `100/100`, empty `0/100`, shortcut `20/100`
+
+Verification matrix snapshots:
+
+- `v1-clean-baseline`: `verification_matrix.md`
+- `v5-recovery-in-thread`: `verification_matrix_v5.md`
+
+Layer A status:
+
+- Oracle / empty / shortcut baselines are wired and deterministic.
+- Whole-family live probe is still pending. No `codex exec` calibration loop was launched in this turn.
+
+Layer B status:
+
+- dual-band scorer emitted (`P_benchmark`, `M_training`, schema `cnb55.verify_result.v3`)
+- 5-slot milestones emitted plus milestone shell scripts
+- integrity rules wired 1:1 in scorer and `family.yaml`
+- verification matrices generated for V1 and stress variant V5
+- manifest lock refreshed with current scorer/workspace hashes

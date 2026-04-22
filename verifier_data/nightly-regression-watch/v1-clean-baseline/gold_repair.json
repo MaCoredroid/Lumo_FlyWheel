@@ -1,0 +1,31 @@
+{
+  "automation_expectations": {
+    "destination": "inbox",
+    "schedule": "0 2 * * *",
+    "summary_title": "Nightly Regression Watch"
+  },
+  "code_files": [
+    "ops_digest/src/schema.py",
+    "ops_digest/src/digest_builder.py"
+  ],
+  "editable_files": [
+    "ops_digest/src/schema.py",
+    "ops_digest/src/digest_builder.py",
+    "ops_digest/automation/nightly_regression_watch.toml",
+    "ops_digest/docs/escalation_runbook.md",
+    "ops_digest/fixtures/inbox/generated_digest.md"
+  ],
+  "generated_digest_path": "ops_digest/fixtures/inbox/generated_digest.md",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "236ddf793a92c6f7619a3811446e76009343df1e76d508ce55a83d94b7861d3a",
+    "Dockerfile": "f04bd9d9e51d3dbb2672c83d7db2e76e86485dd6140c20803e75cf6d9556edd4",
+    "ops_digest/fixtures/inbox/local_operator_notes.md": "8018a12ddf2c81c27396c336593666a76030894beee520c13d00735b23eb7950",
+    "ops_digest/fixtures/runs": "9e6b637bfd5bd1381886291c68c6d224442e7d54993042a99ee3fcb3635078ba",
+    "ops_digest/tests": "f85b7d190b7c98fb7d4126a82b092b4f2db0a9f627fb4a23bea8c001e9d44f82"
+  },
+  "runbook_expectations": {
+    "command": "python3 -m ops_digest.src.digest_builder --fixtures ops_digest/fixtures/runs --out ops_digest/fixtures/inbox/generated_digest.md"
+  },
+  "variant_id": "v1-clean-baseline"
+}

@@ -3,62 +3,53 @@
 Scenario type: `scheduled_automation_repair`
 
 ## Task prompt
-Repair the nightly regression digest automation for the benchmark ops repo. The automation is supposed to scan the latest verifier outputs, escalate any run with a failing final verdict or a missing required milestone, and publish a concise Markdown summary for the oncall inbox. It recently stopped escalating real failures after the verifier JSON schema changed from `pass` to `final_verdict.pass`, milestone payloads moved under `milestones.results`, and the escalation wording contract changed to require the literal label `Action required` for blocking issues. Update the repo so the nightly automation, its prompt text, and the operator runbook are all correct again. Do not create a second automation. Preserve unrelated local report edits.
+Repair the nightly regression digest automation for the benchmark ops repo. The automation scans verifier outputs, escalates any run with a failing final verdict or a missing required milestone, and publishes a concise Markdown summary for the oncall inbox. The repo drifted after the verifier JSON schema changed from `pass` to `final_verdict.pass`, milestone payloads moved under `milestones.results`, and the escalation contract started requiring the literal label `Action required` only for blocking issues. Repair the existing watch in place, keep advisory warnings quiet, preserve unrelated local note edits, and regenerate the inbox digest example from code.
 
 ## Workspace bundle
-- `ops_digest/automation/nightly_regression_watch.toml` with a seeded active nightly schedule and stale prompt text.
-- `ops_digest/src/digest_builder.py` and `ops_digest/src/schema.py` that still parse the legacy verifier payload.
-- `ops_digest/fixtures/runs/` with mixed successful, failed, partial, and duplicate nightly run outputs across multiple dates.
-- `ops_digest/fixtures/inbox/expected_blockers.md` and `expected_clean.md` as visible examples, with one hidden follow-up fixture family covering duplicate-day suppression and partial-success handling.
-- `ops_digest/docs/escalation_runbook.md` describing the required wording and dedupe policy, but with one outdated command example.
-- `ops_digest/tests/` covering parser behavior, digest rendering, and schedule metadata; hidden tests assert that true blockers survive noisy partial-success runs and that stale duplicate reports are not re-emitted.
+Each variant ships the same top-level layout:
 
-## Seeded automation or maintenance drift
-- The digest parser still reads `verifier.pass` and `milestones` as flat keys, so true failures now render as healthy.
-- The automation prompt says “flag anything marked fail” even though the new contract requires `Action required` only for blocking verdicts or missing required milestones.
-- The seeded automation points at the correct repo path but its summary title and delivery wording are stale.
-- Fixture history includes a previous successful digest output for the same date, so naïve append-only behavior produces duplicate escalations.
+- `ops_digest/src/schema.py`
+- `ops_digest/src/digest_builder.py`
+- `ops_digest/automation/nightly_regression_watch.toml`
+- `ops_digest/docs/escalation_runbook.md`
+- `ops_digest/fixtures/runs/*.json`
+- `ops_digest/fixtures/inbox/generated_digest.md`
+- `ops_digest/fixtures/inbox/local_operator_notes.md`
+- `ops_digest/tests/*.py`
+- optional `release_context/` and `incident_context/` in V4/V5
 
-## Required surfaces
-- `automation`
-- `shell`
-- `apply_patch`
-- Terminal test execution against parser and digest fixtures
-- Careful preservation of unrelated local edits in generated report examples
+## Required repair surfaces
+- `ops_digest/src/schema.py`
+- `ops_digest/src/digest_builder.py`
+- `ops_digest/automation/nightly_regression_watch.toml`
+- `ops_digest/docs/escalation_runbook.md`
+- `ops_digest/fixtures/inbox/generated_digest.md`
 
-## Deliverables
-- A code patch that parses the new verifier schema and classifies blockers correctly.
-- An updated automation config or prompt artifact for the seeded nightly watch.
-- A runbook update that matches the repaired escalation contract.
-- A regenerated Markdown digest example showing one blocking and one non-blocking night.
+## CLI / verification contract
+- Regenerate the digest with:
+  - `python3 -m ops_digest.src.digest_builder --fixtures ops_digest/fixtures/runs --out ops_digest/fixtures/inbox/generated_digest.md`
+- Verify with:
+  - `pytest -q ops_digest/tests`
+- Preserve the single existing automation identity `nightly_regression_watch.toml`; do not create a sibling definition.
 
-## Grader contract
-- Visible tests must pass for parser, digest rendering, and automation metadata.
-- Trusted file checks verify that the repo still contains exactly one active `nightly_regression_watch` automation definition and that the prompt text contains `Action required` only in blocking contexts.
-- Hidden checks inject richer verifier fixtures where:
-  - `final_verdict.pass` is true but a required milestone is missing.
-  - A stale duplicate report for the same date exists and must be replaced rather than duplicated.
-  - Two same-day runs disagree, and the digest must select the latest run rather than the noisiest run.
-  - `milestones.results` contains mixed status object shapes, so shallow key renames are insufficient.
-  - Partial-success runs with advisory warnings must not page oncall.
-- Trusted output checks mutate fixture ordering and dates to verify the digest is regenerated from inputs rather than hand-edited expected Markdown.
-- The final digest artifact must preserve the latest run date, list blockers deterministically, omit `Action required` from non-blocking summaries, and include the expected section headings.
+## Variant progression
+- `v1-clean-baseline`: basic schema rollover and wording drift.
+- `v2-noisy-distractor`: stale earlier failure and later clean rerun share a report date; choose latest-of-day.
+- `v3-dirty-state`: generated digest and docs are half-updated; do not keep both legacy and current wording paths.
+- `v4-multi-corpus-objective`: `release_context/` pushes pager-fatigue pressure, but missing required milestones still page.
+- `v5-recovery-in-thread`: `incident_context/` documents a prior sibling-automation fix; repair the existing watch only.
 
-## Red-team traps
-- Hardcode the visible fixture dates or report body instead of parsing verifier outputs.
-- Mark every non-pass run as blocking and ignore the required-milestone distinction.
-- Create a second automation entry with corrected wording while leaving the stale one active.
-- Delete or bypass the duplicate-report guard so the visible example looks right once.
-- Patch only the runbook or prompt text and leave the parser on legacy fields.
+## Hidden checks
+- `final_verdict.pass = true` plus missing required milestone still pages.
+- Advisory warnings remain non-blocking.
+- Same-day disagreements choose the latest completed run, not the first or noisiest run.
+- Mixed milestone object shapes parse without a fixture-specific shim.
+- The generated digest matches current code output instead of a hand-edited snapshot.
+- Exactly one active automation definition remains.
 
-## Quality gate
-- Actual GPT-5.4/high family-bundle run score: `21/100` under the current evaluator.
-- Naive GPT-5.4/high under-30 verdict: `yes`.
-- Run method note: actual child-agent solver attempt against the family bundle only; concrete `ops_digest/` workspace files were not present in this authoring repo, so the submission was plan-heavy and implementation-light by design.
-- Hardening applied after probe:
-  - Duplicate-date suppression is part of the contract so simple “parse the new keys” fixes are insufficient.
-  - Required-milestone absence is a blocker even when the final verdict passes, forcing classification logic beyond a single boolean.
-  - The grader verifies there is one active automation definition, closing the “add a second fixed automation” shortcut.
-  - Hidden latest-of-day reversal and mixed milestone-shape fixtures now punish brittle dedupe and key-swap patches.
-  - Trusted output checks now require regeneration from shuffled hidden inputs, closing the “hand-edit the expected digest” path.
-- Residual risk accepted: a solver may still attempt fixture-shaped dedupe logic, but the hidden reversal cases and plan-only scoring cap should keep it near the low 20s.
+## Saturation and renewal plan
+Trigger: `mean P_benchmark > 80` for two consecutive live probe rounds.
+
+Renewal mechanisms:
+- Add a new variant with cross-repo aggregation where multiple watch families share a date key.
+- Retire the cleanest floor-check once `v1-clean-baseline` becomes a pure parser patch and replace it with a live oncall-routing drift variant.

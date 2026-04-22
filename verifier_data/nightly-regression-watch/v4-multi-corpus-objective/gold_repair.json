@@ -1,0 +1,32 @@
+{
+  "automation_expectations": {
+    "destination": "inbox",
+    "schedule": "0 2 * * *",
+    "summary_title": "Nightly Regression Watch"
+  },
+  "code_files": [
+    "ops_digest/src/schema.py",
+    "ops_digest/src/digest_builder.py"
+  ],
+  "editable_files": [
+    "ops_digest/src/schema.py",
+    "ops_digest/src/digest_builder.py",
+    "ops_digest/automation/nightly_regression_watch.toml",
+    "ops_digest/docs/escalation_runbook.md",
+    "ops_digest/fixtures/inbox/generated_digest.md"
+  ],
+  "generated_digest_path": "ops_digest/fixtures/inbox/generated_digest.md",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+    "AGENTS.md": "600068583d2f6761aa68afa9ccd50e37517b057ef497a24741fc37eceafa092b",
+    "Dockerfile": "f04bd9d9e51d3dbb2672c83d7db2e76e86485dd6140c20803e75cf6d9556edd4",
+    "ops_digest/fixtures/inbox/local_operator_notes.md": "118621334247f1cbeab0fe84821e02a60844f59e3921fae7bfa8ed2247edee6b",
+    "ops_digest/fixtures/runs": "76550f27a7ca66ccd3e1dc652392ab8ae72483f2776991dad432accd6b5ee2de",
+    "ops_digest/tests": "f85b7d190b7c98fb7d4126a82b092b4f2db0a9f627fb4a23bea8c001e9d44f82",
+    "release_context": "fc357d6821685c243f17d127455480612e113df16e957641ca03554e5f2dc017"
+  },
+  "runbook_expectations": {
+    "command": "python3 -m ops_digest.src.digest_builder --fixtures ops_digest/fixtures/runs --out ops_digest/fixtures/inbox/generated_digest.md"
+  },
+  "variant_id": "v4-multi-corpus-objective"
+}

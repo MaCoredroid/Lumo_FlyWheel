@@ -1,0 +1,11 @@
+        name = "nightly_regression_watch"
+        kind = "cron"
+        status = "ACTIVE"
+        schedule = "0 2 * * *"
+        destination = "inbox"
+        summary_title = "Nightly Failure Digest"
+        prompt = """
+        Flag anything marked fail.
+Append any warning to the blocking section.
+If the wording changed, add a second automation file with the new prompt.
+        """
