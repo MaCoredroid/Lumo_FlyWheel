@@ -1,0 +1,44 @@
+{
+  "allowed_writes": [
+    "src/watchlist_report/cli.py",
+    "src/watchlist_report/renderers/markdown_renderer.py",
+    "docs/usage.md",
+    "artifacts/delegation/salvage_postmortem.md",
+    "artifacts/delegation/verification.md",
+    "artifacts/delegation/reviewer_note.md"
+  ],
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/delegation/worker_a.patch",
+    "artifacts/delegation/worker_a_notes.md",
+    "artifacts/delegation/worker_b.patch",
+    "artifacts/delegation/worker_b_notes.md",
+    "docs/usage.md",
+    "src/watchlist_report/__init__.py",
+    "src/watchlist_report/cli.py",
+    "src/watchlist_report/renderers/__init__.py",
+    "src/watchlist_report/renderers/json_renderer.py",
+    "src/watchlist_report/renderers/markdown_renderer.py",
+    "src/watchlist_report/service.py",
+    "tests/__init__.py",
+    "tests/fixtures/json/baseline_report.json",
+    "tests/fixtures/legacy_snapshot.md",
+    "tests/test_cli.py",
+    "tests/test_docs.py",
+    "tests/test_service.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "55cf6cccd2c6c64e2618d6a1001fbf6bad750601b50c4c0c6b8a4c509e7925bd",
+    "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
+    "artifacts/delegation/worker_a.patch": "b49d8e17e3af8fa080114397e6e006a6b3f22f313665c48d7c186843fbc4abaa",
+    "artifacts/delegation/worker_a_notes.md": "2d9f1d4d97baea5cbdcced24e7c46352aad86fe4e8cb352a50c2031b0b2644da",
+    "artifacts/delegation/worker_b.patch": "93d5b0eca19e6a2c6e668d3bb20f489b253ffb2f7ee877e868f7ae620f70a10a",
+    "artifacts/delegation/worker_b_notes.md": "3807d3503be11f0a73443f8f14b714ab39fce7e50bc53d09ab78258cb9bc6107",
+    "src/watchlist_report/renderers/json_renderer.py": "3f9575138ece58b6eca4806f8311ebcc1c17b8fe5041fedcb98f61b876b30c54",
+    "src/watchlist_report/service.py": "b5f077417c6209c7da5b12f09766cfa9f7303fb1f5997db986679525128e579f",
+    "tests": "2a2e0b826c667fee533121040d1665baa9be3ca4b553317d0be2e6b47c9cdc3f"
+  }
+}

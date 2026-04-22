@@ -1,0 +1,31 @@
+{
+  "family_id": "delegation-merge-salvage",
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_solution_sha256": "ff13db18d4d29fbabb90b7c91c7fcb8ff7e790590ac7923e099114170ce24a4c",
+      "hidden_tests_tree_sha256": "cd308060a669f751cc570d6a01b85bbbfc05aebccb2bd63769c901ec8f6497eb",
+      "workspace_manifest_sha256": "f831e56f9be622b53aaed47946d0c059020fb450797298cd7476866ceb84e893"
+    },
+    "v2-noisy-distractor": {
+      "gold_solution_sha256": "f22a38b8a06569c91736bd4893b2430959a740b6c6d9ebf1d439a77dc6e05d0e",
+      "hidden_tests_tree_sha256": "cd308060a669f751cc570d6a01b85bbbfc05aebccb2bd63769c901ec8f6497eb",
+      "workspace_manifest_sha256": "a63612dbaef5d32c66a00b186321c4553202611c06e1fad6ca6f7f23e3c88c16"
+    },
+    "v3-dirty-state": {
+      "gold_solution_sha256": "a67ca1db210d9bae538042cff88dc60f044552811fb8b01bf3bb7f07c0acd333",
+      "hidden_tests_tree_sha256": "cd308060a669f751cc570d6a01b85bbbfc05aebccb2bd63769c901ec8f6497eb",
+      "workspace_manifest_sha256": "1232dc59fb90764ade1070a8a13932b400c882e0826577dc9bc7adb77267c034"
+    },
+    "v4-multi-corpus-objective": {
+      "gold_solution_sha256": "6e3f0f967523e4d9f542b09ec24aa091a12b7bd3277d5fe9dbe651b853de2477",
+      "hidden_tests_tree_sha256": "cd308060a669f751cc570d6a01b85bbbfc05aebccb2bd63769c901ec8f6497eb",
+      "workspace_manifest_sha256": "1e5a3baaae2533beeba2c30a5d3bc0eb9980c5dd2a3f961799c20a3a38cd2bd2"
+    },
+    "v5-recovery-in-thread": {
+      "gold_solution_sha256": "b52067c4e213b60a32da6deb8c336ee6d88ab3b979c2c64ac68c60c73709bf89",
+      "hidden_tests_tree_sha256": "cd308060a669f751cc570d6a01b85bbbfc05aebccb2bd63769c901ec8f6497eb",
+      "workspace_manifest_sha256": "d236ae7ebfaf16e3797a51b3c1e4163e4635cd64af969f4ac9b95c485aff8e8e"
+    }
+  }
+}

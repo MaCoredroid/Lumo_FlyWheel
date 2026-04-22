@@ -1,0 +1,47 @@
+{
+  "allowed_writes": [
+    "src/watchlist_report/cli.py",
+    "src/watchlist_report/renderers/markdown_renderer.py",
+    "docs/usage.md",
+    "artifacts/delegation/salvage_postmortem.md",
+    "artifacts/delegation/verification.md",
+    "artifacts/delegation/reviewer_note.md"
+  ],
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/context/contract_guardrail.md",
+    "artifacts/context/deprecation_memo_2025.md",
+    "artifacts/delegation/worker_a.patch",
+    "artifacts/delegation/worker_a_notes.md",
+    "artifacts/delegation/worker_b.patch",
+    "artifacts/delegation/worker_b_notes.md",
+    "docs/usage.md",
+    "src/watchlist_report/__init__.py",
+    "src/watchlist_report/cli.py",
+    "src/watchlist_report/renderers/__init__.py",
+    "src/watchlist_report/renderers/json_renderer.py",
+    "src/watchlist_report/renderers/markdown_renderer.py",
+    "src/watchlist_report/service.py",
+    "tests/__init__.py",
+    "tests/fixtures/json/baseline_report.json",
+    "tests/fixtures/legacy_snapshot.md",
+    "tests/test_cli.py",
+    "tests/test_docs.py",
+    "tests/test_service.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "95d38f57ae3af6b81c82c1b928b1f3dc169f55f95c0cd4d7474ead1d3f027183",
+    "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
+    "artifacts/context": "0b5162b706aeb456a7e0bebe4ae2e174757a346be81e2dd60b50bd8e6f7de12e",
+    "artifacts/delegation/worker_a.patch": "b49d8e17e3af8fa080114397e6e006a6b3f22f313665c48d7c186843fbc4abaa",
+    "artifacts/delegation/worker_a_notes.md": "2d9f1d4d97baea5cbdcced24e7c46352aad86fe4e8cb352a50c2031b0b2644da",
+    "artifacts/delegation/worker_b.patch": "93d5b0eca19e6a2c6e668d3bb20f489b253ffb2f7ee877e868f7ae620f70a10a",
+    "artifacts/delegation/worker_b_notes.md": "617a185bda0699b51e8acc002bc4aa076f51100ec61fa4c05c575705e305abac",
+    "src/watchlist_report/renderers/json_renderer.py": "3f9575138ece58b6eca4806f8311ebcc1c17b8fe5041fedcb98f61b876b30c54",
+    "src/watchlist_report/service.py": "b5f077417c6209c7da5b12f09766cfa9f7303fb1f5997db986679525128e579f",
+    "tests": "2a2e0b826c667fee533121040d1665baa9be3ca4b553317d0be2e6b47c9cdc3f"
+  }
+}

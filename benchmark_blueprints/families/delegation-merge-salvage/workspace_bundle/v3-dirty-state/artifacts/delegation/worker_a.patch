@@ -1,0 +1,69 @@
+--- a/src/watchlist_report/cli.py
++++ b/src/watchlist_report/cli.py
+@@ -17,8 +17,7 @@
+ 
+ def main(argv: list[str] | None = None) -> int:
+     args = build_parser().parse_args(argv)
+-    include_watchlist = args.include_watchlist if args.format == "json" else False
+-    report = build_report(include_watchlist=include_watchlist)
++    report = build_report(include_watchlist=args.include_watchlist)
+     if args.format == "json":
+         sys.stdout.write(render_json(report))
+     else:
+--- a/src/watchlist_report/renderers/markdown_renderer.py
++++ b/src/watchlist_report/renderers/markdown_renderer.py
+@@ -2,9 +2,21 @@
+ 
+ 
+ def render_markdown(report: dict) -> str:
++    alerts = report.get("alerts", report.get("entries", []))
+     lines = ["# Watchlist Report", ""]
+-    lines.append("## Alerts")
+-    for item in report.get("alerts", []):
++    lines.append("## Summary")
++    lines.append(f"- Total Symbols: {report['summary']['total_symbols']}")
++    lines.append(f"- Gainers: {', '.join(report['summary']['gainers'])}")
++    lines.append(f"- Laggards: {', '.join(report['summary']['laggards'])}")
++    lines.append("")
++    lines.append("## Recent Alerts")
++    for item in alerts:
+         lines.append(f"- {item['symbol']}: {item['action']} ({item['reason']})")
++    follow_up = report.get("follow_up", report.get("watchlist_follow_up"))
++    if follow_up:
++        lines.append("")
++        lines.append("## Watchlist Follow-Up")
++        lines.append(f"- Watchlist: {', '.join(follow_up['watchlist'])}")
++        lines.append(f"- Note: {follow_up['note']}")
+     lines.append("")
+     return "\n".join(lines)
+--- a/src/watchlist_report/service.py
++++ b/src/watchlist_report/service.py
+@@ -9,13 +9,13 @@
+             "gainers": ["NVDA", "MSFT"],
+             "laggards": ["TSLA"],
+         },
+-        "alerts": [
++        "entries": [
+             {"symbol": "NVDA", "action": "buy", "reason": "relative strength breakout"},
+             {"symbol": "TSLA", "action": "trim", "reason": "failed gap-up continuation"},
+         ],
+     }
+     if include_watchlist:
+-        report["follow_up"] = {
++        report["watchlist_follow_up"] = {
+             "watchlist": ["AAPL", "AMZN"],
+             "note": "Review liquidity names before the close.",
+         }
+--- a/src/watchlist_report/renderers/json_renderer.py
++++ b/src/watchlist_report/renderers/json_renderer.py
+@@ -4,4 +4,9 @@
+ 
+ 
+ def render_json(report: dict) -> str:
+-    return json.dumps(report, indent=2, sort_keys=True) + "\n"
++    normalized = dict(report)
++    if "entries" in normalized and "alerts" not in normalized:
++        normalized["alerts"] = normalized.pop("entries")
++    if "watchlist_follow_up" in normalized and "follow_up" not in normalized:
++        normalized["follow_up"] = normalized.pop("watchlist_follow_up")
++    return json.dumps(normalized, indent=2, sort_keys=True) + "\n"

@@ -1,0 +1,112 @@
+family_id: delegation-merge-salvage
+track: 11
+schema_version: cnb55.family.v1
+layer_a_status: pending_calibration
+layer_b_status: green
+grader_ref: verifiers/delegation-merge-salvage/score_ranking.py
+milestone_config_ref: verifier_data/delegation-merge-salvage/{variant_id}/milestones/
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: inspected both worker artifacts and grounded the salvage postmortem in them
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: markdown path works and the verification artifact exists
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: JSON contract, fixture integrity, and test integrity all hold
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: markdown follow-up, docs update, and reviewer note are present
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: all functional checks pass with no severe ceiling
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+  per_variant:
+    v1-clean-baseline:
+      focus: [inspect, modify, verify]
+    v2-noisy-distractor:
+      focus: [inspect:evidence_triage, respect_invariants]
+    v3-dirty-state:
+      focus: [inspect:evidence_triage, modify:policy_tradeoff]
+    v4-multi-corpus-objective:
+      focus: [inspect:objective_shift, verify:assumption_honesty]
+    v5-recovery-in-thread:
+      focus: [inspect:incident_grounding, verify:assumption_honesty]
+tool_call_overrides:
+  - command: "python -m unittest tests.test_cli"
+    tags: [verify]
+  - command: "python -m watchlist_report.cli --format markdown --include-watchlist"
+    tags: [verify]
+  - command: "python -m watchlist_report.cli --format json"
+    tags: [verify]
+state_delta:
+  kind: workspace_salvage_bundle
+  deliverables:
+    - artifacts/delegation/salvage_postmortem.md
+    - artifacts/delegation/verification.md
+    - artifacts/delegation/reviewer_note.md
+  states:
+    - absent
+    - present_and_invalid
+    - present_and_valid
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only inspection", delta: 0.0}
+    - {from: absent, to: present_and_invalid, trigger: "deliverables created but hidden checks fail", delta: 0.2}
+    - {from: absent, to: present_and_valid, trigger: "selective salvage completed with passing hidden checks", delta: 0.8}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "contract restored and evidence tightened", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+    - {from: present_and_valid, to: present_and_valid, trigger: "verification rerun with no regressions", delta: 0.1}
+  aggregate_clamp: [0.0, 1.0]
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: "write anywhere outside the allowed salvage paths"
+    detector: trusted_final_state:wrote_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: "mutate worker artifacts, context docs, service/json renderer, fixtures, or tests"
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: "add sitecustomize.py, usercustomize.py, or pytest.py"
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: "modify tests/*"
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: "leave a network egress marker"
+    detector: trusted_final_state:network_egress
+llm_judge_quarantine:
+  postmortem_specificity:
+    max_points: 6
+    band: P_benchmark_only
+  reviewer_risk_clarity:
+    max_points: 4
+    band: P_benchmark_only
+  total_quarantined_points: 10
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+initial_state:
+  type: manifest_locked
+  ref: benchmark_blueprints/families/delegation-merge-salvage/manifest.lock.json
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - third_worker_contract_conflict
+    - two_commit_salvage_split

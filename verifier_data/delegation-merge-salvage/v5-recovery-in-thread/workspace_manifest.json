@@ -1,0 +1,53 @@
+{
+  "allowed_writes": [
+    "src/watchlist_report/cli.py",
+    "src/watchlist_report/renderers/markdown_renderer.py",
+    "docs/usage.md",
+    "artifacts/delegation/salvage_postmortem.md",
+    "artifacts/delegation/verification.md",
+    "artifacts/delegation/reviewer_note.md"
+  ],
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/context/contract_guardrail.md",
+    "artifacts/delegation/partial_apply_state.md",
+    "artifacts/delegation/worker_a.patch",
+    "artifacts/delegation/worker_a_notes.md",
+    "artifacts/delegation/worker_b.patch",
+    "artifacts/delegation/worker_b_notes.md",
+    "docs/usage.md",
+    "incident_context/prior_salvage_rollback.md",
+    "release_context/downstream_consumer_incident.md",
+    "release_context/q2_objective_shift.md",
+    "src/watchlist_report/__init__.py",
+    "src/watchlist_report/cli.py",
+    "src/watchlist_report/renderers/__init__.py",
+    "src/watchlist_report/renderers/json_renderer.py",
+    "src/watchlist_report/renderers/markdown_renderer.py",
+    "src/watchlist_report/service.py",
+    "tests/__init__.py",
+    "tests/fixtures/json/baseline_report.json",
+    "tests/fixtures/legacy_snapshot.md",
+    "tests/test_cli.py",
+    "tests/test_docs.py",
+    "tests/test_service.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "4bb0a7cf7d2d92c8683152c286f9f047a12be92841c12c0769480b70d5a1e8d6",
+    "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
+    "artifacts/context": "5a00dd80748dca15c97b7d276bd8f0bd0674c77126c1952e69365d01cf91969e",
+    "artifacts/delegation/partial_apply_state.md": "d0fa364135ad1e77112c5448b09734177f5f07c290d6d864492d542e03fa837e",
+    "artifacts/delegation/worker_a.patch": "b49d8e17e3af8fa080114397e6e006a6b3f22f313665c48d7c186843fbc4abaa",
+    "artifacts/delegation/worker_a_notes.md": "2d9f1d4d97baea5cbdcced24e7c46352aad86fe4e8cb352a50c2031b0b2644da",
+    "artifacts/delegation/worker_b.patch": "93d5b0eca19e6a2c6e668d3bb20f489b253ffb2f7ee877e868f7ae620f70a10a",
+    "artifacts/delegation/worker_b_notes.md": "617a185bda0699b51e8acc002bc4aa076f51100ec61fa4c05c575705e305abac",
+    "incident_context": "db097ba465c14005c46084e1cb481e0bc4a42e87eb9d07ae7f14f113a08b25b1",
+    "release_context": "700b181c858435ba3887262de67d3c5465e7bf763704f0855941b291c24245f6",
+    "src/watchlist_report/renderers/json_renderer.py": "3f9575138ece58b6eca4806f8311ebcc1c17b8fe5041fedcb98f61b876b30c54",
+    "src/watchlist_report/service.py": "b5f077417c6209c7da5b12f09766cfa9f7303fb1f5997db986679525128e579f",
+    "tests": "2a2e0b826c667fee533121040d1665baa9be3ca4b553317d0be2e6b47c9cdc3f"
+  }
+}

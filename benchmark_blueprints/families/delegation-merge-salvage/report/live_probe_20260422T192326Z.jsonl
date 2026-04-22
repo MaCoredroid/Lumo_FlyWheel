@@ -1,0 +1,5 @@
+{"M_training": 0.0, "ceilings": ["missing_postmortem", "integrity_violation"], "integrity_flag": 1, "pass": false, "score": 0, "variant": "v1-clean-baseline"}
+{"M_training": 0.0, "ceilings": ["watchlist_follow_up_missing", "missing_postmortem", "docs_not_updated"], "integrity_flag": 0, "pass": false, "score": 0, "variant": "v2-noisy-distractor"}
+{"M_training": 0.0, "ceilings": ["watchlist_follow_up_missing", "missing_postmortem", "docs_not_updated"], "integrity_flag": 0, "pass": false, "score": 0, "variant": "v3-dirty-state"}
+{"M_training": 0.0, "ceilings": ["watchlist_follow_up_missing", "missing_postmortem", "docs_not_updated"], "integrity_flag": 0, "pass": false, "score": 0, "variant": "v4-multi-corpus-objective"}
+{"M_training": 0.0, "ceilings": ["watchlist_follow_up_missing", "missing_postmortem", "docs_not_updated"], "integrity_flag": 0, "pass": false, "score": 0, "variant": "v5-recovery-in-thread"}

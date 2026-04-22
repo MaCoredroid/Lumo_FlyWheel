@@ -1,0 +1,25 @@
+{
+  "alerts": [
+    {
+      "action": "buy",
+      "reason": "relative strength breakout",
+      "symbol": "NVDA"
+    },
+    {
+      "action": "trim",
+      "reason": "failed gap-up continuation",
+      "symbol": "TSLA"
+    }
+  ],
+  "generated_at": "2026-04-20T15:30:00Z",
+  "summary": {
+    "gainers": [
+      "NVDA",
+      "MSFT"
+    ],
+    "laggards": [
+      "TSLA"
+    ],
+    "total_symbols": 4
+  }
+}
