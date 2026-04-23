@@ -180,7 +180,7 @@ rawr_modes:
     status: implemented
   - id: citation_fabricated
     description: canonical slot for the old `invented_behavior_change` idea; the deploy note or facts claim a behavior change such as helper-alias removal that is not supported by checked code/help evidence
-    detection_surface: `deploy_note_invents_behavior_change` / `invented_behavior_change` ceiling in `score_reconciliation.py`
+    detection_surface: "`deploy_note_invents_behavior_change` / `invented_behavior_change` ceiling in `score_reconciliation.py`"
     expected_P_benchmark_max: 0.10
     status: implemented
   - id: constraint_named_not_respected
