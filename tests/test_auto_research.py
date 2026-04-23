@@ -579,6 +579,45 @@ kv_cache_dtype: fp8_e5m2
         )
 
 
+def test_commit_candidate_refuses_when_bootstrap_artifact_is_dirty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", lambda self, candidate_vllm_config, **kwargs: _real_trace())
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        (round_dir / "candidates" / "baseline_a" / "candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    (round_dir / "impl_brief.md").write_text("corrupted brief\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match=r"commit_refused: immutable round artifact changed: impl_brief.md"):
+        manager.commit_candidate(
+            round_id=bootstrap["round_id"],
+            iteration="001",
+            status="keep",
+            notes="should refuse dirty bootstrap artifact",
+        )
+
+
 def test_measure_rejects_duplicate_iteration_row(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _init_repo(tmp_path)
     manager = auto_research.AutoResearchRoundManager(
@@ -775,6 +814,67 @@ kv_cache_dtype: fp8_e5m2
             status="keep",
             notes="should be refused",
         )
+
+
+def test_measure_and_commit_candidate_surface_promql_mismatch_as_harness_fault(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    def fake_measure(self, candidate_vllm_config, *, warmup_s, window_s, target_concurrency_sweep):
+        del self, candidate_vllm_config, warmup_s, window_s, target_concurrency_sweep
+        trace = _real_trace()
+        trace["ttft_p95_ms"]["delta_pct"] = 12.5
+        return trace
+
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", fake_measure)
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        (round_dir / "candidates" / "baseline_a" / "candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    measure = manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    rows = manager._read_results(round_dir / "results.tsv")
+
+    assert measure["recommended_status"] == "harness_fault"
+    assert measure["notes"] == "promql_mismatch"
+    assert rows[0].feasible is False
+
+    with pytest.raises(RuntimeError, match="promql_mismatch requires status harness_fault"):
+        manager.commit_candidate(
+            round_id=bootstrap["round_id"],
+            iteration="001",
+            status="keep",
+            notes="wrong status for promql mismatch",
+        )
+
+    committed = manager.commit_candidate(
+        round_id=bootstrap["round_id"],
+        iteration="001",
+        status="harness_fault",
+        notes="promql_mismatch",
+    )
+    updated_rows = manager._read_results(round_dir / "results.tsv")
+
+    assert committed["status"] == "harness_fault"
+    assert updated_rows[0].status == "harness_fault"
+    assert updated_rows[0].notes == "promql_mismatch"
 
 
 def test_bootstrap_round_rejects_dry_run_bundle(tmp_path: Path) -> None:
@@ -1178,4 +1278,50 @@ kv_cache_dtype: fp8_e5m2
     subprocess.run(["git", "add", "README.md"], cwd=repo, check=True, capture_output=True, text=True)
 
     with pytest.raises(RuntimeError, match=r"finalize-round refuses: staged paths outside allow-list: README.md"):
+        manager.finalize_round(round_id=bootstrap["round_id"], dry_run=True)
+
+
+def test_finalize_round_refuses_when_round_artifact_is_dirty(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+max_num_seqs: 4
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.90
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+""",
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    manager.commit_candidate(
+        round_id=bootstrap["round_id"],
+        iteration="001",
+        status="keep",
+        notes="dry-run winner",
+        allow_synthetic=True,
+    )
+    (round_dir / "iteration_brief.md").write_text("corrupted brief\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match=r"finalize-round refuses: immutable round artifact changed: iteration_brief.md"):
         manager.finalize_round(round_id=bootstrap["round_id"], dry_run=True)

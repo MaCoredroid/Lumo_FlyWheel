@@ -1242,8 +1242,9 @@ class AutoResearchRoundManager:
         self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
         self._assert_git_index_clean(context="commit_refused")
         self._write_results(round_dir / "results.tsv", updated_rows)
+        self._assert_immutable_round_artifacts(round_dir, spec=spec, context="commit_refused")
         self._assert_dirty_paths_match_expected(
-            mutable_paths=[candidate_dir, round_dir / "results.tsv"],
+            mutable_paths=[candidate_dir, round_dir / "results.tsv", round_dir / "round_spec.yaml"],
             bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
             context="commit_refused",
         )
@@ -1329,8 +1330,9 @@ class AutoResearchRoundManager:
             self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
             self._assert_git_index_clean(context="commit_refused")
             self._write_results(round_dir / "results.tsv", updated_rows)
+            self._assert_immutable_round_artifacts(round_dir, spec=spec, context="commit_refused")
             self._assert_dirty_paths_match_expected(
-                mutable_paths=[rescreen_dir, round_dir / "results.tsv"],
+                mutable_paths=[rescreen_dir, round_dir / "results.tsv", round_dir / "round_spec.yaml"],
                 bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
                 context="commit_refused",
             )
@@ -1523,10 +1525,12 @@ class AutoResearchRoundManager:
             staged_paths.append((round_dir / "rescreen_trace.json").relative_to(self.repo_root))
         if (round_dir / "holdout_trace.json").exists():
             staged_paths.append((round_dir / "holdout_trace.json").relative_to(self.repo_root))
-        self._assert_dirty_paths_match_expected(
-            mutable_paths=[self.repo_root / path for path in staged_paths],
-            context="finalize-round refuses",
-        )
+        self._assert_immutable_round_artifacts(round_dir, spec=spec, context="finalize-round refuses")
+        if spec.harness_type != "synthetic":
+            self._assert_dirty_paths_match_expected(
+                mutable_paths=[self.repo_root / path for path in staged_paths] + [round_dir / "round_spec.yaml"],
+                context="finalize-round refuses",
+            )
         finalize_commit_sha = self._commit_paths(
             staged_paths,
             commit_message,
@@ -1938,6 +1942,8 @@ class AutoResearchRoundManager:
         ]
         unexpected: set[str] = set()
         for status, path in self._dirty_entries():
+            if path.endswith(".pyc") or path.startswith("__pycache__/") or "/__pycache__/" in path:
+                continue
             if any(path == candidate or path.startswith(f"{candidate}/") for candidate in mutable):
                 continue
             if any(path == candidate or path.startswith(f"{candidate}/") for candidate in bootstrap):
@@ -1947,6 +1953,23 @@ class AutoResearchRoundManager:
         if unexpected:
             rendered = ", ".join(sorted(unexpected))
             raise RuntimeError(f"{context}: dirty paths outside expected set: {rendered}")
+
+    def _assert_immutable_round_artifacts(self, round_dir: Path, *, spec: RoundSpecRecord, context: str) -> None:
+        if (round_dir / "impl_brief.md").read_text(encoding="utf-8") != IMPL_BRIEF_TEMPLATE:
+            raise RuntimeError(f"{context}: immutable round artifact changed: impl_brief.md")
+        if (round_dir / "iteration_brief.md").read_text(encoding="utf-8") != ITERATION_BRIEF_TEMPLATE:
+            raise RuntimeError(f"{context}: immutable round artifact changed: iteration_brief.md")
+        expected_codex_config = 'model = "gpt-5.4"\nmodel_reasoning_effort = "high"\n'
+        if (round_dir / "codex-home" / ".codex" / "config.toml").read_text(encoding="utf-8") != expected_codex_config:
+            raise RuntimeError(f"{context}: immutable round artifact changed: codex-home/.codex/config.toml")
+
+        default_candidate = load_registry(self.registry_path)[spec.model_id].vllm_config()
+        for suffix in ("a", "b"):
+            baseline_path = round_dir / "candidates" / f"baseline_{suffix}" / "candidate.yaml"
+            if load_yaml_file(baseline_path) != default_candidate:
+                raise RuntimeError(
+                    f"{context}: immutable round artifact changed: candidates/baseline_{suffix}/candidate.yaml"
+                )
 
     def _bootstrap_round_artifact_paths(self, round_dir: Path) -> list[Path]:
         paths = [
