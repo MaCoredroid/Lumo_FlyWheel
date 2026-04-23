@@ -1,0 +1,3 @@
+# legacy_profile_template
+provider = "legacy_vllm"
+model = "gpt-5.4"

@@ -1,0 +1,134 @@
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/.codex/config.toml b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run01/workspace/serving_maintenance/.codex/config.toml
+index 361a43a..5653002 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/.codex/config.toml
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run01/workspace/serving_maintenance/.codex/config.toml
+@@ -1,7 +1,7 @@
+ # Local maintenance profile after provider rollover.
+ # Keep the local tuning block below exactly as written.
+ 
+-provider = "legacy_vllm"
++provider = "responses_proxy"
+ model = "gpt-5.4"
+ model_reasoning_effort = "high"
+ model_verbosity = "low"
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/provider_rollover.md b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run01/workspace/serving_maintenance/docs/provider_rollover.md
+index 89f77ec..bb7fe95 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/provider_rollover.md
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run01/workspace/serving_maintenance/docs/provider_rollover.md
+@@ -1,6 +1,15 @@
+ # Provider rollover
+ 
+-Current profile still points at `legacy_vllm` and the direct endpoint `http://127.0.0.1:8001/v1`.
+-Update the file before the next maintenance run.
++The earlier rollback came from two gaps in the maintenance-responses profile:
+ 
+-Operators still describe the fix as a generic smoke repair rather than the maintenance-responses profile.
++1. The selected provider drifted back to `legacy_vllm` instead of `responses_proxy`.
++2. Follow-up validation stopped after a first successful turn, so `store = false` and broken `previous_response_id` continuity were not caught before rollback.
++
++The repaired profile must keep maintenance traffic on:
++
++- provider: `responses_proxy`
++- base URL: `http://127.0.0.1:11434/v1/responses`
++- wire API: `responses`
++- store: `true`
++
++Do not rewrite the file from a template. Update only the profile selection and preserve the local tuning block exactly as written.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/smoke.md b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run01/workspace/serving_maintenance/docs/smoke.md
+index f08b68e..a31a053 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/smoke.md
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run01/workspace/serving_maintenance/docs/smoke.md
+@@ -1,5 +1,10 @@
+ # Smoke procedure
+ 
+-1. Run the first maintenance turn.
+-2. Check that the response id exists.
+-3. Stop after the first success.
++Run the maintenance-responses smoke as a two-turn continuity check, not a one-turn liveness probe.
++
++1. Load `serving_maintenance/.codex/config.toml` and confirm the selected provider is `responses_proxy` with base URL `http://127.0.0.1:11434/v1/responses`, `wire_api = "responses"`, and `store = true`.
++2. Run turn 1 and capture the exact response id from `response.id`.
++3. Run turn 2 with `request.previous_response_id` set to that exact turn-1 id.
++4. Verify `request.previous_response_id == turn1.response.id` exactly.
++5. Verify `response.previous_response_id == turn1.response.id` exactly.
++6. Fail the smoke if either turn sends `store = false`, if the provider/base URL drift, or if either follow-up id does not match the exact previous response id.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/scripts/smoke_responses_profile.py b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run01/workspace/serving_maintenance/scripts/smoke_responses_profile.py
+index 304969b..26230ad 100755
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/scripts/smoke_responses_profile.py
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run01/workspace/serving_maintenance/scripts/smoke_responses_profile.py
+@@ -4,6 +4,7 @@ from __future__ import annotations
+ import argparse
+ import json
+ from pathlib import Path
++from typing import Any
+ 
+ EXPECTED_PROVIDER = "responses_proxy"
+ EXPECTED_BASE_URL = "http://127.0.0.1:11434/v1/responses"
+@@ -40,19 +41,49 @@ def load_config(path: Path) -> dict:
+         current[key.strip()] = parse_scalar(value)
+     return data
+ 
++def require(condition: bool, message: str) -> None:
++    if not condition:
++        raise ValueError(message)
++
+ def run_smoke(config_path: Path, turn1_path: Path, turn2_path: Path) -> dict:
+     config = load_config(config_path)
+     selected = config.get('provider')
+     providers = config.get('model_providers', {})
++    provider = providers.get(selected, {})
+     turn1 = load_json(turn1_path)
+     turn2 = load_json(turn2_path)
++    turn1_request = turn1.get('request', {})
++    turn1_response = turn1.get('response', {})
++    turn2_request = turn2.get('request', {})
++    turn2_response = turn2.get('response', {})
++    turn1_id = turn1_response.get('id')
++    observed_previous_response_id = turn2_request.get('previous_response_id')
++    response_previous_response_id = turn2_response.get('previous_response_id')
++
++    require(selected == EXPECTED_PROVIDER, f"selected provider must be {EXPECTED_PROVIDER}, got {selected!r}")
++    require(provider.get('base_url') == EXPECTED_BASE_URL, f"provider base_url must be {EXPECTED_BASE_URL}, got {provider.get('base_url')!r}")
++    require(provider.get('wire_api') == 'responses', f"provider wire_api must be 'responses', got {provider.get('wire_api')!r}")
++    require(provider.get('store') is True, f"provider store must be true, got {provider.get('store')!r}")
++
++    require(turn1_request.get('provider') == EXPECTED_PROVIDER, f"turn1 provider must be {EXPECTED_PROVIDER}, got {turn1_request.get('provider')!r}")
++    require(turn1_request.get('base_url') == EXPECTED_BASE_URL, f"turn1 base_url must be {EXPECTED_BASE_URL}, got {turn1_request.get('base_url')!r}")
++    require(turn1_request.get('store') is True, f"turn1 store must be true, got {turn1_request.get('store')!r}")
++    require(turn1_id, 'turn1 response is missing id')
++
++    require(turn2_request.get('provider') == EXPECTED_PROVIDER, f"turn2 provider must be {EXPECTED_PROVIDER}, got {turn2_request.get('provider')!r}")
++    require(turn2_request.get('base_url') == EXPECTED_BASE_URL, f"turn2 base_url must be {EXPECTED_BASE_URL}, got {turn2_request.get('base_url')!r}")
++    require(turn2_request.get('store') is True, f"turn2 store must be true, got {turn2_request.get('store')!r}")
++    require(observed_previous_response_id == turn1_id, f"turn2 request previous_response_id must equal turn1 id {turn1_id!r}, got {observed_previous_response_id!r}")
++    require(response_previous_response_id == turn1_id, f"turn2 response previous_response_id must equal turn1 id {turn1_id!r}, got {response_previous_response_id!r}")
++
+     return {
+         'selected_provider': selected,
+-        'base_url': providers.get(selected, {}).get('base_url'),
+-        'turn1_id': turn1.get('response', {}).get('id'),
+-        'observed_previous_response_id': turn2.get('request', {}).get('previous_response_id'),
+-        'continuity_ok': bool(turn2.get('request', {}).get('previous_response_id')),
+-        'store_ok': True,
++        'base_url': provider.get('base_url'),
++        'turn1_id': turn1_id,
++        'observed_previous_response_id': observed_previous_response_id,
++        'response_previous_response_id': response_previous_response_id,
++        'continuity_ok': observed_previous_response_id == turn1_id and response_previous_response_id == turn1_id,
++        'store_ok': provider.get('store') is True and turn1_request.get('store') is True and turn2_request.get('store') is True,
+         'status': 'ok',
+     }
+ 
+@@ -62,7 +93,11 @@ def main() -> int:
+     parser.add_argument('--turn1', type=Path, required=True)
+     parser.add_argument('--turn2', type=Path, required=True)
+     args = parser.parse_args()
+-    print(json.dumps(run_smoke(args.config, args.turn1, args.turn2), indent=2, sort_keys=True))
++    try:
++        payload: dict[str, Any] = run_smoke(args.config, args.turn1, args.turn2)
++    except ValueError as exc:
++        raise SystemExit(str(exc))
++    print(json.dumps(payload, indent=2, sort_keys=True))
+     return 0
+ 
+ if __name__ == '__main__':

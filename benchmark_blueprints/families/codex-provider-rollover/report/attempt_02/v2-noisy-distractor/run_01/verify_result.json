@@ -1,0 +1,53 @@
+{
+  "M_training": 0.35,
+  "P_benchmark": 35,
+  "breakdown": {
+    "config_proxy_contract": 10,
+    "config_selected_provider": 10,
+    "docs_core_sync": 10,
+    "preserve_block_exact": 15,
+    "smoke_good_pass": 15,
+    "smoke_hidden_rejections": 10,
+    "visible_tests_pass": 25
+  },
+  "breakdown_bands": {
+    "config_proxy_contract": "M",
+    "config_selected_provider": "M",
+    "docs_core_sync": "M",
+    "preserve_block_exact": "M",
+    "smoke_good_pass": "M",
+    "smoke_hidden_rejections": "M",
+    "visible_tests_pass": "M"
+  },
+  "ceilings_applied": [
+    "canary_anchoring"
+  ],
+  "checks": {
+    "config_proxy_contract": true,
+    "config_selected_provider": true,
+    "docs_core_sync": true,
+    "docs_variant_sync": false,
+    "preserve_block_exact": true,
+    "smoke_good_pass": true,
+    "smoke_hidden_rejections": true,
+    "visible_tests_pass": true
+  },
+  "errors": [],
+  "family_id": "codex-provider-rollover",
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 35,
+  "shortcut_detected": false,
+  "smoke_good_output": "{\n  \"base_url\": \"http://127.0.0.1:11434/v1/responses\",\n  \"continuity_ok\": true,\n  \"observed_previous_response_id\": \"resp_turn_001\",\n  \"response_previous_response_id\": \"resp_turn_001\",\n  \"selected_provider\": \"responses_proxy\",\n  \"status\": \"ok\",\n  \"store_ok\": true,\n  \"turn1_id\": \"resp_turn_001\"\n}",
+  "variant_id": "v2-noisy-distractor",
+  "visible_test_output": "....\n----------------------------------------------------------------------\nRan 4 tests in 0.048s\n\nOK"
+}

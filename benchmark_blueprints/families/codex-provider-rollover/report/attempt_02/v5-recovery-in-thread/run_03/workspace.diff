@@ -1,0 +1,206 @@
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/.codex/config.toml b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run03/workspace/serving_maintenance/.codex/config.toml
+index 361a43a..5653002 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/.codex/config.toml
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run03/workspace/serving_maintenance/.codex/config.toml
+@@ -1,7 +1,7 @@
+ # Local maintenance profile after provider rollover.
+ # Keep the local tuning block below exactly as written.
+ 
+-provider = "legacy_vllm"
++provider = "responses_proxy"
+ model = "gpt-5.4"
+ model_reasoning_effort = "high"
+ model_verbosity = "low"
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/provider_rollover.md b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run03/workspace/serving_maintenance/docs/provider_rollover.md
+index 89f77ec..a81c9a9 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/provider_rollover.md
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run03/workspace/serving_maintenance/docs/provider_rollover.md
+@@ -1,6 +1,7 @@
+ # Provider rollover
+ 
+-Current profile still points at `legacy_vllm` and the direct endpoint `http://127.0.0.1:8001/v1`.
+-Update the file before the next maintenance run.
++The maintenance profile now selects `responses_proxy` and targets `http://127.0.0.1:11434/v1/responses`.
+ 
+-Operators still describe the fix as a generic smoke repair rather than the maintenance-responses profile.
++This repair explicitly addresses the earlier rollback: the selected provider path had `store = false`, and the follow-up smoke only checked that a `previous_response_id` field existed instead of verifying exact continuity against the prior response id.
++
++For maintenance runs, keep the profile on `maintenance-responses` with the proxy-backed Responses endpoint and `store = true` on the selected provider so turn-two follow-ups can resume from the exact prior response state.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/smoke.md b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run03/workspace/serving_maintenance/docs/smoke.md
+index f08b68e..ad5f0e6 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/smoke.md
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run03/workspace/serving_maintenance/docs/smoke.md
+@@ -1,5 +1,7 @@
+ # Smoke procedure
+ 
+-1. Run the first maintenance turn.
+-2. Check that the response id exists.
+-3. Stop after the first success.
++1. Run the first maintenance turn against `http://127.0.0.1:11434/v1/responses` using the `responses_proxy` maintenance profile with `store = true`.
++2. Record the turn-one response id from the first completed response.
++3. Run the follow-up maintenance turn with `previous_response_id` set to that exact turn-one response id.
++4. Verify that turn two keeps `store = true` and that `previous_response_id` exactly matches the turn-one response id in both the follow-up request payload and the follow-up response payload.
++5. Treat any missing or mismatched `previous_response_id`, provider drift, base URL drift, or `store = false` value as a smoke failure.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/scripts/smoke_responses_profile.py b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run03/workspace/serving_maintenance/scripts/smoke_responses_profile.py
+index 304969b..36bbc32 100755
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/scripts/smoke_responses_profile.py
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run03/workspace/serving_maintenance/scripts/smoke_responses_profile.py
+@@ -8,13 +8,19 @@ from pathlib import Path
+ EXPECTED_PROVIDER = "responses_proxy"
+ EXPECTED_BASE_URL = "http://127.0.0.1:11434/v1/responses"
+ 
++
++class SmokeError(RuntimeError):
++    pass
++
++
+ def load_json(path: Path) -> dict:
+     return json.loads(path.read_text())
+ 
++
+ def parse_scalar(raw: str):
+     text = raw.strip()
+-    if text in {'true', 'false'}:
+-        return text == 'true'
++    if text in {"true", "false"}:
++        return text == "true"
+     if text.startswith('"') and text.endswith('"'):
+         return text[1:-1]
+     try:
+@@ -22,48 +28,117 @@ def parse_scalar(raw: str):
+     except ValueError:
+         return text
+ 
++
+ def load_config(path: Path) -> dict:
+     data = {}
+     current = data
+     for raw in path.read_text().splitlines():
+         line = raw.strip()
+-        if not line or line.startswith('#'):
++        if not line or line.startswith("#"):
+             continue
+-        if line.startswith('[') and line.endswith(']'):
++        if line.startswith("[") and line.endswith("]"):
+             current = data
+-            for part in line[1:-1].split('.'):
++            for part in line[1:-1].split("."):
+                 current = current.setdefault(part, {})
+             continue
+-        if '=' not in line:
++        if "=" not in line:
+             continue
+-        key, value = line.split('=', 1)
++        key, value = line.split("=", 1)
+         current[key.strip()] = parse_scalar(value)
+     return data
+ 
++
++def require(condition: bool, message: str) -> None:
++    if not condition:
++        raise SmokeError(message)
++
++
++def validate_profile(config: dict) -> tuple[str, dict]:
++    selected = config.get("provider")
++    providers = config.get("model_providers", {})
++    provider = providers.get(selected)
++    require(
++        selected == EXPECTED_PROVIDER,
++        f"selected provider must be {EXPECTED_PROVIDER!r}, got {selected!r}",
++    )
++    require(provider is not None, f"missing provider config for {selected!r}")
++    require(
++        provider.get("base_url") == EXPECTED_BASE_URL,
++        f"provider {selected!r} must use {EXPECTED_BASE_URL!r}",
++    )
++    require(
++        provider.get("wire_api") == "responses",
++        f"provider {selected!r} must use wire_api='responses'",
++    )
++    require(
++        provider.get("store") is True,
++        f"provider {selected!r} must set store = true for follow-up continuity",
++    )
++    return selected, provider
++
++
++def validate_turn_request(request: dict, *, label: str, selected: str) -> None:
++    require(request.get("provider") == selected, f"{label} request provider mismatch")
++    require(
++        request.get("base_url") == EXPECTED_BASE_URL,
++        f"{label} request base_url mismatch",
++    )
++    require(request.get("store") is True, f"{label} request store must be true")
++
++
+ def run_smoke(config_path: Path, turn1_path: Path, turn2_path: Path) -> dict:
+     config = load_config(config_path)
+-    selected = config.get('provider')
+-    providers = config.get('model_providers', {})
++    selected, provider = validate_profile(config)
+     turn1 = load_json(turn1_path)
+     turn2 = load_json(turn2_path)
++
++    turn1_request = turn1.get("request", {})
++    turn1_response = turn1.get("response", {})
++    turn2_request = turn2.get("request", {})
++    turn2_response = turn2.get("response", {})
++
++    validate_turn_request(turn1_request, label="turn1", selected=selected)
++    validate_turn_request(turn2_request, label="turn2", selected=selected)
++
++    turn1_id = turn1_response.get("id")
++    request_previous_response_id = turn2_request.get("previous_response_id")
++    response_previous_response_id = turn2_response.get("previous_response_id")
++
++    require(turn1_id, "turn1 response must include an id")
++    require(
++        request_previous_response_id == turn1_id,
++        "turn2 request previous_response_id must exactly match turn1 response id",
++    )
++    require(
++        response_previous_response_id == turn1_id,
++        "turn2 response previous_response_id must exactly match turn1 response id",
++    )
++
+     return {
+-        'selected_provider': selected,
+-        'base_url': providers.get(selected, {}).get('base_url'),
+-        'turn1_id': turn1.get('response', {}).get('id'),
+-        'observed_previous_response_id': turn2.get('request', {}).get('previous_response_id'),
+-        'continuity_ok': bool(turn2.get('request', {}).get('previous_response_id')),
+-        'store_ok': True,
+-        'status': 'ok',
++        "selected_provider": selected,
++        "base_url": provider.get("base_url"),
++        "turn1_id": turn1_id,
++        "observed_previous_response_id": request_previous_response_id,
++        "response_previous_response_id": response_previous_response_id,
++        "continuity_ok": True,
++        "store_ok": True,
++        "status": "ok",
+     }
+ 
++
+ def main() -> int:
+     parser = argparse.ArgumentParser()
+-    parser.add_argument('--config', type=Path, required=True)
+-    parser.add_argument('--turn1', type=Path, required=True)
+-    parser.add_argument('--turn2', type=Path, required=True)
++    parser.add_argument("--config", type=Path, required=True)
++    parser.add_argument("--turn1", type=Path, required=True)
++    parser.add_argument("--turn2", type=Path, required=True)
+     args = parser.parse_args()
+-    print(json.dumps(run_smoke(args.config, args.turn1, args.turn2), indent=2, sort_keys=True))
++    try:
++        payload = run_smoke(args.config, args.turn1, args.turn2)
++    except SmokeError as exc:
++        raise SystemExit(str(exc))
++    print(json.dumps(payload, indent=2, sort_keys=True))
+     return 0
+ 
+-if __name__ == '__main__':
++
++if __name__ == "__main__":
+     raise SystemExit(main())

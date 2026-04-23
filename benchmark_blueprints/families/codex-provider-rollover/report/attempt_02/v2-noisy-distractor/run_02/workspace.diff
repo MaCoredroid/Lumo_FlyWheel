@@ -1,0 +1,122 @@
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v2-noisy-distractor/serving_maintenance/.codex/config.toml b/tmp/codex_provider_rollover_probe/20260423T193329Z-v2-noisy-distractor-run02/workspace/serving_maintenance/.codex/config.toml
+index 52c9bcc..4e1580e 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v2-noisy-distractor/serving_maintenance/.codex/config.toml
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v2-noisy-distractor-run02/workspace/serving_maintenance/.codex/config.toml
+@@ -1,7 +1,7 @@
+ # Local maintenance profile after provider rollover.
+ # Keep the local tuning block below exactly as written.
+ 
+-provider = "legacy_vllm"
++provider = "responses_proxy"
+ model = "gpt-5.4"
+ model_reasoning_effort = "high"
+ model_verbosity = "low"
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v2-noisy-distractor/serving_maintenance/docs/provider_rollover.md b/tmp/codex_provider_rollover_probe/20260423T193329Z-v2-noisy-distractor-run02/workspace/serving_maintenance/docs/provider_rollover.md
+index b7bd34c..54f23b5 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v2-noisy-distractor/serving_maintenance/docs/provider_rollover.md
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v2-noisy-distractor-run02/workspace/serving_maintenance/docs/provider_rollover.md
+@@ -1,6 +1,10 @@
+ # Provider rollover
+ 
+-Current profile still points at `legacy_vllm` and the direct endpoint `http://127.0.0.1:8001/v1`.
+-Update the file before the next maintenance run.
++Keep the canonical maintenance profile selected:
++- provider: `responses_proxy`
++- endpoint: `http://127.0.0.1:11434/v1/responses`
++- wire API: `responses`
++- store: `true`
+ 
+-The rehearsal canary note still references `maintenance_canary`.
++Ignore the stale canary path and do not switch maintenance traffic to `maintenance_canary`.
++When repairing the profile, preserve the local tuning block at the end of `serving_maintenance/.codex/config.toml` exactly as-is.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v2-noisy-distractor/serving_maintenance/docs/smoke.md b/tmp/codex_provider_rollover_probe/20260423T193329Z-v2-noisy-distractor-run02/workspace/serving_maintenance/docs/smoke.md
+index f08b68e..69ceda2 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v2-noisy-distractor/serving_maintenance/docs/smoke.md
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v2-noisy-distractor-run02/workspace/serving_maintenance/docs/smoke.md
+@@ -1,5 +1,6 @@
+ # Smoke procedure
+ 
+-1. Run the first maintenance turn.
+-2. Check that the response id exists.
+-3. Stop after the first success.
++1. Run the first maintenance turn against `http://127.0.0.1:11434/v1/responses` and confirm it returns a response id.
++2. Run the second turn as a follow-up and require `request.previous_response_id` to exactly equal the first turn response id.
++3. Also require the second response payload to echo that same `previous_response_id`, so the follow-up continuity is exact rather than merely present.
++4. Keep `store=true` on the selected provider and on both requests; if storage drops, the continuity check is not valid.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v2-noisy-distractor/serving_maintenance/scripts/smoke_responses_profile.py b/tmp/codex_provider_rollover_probe/20260423T193329Z-v2-noisy-distractor-run02/workspace/serving_maintenance/scripts/smoke_responses_profile.py
+index 304969b..4c16b52 100755
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v2-noisy-distractor/serving_maintenance/scripts/smoke_responses_profile.py
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v2-noisy-distractor-run02/workspace/serving_maintenance/scripts/smoke_responses_profile.py
+@@ -40,19 +40,35 @@ def load_config(path: Path) -> dict:
+         current[key.strip()] = parse_scalar(value)
+     return data
+ 
++def fail(message: str, **payload) -> int:
++    details = {**payload, "status": "error", "error": message}
++    print(json.dumps(details, indent=2, sort_keys=True))
++    return 1
++
+ def run_smoke(config_path: Path, turn1_path: Path, turn2_path: Path) -> dict:
+     config = load_config(config_path)
+     selected = config.get('provider')
+     providers = config.get('model_providers', {})
+     turn1 = load_json(turn1_path)
+     turn2 = load_json(turn2_path)
++    turn1_id = turn1.get('response', {}).get('id')
++    provider = providers.get(selected, {})
++    observed_previous_response_id = turn2.get('request', {}).get('previous_response_id')
++    response_previous_response_id = turn2.get('response', {}).get('previous_response_id')
++    store_ok = bool(provider.get('store')) and bool(turn1.get('request', {}).get('store')) and bool(turn2.get('request', {}).get('store'))
++    continuity_ok = (
++        bool(turn1_id)
++        and observed_previous_response_id == turn1_id
++        and response_previous_response_id == turn1_id
++    )
+     return {
+         'selected_provider': selected,
+-        'base_url': providers.get(selected, {}).get('base_url'),
+-        'turn1_id': turn1.get('response', {}).get('id'),
+-        'observed_previous_response_id': turn2.get('request', {}).get('previous_response_id'),
+-        'continuity_ok': bool(turn2.get('request', {}).get('previous_response_id')),
+-        'store_ok': True,
++        'base_url': provider.get('base_url'),
++        'turn1_id': turn1_id,
++        'observed_previous_response_id': observed_previous_response_id,
++        'response_previous_response_id': response_previous_response_id,
++        'continuity_ok': continuity_ok,
++        'store_ok': store_ok,
+         'status': 'ok',
+     }
+ 
+@@ -62,7 +78,30 @@ def main() -> int:
+     parser.add_argument('--turn1', type=Path, required=True)
+     parser.add_argument('--turn2', type=Path, required=True)
+     args = parser.parse_args()
+-    print(json.dumps(run_smoke(args.config, args.turn1, args.turn2), indent=2, sort_keys=True))
++    payload = run_smoke(args.config, args.turn1, args.turn2)
++    if payload['selected_provider'] != EXPECTED_PROVIDER:
++        return fail(
++            'selected provider is not the canonical maintenance profile',
++            **payload,
++            expected_provider=EXPECTED_PROVIDER,
++        )
++    if payload['base_url'] != EXPECTED_BASE_URL:
++        return fail(
++            'selected provider base_url is not the canonical responses endpoint',
++            **payload,
++            expected_base_url=EXPECTED_BASE_URL,
++        )
++    if not payload['store_ok']:
++        return fail(
++            'store must stay enabled across both turns for previous_response_id follow-up continuity',
++            **payload,
++        )
++    if not payload['continuity_ok']:
++        return fail(
++            'turn two previous_response_id must exactly match turn one response id in both request and response',
++            **payload,
++        )
++    print(json.dumps(payload, indent=2, sort_keys=True))
+     return 0
+ 
+ if __name__ == '__main__':

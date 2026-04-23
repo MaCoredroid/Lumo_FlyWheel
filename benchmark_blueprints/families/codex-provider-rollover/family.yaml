@@ -1,9 +1,9 @@
 family_id: codex-provider-rollover
 track: 3
 schema_version: cnb55.family.v1
-layer_a_status: implemented_pending_probe
-layer_b_status: implemented_local
-layer_b_status_note: family-local scorer, manifests, milestones, and verification matrices exist; counted whole-family live probe is still pending
+layer_a_status: failed_freeze_gate
+layer_b_status: implemented_probe_evidenced
+layer_b_status_note: family-local scorer, manifests, milestones, verification matrices, and counted live probe artifacts exist; Layer A failed because the live solver completed too much of the task
 
 grader_ref: verifiers/codex-provider-rollover/score_provider_rollover.py
 milestone_config_ref: verifier_data/codex-provider-rollover/{variant_id}/milestones/
@@ -168,8 +168,8 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.0
-  escalation_currently_active: false
+  current_observed_stdev_M_training: 0.287
+  escalation_currently_active: true
 
 initial_state:
   type: manifest_locked

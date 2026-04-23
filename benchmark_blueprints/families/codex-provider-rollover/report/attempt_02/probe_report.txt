@@ -1,0 +1,119 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=20260423T193329Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   40.00    0.00    40    40  [40,40,40]  docs_unalignedx3
+v2-noisy-distractor                3   35.00    0.00    35    35  [35,35,35]  canary_anchoringx3
+v3-dirty-state                     3   53.33   40.41    30   100  [100,30,30]  template_overwritex2
+v4-multi-corpus-objective          3   45.00    0.00    45    45  [45,45,45]  maintenance_profile_driftx3
+v5-recovery-in-thread              3  100.00    0.00   100   100  [100,100,100]  -
+
+family_mean = 54.67   (window 15.0-25.0)
+max_variant_mean = 100.00   (cap 40.0)
+min_variant_mean = 35.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 54.67
+  [FAIL] max variant <= cap: 100.00
+  [FAIL] at least one variant <= hard floor: min variant mean = 35.00
+  [FAIL] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: v2-noisy-distractor (35.0) < v3-dirty-state (53.3) beyond +/-3.0; v4-multi-corpus-objective (45.0) < v5-recovery-in-thread (100.0) beyond +/-3.0
+
+overall: HARDEN NEEDED
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 54.666666666666664,
+    "family_mean_ok": false,
+    "hard_variant_ok": false,
+    "max_variant_mean": 100,
+    "max_variant_ok": false,
+    "min_variant_mean": 35,
+    "monotonic_breaks": [
+      "v2-noisy-distractor (35.0) < v3-dirty-state (53.3) beyond +/-3.0",
+      "v4-multi-corpus-objective (45.0) < v5-recovery-in-thread (100.0) beyond +/-3.0"
+    ],
+    "monotonic_ok": false
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "docs_unaligned": 3
+      },
+      "max": 40,
+      "mean": 40,
+      "min": 40,
+      "n": 3,
+      "scores": [
+        40,
+        40,
+        40
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {
+        "canary_anchoring": 3
+      },
+      "max": 35,
+      "mean": 35,
+      "min": 35,
+      "n": 3,
+      "scores": [
+        35,
+        35,
+        35
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {
+        "template_overwrite": 2
+      },
+      "max": 100,
+      "mean": 53.333333333333336,
+      "min": 30,
+      "n": 3,
+      "scores": [
+        100,
+        30,
+        30
+      ],
+      "shortcut_runs": 0,
+      "stdev": 40.414518843273804
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "maintenance_profile_drift": 3
+      },
+      "max": 45,
+      "mean": 45,
+      "min": 45,
+      "n": 3,
+      "scores": [
+        45,
+        45,
+        45
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {},
+      "max": 100,
+      "mean": 100,
+      "min": 100,
+      "n": 3,
+      "scores": [
+        100,
+        100,
+        100
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    }
+  }
+}

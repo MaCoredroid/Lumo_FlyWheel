@@ -1,0 +1,131 @@
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/.codex/config.toml b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run02/workspace/serving_maintenance/.codex/config.toml
+index 361a43a..772abeb 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/.codex/config.toml
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run02/workspace/serving_maintenance/.codex/config.toml
+@@ -1,7 +1,7 @@
+ # Local maintenance profile after provider rollover.
+ # Keep the local tuning block below exactly as written.
+ 
+-provider = "legacy_vllm"
++provider = "responses_proxy"
+ model = "gpt-5.4"
+ model_reasoning_effort = "high"
+ model_verbosity = "low"
+@@ -14,7 +14,7 @@ name = "Legacy direct vLLM"
+ base_url = "http://127.0.0.1:8001/v1"
+ env_key = "VLLM_API_KEY"
+ wire_api = "responses"
+-store = false
++store = true
+ 
+ [model_providers.responses_proxy]
+ name = "Responses proxy"
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/provider_rollover.md b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run02/workspace/serving_maintenance/docs/provider_rollover.md
+index 89f77ec..e1bb28b 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/provider_rollover.md
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run02/workspace/serving_maintenance/docs/provider_rollover.md
+@@ -1,6 +1,7 @@
+ # Provider rollover
+ 
+-Current profile still points at `legacy_vllm` and the direct endpoint `http://127.0.0.1:8001/v1`.
+-Update the file before the next maintenance run.
++The earlier rollback was incomplete: it left the maintenance profile exposed to the `store = false` regression and only checked that a follow-up request carried some `previous_response_id`.
+ 
+-Operators still describe the fix as a generic smoke repair rather than the maintenance-responses profile.
++The active repair path is the `maintenance-responses` profile using `responses_proxy` at `http://127.0.0.1:11434/v1/responses`.
++
++Keep the maintenance profile on the proxy endpoint during rollover recovery, and require follow-up validation that proves exact turn continuity instead of a generic smoke-only check.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/smoke.md b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run02/workspace/serving_maintenance/docs/smoke.md
+index f08b68e..8352bfe 100644
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/docs/smoke.md
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run02/workspace/serving_maintenance/docs/smoke.md
+@@ -1,5 +1,7 @@
+ # Smoke procedure
+ 
+-1. Run the first maintenance turn.
+-2. Check that the response id exists.
+-3. Stop after the first success.
++1. Run the first maintenance turn with the `maintenance-responses` profile on `responses_proxy` at `http://127.0.0.1:11434/v1/responses`.
++2. Capture the first turn response id.
++3. Run the second turn as a follow-up and require `store = true`.
++4. Verify the second turn request `previous_response_id` exactly matches the first turn response id.
++5. Verify the second turn response also reports the same `previous_response_id`, proving exact follow-up continuity rather than only the presence of a non-empty field.
+diff --git a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/scripts/smoke_responses_profile.py b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run02/workspace/serving_maintenance/scripts/smoke_responses_profile.py
+index 304969b..c631e3a 100755
+--- a/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/v5-recovery-in-thread/serving_maintenance/scripts/smoke_responses_profile.py
++++ b/tmp/codex_provider_rollover_probe/20260423T193329Z-v5-recovery-in-thread-run02/workspace/serving_maintenance/scripts/smoke_responses_profile.py
+@@ -3,10 +3,12 @@ from __future__ import annotations
+ 
+ import argparse
+ import json
++import sys
+ from pathlib import Path
+ 
+ EXPECTED_PROVIDER = "responses_proxy"
+ EXPECTED_BASE_URL = "http://127.0.0.1:11434/v1/responses"
++EXPECTED_PROFILE = "maintenance-responses"
+ 
+ def load_json(path: Path) -> dict:
+     return json.loads(path.read_text())
+@@ -40,19 +42,33 @@ def load_config(path: Path) -> dict:
+         current[key.strip()] = parse_scalar(value)
+     return data
+ 
++def fail(message: str) -> int:
++    print(message, file=sys.stderr)
++    return 1
++
+ def run_smoke(config_path: Path, turn1_path: Path, turn2_path: Path) -> dict:
+     config = load_config(config_path)
+     selected = config.get('provider')
+     providers = config.get('model_providers', {})
++    selected_provider = providers.get(selected, {})
+     turn1 = load_json(turn1_path)
+     turn2 = load_json(turn2_path)
++    turn1_id = turn1.get('response', {}).get('id')
++    request_previous_response_id = turn2.get('request', {}).get('previous_response_id')
++    response_previous_response_id = turn2.get('response', {}).get('previous_response_id')
+     return {
++        'profile': config.get('profile'),
+         'selected_provider': selected,
+-        'base_url': providers.get(selected, {}).get('base_url'),
+-        'turn1_id': turn1.get('response', {}).get('id'),
+-        'observed_previous_response_id': turn2.get('request', {}).get('previous_response_id'),
+-        'continuity_ok': bool(turn2.get('request', {}).get('previous_response_id')),
+-        'store_ok': True,
++        'base_url': selected_provider.get('base_url'),
++        'turn1_id': turn1_id,
++        'request_previous_response_id': request_previous_response_id,
++        'response_previous_response_id': response_previous_response_id,
++        'continuity_ok': (
++            bool(turn1_id)
++            and request_previous_response_id == turn1_id
++            and response_previous_response_id == turn1_id
++        ),
++        'store_ok': selected_provider.get('store') is True and turn2.get('request', {}).get('store') is True,
+         'status': 'ok',
+     }
+ 
+@@ -62,7 +78,21 @@ def main() -> int:
+     parser.add_argument('--turn1', type=Path, required=True)
+     parser.add_argument('--turn2', type=Path, required=True)
+     args = parser.parse_args()
+-    print(json.dumps(run_smoke(args.config, args.turn1, args.turn2), indent=2, sort_keys=True))
++    payload = run_smoke(args.config, args.turn1, args.turn2)
++    print(json.dumps(payload, indent=2, sort_keys=True))
++
++    if payload['profile'] != EXPECTED_PROFILE:
++        return fail(f"expected profile {EXPECTED_PROFILE}, got {payload['profile']!r}")
++    if payload['selected_provider'] != EXPECTED_PROVIDER:
++        return fail(f"expected provider {EXPECTED_PROVIDER}, got {payload['selected_provider']!r}")
++    if payload['base_url'] != EXPECTED_BASE_URL:
++        return fail(f"expected base_url {EXPECTED_BASE_URL}, got {payload['base_url']!r}")
++    if not payload['store_ok']:
++        return fail('store must remain true for the selected provider and the follow-up request')
++    if not payload['continuity_ok']:
++        return fail(
++            'previous_response_id continuity failed: turn2 request/response must exactly match turn1 response id'
++        )
+     return 0
+ 
+ if __name__ == '__main__':
