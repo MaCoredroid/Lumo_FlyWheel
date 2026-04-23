@@ -258,6 +258,7 @@ kv_cache_dtype: fp8_e5m2
 
     finalized = manager.finalize_round(round_id=round_id, dry_run=False)
     assert Path(finalized["bundle_path"]).is_file()
+    assert subprocess.run(["git", "status", "--short"], cwd=repo, check=True, capture_output=True, text=True).stdout == ""
     status = manager.status(round_id=round_id)
     assert status["phase"] == "finalized"
 
@@ -411,6 +412,99 @@ kv_cache_dtype: fp8_e5m2
             iteration="001",
             status="keep",
             notes="should refuse staged spillover",
+            allow_synthetic=True,
+        )
+
+
+def test_commit_candidate_tracks_bootstrap_artifacts_and_leaves_worktree_clean(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", lambda self, candidate_vllm_config, **kwargs: _real_trace())
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        (round_dir / "candidates" / "baseline_a" / "candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    manager.commit_candidate(round_id=bootstrap["round_id"], iteration="001", status="keep", notes="tracks bootstrap")
+
+    tracked = subprocess.run(
+        ["git", "ls-files", str(round_dir.relative_to(repo))],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "round_spec.yaml" in tracked
+    assert "impl_brief.md" in tracked
+    assert "iteration_brief.md" in tracked
+    assert "candidates/baseline_a/candidate.yaml" in tracked
+    assert "candidates/baseline_b/candidate.yaml" in tracked
+    assert "codex-home/.codex/config.toml" in tracked
+    assert subprocess.run(["git", "status", "--short"], cwd=repo, check=True, capture_output=True, text=True).stdout == ""
+
+
+def test_commit_candidate_refuses_when_git_index_has_stale_allowed_path(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+max_num_seqs: 4
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.90
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+""",
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    results_path = round_dir / "results.tsv"
+    results_path.write_text(results_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    subprocess.run(["git", "add", str(results_path.relative_to(repo))], cwd=repo, check=True, capture_output=True, text=True)
+
+    with pytest.raises(RuntimeError, match=r"commit_refused: git index not clean: .*results.tsv"):
+        manager.commit_candidate(
+            round_id=bootstrap["round_id"],
+            iteration="001",
+            status="keep",
+            notes="should refuse stale index",
             allow_synthetic=True,
         )
 

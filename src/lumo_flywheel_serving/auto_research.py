@@ -1225,8 +1225,12 @@ class AutoResearchRoundManager:
                 updated_rows.append(row)
         if not matched:
             raise RuntimeError("commit_refused: pending results row missing or candidate_uuid mismatch")
-        staged_paths = [candidate_dir.relative_to(self.repo_root), (round_dir / "results.tsv").relative_to(self.repo_root)]
+        staged_paths = [
+            path.relative_to(self.repo_root)
+            for path in [*self._bootstrap_round_artifact_paths(round_dir), candidate_dir, round_dir / "results.tsv"]
+        ]
         self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
+        self._assert_git_index_clean(context="commit_refused")
         self._write_results(round_dir / "results.tsv", updated_rows)
 
         commit_message = self._candidate_commit_message(
@@ -1303,6 +1307,12 @@ class AutoResearchRoundManager:
                     )
                 else:
                     updated_rows.append(row)
+            staged_paths = [
+                path.relative_to(self.repo_root)
+                for path in [*self._bootstrap_round_artifact_paths(round_dir), rescreen_dir, round_dir / "results.tsv"]
+            ]
+            self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
+            self._assert_git_index_clean(context="commit_refused")
             self._write_results(round_dir / "results.tsv", updated_rows)
             commit_message = self._candidate_commit_message(
                 round_id=round_id,
@@ -1311,7 +1321,6 @@ class AutoResearchRoundManager:
                 trace_path=(rescreen_dir / "measurement_trace.json").relative_to(self.repo_root),
                 extra_trailers=[f"Rescreen-Of-UUID: {parent.candidate_uuid}"],
             )
-            staged_paths = [rescreen_dir.relative_to(self.repo_root), (round_dir / "results.tsv").relative_to(self.repo_root)]
             commit_sha = self._commit_paths(
                 staged_paths,
                 commit_message,
@@ -1488,6 +1497,7 @@ class AutoResearchRoundManager:
             search_trace_ref.relative_to(self.repo_root),
             measurement_trace_ref.relative_to(self.repo_root),
             bundle_path.relative_to(self.repo_root),
+            (round_dir / ".round.lock").relative_to(self.repo_root),
         ]
         if (round_dir / "rescreen_trace.json").exists():
             staged_paths.append((round_dir / "rescreen_trace.json").relative_to(self.repo_root))
@@ -1847,7 +1857,7 @@ class AutoResearchRoundManager:
         rel_paths = [str(path) for path in paths]
         # Round artifacts intentionally live under output/, which is ignored
         # for normal development but must be committed to the experiment ledger.
-        self._git(["add", "-f", *rel_paths], capture_output=False)
+        self._git(["add", "-A", "-f", "--", *rel_paths], capture_output=False)
         self._assert_only_allowed_staged_paths(paths, context=context)
         self._git(["commit", "-m", message], capture_output=False)
         return self._git(["rev-parse", "HEAD"]).stdout.strip()
@@ -1872,13 +1882,29 @@ class AutoResearchRoundManager:
     def _git_status_short(self) -> str:
         return self._git(["status", "--short"]).stdout.strip()
 
+    def _bootstrap_round_artifact_paths(self, round_dir: Path) -> list[Path]:
+        paths = [
+            round_dir / "round_spec.yaml",
+            round_dir / "impl_brief.md",
+            round_dir / "iteration_brief.md",
+            round_dir / "codex-home",
+            round_dir / ".round.lock",
+            round_dir / "candidates" / "baseline_a",
+            round_dir / "candidates" / "baseline_b",
+        ]
+        return [path for path in paths if path.exists()]
+
+    def _staged_paths(self) -> list[str]:
+        return [line.strip() for line in self._git(["diff", "--cached", "--name-only"]).stdout.splitlines() if line.strip()]
+
+    def _assert_git_index_clean(self, *, context: str) -> None:
+        staged = self._staged_paths()
+        if staged:
+            raise RuntimeError(f"{context}: git index not clean: {', '.join(staged)}")
+
     def _assert_only_allowed_staged_paths(self, allowed_paths: list[Path], *, context: str) -> None:
         allowed = [path.as_posix().rstrip("/") for path in allowed_paths]
-        staged = {
-            line.strip()
-            for line in self._git(["diff", "--cached", "--name-only"]).stdout.splitlines()
-            if line.strip()
-        }
+        staged = set(self._staged_paths())
         unexpected = sorted(
             path
             for path in staged
