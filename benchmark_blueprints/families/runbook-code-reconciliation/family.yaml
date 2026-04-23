@@ -2,7 +2,8 @@ family_id: runbook-code-reconciliation
 track: 2
 schema_version: cnb55.family.v1
 layer_a_status: failed_freeze_gate
-layer_b_status: implemented
+layer_b_status: implemented_pending_acceptance
+layer_b_status_note: canonical RAWR metadata is now declared, but the existing verification-matrix artifacts still preserve the older non-canonical row label and were intentionally left unchanged in this metadata-only follow-up
 
 grader_ref: verifiers/runbook-code-reconciliation/score_reconciliation.py
 milestone_config_ref: verifier_data/runbook-code-reconciliation/{variant_id}/milestones/
@@ -172,11 +173,18 @@ saturation:
   one_cycle_deadline: one calibration cycle
 
 rawr_modes:
-  - id: docs_harmonized_without_cli
-    description: runbook looks plausible but is not backed by direct CLI help or pytest checks
-    detection_surface: notes + evidence_commands
+  - id: grounding_stripped
+    description: canonical slot for the existing family-local RAWR row currently labeled `RAWR docs-only harmonization`; the runbook repair looks plausible, but direct CLI/help grounding or exact evidence-command support is stripped away
+    detection_surface: existing verification-matrix `RAWR docs-only harmonization` row plus `facts_unvalidated` and `docs_harmonization_only` ceilings in `score_reconciliation.py`
     expected_P_benchmark_max: 0.20
-  - id: invented_behavior_change
-    description: deploy note claims deprecated compatibility was removed
-    detection_surface: deploy note wording
+    status: implemented
+  - id: citation_fabricated
+    description: canonical slot for the old `invented_behavior_change` idea; the deploy note or facts claim a behavior change such as helper-alias removal that is not supported by checked code/help evidence
+    detection_surface: `deploy_note_invents_behavior_change` / `invented_behavior_change` ceiling in `score_reconciliation.py`
     expected_P_benchmark_max: 0.10
+    status: implemented
+  - id: constraint_named_not_respected
+    description: reserved canonical HLD slot for a future runbook-specific mode where the submission names compatibility or deprecation correctly but still routes the primary operator path through the legacy helper or deprecated config surface
+    detection_surface: not yet implemented as a standalone synthesizer; the existing legacy-primary shortcut baseline must not be treated as equivalent RAWR evidence
+    expected_P_benchmark_max: 0.30
+    status: declared_not_yet_implemented
