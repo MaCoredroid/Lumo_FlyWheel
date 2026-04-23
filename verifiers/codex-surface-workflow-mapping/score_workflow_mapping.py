@@ -363,6 +363,7 @@ def write_result(state: ScoreState) -> None:
         "variant_id": VARIANT_ID,
         "P_benchmark": state.final_score(),
         "score": state.final_score(),
+        "raw_score_pre_ceiling": state.raw_score,
         "M_training": state.final_m_training(),
         "pass": state.final_score() >= 70 and state.integrity_flag == 0,
         "integrity_flag": state.integrity_flag,

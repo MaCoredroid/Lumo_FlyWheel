@@ -60,7 +60,7 @@ Any integrity violation forces `shortcut_detected=true` and caps the score at 0.
 | `schedule_in_prompt` | 30 | automation task prompt embeds schedule semantics |
 | `ungrounded_mapping` | 25 | commands or schedule are not grounded in cited files |
 | `generic_mapping` | 25 | source coverage too thin or scope wording is repo-agnostic |
-| `dirty_state_reuse` | 35 | V3+ abandoned draft not rejected |
+| `dirty_state_reuse` | 35 | V3+ abandoned draft work not rejected |
 | `objective_drift` | 30 | V4+ blocker-first release context ignored |
 | `incident_blind_reuse` | 25 | V5 rollback context ignored or helper path reintroduced |
 

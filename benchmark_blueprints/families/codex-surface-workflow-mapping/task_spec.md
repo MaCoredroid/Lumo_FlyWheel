@@ -76,7 +76,7 @@ artifacts/README.md
 Variant-specific files add noise or state pressure:
 
 - V2 adds a migration memo and a more tempting deprecated helper path.
-- V3 adds an abandoned Codex patch draft under `drafts/`.
+- V3 adds an abandoned Codex patch and a half-written Codex TOML draft under `drafts/`.
 - V4 adds `release_context/` proving the workflow scope is blocker-first, not generic queue review.
 - V5 adds `incident_context/` showing a weekend helper-based automation was rolled back.
 

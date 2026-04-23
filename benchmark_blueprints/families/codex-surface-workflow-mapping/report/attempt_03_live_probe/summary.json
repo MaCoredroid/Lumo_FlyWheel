@@ -1,0 +1,197 @@
+{
+  "acceptance": {
+    "at_least_one_variant_le_10": false,
+    "family_mean_window": false,
+    "max_variant_le_40": false,
+    "monotonic_with_tolerance_3": true
+  },
+  "current_observed_stdev_M_training": 0.245,
+  "family_mean": 34.6,
+  "family_mean_M_training": 0.346,
+  "max_variant_mean": 50.0,
+  "min_variant_mean": 25.0,
+  "monotonic_breaks": [],
+  "rows": [
+    {
+      "ceilings": [
+        "schedule_in_prompt",
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        1.0,
+        0.25
+      ],
+      "max": 100,
+      "mean": 50.0,
+      "mean_M_training": 0.5,
+      "mean_raw": 92.33,
+      "min": 25,
+      "n": 3,
+      "raw_scores": [
+        89,
+        104,
+        84
+      ],
+      "scores": [
+        25,
+        100,
+        25
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 35.36,
+      "stdev_M_training": 0.3536,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "ceilings": [
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.94
+      ],
+      "max": 94,
+      "mean": 48.0,
+      "mean_M_training": 0.48,
+      "mean_raw": 87.33,
+      "min": 25,
+      "n": 3,
+      "raw_scores": [
+        79,
+        89,
+        94
+      ],
+      "scores": [
+        25,
+        25,
+        94
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 32.53,
+      "stdev_M_training": 0.3253,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "ceilings": [
+        "schedule_in_prompt",
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "mean_raw": 87.33,
+      "min": 25,
+      "n": 3,
+      "raw_scores": [
+        89,
+        89,
+        84
+      ],
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "ceilings": [
+        "dirty_state_reuse",
+        "schedule_in_prompt",
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "mean_raw": 80.67,
+      "min": 25,
+      "n": 3,
+      "raw_scores": [
+        84,
+        84,
+        74
+      ],
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "ceilings": [
+        "dirty_state_reuse",
+        "incident_blind_reuse",
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "mean_raw": 79.0,
+      "min": 25,
+      "n": 3,
+      "raw_scores": [
+        79,
+        79,
+        79
+      ],
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}

@@ -85,7 +85,7 @@ VARIANTS = [
     {
         "id": "v3-dirty-state",
         "label": "dirty-state",
-        "difficulty_summary": "Adds an abandoned Codex artifact patch that points at the wrong helper and looks nearly reusable.",
+        "difficulty_summary": "Adds an abandoned Codex patch plus a half-written Codex TOML draft that point at the wrong helper and look nearly reusable.",
         "scope": "Triage the open incident queue for the on-call rotation and summarize the live blockers.",
         "required_scope_keywords": ["triage", "on-call"],
         "required_paths": [
@@ -95,6 +95,7 @@ VARIANTS = [
             "ops/automation/triage.cron",
             "fixtures/open_incidents.json",
             "drafts/codex_skill_patch.md",
+            "drafts/codex_triage.toml",
         ],
         "rejected_candidates": [
             {
@@ -104,6 +105,11 @@ VARIANTS = [
             },
             {
                 "path": "drafts/codex_skill_patch.md",
+                "command_literal": STALE_COMMAND,
+                "reason_keyword": "abandoned",
+            },
+            {
+                "path": "drafts/codex_triage.toml",
                 "command_literal": STALE_COMMAND,
                 "reason_keyword": "abandoned",
             },
@@ -123,6 +129,7 @@ VARIANTS = [
             "docs/ops/daily_triage.md",
             "ops/automation/triage.cron",
             "fixtures/open_incidents.json",
+            "drafts/codex_triage.toml",
             "release_context/release_notes_2026_04.md",
             "release_context/objective_shift.md",
         ],
@@ -134,6 +141,11 @@ VARIANTS = [
             },
             {
                 "path": "drafts/codex_skill_patch.md",
+                "command_literal": STALE_COMMAND,
+                "reason_keyword": "abandoned",
+            },
+            {
+                "path": "drafts/codex_triage.toml",
                 "command_literal": STALE_COMMAND,
                 "reason_keyword": "abandoned",
             },
@@ -156,6 +168,7 @@ VARIANTS = [
             "docs/ops/daily_triage.md",
             "ops/automation/triage.cron",
             "fixtures/open_incidents.json",
+            "drafts/codex_triage.toml",
             "release_context/release_notes_2026_04.md",
             "release_context/objective_shift.md",
             "incident_context/weekend_rollback.md",
@@ -169,6 +182,11 @@ VARIANTS = [
             },
             {
                 "path": "drafts/codex_skill_patch.md",
+                "command_literal": STALE_COMMAND,
+                "reason_keyword": "abandoned",
+            },
+            {
+                "path": "drafts/codex_triage.toml",
                 "command_literal": STALE_COMMAND,
                 "reason_keyword": "abandoned",
             },
@@ -322,7 +340,7 @@ artifacts/README.md
 Variant-specific files add noise or state pressure:
 
 - V2 adds a migration memo and a more tempting deprecated helper path.
-- V3 adds an abandoned Codex patch draft under `drafts/`.
+- V3 adds an abandoned Codex patch and a half-written Codex TOML draft under `drafts/`.
 - V4 adds `release_context/` proving the workflow scope is blocker-first, not generic queue review.
 - V5 adds `incident_context/` showing a weekend helper-based automation was rolled back.
 
@@ -467,7 +485,7 @@ Any integrity violation forces `shortcut_detected=true` and caps the score at 0.
 | `schedule_in_prompt` | 30 | automation task prompt embeds schedule semantics |
 | `ungrounded_mapping` | 25 | commands or schedule are not grounded in cited files |
 | `generic_mapping` | 25 | source coverage too thin or scope wording is repo-agnostic |
-| `dirty_state_reuse` | 35 | V3+ abandoned draft not rejected |
+| `dirty_state_reuse` | 35 | V3+ abandoned draft work not rejected |
 | `objective_drift` | 30 | V4+ blocker-first release context ignored |
 | `incident_blind_reuse` | 25 | V5 rollback context ignored or helper path reintroduced |
 
@@ -1058,6 +1076,18 @@ It was never shipped and should not be treated as proof of the live workflow.
 """
 
 
+def draft_toml_text() -> str:
+    return f"""# abandoned draft - do not ship
+
+[workflow]
+entrypoint = "{STALE_COMMAND}"
+schedule = "0 9 * * *"
+must_read = ["docs/ops/legacy_schedule.md", "skills/legacy/daily_triage/SKILL.md"]
+
+# left here from a paused migration pass; resume from the live Make target instead
+"""
+
+
 def release_notes_text() -> str:
     return """# Release Notes 2026-04
 
@@ -1354,6 +1384,7 @@ def variant_files(variant: dict[str, object]) -> dict[str, str]:
         files["docs/ops/migration_notes.md"] = docs_migration_text()
     if variant["id"] in {"v3-dirty-state", "v4-multi-corpus-objective", "v5-recovery-in-thread"}:
         files["drafts/codex_skill_patch.md"] = draft_patch_text()
+        files["drafts/codex_triage.toml"] = draft_toml_text()
     if variant["release_paths"]:
         files["release_context/release_notes_2026_04.md"] = release_notes_text()
         files["release_context/objective_shift.md"] = objective_shift_text()
