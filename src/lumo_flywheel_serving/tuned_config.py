@@ -198,6 +198,7 @@ class TunedConfigBundle:
     baseline_bundle_id: str | None = None
     regression_guard: dict[str, Any] = field(default_factory=dict)
     safety_rails: dict[str, Any] = field(default_factory=dict)
+    round_provenance: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -218,6 +219,7 @@ class TunedConfigBundle:
                 "baseline_bundle_id": self.baseline_bundle_id,
                 "regression_guard": dict(self.regression_guard),
                 "safety_rails": dict(self.safety_rails),
+                "round_provenance": dict(self.round_provenance),
             }
         }
 
@@ -304,6 +306,11 @@ class TunedConfigBundle:
                 field_name="tuned_config_bundle.safety_rails",
                 issues=issues,
             ),
+            round_provenance=_require_mapping(
+                bundle_payload.get("round_provenance", {}),
+                field_name="tuned_config_bundle.round_provenance",
+                issues=issues,
+            ),
         )
         if issues:
             raise StructuredValidationError(message="Invalid tuned-config bundle", issues=issues)
@@ -353,6 +360,7 @@ def make_tuned_config_bundle(
     baseline_bundle_id: str | None,
     regression_guard: dict[str, Any],
     safety_rails: dict[str, Any],
+    round_provenance: dict[str, Any] | None = None,
 ) -> TunedConfigBundle:
     return TunedConfigBundle(
         bundle_id=str(uuid4()),
@@ -371,6 +379,7 @@ def make_tuned_config_bundle(
         baseline_bundle_id=baseline_bundle_id,
         regression_guard=dict(regression_guard),
         safety_rails=dict(safety_rails),
+        round_provenance=dict(round_provenance or {}),
     )
 
 

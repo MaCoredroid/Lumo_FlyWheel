@@ -1,165 +1,91 @@
 ---
 name: auto-research-round-manager
-description: Manage the Sprint 0 auto-research round for qwen3.5-27b on the proposal-ranking-manager-judgment V1 workload. Use when Codex should run the first L1-only auto-research loop, load the produced tuned bundle, bring the real vLLM/Qwen serving path to ready state, and verify the round live with the proposal-ranking-manager-judgment family using gpt-5.4 high subagents.
+description: Run the Phase B auto-research round as a Python outer loop over `lumoserve auto-research ...` commands. Use only after the Phase A substrate is present and the preconditions pass.
 ---
 
 # Auto Research Round Manager
 
-Use this skill for the first serving auto-research round defined by `docs/HLD-Serving-Backend-AutoResearch-v0_1.md`:
+This skill is the Phase B outer loop described in `docs/HLD-Serving-Backend-AutoResearch-v0_1-SubSpec-AutoResearchAgent.md`.
 
+Scope:
 - Sprint 0 only
 - `L1` action space only
 - model `qwen3.5-27b`
 - family `proposal-ranking-manager-judgment`
-- live gate on `v1-clean-baseline`
+- one active `codex exec` at a time
 
-The round is complete only when all of these succeed:
+## Preconditions
 
-1. `auto-research run` emits a fresh tuned bundle.
-2. `load-tuned-config` or `resume` activates that bundle.
-3. Real serving reaches `/health` on the chosen port.
-4. Live family verification through the real `/v1/responses` path finishes with `pass: true`.
+Refuse to start unless all of these pass:
+- `python -c "from lumo_flywheel_serving.measurement_harness import RealMeasurementHarness"` succeeds.
+- `codex --version` succeeds.
+- `git status --short` is empty.
+- `lumoserve auto-research --help` lists `bootstrap-round`, `measure`, `commit-candidate`, `rescreen`, `validate-holdout`, `finalize-round`, `status`, and `run`.
+- For each production subcommand, `lumoserve auto-research <name> --help-only` exits 0 and prints `{"subcommand":"<name>","status":"registered"}`.
+- The workload yaml exists and its `seed_trace_ref` points at an existing jsonl file.
+- `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT` is unset.
 
-## Hard Rules
+Block on failure. Do not bootstrap a round when any precondition is red.
 
-- Use `gpt-5.4` with `high` reasoning for every spawned subagent.
-- Keep one active research worker at a time.
-- Do not use cheaper models.
-- Do not create branches or worktrees.
-- Prefer live verification over adding extra tests.
-- If the live gate fails, inspect logs first; do not guess.
+## Round Bootstrap
 
-## Round Inputs
-
-- HLD: `docs/HLD-Serving-Backend-AutoResearch-v0_1.md`
-- Workload: `benchmark_blueprints/families/proposal-ranking-manager-judgment/serving_workload.yaml`
-- Live runner: `scripts/run_live_proposal_family.py`
-- Serving code:
-  - `src/lumo_flywheel_serving/auto_research.py`
-  - `src/lumo_flywheel_serving/model_server.py`
-  - `src/lumo_flywheel_serving/cli.py`
-
-## Default Paths
-
-Use these unless the user overrides them:
-
-```bash
-ROOT=/home/mark/shared/lumoFlyWheel/output/sprint0_live
-REPO=/home/mark/shared/lumoFlyWheel
-BUNDLE_DIR="$ROOT/tuned_configs"
-STATE_DIR="$ROOT/state"
-LOGS_DIR="$ROOT/logs"
-TRITON_DIR="$ROOT/triton"
-BASE_URL=http://127.0.0.1:8101/v1
-```
-
-## Manager Workflow
-
-### 1. Run the round
+Run:
 
 ```bash
 .venv/bin/lumoserve \
   --registry model_registry.yaml \
-  --state-root "$STATE_DIR" \
-  --tuned-config-root "$BUNDLE_DIR" \
-  auto-research run qwen3.5-27b \
+  auto-research bootstrap-round \
+  --model-id qwen3.5-27b \
   --family-id proposal-ranking-manager-judgment \
-  --workload-file benchmark_blueprints/families/proposal-ranking-manager-judgment/serving_workload.yaml
+  --sprint sprint-0 \
+  --workload-file benchmark_blueprints/families/proposal-ranking-manager-judgment/serving_workload.yaml \
+  --round-root output/auto_research
 ```
 
-Record:
+Read the returned `round_id` and `round_dir`. From this point on:
+- Python owns lifecycle, retries, stop criteria, rescreen, holdout, and finalize.
+- Each `codex exec` owns exactly one iteration.
 
-- produced bundle path
-- auto-research `run_log.json`
-- `search_trace.json`
-- `measurement_trace.json`
+## Python Loop
 
-### 2. Load the bundle
+1. Measure and commit the two pre-written baselines:
+   - `candidates/baseline_a/candidate.yaml`
+   - `candidates/baseline_b/candidate.yaml`
+2. Compute `noise_floor = 2 * abs(baseline_a.objective_value - baseline_b.objective_value)` and persist it into `round_spec.yaml`.
+3. For each main-loop iteration:
+   - materialize `iteration_brief.md` placeholders in memory
+   - spawn one `codex exec` with `--json`, `--cd <round_dir>`, and `--output-last-message`
+   - capture stdout to `candidates/<NNN>/agent_session.jsonl`
+   - if the iteration writes `BLOCKED.md`, stop with `ROUND_BLOCKED`
+   - otherwise read the new `results.tsv` row and update stop criteria
+4. After the main loop exits:
+   - `lumoserve auto-research rescreen --round-id <id> --top-k 3 --profile full`
+   - choose the winner by `objective_mean`
+   - `lumoserve auto-research validate-holdout --round-id <id> --candidate-uuid <winner_uuid>`
+5. Finalize exactly once:
+   - `lumoserve auto-research finalize-round --round-id <id>`
 
-```bash
-.venv/bin/lumoserve \
-  --registry model_registry.yaml \
-  --state-root "$STATE_DIR" \
-  load-tuned-config "$BUNDLE"
-```
+## Watchdog
 
-### 3. Bring up real serving
+After every iteration:
+- reject writes outside the round directory and bundle output path
+- reject commits that lack `Signed-off-by: lumoserve-auto-research-cli <auto-research@lumo-flywheel>`
+- reject commits that lack `Candidate-UUID: <uuid>` matching the staged row
 
-```bash
-LUMO_HOST_MEMORY_RECOVERY=0 \
-LUMO_SKIP_VRAM_WAIT=1 \
-LUMO_MIN_GPU_MEMORY_UTILIZATION=0.05 \
-VLLM_API_KEY=EMPTY \
-.venv/bin/lumoserve \
-  --registry model_registry.yaml \
-  --container-name lumo-vllm-sprint0 \
-  --port 8100 \
-  --proxy-port 8101 \
-  --logs-root "$LOGS_DIR" \
-  --triton-cache-root "$TRITON_DIR" \
-  --state-root "$STATE_DIR" \
-  serve qwen3.5-27b
-```
+## Forbidden
 
-Then verify:
+- Do not use subagents.
+- Do not hold a long-running codex transcript across iterations.
+- Do not let a codex iteration call `finalize-round`.
+- Do not rerun blocked rounds automatically.
 
-```bash
-curl -sf -H 'Authorization: Bearer EMPTY' http://127.0.0.1:8100/health
-```
+## Report
 
-If health fails:
-
-- inspect `$LOGS_DIR/vllm_qwen3.5-27b.log`
-- inspect runtime state in `$STATE_DIR/serving_runtime_state.json`
-- fix the repo code or run path
-- rerun the round from step 1 unless the existing bundle is still valid
-
-### 4. Run the live family gate
-
-```bash
-VLLM_API_KEY=EMPTY \
-.venv/bin/python scripts/run_live_proposal_family.py \
-  --base-url "$BASE_URL" \
-  --model qwen3.5-27b \
-  --json
-```
-
-The pass artifact is the latest `output/live_proposal_family/.../result.json`.
-
-Required success shape:
-
-- `codex_result.returncode == 0`
-- `pass == true`
-- `score >= 80`
-
-## Research Worker Pattern
-
-If you need a dedicated research subagent:
-
-- Spawn exactly one worker at a time.
-- Use `gpt-5.4` and `high`.
-- Give it only the current blocker or loop step.
-- Have it report:
-  - commands run
-  - logs inspected
-  - files changed
-  - artifact paths
-  - one terminal status: `ROUND_PASSED` or `BLOCKED`
-
-Suggested worker task shapes:
-
-- diagnose live serving startup failure
-- patch infeasible tuning/runtime contract
-- rerun the live proposal family verifier after serve is healthy
-
-## Round Completion Report
-
-Report back with:
-
-- bundle path
-- auto-research run log path
-- serving log path
-- live result path
-- live verify-result path
-- whether the round passed
-- exact blocker if it did not
+Return:
+- `round_id`
+- `round_branch`
+- outcome
+- `bundle_path` or `null`
+- stopping reason
+- blocker text if any
+- counts for iterations, feasible rows, rescreened rows

@@ -7,3 +7,7 @@ avg_output_tokens: 1200
 rollout_baseline: 10.0
 measurement_window_minutes: 25
 gpu_memory_utilization_cap: 0.08
+seed_trace_ref: seed_trace.jsonl
+holdout_trace_ref: holdout_trace.jsonl
+tpot_ceiling_ms: 80
+turn_latency_ceiling_ms: 35000

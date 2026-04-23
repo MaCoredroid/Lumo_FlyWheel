@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -722,3 +723,145 @@ def test_metric_schema_variant_detects_openmetrics_total() -> None:
             "itl": "vllm:inter_token_latency_seconds",
         }
     ) == "openmetrics_total"
+
+
+def _write_auto_research_registry(path: Path) -> None:
+    path.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    hf_revision: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.90
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+""",
+        encoding="utf-8",
+    )
+
+
+def _write_auto_research_trace(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps({"prompt_tokens": 4096, "output_tokens": 1200, "thinking_tokens": 0, "turn_index": 0}),
+                json.dumps({"prompt_tokens": 2048, "output_tokens": 600, "thinking_tokens": 0, "turn_index": 1}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _init_auto_research_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_auto_research_registry(repo / "model_registry.yaml")
+    workload_dir = repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment"
+    _write_auto_research_trace(workload_dir / "seed_trace.jsonl")
+    _write_auto_research_trace(workload_dir / "holdout_trace.jsonl")
+    (workload_dir / "serving_workload.yaml").write_text(
+        """
+family_id: proposal-ranking-manager-judgment
+workload_distribution_id: prmj-v1-live
+latency_ceiling_ms: 35000
+tpot_ceiling_ms: 80
+turn_latency_ceiling_ms: 35000
+p99_context_tokens: 24576
+avg_prompt_tokens: 4096
+avg_output_tokens: 1200
+rollout_baseline: 10.0
+measurement_window_minutes: 25
+gpu_memory_utilization_cap: 0.08
+seed_trace_ref: seed_trace.jsonl
+holdout_trace_ref: holdout_trace.jsonl
+""",
+        encoding="utf-8",
+    )
+    fixture_src = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "synthetic_measurement.py"
+    fixture_dst = repo / "tests" / "fixtures" / "synthetic_measurement.py"
+    fixture_dst.parent.mkdir(parents=True, exist_ok=True)
+    fixture_dst.write_text(fixture_src.read_text(encoding="utf-8"), encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True, text=True)
+    return repo
+
+
+def test_auto_research_help_only_registered(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(["auto-research", "status", "--help-only", "--round-id", "round-1"])
+    assert args.func(args) == 0
+    assert json.loads(capsys.readouterr().out) == {"subcommand": "status", "status": "registered"}
+
+
+def test_auto_research_status_reports_missing_round(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    repo = _init_auto_research_repo(tmp_path)
+    monkeypatch.setattr(cli, "REPO_ROOT", repo)
+
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "--registry",
+            str(repo / "model_registry.yaml"),
+            "--tuned-config-root",
+            str(repo / "output" / "tuned_configs"),
+            "auto-research",
+            "status",
+            "--round-id",
+            "does-not-exist",
+        ]
+    )
+
+    assert args.func(args) == 1
+    assert json.loads(capsys.readouterr().out) == {"round_id": "does-not-exist", "phase": "missing"}
+
+
+def test_auto_research_run_uses_non_agent_wrapper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = _init_auto_research_repo(tmp_path)
+    monkeypatch.setattr(cli, "REPO_ROOT", repo)
+    monkeypatch.setenv("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT", "1")
+
+    def fake_run_non_agent(self, **kwargs):
+        return {
+            "round_id": "round-123",
+            "round_dir": str(repo / "output" / "auto_research" / "round-123"),
+            "bundle_path": str(repo / "output" / "tuned_configs" / "bundle.yaml"),
+            "rows_created": [],
+            "finalize_commit_sha": "synthetic-sha",
+            "kwargs": kwargs,
+        }
+
+    monkeypatch.setattr(cli.AutoResearchRoundManager, "run_non_agent", fake_run_non_agent)
+
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "--registry",
+            str(repo / "model_registry.yaml"),
+            "--tuned-config-root",
+            str(repo / "output" / "tuned_configs"),
+            "auto-research",
+            "run",
+            "qwen3.5-27b",
+            "--family-id",
+            "proposal-ranking-manager-judgment",
+            "--workload-file",
+            str(repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml"),
+        ]
+    )
+
+    assert args.func(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["round_id"] == "round-123"
+    assert payload["kwargs"]["model_id"] == "qwen3.5-27b"
