@@ -1,8 +1,8 @@
 family_id: dead-flag-reachability-audit
 track: 2
 schema_version: cnb55.family.v1
-layer_a_status: in_progress
-layer_b_status: in_progress
+layer_a_status: failed_freeze_gate
+layer_b_status: implemented_pending_review
 
 grader_ref: verifiers/dead-flag-reachability-audit/score_reachability.py
 milestone_config_ref: verifier_data/dead-flag-reachability-audit/{variant_id}/milestones/
