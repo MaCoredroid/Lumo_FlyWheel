@@ -1,8 +1,8 @@
 family_id: sqlalchemy-2-session-modernization
 track: 3
 schema_version: cnb55.family.v1
-layer_a_status: pending_reprobe
-layer_b_status: in_review
+layer_a_status: failed_freeze_gate
+layer_b_status: implemented_pending_review
 grader_ref: verifiers/sqlalchemy-2-session-modernization/score_sqlalchemy_session_modernization.py
 milestone_config_ref: verifier_data/sqlalchemy-2-session-modernization/{variant_id}/milestones/
 
