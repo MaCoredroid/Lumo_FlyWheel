@@ -1213,6 +1213,10 @@ class AutoResearchRoundManager:
             winner_row = self._pick_winner_row(feasible_rows, objective_field="objective_value")
             winner_parent_uuid = winner_row.candidate_uuid
         else:
+            if not (round_dir / "rescreen_trace.json").is_file():
+                raise RuntimeError("finalize-round refuses without rescreen_trace.json")
+            self._validate_finalize_generator_consistency(round_dir)
+            self._validate_finalize_harness_fault_rows(rows)
             rescreen_rows = [
                 row
                 for row in rows
@@ -1223,19 +1227,34 @@ class AutoResearchRoundManager:
             holdout_path = round_dir / "holdout_trace.json"
             if not holdout_path.is_file():
                 raise RuntimeError("finalize-round refuses without holdout_trace.json")
-            holdout = json.loads(holdout_path.read_text(encoding="utf-8"))
-            if not bool(holdout.get("pass")):
-                raise RuntimeError("finalize-round refuses because holdout validation failed")
             winner_rescreen = self._pick_winner_row(rescreen_rows, objective_field="objective_mean")
             winner_parent_uuid = winner_rescreen.parent_candidate_uuid
             winner_rescreen_uuid = winner_rescreen.candidate_uuid
             winner_row = next(
                 row for row in rows if row.candidate_uuid == winner_parent_uuid and not row.parent_candidate_uuid
             )
+            holdout = json.loads(holdout_path.read_text(encoding="utf-8"))
+            if not bool(holdout.get("pass")):
+                raise RuntimeError("finalize-round refuses because holdout validation failed")
+            if str(holdout.get("candidate_uuid") or "") != winner_parent_uuid:
+                raise RuntimeError("finalize-round refuses because holdout candidate_uuid does not match the winner")
 
         if winner_row is None:
             raise RuntimeError("Unable to determine winner")
 
+        measurement_trace_ref = round_dir / "measurement_trace_combined.json"
+        search_trace_ref = round_dir / "search_trace.json"
+        measurement_trace_combined = []
+        for trace_path in sorted((round_dir / "candidates").glob("*/measurement_trace.json")):
+            measurement_trace_combined.append(json.loads(trace_path.read_text(encoding="utf-8")))
+        measurement_trace_ref.write_text(
+            json.dumps(measurement_trace_combined, indent=2),
+            encoding="utf-8",
+        )
+        search_trace_ref.write_text(
+            json.dumps([row.as_dict() for row in rows], indent=2),
+            encoding="utf-8",
+        )
         bundle = make_tuned_config_bundle(
             model_id=spec.model_id,
             family_id=spec.family_id,
@@ -1246,8 +1265,8 @@ class AutoResearchRoundManager:
                 "metric": "sustained_concurrent_eval_threads",
                 "value": float(winner_row.objective_mean or winner_row.objective_value or "0"),
             },
-            measurement_trace_ref=str(round_dir / "measurement_trace_combined.json"),
-            search_trace_ref=str(round_dir / "search_trace.json"),
+            measurement_trace_ref=str(measurement_trace_ref.relative_to(self.repo_root)),
+            search_trace_ref=str(search_trace_ref.relative_to(self.repo_root)),
             baseline_bundle_id=None,
             regression_guard={"noise_floor": spec.noise_floor},
             safety_rails={"regression_guard_passed": True},
@@ -1260,21 +1279,12 @@ class AutoResearchRoundManager:
                 "winner_rescreen_uuid": winner_rescreen_uuid or None,
                 "sub_spec_version": spec.sub_spec_version,
                 "agent_session_dir_ref": str((round_dir / "candidates").relative_to(self.repo_root)),
+                "agent_model_pin": {"model": "gpt-5.4", "reasoning_effort": "high"},
+                "results_tsv_ref": str((round_dir / "results.tsv").relative_to(self.repo_root)),
+                "holdout_validation": "skipped" if dry_run else "pass",
             },
         )
         bundle_path = persist_tuned_config_bundle(bundle, self.tuned_config_root)
-
-        measurement_trace_combined = []
-        for trace_path in sorted((round_dir / "candidates").glob("*/measurement_trace.json")):
-            measurement_trace_combined.append(json.loads(trace_path.read_text(encoding="utf-8")))
-        (round_dir / "measurement_trace_combined.json").write_text(
-            json.dumps(measurement_trace_combined, indent=2),
-            encoding="utf-8",
-        )
-        (round_dir / "search_trace.json").write_text(
-            json.dumps([row.as_dict() for row in rows], indent=2),
-            encoding="utf-8",
-        )
         run_log = {
             "round_id": round_id,
             "winner_iteration": winner_row.iteration,
@@ -1284,6 +1294,8 @@ class AutoResearchRoundManager:
             "dry_run": dry_run,
             "feasible_count": sum(1 for row in rows if row.feasible),
             "iterations_total": len(rows),
+            "rescreened_count": sum(1 for row in rows if row.status == "rescreened"),
+            "holdout_validation": "skipped" if dry_run else "pass",
         }
         (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
         lock_path = round_dir / ".round.lock"
@@ -1301,8 +1313,8 @@ class AutoResearchRoundManager:
         )
         staged_paths = [
             (round_dir / "run_log.json").relative_to(self.repo_root),
-            (round_dir / "search_trace.json").relative_to(self.repo_root),
-            (round_dir / "measurement_trace_combined.json").relative_to(self.repo_root),
+            search_trace_ref.relative_to(self.repo_root),
+            measurement_trace_ref.relative_to(self.repo_root),
             bundle_path.relative_to(self.repo_root),
         ]
         if (round_dir / "rescreen_trace.json").exists():
@@ -1465,6 +1477,10 @@ class AutoResearchRoundManager:
             endpoint=f"http://127.0.0.1:{self.proxy_port}/v1",
             metrics_scrape_url=f"http://127.0.0.1:{self.port}/metrics",
             admin_url=f"http://127.0.0.1:{self.proxy_port}/admin",
+            model_id=spec.model_id,
+            weight_version_id=spec.weight_version_id,
+            bundle_staging_dir=Path(spec.round_dir) / ".measure-staging",
+            round_id=spec.round_id,
         )
         warmup_s = spec.full_warmup_s if profile == "full" else spec.screen_warmup_s
         measurement_s = spec.full_measurement_s if profile == "full" else spec.screen_measurement_s
@@ -1705,6 +1721,25 @@ class AutoResearchRoundManager:
             return float(value)
         except (TypeError, ValueError):
             return float("inf")
+
+    def _validate_finalize_generator_consistency(self, round_dir: Path) -> None:
+        generators: set[str] = set()
+        for trace_path in sorted((round_dir / "candidates").glob("*/measurement_trace.json")):
+            trace = json.loads(trace_path.read_text(encoding="utf-8"))
+            generator = str(trace.get("generator") or "")
+            if not generator:
+                raise RuntimeError("finalize-round refuses because a measurement trace is missing generator")
+            generators.add(generator)
+        if len(generators) > 1:
+            raise RuntimeError("finalize-round refuses because measurement generator changed mid-round")
+
+    def _validate_finalize_harness_fault_rows(self, rows: list[ResultsRow]) -> None:
+        for index, row in enumerate(rows):
+            if row.status != "harness_fault":
+                continue
+            if any(later.feasible for later in rows[index + 1 :]):
+                continue
+            raise RuntimeError("finalize-round refuses because a harness_fault row has no successor feasible run")
 
     def _pick_winner_row(self, rows: list[ResultsRow], *, objective_field: str) -> ResultsRow:
         return min(
