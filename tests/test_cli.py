@@ -879,3 +879,40 @@ def test_auto_research_run_uses_non_agent_wrapper(
     payload = json.loads(capsys.readouterr().out)
     assert payload["round_id"] == "round-123"
     assert payload["kwargs"]["model_id"] == "qwen3.5-27b"
+    assert payload["kwargs"]["harness_type"] == "real"
+
+
+def test_auto_research_run_accepts_synthetic_harness_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = _init_auto_research_repo(tmp_path)
+    monkeypatch.setattr(cli, "REPO_ROOT", repo)
+    monkeypatch.setenv("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT", "1")
+
+    def fake_run_non_agent(self, **kwargs):
+        return {"round_id": "round-123", "kwargs": kwargs}
+
+    monkeypatch.setattr(cli.AutoResearchRoundManager, "run_non_agent", fake_run_non_agent)
+
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "--registry",
+            str(repo / "model_registry.yaml"),
+            "--tuned-config-root",
+            str(repo / "output" / "tuned_configs"),
+            "auto-research",
+            "run",
+            "qwen3.5-27b",
+            "--family-id",
+            "proposal-ranking-manager-judgment",
+            "--workload-file",
+            str(repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml"),
+            "--harness",
+            "synthetic",
+        ]
+    )
+
+    assert args.func(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["kwargs"]["harness_type"] == "synthetic"

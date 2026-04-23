@@ -1610,7 +1610,10 @@ class AutoResearchRoundManager:
         weight_version_id: str | None,
         round_root: str | Path,
         iteration_cap: int,
+        harness_type: str = "real",
     ) -> dict[str, Any]:
+        if harness_type not in {"real", "synthetic"}:
+            raise RuntimeError(f"Unsupported harness_type: {harness_type}")
         if os.environ.get("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT") != "1":
             raise RuntimeError("auto-research run is CI-only unless LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1")
         bootstrap = self.bootstrap_round(
@@ -1620,7 +1623,7 @@ class AutoResearchRoundManager:
             workload_file=workload_file,
             weight_version_id=weight_version_id,
             round_root=round_root,
-            harness_type="synthetic",
+            harness_type=harness_type,
         )
         round_id = str(bootstrap["round_id"])
         round_dir = Path(bootstrap["round_dir"])
@@ -1633,7 +1636,7 @@ class AutoResearchRoundManager:
                     iteration=f"baseline_{suffix}",
                     status="baseline",
                     notes=f"default-config baseline replay {suffix}",
-                    allow_synthetic=True,
+                    allow_synthetic=harness_type == "synthetic",
                 )
             )
 
@@ -1665,7 +1668,7 @@ class AutoResearchRoundManager:
                     iteration=iteration,
                     status=status,
                     notes="non-agent dry-run candidate",
-                    allow_synthetic=True,
+                    allow_synthetic=harness_type == "synthetic",
                 )
             )
         finalized = self.finalize_round(round_id=round_id, dry_run=True)

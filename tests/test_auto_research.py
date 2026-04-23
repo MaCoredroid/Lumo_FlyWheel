@@ -1169,6 +1169,78 @@ def test_offline_auto_research_runner_backward_compatibility(tmp_path: Path) -> 
     assert result.run_log_path.is_file()
 
 
+def test_run_non_agent_threads_harness_type_to_bootstrap_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    monkeypatch.setenv("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT", "1")
+
+    captured: dict[str, object] = {}
+
+    def fake_bootstrap_round(self, **kwargs):
+        captured["bootstrap"] = kwargs
+        return {
+            "round_id": "round-123",
+            "round_dir": str(repo / "output" / "auto_research" / "round-123"),
+            "round_branch": "autoresearch/test",
+            "round_spec_path": str(repo / "output" / "auto_research" / "round-123" / "round_spec.yaml"),
+        }
+
+    def fake_finalize_round(self, *, round_id: str, dry_run: bool = False):
+        captured["finalize"] = {"round_id": round_id, "dry_run": dry_run}
+        return {
+            "round_id": round_id,
+            "bundle_path": str(repo / "output" / "tuned_configs" / "bundle.yaml"),
+            "finalize_commit_sha": "synthetic-sha",
+        }
+
+    monkeypatch.setattr(auto_research.AutoResearchRoundManager, "bootstrap_round", fake_bootstrap_round)
+    monkeypatch.setattr(auto_research.AutoResearchRoundManager, "finalize_round", fake_finalize_round)
+    monkeypatch.setattr(auto_research.AutoResearchRoundManager, "measure", lambda self, **kwargs: {"candidate_uuid": "uuid"})
+    monkeypatch.setattr(
+        auto_research.AutoResearchRoundManager,
+        "commit_candidate",
+        lambda self, **kwargs: {"iteration": kwargs["iteration"], "candidate_uuid": "uuid", "status": kwargs["status"]},
+    )
+    monkeypatch.setattr(auto_research.OfflineAutoResearchRunner, "_candidate_plan", lambda self: [])
+
+    round_dir = repo / "output" / "auto_research" / "round-123"
+    (round_dir / "candidates" / "baseline_a").mkdir(parents=True, exist_ok=True)
+    (round_dir / "candidates" / "baseline_b").mkdir(parents=True, exist_ok=True)
+
+    result = manager.run_non_agent(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        baseline_bundle=None,
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        iteration_cap=1,
+        harness_type="synthetic",
+    )
+
+    assert captured["bootstrap"] == {
+        "model_id": "qwen3.5-27b",
+        "family_id": "proposal-ranking-manager-judgment",
+        "sprint": "sprint-0",
+        "workload_file": repo
+        / "benchmark_blueprints"
+        / "families"
+        / "proposal-ranking-manager-judgment"
+        / "serving_workload.yaml",
+        "weight_version_id": None,
+        "round_root": repo / "output" / "auto_research",
+        "harness_type": "synthetic",
+    }
+    assert captured["finalize"] == {"round_id": "round-123", "dry_run": True}
+    assert result["bundle_path"] == str(repo / "output" / "tuned_configs" / "bundle.yaml")
+
+
 def test_finalize_round_refuses_without_rescreen_trace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _init_repo(tmp_path)
     manager = auto_research.AutoResearchRoundManager(

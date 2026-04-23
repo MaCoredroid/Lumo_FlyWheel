@@ -678,6 +678,7 @@ def cmd_auto_research_run(args: argparse.Namespace) -> int:
         weight_version_id=args.weight_version_id,
         round_root=args.round_root,
         iteration_cap=args.iteration_cap,
+        harness_type=args.harness,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -808,6 +809,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_research_run.add_argument("--workload-file")
     auto_research_run.add_argument("--baseline-bundle")
     auto_research_run.add_argument("--weight-version-id")
+    auto_research_run.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_research_run.add_argument("--iteration-cap", type=int, default=12)
     auto_research_run.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_research_run.set_defaults(func=cmd_auto_research_run)
