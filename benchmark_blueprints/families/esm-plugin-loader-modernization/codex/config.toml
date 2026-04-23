@@ -1,3 +1,4 @@
+
 version = 1
 family_id = "esm-plugin-loader-modernization"
 profile = "configured_codex"
@@ -16,6 +17,7 @@ commands = [
   "npm test",
   "npm run build",
   "npm run typecheck",
+  "bash scripts/capture_cli_output.sh",
 ]
 
 [scoring]

@@ -1,0 +1,19 @@
+$ node dist/src/index.mjs --help
+Usage: node dist/src/index.mjs <plugin-name>
+Commands:
+  --list   Print discoverable plugin names
+Notes:
+  - Supports default-export and named-export plugins
+  - Rejects malformed plugin modules with Invalid plugin module
+
+$ node dist/src/index.mjs good-default
+default:report
+
+$ node dist/src/index.mjs good-named
+named:report
+
+$ node dist/src/index.mjs --list
+good-default
+good-named
+good-helper
+bad-wrong-shape

@@ -1,0 +1,45 @@
+{
+  "allowed_write_paths": [
+    "src/loader.mjs",
+    "src/contracts.mjs",
+    "src/index.mjs",
+    "scripts/build.mjs",
+    "scripts/typecheck.mjs",
+    "docs/cli/plugins.md",
+    "artifacts/cli_capture.txt"
+  ],
+  "expected_capture": "$ node dist/src/index.mjs --help\nUsage: node dist/src/index.mjs <plugin-name>\nCommands:\n  --list   Print discoverable plugin names\nNotes:\n  - Supports default-export and named-export plugins\n  - Rejects malformed plugin modules with Invalid plugin module\n\n$ node dist/src/index.mjs good-default\ndefault:report\n\n$ node dist/src/index.mjs good-named\nnamed:report\n\n$ node dist/src/index.mjs --list\ngood-default\ngood-named\ngood-helper\nbad-wrong-shape\n",
+  "expected_error_substring": "Invalid plugin module: bad-wrong-shape",
+  "expected_outputs": {
+    "good-default": "default:report",
+    "good-helper": "helper:good-helper:report",
+    "good-named": "named:report"
+  },
+  "forbidden_doc_markers": [
+    "require(",
+    "node src/index.mjs",
+    "src/plugins"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "5ffc9599090845a65847c267a75d4b758192110af61a34f895479ffa771ad3db",
+    "Dockerfile": "e02c2bbc792b0d5293745ac411a3dda946536d9a848ac5c2ded1d942a387bae1",
+    "artifacts/README.md": "ab41c4fa40def652af815a4bc8a39e2fa87ac4f07af2a8dcdc798039e1e99212",
+    "incident_context": "b3bdcf7062e7eadd91e619a50e93d79dd0b2722d3b5c7d77db572d5d4351ed58",
+    "package.json": "fb9d0b79f67762d4c957cc642a5af630fe186028dc64e3db4f458979b70cc155",
+    "plugins": "3f7139b2885d0a62a994330a13a8a3f5429f78055b784031f2549ffc8be0f488",
+    "release_context": "c13e7781f5cc7c75c27ea9d0526e6ac7602de8a06a318cef9ff096978e3d018c",
+    "repo_evidence": "608d9b0772a75553f1e1864ecdd3787e76737c85d866bb172cd50bd73b80de2e",
+    "scripts/capture_cli_output.sh": "38ceb1d88f823b63308f9c9a2a0eefb9f5c2671fe5145328681a0d3a77034e4f",
+    "tests": "eaa4f3a5a91df93c6bda7ca90277bc7bad6a86171e40a45eb750c658f62384bb"
+  },
+  "required_doc_markers": [
+    "node dist/src/index.mjs",
+    "dist/plugins/",
+    "default-export plugin object",
+    "named `plugin` export",
+    "Invalid plugin module",
+    "artifacts/cli_capture.txt"
+  ],
+  "variant_id": "v5-recovery-in-thread"
+}

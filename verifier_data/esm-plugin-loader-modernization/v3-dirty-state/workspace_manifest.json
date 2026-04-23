@@ -1,0 +1,28 @@
+{
+  "file_hashes": {
+    ".scenario_variant": "fdc62f17d056667cff21d79f952b69698e909ea4d276ac5b4fff4947912b2301",
+    "AGENTS.md": "0d8914562cbb68466f3dbeded931de88e65b4b1eadb3fa0bb95e491e368ad9c3",
+    "Dockerfile": "39759f6ffae7e5f217931e7a45a0af1e33628d178a5b76b00d89b22356edbfe1",
+    "artifacts/README.md": "09d6d535eb5263f3885dba584c16b50b39f350c76de887fb74d5eec922b87dfa",
+    "docs/cli/plugins.md": "03f9e5f24f3887a898ea6a2f1fd1a42323dbaa18a45eae57818e600dc4053074",
+    "package.json": "08162f109c179e20a7f2665925d9ebc33b69d41348e9c7cd9c9d2655f3ce8b82",
+    "plugins/bad-wrong-shape.mjs": "487e24361a1dbd6ef4dc986023c176dff9793e008957c922860ef455e109f0ce",
+    "plugins/good-default.mjs": "a05cc1052f0f9a4069dcd2625498f2bf0886b77f1810fff66b371f5ccce2f8a7",
+    "plugins/good-helper.mjs": "d92092bc1dcdef17fadaa0f0624ad4de22d19c802af4d756dd92d6d2862988c0",
+    "plugins/good-named.mjs": "022abf2d24be24da90ec42de208295d27765dd229a9d872e898d85e776d2e9bc",
+    "plugins/helper.cjs": "6725fd6e1428118263f93f7d02302567e5746687fcc087323b1a200e13d864a1",
+    "repo_evidence/build_notes.md": "89576b9bc3ac1a2b4880b5d9950392d6c2973b20f08e48d6506f7b43811cef4f",
+    "repo_evidence/code/in_progress_patch/loader_patch.mjs": "1aa31ec6b337ab24d7933b7fccea96eea46e70986b49968dd5cf523000be0c20",
+    "repo_evidence/code/in_progress_patch/notes.md": "11c578fbfeadf164bd7a08bbacf5ccd94b1e59a796165904ba8df2e16567fb8c",
+    "repo_evidence/loader_contract.md": "ce2a59cdbf259224c65e97e0c18d3bd3c930301ddd3201f703ef9411f928155a",
+    "scripts/build.mjs": "a1e80f7259da9d65f6daf113c893f038961da6112947661cd2d7b5556a992124",
+    "scripts/capture_cli_output.sh": "0f263d71c05b2d8042c78fd637de000bfda5325c5b90a928e4ed64c86b0e6db2",
+    "scripts/typecheck.mjs": "bb1cd20ba445fa7cf1219adf73e9d4ac0d438ad871a9c7ebb600c3165d2a0c9b",
+    "src/contracts.mjs": "78ec07ad7cf4a5b7772325079691031d4b330db36578cc8ca38ac50f24446a0a",
+    "src/index.mjs": "1666064639db95ccf127ea0f5d8a3e2edba84bfb4d6f9ea5ef4935bfab804db2",
+    "src/loader.mjs": "c835b234ee769bf30ad01cec823cc95044b2e3b7f8c0281a5aa3f9aa9b28c836",
+    "tests/test_cli_help.mjs": "2e18ab8c5757bc27113fdb663f9d35bcddb0b29ef2a36b33d62c5d8a1dff102b",
+    "tests/test_loader.mjs": "c284c01dfef26807d3f6349d595a42bf12a8e3f10e8a6ce5f47705b9fcbf4a5f"
+  },
+  "variant_id": "v3-dirty-state"
+}
