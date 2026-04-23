@@ -1,0 +1,11 @@
+{
+  "artifacts": {
+    "determinism_check": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/artifacts/safety_rails/determinism_check.json",
+    "oom_handling": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/artifacts/safety_rails/oom_handling.json",
+    "regression_guard": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/artifacts/safety_rails/regression_guard.json",
+    "resume_cycle": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/artifacts/resume_cycle/recorded_session.json"
+  },
+  "generated_at": "2026-04-23T02:50:21+00:00",
+  "git_dirty": true,
+  "git_sha": "c7dbfdab99510495fa9196ba16fd31331e05c2d3"
+}

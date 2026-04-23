@@ -1,0 +1,11 @@
+{
+  "status": "retained_baseline",
+  "stopping_reason": "hard_infeasibility_oom",
+  "baseline_value": 1,
+  "best_value": 1,
+  "best_candidate_label": "baseline",
+  "weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+  "model_id": "qwen3.5-27b",
+  "family_id": "proposal-ranking-manager-judgment",
+  "bundle_path": null
+}

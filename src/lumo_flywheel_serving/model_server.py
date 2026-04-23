@@ -62,17 +62,17 @@ class ModelServer:
         proxy_port: int = DEFAULT_INFERENCE_PROXY_PORT,
         state_root: str | Path = DEFAULT_STATE_ROOT,
     ) -> None:
-        self.registry_path = Path(registry_path)
+        self.registry_path = Path(registry_path).resolve()
         self._load_local_runtime_env()
         self.registry = load_registry(self.registry_path)
         self.port = port
         self.image = image
         self.container_name = container_name
-        self.logs_root = Path(logs_root)
-        self.triton_cache_root = Path(triton_cache_root)
+        self.logs_root = Path(logs_root).resolve()
+        self.triton_cache_root = Path(triton_cache_root).resolve()
         self.use_sleep_mode = use_sleep_mode
         self.proxy_port = proxy_port
-        self.state_store = RuntimeStateStore(state_root)
+        self.state_store = RuntimeStateStore(Path(state_root).resolve())
         self.current_model = self.state_store.load().current_model_id
 
     def ensure_runtime_scaffolding(self) -> None:

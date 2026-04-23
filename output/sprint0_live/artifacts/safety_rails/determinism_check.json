@@ -1,0 +1,205 @@
+{
+  "assertions": {
+    "run_aborted_on_determinism_failures": true,
+    "three_failures_recorded": true
+  },
+  "baseline_bundle_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260423T0200030000_9cb3959e.yaml",
+  "candidate_overrides": [
+    {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.3,
+      "harness_overrides": {
+        "inject_nondeterminism": true
+      },
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 32768,
+      "max_num_batched_tokens": 6144,
+      "max_num_seqs": 1
+    },
+    {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.3,
+      "harness_overrides": {
+        "inject_nondeterminism": true
+      },
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 32768,
+      "max_num_batched_tokens": 6144,
+      "max_num_seqs": 1
+    },
+    {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.3,
+      "harness_overrides": {
+        "inject_nondeterminism": true
+      },
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 32768,
+      "max_num_batched_tokens": 6144,
+      "max_num_seqs": 1
+    }
+  ],
+  "generated_at": "2026-04-23T02:50:21+00:00",
+  "git_dirty": true,
+  "git_sha": "c7dbfdab99510495fa9196ba16fd31331e05c2d3",
+  "pass": true,
+  "rail": "determinism_check",
+  "run_log": {
+    "baseline_value": 1,
+    "best_candidate_label": "baseline",
+    "best_value": 1,
+    "bundle_path": null,
+    "family_id": "proposal-ranking-manager-judgment",
+    "model_id": "qwen3.5-27b",
+    "status": "retained_baseline",
+    "stopping_reason": "hard_infeasibility_determinism",
+    "weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582"
+  },
+  "run_result": {
+    "baseline_value": 1,
+    "best_candidate_label": "baseline",
+    "best_value": 1,
+    "bundle_path": null,
+    "measurement_trace_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/artifacts/auto_research_runs/determinism_check/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/run_1776912621_qwen3_5-27b/measurement_trace.json",
+    "run_dir": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/artifacts/auto_research_runs/determinism_check/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/run_1776912621_qwen3_5-27b",
+    "run_log_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/artifacts/auto_research_runs/determinism_check/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/run_1776912621_qwen3_5-27b/run_log.json",
+    "search_trace_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/artifacts/auto_research_runs/determinism_check/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/run_1776912621_qwen3_5-27b/search_trace.json",
+    "status": "retained_baseline",
+    "stopping_reason": "hard_infeasibility_determinism"
+  },
+  "search_trace_excerpt": [
+    {
+      "candidate": {
+        "enable_chunked_prefill": true,
+        "enable_prefix_caching": false,
+        "gpu_memory_utilization": 0.3,
+        "kv_cache_dtype": "fp8_e5m2",
+        "max_model_len": 32768,
+        "max_num_batched_tokens": 6144,
+        "max_num_seqs": 1
+      },
+      "determinism_pass_rate": 1.0,
+      "feasible": true,
+      "iteration": 0,
+      "kv_probe_passed": true,
+      "label": "baseline",
+      "metrics": {
+        "batch_factor": 0.75,
+        "cache_factor": 0.8,
+        "length_factor": 1.0,
+        "memory_factor": 0.2,
+        "memory_load": 0.1288,
+        "prefill_factor": 1.1,
+        "raw_capacity": 0.132
+      },
+      "objective_value": 1,
+      "oom": false,
+      "p95_latency_ms": 24290.0,
+      "reason": "ok",
+      "rollout_throughput": 5.28
+    },
+    {
+      "candidate": {
+        "enable_chunked_prefill": true,
+        "enable_prefix_caching": false,
+        "gpu_memory_utilization": 0.3,
+        "harness_overrides": {
+          "inject_nondeterminism": true
+        },
+        "kv_cache_dtype": "fp8_e5m2",
+        "max_model_len": 32768,
+        "max_num_batched_tokens": 6144,
+        "max_num_seqs": 1
+      },
+      "determinism_pass_rate": 0.95,
+      "feasible": false,
+      "iteration": 1,
+      "kv_probe_passed": true,
+      "label": "candidate-01",
+      "metrics": {
+        "batch_factor": 0.75,
+        "cache_factor": 0.8,
+        "length_factor": 1.0,
+        "memory_factor": 0.2,
+        "memory_load": 0.1288,
+        "prefill_factor": 1.1,
+        "raw_capacity": 0.132
+      },
+      "objective_value": 0,
+      "oom": false,
+      "p95_latency_ms": 24290.0,
+      "reason": "determinism_check_failed",
+      "rollout_throughput": 5.28
+    },
+    {
+      "candidate": {
+        "enable_chunked_prefill": true,
+        "enable_prefix_caching": false,
+        "gpu_memory_utilization": 0.3,
+        "harness_overrides": {
+          "inject_nondeterminism": true
+        },
+        "kv_cache_dtype": "fp8_e5m2",
+        "max_model_len": 32768,
+        "max_num_batched_tokens": 6144,
+        "max_num_seqs": 1
+      },
+      "determinism_pass_rate": 0.95,
+      "feasible": false,
+      "iteration": 2,
+      "kv_probe_passed": true,
+      "label": "candidate-02",
+      "metrics": {
+        "batch_factor": 0.75,
+        "cache_factor": 0.8,
+        "length_factor": 1.0,
+        "memory_factor": 0.2,
+        "memory_load": 0.1288,
+        "prefill_factor": 1.1,
+        "raw_capacity": 0.132
+      },
+      "objective_value": 0,
+      "oom": false,
+      "p95_latency_ms": 24290.0,
+      "reason": "determinism_check_failed",
+      "rollout_throughput": 5.28
+    },
+    {
+      "candidate": {
+        "enable_chunked_prefill": true,
+        "enable_prefix_caching": false,
+        "gpu_memory_utilization": 0.3,
+        "harness_overrides": {
+          "inject_nondeterminism": true
+        },
+        "kv_cache_dtype": "fp8_e5m2",
+        "max_model_len": 32768,
+        "max_num_batched_tokens": 6144,
+        "max_num_seqs": 1
+      },
+      "determinism_pass_rate": 0.95,
+      "feasible": false,
+      "iteration": 3,
+      "kv_probe_passed": true,
+      "label": "candidate-03",
+      "metrics": {
+        "batch_factor": 0.75,
+        "cache_factor": 0.8,
+        "length_factor": 1.0,
+        "memory_factor": 0.2,
+        "memory_load": 0.1288,
+        "prefill_factor": 1.1,
+        "raw_capacity": 0.132
+      },
+      "objective_value": 0,
+      "oom": false,
+      "p95_latency_ms": 24290.0,
+      "reason": "determinism_check_failed",
+      "rollout_throughput": 5.28
+    }
+  ],
+  "spec_item": "9.3.3"
+}

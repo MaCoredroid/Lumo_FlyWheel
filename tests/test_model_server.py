@@ -78,6 +78,46 @@ models:
     assert "VLLM_ENABLE_RESPONSES_API_STORE=1" in command
 
 
+def test_build_run_command_resolves_relative_runtime_mounts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    monkeypatch.chdir(tmp_path)
+    server = ModelServer(
+        registry_path=Path("model_registry.yaml"),
+        logs_root=Path("logs"),
+        triton_cache_root=Path("triton"),
+        state_root=Path("state"),
+    )
+
+    cmd = server._build_run_command(
+        "qwen3.5-27b",
+        server.registry["qwen3.5-27b"],
+        enable_request_logging=False,
+        kv_cache_dtype="auto",
+        gpu_memory_utilization=0.9,
+        enforce_eager=False,
+    )
+    command = " ".join(cmd)
+
+    assert f"{tmp_path / 'logs'}:{tmp_path / 'logs'}" in command
+    assert f"{tmp_path / 'triton'}:{tmp_path / 'triton'}" in command
+    assert server.state_store.root == (tmp_path / "state")
+
+
 def test_build_run_command_includes_lora_adapter_flags(tmp_path: Path) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(

@@ -1,0 +1,62 @@
+[
+  {
+    "iteration": 0,
+    "label": "baseline",
+    "candidate": {
+      "max_num_seqs": 1,
+      "max_num_batched_tokens": 6144,
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.3,
+      "max_model_len": 32768,
+      "kv_cache_dtype": "fp8_e5m2"
+    },
+    "feasible": true,
+    "objective_value": 1,
+    "p95_latency_ms": 24290.0,
+    "rollout_throughput": 5.28,
+    "determinism_pass_rate": 1.0,
+    "kv_probe_passed": true,
+    "oom": false,
+    "reason": "ok",
+    "metrics": {
+      "memory_load": 0.1288,
+      "batch_factor": 0.75,
+      "cache_factor": 0.8,
+      "prefill_factor": 1.1,
+      "memory_factor": 0.2,
+      "length_factor": 1.0,
+      "raw_capacity": 0.132
+    }
+  },
+  {
+    "iteration": 1,
+    "label": "candidate-01",
+    "candidate": {
+      "max_num_seqs": 1,
+      "max_num_batched_tokens": 4096,
+      "enable_chunked_prefill": false,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.3,
+      "max_model_len": 24576,
+      "kv_cache_dtype": "fp8_e5m2"
+    },
+    "feasible": false,
+    "objective_value": 0,
+    "p95_latency_ms": 26766.25,
+    "rollout_throughput": 2.88,
+    "determinism_pass_rate": 1.0,
+    "kv_probe_passed": true,
+    "oom": false,
+    "reason": "rollout_floor_failed",
+    "metrics": {
+      "memory_load": 0.0534,
+      "batch_factor": 0.5,
+      "cache_factor": 0.8,
+      "prefill_factor": 0.9,
+      "memory_factor": 0.2,
+      "length_factor": 0.5,
+      "raw_capacity": 0.036
+    }
+  }
+]

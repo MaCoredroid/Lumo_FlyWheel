@@ -1,0 +1,110 @@
+{
+  "assertions": {
+    "reloaded_expected_tuned_config_path": true,
+    "reloaded_expected_weight_version_id": true,
+    "resume_command_succeeded": true,
+    "runtime_state_ready": true,
+    "served_model_contains_expected": true,
+    "status_command_succeeded": true,
+    "status_health_200": true
+  },
+  "expected_last_known_good": {
+    "model_id": "qwen3.5-27b",
+    "tuned_config_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260423T0200030000_9cb3959e.yaml",
+    "weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582"
+  },
+  "generated_at": "2026-04-23T02:50:21+00:00",
+  "git_dirty": true,
+  "git_sha": "c7dbfdab99510495fa9196ba16fd31331e05c2d3",
+  "inputs": {
+    "container_name": "lumo-vllm-sprint0-artifact",
+    "logs_root": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/logs",
+    "registry_path": "/home/mark/shared/lumoFlyWheel/model_registry.yaml",
+    "state_root": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/state",
+    "triton_cache_root": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/triton"
+  },
+  "pass": true,
+  "post_state": {
+    "active_tuned_config_id": "9cb3959e-00bd-4d0a-9a60-c4d86aa3bc4b",
+    "active_tuned_config_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260423T0200030000_9cb3959e.yaml",
+    "current_model_id": "qwen3.5-27b",
+    "current_weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+    "invalidate_count": 0,
+    "invalidated_at": null,
+    "last_known_good_model_id": "qwen3.5-27b",
+    "last_known_good_tuned_config_id": "9cb3959e-00bd-4d0a-9a60-c4d86aa3bc4b",
+    "last_known_good_tuned_config_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260423T0200030000_9cb3959e.yaml",
+    "last_known_good_weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+    "status": "READY"
+  },
+  "pre_state": {
+    "active_tuned_config_id": "9cb3959e-00bd-4d0a-9a60-c4d86aa3bc4b",
+    "active_tuned_config_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260423T0200030000_9cb3959e.yaml",
+    "current_model_id": "qwen3.5-27b",
+    "current_weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+    "invalidate_count": 0,
+    "invalidated_at": null,
+    "last_known_good_model_id": "qwen3.5-27b",
+    "last_known_good_tuned_config_id": "9cb3959e-00bd-4d0a-9a60-c4d86aa3bc4b",
+    "last_known_good_tuned_config_path": "/home/mark/shared/lumoFlyWheel/output/sprint0_live/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260423T0200030000_9cb3959e.yaml",
+    "last_known_good_weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+    "status": "READY"
+  },
+  "resume_result": {
+    "command": "/home/mark/shared/lumoFlyWheel/.venv/bin/python -m lumo_flywheel_serving.cli --registry /home/mark/shared/lumoFlyWheel/model_registry.yaml --logs-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/logs --triton-cache-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/triton --state-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/state --container-name lumo-vllm-sprint0-artifact resume",
+    "duration_seconds": 614.714,
+    "parsed_stdout": null,
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "4df9a9e64c206295b473b4772d90471ad3f126d57156cd5fd21c84dfcbe89e13\nlumo-vllm-sprint0-artifact\nlumo-vllm-sprint0-artifact\n976c0bf8bc74bfc5c7aaf5ace5cdef7d94dfed29abf2f13a558410eb9ace3735\n{\n  \"status\": \"resumed\",\n  \"model_id\": \"qwen3.5-27b\",\n  \"weight_version_id\": \"2e1b21350ce589fcaafbb3c7d7eac526a7aed582\",\n  \"tuned_config_path\": \"/home/mark/shared/lumoFlyWheel/output/sprint0_live/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260423T0200030000_9cb3959e.yaml\"\n}"
+  },
+  "spec_item": "9.5.1",
+  "status_result": {
+    "command": "/home/mark/shared/lumoFlyWheel/.venv/bin/python -m lumo_flywheel_serving.cli --registry /home/mark/shared/lumoFlyWheel/model_registry.yaml --logs-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/logs --triton-cache-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/triton --state-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/state --container-name lumo-vllm-sprint0-artifact status",
+    "duration_seconds": 0.138,
+    "parsed_stdout": {
+      "health": 200,
+      "models": {
+        "data": [
+          {
+            "created": 1776912588,
+            "id": "qwen3.5-27b",
+            "max_model_len": 32768,
+            "object": "model",
+            "owned_by": "vllm",
+            "parent": null,
+            "permission": [
+              {
+                "allow_create_engine": false,
+                "allow_fine_tuning": false,
+                "allow_logprobs": true,
+                "allow_sampling": true,
+                "allow_search_indices": false,
+                "allow_view": true,
+                "created": 1776912588,
+                "group": null,
+                "id": "modelperm-86224eb003aec8d8",
+                "is_blocking": false,
+                "object": "model_permission",
+                "organization": "*"
+              }
+            ],
+            "root": "/models/qwen3.5-27b-fp8"
+          }
+        ],
+        "object": "list"
+      }
+    },
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "{\n  \"health\": 200,\n  \"models\": {\n    \"object\": \"list\",\n    \"data\": [\n      {\n        \"id\": \"qwen3.5-27b\",\n        \"object\": \"model\",\n        \"created\": 1776912588,\n        \"owned_by\": \"vllm\",\n        \"root\": \"/models/qwen3.5-27b-fp8\",\n        \"parent\": null,\n        \"max_model_len\": 32768,\n        \"permission\": [\n          {\n            \"id\": \"modelperm-86224eb003aec8d8\",\n            \"object\": \"model_permission\",\n            \"created\": 1776912588,\n            \"allow_create_engine\": false,\n            \"allow_sampling\": true,\n            \"allow_logprobs\": true,\n            \"allow_search_indices\": false,\n            \"allow_view\": true,\n            \"allow_fine_tuning\": false,\n            \"organization\": \"*\",\n            \"group\": null,\n            \"is_blocking\": false\n          }\n        ]\n      }\n    ]\n  }\n}"
+  },
+  "stop_result": {
+    "command": "/home/mark/shared/lumoFlyWheel/.venv/bin/python -m lumo_flywheel_serving.cli --registry /home/mark/shared/lumoFlyWheel/model_registry.yaml --logs-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/logs --triton-cache-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/triton --state-root /home/mark/shared/lumoFlyWheel/output/sprint0_live/state --container-name lumo-vllm-sprint0-artifact stop",
+    "duration_seconds": 32.313,
+    "parsed_stdout": null,
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "lumo-vllm-sprint0-artifact\nlumo-vllm-sprint0-artifact"
+  }
+}
