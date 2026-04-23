@@ -1,0 +1,141 @@
+{
+  "allowed_evidence_roots": [
+    "repo/",
+    "review/",
+    "release_context/",
+    "incident_context/"
+  ],
+  "expected_issues": [
+    {
+      "allowed_linked_surfaces": [
+        "repo/docs/export_contract.md",
+        "release_context/nightly_export_consumer.md"
+      ],
+      "anchor": {
+        "end": 15,
+        "start": 15
+      },
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "id": "default_output_regression",
+      "keyword_groups": [
+        [
+          "default"
+        ],
+        [
+          "json"
+        ],
+        [
+          "markdown"
+        ]
+      ],
+      "points": 20,
+      "score_key": "issue.default_output_regression"
+    },
+    {
+      "allowed_linked_surfaces": [
+        "repo/src/release_readiness/export.py",
+        "repo/docs/export_contract.md"
+      ],
+      "anchor": {
+        "end": 7,
+        "start": 7
+      },
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "id": "json_renderer_contract_regression",
+      "keyword_groups": [
+        [
+          "json"
+        ],
+        [
+          "markdown"
+        ],
+        [
+          "renderer",
+          "registry",
+          "explicit"
+        ]
+      ],
+      "points": 20,
+      "score_key": "issue.json_renderer_contract_regression"
+    },
+    {
+      "allowed_linked_surfaces": [
+        "repo/docs/export_contract.md",
+        "repo/src/release_readiness/export.py"
+      ],
+      "anchor": {
+        "end": 4,
+        "start": 4
+      },
+      "changed_file": "repo/tests/test_markdown_export.py",
+      "id": "missing_regression_tests",
+      "keyword_groups": [
+        [
+          "test",
+          "coverage"
+        ],
+        [
+          "json"
+        ],
+        [
+          "default",
+          "explicit"
+        ]
+      ],
+      "points": 10,
+      "score_key": "issue.missing_regression_tests"
+    }
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "d3e995d673a814dcd72b311ed5f7d2193b6cd7514f7ad34d11976e3586c064db",
+    "AGENTS.md": "afb1d654f4bb22dc1e3878ddd007cdc69188b7e1143d1481f1edaf3ea8c8dcec",
+    "Dockerfile": "1663db6720ef99476ccc05d179bb9c97276c52904bba9786b1112e17fa9d9273",
+    "bin": "b9190588c28515490c86017ebf9bb0641e09756566abe8cf64640843b257acef",
+    "incident_context": "febbfd480b94554f09fd475ad94e55d2927e7004230b1776e1d2ee3a6e754e25",
+    "release_context": "01c9b01f6feec94c6eab1d2034cbe57c8a38ad619dbfa0b537803eacbd4b966e",
+    "repo": "161af57ea899b57524d1e5032ce29916a5693f285ecc5689f042a245f91421ac",
+    "repo/tests": "155905f767007e13c85d7a66262c2881e36478438496d79f7a9f4f07072071f7",
+    "review": "8d450e0c9e9765956bba16a29988e6f88eb05446e2f2bf34ae29554911e49703"
+  },
+  "shortcut_review": {
+    "findings": [
+      {
+        "changed_file": "repo/docs/markdown_export.md",
+        "changed_lines": {
+          "end": 3,
+          "start": 3
+        },
+        "evidence_paths": [
+          "repo/docs/markdown_export.md",
+          "review/pr_description.md"
+        ],
+        "impact": "This mostly reads as style feedback rather than a behavioral blocker.",
+        "linked_surface": "repo/docs/markdown_export.md",
+        "severity": "low",
+        "test_gap": "",
+        "title": "Markdown heading wording could be clearer"
+      },
+      {
+        "changed_file": "repo/tests/fixtures/release_readiness.md",
+        "changed_lines": {
+          "end": 3,
+          "start": 1
+        },
+        "evidence_paths": [
+          "repo/tests/fixtures/release_readiness.md",
+          "review/ci_snapshot.md"
+        ],
+        "impact": "The fixture update is large, but I do not see a correctness issue.",
+        "linked_surface": "repo/tests/fixtures/release_readiness.md",
+        "severity": "low",
+        "test_gap": "",
+        "title": "Snapshot fixture churn is noisy"
+      }
+    ],
+    "intent_verdict": "matches_intent",
+    "schema_version": "cnb55.pr_review.v1",
+    "summary": "Looks good to merge; CI passed and the diff is mostly docs plus markdown polish.",
+    "variant_id": "v5-recovery-in-thread"
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

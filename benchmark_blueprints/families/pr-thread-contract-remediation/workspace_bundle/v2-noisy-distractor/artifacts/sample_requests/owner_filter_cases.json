@@ -1,0 +1,18 @@
+[
+  {
+    "owner": "bob",
+    "queue_id": "q-001"
+  },
+  {
+    "owner": "bob",
+    "queue_id": "q-002"
+  },
+  {
+    "owner": "alice",
+    "queue_id": "q-003"
+  },
+  {
+    "owner": null,
+    "queue_id": "q-004"
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "allowed_write_paths": [
+    "queue_api/handlers.py",
+    "queue_api/serializers.py",
+    "queue_api/service.py",
+    "tests/test_handlers.py",
+    "tests/test_service.py",
+    "docs/release_notes.md",
+    "CHANGELOG.md",
+    "review/reviewer_replies.json",
+    "review/verification_note.md"
+  ],
+  "file_hashes": {
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "4fc40d0786d518aa701d011c1b309791eb2f7ddb7709d2e88043484e763e920e",
+    "CHANGELOG.md": "70249eee9fceb27c2acf1dfa54ad3013647f51d19879e4af8267def423c45d82",
+    "Dockerfile": "8076b7a63a4a6d9afa5f5938ea2421245870612d830b306b48d0f46dc98ef5c4",
+    "artifacts/expected_reply_schema.json": "833e17fcc97fa84b0571a276495c4bc35a802f664903fd7a58aaed923ff2dcc5",
+    "artifacts/sample_requests/owner_filter_cases.json": "811ce5ce78943739a2f3daceeda9232a590daa96e2b761aa13f5530f0fa41e8a",
+    "docs/release_notes.md": "bcbf71e50659c360924f6297b84bcae89e79f08cda0507349babcc7a3f260a7a",
+    "incident_context/inc_742_owner_null_rollback.md": "3dd57c7c12c3cd47d39fad96d323e57dc3e7f14f0704b641328665fc4b7205bd",
+    "queue_api/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "queue_api/handlers.py": "96e5d143a05899588fea54e2c3c956693f0189357bbd8b9fb7c5dd188b566023",
+    "queue_api/serializers.py": "4202e8de6bad07ae06fcc421ed9fbda0d76499506392f05fbe0401a83ffd336f",
+    "queue_api/service.py": "03117c0ad9c21ccb6220a2de319583fd35cf48f9713d8510e521e2745aa771a6",
+    "release_context/mobile_client_contract.md": "e45edc38a7fd636c31bb756176c86f28cfdfba66b32a0617852a5843bfbb96ef",
+    "repo_evidence/abandoned_patch.md": "70c593cf981aa5f2269b11551a7aaa0c404d7eb689eddb367236189473aff1a4",
+    "repo_evidence/january_readability_memo.md": "8f540cc52142736b1834ddd2253058c6fe36e5c1750ca0018cf0424942fd8579",
+    "review/pr_481_patch.diff": "e0a0fbb8631d5d9356b413870905f01218b65e50ee8fc939d2e5f522972d72b2",
+    "review/pr_481_threads.json": "d269ef59854eb437ee597f7d54d3c431f9a37906d315407336b90f26bf856c55",
+    "review/review_summary.md": "991e7a9d50eb5c967ea5d8faf41eb94971e5e3afc253f18b4cb4b4be7c5e1a87",
+    "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/locked/reply_contract.txt": "220ae747a0dc0dcd57c143f2b2b4c5b761f56fec0a00e552f05282d4cc47a770",
+    "tests/test_handlers.py": "d2d843671a7ba3531ec4648383038b050759facadc5980dddc3c4299152a8119",
+    "tests/test_service.py": "557631188a689f4dc94776eced0957195ab8f809acc9135397e47773a446555b"
+  },
+  "readonly_tree_hashes": {
+    "artifacts": "1fad59a72e24dbc84e511e9e7d202fe72b49bf1e226201a424ee9a4fee4a1835",
+    "incident_context": "9e50aab2a8ff369b1006409c40761ba142d296c0bd156ae0f8b5937e0e77bc53",
+    "release_context": "a2d92ce95f9c8e65f63d768cda51f865bafb1ff142c63cf934be8158dcddceb7",
+    "repo_evidence": "e50f6e791fd968127e1366b94993c15b5cc8bfada1d3d7319e1d57df9a0b3f17",
+    "review/pr_481_patch.diff": "e0a0fbb8631d5d9356b413870905f01218b65e50ee8fc939d2e5f522972d72b2",
+    "review/pr_481_threads.json": "d269ef59854eb437ee597f7d54d3c431f9a37906d315407336b90f26bf856c55",
+    "review/review_summary.md": "991e7a9d50eb5c967ea5d8faf41eb94971e5e3afc253f18b4cb4b4be7c5e1a87",
+    "tests/locked": "ee2f5f3cd5fa4fc65d5a369ce81304984cf6edc02ecad60cf2e852ec7e7793fb"
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

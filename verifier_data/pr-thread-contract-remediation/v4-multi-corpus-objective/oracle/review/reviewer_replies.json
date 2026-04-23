@@ -1,0 +1,30 @@
+[
+  {
+    "body": "Updated queue_api/serializers.py so both response paths omit the owner key for unowned buckets, and added regression coverage in tests/test_handlers.py for the export path.",
+    "evidence": [
+      "queue_api/serializers.py",
+      "tests/test_handlers.py"
+    ],
+    "status": "resolved",
+    "thread_id": "RTR-101"
+  },
+  {
+    "body": "Adjusted queue_api/service.py to preserve the existing owner bucket order and append unowned last, with equal-count coverage added in tests/test_service.py.",
+    "evidence": [
+      "queue_api/service.py",
+      "tests/test_service.py"
+    ],
+    "status": "resolved",
+    "thread_id": "RTR-102"
+  },
+  {
+    "body": "Updated docs/release_notes.md with the omit-not-null contract note and confirmed request-side owner filter semantics are unchanged. I also referenced release_context/mobile_client_contract.md because that compatibility contract is the current objective.",
+    "evidence": [
+      "docs/release_notes.md",
+      "review/verification_note.md",
+      "release_context/mobile_client_contract.md"
+    ],
+    "status": "resolved",
+    "thread_id": "RTR-103"
+  }
+]

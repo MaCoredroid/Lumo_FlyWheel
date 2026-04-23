@@ -1,0 +1,37 @@
+[
+  {
+    "body": "Clients already treat a missing `owner` key as unassigned. Serializing `owner: null` changed the response contract. Please fix the default and export payloads and leave a reply with the changed files.",
+    "path": "queue_api/serializers.py",
+    "state": "unresolved",
+    "subject": "Unowned response buckets should omit owner entirely",
+    "thread_id": "RTR-101"
+  },
+  {
+    "body": "When `include_unowned=true`, append the unowned bucket after the pre-existing owner buckets. Do not globally re-sort the owners, especially on equal counts.",
+    "path": "queue_api/service.py",
+    "state": "unresolved",
+    "subject": "Append unowned after current owner order",
+    "thread_id": "RTR-102"
+  },
+  {
+    "body": "Please document that unowned buckets omit `owner` instead of serializing `null`, keep request-side owner filter semantics unchanged, and reply with the concrete files/tests you touched. The release_context files explain why mobile compatibility is the real objective this cycle.",
+    "path": "docs/release_notes.md",
+    "state": "unresolved",
+    "subject": "Document the contract nuance and close with evidence",
+    "thread_id": "RTR-103"
+  },
+  {
+    "body": "Resolved earlier in a separate cleanup diff. No follow-up here.",
+    "path": "queue_api/serializers.py",
+    "state": "resolved",
+    "subject": "Rename owner_label",
+    "thread_id": "RTR-104"
+  },
+  {
+    "body": "This was attached to an older diff and is no longer the right direction. The current contract is to preserve owner order.",
+    "path": "queue_api/service.py",
+    "state": "outdated",
+    "subject": "Alphabetize owner buckets",
+    "thread_id": "RTR-105"
+  }
+]

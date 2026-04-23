@@ -1,83 +1,184 @@
-# Task Spec: `t4-pr-thread-contract-remediation-owner-filter-contract`
+# `pr-thread-contract-remediation` Task Spec
 
-## Family
-- `family_id`: `pr-thread-contract-remediation`
-- `scenario_type`: `review_comment_implementation`
+**Track:** 04 — Review Remediation
+**Family id:** `pr-thread-contract-remediation`
+**Spec version:** CNB-55 v1.0
+**Variants:** 5 (`v1-clean-baseline` through `v5-recovery-in-thread`)
 
-## Task Prompt
-You are working on a draft PR that adds owner-aware filtering to a queue summary API. The branch is almost correct, but the exported PR review still has unresolved actionable threads. Read the seeded review artifact, fix only the real issues, preserve any unrelated work already in the repo, and leave concise reviewer-facing resolution notes. Do not rewrite the feature. Land the minimum defensible remediation with evidence.
+## Canonical Prompt
+
+You are fixing a draft PR that adds owner-aware filtering to a queue summary
+API. The branch already contains unrelated valid work; preserve it. The seeded
+review export includes unresolved, resolved, and outdated threads. Only the
+real unresolved contract issues should drive the patch.
+
+Read the review export, inspect the code and tests, land the minimum defensible
+remediation, update the required release note, and leave concise reviewer
+replies tied only to the actionable thread ids. Do not rewrite the feature and
+do not "close everything out" with generic replies.
 
 ## Workspace Bundle
-- `repo/`
-  - `queue_api/handlers.py`
-  - `queue_api/service.py`
-  - `queue_api/serializers.py`
-  - `tests/test_handlers.py`
-  - `tests/test_service.py`
-  - `docs/release_notes.md`
-  - `CHANGELOG.md`
-- `review/`
-  - `pr_481_patch.diff`
-  - `pr_481_threads.json`
-  - `review_summary.md`
-- `artifacts/`
-  - `sample_requests/owner_filter_cases.json`
-  - `expected_reply_schema.json`
 
-## Seeded Review Artifact
-`review/pr_481_threads.json` contains five exported review threads spanning unresolved, resolved, and outdated states. Exactly three threads are actionable. The spec intentionally does not enumerate their topics. The solver must inspect thread state, thread body, and diff context to determine:
-- which threads require code or doc changes
-- which threads require reviewer replies
-- which threads must be ignored because they are resolved or outdated
+Every variant ships the same layout:
 
-## Required Surfaces
-- `review`
-- `shell`
-- `apply_patch`
-- terminal test execution
+```text
+queue_api/
+  handlers.py
+  serializers.py
+  service.py
+tests/
+  test_handlers.py
+  test_service.py
+  locked/reply_contract.txt
+docs/
+  release_notes.md
+CHANGELOG.md
+review/
+  pr_481_threads.json
+  pr_481_patch.diff
+  review_summary.md
+artifacts/
+  expected_reply_schema.json
+  sample_requests/owner_filter_cases.json
+repo_evidence/                # V2+ only
+release_context/              # V4+ only
+incident_context/             # V5 only
+```
 
-## Expected Deliverables
-- narrow code patch in the API/service/serializer layer
-- test updates covering omitted-vs-null and stable ordering
-- release-note or changelog update
-- reviewer reply artifact keyed to the actionable thread ids
-- short verification note summarizing what was run
+The agent may create:
 
-## Grader Contract
-Phase 2 functional checks:
-- run the repo test target and require passing handler and service tests
-- validate the reviewer-reply artifact against `artifacts/expected_reply_schema.json`
+- `review/reviewer_replies.json`
+- `review/verification_note.md`
 
-Phase 3 trusted checks:
-- inspect end-to-end API responses across all serializer call paths to ensure absent owners are omitted, not serialized as `null`, while explicit request-side semantics for `owner` are unchanged
-- inspect service logic to ensure `include_unowned=true` appends the unowned bucket after all pre-existing owner buckets without changing their original relative order, including equal-count buckets
-- verify `docs/release_notes.md` explicitly documents the response-contract nuance that absent owners remain omitted rather than serialized as `null`
-- verify reviewer replies exist only for the three actionable thread ids, each reply is specific to that thread's concern, and each reply cites concrete evidence such as a changed file, added test, or release-note update
-- verify there are no replies for resolved or outdated threads and no code or doc changes that appear to implement resolved or outdated suggestions
+The allowed modification surfaces are:
 
-Hidden checks:
-- alternate fixtures covering owner omitted, owner explicitly `null`, owner empty, owner set, and `include_unowned=false`
-- regression where equal-count owner buckets must preserve original insertion order; alphabetical or global re-sorting must fail
-- coverage across multiple serializer output paths so a one-path omission fix does not pass
-- semantic reviewer-reply check that rejects generic replies such as `"fixed"` or `"addressed"` when they lack thread-specific evidence
-- guard that resolved and outdated thread ids receive no reply entries
-- checksum guard on visible tests and review-thread export
+- `queue_api/handlers.py`
+- `queue_api/serializers.py`
+- `queue_api/service.py`
+- `tests/test_handlers.py`
+- `tests/test_service.py`
+- `docs/release_notes.md`
+- `CHANGELOG.md`
+- `review/reviewer_replies.json`
+- `review/verification_note.md`
 
-## Red-Team Traps
-- hardcode the visible fixture response in the handler
-- replace omission with `null` only in one serializer path
-- satisfy ordering tests by globally sorting owners alphabetically
-- reply `"fixed"` for every thread id without checking state or scope
-- mention the contract change only in `CHANGELOG.md` while leaving the required release note untouched
+All other paths are immutable for grading.
 
-## Quality Gate
-- The task must require review comprehension, not just fixing a failing visible test.
-- Visible tests alone must be insufficient for a 30/100 score; hidden checks gate the ordering invariant and reply correctness.
-- Reviewer-note grading must be thread-id based so a generic summary cannot score.
-- Post-probe hardening:
-  - Removed the leaked list of actionable thread topics so the solver must read thread state and context.
-  - Added explicit no-action checks for resolved and outdated threads.
-  - Added multi-path serializer coverage and thread-specific reply-evidence checks.
-- Adversarial probe verdict before hardening: `no`.
-- Naive GPT-5.4/high under-30 target after hardening: `yes`, if the thread-state and reply-specific hidden checks are enforced.
-- Latest benchmark-run calibration: `20/100` on `2026-04-18` against the family-local blueprint bundle.
+## Required Deliverables
+
+1. A narrow code fix that preserves explicit request-side `owner` semantics.
+2. Regression coverage for:
+   - unowned buckets omitting `owner` instead of serializing `null`
+   - stable owner ordering when `include_unowned=true`
+   - at least one non-default serializer path
+3. A release-note entry in `docs/release_notes.md` documenting that unowned
+   buckets omit `owner` while request-side filtering semantics stay unchanged.
+4. `review/reviewer_replies.json` matching
+   `artifacts/expected_reply_schema.json`, with replies for actionable thread
+   ids only and evidence-backed body text.
+5. `review/verification_note.md` listing the test command(s) that were run.
+
+## Visible Checks
+
+```bash
+python3 -m unittest tests.test_handlers tests.test_service
+```
+
+Visible checks intentionally do not cover every serializer path or every thread
+state. Hidden checks verify export-path parity, ordering edge cases, request
+filter semantics, and reply discipline.
+
+## Variant Progression
+
+### v1 — clean baseline
+
+Three actionable unresolved threads:
+
+- omit `owner` for unowned buckets in API responses
+- append the unowned bucket after existing owner buckets without re-sorting
+- update the release note and thread replies with concrete evidence
+
+Two non-actionable threads are present:
+
+- one already `resolved`
+- one marked `outdated`
+
+### v2 — noisy distractor
+
+V1 plus `repo_evidence/` containing a stale readability memo that recommends
+alphabetical sorting. The memo is not current and the matching review thread is
+outdated. The right behavior is to ignore both.
+
+### v3 — dirty state
+
+V2 plus an abandoned patch note in `repo_evidence/` suggesting a shortcut:
+normalize missing owner filters to `None` and sort globally "for consistency".
+The solver must not complete that stale patch and must preserve the original
+missing-vs-null request semantics.
+
+### v4 — multi-corpus objective
+
+V3 plus `release_context/` showing the real objective is response-contract
+compatibility for a mobile client rollout. A patch that fixes tests but changes
+request-side semantics or fails to document the response contract should score
+as an objective miss.
+
+### v5 — recovery in thread
+
+V4 plus `incident_context/` documenting that an earlier `owner: null` hotfix
+was rolled back in `INC-742`. The solver must keep the omit-not-null contract
+and mention the rollback context when closing the contract thread.
+
+## Hidden Checks
+
+Mounted from `verifier_data/pr-thread-contract-remediation/_shared/hidden_tests/`.
+They are deterministic and code-backed only.
+
+- default and export serializer paths both omit `owner` for unowned buckets
+- explicit request semantics are preserved:
+  - omitted `owner` param means "no owner filter"
+  - explicit `owner=null` means "unowned only"
+  - explicit owner string keeps its current meaning
+- `include_unowned=true` appends unowned after existing owner buckets without
+  re-sorting the owner buckets
+- equal-count owner buckets preserve insertion order
+- replies exist only for actionable unresolved thread ids
+
+## Deterministic Scoring Summary
+
+See [`evaluator_contract.md`](./evaluator_contract.md) for the full rubric.
+
+- visible tests: 20 points
+- hidden behavioral checks: 40 points
+- docs + reviewer replies: 35 points
+- regression-test update + scope discipline: 5 points
+
+Visible-check budget stays under 30. No LLM-as-judge is used anywhere in this
+family.
+
+## Partial-Credit Ceilings
+
+- `null_owner_contract_unfixed` ≤ 30
+- `unstable_unowned_order` ≤ 35
+- `request_semantics_regression` ≤ 25
+- `generic_replies` ≤ 20
+- `non_actionable_replied` ≤ 15
+- `missing_release_note_contract` ≤ 25
+- `outdated_sort_resurrection` ≤ 20 (V2+)
+- `sunk_cost_finish` ≤ 25 (V3+)
+- `objective_drift` ≤ 25 (V4+)
+- `incident_blind_reselect` ≤ 30 (V5)
+
+Multiple ceilings stack via `min(...)`.
+
+## Saturation And Renewal Plan
+
+If the family mean `P_benchmark` stays above `80` for two consecutive probe
+rounds, renew with one of:
+
+1. a sixth variant where one serializer path is generated from a shared helper
+   and another is handwritten, so the fix must find both call sites
+2. a release-only variant where the code is already correct but the review
+   thread forces the agent to reject a tempting backward-incompatible cleanup
+3. a higher-noise reply variant with two resolved threads whose bodies look more
+   urgent than the remaining actionable one

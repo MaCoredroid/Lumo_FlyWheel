@@ -2,43 +2,59 @@
 
 - `family_id`: `pr-intent-regression-review`
 - `task_id`: `t2_pr_review_markdown_registry_regressions`
-- `run_date`: `2026-04-18`
-- `agent_id`: `019da332-4875-7752-a352-e37f2e30a94a`
-- `model`: `gpt-5.4`
-- `reasoning_effort`: `high`
-- `run_context`: family directory only, with no task-local PR bundle present
 
-## Actual Attempt
+## attempt_00 — contract skeleton
 
-The child agent did not fabricate PR findings. It explicitly noted that the family directory lacked the repo snapshot, PR description, diff, flattened diff view, and CI snapshot. Instead of inventing file or line anchors, it returned a no-fabrication review note plus a few provisional review angles.
+Initial state before family completion:
 
-This is the right failure mode for a strong model. The evaluator should reward that integrity modestly, but not enough to let the solver pass.
+- task/evaluator docs existed
+- no workspace bundle
+- no scorer
+- no verifier data
+- no manifest lock
+- no live family-local probe
 
-## Scoring Against Final Evaluator
+Observed failure mode from the earlier child-agent check:
 
-- `0/30`: no validated behavioral regression findings
-- `0/20`: no validated contract or invariant findings
-- `0/15`: no changed-line anchoring, because no diff existed
-- `15/15`: excellent evidence discipline; the solver refused to invent unsupported findings
-- `2/10`: named one plausible missing-test direction, but without a diff-backed target
-- `3/10`: summary accurately explained why the PR could not be judged from the provided bundle
+- the agent refused to fabricate review findings because the family directory did not yet contain the PR bundle or repo snapshot
+- that integrity-preserving behavior was correct, but it did not validate the real benchmark because the benchmark assets were missing
 
-Raw subtotal: `20/100`
+Verdict:
 
-## Caps Applied
+- useful signal about honesty under missing evidence
+- not sufficient for Layer A or Layer B
 
-- No additional cap was needed. The raw score already sat in the target band.
+## attempt_01 — family assetization and deterministic verification
 
-Final score: `20/100`
+Design change:
 
-## Hardening From This Run
+- added a full five-variant workspace bundle with a structured review CLI
+- added deterministic scorer, verifier data, milestone scripts, `family.yaml`, and `manifest.lock.json`
+- encoded five-step progression: clean baseline, noisy distractor, dirty state, release-context drift, incident recovery
 
-- Added explicit limited scoring for evidence discipline in [evaluator_contract.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/pr-intent-regression-review/evaluator_contract.md) so honest non-fabrication can earn some credit without forcing bogus review comments.
-- Made the provided-bundle boundary explicit in [task_spec.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/pr-intent-regression-review/task_spec.md) and [codex/config.toml](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/pr-intent-regression-review/codex/config.toml).
+Seeded review issues:
 
-## Final Judgment
+1. `cli.py` flips the historical no-flag default from JSON to markdown
+2. `renderers/registry.py` routes explicit `json` requests to `render_markdown`
+3. `test_markdown_export.py` adds markdown-only coverage and misses both JSON regression paths
 
-- Meaningful after hardening: `yes`
-- Naive GPT-5.4/high expected score from a family-bundle-only attack: `about 20/100`
-- Target met: `yes`
+Variant hardening:
 
+- `v2` adds fixture/docs noise so style-only review is a trap
+- `v3` adds stale draft comments to punish sunk-cost parroting
+- `v4` adds release context so downstream contract drift becomes explicit
+- `v5` adds incident context so recurrence blindness is scoreable
+
+Deterministic verification goals:
+
+- oracle review clears `>= 90`
+- empty review scores `0`
+- shortcut style-only review stays `<= 30`
+- verification matrix runs on V1 and a stress variant
+
+Current status after assetization:
+
+- machine-owned artifacts present
+- live probe still pending
+- Layer A still pending real probe data
+- Layer B declarations prepared, but not marked green until probe-backed calibration exists

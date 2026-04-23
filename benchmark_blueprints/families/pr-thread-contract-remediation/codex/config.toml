@@ -1,20 +1,32 @@
-[family]
+[benchmark]
 family_id = "pr-thread-contract-remediation"
-task_spec = "task_spec.md"
-evaluator_contract = "evaluator_contract.md"
-benchmark_run = "benchmark_run.md"
+task_id = "cnb55-review-pr-thread-contract-remediation"
+profile = "configured_codex"
+canonical_runtime = "responses_api"
 
 [solver]
-model = "gpt-5.4"
 reasoning_effort = "high"
-required_surfaces = ["review", "shell", "apply_patch", "terminal_tests"]
-preferred_skill = "skills/review-thread-remediation/SKILL.md"
+model_hint = "gpt-5.4"
+max_turns = 18
 
-[scoring]
-target_naive_score = 20
-max_naive_score = 30
+[workspace]
+primary_languages = ["python", "json", "markdown"]
+root_hint = "/workspace"
+dirty_workspace_variant = true
 
-[guardrails]
-must_preserve_unrelated_work = true
-must_respect_thread_state = true
-forbid_generic_thread_closure = true
+[surfaces]
+required = ["review", "shell", "apply_patch", "terminal_tests"]
+preferred = ["diff_inspection"]
+
+[grading]
+visible_gate = "python3 -m unittest tests.test_handlers tests.test_service"
+non_code_requirements = [
+  "docs/release_notes.md",
+  "review/reviewer_replies.json",
+  "review/verification_note.md",
+]
+fail_on = [
+  "generic_thread_closure",
+  "resolved_or_outdated_thread_reply",
+  "request_semantics_regression",
+]
