@@ -114,3 +114,41 @@
   - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02b_live_probe/attempt_02b_live_probe_probe_report.txt`
   - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02b_live_probe/logs/`
   - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02b_live_probe/artifacts/`
+
+## attempt_02c — post-family-yaml-fix full live probe
+- Trigger:
+  - review-blocker fix changed `family.yaml`, so the prior probe was stale for this review round
+- Review-blocker fix:
+  - quoted the `M2_primary_fix.description` scalar in `family.yaml` so the family declaration parses as valid YAML
+- Exact YAML validation command:
+  - `python3 -c "import pathlib, yaml; data = yaml.safe_load(pathlib.Path('benchmark_blueprints/families/sandbox-policy-ci-drift/family.yaml').read_text()); print('PARSE_OK', data['family_id'], data['milestones']['M2_primary_fix']['description'])"`
+- Parse result before the fresh probe:
+  - `PARSE_OK sandbox-policy-ci-drift \`make ci\` passes on the repaired repo.`
+- Exact live probe command:
+  - `python3 benchmark_blueprints/families/sandbox-policy-ci-drift/tools/probe_family.py --attempt attempt_02c_family_yaml_fix_probe --n 3`
+- Exact probe-report command:
+  - `python3 benchmark_blueprints/families/sandbox-policy-ci-drift/tools/probe_report.py --attempt-dir benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe`
+- Fresh `N=3` live results:
+  - `v1-clean-baseline`: `scores=[20,20,20]`, `mean P=20.00`, `stdev P=0.00`, `mean M=0.2000`, ceilings=`docs_contract_stale`, `fixture_specific_normalization`
+  - `v2-noisy-distractor`: `scores=[20,20,20]`, `mean P=20.00`, `stdev P=0.00`, `mean M=0.2000`, ceilings=`docs_contract_stale`, `fixture_specific_normalization`
+  - `v3-dirty-state`: `scores=[20,50,20]`, `mean P=30.00`, `stdev P=14.14`, `mean M=0.3000`, ceilings=`docs_contract_stale`, `fixture_specific_normalization`
+  - `v4-multi-corpus-objective`: `scores=[20,20,20]`, `mean P=20.00`, `stdev P=0.00`, `mean M=0.2000`, ceilings=`docs_contract_stale`, `fixture_specific_normalization`, `release_consumer_contract_missed`
+  - `v5-recovery-in-thread`: `scores=[10,10,10]`, `mean P=10.00`, `stdev P=0.00`, `mean M=0.1000`, ceilings=`docs_contract_stale`, `fixture_specific_normalization`, `release_consumer_contract_missed`, `rollback_context_unacknowledged`
+- Updated Layer A checks:
+  - family mean: `20.00` -> `PASS`
+  - max variant mean: `30.00` -> `PASS`
+  - at least one variant mean <= `10`: `PASS`
+  - monotonic `V1>=V2>=V3>=V4>=V5` within `+/-3`: `FAIL`
+- Updated Layer B probe metadata:
+  - family mean `M_training`: `0.2000`
+  - current observed stdev `M_training`: `0.0894`
+- Honest read after the post-fix sweep:
+  - the YAML parse blocker is fixed and independently validated
+  - the post-fix family now satisfies three of the four Layer A gates on a fresh whole-family live probe
+  - the remaining miss is monotonicity only: `v3=30` is above `v2=20`, so `layer_a_status` should be treated as `failed_freeze_gate`, not `implemented_pending_probe`
+- Family-local artifact paths for this attempt:
+  - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe/probe_runs.jsonl`
+  - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe/summary.json`
+  - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe/attempt_02c_family_yaml_fix_probe_probe_report.txt`
+  - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe/logs/`
+  - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe/artifacts/`

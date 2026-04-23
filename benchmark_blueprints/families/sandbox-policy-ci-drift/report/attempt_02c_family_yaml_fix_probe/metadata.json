@@ -1,0 +1,32 @@
+{
+  "attempt": "attempt_02c_family_yaml_fix_probe",
+  "codex_command_template": [
+    "codex",
+    "exec",
+    "--full-auto",
+    "--ephemeral",
+    "--skip-git-repo-check",
+    "--json",
+    "--cd",
+    "<workspace>",
+    "--output-last-message",
+    "<last_message_file>",
+    "-m",
+    "gpt-5.4",
+    "-c",
+    "reasoning_effort=\"high\"",
+    "Read AGENTS.md in this directory and complete the benchmark task in this workspace only. Repair the repo so make ci passes and the parser, preview, workflow, config, and release note all align on the same sandbox and approval-policy contract. Do not modify any immutable evidence or tests."
+  ],
+  "created_at_epoch": 1776902512,
+  "model": "gpt-5.4",
+  "n": 3,
+  "prompt": "Read AGENTS.md in this directory and complete the benchmark task in this workspace only. Repair the repo so make ci passes and the parser, preview, workflow, config, and release note all align on the same sandbox and approval-policy contract. Do not modify any immutable evidence or tests.",
+  "reasoning_effort": "high",
+  "variants": [
+    "v1-clean-baseline",
+    "v2-noisy-distractor",
+    "v3-dirty-state",
+    "v4-multi-corpus-objective",
+    "v5-recovery-in-thread"
+  ]
+}
