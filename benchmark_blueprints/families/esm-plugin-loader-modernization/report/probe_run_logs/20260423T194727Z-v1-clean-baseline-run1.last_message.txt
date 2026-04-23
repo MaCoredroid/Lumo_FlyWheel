@@ -1,0 +1,11 @@
+Implemented the ESM loader migration in code, not docs. The loader now resolves emitted plugins by extension from the local `plugins/` tree, supports default exports, named `plugin` exports, and CommonJS interop paths, and rejects malformed modules with a stable contract error in [src/loader.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run1/workspace/src/loader.mjs:1) and [src/contracts.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run1/workspace/src/contracts.mjs:1). I also wrapped the CLI entrypoint so bad plugins fail with a clean message instead of an unstable stack trace in [src/index.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run1/workspace/src/index.mjs:2).
+
+To make the built output runnable on its own, the build now emits a `dist/package.json` with ESM semantics in [scripts/build.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run1/workspace/scripts/build.mjs:2). The CLI evidence was regenerated with [scripts/capture_cli_output.sh](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run1/workspace/scripts/capture_cli_output.sh:1), producing [artifacts/cli_capture.txt](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run1/workspace/artifacts/cli_capture.txt:1).
+
+Verification passed:
+- `npm test`
+- `npm run build`
+- `npm run typecheck`
+- `bash scripts/capture_cli_output.sh`
+
+I also did an extra dist smoke check beyond the required script: `dist` successfully ran `good-default`, `good-named`, and `good-helper`, and `bad-wrong-shape` now fails with `Plugin "bad-wrong-shape" does not match the plugin contract`.

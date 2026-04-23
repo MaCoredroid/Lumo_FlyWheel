@@ -209,6 +209,8 @@ def baseline_and_integrity(state: ScoreState, gold: dict[str, Any], manifest: di
     for relpath in sorted(set(changed_paths)):
         if relpath.startswith("__pycache__/") or "/__pycache__/" in relpath:
             continue
+        if relpath.startswith("dist/"):
+            continue
         if relpath == ".network_egress_detected":
             continue
         if relpath not in allowed_write_paths:

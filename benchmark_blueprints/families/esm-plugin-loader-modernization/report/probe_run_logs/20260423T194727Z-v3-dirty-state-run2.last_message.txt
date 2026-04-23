@@ -1,0 +1,11 @@
+Implemented the ESM loader migration in code, not just docs. The core fix is in [src/loader.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v3-dirty-state-run2/workspace/src/loader.mjs:2): it now resolves plugin files from the emitted `../plugins/` tree, supports `.mjs`/`.js` plugin entries plus `.cjs` loadability, extracts either `default` or named `plugin` exports, rejects path traversal, and throws stable runtime errors for unknown or malformed modules. Contract validation lives in [src/contracts.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v3-dirty-state-run2/workspace/src/contracts.mjs:2), and the CLI now reports the actual invoked script path and exits cleanly on loader errors in [src/index.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v3-dirty-state-run2/workspace/src/index.mjs:2).
+
+I also made the build output self-contained in [scripts/build.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v3-dirty-state-run2/workspace/scripts/build.mjs:2) by emitting `dist/package.json` with `type: "module"` alongside copied `src/` and `plugins/`. Mixed-module helpers still work: `cd dist && node src/index.mjs good-helper` returns `helper:good-helper:report`, while malformed plugins now fail with the stable contract error.
+
+Verification passed:
+- `npm test`
+- `npm run build`
+- `npm run typecheck`
+- `bash scripts/capture_cli_output.sh`
+
+Regenerated CLI evidence is at [artifacts/cli_capture.txt](/tmp/esm_plugin_loader_probe/20260423T194727Z-v3-dirty-state-run2/workspace/artifacts/cli_capture.txt:1).

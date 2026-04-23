@@ -1,0 +1,11 @@
+Implemented the ESM loader migration in [src/loader.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run1/workspace/src/loader.mjs), [src/contracts.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run1/workspace/src/contracts.mjs), [src/index.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run1/workspace/src/index.mjs), and [scripts/build.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run1/workspace/scripts/build.mjs). The loader now resolves real emitted plugin files by extension, supports default-export and named `plugin` ESM modules, preserves mixed-module helper behavior, and rejects malformed modules with a stable runtime error. The build now emits a self-contained `dist/` tree with its own `package.json` so the copied output runs independently.
+
+I did not modify `tests/`, `plugins/`, `repo_evidence/`, `release_context/`, or `incident_context/`. I also regenerated the CLI evidence at [artifacts/cli_capture.txt](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run1/workspace/artifacts/cli_capture.txt).
+
+Verification completed:
+- `npm test`
+- `npm run build`
+- `npm run typecheck`
+- `bash scripts/capture_cli_output.sh`
+
+I also directly verified `dist` execution with `node dist/src/index.mjs ...` and from inside `dist/` itself. One repo note: this workspace is not a git checkout, so `git status` is unavailable here.

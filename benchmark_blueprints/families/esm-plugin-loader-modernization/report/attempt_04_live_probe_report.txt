@@ -1,0 +1,136 @@
+ESM plugin-loader probe report — 15 runs probe_run_id=20260423T194727Z
+
+variant                            n    mean   stdev   min   max   M_mean  raw_mean  scores  ceilings
+-----------------------------------------------------------------------------------------------------
+v1-clean-baseline                  3   20.00    0.00    20    20   0.2222     80.00  [20,20,20]  docs_or_evidence_driftx3,malformed_plugin_acceptedx3,unsafe_namespace_coercionx3
+v2-noisy-distractor                3   20.00    0.00    20    20   0.2222     80.00  [20,20,20]  docs_or_evidence_driftx3,malformed_plugin_acceptedx3,unsafe_namespace_coercionx3
+v3-dirty-state                     3   20.00    0.00    20    20   0.2222     80.00  [20,20,20]  docs_or_evidence_driftx3,malformed_plugin_acceptedx3,unsafe_namespace_coercionx3
+v4-multi-corpus-objective          3   20.00    0.00    20    20   0.2222     80.00  [20,20,20]  docs_or_evidence_driftx3,malformed_plugin_acceptedx3,unsafe_namespace_coercionx3
+v5-recovery-in-thread              3   23.33    2.89    20    25   0.2593     80.00  [25,20,25]  docs_or_evidence_driftx3,incident_blind_helper_regressionx3,malformed_plugin_acceptedx3,unsafe_namespace_coercionx1
+
+family_mean = 20.67 (window 15.0-25.0)
+max_variant_mean = 23.33 (cap 40.0)
+min_variant_mean = 20.00 (must have at least one <= 10.0)
+
+Acceptance checks:
+  [PASS] family_mean in window: 20.67
+  [PASS] max variant <= cap: 23.33
+  [FAIL] at least one variant <= hard floor: min variant mean = 20.00
+  [FAIL] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: v4-multi-corpus-objective (20.00) < v5-recovery-in-thread (23.33) beyond +/-3.0
+
+overall: HARDEN NEEDED
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 20.666666666666668,
+    "family_mean_ok": true,
+    "hard_variant_ok": false,
+    "max_variant_mean": 23.333333333333332,
+    "max_variant_ok": true,
+    "min_variant_mean": 20,
+    "monotonic_breaks": [
+      "v4-multi-corpus-objective (20.00) < v5-recovery-in-thread (23.33) beyond +/-3.0"
+    ],
+    "monotonic_ok": false
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "docs_or_evidence_drift": 3,
+        "malformed_plugin_accepted": 3,
+        "unsafe_namespace_coercion": 3
+      },
+      "m_training_mean": 0.2222,
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 3,
+      "raw_mean": 80,
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "stdev": 0.0
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {
+        "docs_or_evidence_drift": 3,
+        "malformed_plugin_accepted": 3,
+        "unsafe_namespace_coercion": 3
+      },
+      "m_training_mean": 0.2222,
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 3,
+      "raw_mean": 80,
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "stdev": 0.0
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {
+        "docs_or_evidence_drift": 3,
+        "malformed_plugin_accepted": 3,
+        "unsafe_namespace_coercion": 3
+      },
+      "m_training_mean": 0.2222,
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 3,
+      "raw_mean": 80,
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "stdev": 0.0
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "docs_or_evidence_drift": 3,
+        "malformed_plugin_accepted": 3,
+        "unsafe_namespace_coercion": 3
+      },
+      "m_training_mean": 0.2222,
+      "max": 20,
+      "mean": 20,
+      "min": 20,
+      "n": 3,
+      "raw_mean": 80,
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "stdev": 0.0
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "docs_or_evidence_drift": 3,
+        "incident_blind_helper_regression": 3,
+        "malformed_plugin_accepted": 3,
+        "unsafe_namespace_coercion": 1
+      },
+      "m_training_mean": 0.25926666666666665,
+      "max": 25,
+      "mean": 23.333333333333332,
+      "min": 20,
+      "n": 3,
+      "raw_mean": 80,
+      "scores": [
+        25,
+        20,
+        25
+      ],
+      "stdev": 2.886751345948129
+    }
+  }
+}

@@ -1,0 +1,11 @@
+Implemented the ESM loader migration in [src/loader.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v4-multi-corpus-objective-run1/workspace/src/loader.mjs), [src/contracts.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v4-multi-corpus-objective-run1/workspace/src/contracts.mjs), [src/index.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v4-multi-corpus-objective-run1/workspace/src/index.mjs), and [scripts/build.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v4-multi-corpus-objective-run1/workspace/scripts/build.mjs). The loader now resolves `.mjs`/`.js`/`.cjs` plugin entries, accepts both default and named `plugin` exports, preserves mixed-module helper usage, and rejects malformed plugins with a stable contract error instead of Node’s module-resolution stack. The build now writes a `dist/package.json` with `"type": "module"` so `dist/` remains runnable as a standalone copied tree.
+
+I regenerated [artifacts/cli_capture.txt](/tmp/esm_plugin_loader_probe/20260423T194727Z-v4-multi-corpus-objective-run1/workspace/artifacts/cli_capture.txt) via `bash scripts/capture_cli_output.sh`. I also directly smoke-tested `node dist/src/index.mjs good-helper` and `node dist/src/index.mjs bad-wrong-shape` to confirm the standalone `dist/` runtime works on both the mixed-helper success path and the malformed-plugin failure path.
+
+Verification completed:
+- `npm test`
+- `npm run build`
+- `npm run typecheck`
+- `bash scripts/capture_cli_output.sh`
+
+There is no `.git` directory in this workspace, so I could not provide a git diff/status summary.

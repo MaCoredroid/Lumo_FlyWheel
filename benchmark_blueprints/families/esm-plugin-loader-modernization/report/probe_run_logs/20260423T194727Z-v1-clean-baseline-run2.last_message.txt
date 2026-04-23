@@ -1,0 +1,9 @@
+Repaired the loader as an actual ESM runtime migration in [src/loader.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run2/workspace/src/loader.mjs:2), [src/contracts.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run2/workspace/src/contracts.mjs:2), [src/index.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run2/workspace/src/index.mjs:2), and [scripts/build.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run2/workspace/scripts/build.mjs:2). The loader now discovers `.mjs` plugins from the runtime tree, resolves plugin URLs relative to `import.meta.url`, accepts both `default` and named `plugin` exports, preserves the `.cjs` helper case, and rejects malformed modules with a stable contract error. The build now copies `package.json` into `dist/` so the emitted tree is more self-contained.
+
+I did not touch `tests/`, `plugins/`, `repo_evidence/`, `release_context/`, or `incident_context/`. I regenerated the CLI evidence at [artifacts/cli_capture.txt](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run2/workspace/artifacts/cli_capture.txt:1), and also verified standalone emitted runtime behavior by running `node src/index.mjs good-helper` from inside `dist/`.
+
+Verification passed:
+- `npm test`
+- `npm run build`
+- `npm run typecheck`
+- `bash scripts/capture_cli_output.sh`

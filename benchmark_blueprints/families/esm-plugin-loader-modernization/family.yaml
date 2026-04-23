@@ -3,7 +3,7 @@ family_id: esm-plugin-loader-modernization
 track: 3
 scenario_type: migration_refactor
 schema_version: cnb55.family.v1
-layer_a_status: pending_reprobe
+layer_a_status: probed_harden_needed
 layer_b_status: implemented_pending_review
 grader_ref: verifiers/esm-plugin-loader-modernization/score_esm_loader.py
 milestone_config_ref: verifier_data/esm-plugin-loader-modernization/{variant_id}/milestones/
@@ -113,7 +113,7 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.0
+  current_observed_stdev_M_training: 0.0196
   escalation_currently_active: false
 
 initial_state:

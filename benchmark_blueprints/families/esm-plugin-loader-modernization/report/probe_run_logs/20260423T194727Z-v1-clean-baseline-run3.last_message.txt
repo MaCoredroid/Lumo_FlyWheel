@@ -1,0 +1,9 @@
+Implemented the ESM loader migration in source so it now resolves real emitted plugin modules by extension, accepts both `default` and named `plugin` exports, and fails malformed modules with a stable runtime error instead of a stack dump. The main changes are in [src/loader.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run3/workspace/src/loader.mjs:2), [src/contracts.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run3/workspace/src/contracts.mjs:2), and [src/index.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run3/workspace/src/index.mjs:4). I also updated [scripts/build.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run3/workspace/scripts/build.mjs:2) to copy `package.json` into `dist/` so the built tree carries its module context and is runnable on its own.
+
+CLI evidence was regenerated at [artifacts/cli_capture.txt](/tmp/esm_plugin_loader_probe/20260423T194727Z-v1-clean-baseline-run3/workspace/artifacts/cli_capture.txt:1). The required verification completed successfully:
+- `npm test`
+- `npm run build`
+- `npm run typecheck`
+- `bash scripts/capture_cli_output.sh`
+
+I also smoke-tested mixed-module behavior with `good-helper` in both source and `dist/`, and verified the malformed plugin path now prints: `Invalid plugin module "bad-wrong-shape": expected a default export or named "plugin" export with a run() function`.

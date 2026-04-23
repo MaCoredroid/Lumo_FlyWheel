@@ -1,0 +1,14 @@
+Implemented the ESM loader migration in [src/loader.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v2-noisy-distractor-run3/workspace/src/loader.mjs:2) by resolving real emitted plugin files via `.mjs` / `.js` / `.cjs`, validating plugin names, and normalizing both default-export and named-export plugin shapes before enforcing the contract. That keeps the mixed-module helper path working, including the ESM plugin that imports [plugins/helper.cjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v2-noisy-distractor-run3/workspace/plugins/helper.cjs:1).
+
+I added the stable runtime contract check in [src/contracts.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v2-noisy-distractor-run3/workspace/src/contracts.mjs:2), wrapped CLI execution with clean error handling in [src/index.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v2-noisy-distractor-run3/workspace/src/index.mjs:20), and updated [scripts/build.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v2-noisy-distractor-run3/workspace/scripts/build.mjs:2) to copy `package.json` into `dist/` so the built tree is self-contained. I also regenerated the CLI evidence at [artifacts/cli_capture.txt](/tmp/esm_plugin_loader_probe/20260423T194727Z-v2-noisy-distractor-run3/workspace/artifacts/cli_capture.txt:1).
+
+Verification passed:
+- `npm test`
+- `npm run build`
+- `npm run typecheck`
+- `bash scripts/capture_cli_output.sh`
+
+Extra runtime checks also passed:
+- `node src/index.mjs good-helper`
+- `cd dist && node src/index.mjs good-helper`
+- `node src/index.mjs bad-wrong-shape` now fails with the stable contract error

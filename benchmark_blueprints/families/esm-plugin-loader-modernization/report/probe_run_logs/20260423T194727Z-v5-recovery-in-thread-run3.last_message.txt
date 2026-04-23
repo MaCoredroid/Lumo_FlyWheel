@@ -1,0 +1,9 @@
+Implemented the ESM loader repair in [src/loader.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run3/workspace/src/loader.mjs:2), [src/contracts.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run3/workspace/src/contracts.mjs:2), and [src/index.mjs](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run3/workspace/src/index.mjs:2). The loader now resolves real `.mjs` plugin files from the source or emitted tree, discovers plugins from the filesystem instead of a hard-coded list, accepts both `default` and named `plugin` exports, preserves the `.cjs` helper path, and rejects malformed modules with a stable runtime error.
+
+I regenerated the CLI evidence at [artifacts/cli_capture.txt](/tmp/esm_plugin_loader_probe/20260423T194727Z-v5-recovery-in-thread-run3/workspace/artifacts/cli_capture.txt:1). I also smoke-tested the built tree directly with `node dist/src/index.mjs good-helper`, which confirmed the mixed-module helper still works from `dist/`, and `bad-wrong-shape` now fails cleanly with `Invalid plugin module "bad-wrong-shape"`.
+
+Verification completed successfully:
+- `npm test`
+- `npm run build`
+- `npm run typecheck`
+- `bash scripts/capture_cli_output.sh`
