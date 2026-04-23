@@ -12,11 +12,11 @@ Repo-level checklist for the canonical 55 CNB-55 families.
 
 ## Track 02 Codebase Understanding
 
-- [ ] `codex-surface-workflow-mapping`
-- [ ] `dead-flag-reachability-audit`
-- [ ] `parallel-explorer-root-cause-map`
-- [ ] `request-path-evidence-brief`
-- [ ] `runbook-code-reconciliation`
+- [x] ~~`codex-surface-workflow-mapping`~~
+- [x] ~~`dead-flag-reachability-audit`~~
+- [x] ~~`parallel-explorer-root-cause-map`~~
+- [x] ~~`request-path-evidence-brief`~~
+- [x] ~~`runbook-code-reconciliation`~~
 
 ## Track 03 Refactor Modernization
 

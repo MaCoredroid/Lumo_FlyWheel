@@ -4,7 +4,7 @@ PIP := $(VENV)/bin/pip
 PYTEST := $(VENV)/bin/pytest
 LUMOSERVE := $(VENV)/bin/lumoserve
 
-.PHONY: venv bootstrap-runtime build-image download-qwen35-27b serve stop smoke resume gate1 test
+.PHONY: venv bootstrap-runtime build-image download-qwen35-27b serve stop smoke resume gate1 test install-hooks
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -37,3 +37,6 @@ gate1:
 
 test:
 	$(PYTEST)
+
+install-hooks:
+	git config core.hooksPath .githooks
