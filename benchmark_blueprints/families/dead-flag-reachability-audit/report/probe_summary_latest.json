@@ -1,0 +1,159 @@
+{
+  "command_template": "codex -a never exec --skip-git-repo-check --json -m \"gpt-5.4\" -c 'reasoning_effort=\"high\"' -c 'model_reasoning_effort=\"high\"' -s workspace-write -C <workspace> \"<prompt>\"",
+  "gate": {
+    "all_pass": false,
+    "family_mean": 20.666666666666668,
+    "family_mean_ok": true,
+    "hard_variant_ok": false,
+    "max_observed_stdev_M_training": 0.05773502691896257,
+    "max_variant_mean": 23.333333333333332,
+    "max_variant_ok": true,
+    "min_variant_mean": 20,
+    "monotonic_breaks": [
+      "v3-dirty-state (20.00) < v4-multi-corpus-objective (23.33) beyond +/-3"
+    ],
+    "monotonic_ok": false
+  },
+  "model": "gpt-5.4",
+  "probe_run_id": "20260423T061908Z",
+  "reasoning": "high",
+  "repeats": 3,
+  "variants": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "alias_collapse": 1,
+        "classification_miss": 3,
+        "cleanup_overreach": 1,
+        "grep_only_reasoning": 3,
+        "parser_equals_runtime": 3
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        77,
+        96,
+        99
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {
+        "classification_miss": 3,
+        "cleanup_overreach": 3,
+        "grep_only_reasoning": 3,
+        "parser_equals_runtime": 3,
+        "stale_docs_truth": 1
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        99,
+        91,
+        95
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {
+        "alias_collapse": 1,
+        "classification_miss": 3,
+        "cleanup_overreach": 1,
+        "grep_only_reasoning": 3,
+        "parser_equals_runtime": 3,
+        "sunk_cost_finish": 3
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        94,
+        80,
+        99
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "classification_miss": 2,
+        "grep_only_reasoning": 3,
+        "objective_drift": 2,
+        "parser_equals_runtime": 2
+      },
+      "max": 30,
+      "mean": 23.333333333333332,
+      "mean_M_training": 0.23333333333333334,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        102,
+        99,
+        117
+      ],
+      "scores": [
+        20,
+        20,
+        30
+      ],
+      "shortcut_runs": 0,
+      "stdev": 5.773502691896257,
+      "stdev_M_training": 0.05773502691896257
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "classification_miss": 3,
+        "cleanup_overreach": 3,
+        "grep_only_reasoning": 3,
+        "incident_blind_cleanup": 2,
+        "parser_equals_runtime": 3,
+        "sunk_cost_finish": 3
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        99,
+        99,
+        99
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    }
+  }
+}
