@@ -1,0 +1,3 @@
+release_entrypoint = "scripts/legacy_release.py"
+release_smoke_command = "python deploy/check_release.py --env prod"
+release_manifest = "release/manifest.toml"

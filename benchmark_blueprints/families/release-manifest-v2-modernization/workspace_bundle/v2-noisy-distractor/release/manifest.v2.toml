@@ -1,0 +1,4 @@
+version = "v2"
+artifact_name = "shipit.tar.gz"
+artifact_manifest = "artifacts/legacy-manifest.json"
+target_environment = "production"

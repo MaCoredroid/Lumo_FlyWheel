@@ -1,0 +1,58 @@
+{
+  "allowed_write_paths": [
+    ".github/workflows/release.yml",
+    ".github/workflows/reusable_release.yml",
+    "release/manifest.v2.toml",
+    "codex/config.toml",
+    "docs/releases/staging_rollout.md",
+    "artifacts/release_smoke_report.json"
+  ],
+  "docs_order_pairs": [
+    [
+      "artifact_manifest output",
+      "staging smoke"
+    ]
+  ],
+  "proof_contract": {
+    "artifact_manifest": "artifacts/release-manifest.json",
+    "incident_guardrail": "INC-342: no prod alias",
+    "ordered_checks": [
+      "dry-run",
+      "artifact_manifest",
+      "staging smoke"
+    ],
+    "schema_version": "cnb55.release_smoke_report.v1"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "ff9d176149c6f91ae1abb09ba5070ac2996aea945b899b5cb794af8659defe46",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "config/env": "5776c7a70eae9e5c9008381ca958b5a2e1e0effc9c00c3d4434669fdc325d293",
+    "deploy": "bc18cfc1fe7457ca03a9b304e435c4d561bf9fc7e77e77cc75f28796d8231e4b",
+    "incident_context/inc_342_prod_alias.md": "e2a44d79466373dda64ed22da30b85c9c64abc937121c844fad4a3772c5dcf1d",
+    "incident_context/recovery_notes.md": "f748e9c8658b1ab70be715cb50691a94d2c00dcec646f19c5d0d300c91b596a2",
+    "logs": "3414982305b26c5245b7b81b74687e8f87d8570ade3b9107d1cbfce71e02805e",
+    "release/manifest.toml": "f6b184fc699f487a0882e70370674055ff948441ed559638f1ee90153321dd44",
+    "release_context/rollout_order.md": "bfac81d8dbd335200943cec07df08b3065c49a2cc62722917f66b282cd5b9b5f",
+    "scripts": "851feaa756cebaad06eb3b4a575033306abb695ac2b660289c247fcff195bf64",
+    "tests": "c7f9940b180fec9a79babda0f90ef47191ce50e01d88e9b3dddce406f6ec45f8"
+  },
+  "required_docs_phrases": [
+    "reusable workflow",
+    "release/manifest.v2.toml",
+    "target_environment: staging",
+    "artifact_manifest output",
+    "inc-342",
+    "do not reintroduce the prod alias",
+    "deploy/check_release.py --env staging --emit-json artifacts/release_smoke_report.json"
+  ],
+  "runtime_paths": [
+    ".github/workflows/release.yml",
+    ".github/workflows/reusable_release.yml",
+    "release/manifest.v2.toml",
+    "codex/config.toml",
+    "docs/releases/staging_rollout.md",
+    "artifacts/release_smoke_report.json"
+  ],
+  "variant_id": "v5-recovery-in-thread"
+}

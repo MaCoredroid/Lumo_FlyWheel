@@ -1,77 +1,178 @@
-# `release-manifest-v2-modernization` Task Spec
+# Task Spec: `release-manifest-v2-modernization`
 
-## Task Prompt
-Modernize the `shipit` service release path from a legacy release manifest and hand-wired GitHub Actions workflow to a reusable workflow plus manifest-v2 contract. Keep the repo-local release dry-run and staging deploy smoke behavior correct. Update the Codex config and operator release note only where they match the real wired release path. Preserve unrelated in-progress edits in release notes and env override files.
+## Track And Family
+
+- Track: 03 — Refactor Modernization
+- Family id: `release-manifest-v2-modernization`
+- Scenario type: `migration_refactor`
+- Variants: 5 (`v1-clean-baseline` through `v5-recovery-in-thread`)
+
+## Canonical Task Prompt
+
+Modernize the `shipit` release path from a legacy manifest plus hand-wired
+workflow into a reusable workflow + manifest-v2 contract without breaking the
+staging smoke path.
+
+The seeded failure mode is a shallow cutover: a solver can make the visible
+dry-run go green by updating the obvious workflow and manifest strings while
+leaving the reusable workflow contract incomplete, the operator doc stale, the
+Codex config pointed at the legacy entrypoint, or the incident/objective
+context unread.
+
+The task is only complete when all of the following align:
+
+1. `.github/workflows/release.yml`
+2. `.github/workflows/reusable_release.yml`
+3. `release/manifest.v2.toml`
+4. `codex/config.toml`
+5. `docs/releases/staging_rollout.md`
+6. `artifacts/release_smoke_report.json`
+
+## Required Outputs
+
+- workflow repair in:
+  - `.github/workflows/release.yml`
+  - `.github/workflows/reusable_release.yml`
+- manifest repair in:
+  - `release/manifest.v2.toml`
+- config repair in:
+  - `codex/config.toml`
+- doc repair in:
+  - `docs/releases/staging_rollout.md`
+- proof artifact in:
+  - `artifacts/release_smoke_report.json`
+
+The proof artifact must be produced by running:
+
+```bash
+python deploy/check_release.py --env staging --emit-json artifacts/release_smoke_report.json
+```
 
 ## Workspace Bundle
-- `.github/workflows/release.yml`: legacy workflow with stale inline steps.
-- `.github/workflows/reusable_release.yml`: target reusable workflow contract.
-- `release/manifest.toml`: legacy manifest shape.
-- `release/manifest.v2.toml`: partially authored target manifest with wrong field mapping.
-- `scripts/run_ci.py`: repo-local dry-run release driver.
-- `deploy/check_release.py`: deploy smoke verifier.
-- `.codex/config.toml`: still points at legacy release helpers.
-- `docs/releases/staging_rollout.md`: partially edited release note in dirty-workspace variants.
-- `config/env/staging.toml`: env override file with unrelated local edits.
-- `logs/dry_run_green.log`, `logs/staging_smoke_fail.log`: evidence of the second-order failure.
-- `tests/test_manifest_contract.py`, `tests/test_release_driver.py`: visible tests.
 
-## Seeded Modernization Breakage
-- The repo is mid-cutover to a reusable workflow and manifest-v2 contract.
-- `release.yml` and `manifest.v2.toml` disagree on input names, environment labels, and artifact outputs.
-- `scripts/run_ci.py` can go green on the dry-run path while staging smoke still fails.
-- `.codex/config.toml` and the release note still reference legacy release helpers.
-- Dirty-workspace variants include local note and env-override edits that must survive the modernization.
+Every variant ships the same writable repair surfaces:
+
+```text
+.github/workflows/release.yml
+.github/workflows/reusable_release.yml
+release/manifest.v2.toml
+codex/config.toml
+docs/releases/staging_rollout.md
+artifacts/release_smoke_report.json
+```
+
+Every variant also ships the same immutable integrity surfaces:
+
+```text
+tests/
+logs/
+config/env/
+deploy/
+scripts/
+release/manifest.toml
+AGENTS.md
+Dockerfile
+.scenario_variant
+```
+
+Variant-specific evidence:
+
+- `v1-clean-baseline`: no extra corpus, direct cutover repair
+- `v2-noisy-distractor`: stale prod-era archive note and log, both read-only
+- `v3-dirty-state`: abandoned migration draft plus existing local-note pressure
+- `v4-multi-corpus-objective`: `release_context/` changes the correct operator
+  verification order
+- `v5-recovery-in-thread`: `incident_context/` adds `INC-342`, which forbids
+  reintroducing the prod alias
+
+## Variant Progression
+
+### V1 — Clean Baseline
+
+Minimal release-path modernization. The solver must complete the reusable
+workflow contract, align manifest/config/docs, and emit the staging smoke
+report artifact.
+
+### V2 — Noisy Distractor
+
+Adds read-only prod-era notes and logs that look authoritative but are stale.
+The right move is to ignore them and fix the live path.
+
+### V3 — Dirty State
+
+Adds an abandoned migration draft that preserves the wrong prod-era contract.
+The right move is to repair the actual release path and preserve the seeded env
+override comment, not finish the sunk-cost draft.
+
+### V4 — Multi-Corpus Objective
+
+Adds `release_context/` that changes the operator objective: docs must tell the
+operator to confirm the `artifact_manifest` output before staging smoke.
+
+### V5 — Recovery In Thread
+
+Adds `incident_context/` showing a rollback caused by a reintroduced `prod`
+alias. The solver must keep the path explicitly on `staging` and document the
+`INC-342` guardrail.
 
 ## Required Surfaces
+
 - `shell`
 - `apply_patch`
 - `terminal_tests`
-- YAML and TOML editing
+- YAML editing
+- TOML editing
 - docs update
-- release smoke inspection
+- proof artifact generation
 
-## Expected Deliverables
-- Workflow patch aligning the repo to the reusable release contract.
-- Manifest-v2 patch matching the workflow inputs, outputs, and environment wiring.
-- Targeted `.codex/config.toml` and release-note updates matching the actual release path.
-- No bypass of the deploy smoke path and no destructive rewrite of unrelated local edits.
+## Visible Checks
 
-## Grader Contract
-- Phase 2 visible checks:
-  - `pytest -q tests/test_manifest_contract.py tests/test_release_driver.py`
-  - `python scripts/run_ci.py --mode release-dry-run`
-- Hidden checks:
-  - `python deploy/check_release.py --env staging` succeeds only if workflow, manifest, and environment wiring agree.
-  - Reusable workflow contract passes required `workflow_call` inputs, secrets, and outputs.
-  - Manifest-v2 fields align with both the dry-run driver and staging smoke verifier.
-  - `.codex/config.toml` references the same release path the workflow uses.
-  - Dirty-workspace note and env override edits survive targeted changes.
-- Trusted final-state checks:
-  - The deploy smoke step was not stubbed, bypassed, or turned into a no-op.
-  - Legacy artifact names or environment aliases are no longer live on the release path.
-  - Docs describe the actual staging rollout path, not a prompt-invented one.
-- Scoring intent:
-  - Workflow syntax or docs-only progress is capped at `0.20`.
-  - Scores above `0.30` require staging verification, not just dry-run green.
-  - Scores above `0.50` require dirty-workspace preservation and non-bypassed smoke behavior.
+- `pytest -q tests/test_manifest_contract.py tests/test_release_driver.py`
+- `python scripts/run_ci.py --mode release-dry-run`
 
-## Red-Team Traps
-- Swap to a reusable workflow but omit one required secret or output mapping.
-- Convert manifest syntax while keeping the wrong environment or artifact name.
-- Make smoke green by bypassing the verification step.
-- Update docs and config while workflow and manifest remain inconsistent.
-- Overwrite partially edited release notes or env override files.
-- Silence deprecation warnings without fixing staging continuity.
+## Hidden Checks
 
-## Quality Gate
-- GPT-5.4/high adversarial probe judgment before hardening: `under_30_for_naive_solver = maybe`.
-- Probe found an easy 30+ path if the task only rewards a syntactically valid workflow/manifest migration plus prose artifacts.
-- Hardening applied in this spec:
-  - Bound scores above `0.30` to staging smoke, not just dry-run green.
-  - Added trusted checks for real `workflow_call` plumbing, manifest-field alignment, and non-bypassed smoke behavior.
-  - Added dirty-workspace preservation as a score separator.
-  - Treated docs/config as dependent artifacts instead of primary scoring surfaces.
-- Actual run evidence: [benchmark_run.md](./benchmark_run.md) records an overperforming first attempt, then a hardened rerun scored at `20/100`.
-- Final quality judgment after hardening: `under_30_for_naive_solver = yes`.
-- Rationale: a naive solver can still make the workflow parse, but without wiring manifest, workflow, staging smoke, and preserved local edits together it should stay under the 30-point band.
+- `deploy/check_release.py` validates the reusable workflow, manifest-v2,
+  config, and docs as one aligned release contract.
+- Hidden pytest verifies variant-specific doc requirements using
+  `verifier_data/<family>/<variant>/hidden_tests/test_release_alignment_hidden.py`.
+- The proof artifact must match the family-owned JSON schema and variant-owned
+  ordering/incident requirements.
+
+## Trusted-Final-State Rules
+
+The grader treats these as immutable:
+
+- visible tests
+- logs
+- env override files
+- deploy helper
+- scripts
+- legacy manifest
+- release/incident context files
+- `AGENTS.md`, `Dockerfile`, `.scenario_variant`
+
+Any mutation there raises integrity and force-fails the invariants milestone.
+
+## Saturation And Renewal
+
+Trigger: if mean `P_benchmark > 80` for two consecutive probe rounds, mark
+`saturation_renewal_due`.
+
+Renewal queue:
+
+- add a V6 where the manifest output name changes mid-cutover
+- retire the easy floor variant if V1 stops discriminating
+
+## Current Status
+
+- oracle overlay: `100 / 100` on V1 and V5 verification matrices
+- empty baseline: `0 / 100`
+- RAWR grounding_stripped: `20 / 100`
+- prod-alias shortcut: `20 / 100`
+- context-blind stress row:
+  - V1: not applicable, full pass
+  - V5: `20 / 100`
+
+Layer B scaffolding is implemented. Live probe status is recorded in
+`benchmark_run.md`.

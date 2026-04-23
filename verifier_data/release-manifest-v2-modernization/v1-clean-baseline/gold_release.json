@@ -1,0 +1,46 @@
+{
+  "allowed_write_paths": [
+    ".github/workflows/release.yml",
+    ".github/workflows/reusable_release.yml",
+    "release/manifest.v2.toml",
+    "codex/config.toml",
+    "docs/releases/staging_rollout.md",
+    "artifacts/release_smoke_report.json"
+  ],
+  "docs_order_pairs": [],
+  "proof_contract": {
+    "artifact_manifest": "artifacts/release-manifest.json",
+    "incident_guardrail": null,
+    "ordered_checks": [
+      "dry-run",
+      "staging smoke"
+    ],
+    "schema_version": "cnb55.release_smoke_report.v1"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "862d289ccc8f205cc1fcd6605334a45a0fc6292424b98eeb9b227c4a2f8fa4ee",
+    "AGENTS.md": "036a7d0c15d0502c5f2b467e4bd4c6e7d6cd6dbe0263aa8f7e4368795043cf55",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "config/env": "5776c7a70eae9e5c9008381ca958b5a2e1e0effc9c00c3d4434669fdc325d293",
+    "deploy": "bc18cfc1fe7457ca03a9b304e435c4d561bf9fc7e77e77cc75f28796d8231e4b",
+    "logs": "3414982305b26c5245b7b81b74687e8f87d8570ade3b9107d1cbfce71e02805e",
+    "release/manifest.toml": "f6b184fc699f487a0882e70370674055ff948441ed559638f1ee90153321dd44",
+    "scripts": "851feaa756cebaad06eb3b4a575033306abb695ac2b660289c247fcff195bf64",
+    "tests": "c7f9940b180fec9a79babda0f90ef47191ce50e01d88e9b3dddce406f6ec45f8"
+  },
+  "required_docs_phrases": [
+    "reusable workflow",
+    "release/manifest.v2.toml",
+    "target_environment: staging",
+    "deploy/check_release.py --env staging --emit-json artifacts/release_smoke_report.json"
+  ],
+  "runtime_paths": [
+    ".github/workflows/release.yml",
+    ".github/workflows/reusable_release.yml",
+    "release/manifest.v2.toml",
+    "codex/config.toml",
+    "docs/releases/staging_rollout.md",
+    "artifacts/release_smoke_report.json"
+  ],
+  "variant_id": "v1-clean-baseline"
+}

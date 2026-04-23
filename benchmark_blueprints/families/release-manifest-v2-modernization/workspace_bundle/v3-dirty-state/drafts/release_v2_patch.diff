@@ -1,0 +1,5 @@
+# Abandoned Patch
+
+- switched the workflow to `manifest_path: release/manifest.toml`
+- kept the prod alias because the dry-run was green
+- TODO later: docs

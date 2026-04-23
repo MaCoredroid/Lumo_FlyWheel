@@ -1,0 +1,4 @@
+version = "v2"
+artifact_name = "shipit.tar.gz"
+artifact_manifest = "artifacts/release-manifest.json"
+target_environment = "staging"

@@ -1,0 +1,9 @@
+name: release
+on:
+  workflow_dispatch:
+jobs:
+  release:
+    uses: ./.github/workflows/reusable_release.yml
+    with:
+      manifest_path: release/manifest.toml
+      environment: prod

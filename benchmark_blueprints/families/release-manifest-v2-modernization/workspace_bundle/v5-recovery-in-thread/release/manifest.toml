@@ -1,0 +1,3 @@
+version = "v1"
+artifact = "shipit.tar.gz"
+environment = "prod"

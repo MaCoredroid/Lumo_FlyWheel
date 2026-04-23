@@ -1,0 +1,24 @@
+{
+  "artifact_manifest": "artifacts/release-manifest.json",
+  "checks": {
+    "config": true,
+    "docs_base": true,
+    "manifest": true,
+    "no_prod_alias": true,
+    "reusable_contract": true,
+    "variant_docs": true,
+    "workflow": true
+  },
+  "incident_guardrail": null,
+  "manifest_path": "release/manifest.v2.toml",
+  "ordered_checks": [
+    "dry-run",
+    "artifact_manifest",
+    "staging smoke"
+  ],
+  "schema_version": "cnb55.release_smoke_report.v1",
+  "smoke_status": "ok",
+  "target_environment": "staging",
+  "variant_id": "v4-multi-corpus-objective",
+  "workflow_ref": ".github/workflows/reusable_release.yml"
+}

@@ -1,0 +1,25 @@
+name: reusable-release
+on:
+  workflow_call:
+    inputs:
+      manifest_path:
+        required: true
+        type: string
+      target_environment:
+        required: true
+        type: string
+    secrets:
+      deploy_token:
+        required: true
+    outputs:
+      artifact_manifest:
+        description: emitted manifest path
+        value: ${{ jobs.release.outputs.artifact_manifest }}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_manifest: ${{ steps.manifest.outputs.path }}
+    steps:
+      - id: manifest
+        run: echo "path=artifacts/release-manifest.json" >> "$GITHUB_OUTPUT"

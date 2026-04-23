@@ -1,0 +1,32 @@
+{
+  "family_id": "release-manifest-v2-modernization",
+  "grader_ref": "verifiers/release-manifest-v2-modernization/score_release_modernization.py",
+  "schema_version": "cnb55.manifest_lock.v1",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_release_sha256": "70021829a36e2ed4bedcd7bcf1155bda6a63b9fc9cbabfab575606b1cc9dbbc8",
+      "workspace_manifest_sha256": "89edc056da31a1857e35251f1c5ab824f4bae1a63b9a2329e7bfb06a22b3fede",
+      "workspace_sha256": "5cbc13c96c68a9e778dfd00f0e4ee52e9a79d5dd82f65d0e2a2875da3bacfde0"
+    },
+    "v2-noisy-distractor": {
+      "gold_release_sha256": "171b48177d6d0431681aba5bb45ba6c26632ceb4b3adcf347d61ab7b694a3cf3",
+      "workspace_manifest_sha256": "80215f214108a282e0979547c2342b75e4a7cf489af7ac0d0675a26b833a68ba",
+      "workspace_sha256": "8e227a1ff1ee66dedca72d2a1cadfc1152d0e45bc9fe095ea6103019a1baa272"
+    },
+    "v3-dirty-state": {
+      "gold_release_sha256": "664df037a477364a555f88ccf26ff6af61fa20db1fe00f6675b10644ab588017",
+      "workspace_manifest_sha256": "ddddf45fb1fb1f9fc13a04f81fdf65748ed29874573065fab4f745a20d9bccc9",
+      "workspace_sha256": "45189e46b753cf15c30fee8afd613555aa2db28c6b6e7bbd4c2cf2324a02d97b"
+    },
+    "v4-multi-corpus-objective": {
+      "gold_release_sha256": "7b1350fb185de8ae8322efc13bc7d250b69bb80a98e8c5723d862f0596cd24f8",
+      "workspace_manifest_sha256": "7d7bfdf951040d3f20a5f88044e2503f6638728e465f353ef7b015dd04016d3b",
+      "workspace_sha256": "9e913191f389ff99bd393d444a395a941cf456061a82b94663c1a66d39ee258e"
+    },
+    "v5-recovery-in-thread": {
+      "gold_release_sha256": "8907f110e6271929c657d807582455ecf05474869439a7e152513d1829daeadc",
+      "workspace_manifest_sha256": "32bd86ead10a3336c3c32d0e21c0fdad4d24e162ae9d59e16aa95d09ff1fef1d",
+      "workspace_sha256": "5f5cf43c714e3a740785b48e3f0866599d4dbc458fabc78e61f23bd6365cd9c0"
+    }
+  }
+}

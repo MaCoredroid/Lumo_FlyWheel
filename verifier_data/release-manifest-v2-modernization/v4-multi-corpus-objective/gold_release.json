@@ -1,0 +1,55 @@
+{
+  "allowed_write_paths": [
+    ".github/workflows/release.yml",
+    ".github/workflows/reusable_release.yml",
+    "release/manifest.v2.toml",
+    "codex/config.toml",
+    "docs/releases/staging_rollout.md",
+    "artifacts/release_smoke_report.json"
+  ],
+  "docs_order_pairs": [
+    [
+      "artifact_manifest output",
+      "staging smoke"
+    ]
+  ],
+  "proof_contract": {
+    "artifact_manifest": "artifacts/release-manifest.json",
+    "incident_guardrail": null,
+    "ordered_checks": [
+      "dry-run",
+      "artifact_manifest",
+      "staging smoke"
+    ],
+    "schema_version": "cnb55.release_smoke_report.v1"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+    "AGENTS.md": "6f6792205e1bec5cde07fb38ba5683b809453568c174c77efc10ac7dbc630ef2",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "config/env": "5776c7a70eae9e5c9008381ca958b5a2e1e0effc9c00c3d4434669fdc325d293",
+    "deploy": "bc18cfc1fe7457ca03a9b304e435c4d561bf9fc7e77e77cc75f28796d8231e4b",
+    "logs": "3414982305b26c5245b7b81b74687e8f87d8570ade3b9107d1cbfce71e02805e",
+    "release/manifest.toml": "f6b184fc699f487a0882e70370674055ff948441ed559638f1ee90153321dd44",
+    "release_context/objective_shift.md": "52847c789b8d6d66359e24166937c3c79e75f74ed32974d7983736543246e3c2",
+    "release_context/rollout_order.md": "927e231c08236c93fc43fb57aecf2084160654a227c3c56f338ee3808d995a18",
+    "scripts": "851feaa756cebaad06eb3b4a575033306abb695ac2b660289c247fcff195bf64",
+    "tests": "c7f9940b180fec9a79babda0f90ef47191ce50e01d88e9b3dddce406f6ec45f8"
+  },
+  "required_docs_phrases": [
+    "reusable workflow",
+    "release/manifest.v2.toml",
+    "target_environment: staging",
+    "artifact_manifest output",
+    "deploy/check_release.py --env staging --emit-json artifacts/release_smoke_report.json"
+  ],
+  "runtime_paths": [
+    ".github/workflows/release.yml",
+    ".github/workflows/reusable_release.yml",
+    "release/manifest.v2.toml",
+    "codex/config.toml",
+    "docs/releases/staging_rollout.md",
+    "artifacts/release_smoke_report.json"
+  ],
+  "variant_id": "v4-multi-corpus-objective"
+}

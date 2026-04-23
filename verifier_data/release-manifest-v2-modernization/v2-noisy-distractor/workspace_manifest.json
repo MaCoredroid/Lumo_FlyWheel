@@ -1,0 +1,43 @@
+{
+  "allowed_write_paths": [
+    ".github/workflows/release.yml",
+    ".github/workflows/reusable_release.yml",
+    "release/manifest.v2.toml",
+    "codex/config.toml",
+    "docs/releases/staging_rollout.md",
+    "artifacts/release_smoke_report.json"
+  ],
+  "family_id": "release-manifest-v2-modernization",
+  "file_hashes": {
+    ".github/workflows/release.yml": "e72d2fedd6f020feee86f2018dd18affe859cd31fa1d425d55697e0abf60b07d",
+    ".github/workflows/reusable_release.yml": "4fb750bd5aaf09a141ad5a6642f574ffbb73b5dc924867014945f700f95e6dd5",
+    ".scenario_variant": "f1fb40a47c903162d580ada97b07c0c73f4b7607bda5d4d078c09f1642f354dd",
+    "AGENTS.md": "25380b703f5a23229791b13394e205262b4dda23da4f5e5c5720f704091a6195",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "codex/config.toml": "f2c69ec7cc4d7472bba4ce1834504ad96796b7f4d04759295e65b16cbbc04a5d",
+    "config/env/staging.toml": "410467f8596e4625426eafdec91f295d7f9f5061b23350d6e2d54480d716261b",
+    "deploy/check_release.py": "a9a5a41229b0fc29b0ebcdb401b1727ac6327af3b0aaead3938545251f2570bb",
+    "docs/releases/archive_prod_cutover.md": "8e9806e8e1f92fd4860a028986d5d08a91fe1dc361f294db68a1af04e22fe687",
+    "docs/releases/staging_rollout.md": "efbf4f00eae880e72a528342d11bfc421da4cb517f4b584a1c2afa34452be0a0",
+    "logs/archive_prod_green.log": "c85c2a5566bf7c4c2ab5132efaa3e389ebdb3f77d72b45425319ceb4cc38b81e",
+    "logs/dry_run_green.log": "d06466a8a5f1e42d7677540ea6c6e574710572ffd02614ca930fc73967047066",
+    "logs/staging_smoke_fail.log": "87898a05bb8bab26ea3ffce32655ea3713069d950e3804c7a2d5acf451a9e0dd",
+    "release/manifest.toml": "f6b184fc699f487a0882e70370674055ff948441ed559638f1ee90153321dd44",
+    "release/manifest.v2.toml": "483417cba21888642caf5b4e157bd2e7d9680cf774b9ec7df1e88475b3111c0e",
+    "scripts/run_ci.py": "fb7ade7d76eeb982218975a544491e41aaeaa7d44b3d9ce413e83a373a9b80e7",
+    "tests/test_manifest_contract.py": "a2696d29fde918e897a7420aa7c9b0454a97f0e2aa6c9502106c7e7380f83bbe",
+    "tests/test_release_driver.py": "171a324a886deec948430dca010aa43a0db8a16f9b787b7df8fff201501a5924"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "f1fb40a47c903162d580ada97b07c0c73f4b7607bda5d4d078c09f1642f354dd",
+    "AGENTS.md": "25380b703f5a23229791b13394e205262b4dda23da4f5e5c5720f704091a6195",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "config/env": "5776c7a70eae9e5c9008381ca958b5a2e1e0effc9c00c3d4434669fdc325d293",
+    "deploy": "bc18cfc1fe7457ca03a9b304e435c4d561bf9fc7e77e77cc75f28796d8231e4b",
+    "logs": "e03b0509b40df4cedc30779f2d3bb32cb66ad4f06cd0500b9fd9f9bafef98e0c",
+    "release/manifest.toml": "f6b184fc699f487a0882e70370674055ff948441ed559638f1ee90153321dd44",
+    "scripts": "851feaa756cebaad06eb3b4a575033306abb695ac2b660289c247fcff195bf64",
+    "tests": "c7f9940b180fec9a79babda0f90ef47191ce50e01d88e9b3dddce406f6ec45f8"
+  },
+  "variant_id": "v2-noisy-distractor"
+}

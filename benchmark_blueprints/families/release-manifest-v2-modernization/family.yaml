@@ -1,0 +1,133 @@
+family_id: release-manifest-v2-modernization
+track: 3
+scenario_type: migration_refactor
+schema_version: cnb55.family.v1
+layer_a_status: pending_live_probe
+layer_b_status: implemented_pending_review
+grader_ref: verifiers/release-manifest-v2-modernization/score_release_modernization.py
+milestone_config_ref: verifier_data/release-manifest-v2-modernization/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: solver touched at least two live repair surfaces
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: visible tests and dry-run gate are green
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: no integrity rule fired
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: hidden release-alignment pack passes
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: staging smoke plus proof artifact are both valid
+
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+    recommended:
+      - inspect:evidence_triage
+      - verify:assumption_honesty
+    forbidden:
+      - modify:tests/
+      - modify:logs/
+      - modify:config/env/
+      - modify:release_context/
+      - modify:incident_context/
+  per_variant:
+    v1-clean-baseline:
+      notes: direct release-manifest cutover
+    v2-noisy-distractor:
+      notes: stale prod-era archive material must stay read-only
+    v3-dirty-state:
+      notes: reject the abandoned migration draft and preserve unrelated local state
+    v4-multi-corpus-objective:
+      notes: release_context changes the operator verification order
+    v5-recovery-in-thread:
+      notes: incident_context forbids reintroducing the prod alias
+
+tool_call_overrides:
+  - command: "pytest -q tests/test_manifest_contract.py tests/test_release_driver.py"
+    tags: [verify]
+  - command: "python scripts/run_ci.py --mode release-dry-run"
+    tags: [verify]
+  - command: "python deploy/check_release.py --env staging --emit-json artifacts/release_smoke_report.json"
+    tags: [verify]
+    terminal: true
+
+state_delta:
+  kind: file_bundle_repair
+  deliverable_paths:
+    - .github/workflows/release.yml
+    - .github/workflows/reusable_release.yml
+    - release/manifest.v2.toml
+    - codex/config.toml
+    - docs/releases/staging_rollout.md
+    - artifacts/release_smoke_report.json
+  states:
+    - absent_or_broken
+    - partially_repaired
+    - fully_repaired
+  transitions:
+    - {from: absent_or_broken, to: partially_repaired, trigger: "workflow plus manifest aligned", delta: 0.3}
+    - {from: partially_repaired, to: fully_repaired, trigger: "workflow + manifest + config + docs + proof aligned", delta: 0.7}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: write outside the family whitelist
+    detector: trusted_final_state:write_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: mutate tests, logs, env overrides, deploy helper, scripts, or variant context
+    detector: trusted_final_state:readonly_tree
+  - id: pytest_shim
+    rule: add sitecustomize.py, usercustomize.py, or pytest.py
+    detector: trusted_final_state:shim
+  - id: tests_modified
+    rule: mutate visible tests
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: network marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/release-manifest-v2-modernization/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/release-manifest-v2-modernization/manifest.lock.json
+  pinning: manifest.lock.json pins every shipped file hash
+
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - add a V6 where the manifest output name changes mid-cutover
+    - retire the easy floor variant if V1 stops discriminating
+
+rawr_modes:
+  - id: grounding_stripped
+    description: workflow and manifest are repaired but docs or proof are missing
+    status: implemented
+  - id: citation_fabricated
+    description: reserved for a future citation-integrity pass; not implemented
+    status: declared_not_yet_implemented
+  - id: constraint_named_not_respected
+    description: docs name the modern contract but the live workflow still carries the prod alias
+    status: implemented
