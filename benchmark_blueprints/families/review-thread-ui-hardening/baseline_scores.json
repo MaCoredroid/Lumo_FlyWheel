@@ -1,0 +1,27 @@
+{
+  "v1-clean-baseline": {
+    "empty": 0,
+    "oracle": 100,
+    "shortcut": 10
+  },
+  "v2-noisy-distractor": {
+    "empty": 0,
+    "oracle": 100,
+    "shortcut": 10
+  },
+  "v3-dirty-state": {
+    "empty": 0,
+    "oracle": 100,
+    "shortcut": 10
+  },
+  "v4-multi-corpus-objective": {
+    "empty": 0,
+    "oracle": 100,
+    "shortcut": 10
+  },
+  "v5-recovery-in-thread": {
+    "empty": 0,
+    "oracle": 100,
+    "shortcut": 10
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "allowed_edit_files": [
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css",
+    "repo/config/snapshot-viewports.json"
+  ],
+  "component_file": "repo/src/components/ReviewThreadCard.tsx",
+  "config_file": "repo/config/snapshot-viewports.json",
+  "evidence_file": "evidence/post_fix.md",
+  "objective_drift_thread_ids": [
+    "RT-102"
+  ],
+  "pass_bar": 40,
+  "protected_controls": [
+    "resolved-thread-menu"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "78effabfaaaf8b561ed0bcd611aaf9709fc6ae0fe84b43265ca4b907a020d8ca",
+    "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
+    "artifacts": "1a366af957f927ec9190a6a01b1b58e92de572f150f9481f150f2e95ea17ab24",
+    "bin": "ebceb35ee2640666395f1c25936505b7a4ad131644d5108f9c9bbdc74487a759",
+    "repo/tests": "8cf3853d345c1a5a156eef1a1167912a44d50b059e7facf2447e72f1d2bac981"
+  },
+  "reply_file": "review_reply/replies.md",
+  "required_acknowledgement": "",
+  "required_changed_files": [
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css",
+    "repo/config/snapshot-viewports.json"
+  ],
+  "resolved_thread_ids": [
+    "RT-099",
+    "RT-102"
+  ],
+  "route": "/pull/241/review-thread",
+  "stale_path_marker": "",
+  "style_file": "repo/src/styles/review-thread.css",
+  "target_control": "reply-thread-menu",
+  "unresolved_thread_ids": [
+    "RT-118"
+  ],
+  "variant_id": "v2-noisy-distractor",
+  "viewport": {
+    "height": 844,
+    "id": "ios-review-reopened",
+    "width": 390
+  },
+  "viewport_human": "390x844",
+  "visible_test_file": "repo/tests/test_review_thread_ui.py",
+  "visible_test_sha256": "917b02d432759ae2d8b443595b942399f5b85cb1b619703687380bc42baa14f6"
+}

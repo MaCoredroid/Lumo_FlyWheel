@@ -1,0 +1,23 @@
+.review-thread-card__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.review-thread-card__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-thread-card__menu-button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 480px) {
+  .review-thread-card__meta-row {
+    padding-right: 8px;
+  }
+}

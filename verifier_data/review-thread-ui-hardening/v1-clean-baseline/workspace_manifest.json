@@ -1,0 +1,47 @@
+{
+  "file_sha256": {
+    ".scenario_variant": "862d289ccc8f205cc1fcd6605334a45a0fc6292424b98eeb9b227c4a2f8fa4ee",
+    "AGENTS.md": "f52676090c0cca0bbfe37567d3d2f671f05f6d6ca6fb34e1a7c9523df061df27",
+    "Dockerfile": "0141626ee60ad2d9d90697b8522882a778c0f9e8c361f9f9eaf714b6c77e7894",
+    "artifacts/logs/lint_warning.txt": "8b762572a2827d6770f9cf2a2b772dfe5f8c627ce8bfde4b867f778f366609a9",
+    "artifacts/logs/snapshot_failure.txt": "f3a55ba89b0addf5453d9ddf262e3b26391775e7dc924d540cf05b143bcfa0e3",
+    "artifacts/review/export.md": "16e96ddbd9952974b1ccb7a777577e366c80f76f1ae051c470d740dea7d04c4c",
+    "artifacts/review/threads.json": "2e10b3c5b9a8635cd7058f1077de752e110448b01fb7b777e68483f2077783da",
+    "artifacts/screenshots/active_mobile_reopen.md": "cc116aa5226b75fa07489d5f8260550206947bfaf3da82d175497e12f7c75743",
+    "artifacts/screenshots/resolved_reference.md": "a8035cfcd26d387e996124d61a019309f87813685245661bdb5607fe0e9b6857",
+    "bin/review-thread-task": "12e8bbc03d337ae0cbe30998513b267aaea1ef26551ebe7f804d576bf0f03f65",
+    "evidence/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "repo/config/snapshot-viewports.json": "abceb453bd440021b87345981cbe32f35aea12f20ff9fba2ce49ebedd6e551eb",
+    "repo/src/components/ReviewThreadCard.tsx": "12ded17879a2ab74dea301e835dd7ac539ee5c9258a1e1966cedba07b51bd6ac",
+    "repo/src/styles/review-thread.css": "d5a1086248376f474a6788826277407cacd632e21a5d9acf6286a7ad59d39294",
+    "repo/tests/test_review_thread_ui.py": "917b02d432759ae2d8b443595b942399f5b85cb1b619703687380bc42baa14f6",
+    "review_reply/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/logs/lint_warning.txt",
+    "artifacts/logs/snapshot_failure.txt",
+    "artifacts/review/export.md",
+    "artifacts/review/threads.json",
+    "artifacts/screenshots/active_mobile_reopen.md",
+    "artifacts/screenshots/resolved_reference.md",
+    "bin/review-thread-task",
+    "evidence/.gitkeep",
+    "repo/config/snapshot-viewports.json",
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css",
+    "repo/tests/test_review_thread_ui.py",
+    "review_reply/.gitkeep"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "78effabfaaaf8b561ed0bcd611aaf9709fc6ae0fe84b43265ca4b907a020d8ca",
+    "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
+    "artifacts": "623f61655d1656bf7c9637533a1368f3ce4312c43721aa3c5931d3380c2094a9",
+    "bin": "ebceb35ee2640666395f1c25936505b7a4ad131644d5108f9c9bbdc74487a759",
+    "repo/tests": "8cf3853d345c1a5a156eef1a1167912a44d50b059e7facf2447e72f1d2bac981"
+  },
+  "variant_id": "v1-clean-baseline"
+}

@@ -1,0 +1,25 @@
+{
+  "viewports": [
+    {
+      "id": "desktop-review",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "legacy-resolved-reference",
+      "width": 375,
+      "height": 812
+    },
+    {
+      "id": "pixel-compact",
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "scenarios": [
+    {
+      "route": "/pull/241/review-thread",
+      "viewport_id": "desktop-review"
+    }
+  ]
+}

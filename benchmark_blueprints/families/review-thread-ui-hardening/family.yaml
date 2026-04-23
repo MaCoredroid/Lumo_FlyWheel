@@ -1,0 +1,164 @@
+family_id: review-thread-ui-hardening
+track: 10
+schema_version: cnb55.family.v1
+layer_a_status: pending_live_probe
+layer_b_status: green
+grader_ref: verifiers/review-thread-ui-hardening/score_ranking.py
+milestone_config_ref: verifier_data/review-thread-ui-hardening/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    passes_when:
+      all_of:
+        - brief_exists
+        - unresolved_threads_only
+    description: Solver mapped the live reopen to the right unresolved thread ids.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - brief_exists
+        - variant_match
+        - target_control_named
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+        - shortcut_detected == false
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - wrap_fix
+        - exact_viewport
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - replies_match_threads
+        - evidence_matches_viewport
+        - no ceiling in {artifact_only, wrong_thread_mapping, wrong_viewport_mapping}
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core: &core
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    forbidden:
+      - modify:artifacts
+      - modify:tests
+  extended: &extended
+    - {parent: inspect, sub_tag: evidence_triage, semantics: "separate unresolved evidence from resolved or stale review context"}
+    - {parent: inspect, sub_tag: prioritize, semantics: "identify the exact control and viewport that are still live"}
+    - {parent: modify, sub_tag: policy_tradeoff, semantics: "apply the narrow fix instead of broad churn"}
+    - {parent: verify, sub_tag: assumption_honesty, semantics: "acknowledge remaining release or incident risk in evidence"}
+  per_variant:
+    v1-clean-baseline:
+      core: *core
+      extended: *extended
+    v2-noisy-distractor:
+      core: *core
+      extended: *extended
+    v3-dirty-state:
+      core: *core
+      extended: *extended
+    v4-multi-corpus-objective:
+      core: *core
+      extended: *extended
+    v5-recovery-in-thread:
+      core: *core
+      extended: *extended
+
+tool_call_overrides:
+  - command: "review-thread-task schema"
+    tags: [inspect]
+    notes: Prints the submission schema.
+  - command: "review-thread-task validate"
+    tags: [verify]
+    notes: Validates the structured submission input.
+  - command: "review-thread-task submit"
+    tags: [modify]
+    terminal: true
+    notes: Writes brief/fix_summary.{json,md}.
+
+state_delta:
+  kind: json_deliverable
+  deliverable_path: brief/fix_summary.json
+  states:
+    - absent
+    - present_and_invalid
+    - present_and_valid
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only actions", delta: 0.0}
+    - {from: absent, to: present_and_invalid, trigger: "invalid raw write", delta: 0.0}
+    - {from: absent, to: present_and_valid, trigger: "submit success", delta: 0.7}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "submit success after repair", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: write outside repo source, config, replies, evidence, submission input, or brief
+    detector: trusted_final_state:wrote_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: any mutation under artifacts, tests, release_context, incident_context, AGENTS.md, Dockerfile, or bin
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: sitecustomize.py, usercustomize.py, or pytest.py present
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: repo/tests/test_review_thread_ui.py changed
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: .network_egress_detected marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  reply_concise:
+    max_points: 5
+    source: verifier_data/review-thread-ui-hardening/_rubrics/reply_concise.md
+    band: P_benchmark_only
+  evidence_clarity:
+    max_points: 5
+    source: verifier_data/review-thread-ui-hardening/_rubrics/evidence_clarity.md
+    band: P_benchmark_only
+  total_quarantined_points: 10
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/review-thread-ui-hardening/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/review-thread-ui-hardening/manifest.lock.json
+  pinning: manifest_locked
+
+saturation:
+  trigger: mean P_benchmark > 80 for two consecutive probe rounds
+  detection_path: family-local benchmark_run plus future LLD-06 ingestion
+  renewal_mechanisms:
+    - id: route_switch_mid_thread
+      description: introduce a mid-run thread export that changes the active viewport after the first attempted fix
+    - id: retire_v1
+      description: retire V1 and promote V2 if the baseline stops discriminating
