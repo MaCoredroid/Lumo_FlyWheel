@@ -1221,6 +1221,10 @@ class AutoResearchRoundManager:
         updated_rows: list[ResultsRow] = []
         for row in rows:
             if row.iteration == iteration and row.candidate_uuid == str(trace.get("candidate_uuid")):
+                if row.status.strip():
+                    raise RuntimeError(
+                        f"commit_refused: results row already finalized for iteration {iteration}"
+                    )
                 updated_rows.append(
                     ResultsRow(
                         **{
@@ -1241,6 +1245,7 @@ class AutoResearchRoundManager:
         ]
         self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
         self._assert_git_index_clean(context="commit_refused")
+        self._maybe_persist_noise_floor(round_dir=round_dir, spec=spec, rows=updated_rows)
         self._write_results(round_dir / "results.tsv", updated_rows)
         self._assert_immutable_round_artifacts(round_dir, spec=spec, context="commit_refused")
         self._assert_dirty_paths_match_expected(
@@ -2105,6 +2110,38 @@ class AutoResearchRoundManager:
 
     def _write_yaml(self, path: Path, payload: Any) -> None:
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    def _maybe_persist_noise_floor(
+        self,
+        *,
+        round_dir: Path,
+        spec: RoundSpecRecord,
+        rows: list[ResultsRow],
+    ) -> None:
+        baseline_rows = sorted(
+            (
+                row
+                for row in rows
+                if row.iteration in {"baseline_a", "baseline_b"} and row.status == "baseline"
+            ),
+            key=lambda row: row.iteration,
+        )
+        if len(baseline_rows) != 2:
+            return
+        try:
+            objectives = [float(row.objective_value) for row in baseline_rows]
+        except (TypeError, ValueError):
+            return
+        noise_floor = 2.0 * abs(objectives[0] - objectives[1])
+        if math.isclose(spec.noise_floor, noise_floor, rel_tol=0.0, abs_tol=1e-9):
+            return
+        updated_spec = RoundSpecRecord(
+            **{
+                **spec.__dict__,
+                "noise_floor": noise_floor,
+            }
+        )
+        self._write_yaml(round_dir / "round_spec.yaml", updated_spec.as_dict())
 
     @staticmethod
     def _ci95(values: list[float]) -> float:

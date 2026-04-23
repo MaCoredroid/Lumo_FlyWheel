@@ -532,6 +532,45 @@ def test_commit_candidate_tracks_bootstrap_artifacts_and_leaves_worktree_clean(
     assert subprocess.run(["git", "status", "--short"], cwd=repo, check=True, capture_output=True, text=True).stdout == ""
 
 
+def test_commit_candidate_refuses_duplicate_commit_for_same_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", lambda self, candidate_vllm_config, **kwargs: _real_trace())
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        (round_dir / "candidates" / "baseline_a" / "candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    manager.commit_candidate(round_id=bootstrap["round_id"], iteration="001", status="keep", notes="initial commit")
+
+    with pytest.raises(RuntimeError, match="results row already finalized"):
+        manager.commit_candidate(
+            round_id=bootstrap["round_id"],
+            iteration="001",
+            status="discard",
+            notes="should not be allowed",
+        )
+
+
 def test_commit_candidate_refuses_when_git_index_has_stale_allowed_path(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     manager = auto_research.AutoResearchRoundManager(
@@ -918,6 +957,62 @@ def test_measure_and_commit_candidate_surface_promql_mismatch_as_harness_fault(
     assert committed["status"] == "harness_fault"
     assert updated_rows[0].status == "harness_fault"
     assert updated_rows[0].notes == "promql_mismatch"
+
+
+def test_baseline_commits_persist_noise_floor_into_round_spec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    measurements = iter(
+        [
+            _real_trace(objective=9, ttft=1400.0, tpot=12.0, turn=4000.0),
+            _real_trace(objective=11, ttft=1500.0, tpot=12.5, turn=4200.0),
+        ]
+    )
+    monkeypatch.setattr(
+        auto_research.RealMeasurementHarness,
+        "measure",
+        lambda self, candidate_vllm_config, **kwargs: next(measurements),
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+
+    manager.measure(round_id=round_id, candidate_path=round_dir / "candidates" / "baseline_a" / "candidate.yaml")
+    manager.commit_candidate(
+        round_id=round_id,
+        iteration="baseline_a",
+        status="baseline",
+        notes="default baseline replay a",
+    )
+    round_spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    assert round_spec["noise_floor"] == 0.0
+
+    manager.measure(round_id=round_id, candidate_path=round_dir / "candidates" / "baseline_b" / "candidate.yaml")
+    manager.commit_candidate(
+        round_id=round_id,
+        iteration="baseline_b",
+        status="baseline",
+        notes="default baseline replay b",
+    )
+
+    updated_round_spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
+    assert isinstance(updated_round_spec, dict)
+    assert updated_round_spec["noise_floor"] == pytest.approx(4.0)
+    assert manager.status(round_id=round_id)["noise_floor"] == pytest.approx(4.0)
 
 
 def test_bootstrap_round_rejects_dry_run_bundle(tmp_path: Path) -> None:
