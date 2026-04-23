@@ -1,0 +1,46 @@
+{
+  "cleanup_actions": {
+    "ENABLE_PREVIEW_V2": "deprecate",
+    "ENABLE_SHADOW_PREVIEW": "keep",
+    "PREVIEW_FORCE_LEGACY": "docs_cleanup"
+  },
+  "docs_requirements": [],
+  "flags": {
+    "ENABLE_PREVIEW_V2": {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "expected_false_positive_path": "src/preview/service.py",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    "ENABLE_SHADOW_PREVIEW": {
+      "alias_of": null,
+      "expected_false_positive_path": "tests/test_force_legacy_reporting_only.py",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    "PREVIEW_FORCE_LEGACY": {
+      "alias_of": null,
+      "expected_false_positive_path": "repo_evidence/in_progress_patch/preview_force_legacy.patch",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  },
+  "pass_bar": 70,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+    "AGENTS.md": "1743c99d9f6b3a6252b4be0e2302e1a80c4d6595d4144233bb88996cf8b79f16",
+    "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+    "bin": "8c2d733bec61be71aa88a750bcb695cbca9eca77592e623829ce4e645838fb9a",
+    "config": "bcea67c3ab53618f342384a0b0a716bc6d428f2c135cf0e5afd90ed415c21998",
+    "docs": "bae20c145d5d7ab78b0e980dc26882ecdec4504a45e57e0d751724a1654703f7",
+    "repo_evidence": "dd4966c6a16163c3ba83a149804f6c297436202004df5908eaac60804c9a0f72",
+    "src": "1606ae36a371f9d37aecaafc541f471f5e7a528076a8c4722c92736a593060d7",
+    "tests": "d60a59779fe70564ac867dc8b13a1dfd2eb41d9b509009191e198db4c0f1b110"
+  },
+  "required_surface_roots_min": 4,
+  "test_flag_audit_contract_sha256": "4b81fdf9f6172751c6a237536d98bf05151ec9322fc3cc7cea3daeb9a6b7df50",
+  "variant_id": "v3-dirty-state"
+}

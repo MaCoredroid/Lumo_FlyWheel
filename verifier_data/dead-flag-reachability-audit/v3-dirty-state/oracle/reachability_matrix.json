@@ -1,0 +1,54 @@
+{
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "tests/test_force_legacy_reporting_only.py",
+      "evidence": [
+        "config/defaults.toml",
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "src/preview/service.py",
+        "tests/test_shadow_preview_live.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is live because the env parser records it and the service reaches the live shadow runtime branch when it is enabled.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "src/preview/service.py",
+      "evidence": [
+        "config/defaults.toml",
+        "src/preview/config.py",
+        "src/preview/service.py",
+        "tests/test_preview_v2_alias.py"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is partial: the parser still accepts it, but only as a legacy alias that maps into ENABLE_SHADOW_PREVIEW rather than a standalone runtime branch.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "repo_evidence/in_progress_patch/preview_force_legacy.patch",
+      "evidence": [
+        "config/defaults.toml",
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_force_legacy_reporting_only.py",
+        "docs/preview_rollout_runbook.md",
+        "repo_evidence/in_progress_patch/preview_force_legacy.patch",
+        "repo_evidence/previous_session/audit_draft.md"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY is dead in the live runtime: the parser records the flag for reporting, but the service never branches on it and the only extra references are stale helpers or abandoned patches.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "family_id": "dead-flag-reachability-audit",
+  "grader": {
+    "score_reachability_py_sha256": "4d46a39cadb27f8b66afbab505213ced25136532a1a89e8d6b02650b7844b3df"
+  },
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_audit_sha256": "d52afbb57d4e2cfe17878bb3f533136d13272007d2c833e3d5fa11a350659a99",
+        "hidden_tests_tree_sha256": "ad147fc9ab3d1f397d325e975363a3d05c8f7378de9cceb1848691ad5809b96b",
+        "oracle_flag_audit_sha256": "69c11043ec89032f6e297b59b19ea1eece592a3e0f2e39b86db626383960de4f",
+        "workspace_manifest_sha256": "7e7ee1b130fb533aaf10c9e1733824489f722960eacf1d213b639aaaeebc0eaf"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+        "AGENTS.md": "02ecfeb80af0244f76bb87f2675639d23180231f423412c29a0828a6688a1811",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "bin": "8c2d733bec61be71aa88a750bcb695cbca9eca77592e623829ce4e645838fb9a",
+        "config": "bcea67c3ab53618f342384a0b0a716bc6d428f2c135cf0e5afd90ed415c21998",
+        "docs": "bae20c145d5d7ab78b0e980dc26882ecdec4504a45e57e0d751724a1654703f7",
+        "src": "1606ae36a371f9d37aecaafc541f471f5e7a528076a8c4722c92736a593060d7",
+        "tests": "d60a59779fe70564ac867dc8b13a1dfd2eb41d9b509009191e198db4c0f1b110"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_audit_sha256": "390ea0e19d7a444d35ded1aec8401beddea39bf90ce4fb09e9fd8fd8c3d81dc9",
+        "hidden_tests_tree_sha256": "ad147fc9ab3d1f397d325e975363a3d05c8f7378de9cceb1848691ad5809b96b",
+        "oracle_flag_audit_sha256": "d7caf07f991778739357cbf83cfc66bb27763700600fe8e5be79ecd78c4e98e8",
+        "workspace_manifest_sha256": "c303ab3ddcb62950c1071195fed654407e65951a87896cb81b6e53f4fd127aea"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+        "AGENTS.md": "432a2fc24ea42571912b40744f568de1ecb6b129e37e7e2c33b589a8e2ae343e",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "bin": "8c2d733bec61be71aa88a750bcb695cbca9eca77592e623829ce4e645838fb9a",
+        "config": "bcea67c3ab53618f342384a0b0a716bc6d428f2c135cf0e5afd90ed415c21998",
+        "docs": "366dda901a67e7e6bfd59501c2b8be94b76c7e5a4de10dd33308105732c297c4",
+        "src": "1606ae36a371f9d37aecaafc541f471f5e7a528076a8c4722c92736a593060d7",
+        "tests": "d60a59779fe70564ac867dc8b13a1dfd2eb41d9b509009191e198db4c0f1b110"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_audit_sha256": "68e25ae2147b995216827a493b9fd7b12b8260a8b19e888ba25ad0aa001d4dc5",
+        "hidden_tests_tree_sha256": "ad147fc9ab3d1f397d325e975363a3d05c8f7378de9cceb1848691ad5809b96b",
+        "oracle_flag_audit_sha256": "09b86a411f637291a03eb88239005ee9adb8a613c8fb727becc96675beaf9642",
+        "workspace_manifest_sha256": "a2e2fcbfbafc2059a9426117a7f4c5b4b77dd00eb17924cd5c6d17f6a51ebf8b"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+        "AGENTS.md": "1743c99d9f6b3a6252b4be0e2302e1a80c4d6595d4144233bb88996cf8b79f16",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "bin": "8c2d733bec61be71aa88a750bcb695cbca9eca77592e623829ce4e645838fb9a",
+        "config": "bcea67c3ab53618f342384a0b0a716bc6d428f2c135cf0e5afd90ed415c21998",
+        "docs": "bae20c145d5d7ab78b0e980dc26882ecdec4504a45e57e0d751724a1654703f7",
+        "repo_evidence": "dd4966c6a16163c3ba83a149804f6c297436202004df5908eaac60804c9a0f72",
+        "src": "1606ae36a371f9d37aecaafc541f471f5e7a528076a8c4722c92736a593060d7",
+        "tests": "d60a59779fe70564ac867dc8b13a1dfd2eb41d9b509009191e198db4c0f1b110"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_audit_sha256": "9aea9ca90deeaa2f6ec8c8566166cfbd5ba187fbc0f9bba65ba0ad4fb9c3f549",
+        "hidden_tests_tree_sha256": "ad147fc9ab3d1f397d325e975363a3d05c8f7378de9cceb1848691ad5809b96b",
+        "oracle_flag_audit_sha256": "ab02f7d4f3bb7d0eb216fccf01cdf3f365dbc02b8022f62cf865b6fd60a5dc0f",
+        "workspace_manifest_sha256": "35330cf0872c30bb48b38b5a337a751c6ecf6a199491be711ffaaebca8a48974"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+        "AGENTS.md": "0c563002677249ca41c240b6b7430a4dc269039510e2137e44a47e8c49f2a2f8",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "bin": "8c2d733bec61be71aa88a750bcb695cbca9eca77592e623829ce4e645838fb9a",
+        "config": "bcea67c3ab53618f342384a0b0a716bc6d428f2c135cf0e5afd90ed415c21998",
+        "docs": "bae20c145d5d7ab78b0e980dc26882ecdec4504a45e57e0d751724a1654703f7",
+        "release_context": "1ff065aec74c388ebf155e50760a9081e9ad27038b182ab6f4b08b9cc14e5de2",
+        "repo_evidence": "58b081557a734a9acab48aca8ec58d936a21906725f371aebb9226dcc4581f69",
+        "src": "1606ae36a371f9d37aecaafc541f471f5e7a528076a8c4722c92736a593060d7",
+        "tests": "d60a59779fe70564ac867dc8b13a1dfd2eb41d9b509009191e198db4c0f1b110"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_audit_sha256": "a9ed8b6ff85a66c2cf4a7596c2da2f150ecd8fe84f008c547d05cf687df6055c",
+        "hidden_tests_tree_sha256": "ad147fc9ab3d1f397d325e975363a3d05c8f7378de9cceb1848691ad5809b96b",
+        "oracle_flag_audit_sha256": "39cde9a0ced46cc07e6ef5ac5c305206d629eff744f17b86873075683e15d1a9",
+        "workspace_manifest_sha256": "bdcffac9ff895de9ab8b48205307ac8e5b5e77c1b34234445eda31113e60ce37"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+        "AGENTS.md": "321d28340ab44e2f3fa3113d7d3fd5519bb4de5e521048ad24d5f353b5db3515",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "bin": "8c2d733bec61be71aa88a750bcb695cbca9eca77592e623829ce4e645838fb9a",
+        "config": "bcea67c3ab53618f342384a0b0a716bc6d428f2c135cf0e5afd90ed415c21998",
+        "docs": "bae20c145d5d7ab78b0e980dc26882ecdec4504a45e57e0d751724a1654703f7",
+        "incident_context": "621043f3cfb1c0f3b6733f9d42a5d9f25bbc326ed683467916c2ef377c099340",
+        "release_context": "1ff065aec74c388ebf155e50760a9081e9ad27038b182ab6f4b08b9cc14e5de2",
+        "repo_evidence": "dd4966c6a16163c3ba83a149804f6c297436202004df5908eaac60804c9a0f72",
+        "src": "1606ae36a371f9d37aecaafc541f471f5e7a528076a8c4722c92736a593060d7",
+        "tests": "d60a59779fe70564ac867dc8b13a1dfd2eb41d9b509009191e198db4c0f1b110"
+      }
+    }
+  }
+}

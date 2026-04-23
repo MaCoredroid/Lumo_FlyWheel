@@ -1,0 +1,122 @@
+family_id: dead-flag-reachability-audit
+track: 2
+schema_version: cnb55.family.v1
+layer_a_status: in_progress
+layer_b_status: in_progress
+
+grader_ref: verifiers/dead-flag-reachability-audit/score_reachability.py
+milestone_config_ref: verifier_data/dead-flag-reachability-audit/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L2
+    description: The submitted audit cites enough workspace evidence to prove code-path localization.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: "`brief/flag_audit.json` exists, parses, and matches the schema version."
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No integrity violation and no readonly tree mutation.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: The matrix captures all three flags, runtime symbols, and cleanup actions.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: All classifications are correct and no hard ceiling <= 35 fired.
+
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    recommended:
+      - inspect:evidence_triage
+      - inspect:prioritize
+      - verify:assumption_honesty
+  per_variant:
+    v1-clean-baseline: {}
+    v2-noisy-distractor:
+      variant_notes: stale-doc triage required
+    v3-dirty-state:
+      variant_notes: sunk-cost rejection required
+    v4-multi-corpus-objective:
+      variant_notes: release-freeze cleanup reprioritization required
+    v5-recovery-in-thread:
+      variant_notes: rollback-incident acknowledgement required
+
+tool_call_overrides:
+  - command: "cnb55-flag-audit schema"
+    tags: [inspect]
+  - command: "cnb55-flag-audit validate"
+    tags: [verify]
+  - command: "cnb55-flag-audit submit"
+    tags: [modify]
+    terminal: true
+
+state_delta:
+  kind: json_deliverable
+  deliverable_path: brief/flag_audit.json
+  states:
+    - absent
+    - present_and_invalid
+    - present_and_valid
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only turn", delta: 0.0}
+    - {from: absent, to: absent, trigger: "cnb55-flag-audit validate success", delta: 0.3}
+    - {from: absent, to: present_and_valid, trigger: "cnb55-flag-audit submit success", delta: 0.7}
+    - {from: absent, to: present_and_invalid, trigger: "raw invalid write", delta: 0.0}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "subsequent valid submit", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: "any write outside `brief/*`, `artifacts/*`, and `brief_input.json`"
+  - id: immutable_slice_mutated
+    rule: readonly tree hash changed
+  - id: pytest_shim
+    rule: shim file present
+  - id: tests_modified
+    rule: visible test checksum changed
+  - id: network_egress
+    rule: "`.network_egress_detected` marker present"
+
+llm_judge_quarantine:
+  cleanup_precision_bonus:
+    max_points: 6
+    band: P_benchmark_only
+  total_quarantined_points: 6
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  type: manifest_locked
+  ref: benchmark_blueprints/families/dead-flag-reachability-audit/manifest.lock.json
+
+rawr_modes:
+  grounding_stripped: implemented
+  citation_fabricated: declared_not_yet_implemented
+  constraint_named_not_respected: declared_not_yet_implemented
+
+saturation:
+  threshold_mean_P: 80
+  sustained_rounds: 2
+  renewal_queue:
+    - add-deploy-manifest-corpus
+    - add-parser-refactor-diff
+    - retire-v1

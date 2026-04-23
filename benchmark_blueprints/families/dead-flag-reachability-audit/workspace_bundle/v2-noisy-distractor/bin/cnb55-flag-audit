@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+SCHEMA_VERSION = "cnb55.flag_audit.v1"
+FLAG_IDS = ("ENABLE_SHADOW_PREVIEW", "ENABLE_PREVIEW_V2", "PREVIEW_FORCE_LEGACY")
+STATUS_VALUES = ("live", "partial", "dead")
+ACTION_VALUES = ("keep", "deprecate", "docs_cleanup", "telemetry_first", "remove_after_migration", "do_not_remove_now")
+EVIDENCE_ROOTS = ("config", "src", "docs", "tests", "release_context", "incident_context", "repo_evidence")
+
+
+def schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "schema_version",
+            "variant_id",
+            "flags",
+            "summary",
+            "cleanup_plan",
+            "assumption_ledger",
+        ],
+        "additionalProperties": False,
+    }
+
+
+def validate(doc: Any, root: Path) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(doc, dict):
+        return ["top-level value must be an object"]
+    required = set(schema()["required"])
+    missing = sorted(required - set(doc))
+    extra = sorted(set(doc) - required)
+    for field in missing:
+        errors.append(f"missing field: {field}")
+    for field in extra:
+        errors.append(f"unexpected field: {field}")
+    if errors:
+        return errors
+
+    if doc.get("schema_version") != SCHEMA_VERSION:
+        errors.append(f"schema_version must be {SCHEMA_VERSION}")
+    variant = (root / ".scenario_variant").read_text().strip()
+    if doc.get("variant_id") != variant:
+        errors.append("variant_id mismatch")
+
+    flags = doc.get("flags")
+    if not isinstance(flags, list) or len(flags) != len(FLAG_IDS):
+        errors.append("flags must contain exactly three entries")
+    else:
+        seen: set[str] = set()
+        for entry in flags:
+            if not isinstance(entry, dict):
+                errors.append("flag entries must be objects")
+                continue
+            for field in ("flag", "status", "alias_of", "parser_symbol", "runtime_branch_symbol", "evidence", "disproved_false_positive_path", "rationale"):
+                if field not in entry:
+                    errors.append(f"flag entry missing {field}")
+            flag = entry.get("flag")
+            if flag not in FLAG_IDS:
+                errors.append(f"unknown flag: {flag}")
+            elif flag in seen:
+                errors.append(f"duplicate flag: {flag}")
+            else:
+                seen.add(flag)
+            if entry.get("status") not in STATUS_VALUES:
+                errors.append(f"bad status for {flag}")
+            alias_of = entry.get("alias_of")
+            if alias_of is not None and alias_of not in FLAG_IDS:
+                errors.append(f"bad alias_of for {flag}")
+            for nullable in ("parser_symbol", "runtime_branch_symbol"):
+                value = entry.get(nullable)
+                if value is not None and (not isinstance(value, str) or len(value.strip()) < 3):
+                    errors.append(f"{nullable} must be null or non-empty string for {flag}")
+            evidence = entry.get("evidence")
+            if not isinstance(evidence, list) or len(evidence) < 2:
+                errors.append(f"evidence must list at least two citations for {flag}")
+            else:
+                for rel in evidence:
+                    if not isinstance(rel, str):
+                        errors.append(f"evidence citation must be string for {flag}")
+                        continue
+                    if not any(rel == prefix or rel.startswith(prefix + "/") for prefix in EVIDENCE_ROOTS):
+                        errors.append(f"citation outside evidence roots: {rel}")
+                    if not (root / rel).exists():
+                        errors.append(f"missing citation path: {rel}")
+            false_path = entry.get("disproved_false_positive_path")
+            if not isinstance(false_path, str) or not false_path.strip():
+                errors.append(f"disproved_false_positive_path must be non-empty for {flag}")
+            elif not (root / false_path).exists():
+                errors.append(f"false-positive path missing: {false_path}")
+            rationale = entry.get("rationale")
+            if not isinstance(rationale, str) or len(rationale.strip()) < 40:
+                errors.append(f"rationale too short for {flag}")
+
+    summary = doc.get("summary")
+    if not isinstance(summary, dict):
+        errors.append("summary must be object")
+    else:
+        for field in ("highest_operational_risk", "note"):
+            if field not in summary:
+                errors.append(f"summary missing {field}")
+        if summary.get("highest_operational_risk") not in FLAG_IDS:
+            errors.append("summary.highest_operational_risk must name a flag")
+        note = summary.get("note")
+        if not isinstance(note, str) or len(note.strip()) < 30:
+            errors.append("summary.note too short")
+
+    cleanup_plan = doc.get("cleanup_plan")
+    if not isinstance(cleanup_plan, list) or len(cleanup_plan) < 2:
+        errors.append("cleanup_plan must have at least two actions")
+    else:
+        for row in cleanup_plan:
+            if not isinstance(row, dict):
+                errors.append("cleanup row must be object")
+                continue
+            for field in ("flag", "action", "rationale", "blockers"):
+                if field not in row:
+                    errors.append(f"cleanup row missing {field}")
+            if row.get("flag") not in FLAG_IDS:
+                errors.append(f"cleanup flag unknown: {row.get('flag')}")
+            if row.get("action") not in ACTION_VALUES:
+                errors.append(f"cleanup action invalid: {row.get('action')}")
+            if not isinstance(row.get("rationale"), str) or len(row["rationale"].strip()) < 20:
+                errors.append("cleanup rationale too short")
+            blockers = row.get("blockers")
+            if not isinstance(blockers, list):
+                errors.append("cleanup blockers must be list")
+
+    ledger = doc.get("assumption_ledger")
+    if not isinstance(ledger, list) or not ledger:
+        errors.append("assumption_ledger must be non-empty")
+    else:
+        if not any(isinstance(row, dict) and row.get("status") == "missing" for row in ledger):
+            errors.append("assumption_ledger must include one missing row")
+        for row in ledger:
+            if not isinstance(row, dict):
+                errors.append("assumption row must be object")
+                continue
+            if row.get("status") not in ("observed", "to_verify", "missing"):
+                errors.append("assumption status invalid")
+            if not isinstance(row.get("topic"), str) or not row["topic"].strip():
+                errors.append("assumption topic required")
+            if not isinstance(row.get("note"), str) or len(row["note"].strip()) < 8:
+                errors.append("assumption note too short")
+    return errors
+
+
+def render_md(doc: dict[str, Any]) -> str:
+    lines = [
+        "# Flag Audit",
+        "",
+        f"- variant: `{doc['variant_id']}`",
+        f"- highest_operational_risk: `{doc['summary']['highest_operational_risk']}`",
+        "",
+        "## Flag Status",
+        "",
+        "| flag | status | alias_of | parser_symbol | runtime_branch_symbol | false_positive_path |",
+        "|---|---|---|---|---|---|",
+    ]
+    for entry in doc["flags"]:
+        lines.append(
+            f"| `{entry['flag']}` | {entry['status']} | {entry['alias_of'] or '—'} | "
+            f"`{entry['parser_symbol'] or '—'}` | `{entry['runtime_branch_symbol'] or '—'}` | "
+            f"`{entry['disproved_false_positive_path']}` |"
+        )
+        lines.append("")
+        lines.append(f"Evidence: {', '.join(f'`{rel}`' for rel in entry['evidence'])}")
+        lines.append("")
+        lines.append(entry["rationale"])
+        lines.append("")
+    lines.extend([
+        "## Cleanup Plan",
+        "",
+        "| flag | action | blockers | rationale |",
+        "|---|---|---|---|",
+    ])
+    for row in doc["cleanup_plan"]:
+        blockers = ", ".join(row["blockers"]) if row["blockers"] else "none"
+        lines.append(f"| `{row['flag']}` | `{row['action']}` | {blockers} | {row['rationale']} |")
+    lines.extend([
+        "",
+        "## Assumption Ledger",
+        "",
+        "| status | topic | note |",
+        "|---|---|---|",
+    ])
+    for row in doc["assumption_ledger"]:
+        lines.append(f"| {row['status']} | {row['topic']} | {row['note']} |")
+    lines.extend(["", doc["summary"]["note"], ""])
+    return "\n".join(lines)
+
+
+def write_outputs(doc: dict[str, Any], root: Path) -> None:
+    brief_dir = root / "brief"
+    art_dir = root / "artifacts"
+    brief_dir.mkdir(parents=True, exist_ok=True)
+    art_dir.mkdir(parents=True, exist_ok=True)
+    (brief_dir / "flag_audit.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    (art_dir / "reachability_matrix.json").write_text(json.dumps({"flags": doc["flags"]}, indent=2, sort_keys=True) + "\n")
+    (art_dir / "flag_audit.md").write_text(render_md(doc))
+    cleanup_lines = ["# Cleanup Patch Plan", ""]
+    for row in doc["cleanup_plan"]:
+        cleanup_lines.append(f"## {row['flag']}")
+        cleanup_lines.append("")
+        cleanup_lines.append(f"- action: `{row['action']}`")
+        cleanup_lines.append(f"- blockers: {', '.join(row['blockers']) if row['blockers'] else 'none'}")
+        cleanup_lines.append(f"- rationale: {row['rationale']}")
+        cleanup_lines.append("")
+    (art_dir / "cleanup.patchplan.md").write_text("\n".join(cleanup_lines) + "\n")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("schema")
+    validate_p = sub.add_parser("validate")
+    validate_p.add_argument("input")
+    submit_p = sub.add_parser("submit")
+    submit_p.add_argument("input")
+    args = parser.parse_args()
+
+    root = Path.cwd()
+    if args.cmd == "schema":
+        print(json.dumps(schema(), indent=2, sort_keys=True))
+        return 0
+
+    doc = json.loads(Path(args.input).read_text())
+    errors = validate(doc, root)
+    if errors:
+        for err in errors:
+            print(err)
+        return 1
+    if args.cmd == "submit":
+        write_outputs(doc, root)
+    else:
+        print("OK")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

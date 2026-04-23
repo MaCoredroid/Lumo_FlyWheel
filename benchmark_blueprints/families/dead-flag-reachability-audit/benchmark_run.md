@@ -1,43 +1,93 @@
-# Benchmark Run
+# Benchmark Run — `dead-flag-reachability-audit`
 
-- `family_id`: `dead-flag-reachability-audit`
-- `task_id`: `t2_dead_flag_preview_reachability_audit`
-- `run_date`: `2026-04-18`
-- `agent_id`: `019da332-47e8-7b91-8aa2-6802f6a699fc`
-- `model`: `gpt-5.4`
-- `reasoning_effort`: `high`
-- `run_context`: family directory only, with no task-local runtime bundle present
+## Model under test
 
-## Actual Attempt
+```bash
+codex exec --model gpt-5.4 --reasoning-effort high
+```
 
-The child agent attempted a real flag audit and produced all required deliverables. It stayed inside the family bundle, but because the concrete repo files were absent it inferred live or partial or dead status from benchmark metadata, naming patterns, and the task’s own ambiguity notes.
+## Layer A target
 
-The attempt is strong enough to look plausible to a shallow grader, which is why the runtime-branch and parser-symbol requirements matter.
+- family mean in `[15, 25]`
+- max variant mean `<= 40`
+- at least one variant mean `<= 10`
+- monotonic `V1 >= V2 >= V3 >= V4 >= V5` within `+/-3`
+- oracle `>= 90`
+- empty `= 0`
+- shortcut `<= 30`
 
-## Scoring Against Final Evaluator
+## attempt_00 — runtime family build and static verification
 
-- `12/35`: classifications were plausible, but unproven
-- `6/20`: alias-versus-standalone reasoning was directionally good
-- `0/20`: `reachability_matrix.json` left parser and runtime symbols null, so the core runtime-proof requirement was unmet
-- `4/15`: used multiple surfaces, but all were metadata-level
-- `8/10`: cleanup plan was narrow and mostly evidence-bounded
+Scope completed inside this family only:
 
-Raw subtotal: `30/100`
+- authored `workspace_bundle/v1..v5`
+- added family-local CLI `bin/cnb55-flag-audit`
+- added deterministic scorer `verifiers/dead-flag-reachability-audit/score_reachability.py`
+- added family-local regen, live-probe, and verification-matrix runners
+- generated `verifier_data/dead-flag-reachability-audit/v1..v5`
+- added `family.yaml`, `manifest.lock.json`, and verification-matrix artifacts
 
-## Caps Applied
+Commands run:
 
-- Runtime-evidence cap from [evaluator_contract.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/dead-flag-reachability-audit/evaluator_contract.md): `20/100` maximum when no concrete runtime-branch evidence is established
+```bash
+python3 verifiers/dead-flag-reachability-audit/regen_family.py
+python3 verifiers/dead-flag-reachability-audit/run_verification_matrix.py --variant v1-clean-baseline --out benchmark_blueprints/families/dead-flag-reachability-audit/verification_matrix.md
+python3 verifiers/dead-flag-reachability-audit/run_verification_matrix.py --variant v5-recovery-in-thread --out benchmark_blueprints/families/dead-flag-reachability-audit/verification_matrix_v5.md
+```
 
-Final score: `20/100`
+Observed static sanity:
 
-## Hardening From This Run
+| variant | oracle | empty | shortcut |
+| --- | ---: | ---: | ---: |
+| v1-clean-baseline | 100 | 0 | 20 |
+| v2-noisy-distractor | 100 | 0 | 20 |
+| v3-dirty-state | 100 | 0 | 20 |
+| v4-multi-corpus-objective | 100 | 0 | 20 |
+| v5-recovery-in-thread | 100 | 0 | 20 |
 
-- Made the provided-bundle boundary explicit in [task_spec.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/dead-flag-reachability-audit/task_spec.md), [evaluator_contract.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/dead-flag-reachability-audit/evaluator_contract.md), and [codex/config.toml](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/dead-flag-reachability-audit/codex/config.toml).
-- Kept the requirement that the matrix include parser and runtime symbols plus a disproved false-positive path.
+Verification matrix headline results:
 
-## Final Judgment
+V1 matrix:
 
-- Meaningful after hardening: `yes`
-- Naive GPT-5.4/high expected score from a family-bundle-only attack: `about 20/100`
-- Target met: `yes`
+| trajectory | P_benchmark | M_training | integrity | ceilings |
+| --- | ---: | ---: | ---: | --- |
+| Oracle | 100 | 1.0000 | 0 | none |
+| Empty | 0 | 0.0000 | 0 | `no_audit_file` |
+| RAWR grounding_stripped | 30 | 0.3000 | 0 | `grep_only_reasoning` |
+| Alias collapse | 25 | 0.2500 | 0 | `classification_miss`, `alias_collapse` |
+| Force-legacy as live | 20 | 0.2000 | 0 | `classification_miss`, `parser_equals_runtime` |
+| Delete-tests adversarial | 0 | 0.0000 | 1 | `tests_modified`, `immutable_slice_mutated` |
 
+V5 matrix:
+
+| trajectory | P_benchmark | M_training | integrity | ceilings |
+| --- | ---: | ---: | ---: | --- |
+| Oracle | 100 | 1.0000 | 0 | none |
+| Empty | 0 | 0.0000 | 0 | `no_audit_file` |
+| RAWR grounding_stripped | 30 | 0.3000 | 0 | `grep_only_reasoning` |
+| Alias collapse | 25 | 0.2500 | 0 | `classification_miss`, `alias_collapse` |
+| Force-legacy as live | 20 | 0.2000 | 0 | `classification_miss`, `parser_equals_runtime`, `sunk_cost_finish` |
+| Delete-tests adversarial | 0 | 0.0000 | 1 | `tests_modified`, `immutable_slice_mutated` |
+
+Interpretation:
+
+- Layer B scaffolding exists and is executable.
+- Oracle, empty, shortcut, and adversarial integrity behaviors are all in the
+  expected bands.
+- Static verification alone does not say whether Layer A is calibrated; the
+  family still needs a real live probe against the authored bundle.
+
+## attempt_01 — live probe
+
+Status at commit time: pending until the family-local live runner finishes or
+is intentionally deferred.
+
+One `--repeats 1` launch was started during authoring and then stopped without
+recording results because the first Codex workspace run had not completed yet.
+No scored live-probe outcome is claimed in this file.
+
+Planned command:
+
+```bash
+python3 verifiers/dead-flag-reachability-audit/run_live_probe.py --repeats 1
+```

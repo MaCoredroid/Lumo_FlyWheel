@@ -1,0 +1,10 @@
+diff --git a/src/preview/runtime.py b/src/preview/runtime.py
+--- a/src/preview/runtime.py
++++ b/src/preview/runtime.py
+@@
+ def preview_runtime_branch(config):
++    if config.force_legacy_seen:
++        return "preview_runtime_branch:legacy_force_override"
+     if config.shadow_enabled:
+         return "preview_runtime_branch:shadow_preview_path"
+     return "preview_runtime_branch:legacy_preview_path"

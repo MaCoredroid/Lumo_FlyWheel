@@ -1,85 +1,162 @@
-# Dead Flag Reachability Audit
+# `dead-flag-reachability-audit` Task Spec
 
-- `task_id`: `t2_dead_flag_preview_reachability_audit`
 - `family_id`: `dead-flag-reachability-audit`
-- `scenario_type`: `reachability_audit`
+- `task_id`: `t2_dead_flag_preview_reachability_audit`
+- Track: `02 Codebase Understanding`
+- Structured output schema: `cnb55.flag_audit.v1`
 
 ## Task Prompt
 
-Audit the preview rollout flags in this repo and determine which are live, partially wired, or dead. The operator request names three controls:
+Audit the preview rollout flags in this repo and determine which are `live`,
+`partial`, or `dead`. The operator request always names these three controls:
 
 - `ENABLE_SHADOW_PREVIEW`
 - `ENABLE_PREVIEW_V2`
 - `PREVIEW_FORCE_LEGACY`
 
-You must trace defaults, environment parsing, live call sites, tests, and rollout docs before you classify anything. Produce:
+You must trace defaults, environment parsing, runtime branching, tests, docs,
+and any extra release or incident context that exists in the variant before you
+classify anything.
 
-- `artifacts/flag_audit.md`: one section per flag with status, evidence, and operational risk.
-- `artifacts/reachability_matrix.json`: for each flag, record whether it appears in defaults, env parsing, runtime branching, tests, and docs, along with `parser_symbol`, `runtime_branch_symbol`, `alias_of`, and one disproved false-positive path.
-- `artifacts/cleanup.patchplan.md`: a narrow cleanup recommendation for any flag you prove dead or docs-only.
+Do not patch runtime logic. This family scores reachability judgment, not code
+cleanup execution.
 
-Do not delete flags or patch runtime logic. This task is about correct reachability judgment, not speculative cleanup.
+## CLI Contract
 
-## Workspace Bundle
+Every variant ships the same CLI surface:
 
-- Small service repo with `config/defaults.toml`, `src/preview_cli.py`, `src/preview/service.py`, `src/preview/runtime.py`, `.env.example`, deployment docs, and tests.
-- One rollout memo that uses the old flag vocabulary.
-- One env parser that still accepts a legacy alias.
-- One hidden branch where a flag appears in docs and tests but no longer changes runtime behavior.
+```bash
+./bin/cnb55-flag-audit schema
+./bin/cnb55-flag-audit validate brief_input.json
+./bin/cnb55-flag-audit submit brief_input.json
+```
 
-## Seeded Ambiguity
+Expected solver flow:
 
-Authoring note: these ambiguity seeds are for benchmark design and hidden checks. They should not appear verbatim in the solver-visible task prompt.
+1. Author `brief_input.json` at the workspace root.
+2. Run `./bin/cnb55-flag-audit validate brief_input.json`.
+3. Run `./bin/cnb55-flag-audit submit brief_input.json`.
 
-- Not every named control with parser or docs presence changes live production behavior.
-- At least one control has misleading evidence because one surface suggests reachability while another does not.
-- Naming and alias behavior are intentionally confusable enough that grep counts are not trustworthy.
-- The prose rollout story is not a reliable substitute for runtime tracing.
+Successful `submit` writes:
 
-## Required Surfaces
+- `brief/flag_audit.json`
+- `artifacts/flag_audit.md`
+- `artifacts/reachability_matrix.json`
+- `artifacts/cleanup.patchplan.md`
 
-- Repo search and code reading across config, env parsing, runtime, docs, and tests.
-- Shell for targeted inspection and optional test execution.
-- Structured JSON output for the reachability matrix.
-- Evidence must come from the provided benchmark bundle only. Workspace-wide analogy hunting or sibling scenario lookups do not count.
+## Required Output Shape
 
-## Expected Deliverables
+`brief_input.json` must include:
 
-- An audit that classifies each flag correctly and explains why.
-- A matrix artifact that makes the classification auditable.
-- A cleanup plan that stays within proven evidence and does not over-prescribe implementation work.
+- `schema_version`
+- `variant_id`
+- `flags`: exactly three rows, one per named control
+- `summary`
+- `cleanup_plan`
+- `assumption_ledger`
 
-## Grader Contract
+Each flag row must include:
 
-- Full credit requires:
-- Correct live or partial or dead classification for all three named flags.
-- Evidence from at least four distinct surfaces across config, parser, runtime, tests, and docs.
-- A correct distinction between parser presence and behavioral reachability.
-- A correct distinction between a live alias and a dead standalone flag.
-- `reachability_matrix.json` names the actual parser symbol and runtime branch symbol for each flag and includes one disproved false-positive path.
-- A cleanup recommendation that matches the proven classification.
-- Partial credit if two flags are classified correctly and the third is close but unsupported.
-- Low credit if the solver infers reachability from grep presence alone or collapses partial and dead into the same bucket.
+- `flag`
+- `status`: one of `live`, `partial`, `dead`
+- `alias_of`
+- `parser_symbol`
+- `runtime_branch_symbol`
+- `evidence`
+- `disproved_false_positive_path`
+- `rationale`
 
-## Red-Team Traps
+## Variant Progression
 
-- Treat every parsed env var as live behavior.
-- Treat every documented flag as production-reachable.
-- Miss the alias mapping and double-count it as a separate live control.
-- Use tests as the sole source of truth even when they only exercise a stub path.
-- Recommend deleting a flag without proving dead runtime reachability.
+### V1 clean baseline
 
-## Quality Gate
+- Core reachability split only.
+- `ENABLE_SHADOW_PREVIEW` is the live runtime control.
+- `ENABLE_PREVIEW_V2` is accepted by the parser as a legacy alias.
+- `PREVIEW_FORCE_LEGACY` is parser-visible but not runtime-live.
 
-- Hardening applied after adversarial probe:
-- The runtime prompt should not reveal the bucket distribution or the exact ambiguity pattern.
-- `reachability_matrix.json` now requires parser and runtime symbols plus one disproved false-positive path.
-- The bundle boundary is now explicit so metadata-only guessing cannot be laundered with unrelated workspace evidence.
-- The hidden grader should verify that a solver cannot score by simply listing file matches; the narrative must align with runtime branching.
-- The cleanup deliverable should be judged against overreach. Cleanup that goes beyond proven evidence should lose credit.
-- Hidden grader notes may enforce a live or partial or dead distribution, but that fact should stay out of the public prompt.
-- Hardening target: a naive GPT-5.4/high solver should not clear 30/100 via grep plus rollout-doc paraphrase.
-- Probe record:
-- Initial adversarial probe judged the spec too easy at roughly 35-55/100 because the public text leaked the answer skeleton.
-- Hardening moved bucket-shape clues into hidden notes and added structured runtime-proof requirements.
-- Current expectation after hardening: under 30/100 for a naive GPT-5.4/high solver if the grader validates branch symbols and disproved paths.
+### V2 noisy distractor
+
+- Adds a stale 2025 rollout memo that still names `ENABLE_PREVIEW_V2`.
+- Tests and docs are now noisy enough that grep-only reasoning should fail.
+
+### V3 dirty state
+
+- Adds a prior-session audit draft plus an unfinished patch that would revive a
+  `PREVIEW_FORCE_LEGACY` runtime branch.
+- The right answer rejects abandoned intent as proof of current reachability.
+
+### V4 multi-corpus objective
+
+- Adds `release_context/` with release-freeze guidance.
+- Classification does not change, but cleanup sequencing must shift toward
+  telemetry or docs-first handling for the alias during the freeze.
+
+### V5 recovery in thread
+
+- Adds `incident_context/` showing a rollback after premature alias removal.
+- The audit must acknowledge the rollback before recommending any follow-up
+  cleanup on `ENABLE_PREVIEW_V2`.
+
+## Workspace Layout
+
+Every variant contains the same top-level surfaces:
+
+- `config/defaults.toml`
+- `src/preview/config.py`
+- `src/preview/runtime.py`
+- `src/preview/service.py`
+- `src/preview/legacy.py`
+- `src/preview_cli.py`
+- `docs/`
+- `tests/`
+- optional `release_context/`
+- optional `incident_context/`
+- optional `repo_evidence/`
+
+The solver may write only:
+
+- `brief/*`
+- `artifacts/*`
+- `brief_input.json`
+
+Any other file mutation is an integrity failure.
+
+## What Full Credit Looks Like
+
+The solver:
+
+- classifies all three flags correctly
+- distinguishes parser presence from runtime reachability
+- treats `ENABLE_PREVIEW_V2` as alias-only, not as a standalone live branch
+- proves `PREVIEW_FORCE_LEGACY` lacks a live runtime branch
+- cites at least four distinct surface roots
+- names one disproved false-positive path per flag
+- keeps the cleanup plan narrow and variant-appropriate
+
+## Partial-Credit Ceilings
+
+The scorer applies hard caps after aggregation:
+
+- `no_audit_file` -> `0`
+- `malformed_audit` -> `10`
+- `runtime_branch_missing` -> `20`
+- `parser_equals_runtime` -> `20`
+- `cleanup_overreach` -> `20`
+- `alias_collapse` -> `25`
+- `incident_blind_cleanup` -> `25`
+- `grep_only_reasoning` -> `30`
+- `stale_docs_truth` -> `30`
+- `sunk_cost_finish` -> `30`
+- `objective_drift` -> `35`
+- `classification_miss` -> `45`
+
+## Saturation And Renewal
+
+This family should be renewed if `mean P_benchmark > 80` for two probe rounds.
+Current renewal queue:
+
+- add deploy-manifest evidence so alias migration can be proven directly
+- add a parser-refactor diff that tempts solver over-reliance on intended
+  future state
+- retire or replace the current V1 if it stops discriminating at all

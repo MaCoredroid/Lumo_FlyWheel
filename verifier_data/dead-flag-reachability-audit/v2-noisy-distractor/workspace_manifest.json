@@ -1,0 +1,33 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "bin/cnb55-flag-audit",
+    "config/defaults.toml",
+    "docs/false_positive_notes.md",
+    "docs/preview_rollout_runbook.md",
+    "docs/preview_v2_ramp_memo_2025.md",
+    "src/preview/__init__.py",
+    "src/preview/config.py",
+    "src/preview/legacy.py",
+    "src/preview/runtime.py",
+    "src/preview/service.py",
+    "src/preview_cli.py",
+    "tests/test_force_legacy_reporting_only.py",
+    "tests/test_preview_v2_alias.py",
+    "tests/test_shadow_preview_live.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "432a2fc24ea42571912b40744f568de1ecb6b129e37e7e2c33b589a8e2ae343e",
+    "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+    "bin": "8c2d733bec61be71aa88a750bcb695cbca9eca77592e623829ce4e645838fb9a",
+    "config": "bcea67c3ab53618f342384a0b0a716bc6d428f2c135cf0e5afd90ed415c21998",
+    "docs": "366dda901a67e7e6bfd59501c2b8be94b76c7e5a4de10dd33308105732c297c4",
+    "src": "1606ae36a371f9d37aecaafc541f471f5e7a528076a8c4722c92736a593060d7",
+    "tests": "d60a59779fe70564ac867dc8b13a1dfd2eb41d9b509009191e198db4c0f1b110"
+  },
+  "variant_id": "v2-noisy-distractor"
+}
