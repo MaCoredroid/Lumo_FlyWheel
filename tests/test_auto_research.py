@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -71,6 +72,75 @@ holdout_trace_ref: holdout_trace.jsonl
 """,
         encoding="utf-8",
     )
+
+
+def test_capture_seed_workload_updates_seed_and_holdout_refs(tmp_path: Path) -> None:
+    workload_path = tmp_path / "serving_workload.yaml"
+    _write_workload(workload_path)
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "capture_seed_workload.py"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script_path),
+            "--workload-file",
+            str(workload_path),
+            "--count",
+            "10",
+            "--split-seed",
+            "17",
+            "--update-workload",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(completed.stdout)
+    workload = auto_research.load_yaml_file(workload_path)
+    assert isinstance(workload, dict)
+    seed_path = workload_path.with_name("seed_trace.jsonl")
+    holdout_path = workload_path.with_name("holdout_trace.jsonl")
+
+    assert seed_path.is_file()
+    assert holdout_path.is_file()
+    assert payload["seed_count"] == 9
+    assert payload["holdout_count"] == 1
+    assert len(payload["workload_distribution_id"]) == 64
+    assert workload["seed_trace_ref"] == "seed_trace.jsonl"
+    assert workload["holdout_trace_ref"] == "holdout_trace.jsonl"
+    assert workload["workload_distribution_id"] == payload["seed_sha256"] == payload["workload_distribution_id"]
+
+
+def test_capture_seed_workload_overwrites_stale_distribution_id(tmp_path: Path) -> None:
+    workload_path = tmp_path / "serving_workload.yaml"
+    _write_workload(workload_path)
+    workload = auto_research.load_yaml_file(workload_path)
+    assert isinstance(workload, dict)
+    workload["workload_distribution_id"] = "stale-id"
+    workload_path.write_text(auto_research.yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "capture_seed_workload.py"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script_path),
+            "--workload-file",
+            str(workload_path),
+            "--count",
+            "8",
+            "--update-workload",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(completed.stdout)
+    updated = auto_research.load_yaml_file(workload_path)
+    assert isinstance(updated, dict)
+    assert updated["workload_distribution_id"] != "stale-id"
+    assert updated["workload_distribution_id"] == payload["workload_distribution_id"]
 
 
 def _init_repo(tmp_path: Path) -> Path:
