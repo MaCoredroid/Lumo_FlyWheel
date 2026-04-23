@@ -1,0 +1,147 @@
+{
+  "automation": {
+    "command_literal": "make codex-daily-triage",
+    "kind": "cron",
+    "schedule_literal": "0 9 * * 1-5",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md",
+      "Makefile"
+    ],
+    "task_prompt": "Run the live daily triage workflow through the Make target, prioritize blocker incidents for the on-call rotation before any general queue cleanup, and keep the task body focused on blocker-first triage while leaving cadence to the separate schedule field."
+  },
+  "mapping_note": {
+    "decisions": [
+      {
+        "artifact": "skill",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "Point the skill at the live Codex-facing Make target rather than the underlying helper so the rendered skill matches the documented entrypoint and the blocker-first release objective.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          "release_context/objective_shift.md",
+          "release_context/release_notes_2026_04.md"
+        ]
+      },
+      {
+        "artifact": "toml",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "Use the same Make entrypoint in TOML, and require the current daily-triage and release-context docs so consumers see the narrowed blocker-first scope instead of the older broad sweep narrative.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          "release_context/objective_shift.md",
+          "release_context/release_notes_2026_04.md",
+          "docs/ops/migration_notes.md"
+        ]
+      },
+      {
+        "artifact": "automation",
+        "command_literals": [
+          "make codex-daily-triage",
+          "0 9 * * 1-5",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "Keep automation schedule semantics in the cron literal while task semantics stay on the live Make entrypoint and the blocker-first release scope; this avoids reintroducing the deprecated daily seven-day sweep framing.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "ops/automation/triage.cron",
+          "Makefile",
+          "release_context/objective_shift.md",
+          "release_context/release_notes_2026_04.md"
+        ]
+      },
+      {
+        "artifact": "mapping_note",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+          "0 9 * * *"
+        ],
+        "rationale": "Record the live Make target and explicitly reject abandoned or rollback-only legacy artifacts so the note preserves why the deprecated helper and old every-day cron are not the Codex-native workflow.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "docs/ops/legacy_schedule.md",
+          "docs/ops/migration_notes.md",
+          "drafts/codex_triage.toml",
+          "drafts/codex_skill_patch.md",
+          "skills/legacy/daily_triage/SKILL.md"
+        ]
+      }
+    ]
+  },
+  "rejected_candidates": [
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "docs/ops/legacy_schedule.md",
+      "reason": "Legacy note explicitly says it pre-dates the current automation and must not be used as the source of truth; it also carries the obsolete every-day cron `0 9 * * *`.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "skills/legacy/daily_triage/SKILL.md",
+      "reason": "The legacy skill draft says it predates the current repo migration and is kept only for comparing old vs. new wording, so it is evidence of deprecated language rather than the live entrypoint.",
+      "source_paths": [
+        "skills/legacy/daily_triage/SKILL.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_triage.toml",
+      "reason": "The draft TOML is marked abandoned and points at the deprecated helper plus the stale daily cron, while the migration notes say to resume from the live Make target instead.",
+      "source_paths": [
+        "drafts/codex_triage.toml",
+        "docs/ops/migration_notes.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_skill_patch.md",
+      "reason": "The abandoned patch states it tried to wrap the deprecated helper and was never shipped, so it cannot anchor the mapped Codex workflow.",
+      "source_paths": [
+        "drafts/codex_skill_patch.md"
+      ]
+    }
+  ],
+  "schema_version": "cnb55.workflow_mapping.v1",
+  "skill": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md",
+      "scripts/triage.py",
+      "fixtures/open_incidents.json"
+    ],
+    "workflow_scope": "Prioritize blocker incidents for the on-call rotation before any general queue cleanup, keeping on-call ownership clarity and a summary output that can feed the response review stand-up."
+  },
+  "toml": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "must_read": [
+      "docs/ops/daily_triage.md",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md",
+      "docs/ops/migration_notes.md",
+      "ops/automation/triage.cron"
+    ],
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md"
+    ],
+    "workflow_scope": "Prioritize blocker incidents for the on-call rotation before any general queue cleanup, with blocker-first output aligned to on-call ownership and the response review stand-up."
+  },
+  "variant_id": "v4-multi-corpus-objective"
+}

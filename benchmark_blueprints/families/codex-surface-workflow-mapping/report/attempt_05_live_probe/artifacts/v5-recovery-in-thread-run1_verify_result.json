@@ -1,0 +1,86 @@
+{
+  "M_training": 0.25,
+  "P_benchmark": 25,
+  "breakdown": {
+    "hidden.automation_entrypoint": 5,
+    "hidden.schedule_literal": 10,
+    "hidden.scope_specificity": 5,
+    "hidden.skill_entrypoint": 10,
+    "hidden.toml_entrypoint": 10,
+    "phase2.mapping_decisions": 4,
+    "phase2.rejected_candidates": 4,
+    "phase2.rendered_artifacts": 4,
+    "phase2.schema_and_variant": 4,
+    "phase2.sections_present": 4,
+    "phase2.submission_exists": 4,
+    "phase2.submission_parses": 6,
+    "phase2.task_schedule_split": 4
+  },
+  "breakdown_bands": {
+    "hidden.automation_entrypoint": "M",
+    "hidden.schedule_literal": "M",
+    "hidden.scope_specificity": "M",
+    "hidden.skill_entrypoint": "M",
+    "hidden.toml_entrypoint": "M",
+    "phase2.mapping_decisions": "M",
+    "phase2.rejected_candidates": "M",
+    "phase2.rendered_artifacts": "M",
+    "phase2.schema_and_variant": "M",
+    "phase2.sections_present": "M",
+    "phase2.submission_exists": "M",
+    "phase2.submission_parses": "M",
+    "phase2.task_schedule_split": "M"
+  },
+  "ceilings_applied": [
+    "schedule_in_prompt",
+    "ungrounded_mapping",
+    "dirty_state_reuse",
+    "incident_blind_reuse"
+  ],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.7,
+    "slots": [
+      {
+        "passed_bool": true,
+        "slot": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": true,
+        "slot": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_score_pre_ceiling": 74,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 25,
+  "shortcut_detected": false,
+  "variant_id": "v5-recovery-in-thread"
+}

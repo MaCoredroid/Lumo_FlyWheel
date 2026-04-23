@@ -1,0 +1,35 @@
+# Probe Report — attempt_05_live_probe
+
+Model: `codex exec --model gpt-5.4 -c 'reasoning_effort="high"'`
+Runs per variant: `3`
+Variants: `v1-clean-baseline, v2-noisy-distractor, v3-dirty-state, v4-multi-corpus-objective, v5-recovery-in-thread`
+
+| Variant | n | mean P | stdev P | mean raw | mean M | stdev M | min | max | scores | ceilings |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| v1-clean-baseline | 3 | 43.33 | 41.90 | 87.33 | 0.4333 | 0.4190 | 0 | 100 | [0, 30, 100] | generic_mapping, inconsistent_entrypoints, schedule_in_prompt, ungrounded_mapping |
+| v2-noisy-distractor | 3 | 41.67 | 42.49 | 82.33 | 0.4167 | 0.4249 | 0 | 100 | [100, 0, 25] | inconsistent_entrypoints, schedule_in_prompt, ungrounded_mapping |
+| v3-dirty-state | 3 | 25.00 | 0.00 | 87.33 | 0.2500 | 0.0000 | 25 | 25 | [25, 25, 25] | schedule_in_prompt, ungrounded_mapping |
+| v4-multi-corpus-objective | 3 | 25.00 | 0.00 | 89.00 | 0.2500 | 0.0000 | 25 | 25 | [25, 25, 25] | ungrounded_mapping |
+| v5-recovery-in-thread | 3 | 25.00 | 0.00 | 80.67 | 0.2500 | 0.0000 | 25 | 25 | [25, 25, 25] | dirty_state_reuse, incident_blind_reuse, schedule_in_prompt, ungrounded_mapping |
+
+## Layer A checks
+
+- family_mean in [15, 25]: `32.00` -> `FAIL`
+- max variant mean <= 40: `43.33` -> `FAIL`
+- at least one variant mean <= 10: `25.00` -> `FAIL`
+- monotonic V1>=V2>=V3>=V4>=V5 within +/-3: `PASS`
+
+Monotonic breaks:
+- none
+
+## Layer B probe metadata
+
+- family mean M_training: `0.3200`
+- current observed stdev M_training: `0.2804`
+
+## Artifacts
+
+- Runs JSONL: `families/codex-surface-workflow-mapping/report/attempt_05_live_probe/probe_runs.jsonl`
+- Summary JSON: `families/codex-surface-workflow-mapping/report/attempt_05_live_probe/summary.json`
+- Logs: `families/codex-surface-workflow-mapping/report/attempt_05_live_probe/logs`
+- Saved results: `families/codex-surface-workflow-mapping/report/attempt_05_live_probe/artifacts`

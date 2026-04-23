@@ -1,0 +1,13 @@
+[workflow]
+schema_version = "cnb55.workflow_mapping.v1"
+entrypoint = "make codex-daily-triage"
+workflow_scope = "Triage the open incident queue for the on-call rotation and summarize the live blockers. In this dirty-state variant, inspect and reject abandoned migration drafts and rollback-only helpers before reusing any Codex artifact."
+preferred_output_dir = "artifacts"
+
+[workflow.must_read]
+paths = ["docs/ops/daily_triage.md", "Makefile", "docs/ops/migration_notes.md", "drafts/codex_skill_patch.md", "drafts/codex_triage.toml"]
+
+[automation]
+kind = "cron"
+schedule_literal = "0 9 * * 1-5"
+command = "make codex-daily-triage"

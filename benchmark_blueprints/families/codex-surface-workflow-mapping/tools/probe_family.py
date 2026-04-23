@@ -35,6 +35,7 @@ PROMPT = (
     "and the rendered artifacts exist. "
     "Do not modify immutable evidence or tests."
 )
+CAPACITY_ERROR = "Selected model is at capacity. Please try a different model."
 
 
 def run_subprocess(command: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -46,6 +47,10 @@ def run_subprocess(command: list[str], *, cwd: Path | None = None, env: dict[str
         capture_output=True,
         check=False,
     )
+
+
+def is_capacity_failure(result: subprocess.CompletedProcess[str]) -> bool:
+    return result.returncode != 0 and CAPACITY_ERROR in f"{result.stdout}\n{result.stderr}"
 
 
 def score_workspace(workspace: Path, variant: str, result_path: Path) -> dict:
@@ -134,6 +139,8 @@ def main() -> int:
     parser.add_argument("--n", type=int, default=3)
     parser.add_argument("--variants", nargs="*", default=DEFAULT_VARIANTS)
     parser.add_argument("--timeout-seconds", type=int, default=1200)
+    parser.add_argument("--capacity-retries", type=int, default=3)
+    parser.add_argument("--capacity-backoff-seconds", type=int, default=45)
     args = parser.parse_args()
 
     attempt_dir = FAMILY_ROOT / "report" / args.attempt
@@ -154,6 +161,8 @@ def main() -> int:
         "reasoning_effort": "high",
         "n": args.n,
         "variants": args.variants,
+        "capacity_retries": args.capacity_retries,
+        "capacity_backoff_seconds": args.capacity_backoff_seconds,
         "prompt": PROMPT,
         "command_template": [
             "timeout",
@@ -184,7 +193,6 @@ def main() -> int:
             workdir = probe_root / run_tag
             workspace = workdir / "workspace"
             workdir.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(WORKSPACE_BUNDLE / variant, workspace)
             last_message_path = workdir / "last_message.txt"
             command_txt = workdir / "command.txt"
             command = [
@@ -208,9 +216,33 @@ def main() -> int:
             ]
             command_txt.write_text(" ".join(command) + "\n", encoding="utf-8")
 
-            started = time.time()
-            codex = run_subprocess(command)
-            duration = round(time.time() - started, 2)
+            capacity_retry_count = 0
+            total_duration = 0.0
+            for attempt_index in range(1, args.capacity_retries + 2):
+                if workspace.exists():
+                    shutil.rmtree(workspace)
+                if last_message_path.exists():
+                    last_message_path.unlink()
+                shutil.copytree(WORKSPACE_BUNDLE / variant, workspace)
+
+                started = time.time()
+                codex = run_subprocess(command)
+                duration = round(time.time() - started, 2)
+                total_duration += duration
+
+                attempt_stdout = logs_dir / f"{run_tag}.attempt{attempt_index}.stdout.jsonl"
+                attempt_stderr = logs_dir / f"{run_tag}.attempt{attempt_index}.stderr.log"
+                attempt_stdout.write_text(codex.stdout, encoding="utf-8")
+                attempt_stderr.write_text(codex.stderr, encoding="utf-8")
+
+                if not is_capacity_failure(codex):
+                    break
+                if attempt_index > args.capacity_retries:
+                    break
+                capacity_retry_count += 1
+                time.sleep(args.capacity_backoff_seconds * attempt_index)
+
+            duration = round(total_duration, 2)
 
             (logs_dir / f"{run_tag}.stdout.jsonl").write_text(codex.stdout, encoding="utf-8")
             (logs_dir / f"{run_tag}.stderr.log").write_text(codex.stderr, encoding="utf-8")
@@ -250,6 +282,8 @@ def main() -> int:
                 "run_index": run_index,
                 "codex_exit": codex.returncode,
                 "codex_seconds": duration,
+                "capacity_retry_count": capacity_retry_count,
+                "capacity_exhausted": is_capacity_failure(codex),
                 "command": " ".join(command),
                 "score": int(result.get("score", 0)),
                 "raw_score_pre_ceiling": int(result.get("raw_score_pre_ceiling", 0)),

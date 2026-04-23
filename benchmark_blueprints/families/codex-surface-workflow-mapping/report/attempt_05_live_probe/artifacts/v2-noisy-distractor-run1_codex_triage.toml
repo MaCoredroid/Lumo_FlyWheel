@@ -1,0 +1,13 @@
+[workflow]
+schema_version = "cnb55.workflow_mapping.v1"
+entrypoint = "make codex-daily-triage"
+workflow_scope = "Run the live daily triage workflow for the on-call rotation: use the active incident window, summarize blocker incidents, and keep non-blocking routing drift as noise instead of remapping the task."
+preferred_output_dir = "artifacts"
+
+[workflow.must_read]
+paths = ["Makefile", "docs/ops/daily_triage.md", "ops/automation/triage.cron", "scripts/triage.py", "fixtures/open_incidents.json", "docs/ops/migration_notes.md"]
+
+[automation]
+kind = "cron"
+schedule_literal = "0 9 * * 1-5"
+command = "make codex-daily-triage"

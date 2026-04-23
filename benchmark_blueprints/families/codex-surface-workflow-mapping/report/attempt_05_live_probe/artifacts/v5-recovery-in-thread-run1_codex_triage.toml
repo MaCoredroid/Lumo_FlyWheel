@@ -1,0 +1,13 @@
+[workflow]
+schema_version = "cnb55.workflow_mapping.v1"
+entrypoint = "make codex-daily-triage"
+workflow_scope = "Run the blocker-first weekday on-call triage flow and emit the summary used by the response review stand-up."
+preferred_output_dir = "artifacts"
+
+[workflow.must_read]
+paths = ["Makefile", "docs/ops/daily_triage.md", "release_context/release_notes_2026_04.md", "release_context/objective_shift.md", "incident_context/recovered_plan.md", "incident_context/weekend_rollback.md"]
+
+[automation]
+kind = "cron"
+schedule_literal = "0 9 * * 1-5"
+command = "make codex-daily-triage"

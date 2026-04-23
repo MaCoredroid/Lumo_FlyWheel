@@ -5,7 +5,7 @@
     "run_verification_matrix_py_sha256": "f07229922080a6ee7348ed625b2c0e35d99463dd90c1d60061eb25f0281a56be",
     "score_workflow_mapping_py_sha256": "9101860a546750302407ac421002a0eec15d5314c7a9b240c0696cf8e9c45578"
   },
-  "last_regen_utc": "2026-04-23T06:02:39Z",
+  "last_regen_utc": "2026-04-23T07:26:38Z",
   "schema_version": "cnb55.manifest.v2",
   "variants": {
     "v1-clean-baseline": {

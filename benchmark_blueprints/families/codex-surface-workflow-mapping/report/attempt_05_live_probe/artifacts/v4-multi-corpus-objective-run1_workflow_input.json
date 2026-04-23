@@ -1,0 +1,141 @@
+{
+  "schema_version": "cnb55.workflow_mapping.v1",
+  "variant_id": "v4-multi-corpus-objective",
+  "skill": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "workflow_scope": "Run the live Codex triage flow against blocker incidents for the on-call rotation, preserve owner clarity, and emit a response-review-stand-up summary before any general queue cleanup.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md",
+      "docs/ops/migration_notes.md"
+    ]
+  },
+  "toml": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "workflow_scope": "Blockers-first daily triage for the on-call rotation with stand-up-ready output and no fallback to the broad queue-sweep narrative.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md"
+    ],
+    "must_read": [
+      "docs/ops/daily_triage.md",
+      "docs/ops/migration_notes.md",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md"
+    ]
+  },
+  "automation": {
+    "kind": "cron",
+    "schedule_literal": "0 9 * * 1-5",
+    "command_literal": "make codex-daily-triage",
+    "task_prompt": "Run the blockers-first Codex daily triage workflow for the on-call rotation, use the repo evidence surface for local dry runs, and produce a stand-up-ready summary without broad queue-sweep behavior.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md"
+    ]
+  },
+  "mapping_note": {
+    "decisions": [
+      {
+        "artifact": "skill",
+        "rationale": "The skill stays anchored on `make codex-daily-triage` because the daily triage doc names it as the live Codex-facing entrypoint, and the release context narrows the scope to blocker-first on-call triage instead of a broad queue sweep.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          "release_context/objective_shift.md",
+          "release_context/release_notes_2026_04.md"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ]
+      },
+      {
+        "artifact": "toml",
+        "rationale": "The TOML mirrors the same live Make entrypoint and records the live workflow scope, while must-read files point reviewers to the migration note and release-context objective shift instead of any legacy helper draft.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "docs/ops/migration_notes.md",
+          "Makefile",
+          "release_context/objective_shift.md"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ]
+      },
+      {
+        "artifact": "automation",
+        "rationale": "Automation uses the same live Make entrypoint but keeps scheduling separate: the weekday cron literal comes from the pinned automation files, while the task body stays focused on blockers-first triage and stand-up output.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "ops/automation/triage.cron",
+          "release_context/objective_shift.md",
+          "release_context/release_notes_2026_04.md"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ]
+      },
+      {
+        "artifact": "mapping_note",
+        "rationale": "The mapping note documents why this v4 release-context variant changes workflow scope around objective drift but does not switch entrypoints: migration notes keep the legacy helper rollback-only while the live Make target remains canonical.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "docs/ops/migration_notes.md",
+          "release_context/objective_shift.md",
+          "Makefile"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ]
+      }
+    ]
+  },
+  "rejected_candidates": [
+    {
+      "path": "drafts/codex_triage.toml",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "This abandoned draft points at the deprecated helper and legacy daily cadence, while the draft itself says to resume from the live Make target instead.",
+      "source_paths": [
+        "drafts/codex_triage.toml",
+        "docs/ops/migration_notes.md"
+      ]
+    },
+    {
+      "path": "docs/ops/legacy_schedule.md",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "The legacy schedule note explicitly says not to use it as the source of truth and describes the older queue-sweep behavior that the release context deprioritized.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md",
+        "release_context/release_notes_2026_04.md"
+      ]
+    },
+    {
+      "path": "skills/legacy/daily_triage/SKILL.md",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "The legacy skill is retained only for old-vs-new wording comparison and still cites the rollback-only helper instead of the live Codex entrypoint.",
+      "source_paths": [
+        "skills/legacy/daily_triage/SKILL.md",
+        "docs/ops/migration_notes.md"
+      ]
+    },
+    {
+      "path": "drafts/codex_skill_patch.md",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "This patch was never shipped and says it wraps the deprecated helper, so it is evidence of an abandoned migration attempt, not the live workflow.",
+      "source_paths": [
+        "drafts/codex_skill_patch.md",
+        "docs/ops/migration_notes.md"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "attempt": "attempt_05_live_probe",
+  "capacity_backoff_seconds": 30,
+  "capacity_retries": 5,
+  "command_template": [
+    "timeout",
+    "900",
+    "codex",
+    "exec",
+    "--full-auto",
+    "--ephemeral",
+    "--skip-git-repo-check",
+    "--json",
+    "--cd",
+    "<workspace>",
+    "--output-last-message",
+    "<last_message_file>",
+    "-m",
+    "gpt-5.4",
+    "-c",
+    "reasoning_effort=\"high\"",
+    "Read AGENTS.md in this directory and follow it exactly. Complete the workflow-mapping benchmark in this workspace only. Author workflow_input.json at the workspace root, then run ./bin/cnb55-workflow-map validate workflow_input.json and ./bin/cnb55-workflow-map submit workflow_input.json so artifacts/workflow_map.json and the rendered artifacts exist. Do not modify immutable evidence or tests."
+  ],
+  "created_at_epoch": 1776930176,
+  "model": "gpt-5.4",
+  "n": 3,
+  "prompt": "Read AGENTS.md in this directory and follow it exactly. Complete the workflow-mapping benchmark in this workspace only. Author workflow_input.json at the workspace root, then run ./bin/cnb55-workflow-map validate workflow_input.json and ./bin/cnb55-workflow-map submit workflow_input.json so artifacts/workflow_map.json and the rendered artifacts exist. Do not modify immutable evidence or tests.",
+  "reasoning_effort": "high",
+  "variants": [
+    "v1-clean-baseline",
+    "v2-noisy-distractor",
+    "v3-dirty-state",
+    "v4-multi-corpus-objective",
+    "v5-recovery-in-thread"
+  ]
+}

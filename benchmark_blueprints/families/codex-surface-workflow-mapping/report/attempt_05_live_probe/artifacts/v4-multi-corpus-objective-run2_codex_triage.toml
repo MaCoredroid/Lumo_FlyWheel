@@ -1,0 +1,13 @@
+[workflow]
+schema_version = "cnb55.workflow_mapping.v1"
+entrypoint = "make codex-daily-triage"
+workflow_scope = "Prioritize blocker incidents for the on-call rotation before any general queue cleanup, with blocker-first output aligned to on-call ownership and the response review stand-up."
+preferred_output_dir = "artifacts"
+
+[workflow.must_read]
+paths = ["docs/ops/daily_triage.md", "release_context/objective_shift.md", "release_context/release_notes_2026_04.md", "docs/ops/migration_notes.md", "ops/automation/triage.cron"]
+
+[automation]
+kind = "cron"
+schedule_literal = "0 9 * * 1-5"
+command = "make codex-daily-triage"

@@ -1,7 +1,7 @@
 family_id: codex-surface-workflow-mapping
 track: 2
 schema_version: cnb55.family.v1
-layer_a_status: probe_pending
+layer_a_status: probe_attempt_05_failed_too_easy
 layer_b_status: green
 
 grader_ref: verifiers/codex-surface-workflow-mapping/score_workflow_mapping.py
@@ -98,8 +98,8 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.0
-  escalation_currently_active: false
+  current_observed_stdev_M_training: 0.2804
+  escalation_currently_active: true
 
 initial_state:
   type: manifest_locked

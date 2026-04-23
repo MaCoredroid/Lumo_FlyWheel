@@ -170,3 +170,137 @@ Concrete calibration blocker, not an infra blocker.
 - Another minor scorer-only tweak would be fake ambiguity. To move this family into the `15-25` window honestly, the next iteration has to be a real task redesign:
   - materially harder baseline evidence in `V1/V2`, or
   - a user-approved wider Layer A window for this family's honest frontier difficulty.
+
+## attempt_04_live_probe_capacity_blocked_not_counted
+
+### Goal
+
+Re-run the whole-family live probe from the current family state and confirm whether the earlier Layer A blocker reproduces cleanly.
+
+### Exact commands executed before the blocker
+
+```bash
+python3 -m py_compile \
+  verifiers/codex-surface-workflow-mapping/regen_family.py \
+  verifiers/codex-surface-workflow-mapping/score_workflow_mapping.py \
+  verifiers/codex-surface-workflow-mapping/run_verification_matrix.py \
+  benchmark_blueprints/families/codex-surface-workflow-mapping/tools/probe_family.py \
+  benchmark_blueprints/families/codex-surface-workflow-mapping/tools/probe_report.py
+
+python3 verifiers/codex-surface-workflow-mapping/regen_family.py
+
+python3 verifiers/codex-surface-workflow-mapping/run_verification_matrix.py \
+  --variant v1-clean-baseline \
+  --out benchmark_blueprints/families/codex-surface-workflow-mapping/verification_matrix.md
+
+python3 verifiers/codex-surface-workflow-mapping/run_verification_matrix.py \
+  --variant v5-recovery-in-thread \
+  --out benchmark_blueprints/families/codex-surface-workflow-mapping/verification_matrix_v5.md
+
+python3 benchmark_blueprints/families/codex-surface-workflow-mapping/tools/probe_family.py \
+  --attempt attempt_04_live_probe \
+  --n 3 \
+  --variants v1-clean-baseline v2-noisy-distractor v3-dirty-state v4-multi-corpus-objective v5-recovery-in-thread \
+  --timeout-seconds 900
+```
+
+### Exact blocker output
+
+- `attempt_04_live_probe` was interrupted and not counted after repeated external model-capacity failures inside `codex exec`.
+- Exact stdout error captured in the family-local probe logs:
+  - `Selected model is at capacity. Please try a different model.`
+- Representative invalid rows before the stop:
+  - `v1-clean-baseline`: `[30, 25, 25]`
+  - `v2-noisy-distractor`: `[0, 0, 0]` with `codex_exit=1`, `ceilings=no_submission`
+  - `v3-dirty-state`: partial `[30, 0]` before interruption
+- This was an infra blocker, not an honest benchmark signal, so the run was superseded.
+
+### Family-local follow-up
+
+- Patched [probe_family.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/tools/probe_family.py) to retry only the explicit capacity error with clean-workspace reruns and bounded backoff:
+  - exact retry string: `Selected model is at capacity. Please try a different model.`
+  - clean workspace rebuilt before each retry
+  - ordinary low-quality solver outputs still record directly and are not retried
+
+## attempt_05_live_probe_counted_post_retry_patch
+
+### Goal
+
+Run the post-change counted whole-family live probe across all five variants from the retry-hardened family-local runner state, then record the exact Layer A outcome.
+
+### Exact commands executed
+
+```bash
+python3 -m py_compile \
+  benchmark_blueprints/families/codex-surface-workflow-mapping/tools/probe_family.py
+
+python3 verifiers/codex-surface-workflow-mapping/run_verification_matrix.py \
+  --variant v1-clean-baseline \
+  --out benchmark_blueprints/families/codex-surface-workflow-mapping/verification_matrix.md
+
+python3 verifiers/codex-surface-workflow-mapping/run_verification_matrix.py \
+  --variant v5-recovery-in-thread \
+  --out benchmark_blueprints/families/codex-surface-workflow-mapping/verification_matrix_v5.md
+
+python3 benchmark_blueprints/families/codex-surface-workflow-mapping/tools/probe_family.py \
+  --attempt attempt_05_live_probe \
+  --n 3 \
+  --variants v1-clean-baseline v2-noisy-distractor v3-dirty-state v4-multi-corpus-objective v5-recovery-in-thread \
+  --timeout-seconds 900 \
+  --capacity-retries 5 \
+  --capacity-backoff-seconds 30
+
+python3 benchmark_blueprints/families/codex-surface-workflow-mapping/tools/probe_report.py \
+  --attempt-dir benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_05_live_probe
+```
+
+### Verification matrix outputs before the counted rerun
+
+- V1 in [verification_matrix.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/verification_matrix.md):
+  - Oracle `P=100`, `M=1.0000`, `pass=True`
+  - Empty `P=0`, `M=0.0000`, `ceilings=no_submission`
+  - Shortcut stale helper `P=20`, `M=0.2000`
+  - Delete-tests adversarial `P=0`, `integrity=1`, `H=tests_modified,immutable_slice_mutated`
+- V5 in [verification_matrix_v5.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/verification_matrix_v5.md):
+  - Oracle `P=100`, `M=1.0000`, `pass=True`
+  - Empty `P=0`, `M=0.0000`, `ceilings=no_submission`
+  - Shortcut stale helper `P=20`, `M=0.2000`
+  - Delete-tests adversarial `P=0`, `integrity=1`, `H=tests_modified,immutable_slice_mutated`
+
+### Counted live probe results
+
+Probe report: [attempt_05_live_probe_probe_report.txt](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_05_live_probe/attempt_05_live_probe_probe_report.txt)
+
+| variant | n | mean P | stdev P | mean raw | mean M | stdev M | min | max | scores | ceilings |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| v1-clean-baseline | 3 | 43.33 | 41.90 | 87.33 | 0.4333 | 0.4190 | 0 | 100 | [0, 30, 100] | generic_mapping, inconsistent_entrypoints, schedule_in_prompt, ungrounded_mapping |
+| v2-noisy-distractor | 3 | 41.67 | 42.49 | 82.33 | 0.4167 | 0.4249 | 0 | 100 | [100, 0, 25] | inconsistent_entrypoints, schedule_in_prompt, ungrounded_mapping |
+| v3-dirty-state | 3 | 25.00 | 0.00 | 87.33 | 0.2500 | 0.0000 | 25 | 25 | [25, 25, 25] | schedule_in_prompt, ungrounded_mapping |
+| v4-multi-corpus-objective | 3 | 25.00 | 0.00 | 89.00 | 0.2500 | 0.0000 | 25 | 25 | [25, 25, 25] | ungrounded_mapping |
+| v5-recovery-in-thread | 3 | 25.00 | 0.00 | 80.67 | 0.2500 | 0.0000 | 25 | 25 | [25, 25, 25] | dirty_state_reuse, incident_blind_reuse, schedule_in_prompt, ungrounded_mapping |
+
+### Layer A gate values
+
+- `family_mean ∈ [15,25]`: observed `32.00` -> `FAIL`
+- `max variant mean ≤ 40`: observed `43.33` -> `FAIL`
+- `at least one variant mean ≤ 10`: observed `25.00` -> `FAIL`
+- `monotonic V1≥V2≥V3≥V4≥V5 ±3`: `PASS`
+- `family_mean_M_training`: `0.3200`
+- `current_observed_stdev_M_training`: `0.2804`
+
+### Spot-check explanation
+
+- `v1-clean-baseline` still contains a clean `100` lane. The counted rerun shows the solver can fully ground the live `make codex-daily-triage` path, keep schedule semantics out of the task prompt, and reject stale helper evidence when it decides to do the whole job correctly. That keeps `V1` materially above the freeze target.
+- `v2-noisy-distractor` also still contains a clean `100` lane. The noisy helper and migration memo do not reliably drag the calibration model below the intended window.
+- `v3` through `v5` remain stable at `25`, and `V5` still fires the intended deeper ceilings (`dirty_state_reuse`, `incident_blind_reuse`) probe-wide. The family-local later-variant hardening is working; the problem is that the early variants are still too easy and the lower end never reaches `<= 10`.
+- The post-change counted run needed `0` capacity retries on all recorded rows. The retry patch removed the external blocker without changing the honest scoring behavior of successful solver attempts.
+
+### Verdict
+
+Concrete calibration blocker, not an infra blocker.
+
+- The counted post-change live probe is complete and recorded family-locally.
+- The family still fails Layer A because the baseline mapping task remains too easy for `gpt-5.4` high:
+  - `V1` mean `43.33`
+  - `V2` mean `41.67`
+- Another narrow scorer tweak would be fake ambiguity. The honest next step is still a real `V1/V2` task redesign or an explicitly wider acceptance window for this family.

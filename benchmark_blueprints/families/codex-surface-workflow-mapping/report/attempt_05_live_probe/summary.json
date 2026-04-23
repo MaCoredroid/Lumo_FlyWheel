@@ -1,0 +1,200 @@
+{
+  "acceptance": {
+    "at_least_one_variant_le_10": false,
+    "family_mean_window": false,
+    "max_variant_le_40": false,
+    "monotonic_with_tolerance_3": true
+  },
+  "current_observed_stdev_M_training": 0.2804,
+  "family_mean": 32.0,
+  "family_mean_M_training": 0.32,
+  "max_variant_mean": 43.33,
+  "min_variant_mean": 25.0,
+  "monotonic_breaks": [],
+  "rows": [
+    {
+      "ceilings": [
+        "generic_mapping",
+        "inconsistent_entrypoints",
+        "schedule_in_prompt",
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.0,
+        0.3,
+        1.0
+      ],
+      "max": 100,
+      "mean": 43.33,
+      "mean_M_training": 0.4333,
+      "mean_raw": 87.33,
+      "min": 0,
+      "n": 3,
+      "raw_scores": [
+        59,
+        99,
+        104
+      ],
+      "scores": [
+        0,
+        30,
+        100
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 41.9,
+      "stdev_M_training": 0.419,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "ceilings": [
+        "inconsistent_entrypoints",
+        "schedule_in_prompt",
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        1.0,
+        0.0,
+        0.25
+      ],
+      "max": 100,
+      "mean": 41.67,
+      "mean_M_training": 0.4167,
+      "mean_raw": 82.33,
+      "min": 0,
+      "n": 3,
+      "raw_scores": [
+        104,
+        64,
+        79
+      ],
+      "scores": [
+        100,
+        0,
+        25
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 42.49,
+      "stdev_M_training": 0.4249,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "ceilings": [
+        "schedule_in_prompt",
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "mean_raw": 87.33,
+      "min": 25,
+      "n": 3,
+      "raw_scores": [
+        84,
+        89,
+        89
+      ],
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "ceilings": [
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "mean_raw": 89.0,
+      "min": 25,
+      "n": 3,
+      "raw_scores": [
+        89,
+        89,
+        89
+      ],
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "ceilings": [
+        "dirty_state_reuse",
+        "incident_blind_reuse",
+        "schedule_in_prompt",
+        "ungrounded_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "mean_raw": 80.67,
+      "min": 25,
+      "n": 3,
+      "raw_scores": [
+        74,
+        89,
+        79
+      ],
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "selected_entrypoints": [
+        "make codex-daily-triage",
+        "make codex-daily-triage",
+        "make codex-daily-triage"
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}
