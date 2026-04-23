@@ -1272,8 +1272,21 @@ class AutoResearchRoundManager:
         round_dir = self._round_dir(round_id)
         spec = RoundSpecRecord.from_path(round_dir / "round_spec.yaml")
         rows = self._read_results(round_dir / "results.tsv")
-        feasible_rows = [row for row in rows if row.status == "keep" and row.feasible and row.objective_value]
-        feasible_rows.sort(key=lambda row: float(row.objective_value), reverse=True)
+        feasible_rows = [
+            row
+            for row in rows
+            if row.status in {"baseline", "keep"} and row.feasible and row.objective_value and not row.parent_candidate_uuid
+        ]
+        feasible_rows.sort(
+            key=lambda row: (
+                -self._metric_tie_break_value(row.objective_value),
+                self._metric_tie_break_value(row.ttft_p95_ms),
+                self._metric_tie_break_value(row.tpot_p95_ms),
+                self._metric_tie_break_value(row.turn_latency_p95_ms),
+                row.iteration,
+                row.candidate_uuid,
+            )
+        )
         selected = feasible_rows[:top_k]
         rescreen_rows: list[dict[str, Any]] = []
         for index, parent in enumerate(selected, start=1):
@@ -1813,8 +1826,11 @@ class AutoResearchRoundManager:
             raise RuntimeError("commit_refused: malformed_trace")
         if cache_isolation.get("cache_salt") != candidate_uuid:
             raise RuntimeError("commit_refused: malformed_trace")
+        if cache_isolation.get("prefix_cache_reset_at_bootstrap") is not True:
+            raise RuntimeError("commit_refused: malformed_trace")
         try:
             first_ten_hit_rate = float(cache_isolation["first_10_req_prefix_cache_hit_rate"])
+            float(cache_isolation["last_10_req_prefix_cache_hit_rate"])
         except (KeyError, TypeError, ValueError) as exc:
             raise RuntimeError("commit_refused: malformed_trace") from exc
         if first_ten_hit_rate > 0.10:

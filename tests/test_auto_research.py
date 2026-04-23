@@ -816,6 +816,49 @@ kv_cache_dtype: fp8_e5m2
         )
 
 
+def test_commit_candidate_rejects_missing_required_cache_isolation_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", lambda self, candidate_vllm_config, **kwargs: _real_trace())
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        (round_dir / "candidates" / "baseline_a" / "candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    trace_path = candidate_dir / "measurement_trace.json"
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    trace["cache_isolation"]["prefix_cache_reset_at_bootstrap"] = False
+    trace["cache_isolation"].pop("last_10_req_prefix_cache_hit_rate")
+    trace_path.write_text(json.dumps(trace, indent=2), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="malformed_trace"):
+        manager.commit_candidate(
+            round_id=bootstrap["round_id"],
+            iteration="001",
+            status="keep",
+            notes="should be refused",
+        )
+
+
 def test_measure_and_commit_candidate_surface_promql_mismatch_as_harness_fault(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1069,6 +1112,65 @@ def test_finalize_round_refuses_without_rescreen_trace(tmp_path: Path, monkeypat
 
     with pytest.raises(RuntimeError, match="rescreen_trace.json"):
         manager.finalize_round(round_id=round_id, dry_run=False)
+
+
+def test_rescreen_and_finalize_allow_baseline_winner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    measurements = iter(
+        [
+            _real_trace(objective=9, ttft=1400.0, tpot=12.0, turn=4000.0),
+            _real_trace(objective=9, ttft=1600.0, tpot=12.5, turn=4300.0),
+            _real_trace(objective=9, ttft=1450.0, tpot=11.5, turn=4050.0),
+            _real_trace(objective=9, ttft=1425.0, tpot=11.0, turn=3950.0),
+        ]
+    )
+
+    monkeypatch.setattr(
+        auto_research.RealMeasurementHarness,
+        "measure",
+        lambda self, candidate_vllm_config, **kwargs: next(measurements),
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+
+    baseline_uuids: dict[str, str] = {}
+    for suffix in ("a", "b"):
+        result = manager.measure(
+            round_id=round_id,
+            candidate_path=round_dir / "candidates" / f"baseline_{suffix}" / "candidate.yaml",
+        )
+        baseline_uuids[suffix] = result["candidate_uuid"]
+        manager.commit_candidate(
+            round_id=round_id,
+            iteration=f"baseline_{suffix}",
+            status="baseline",
+            notes=f"default baseline replay {suffix}",
+        )
+
+    rescreen = manager.rescreen(round_id=round_id, top_k=1)
+    assert len(rescreen["rescreened"]) == 1
+    assert rescreen["rescreened"][0]["parent_candidate_uuid"] == baseline_uuids["a"]
+
+    holdout = manager.validate_holdout(round_id=round_id, candidate_uuid=baseline_uuids["a"])
+    assert holdout["pass"] is True
+
+    finalized = manager.finalize_round(round_id=round_id, dry_run=False)
+
+    assert finalized["winner_iteration"] == "baseline_a"
+    assert finalized["winner_candidate_uuid"] == baseline_uuids["a"]
 
 
 def test_finalize_round_refuses_when_holdout_uuid_does_not_match_winner(
