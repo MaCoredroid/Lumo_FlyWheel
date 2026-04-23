@@ -1667,7 +1667,9 @@ class AutoResearchRoundManager:
         if skip_git:
             return f"synthetic-{uuid4()}"
         rel_paths = [str(path) for path in paths]
-        self._git(["add", *rel_paths], capture_output=False)
+        # Round artifacts intentionally live under output/, which is ignored
+        # for normal development but must be committed to the experiment ledger.
+        self._git(["add", "-f", *rel_paths], capture_output=False)
         self._git(["commit", "-m", message], capture_output=False)
         return self._git(["rev-parse", "HEAD"]).stdout.strip()
 
