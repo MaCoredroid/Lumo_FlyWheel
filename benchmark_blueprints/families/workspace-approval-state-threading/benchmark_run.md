@@ -64,3 +64,37 @@
   - V5 (`live_probes/attempt_02/v5-recovery-in-thread/codex_last_message.txt`) similarly reported a complete fix and six visible tests, but the scorer still clipped it at `20` because the recovery-specific rollback acknowledgment was missing and the same shortcut pattern remained.
 - Next hardening hypothesis:
   - The family currently separates genuine partial progress, but V1 is not yet easier-to-fail than V2-V5 in live practice. The next family-local hardening step should be a single change that lowers the V1 floor or raises the variant-specific penalties without inventing fake ambiguity, most likely by tightening the visible artifact/runbook contract around legacy fallback provenance.
+
+## attempt_03 - fresh whole-family rerun after family-local metadata fix
+
+- Trigger:
+  - Family-local metadata changed after `attempt_02` (`family.yaml` status normalization plus canonical `rawr_modes` block), so the user-required policy forced a full fresh live probe across all five variants.
+- Exact command run:
+  - `python3 verifiers/workspace-approval-state-threading/run_live_probe.py attempt_03`
+- Per-variant `codex exec` command shape:
+  - `codex exec --ephemeral --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C <attempt_03>/<variant>/workspace -m gpt-5.4 -o <attempt_03>/<variant>/codex_last_message.txt "Read AGENTS.md and complete the task fully in this workspace only. Run bin/run-visible-tests before finishing. Update code, tests, docs, preview artifact, and rollout note. Do not modify read-only context files."`
+- Family-local probe artifact root:
+  - `verifier_data/workspace-approval-state-threading/live_probes/attempt_03/`
+- Per-variant results:
+
+  | Variant | Exit | Duration (s) | Score | P_benchmark | M_training | visible_tests_ok | Key ceilings |
+  |---|---:|---:|---:|---:|---:|---|---|
+  | V1 clean baseline | 0 | 283.782 | 16 | 16 | 0.1778 | False | `risk_level_alias_shortcut`, `missing_legacy_fallback`, `stale_config_or_runbook`, `missing_preview_or_rollout_evidence` |
+  | V2 noisy distractor | 0 | 253.641 | 20 | 20 | 0.2222 | False | `risk_level_alias_shortcut`, `missing_legacy_fallback`, `missing_preview_or_rollout_evidence` |
+  | V3 dirty state | 0 | 253.694 | 20 | 20 | 0.2222 | True | `risk_level_alias_shortcut`, `missing_legacy_fallback`, `missing_preview_or_rollout_evidence` |
+  | V4 multi-corpus objective | 0 | 267.155 | 20 | 20 | 0.2222 | True | `risk_level_alias_shortcut`, `missing_legacy_fallback`, `missing_preview_or_rollout_evidence` |
+  | V5 recovery in thread | 0 | 296.598 | 12 | 12 | 0.1333 | True | `risk_level_alias_shortcut`, `missing_legacy_fallback`, `stale_config_or_runbook`, `missing_preview_or_rollout_evidence`, `rollback_ack_missing` |
+
+- Layer A gate values from the fresh rerun:
+  - `family_mean = 17.6` -> pass
+  - `max_variant_mean = 20` -> pass
+  - `min_variant_mean = 12` -> fail (`>=1` variant `<=10` still not met)
+  - `monotonic V1>=V2>=V3>=V4>=V5 +/-3` -> fail (`V1=16`, `V2=20`)
+  - `oracle >= 90` -> pass (`100`, unchanged family-local deterministic baseline)
+  - `empty = 0` -> pass (`0`, unchanged family-local deterministic baseline)
+  - `shortcut <= 30` -> pass (`20`, unchanged family-local deterministic baseline)
+- Acceptance verdict:
+  - Layer A remains failed. The rerun preserved the honest story: the family is still in-band on mean and max, but it still misses the fail-floor requirement and still violates the monotonic ordering gate.
+- Fresh delta versus `attempt_02`:
+  - V1-V4 stayed in the same observed band.
+  - V5 dropped from `20` to `12`, which reduced the family mean from `19.2` to `17.6` while keeping the overall acceptance outcome unchanged.

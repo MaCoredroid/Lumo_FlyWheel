@@ -1,0 +1,32 @@
+ .../artifacts/preview/workspace_admin_capture.json |  13 ++--
+ .../rollout/approval_state_rollout_note.json}      |  15 +++++
+ .../api/__pycache__/serializers.cpython-314.pyc}   | Bin 0 -> 811 bytes
+ .../workspace}/backend/api/serializers.py          |   3 +-
+ .../workspaces/__pycache__/models.cpython-314.pyc} | Bin 0 -> 410 bytes
+ .../__pycache__/service.cpython-314.pyc}           | Bin 0 -> 1201 bytes
+ .../workspace}/backend/workspaces/service.py       |  13 ++--
+ .../__pycache__/export_workspace.cpython-314.pyc}  | Bin 0 -> 2814 bytes
+ .../workspace}/cli/export_workspace.py             |  18 +++++-
+ .../workspace}/config/defaults.toml                |   2 +-
+ .../docs/runbooks/workspace-approvals.md           |   5 +-
+ .../frontend/src/components/WorkspaceTable.tsx     |  12 +++-
+ .../tests/__pycache__/_support.cpython-314.pyc}    | Bin 0 -> 686 bytes
+ ...backend_service_and_serializer.cpython-314.pyc} | Bin 0 -> 3268 bytes
+ ...test_mixed_dataset_consistency.cpython-314.pyc} | Bin 0 -> 1935 bytes
+ ...rkspace_admin_preview_contract.cpython-314.pyc} | Bin 0 -> 1908 bytes
+ ...t_workspace_table_contract_top.cpython-314.pyc} | Bin 0 -> 1540 bytes
+ .../workspace/tests/_support.py}                   |   8 +++
+ .../backend/__pycache__/__init__.cpython-314.pyc}  | Bin 0 -> 271 bytes
+ .../test_service_and_serializer.cpython-314.pyc}   | Bin 0 -> 3247 bytes
+ .../tests/backend/test_service_and_serializer.py   |  59 ++++++++++++++++--
+ .../e2e/__pycache__/__init__.cpython-314.pyc}      | Bin 0 -> 267 bytes
+ .../test_workspace_admin_preview.cpython-314.pyc}  | Bin 0 -> 1903 bytes
+ .../tests/e2e/test_workspace_admin_preview.py      |   7 ++-
+ .../frontend/__pycache__/__init__.cpython-314.pyc} | Bin 0 -> 272 bytes
+ .../test_workspace_table_contract.cpython-314.pyc} | Bin 0 -> 1545 bytes
+ .../frontend/test_workspace_table_contract.py      |   4 +-
+ .../tests/test_backend_service_and_serializer.py}  |  68 +++++++++++++++++++++
+ .../tests/test_mixed_dataset_consistency.py        |  17 +++++-
+ .../test_workspace_admin_preview_contract.py}      |  16 +++++
+ .../tests/test_workspace_table_contract_top.py}    |  14 +++++
+ 31 files changed, 245 insertions(+), 29 deletions(-)

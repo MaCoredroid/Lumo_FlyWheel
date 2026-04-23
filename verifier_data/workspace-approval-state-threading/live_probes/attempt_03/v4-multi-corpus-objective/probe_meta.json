@@ -1,0 +1,7 @@
+{
+  "variant_id": "v4-multi-corpus-objective",
+  "codex_command": "codex exec --ephemeral --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_03/v4-multi-corpus-objective/workspace -m gpt-5.4 -o /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_03/v4-multi-corpus-objective/codex_last_message.txt Read AGENTS.md and complete the task fully in this workspace only. Run bin/run-visible-tests before finishing. Update code, tests, docs, preview artifact, and rollout note. Do not modify read-only context files.",
+  "codex_exit_code": 0,
+  "duration_seconds": 267.155,
+  "artifact_root": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_03/v4-multi-corpus-objective"
+}

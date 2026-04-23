@@ -1,0 +1,21 @@
+# attempt_03 probe report
+
+Model: `gpt-5.4`
+Reasoning effort: `high`
+
+| variant | exit | duration_s | score | P_benchmark | M_training | pass | ceilings |
+|---|---:|---:|---:|---:|---:|---|---|
+| v1-clean-baseline | 0 | 283.782 | 16 | 16 | 0.1778 | False | risk_level_alias_shortcut, missing_legacy_fallback, stale_config_or_runbook, missing_preview_or_rollout_evidence |
+| v2-noisy-distractor | 0 | 253.641 | 20 | 20 | 0.2222 | False | risk_level_alias_shortcut, missing_legacy_fallback, missing_preview_or_rollout_evidence |
+| v3-dirty-state | 0 | 253.694 | 20 | 20 | 0.2222 | False | risk_level_alias_shortcut, missing_legacy_fallback, missing_preview_or_rollout_evidence |
+| v4-multi-corpus-objective | 0 | 267.155 | 20 | 20 | 0.2222 | False | risk_level_alias_shortcut, missing_legacy_fallback, missing_preview_or_rollout_evidence |
+| v5-recovery-in-thread | 0 | 296.598 | 12 | 12 | 0.1333 | False | risk_level_alias_shortcut, missing_legacy_fallback, stale_config_or_runbook, missing_preview_or_rollout_evidence, rollback_ack_missing |
+
+## Layer A gates
+
+- `family_mean`: 17.6 (`pass=True`)
+- `max_variant_mean`: 20 (`pass=True`)
+- `min_variant_mean`: 12 (`pass=False`)
+- `monotonic V1>=V2>=V3>=V4>=V5 +/-3`: False
+
+Summary artifact: `/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/workspace-approval-state-threading/live_probes/attempt_03/summary.json`
