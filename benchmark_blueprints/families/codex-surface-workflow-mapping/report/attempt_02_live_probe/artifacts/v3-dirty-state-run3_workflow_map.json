@@ -1,0 +1,125 @@
+{
+  "automation": {
+    "command_literal": "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md",
+    "kind": "cron",
+    "schedule_literal": "0 9 * * 1-5",
+    "source_paths": [
+      "ops/automation/triage.cron",
+      "docs/ops/daily_triage.md",
+      "Makefile"
+    ],
+    "task_prompt": "Run the live weekday daily triage for the on-call rotation by using the current workflow entrypoint and summarizing active blockers from the open incident queue. In this dirty-state migration variant, keep rollback-only legacy helpers out of the task mapping even if they remain in the workspace for diffing."
+  },
+  "mapping_note": {
+    "decisions": [
+      {
+        "artifact": "skill",
+        "command_literals": [
+          "make codex-daily-triage"
+        ],
+        "rationale": "The skill should anchor on the live Codex-facing entrypoint rather than the underlying Python helper because the repo documentation names the Make target as the canonical interface and the migration notes say the legacy helper stayed rollback-only. For the dirty-state variant, that means the skill must steer readers away from stale diffing surfaces that still exist in-tree.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/daily_triage.md",
+          "docs/ops/migration_notes.md"
+        ]
+      },
+      {
+        "artifact": "toml",
+        "command_literals": [
+          "make codex-daily-triage",
+          "0 9 * * 1-5"
+        ],
+        "rationale": "The TOML should expose the same live Make entrypoint as the skill and carry the weekday schedule literal separately so task semantics and cadence do not collapse into one field. The live schedule is the weekday cron, not the deprecated seven-day sweep from the legacy note.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/daily_triage.md",
+          "ops/automation/triage.cron"
+        ]
+      },
+      {
+        "artifact": "automation",
+        "command_literals": [
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md",
+          "0 9 * * 1-5"
+        ],
+        "rationale": "The automation artifact should keep the concrete task command and the weekday cron literal exactly as the repo pins them today. In the dirty-state variant, the prompt should mention live blockers and on-call triage while avoiding rollback-only helpers that are still present only for migration diffing.",
+        "source_paths": [
+          "ops/automation/triage.cron",
+          "docs/ops/daily_triage.md",
+          "scripts/triage.py"
+        ]
+      },
+      {
+        "artifact": "mapping_note",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "The mapping note should document both the accepted live entrypoint and the stale rollback-only alternative so reviewers can see why the live mapping stayed on the Make target. That distinction matters more in this dirty-state bundle because both commands are still visible in the repo, but only one is described as live.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/daily_triage.md",
+          "docs/ops/migration_notes.md",
+          "scripts/triage_legacy.py",
+          "docs/ops/legacy_schedule.md"
+        ]
+      }
+    ]
+  },
+  "rejected_candidates": [
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "skills/legacy/daily_triage/SKILL.md",
+      "reason": "This legacy skill draft still points at the deprecated helper, while the repo says the live Codex-facing entrypoint is `make codex-daily-triage` and the helper remained rollback-only during migration.",
+      "source_paths": [
+        "skills/legacy/daily_triage/SKILL.md",
+        "docs/ops/daily_triage.md",
+        "docs/ops/migration_notes.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_skill_patch.md",
+      "reason": "The draft is explicitly abandoned and wraps the deprecated helper rather than the live Make target, so it is evidence of stale Codex work, not a reusable mapping source.",
+      "source_paths": [
+        "drafts/codex_skill_patch.md",
+        "docs/ops/migration_notes.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "docs/ops/legacy_schedule.md",
+      "reason": "This note predates the current automation, carries the wrong daily schedule, and explicitly says not to use it as the source of truth for the live workflow mapping.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md"
+      ]
+    }
+  ],
+  "schema_version": "cnb55.workflow_mapping.v1",
+  "skill": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "source_paths": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "docs/ops/migration_notes.md"
+    ],
+    "workflow_scope": "Run the live Codex-facing daily triage workflow for the on-call rotation through `make codex-daily-triage`, summarizing active blockers from the open incident queue. In the `v3-dirty-state` bundle, preserve the live Make target as canonical even though rollback-only legacy helpers and abandoned Codex drafts remain present for migration diffing."
+  },
+  "toml": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "must_read": [
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron",
+      "docs/ops/migration_notes.md",
+      "fixtures/open_incidents.json"
+    ],
+    "source_paths": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron"
+    ],
+    "workflow_scope": "Weekday Codex daily triage for the on-call incident queue using the live Make target and the current active-window script, with rollback-only legacy surfaces treated as rejected evidence in this dirty-state variant."
+  },
+  "variant_id": "v3-dirty-state"
+}

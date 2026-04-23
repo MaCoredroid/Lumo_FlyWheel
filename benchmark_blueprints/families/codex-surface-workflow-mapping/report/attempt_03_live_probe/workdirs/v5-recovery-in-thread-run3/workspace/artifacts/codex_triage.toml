@@ -1,0 +1,13 @@
+[workflow]
+schema_version = "cnb55.workflow_mapping.v1"
+entrypoint = "make codex-daily-triage"
+workflow_scope = "Weekday-only blocker triage routed through the live Make target, with on-call ownership clarity preserved and the stand-up summary goal kept separate from the scheduler."
+preferred_output_dir = "artifacts"
+
+[workflow.must_read]
+paths = ["docs/ops/daily_triage.md", "release_context/objective_shift.md", "incident_context/recovered_plan.md", "incident_context/weekend_rollback.md"]
+
+[automation]
+kind = "cron"
+schedule_literal = "0 9 * * 1-5"
+command = "make codex-daily-triage"

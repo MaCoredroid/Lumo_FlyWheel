@@ -1,0 +1,6 @@
+Completed in this workspace only. I wrote [workflow_input.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v4-multi-corpus-objective-run3/workspace/workflow_input.json), ran `./bin/cnb55-workflow-map validate workflow_input.json`, then `./bin/cnb55-workflow-map submit workflow_input.json`, which generated the canonical [workflow_map.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v4-multi-corpus-objective-run3/workspace/artifacts/workflow_map.json) plus the rendered artifacts in `artifacts/`.
+
+The mapping is grounded on the live Codex-facing entrypoint `make codex-daily-triage`, keeps the blocker-first/on-call/stand-up scope from `release_context/`, and explicitly rejects the stale `triage_legacy.py` path. I did not modify immutable evidence or tests.
+
+`pytest` is not installed in this bundle, so `python3 -m pytest tests/test_workflow_map.py` could not run. I instead ran an equivalent stdlib check against the same invariants from `tests/test_workflow_map.py`, and that passed.
+

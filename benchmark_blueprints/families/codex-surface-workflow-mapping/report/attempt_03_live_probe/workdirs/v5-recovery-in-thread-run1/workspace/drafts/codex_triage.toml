@@ -1,0 +1,8 @@
+# abandoned draft - do not ship
+
+[workflow]
+entrypoint = "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md"
+schedule = "0 9 * * *"
+must_read = ["docs/ops/legacy_schedule.md", "skills/legacy/daily_triage/SKILL.md"]
+
+# left here from a paused migration pass; resume from the live Make target instead

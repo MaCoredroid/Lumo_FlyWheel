@@ -1,0 +1,87 @@
+{
+  "M_training": 0.15,
+  "P_benchmark": 15,
+  "bands": {
+    "deploy.note_accurate": "M",
+    "facts.exact_match": "M",
+    "notes.caveat_present": "M",
+    "notes.direct_verification": "M",
+    "notes.structure": "M",
+    "runbook.current_config_surface": "M",
+    "runbook.current_primary_path": "M",
+    "runbook.legacy_marked_secondary": "M",
+    "visible.pytest_passes": "M"
+  },
+  "breakdown": {
+    "deploy.note_accurate": 15,
+    "facts.exact_match": 20,
+    "notes.caveat_present": 4,
+    "notes.direct_verification": 8,
+    "notes.structure": 8,
+    "runbook.current_config_surface": 15,
+    "runbook.current_primary_path": 20,
+    "runbook.legacy_marked_secondary": 5,
+    "visible.pytest_passes": 10
+  },
+  "ceiling_cap": 15,
+  "ceilings_applied": [
+    "docs_harmonization_only"
+  ],
+  "changed_files": [
+    "artifacts/deploy_note.md",
+    "artifacts/reconciliation_facts.json",
+    "artifacts/verification_notes.md",
+    "docs/runbooks/release_preview.md"
+  ],
+  "elapsed_sec": 0.342,
+  "errors": [
+    "submission does not clearly privilege code / CLI help over README prose"
+  ],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.7,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": false,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "pass_bar": 65,
+  "raw_M_pre_ceiling": 1.05,
+  "raw_score_pre_ceiling": 105,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 15,
+  "shortcut_detected": false,
+  "variant_id": "v3-dirty-state"
+}

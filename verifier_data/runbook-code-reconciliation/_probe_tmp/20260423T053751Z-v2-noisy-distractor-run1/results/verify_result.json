@@ -1,0 +1,87 @@
+{
+  "M_training": 0.25,
+  "P_benchmark": 25,
+  "bands": {
+    "deploy.note_accurate": "M",
+    "discipline.code_over_readme": "M",
+    "notes.caveat_present": "M",
+    "notes.direct_verification": "M",
+    "notes.structure": "M",
+    "runbook.current_config_surface": "M",
+    "runbook.current_primary_path": "M",
+    "runbook.legacy_marked_secondary": "M",
+    "visible.pytest_passes": "M"
+  },
+  "breakdown": {
+    "deploy.note_accurate": 15,
+    "discipline.code_over_readme": 10,
+    "notes.caveat_present": 4,
+    "notes.direct_verification": 8,
+    "notes.structure": 8,
+    "runbook.current_config_surface": 15,
+    "runbook.current_primary_path": 20,
+    "runbook.legacy_marked_secondary": 5,
+    "visible.pytest_passes": 10
+  },
+  "ceiling_cap": 25,
+  "ceilings_applied": [
+    "facts_unvalidated"
+  ],
+  "changed_files": [
+    "artifacts/deploy_note.md",
+    "artifacts/reconciliation_facts.json",
+    "artifacts/verification_notes.md",
+    "docs/runbooks/release_preview.md"
+  ],
+  "elapsed_sec": 0.342,
+  "errors": [
+    "facts file is present but does not match the authoritative split"
+  ],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.5,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": false,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": false,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": false,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "pass_bar": 65,
+  "raw_M_pre_ceiling": 0.95,
+  "raw_score_pre_ceiling": 95,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 25,
+  "shortcut_detected": false,
+  "variant_id": "v2-noisy-distractor"
+}

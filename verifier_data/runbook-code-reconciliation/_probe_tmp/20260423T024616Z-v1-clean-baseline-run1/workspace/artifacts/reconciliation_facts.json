@@ -1,0 +1,20 @@
+{
+  "primary_entrypoint": "python src/release_preview/cli.py generate --config configs/release_preview.toml",
+  "legacy_alias": "python scripts/release_preview_helper.py build-preview --settings configs/release_preview.toml",
+  "current_flag": "--config",
+  "deprecated_flag": "--settings",
+  "current_env_var": "RELEASE_PREVIEW_CONFIG",
+  "deprecated_env_var": "PREVIEW_SETTINGS_PATH",
+  "default_config": "configs/release_preview.toml",
+  "helper_alias_status": "compatibility-only",
+  "evidence_commands": [
+    "python3 src/release_preview/cli.py --help",
+    "python3 src/release_preview/cli.py generate --help",
+    "python3 src/release_preview/cli.py generate --config configs/release_preview.toml --dry-run",
+    "python3 src/release_preview/cli.py generate --dry-run",
+    "RELEASE_PREVIEW_CONFIG=env/current.toml python3 src/release_preview/cli.py generate --dry-run",
+    "PREVIEW_SETTINGS_PATH=env/deprecated.toml python3 src/release_preview/cli.py generate --dry-run",
+    "python3 scripts/release_preview_helper.py build-preview --settings configs/release_preview.toml",
+    "pytest -q tests/test_release_preview_cli.py"
+  ]
+}

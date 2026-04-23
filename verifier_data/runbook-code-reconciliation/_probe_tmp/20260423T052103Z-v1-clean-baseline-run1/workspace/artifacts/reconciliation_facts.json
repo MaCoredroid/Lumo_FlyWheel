@@ -1,0 +1,23 @@
+{
+  "primary_entrypoint": "python src/release_preview/cli.py generate",
+  "legacy_alias": "python scripts/release_preview_helper.py build-preview --settings configs/release_preview.toml",
+  "current_flag": "--config",
+  "deprecated_flag": "--settings",
+  "current_env_var": "RELEASE_PREVIEW_CONFIG",
+  "deprecated_env_var": "PREVIEW_SETTINGS_PATH",
+  "default_config_path": "configs/release_preview.toml",
+  "evidence_commands": [
+    "python src/release_preview/cli.py --help",
+    "python src/release_preview/cli.py generate --help",
+    "python src/release_preview/cli.py generate --config configs/release_preview.toml --dry-run",
+    "python scripts/release_preview_helper.py build-preview --settings configs/release_preview.toml",
+    "pytest -q tests/test_release_preview_cli.py"
+  ],
+  "facts": [
+    "The current runbook path is the release_preview CLI generate subcommand, not the helper alias.",
+    "The current exposed flag is --config.",
+    "The helper alias remains available only for compatibility and prints a forward to the current command.",
+    "The code still accepts PREVIEW_SETTINGS_PATH and --settings as deprecated compatibility inputs.",
+    "The bundle-local default config path is configs/release_preview.toml."
+  ]
+}

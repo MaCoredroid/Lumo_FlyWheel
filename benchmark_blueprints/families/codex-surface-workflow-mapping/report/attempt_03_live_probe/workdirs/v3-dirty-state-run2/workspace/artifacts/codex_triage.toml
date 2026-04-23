@@ -1,0 +1,13 @@
+[workflow]
+schema_version = "cnb55.workflow_mapping.v1"
+entrypoint = "make codex-daily-triage"
+workflow_scope = "Triage the open incident queue for the on-call rotation and summarize the live blockers."
+preferred_output_dir = "artifacts"
+
+[workflow.must_read]
+paths = ["Makefile", "docs/ops/daily_triage.md", "docs/ops/migration_notes.md", "ops/automation/triage.cron", ".scenario_variant"]
+
+[automation]
+kind = "cron"
+schedule_literal = "0 9 * * 1-5"
+command = "make codex-daily-triage"

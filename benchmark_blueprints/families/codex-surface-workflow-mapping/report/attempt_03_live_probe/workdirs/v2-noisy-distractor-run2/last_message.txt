@@ -1,0 +1,10 @@
+Authored [workflow_input.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v2-noisy-distractor-run2/workspace/workflow_input.json:1) from workspace evidence only, keeping `make codex-daily-triage` as the shared live entrypoint, separating the weekday cron from the task body, and rejecting the legacy helper surfaces as stale distractors for `v2-noisy-distractor`.
+
+Ran the required CLI path successfully:
+`./bin/cnb55-workflow-map validate workflow_input.json`
+`./bin/cnb55-workflow-map submit workflow_input.json`
+
+The rendered outputs now exist at [artifacts/workflow_map.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/workflow_map.json:1), [artifacts/SKILL.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/SKILL.md:1), [artifacts/codex_triage.toml](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/codex_triage.toml:1), [artifacts/automation_proposal.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/automation_proposal.md:1), and [artifacts/mapping_note.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/mapping_note.md:1).
+
+Verification: `pytest -q tests/test_workflow_map.py` passed with `6 passed`. The only warning was a non-failing `PytestCacheWarning` because pytest could not write `.pytest_cache` outside the writable area.
+

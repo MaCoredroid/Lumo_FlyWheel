@@ -1,0 +1,11 @@
+{
+  "required_keys": [
+    "primary_entrypoint",
+    "legacy_alias",
+    "current_flag",
+    "deprecated_flag",
+    "current_env_var",
+    "deprecated_env_var",
+    "evidence_commands"
+  ]
+}

@@ -1,0 +1,5 @@
+Completed in this workspace only.
+
+I authored [workflow_input.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v2-noisy-distractor-run3/workspace/workflow_input.json) with the live entrypoint mapped to `make codex-daily-triage`, the weekday cron cadence `0 9 * * 1-5`, explicit rejection of the legacy helper paths, and variant-specific rationale for the noisy-distractor fixture behavior. I then ran `./bin/cnb55-workflow-map validate workflow_input.json` and `./bin/cnb55-workflow-map submit workflow_input.json`, which produced the canonical and rendered artifacts under [artifacts](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v2-noisy-distractor-run3/workspace/artifacts).
+
+Verification passed: `pytest -q tests/test_workflow_map.py` returned `6 passed`. The only warning was a `PytestCacheWarning` about not being able to write `.pytest_cache` outside the writable area; it did not affect the test results.

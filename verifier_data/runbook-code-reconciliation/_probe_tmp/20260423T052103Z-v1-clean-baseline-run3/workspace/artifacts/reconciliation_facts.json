@@ -1,0 +1,32 @@
+{
+  "primary_entrypoint": "python src/release_preview/cli.py generate --config configs/release_preview.toml",
+  "legacy_alias": "python scripts/release_preview_helper.py build-preview --settings configs/release_preview.toml",
+  "current_flag": "--config",
+  "deprecated_flag": "--settings",
+  "current_env_var": "RELEASE_PREVIEW_CONFIG",
+  "deprecated_env_var": "PREVIEW_SETTINGS_PATH",
+  "default_config_path": "configs/release_preview.toml",
+  "primary_subcommand": "generate",
+  "dry_run_flag": "--dry-run",
+  "evidence_commands": [
+    "python src/release_preview/cli.py --help",
+    "python src/release_preview/cli.py generate --help",
+    "python src/release_preview/cli.py generate --config configs/release_preview.toml --dry-run",
+    "RELEASE_PREVIEW_CONFIG=configs/release_preview.toml python src/release_preview/cli.py generate --dry-run",
+    "python scripts/release_preview_helper.py build-preview --settings configs/release_preview.toml",
+    "pytest -q tests/test_release_preview_cli.py"
+  ],
+  "evidence_summary": {
+    "current_cli_help_exposes_generate": true,
+    "generate_help_exposes_config": true,
+    "generate_help_exposes_dry_run": true,
+    "generate_help_hides_deprecated_flag": true,
+    "helper_alias_is_compatibility_only": true
+  },
+  "pytest_result": {
+    "command": "pytest -q tests/test_release_preview_cli.py",
+    "status": "passed",
+    "summary": "2 passed, 1 warning in 0.07s",
+    "warning": "PytestCacheWarning: cache could not write to a .pytest_cache path outside the writable bundle root"
+  }
+}

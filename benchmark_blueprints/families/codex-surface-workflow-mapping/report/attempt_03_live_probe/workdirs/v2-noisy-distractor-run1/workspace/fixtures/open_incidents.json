@@ -1,0 +1,20 @@
+[
+  {
+    "id": "INC-410",
+    "owner": "oncall-a",
+    "severity": "blocker",
+    "summary": "response export misses owner_source"
+  },
+  {
+    "id": "INC-411",
+    "owner": "oncall-b",
+    "severity": "warning",
+    "summary": "non-blocking routing drift"
+  },
+  {
+    "id": "INC-412",
+    "owner": "oncall-a",
+    "severity": "blocker",
+    "summary": "weekend automation page noise"
+  }
+]

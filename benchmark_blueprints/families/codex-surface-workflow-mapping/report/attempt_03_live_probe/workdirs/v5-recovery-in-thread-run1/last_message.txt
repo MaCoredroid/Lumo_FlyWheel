@@ -1,0 +1,9 @@
+Completed in this workspace only.
+
+I authored [workflow_input.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v5-recovery-in-thread-run1/workspace/workflow_input.json) and ran the required commands:
+`./bin/cnb55-workflow-map validate workflow_input.json`
+`./bin/cnb55-workflow-map submit workflow_input.json`
+
+The rendered outputs now exist in [artifacts/workflow_map.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v5-recovery-in-thread-run1/workspace/artifacts/workflow_map.json), [artifacts/SKILL.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v5-recovery-in-thread-run1/workspace/artifacts/SKILL.md), [artifacts/codex_triage.toml](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v5-recovery-in-thread-run1/workspace/artifacts/codex_triage.toml), [artifacts/automation_proposal.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v5-recovery-in-thread-run1/workspace/artifacts/automation_proposal.md), and [artifacts/mapping_note.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v5-recovery-in-thread-run1/workspace/artifacts/mapping_note.md).
+
+Verification: `pytest -q tests/test_workflow_map.py` passed with `6 passed`. The only warning was a non-failing pytest cache write warning outside the writable area.

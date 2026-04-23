@@ -1,0 +1,10 @@
+Completed in this workspace only. I authored [workflow_input.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v4-multi-corpus-objective-run1/workspace/workflow_input.json) and ran the required commands:
+
+```bash
+./bin/cnb55-workflow-map validate workflow_input.json
+./bin/cnb55-workflow-map submit workflow_input.json
+```
+
+The canonical and rendered outputs now exist under [artifacts/workflow_map.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v4-multi-corpus-objective-run1/workspace/artifacts/workflow_map.json), [artifacts/SKILL.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v4-multi-corpus-objective-run1/workspace/artifacts/SKILL.md), [artifacts/codex_triage.toml](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v4-multi-corpus-objective-run1/workspace/artifacts/codex_triage.toml), [artifacts/automation_proposal.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v4-multi-corpus-objective-run1/workspace/artifacts/automation_proposal.md), and [artifacts/mapping_note.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_03_live_probe/workdirs/v4-multi-corpus-objective-run1/workspace/artifacts/mapping_note.md).
+
+I also verified the grader-facing checks with `pytest -q tests/test_workflow_map.py`: `6 passed`. The only warning was a sandboxed `.pytest_cache` write outside this workspace; it did not affect test results.

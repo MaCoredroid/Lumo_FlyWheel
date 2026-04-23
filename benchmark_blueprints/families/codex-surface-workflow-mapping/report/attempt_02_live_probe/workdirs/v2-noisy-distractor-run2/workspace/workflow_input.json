@@ -1,0 +1,134 @@
+{
+  "schema_version": "cnb55.workflow_mapping.v1",
+  "variant_id": "v2-noisy-distractor",
+  "skill": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "workflow_scope": "Triage the open incident queue for the on-call rotation and summarize the live blockers.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "scripts/triage.py",
+      "fixtures/open_incidents.json"
+    ]
+  },
+  "toml": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "workflow_scope": "Triage the open incident queue for the on-call rotation and summarize the live blockers.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "scripts/triage.py"
+    ],
+    "must_read": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron",
+      "docs/ops/migration_notes.md",
+      ".scenario_variant"
+    ]
+  },
+  "automation": {
+    "kind": "cron",
+    "schedule_literal": "0 9 * * 1-5",
+    "command_literal": "make codex-daily-triage",
+    "task_prompt": "Run the live daily triage workflow via `make codex-daily-triage` to triage the open incident queue for the on-call rotation and summarize the live blockers. Do not fold the weekday cadence into the task body, and ignore rollback-only legacy helpers when mapping this noisy-distractor variant.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron",
+      "docs/ops/migration_notes.md",
+      ".scenario_variant"
+    ]
+  },
+  "mapping_note": {
+    "decisions": [
+      {
+        "artifact": "skill",
+        "rationale": "The skill should expose the Codex-facing live entrypoint, not the rollback helper. In this noisy-distractor variant, the workflow map stays on `make codex-daily-triage`, and the supporting evidence shows that the underlying script reads `fixtures/open_incidents.json` and summarizes blocker incidents for on-call triage.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          "scripts/triage.py",
+          "fixtures/open_incidents.json",
+          ".scenario_variant"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ]
+      },
+      {
+        "artifact": "toml",
+        "rationale": "The TOML config needs the same live entrypoint as the skill so the generated config does not drift onto the deprecated helper. The must-read list keeps the live Make target, live ops note, cadence file, migration warning, and scenario variant together.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          "ops/automation/triage.cron",
+          "docs/ops/migration_notes.md",
+          ".scenario_variant"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "0 9 * * 1-5"
+        ]
+      },
+      {
+        "artifact": "automation",
+        "rationale": "The automation proposal keeps task semantics separate from schedule semantics by pairing the live entrypoint with the weekday cron literal instead of embedding the schedule into the task text. That matters here because the bundle contains stale seven-day references that should be treated as distractors.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "ops/automation/triage.cron",
+          "docs/ops/legacy_schedule.md",
+          ".scenario_variant"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "0 9 * * 1-5",
+          "0 9 * * *"
+        ]
+      },
+      {
+        "artifact": "mapping_note",
+        "rationale": "The mapping note should explicitly document why the deprecated surfaces were rejected: the migration notes call the helper rollback-only, the legacy skill is labeled as a legacy draft, and the legacy schedule note explicitly says not to use it as the source of truth. That rejection is part of the correct mapping for this noisy-distractor variant.",
+        "source_paths": [
+          "docs/ops/migration_notes.md",
+          "docs/ops/legacy_schedule.md",
+          "skills/legacy/daily_triage/SKILL.md",
+          "scripts/triage_legacy.py",
+          ".scenario_variant"
+        ],
+        "command_literals": [
+          "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+          "0 9 * * *"
+        ]
+      }
+    ]
+  },
+  "rejected_candidates": [
+    {
+      "path": "skills/legacy/daily_triage/SKILL.md",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "This file is explicitly a legacy draft that predates the current repo migration, so it should not override the live Codex-facing entrypoint.",
+      "source_paths": [
+        "skills/legacy/daily_triage/SKILL.md",
+        "docs/ops/daily_triage.md"
+      ]
+    },
+    {
+      "path": "docs/ops/legacy_schedule.md",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "This note says it pre-dates the current automation and explicitly warns not to use it as the source of truth when mapping the live workflow.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md"
+      ]
+    },
+    {
+      "path": "scripts/triage_legacy.py",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "The script comments mark the invocation as deprecated and preserved for rollback diffing only, which makes it a distractor rather than the live entrypoint.",
+      "source_paths": [
+        "scripts/triage_legacy.py",
+        "docs/ops/migration_notes.md"
+      ]
+    }
+  ]
+}

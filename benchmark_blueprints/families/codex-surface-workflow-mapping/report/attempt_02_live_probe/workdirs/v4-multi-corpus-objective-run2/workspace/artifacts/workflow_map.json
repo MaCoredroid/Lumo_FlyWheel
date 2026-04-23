@@ -1,0 +1,131 @@
+{
+  "automation": {
+    "command_literal": "make codex-daily-triage",
+    "kind": "cron",
+    "schedule_literal": "0 9 * * 1-5",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md"
+    ],
+    "task_prompt": "Run the live daily triage workflow through `make codex-daily-triage`. Preserve the live task semantics: prioritize blocker incidents for the on-call rotation before any general backlog cleanup, and produce summary output that can feed the response review stand-up. Do not restate or embed the cron cadence inside the task body."
+  },
+  "mapping_note": {
+    "decisions": [
+      {
+        "artifact": "skill",
+        "command_literals": [
+          "make codex-daily-triage"
+        ],
+        "rationale": "The skill should anchor on `make codex-daily-triage` because the live Codex-facing entrypoint is named explicitly in the workflow doc, and the release context narrows the scope to blocker-first, on-call-oriented triage rather than a broad queue sweep.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          "release_context/objective_shift.md",
+          "release_context/release_notes_2026_04.md"
+        ]
+      },
+      {
+        "artifact": "toml",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "The TOML should keep the same live entrypoint while marking the current workflow scope as blocker incidents first, on-call ownership clarity, and stand-up-ready summary output. The Make target remains the live wrapper even though the underlying Python command still exists.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          "release_context/objective_shift.md",
+          "release_context/release_notes_2026_04.md"
+        ]
+      },
+      {
+        "artifact": "automation",
+        "command_literals": [
+          "make codex-daily-triage",
+          "0 9 * * 1-5"
+        ],
+        "rationale": "The automation artifact should keep task semantics and schedule semantics separate: the task invokes the live Make entrypoint, while the weekday-only cadence stays in the cron configuration. The weekday narrowing also matches the release note that weekend queue sweeps were deprioritized after noisy pages in March.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "ops/automation/triage.cron",
+          "release_context/release_notes_2026_04.md"
+        ]
+      },
+      {
+        "artifact": "mapping_note",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "The mapping note should explicitly record why the live workflow wins over stale candidates: the legacy helper is retained only for rollback diffing, the legacy schedule note is not the source of truth, and the abandoned Codex patch never shipped. That evidence belongs in the note rather than being silently ignored.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "docs/ops/legacy_schedule.md",
+          "docs/ops/migration_notes.md",
+          "drafts/codex_skill_patch.md"
+        ]
+      }
+    ]
+  },
+  "rejected_candidates": [
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "scripts/triage_legacy.py",
+      "reason": "Deprecated rollback-only helper; migration notes say it was kept for diffing outputs and never replaced the live Make entrypoint.",
+      "source_paths": [
+        "scripts/triage_legacy.py",
+        "docs/ops/legacy_schedule.md",
+        "docs/ops/migration_notes.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "skills/legacy/daily_triage/SKILL.md",
+      "reason": "Legacy skill draft still points at the deprecated helper and predates the current repo migration, so it is evidence of stale wording rather than the live workflow.",
+      "source_paths": [
+        "skills/legacy/daily_triage/SKILL.md",
+        "docs/ops/migration_notes.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_skill_patch.md",
+      "reason": "Abandoned Codex patch that wrapped the deprecated helper and was never shipped, so it cannot be reused as the canonical Codex-native mapping.",
+      "source_paths": [
+        "drafts/codex_skill_patch.md",
+        "docs/ops/migration_notes.md"
+      ]
+    }
+  ],
+  "schema_version": "cnb55.workflow_mapping.v1",
+  "skill": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md"
+    ],
+    "workflow_scope": "Triage blocker incidents for the on-call rotation before any general queue cleanup, with on-call ownership clarity and summary output that can feed the response review stand-up."
+  },
+  "toml": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "must_read": [
+      "docs/ops/daily_triage.md",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md",
+      "docs/ops/migration_notes.md",
+      "docs/ops/legacy_schedule.md"
+    ],
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "release_context/objective_shift.md",
+      "release_context/release_notes_2026_04.md"
+    ],
+    "workflow_scope": "Triage blocker incidents first for the on-call rotation, then hand the summary to the response review stand-up instead of running a broad queue sweep."
+  },
+  "variant_id": "v4-multi-corpus-objective"
+}

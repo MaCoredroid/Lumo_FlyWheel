@@ -1,0 +1,123 @@
+{
+  "automation": {
+    "command_literal": "make codex-daily-triage",
+    "kind": "cron",
+    "schedule_literal": "0 9 * * 1-5",
+    "source_paths": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron",
+      "incident_context/recovered_plan.md"
+    ],
+    "task_prompt": "Run the blocker-first on-call triage workflow via `make codex-daily-triage`, review blocker incidents before any general queue cleanup, and emit the summary used for the response review stand-up."
+  },
+  "mapping_note": {
+    "decisions": [
+      {
+        "artifact": "skill",
+        "command_literals": [
+          "make codex-daily-triage"
+        ],
+        "rationale": "The skill stays anchored on the recovered live entrypoint rather than the rollback helper because the workflow scope narrowed to blocker-first on-call triage and the approved route is the Make target.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/daily_triage.md",
+          "release_context/objective_shift.md",
+          "incident_context/recovered_plan.md"
+        ]
+      },
+      {
+        "artifact": "toml",
+        "command_literals": [
+          "make codex-daily-triage"
+        ],
+        "rationale": "The TOML mirrors the same Make entrypoint and points operators at the current migration and rollback notes so they do not resume from the deprecated helper or stale queue-sweep narrative.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/migration_notes.md",
+          "incident_context/recovered_plan.md"
+        ]
+      },
+      {
+        "artifact": "automation",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "Automation remains a weekday cron that invokes the recovered Make target while keeping schedule semantics separate from task semantics; the underlying implementation still shells out to the active Python triage command.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/daily_triage.md",
+          "ops/automation/triage.cron",
+          "incident_context/recovered_plan.md"
+        ]
+      },
+      {
+        "artifact": "mapping_note",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "The mapping note records why the live route stays on the recovered Make target and why the rollback-only helper and abandoned Codex draft are explicitly rejected in this variant.",
+        "source_paths": [
+          "docs/ops/migration_notes.md",
+          "docs/ops/legacy_schedule.md",
+          "incident_context/weekend_rollback.md",
+          "incident_context/recovered_plan.md",
+          "drafts/codex_triage.toml",
+          "drafts/codex_skill_patch.md"
+        ]
+      }
+    ]
+  },
+  "rejected_candidates": [
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "docs/ops/legacy_schedule.md",
+      "reason": "This note explicitly pre-dates the current automation, documents the deprecated helper, and carries the superseded seven-day sweep instead of the recovered weekday blocker-first route.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md",
+        "incident_context/weekend_rollback.md",
+        "incident_context/recovered_plan.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_triage.toml",
+      "reason": "This abandoned draft wraps the deprecated helper and even notes that the live migration should resume from the Make target instead of shipping the legacy command.",
+      "source_paths": [
+        "drafts/codex_triage.toml",
+        "drafts/codex_skill_patch.md",
+        "docs/ops/migration_notes.md"
+      ]
+    }
+  ],
+  "schema_version": "cnb55.workflow_mapping.v1",
+  "skill": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "source_paths": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "release_context/objective_shift.md",
+      "incident_context/recovered_plan.md"
+    ],
+    "workflow_scope": "Run the weekday blocker-first daily triage for the on-call rotation before any general backlog cleanup, producing summary output for the response review stand-up."
+  },
+  "toml": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "must_read": [
+      "docs/ops/daily_triage.md",
+      "docs/ops/migration_notes.md",
+      "release_context/objective_shift.md",
+      "incident_context/weekend_rollback.md",
+      "incident_context/recovered_plan.md"
+    ],
+    "source_paths": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "incident_context/recovered_plan.md"
+    ],
+    "workflow_scope": "Weekday blocker-first triage for the on-call rotation with summary output for the response review stand-up."
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

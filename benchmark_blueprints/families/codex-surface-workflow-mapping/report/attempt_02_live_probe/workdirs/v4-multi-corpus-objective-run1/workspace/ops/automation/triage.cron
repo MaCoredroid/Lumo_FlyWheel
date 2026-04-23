@@ -1,0 +1,1 @@
+0 9 * * 1-5 python3 scripts/triage.py --window active --emit-md reports/daily_triage.md

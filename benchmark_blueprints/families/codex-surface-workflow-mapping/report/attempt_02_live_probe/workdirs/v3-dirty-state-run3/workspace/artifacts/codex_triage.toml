@@ -1,0 +1,13 @@
+[workflow]
+schema_version = "cnb55.workflow_mapping.v1"
+entrypoint = "make codex-daily-triage"
+workflow_scope = "Weekday Codex daily triage for the on-call incident queue using the live Make target and the current active-window script, with rollback-only legacy surfaces treated as rejected evidence in this dirty-state variant."
+preferred_output_dir = "artifacts"
+
+[workflow.must_read]
+paths = ["docs/ops/daily_triage.md", "ops/automation/triage.cron", "docs/ops/migration_notes.md", "fixtures/open_incidents.json"]
+
+[automation]
+kind = "cron"
+schedule_literal = "0 9 * * 1-5"
+command = "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"

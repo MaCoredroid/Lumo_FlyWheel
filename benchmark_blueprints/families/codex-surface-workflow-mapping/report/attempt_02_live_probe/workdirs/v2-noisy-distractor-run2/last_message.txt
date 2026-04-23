@@ -1,0 +1,10 @@
+Completed in-place in the workspace. I authored [workflow_input.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v2-noisy-distractor-run2/workspace/workflow_input.json) and ran the required commands:
+
+```sh
+./bin/cnb55-workflow-map validate workflow_input.json
+./bin/cnb55-workflow-map submit workflow_input.json
+```
+
+The submission rendered the expected artifacts under [artifacts](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts): [workflow_map.json](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/workflow_map.json), [SKILL.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/SKILL.md), [codex_triage.toml](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/codex_triage.toml), [automation_proposal.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/automation_proposal.md), and [mapping_note.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/codex-surface-workflow-mapping/report/attempt_02_live_probe/workdirs/v2-noisy-distractor-run2/workspace/artifacts/mapping_note.md).
+
+I also verified the same invariants the test file checks. `pytest` itself is not installed in this interpreter, so I used a direct Python assertion pass instead; it succeeded.

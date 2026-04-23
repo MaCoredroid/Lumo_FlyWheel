@@ -1,0 +1,122 @@
+{
+  "schema_version": "cnb55.workflow_mapping.v1",
+  "variant_id": "v1-clean-baseline",
+  "skill": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "workflow_scope": "Triage the open incident queue for the on-call rotation and summarize the live blockers.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      "scripts/triage.py",
+      "fixtures/open_incidents.json"
+    ]
+  },
+  "toml": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "workflow_scope": "Triage the open incident queue for the on-call rotation and summarize the live blockers.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "Makefile",
+      ".scenario_variant"
+    ],
+    "must_read": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "scripts/triage.py",
+      "ops/automation/triage.cron",
+      "fixtures/open_incidents.json"
+    ]
+  },
+  "automation": {
+    "kind": "cron",
+    "schedule_literal": "0 9 * * 1-5",
+    "command_literal": "make codex-daily-triage",
+    "task_prompt": "Run `make codex-daily-triage` to triage the open incident queue for the on-call rotation and summarize the live blockers. Keep the task body focused on the workflow itself; the weekday 09:00 cadence belongs in scheduler configuration, not in the task instructions. Use `fixtures/open_incidents.json` as the sample evidence surface for local dry runs.",
+    "source_paths": [
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron"
+    ]
+  },
+  "mapping_note": {
+    "decisions": [
+      {
+        "artifact": "skill",
+        "rationale": "The skill anchors on the live Codex-facing entrypoint because `docs/ops/daily_triage.md` names `make codex-daily-triage` as the workflow entrypoint, and `Makefile` resolves that target to the active `scripts/triage.py` invocation that triages blocker incidents.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          "scripts/triage.py"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ]
+      },
+      {
+        "artifact": "toml",
+        "rationale": "The TOML keeps the same live entrypoint as the skill and records the clean-baseline variant so the generated config reads the current workflow files first instead of inheriting rollback-only helpers or stale draft wording.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "Makefile",
+          ".scenario_variant"
+        ],
+        "command_literals": [
+          "make codex-daily-triage"
+        ]
+      },
+      {
+        "artifact": "automation",
+        "rationale": "The automation maps the weekday scheduler literal from `ops/automation/triage.cron` onto the same live entrypoint while leaving the task prompt focused on triage behavior rather than embedding schedule semantics in the task body.",
+        "source_paths": [
+          "docs/ops/daily_triage.md",
+          "ops/automation/triage.cron"
+        ],
+        "command_literals": [
+          "make codex-daily-triage",
+          "0 9 * * 1-5"
+        ]
+      },
+      {
+        "artifact": "mapping_note",
+        "rationale": "The note explicitly rejects stale candidates because the clean-baseline variant should not pivot to rollback-only files: the legacy skill says it predates the current migration, the legacy schedule says it is not the source of truth, and `scripts/triage_legacy.py` is preserved for rollback diffs only.",
+        "source_paths": [
+          "skills/legacy/daily_triage/SKILL.md",
+          "docs/ops/legacy_schedule.md",
+          "scripts/triage_legacy.py",
+          ".scenario_variant"
+        ],
+        "command_literals": [
+          "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+          "0 9 * * *"
+        ]
+      }
+    ]
+  },
+  "rejected_candidates": [
+    {
+      "path": "skills/legacy/daily_triage/SKILL.md",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "Rejected because this draft says it predates the current repo migration and keeps the legacy helper only so reviewers can compare old vs. new workflow wording.",
+      "source_paths": [
+        "skills/legacy/daily_triage/SKILL.md"
+      ]
+    },
+    {
+      "path": "docs/ops/legacy_schedule.md",
+      "command_literal": "0 9 * * *",
+      "reason": "Rejected because the note says it pre-dates the current automation and must not be used as the source of truth when mapping the live workflow.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md"
+      ]
+    },
+    {
+      "path": "Makefile:daily-triage-legacy",
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "reason": "Rejected because the legacy target points at the deprecated helper, while the live Codex-facing workflow is documented as `make codex-daily-triage`.",
+      "source_paths": [
+        "Makefile",
+        "docs/ops/daily_triage.md"
+      ]
+    }
+  ]
+}
