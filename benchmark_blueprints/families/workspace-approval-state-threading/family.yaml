@@ -82,6 +82,7 @@ capability_tags:
     v1-clean-baseline:
       core: *core_base
       extended: *extended_base
+      variant_notes: Clean baseline is the floor check; missing legacy fallback plus visible/evidence contract failures should stay in the <=10 band.
     v2-noisy-distractor:
       core: *core_base
       extended: *extended_base

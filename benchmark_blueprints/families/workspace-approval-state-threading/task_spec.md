@@ -75,6 +75,7 @@ There is no LLM judge in the milestone layer. All scorer decisions must be repro
 ## Variant Progression
 - `v1-clean-baseline`
   - Minimal bundle; solver must wire `approval_state` across backend, CLI, UI, config, docs, tests, and preview artifact.
+  - This variant is the honest floor check. Missing the legacy-row fallback while also failing the visible/evidence contract should remain in the `<=10` band rather than earning mid-teen partial credit.
 - `v2-noisy-distractor`
   - Adds stale ops snapshots and an outdated memo that still use `approval_mode`; solver must not anchor on the stale token.
 - `v3-dirty-state`

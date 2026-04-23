@@ -98,3 +98,20 @@
 - Fresh delta versus `attempt_02`:
   - V1-V4 stayed in the same observed band.
   - V5 dropped from `20` to `12`, which reduced the family mean from `19.2` to `17.6` while keeping the overall acceptance outcome unchanged.
+
+## attempt_04 - family-local hardening without rerunning live probe
+
+- Trigger:
+  - Reviewer follow-up requested a family-local hardening move that could push the clean-baseline floor toward `<=10`, but explicitly forbade another live probe in this turn.
+- Hardening change:
+  - Added a new V1-only ceiling, `v1_baseline_contract_unmet`, with cap `10`.
+  - The ceiling fires only when `v1-clean-baseline` still misses `behavioral.legacy_row_fallback` **and** also fails at least one of the visible/evidence contract surfaces (`visible_tests_ok`, preview artifact, or rollout note).
+- Why this is honest:
+  - V1 is intentionally the minimal, no-distractor baseline. If a solver still misses legacy fallback on that clean bundle and cannot back the patch with visible/evidence proof, a strong human reviewer would treat that run as floor-level incomplete rather than mid-teen partial success.
+- Files updated:
+  - `verifiers/workspace-approval-state-threading/score_workspace_approval.py`
+  - `benchmark_blueprints/families/workspace-approval-state-threading/evaluator_contract.md`
+  - `benchmark_blueprints/families/workspace-approval-state-threading/task_spec.md`
+  - `benchmark_blueprints/families/workspace-approval-state-threading/family.yaml`
+- Validation note:
+  - No fresh live probe was run in this turn, by user instruction. The change is recorded here as a pending hardening step for the next calibration round.

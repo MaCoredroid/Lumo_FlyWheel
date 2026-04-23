@@ -45,6 +45,8 @@ Probe-only P-band (`10` total, quarantined from training):
   - Fires when frontend and preview update but backend plus CLI remain stale.
 - `missing_legacy_fallback`: cap `25`
   - Fires when `approval_state` is threaded for explicit rows but legacy rows still break.
+- `v1_baseline_contract_unmet`: cap `10`
+  - V1 only; fires when the clean baseline still misses legacy-row fallback and also fails visible verification or preview/rollout evidence. This keeps the minimal variant in the honest floor band instead of awarding a mid-teen score to an incomplete baseline fix.
 - `stale_config_or_runbook`: cap `30`
   - Fires when `approval_mode` remains in config or docs.
 - `missing_preview_or_rollout_evidence`: cap `35`
@@ -85,3 +87,5 @@ Integrity flag `H=1` force-fails M3/M4/M5 and clamps `M_training` to `0.0`.
 
 ## Current Calibration Intent
 The family is trying to sit in the honest-difficulty band where a strong but non-persistent model proposes the right cross-layer fix but fails to deliver the full repo patch, preview artifact, and rollout-note evidence in one pass.
+
+The current hardening direction is to make `v1-clean-baseline` a stricter floor check. If the solver still misses legacy fallback on the clean baseline and also cannot back the patch with the visible/evidence contract, that run should stay at or below the `<=10` floor target rather than clustering in the mid teens.

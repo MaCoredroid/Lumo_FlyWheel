@@ -309,7 +309,7 @@ def apply_partial_progress(state: ScoreState) -> None:
     state.add("partial_progress.cross_surface", points, band="P_only")
 
 
-def apply_ceilings(state: ScoreState, gold: dict[str, Any], normalized: list[dict[str, Any]], serialized: list[dict[str, Any]], exported: list[dict[str, Any]], rollout_ok: bool, preview_ok: bool, config_docs_ok: bool) -> None:
+def apply_ceilings(state: ScoreState, gold: dict[str, Any], normalized: list[dict[str, Any]], serialized: list[dict[str, Any]], exported: list[dict[str, Any]], rollout_ok: bool, preview_ok: bool, config_docs_ok: bool, visible_tests_ok: bool) -> None:
     serializer_text = (AGENT_WS / "backend" / "api" / "serializers.py").read_text()
     table_text = (AGENT_WS / "frontend" / "src" / "components" / "WorkspaceTable.tsx").read_text()
     docs_text = (AGENT_WS / "docs" / "runbooks" / "workspace-approvals.md").read_text()
@@ -327,6 +327,13 @@ def apply_ceilings(state: ScoreState, gold: dict[str, Any], normalized: list[dic
 
     if backend_ok and not state.breakdown.get("behavioral.legacy_row_fallback"):
         state.ceiling("missing_legacy_fallback", 25)
+
+    if (
+        VARIANT_ID == "v1-clean-baseline"
+        and not state.breakdown.get("behavioral.legacy_row_fallback")
+        and (not visible_tests_ok or not preview_ok or not rollout_ok)
+    ):
+        state.ceiling("v1_baseline_contract_unmet", 10)
 
     if "approval_mode" in docs_text or "approval_mode" in config_text:
         state.ceiling("stale_config_or_runbook", 30)
@@ -368,7 +375,7 @@ def main() -> None:
     _, _, _, preview_ok, config_docs_ok = score_frontend_and_artifacts(state, gold)
     rollout_ok = score_rollout_note(state, gold)
     apply_partial_progress(state)
-    apply_ceilings(state, gold, normalized, serialized, exported, rollout_ok, preview_ok, config_docs_ok)
+    apply_ceilings(state, gold, normalized, serialized, exported, rollout_ok, preview_ok, config_docs_ok, visible_tests_ok)
     set_milestones(state, visible_tests_ok, rollout_ok, preview_ok)
 
     result = {
