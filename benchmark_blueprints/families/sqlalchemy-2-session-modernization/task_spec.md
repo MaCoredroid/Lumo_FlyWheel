@@ -1,73 +1,155 @@
 # `sqlalchemy-2-session-modernization` Task Spec
 
-## Task Prompt
-Modernize the `ledger-sync` service from legacy SQLAlchemy `session.query(...)` patterns and implicit transaction behavior to SQLAlchemy 2.0 `select(...)` access with explicit session boundaries. The fix must hold across the API write path, the retrying worker, and the admin CLI dry-run and batch commands. Update the deploy note so operators understand the transaction-boundary change.
+**Track:** 03 — Refactor Modernization  
+**Family id:** `sqlalchemy-2-session-modernization`  
+**Spec version:** CNB-55 v1.0  
+**Variants:** 5 (`v1` through `v5`)
 
-## Workspace Bundle
-- `app/api.py`: HTTP write path for ledger entries.
-- `app/repository.py`: shared query helpers and row loaders.
-- `app/worker.py`: retryable settlement worker.
-- `app/admin_cli.py`: dry-run and batch reconciliation commands.
-- `app/models.py`, `app/db.py`: engine and session setup.
-- `seed/ledger_seed.sql`: seeded records for visible and hidden checks.
-- `docs/deploy/sqlalchemy2-cutover.md`: rollout note template with stale guidance.
-- `README.md`: nearby local edits in dirty-workspace variants.
-- `tests/test_api.py`, `tests/test_worker.py`, `tests/test_admin_cli.py`: visible tests.
+## Canonical Task Prompt
 
-## Seeded Modernization Breakage
-- The dependency bump moved the service onto SQLAlchemy 2.x semantics.
-- `repository.py` still uses `session.query(...)`, `.count()`, and implicit session state assumptions.
-- `worker.py` relies on partial writes surviving exception paths, which now creates incorrect retry behavior.
-- `admin_cli.py` treats dry-run as a real write path in one batch branch.
-- The deploy note still suggests a broad compatibility shim rather than an explicit cutover.
+Modernize the `ledger-sync` service from legacy SQLAlchemy `session.query(...)`
+usage and implicit transaction behavior to SQLAlchemy 2.0 `select(...)` access
+ with explicit transaction boundaries.
+
+The fix must hold across:
+
+- `app/api.py` — API create/read path
+- `app/repository.py` — shared row-loading and count/existence helpers
+- `app/worker.py` — retrying settlement flow
+- `app/admin_cli.py` — dry-run and batch planning paths
+- `docs/deploy/sqlalchemy2-cutover.md` — operator cutover / rollback note
+
+The benchmark is about **behavioral modernization**, not a mechanical API swap.
+Replacing `query()` with `select()` while preserving helper-owned commits,
+partial writes on failure, or a writeful dry-run is a scoreable failure.
 
 ## Required Surfaces
+
 - `shell`
 - `apply_patch`
-- `terminal_tests`
-- SQL and seed-data inspection
-- docs update
+- `pytest`
+- local file inspection
+- docs editing
+
+No network, no MCP, no browser, no subagents.
+
+## Workspace Layout
+
+Each variant ships a self-contained workspace under
+`workspace_bundle/<variant_id>/`:
+
+```text
+AGENTS.md
+Dockerfile
+.scenario_variant
+app/
+docs/deploy/sqlalchemy2-cutover.md
+seed/ledger_seed.sql
+tests/test_api.py
+tests/test_worker.py
+tests/test_admin_cli.py
+notes/                # V2+ and V3 only
+README.md             # V3 only
+release_context/      # V4+
+incident_context/     # V5
+artifacts/README.md
+```
+
+Visible validation is always:
+
+```bash
+pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py
+```
+
+## Variant Progression
+
+### v1 — clean baseline
+
+Single-service cutover with the core bug set only:
+
+- repository helper still uses `session.query(...)`
+- helper-owned commits leak transaction control
+- worker failure persists `processing`
+- admin dry-run persists `queued`
+- deploy note still recommends a compatibility shim
+
+**Primary stress:** can the solver land a real SQLAlchemy 2 migration with
+explicit transaction ownership rather than a syntax-only rewrite.
+
+### v2 — noisy distractor
+
+V1 plus stale compatibility-shim notes under `notes/`.
+
+**Primary stress:** can the solver ignore stale rollout lore instead of
+re-introducing a shim or preserving helper commits because an old note once
+claimed they were safe.
+
+### v3 — dirty state
+
+V2 plus a nearby `README.md` edit and an abandoned partial patch note.
+
+**Primary stress:** can the solver fix the transaction model without reverting
+or "cleaning up" unrelated local edits, and without finishing the abandoned
+per-row-commit direction.
+
+### v4 — multi-corpus objective
+
+V3 plus `release_context/` that makes the release objective more explicit:
+operator-safe dry-run behavior and batch rollback are now first-class blockers.
+
+**Primary stress:** can the solver re-weight toward release-safe transaction
+behavior across batch helpers rather than only fixing the single-row visible
+tests.
+
+### v5 — recovery in thread
+
+V4 plus `incident_context/` describing a rolled-back cutover caused by retry
+state leakage and writeful dry-runs.
+
+**Primary stress:** can the solver fix the code and update the deploy note in a
+way that acknowledges the incident and proves the retried cutover is now safe.
 
 ## Expected Deliverables
-- Code patch across repository, API, worker, and CLI layers.
-- Explicit transaction-boundary handling that preserves rollback correctness.
-- Updated deploy note documenting rollout, rollback, and operator-visible behavior changes.
-- No blanket compatibility shim that preserves legacy `session.query(...)` behavior.
 
-## Grader Contract
-- Phase 2 visible checks:
-  - `pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py`
-- Hidden checks:
-  - API write path uses SQLAlchemy 2.0-style selects and persistence without leaking global session state.
-  - Worker retry path is idempotent after a forced exception and does not leak partial writes.
-  - Admin CLI dry-run performs read-only planning and batch mode persists only when expected.
-  - `count`, `exists`, and `one_or_none` semantics remain correct after migration.
-- Trusted final-state checks:
-  - No live `session.query(` remains in the service path.
-  - No blanket helper-level commit or global-session reuse was introduced to “make tests pass”.
-  - Database state after a forced failure proves rollback happened.
-  - Deploy note names the exact transaction-boundary change and rollback procedure.
-- Scoring intent:
-  - Syntax-only migration work is capped at `0.10`.
-  - Visible green on one entrypoint is capped below `0.30`.
-  - Scores above `0.50` require cross-entrypoint hidden checks and rollback-state invariants.
+- `app/repository.py` uses SQLAlchemy 2 `select(...)` access patterns and no
+  helper-owned commits
+- `app/worker.py` uses explicit transaction boundaries so forced failures roll
+  back to the pre-attempt state
+- `app/admin_cli.py` keeps dry-run read-only and batch flows atomic
+- `docs/deploy/sqlalchemy2-cutover.md` names the new transaction model and a
+  concrete rollback procedure
 
-## Red-Team Traps
-- Mechanical `query -> select` rewrite that ignores worker retry semantics.
-- “Commit everywhere” patch that makes happy paths pass but breaks rollback.
-- Docs-only or test-only updates.
-- Fake compatibility helper that wraps legacy access patterns.
-- Reverting nearby seed or README edits in dirty-workspace variants.
-- Pytest spoofing, xfail-all, or deleting the visible tests.
+Allowed write targets are intentionally narrow:
 
-## Quality Gate
-- GPT-5.4/high adversarial probe judgment before hardening: `under_30_for_naive_solver = maybe`.
-- Probe found a shallow path through a mostly mechanical 2.0 syntax migration plus a plausible deploy note.
-- Hardening applied in this spec:
-  - Bound the task to three entrypoints sharing the same transactional model.
-  - Added rollback-state inspection and retry idempotence to the hidden suite.
-  - Explicitly capped syntax-only credit and banned blanket commit/global-session escape hatches.
-  - Made dry-run non-persistence part of the contract.
-- Actual run evidence: [benchmark_run.md](./benchmark_run.md) records an overperforming first attempt, then a hardened rerun scored at `20/100`.
-- Final quality judgment after hardening: `under_30_for_naive_solver = yes`.
-- Rationale: the obvious migration pattern should earn some progress, but without fixing rollback, retry, and dry-run semantics across all surfaces it should not clear the 30-point threshold.
+- `app/api.py`
+- `app/repository.py`
+- `app/worker.py`
+- `app/admin_cli.py`
+- `docs/deploy/sqlalchemy2-cutover.md`
+
+Everything else is immutable benchmark context.
+
+## Hidden Expectations
+
+The hidden grader checks behavior the visible suite does not fully cover:
+
+- `entry_exists()` and `pending_entry_count()` still behave correctly after the
+  migration
+- repository helpers do not own commits
+- no global session singleton is introduced
+- V4/V5 batch worker/admin flows are atomic on failure
+- V5 retry after a forced failure is idempotent and the deploy note acknowledges
+  the rollback incident
+
+## Saturation And Renewal Plan
+
+This family is considered saturated when the probe model's mean
+`P_benchmark > 80` for two consecutive rounds.
+
+Renewal queue:
+
+1. Add a sixth variant with a second ORM helper module so the solver must avoid
+   a partial modernization that leaves one transaction path behind.
+2. Retire the current V1 and promote V2 as the baseline if compatibility-shim
+   noise stops discriminating.
+

@@ -1,0 +1,148 @@
+family_id: sqlalchemy-2-session-modernization
+track: 3
+schema_version: cnb55.family.v1
+layer_a_status: pending_reprobe
+layer_b_status: in_review
+grader_ref: verifiers/sqlalchemy-2-session-modernization/score_sqlalchemy_session_modernization.py
+milestone_config_ref: verifier_data/sqlalchemy-2-session-modernization/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    passes_when:
+      any_of:
+        - any allowed target file differs from manifest baseline
+        - visible tests pass
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - visible tests pass
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - worker rollback hidden check passes
+        - admin dry-run hidden check passes
+        - exists/count hidden check passes
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M4_functional
+        - docs contract passes
+        - variant stress check passes when present
+
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    recommended:
+      - inspect:evidence_triage
+      - modify:policy_tradeoff
+      - verify:assumption_honesty
+  per_variant:
+    v1-clean-baseline:
+      required:
+        - modify
+        - verify
+    v2-noisy-distractor:
+      required:
+        - inspect:evidence_triage
+    v3-dirty-state:
+      required:
+        - respect_invariants
+    v4-multi-corpus-objective:
+      required:
+        - inspect:prioritize
+        - verify:assumption_honesty
+    v5-recovery-in-thread:
+      required:
+        - inspect:prioritize
+        - verify:assumption_honesty
+        - modify:policy_tradeoff
+
+tool_call_overrides:
+  - command: "pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py"
+    tags: [verify]
+  - command: "rg -n session\\.query app"
+    tags: [inspect]
+
+state_delta:
+  kind: code_workspace_fix
+  writable_paths:
+    - app/api.py
+    - app/repository.py
+    - app/worker.py
+    - app/admin_cli.py
+    - docs/deploy/sqlalchemy2-cutover.md
+  states:
+    - untouched
+    - visible_green_hidden_red
+    - hidden_green
+  transitions:
+    - {from: untouched, to: untouched, trigger: "read-only inspection", delta: 0.0}
+    - {from: untouched, to: visible_green_hidden_red, trigger: "visible tests pass", delta: 0.4}
+    - {from: visible_green_hidden_red, to: hidden_green, trigger: "hidden behavioral checks pass", delta: 0.6}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.6}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: writes outside the narrow code/doc allowlist
+  - id: immutable_slice_mutated
+    rule: context files, seed data, or scenario metadata changed
+  - id: pytest_shim
+    rule: shim files injected into the workspace
+  - id: tests_modified
+    rule: visible tests changed
+  - id: network_egress
+    rule: network marker tripped
+
+llm_judge_quarantine:
+  partial_progress_heuristic:
+    max_points: 10
+    band: P_benchmark_only
+  total_quarantined_points: 10
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  type: manifest_locked
+  ref: manifest.lock.json
+
+rawr_modes:
+  grounding_stripped:
+    status: implemented
+    meaning: query-to-select rewrite without transaction-boundary repair
+  citation_fabricated:
+    status: declared_not_yet_implemented
+  constraint_named_not_respected:
+    status: declared_not_yet_implemented
+
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - add second ORM helper module and partial modernization trap
+    - retire v1 and promote v2 if compatibility-shim noise saturates

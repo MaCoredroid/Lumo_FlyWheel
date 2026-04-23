@@ -1,0 +1,20 @@
+{
+  "allowed_write_paths": [
+    "app/api.py",
+    "app/repository.py",
+    "app/worker.py",
+    "app/admin_cli.py",
+    "docs/deploy/sqlalchemy2-cutover.md"
+  ],
+  "oracle_overlay_root": "verifier_data/sqlalchemy-2-session-modernization/v4-multi-corpus-objective/oracle/files",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+    "AGENTS.md": "e9b36e2c0644bd791b7c61c0b687c40c7c200698f1f66579521c425ca48692e1",
+    "Dockerfile": "2d145451c7bbb151dbf5d75e1074bd95a017156a65846a739bf35c6047c51192",
+    "artifacts": "ca4883f4ddddcebe860072d5a7490164fa322451502386393d939c9942f82b4a",
+    "release_context": "9033448c17beb022040e518ce58b257f0dda00c2c2c8d74efd57a4aa8dafa4a5",
+    "seed": "7f643112ffa68781bf7296704f1a8ea067ad12ecd975c82f339c83b545e63932",
+    "tests": "a08ee1a63a1025a3d296710ea39877659daac1731843710d5c9d608b473d9c69"
+  },
+  "variant_id": "v4-multi-corpus-objective"
+}

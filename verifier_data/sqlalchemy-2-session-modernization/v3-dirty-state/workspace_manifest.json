@@ -1,0 +1,39 @@
+{
+  "allowed_write_paths": [
+    "app/api.py",
+    "app/repository.py",
+    "app/worker.py",
+    "app/admin_cli.py",
+    "docs/deploy/sqlalchemy2-cutover.md"
+  ],
+  "files": {
+    ".scenario_variant": "fdc62f17d056667cff21d79f952b69698e909ea4d276ac5b4fff4947912b2301",
+    "AGENTS.md": "c58ae2da8f131b7d8f09c8e4e23bdc270d0ff7ce345f87061efce2f0b1220845",
+    "Dockerfile": "b366aa97b7f04f4e51915feceb6ea3dc725251f98123fedf8b1167ad2d1e3b81",
+    "README.md": "a85ed4b0f4ab6b7b2faff6d7e2731b60f535bb6adbe36c5734eb640d0cf1c97d",
+    "app/admin_cli.py": "6ac2f141428cff21b0b77108663025df81a940ad288a001dbebb9ebb3d352220",
+    "app/api.py": "d722dc0fee2181761c87b4467662970e76f2313aac354e6001d880cae3c4c112",
+    "app/db.py": "7130b3190b837a2230cd6ec84c0ee2136cdd602498839d3096501bb0a34497b0",
+    "app/models.py": "89a50c5f07b0af2ddee75625fba395f24aafe4f7935f07fef76bed60f5e57aed",
+    "app/repository.py": "f7015da73b065acce48e93e64f6c9effab444122f2ac517e22607fcc244a9f29",
+    "app/worker.py": "d1143c6b26595befe4195056766b08d0d65d26720b74e8c2b7e7e85fcb0872b3",
+    "artifacts/README.md": "fcf3f67bfb9e7f238b9994e77d05d1414d94bb8d2edbf31f25d1973121894b97",
+    "docs/deploy/sqlalchemy2-cutover.md": "dc46e3ce249e9bb28bac9a143c7be6b4c8203b10f884310ecd7f30f1b120654c",
+    "notes/in_progress_patch.md": "55a817d13fe4d8a689a55b4a74fc8725fcb01de763d3b18d6d49ed57c79f8b86",
+    "seed/ledger_seed.sql": "5aea59b9ceb947823cd6523ec5f78755a9337aaaf0e9f805ef0716c253a0b510",
+    "tests/test_admin_cli.py": "a85dfd56c1e342facb64e32c7ee27c4ccdfad2af62867e252d3560a7082267b0",
+    "tests/test_api.py": "746392a57ecfbe6e958f697a5d557184b47a9fa3ca33d031f129778b99f72fe1",
+    "tests/test_worker.py": "4772003fcf68b4b6b8dcea0c4bfbc6b0e312318c5a5c310da5ae8ad73339f715"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+    "AGENTS.md": "c9d142cc3ddb773773e7bffb50f94e0808cf78fff3c1bd4f452f55821693bd39",
+    "Dockerfile": "2d145451c7bbb151dbf5d75e1074bd95a017156a65846a739bf35c6047c51192",
+    "README.md": "cb527edc2986acc6ba823b82fa26b8473c3c5f84dca20549cf22c2bc779ba5f9",
+    "artifacts": "ca4883f4ddddcebe860072d5a7490164fa322451502386393d939c9942f82b4a",
+    "notes": "b96f10b19290f330edfba82677d9abcc13b41f2d55a463b73705d1523c61d8bc",
+    "seed": "7f643112ffa68781bf7296704f1a8ea067ad12ecd975c82f339c83b545e63932",
+    "tests": "a08ee1a63a1025a3d296710ea39877659daac1731843710d5c9d608b473d9c69"
+  },
+  "variant_id": "v3-dirty-state"
+}

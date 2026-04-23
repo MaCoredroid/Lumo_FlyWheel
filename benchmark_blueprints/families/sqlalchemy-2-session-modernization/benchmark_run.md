@@ -1,41 +1,48 @@
 # Benchmark Run
 
-## Attempt History
-- `attempt_01`
-  - model: `gpt-5.4`
-  - reasoning: `high`
-  - agent: `019da338-6914-7b43-ad6c-adf0e89a7c98`
-  - result: over target under the original evaluator because visible transaction fixes were worth too much.
-- `attempt_02`
-  - model: `gpt-5.4`
-  - reasoning: `high`
-  - agent: `019da33f-ceb9-74f1-9140-9c5cc6ff9af8`
-  - workspace: `probe_runs/attempt_02/workspace`
+## attempt_00 — baseline design
 
-## Hardening Applied After Attempt 01
-- Shifted most of the score behind withheld retry/idempotence and multi-entrypoint transaction packs.
-- Added a cap at `20` when only the visible entrypoints are proven.
-- Reduced syntax-only and docs-only credit.
+- Original family existed only as a single loose workspace plus shallow docs.
+- No five-variant ladder, no family-local scorer, no verifier data, no
+  manifests, no Layer-B declaration.
+- Hypothesis: visible worker/admin failures alone would not give an honest
+  `~20/100` signal because the bundle did not yet encode batch, context, or
+  integrity pressure.
 
-## Attempt 02 Evidence
-- Visible command: `pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py`
-  - result: `PASS` (`3 passed`)
-- Audit command: `rg -n "session\\.query\\(" app`
-  - result: `PASS` (no live matches)
-- Solver changed repository, API, worker, admin CLI, and deploy note files.
+## attempt_01 — pre-rebuild hardening snapshot
 
-## Scoring Against Hardened Evaluator
-- Visible tests pass: `10/10`
-- No live `session.query(`: `5/5`
-- Deploy note accuracy: `5/5`
-- Hidden worker retry pack: `0/20`
-- Hidden admin CLI pack: `0/20`
-- Hidden rollback-state pack: `0/20`
-- Trusted anti-global-session checks: `0/10`
-- Hidden multi-entrypoint boundary pack: `0/10`
-- Raw subtotal before caps: `20/100`
-- Final scored result: `20/100`
+- Earlier family-local notes already documented a hardened visible/hidden split
+  that targeted `20/100` for a shallow GPT-5.4/high solver.
+- That work remained partial because the shipped family layout still lacked the
+  CNB-55 five-variant bundle and Layer-B artifacts.
 
-## Final Judgment
-- Target achieved: `yes`
-- Current hardness judgment: a naive GPT-5.4/high solver can fix the visible transaction bugs, but the withheld retry/idempotence packs still gate anything above the intended `~20/100` band.
+## attempt_02 — family rebuild for CNB-55 shape
+
+- Replaced the single runnable bundle with five explicit variants:
+  `v1-clean-baseline` through `v5-recovery-in-thread`.
+- Added immutable context files for stale-shim noise, dirty local edits,
+  release-objective drift, and rollback incident recovery.
+- Added family-local scorer, hidden tests, oracle file set, milestone scripts,
+  and variant-local verifier-data directories.
+- Rewrote `task_spec.md` and `evaluator_contract.md` to match the new family
+  shape and narrow write allowlist.
+
+## attempt_03 — regeneration / acceptance status
+
+- Ran `scripts/regen_family.py` end to end.
+- Generated per-variant `workspace_manifest.json`, `gold_fix.json`, and
+  `manifest.lock.json`.
+- Observed baseline scores on all five variants:
+  - oracle: `100`
+  - untouched / empty: `0`
+  - query-only shortcut: `20`
+- Generated verification matrices:
+  - `verification_matrix.md` for `v1-clean-baseline`
+  - `verification_matrix_v5.md` for `v5-recovery-in-thread`
+- Stress-matrix spot check:
+  - V5 `Visible-only repair` lands at `35` with `batch_atomicity_missing`
+    still firing, which is the intended shape for the batch / incident stress
+    row.
+- Live probe status: pending.
+- Next gate: run a real `codex exec` family probe and decide whether Layer A is
+  already honest enough to keep or still needs another hardening pass.

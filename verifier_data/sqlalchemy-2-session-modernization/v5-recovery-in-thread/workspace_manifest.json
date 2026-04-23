@@ -1,0 +1,40 @@
+{
+  "allowed_write_paths": [
+    "app/api.py",
+    "app/repository.py",
+    "app/worker.py",
+    "app/admin_cli.py",
+    "docs/deploy/sqlalchemy2-cutover.md"
+  ],
+  "files": {
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "b89fcbb8313c1663ae9eab1e5bcf6adb997fafeed7aeb03fa6db74247e45eda3",
+    "Dockerfile": "b366aa97b7f04f4e51915feceb6ea3dc725251f98123fedf8b1167ad2d1e3b81",
+    "app/admin_cli.py": "6ac2f141428cff21b0b77108663025df81a940ad288a001dbebb9ebb3d352220",
+    "app/api.py": "d722dc0fee2181761c87b4467662970e76f2313aac354e6001d880cae3c4c112",
+    "app/db.py": "7130b3190b837a2230cd6ec84c0ee2136cdd602498839d3096501bb0a34497b0",
+    "app/models.py": "89a50c5f07b0af2ddee75625fba395f24aafe4f7935f07fef76bed60f5e57aed",
+    "app/repository.py": "f7015da73b065acce48e93e64f6c9effab444122f2ac517e22607fcc244a9f29",
+    "app/worker.py": "d1143c6b26595befe4195056766b08d0d65d26720b74e8c2b7e7e85fcb0872b3",
+    "artifacts/README.md": "fcf3f67bfb9e7f238b9994e77d05d1414d94bb8d2edbf31f25d1973121894b97",
+    "docs/deploy/sqlalchemy2-cutover.md": "dc46e3ce249e9bb28bac9a143c7be6b4c8203b10f884310ecd7f30f1b120654c",
+    "incident_context/recovery-checklist.md": "77c9223933bffd65acd128a6c8ad7cdbcc4452d2d5069d5b113b4127becd6258",
+    "incident_context/retry-state-rollback.md": "ce0b2efd1e7cd5ae39ef89995d6291a5947e05c64bfbc7c77d743334d85ec596",
+    "release_context/current-cutover-gate.md": "4afb5d87a940c17495a836a1eca390490d7b1527187d451d22060d766930bbd3",
+    "seed/ledger_seed.sql": "5aea59b9ceb947823cd6523ec5f78755a9337aaaf0e9f805ef0716c253a0b510",
+    "tests/test_admin_cli.py": "a85dfd56c1e342facb64e32c7ee27c4ccdfad2af62867e252d3560a7082267b0",
+    "tests/test_api.py": "746392a57ecfbe6e958f697a5d557184b47a9fa3ca33d031f129778b99f72fe1",
+    "tests/test_worker.py": "4772003fcf68b4b6b8dcea0c4bfbc6b0e312318c5a5c310da5ae8ad73339f715"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "eff5730f83ffdbf6c96453d592074e5be8f4da03868aafd19114f53625f08c73",
+    "Dockerfile": "2d145451c7bbb151dbf5d75e1074bd95a017156a65846a739bf35c6047c51192",
+    "artifacts": "ca4883f4ddddcebe860072d5a7490164fa322451502386393d939c9942f82b4a",
+    "incident_context": "8d93a3db1a39b8ac7697321d8c65be22eb1ec4023531b23dafb6add69850f616",
+    "release_context": "57d026e5c731351755d48c90f7c76a8625904d850eb540ce1ac813e3fbd1deb3",
+    "seed": "7f643112ffa68781bf7296704f1a8ea067ad12ecd975c82f339c83b545e63932",
+    "tests": "a08ee1a63a1025a3d296710ea39877659daac1731843710d5c9d608b473d9c69"
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

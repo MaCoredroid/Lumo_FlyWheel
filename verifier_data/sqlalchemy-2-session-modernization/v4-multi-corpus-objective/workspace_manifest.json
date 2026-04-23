@@ -1,0 +1,38 @@
+{
+  "allowed_write_paths": [
+    "app/api.py",
+    "app/repository.py",
+    "app/worker.py",
+    "app/admin_cli.py",
+    "docs/deploy/sqlalchemy2-cutover.md"
+  ],
+  "files": {
+    ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+    "AGENTS.md": "85307bd5fc79af7b08bea83679c2bdded584d2024c99fb0e990c19964ddb0aeb",
+    "Dockerfile": "b366aa97b7f04f4e51915feceb6ea3dc725251f98123fedf8b1167ad2d1e3b81",
+    "app/admin_cli.py": "6ac2f141428cff21b0b77108663025df81a940ad288a001dbebb9ebb3d352220",
+    "app/api.py": "d722dc0fee2181761c87b4467662970e76f2313aac354e6001d880cae3c4c112",
+    "app/db.py": "7130b3190b837a2230cd6ec84c0ee2136cdd602498839d3096501bb0a34497b0",
+    "app/models.py": "89a50c5f07b0af2ddee75625fba395f24aafe4f7935f07fef76bed60f5e57aed",
+    "app/repository.py": "f7015da73b065acce48e93e64f6c9effab444122f2ac517e22607fcc244a9f29",
+    "app/worker.py": "d1143c6b26595befe4195056766b08d0d65d26720b74e8c2b7e7e85fcb0872b3",
+    "artifacts/README.md": "fcf3f67bfb9e7f238b9994e77d05d1414d94bb8d2edbf31f25d1973121894b97",
+    "docs/deploy/sqlalchemy2-cutover.md": "dc46e3ce249e9bb28bac9a143c7be6b4c8203b10f884310ecd7f30f1b120654c",
+    "release_context/current-cutover-gate.md": "acdecb2e0e556d4a08edf0cb46faafb23a57fd3841705f2592ae3400208d3612",
+    "release_context/test-plan.md": "746e952c0d9b8bba5fe692688a86cc788d568a3629df759fc0af1e87ea8c0362",
+    "seed/ledger_seed.sql": "5aea59b9ceb947823cd6523ec5f78755a9337aaaf0e9f805ef0716c253a0b510",
+    "tests/test_admin_cli.py": "a85dfd56c1e342facb64e32c7ee27c4ccdfad2af62867e252d3560a7082267b0",
+    "tests/test_api.py": "746392a57ecfbe6e958f697a5d557184b47a9fa3ca33d031f129778b99f72fe1",
+    "tests/test_worker.py": "4772003fcf68b4b6b8dcea0c4bfbc6b0e312318c5a5c310da5ae8ad73339f715"
+  },
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+    "AGENTS.md": "e9b36e2c0644bd791b7c61c0b687c40c7c200698f1f66579521c425ca48692e1",
+    "Dockerfile": "2d145451c7bbb151dbf5d75e1074bd95a017156a65846a739bf35c6047c51192",
+    "artifacts": "ca4883f4ddddcebe860072d5a7490164fa322451502386393d939c9942f82b4a",
+    "release_context": "9033448c17beb022040e518ce58b257f0dda00c2c2c8d74efd57a4aa8dafa4a5",
+    "seed": "7f643112ffa68781bf7296704f1a8ea067ad12ecd975c82f339c83b545e63932",
+    "tests": "a08ee1a63a1025a3d296710ea39877659daac1731843710d5c9d608b473d9c69"
+  },
+  "variant_id": "v4-multi-corpus-objective"
+}
