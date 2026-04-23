@@ -60,6 +60,7 @@
           "Makefile",
           "docs/ops/daily_triage.md",
           "drafts/codex_skill_patch.md",
+          "drafts/codex_triage.toml",
           "fixtures/open_incidents.json",
           "ops/automation/triage.cron",
           "scripts/triage.py"
@@ -84,6 +85,15 @@
       "source_paths": [
         "docs/ops/legacy_schedule.md",
         "drafts/codex_skill_patch.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_triage.toml",
+      "reason": "Rejected because this path is abandoned relative to the live workflow mapping.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md",
+        "drafts/codex_triage.toml"
       ]
     }
   ],

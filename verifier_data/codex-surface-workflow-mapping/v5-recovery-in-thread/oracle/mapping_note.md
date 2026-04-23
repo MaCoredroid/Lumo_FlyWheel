@@ -44,6 +44,7 @@ The mapping note ties each artifact back to the exact repo files and exact liter
 Source paths:
 - `Makefile`
 - `docs/ops/daily_triage.md`
+- `drafts/codex_triage.toml`
 - `fixtures/open_incidents.json`
 - `incident_context/recovered_plan.md`
 - `incident_context/weekend_rollback.md`
@@ -61,4 +62,5 @@ Command literals:
 
 - `skills/legacy/daily_triage/SKILL.md`: Rejected because this path is stale relative to the live workflow mapping.
 - `drafts/codex_skill_patch.md`: Rejected because this path is abandoned relative to the live workflow mapping.
+- `drafts/codex_triage.toml`: Rejected because this path is abandoned relative to the live workflow mapping.
 - `incident_context/weekend_rollback.md`: Rejected because this path is rollback relative to the live workflow mapping.

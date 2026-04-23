@@ -14,7 +14,7 @@
     "Makefile": "e5f1e6032288194f78aa9df973f7a0451f14ce0ba79e1de758d3e23065008ced",
     "bin": "3754c0e2ffe6a15935d6079fa58a8dcbb5ce3cbb98a8c3fa87cadd89fc884631",
     "docs": "0dbed4f4e86eda8fdf0037f035540a3f37df2106057794b5ba620512f439dec7",
-    "drafts": "32e56d450a2bcebe24511337572f0fbb9a383f837bfab377f6a04a4f8ed18a16",
+    "drafts": "80b8921e52a8448961c45272b910df679ea85cde7f5916b6bebaf084c79d4f0d",
     "fixtures": "625154fc076fb9a3484ef5249e0c553e637c3a156bb1ef84741f5332f0b5a5a7",
     "ops": "2396dcf33dd0adb9f4f3bc373f0e2f0032e281cc8e51a4063df9b0211c7ca147",
     "release_context": "33f77a6ca8c049723797fe396c4f3bf9f00c1719d8fd1ce67b37da2e4b510f44",
@@ -32,6 +32,11 @@
       "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
       "path": "drafts/codex_skill_patch.md",
       "reason_keyword": "abandoned"
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_triage.toml",
+      "reason_keyword": "abandoned"
     }
   ],
   "release_paths": [
@@ -44,6 +49,7 @@
     "docs/ops/daily_triage.md",
     "ops/automation/triage.cron",
     "fixtures/open_incidents.json",
+    "drafts/codex_triage.toml",
     "release_context/release_notes_2026_04.md",
     "release_context/objective_shift.md"
   ],

@@ -45,6 +45,7 @@ Source paths:
 - `Makefile`
 - `docs/ops/daily_triage.md`
 - `drafts/codex_skill_patch.md`
+- `drafts/codex_triage.toml`
 - `fixtures/open_incidents.json`
 - `ops/automation/triage.cron`
 - `scripts/triage.py`
@@ -58,3 +59,4 @@ Command literals:
 
 - `skills/legacy/daily_triage/SKILL.md`: Rejected because this path is stale relative to the live workflow mapping.
 - `drafts/codex_skill_patch.md`: Rejected because this path is abandoned relative to the live workflow mapping.
+- `drafts/codex_triage.toml`: Rejected because this path is abandoned relative to the live workflow mapping.
