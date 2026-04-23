@@ -1,8 +1,8 @@
 family_id: request-path-evidence-brief
 track: 2
 schema_version: cnb55.family.v1
-layer_a_status: implemented_pending_probe
-layer_b_status: implemented_pending_probe
+layer_a_status: failed_freeze_gate      # counted whole-family live probe completed; see benchmark_run.md attempt_03
+layer_b_status: implemented_pending_review   # Layer B artifacts are in place and post-probe, awaiting review
 grader_ref: verifiers/request-path-evidence-brief/score_trace.py
 milestone_config_ref: verifier_data/request-path-evidence-brief/{variant_id}/milestones/
 milestones:
