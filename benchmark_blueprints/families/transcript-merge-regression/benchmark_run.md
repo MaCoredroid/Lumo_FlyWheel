@@ -132,3 +132,36 @@ Next hardening hypothesis:
   V2-V5 variant deltas create a stronger runtime/evaluator distinction, or
   explicitly document this family as a frontier-easy signal that cannot reach
   the canonical `15-25` window without fake ambiguity.
+
+## attempt_03 — reviewer follow-up attestation only
+
+Design choice:
+
+- No fresh live probe in this turn.
+- Applied the explicit-attestation path rather than changing the scorer or task
+  design without new calibration evidence.
+
+Changes made:
+
+- `family.yaml` now marks `layer_a_status: failed_freeze_gate` instead of the
+  stale post-probe `in_progress` value.
+- `family.yaml` now carries a Layer A review attestation that this family is
+  currently a frontier-easy / widening-candidate signal, based on the recorded
+  `attempt_02_live_probe` results.
+- `task_spec.md` now repeats the same calibration stance so reviewers do not
+  read the bundle as if Layer A were still merely pending.
+
+Why this path:
+
+- The latest real whole-family probe already established the important point:
+  the family misses §10.1 because the frontier model usually repairs the
+  runtime defect, while a meaningful amount of remaining separation still comes
+  from the incident-note ceiling.
+- Changing scoring or task pressure here without a new probe would create a new
+  unmeasured calibration state. That would be less honest than simply marking
+  the current state explicitly.
+
+Status after this follow-up:
+
+- Layer A: `failed_freeze_gate`, with explicit widening-candidate attestation.
+- Layer B: unchanged from the prior pass.

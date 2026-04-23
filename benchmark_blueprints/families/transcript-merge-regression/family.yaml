@@ -2,10 +2,27 @@ family_id: transcript-merge-regression
 track: 11
 scenario_type: investigate_then_fix
 schema_version: cnb55.family.v1
-layer_a_status: in_progress
+layer_a_status: failed_freeze_gate
 layer_b_status: implemented_pending_acceptance
 grader_ref: verifiers/transcript-merge-regression/score_transcript_merge.py
 milestone_config_ref: verifier_data/transcript-merge-regression/{variant_id}/milestones/
+
+layer_a_review:
+  latest_probe_attempt: attempt_02_live_probe
+  verdict: frontier_easy_widening_candidate
+  attestation: |
+    The latest whole-family live probe already happened and is recorded in
+    benchmark_run.md attempt_02. It missed the §10.1 freeze gate with
+    family_mean=72.67, max_variant_mean=86.67, min_variant_mean=65.00, and
+    monotonic failure between V3->V4 and V4->V5.
+
+    The honest read is that this family is currently frontier-easy on the core
+    reducer/runtime repair task. Residual separation in V2-V5 is still driven
+    mostly by the stale_incident_note ceiling, not by a materially harder
+    runtime miss. This follow-up does not change scoring or claim a new
+    calibration result. Until a later runtime-facing hardening pass is probed,
+    treat this family as a widening-candidate signal rather than a
+    §10.1-calibrated Layer A family.
 
 milestones:
   M1_localization:

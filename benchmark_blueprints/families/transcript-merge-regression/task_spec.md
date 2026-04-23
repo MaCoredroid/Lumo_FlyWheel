@@ -33,3 +33,22 @@ If the family mean probe score stays above `80` for two rounds, renew with:
 
 1. a variant where assistant fragments and tool fragments share sequence ranges
 2. a variant where summary consumers ingest both rendered lines and merged-event counts
+
+## Current Calibration Attestation
+
+The latest whole-family live probe is already recorded in
+`benchmark_run.md` attempt_02. That run showed this family is currently too
+easy for the target §10.1 window on the underlying reducer/runtime repair:
+
+- `family_mean = 72.67`
+- `max_variant_mean = 86.67`
+- `min_variant_mean = 65.00`
+- monotonic failed at `V3 -> V4` and `V4 -> V5`
+
+For this family, the current differentiator is still too note-heavy: several
+V2-V5 failures came from the incident-note ceiling rather than a stronger
+runtime miss. This documentation follow-up does not claim a new calibration
+result and does not run a fresh probe. Until a later hardening pass proves
+otherwise, treat `transcript-merge-regression` as an honest
+frontier-easy / widening-candidate family, and prefer future changes that add
+runtime or evidence-triage difficulty over more note-layer pressure.
