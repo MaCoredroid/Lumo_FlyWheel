@@ -1,0 +1,6 @@
+{"item": {"content": [{"text": "Rebuild the replay after the chronology-blind rollback.", "type": "output_text"}], "type": "message"}, "sequence": 1, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"route\":\"primary\"}", "call_id": "call-route-primary", "tool_name": "route_lookup", "type": "tool_call"}, "sequence": 2, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"route\":\"fallback\"}", "call_id": "call-route-fallback", "tool_name": "route_lookup", "type": "tool_call"}, "sequence": 3, "type": "response.output_item.added"}
+{"item": {"call_id": "call-route-fallback", "output": "fallback warming", "tool_name": "route_lookup", "type": "tool_result"}, "sequence": 4, "type": "response.output_item.added"}
+{"item": {"call_id": "call-route-primary", "output": "primary ready", "tool_name": "route_lookup", "type": "tool_result"}, "sequence": 5, "type": "response.output_item.added"}
+{"response": {"id": "resp_demo"}, "sequence": 6, "type": "response.completed"}

@@ -1,0 +1,10 @@
+{
+  "message": {
+    "function_call": {
+      "arguments": "{\"ticker\":\"AAPL\"}",
+      "name": "market_lookup"
+    },
+    "role": "assistant"
+  },
+  "type": "legacy.chat_completion"
+}

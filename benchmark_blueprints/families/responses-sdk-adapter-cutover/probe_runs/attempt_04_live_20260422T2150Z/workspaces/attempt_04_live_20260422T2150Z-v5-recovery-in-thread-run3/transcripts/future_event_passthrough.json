@@ -1,0 +1,27 @@
+[
+  {
+    "type": "message",
+    "sequence": 0,
+    "content": [
+      {"type": "output_text", "text": "Checking current responders."}
+    ]
+  },
+  {
+    "type": "reasoning_log",
+    "sequence": 1,
+    "summary": "Future SDK event: keep for replay or ignore safely."
+  },
+  {
+    "type": "tool_call",
+    "sequence": 2,
+    "call_id": "call-11",
+    "name": "lookup_owner",
+    "arguments": "{\"service\": \"incident-handoff\"}"
+  },
+  {
+    "type": "tool_result",
+    "sequence": 3,
+    "call_id": "call-11",
+    "output": "primary-owner"
+  }
+]

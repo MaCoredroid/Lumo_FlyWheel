@@ -1,0 +1,6 @@
+{"item": {"content": [{"text": "Need quote and chart snapshots before I answer.", "type": "output_text"}], "type": "message"}, "sequence": 1, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"field\":\"quote\",\"ticker\":\"AAPL\"}", "call_id": "call-quote-aapl", "tool_name": "market_lookup", "type": "tool_call"}, "sequence": 2, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"field\":\"chart\",\"ticker\":\"AAPL\"}", "call_id": "call-chart-aapl", "tool_name": "market_lookup", "type": "tool_call"}, "sequence": 3, "type": "response.output_item.added"}
+{"item": {"call_id": "call-chart-aapl", "output": "5d trend up", "tool_name": "market_lookup", "type": "tool_result"}, "sequence": 4, "type": "response.output_item.added"}
+{"item": {"call_id": "call-quote-aapl", "output": "AAPL 192.11", "tool_name": "market_lookup", "type": "tool_result"}, "sequence": 5, "type": "response.output_item.added"}
+{"response": {"id": "resp_demo"}, "sequence": 6, "type": "response.completed"}

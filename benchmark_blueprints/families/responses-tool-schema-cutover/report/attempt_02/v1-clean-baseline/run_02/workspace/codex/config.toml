@@ -1,0 +1,4 @@
+[runtime]
+transport = "responses"
+tool_result_join_key = "call_id"
+replay_mode = "responses_output_items"

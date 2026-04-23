@@ -1,0 +1,6 @@
+{"item": {"content": [{"text": "Keep the summary stable while repairing the join semantics.", "type": "output_text"}], "type": "message"}, "sequence": 1, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"page\":1}", "call_id": "call-orders-page-1", "tool_name": "orders_lookup", "type": "tool_call"}, "sequence": 2, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"page\":2}", "call_id": "call-orders-page-2", "tool_name": "orders_lookup", "type": "tool_call"}, "sequence": 3, "type": "response.output_item.added"}
+{"item": {"call_id": "call-orders-page-2", "output": "9 orders", "tool_name": "orders_lookup", "type": "tool_result"}, "sequence": 4, "type": "response.output_item.added"}
+{"item": {"call_id": "call-orders-page-1", "output": "12 orders", "tool_name": "orders_lookup", "type": "tool_result"}, "sequence": 5, "type": "response.output_item.added"}
+{"response": {"id": "resp_demo"}, "sequence": 6, "type": "response.completed"}

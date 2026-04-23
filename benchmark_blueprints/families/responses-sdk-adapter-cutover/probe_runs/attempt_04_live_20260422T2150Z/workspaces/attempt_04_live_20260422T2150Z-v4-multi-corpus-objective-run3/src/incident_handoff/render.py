@@ -7,5 +7,5 @@ def render_transcript(events):
         elif kind == "tool_call":
             lines.append(f"tool_call({event['call_id']}): {event['name']} {event['arguments']}")
         elif kind == "tool_result":
-            lines.append(f"tool_result: {event['output']}")
+            lines.append(f"tool_result({event['call_id']}): {event['output']}")
     return "\n".join(lines)

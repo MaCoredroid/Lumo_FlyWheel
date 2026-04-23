@@ -1,0 +1,6 @@
+{"item": {"content": [{"text": "Need weather for SF and NYC before I answer.", "type": "output_text"}], "type": "message"}, "sequence": 1, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"city\":\"San Francisco\"}", "call_id": "call-weather-sf", "tool_name": "weather_lookup", "type": "tool_call"}, "sequence": 2, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"city\":\"New York\"}", "call_id": "call-weather-nyc", "tool_name": "weather_lookup", "type": "tool_call"}, "sequence": 3, "type": "response.output_item.added"}
+{"item": {"call_id": "call-weather-nyc", "output": "New York is 71F and sunny.", "tool_name": "weather_lookup", "type": "tool_result"}, "sequence": 4, "type": "response.output_item.added"}
+{"item": {"call_id": "call-weather-sf", "output": "San Francisco is 58F and foggy.", "tool_name": "weather_lookup", "type": "tool_result"}, "sequence": 5, "type": "response.output_item.added"}
+{"response": {"id": "resp_demo"}, "sequence": 6, "type": "response.completed"}

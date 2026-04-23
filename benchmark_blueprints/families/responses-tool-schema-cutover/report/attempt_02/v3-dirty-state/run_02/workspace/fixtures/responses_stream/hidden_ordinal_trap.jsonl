@@ -1,0 +1,6 @@
+{"item": {"content": [{"text": "Preserve the original call ids from the stream, not synthetic ordinals.", "type": "output_text"}], "type": "message"}, "sequence": 1, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"field\":\"quote\",\"ticker\":\"NVDA\"}", "call_id": "call-17", "tool_name": "market_lookup", "type": "tool_call"}, "sequence": 2, "type": "response.output_item.added"}
+{"item": {"arguments": "{\"field\":\"quote\",\"ticker\":\"AMD\"}", "call_id": "call-03", "tool_name": "market_lookup", "type": "tool_call"}, "sequence": 3, "type": "response.output_item.added"}
+{"item": {"call_id": "call-03", "output": "AMD 182.44", "tool_name": "market_lookup", "type": "tool_result"}, "sequence": 4, "type": "response.output_item.added"}
+{"item": {"call_id": "call-17", "output": "NVDA 914.02", "tool_name": "market_lookup", "type": "tool_result"}, "sequence": 5, "type": "response.output_item.added"}
+{"response": {"id": "resp_demo"}, "sequence": 6, "type": "response.completed"}

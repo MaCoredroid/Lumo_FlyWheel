@@ -1,10 +1,27 @@
+def _iter_content_blocks(item):
+    content = item.get("content", [])
+    if isinstance(content, str):
+        return [{"type": "output_text", "text": content}]
+    return content or []
+
+
+def _sequence_key(index, item):
+    sequence = item.get("sequence")
+    if not isinstance(sequence, int):
+        sequence = index
+    return (sequence, index)
+
+
 def normalize_response_items(items):
     events = []
-    for item in items:
+    ordered_items = sorted(enumerate(items), key=lambda pair: _sequence_key(*pair))
+    for _, item in ordered_items:
         item_type = item["type"]
         if item_type == "message":
-            events.append({"kind": "assistant_text", "text": item["content"]})
-        elif item_type == "tool_call":
+            for block in _iter_content_blocks(item):
+                if block.get("type") in {"output_text", "text"} and block.get("text"):
+                    events.append({"kind": "assistant_text", "text": block["text"]})
+        elif item_type in {"tool_call", "function_call"}:
             events.append(
                 {
                     "kind": "tool_call",
@@ -13,7 +30,7 @@ def normalize_response_items(items):
                     "arguments": item["arguments"],
                 }
             )
-        elif item_type == "tool_result":
+        elif item_type in {"tool_result", "function_call_output"}:
             events.append(
                 {
                     "kind": "tool_result",

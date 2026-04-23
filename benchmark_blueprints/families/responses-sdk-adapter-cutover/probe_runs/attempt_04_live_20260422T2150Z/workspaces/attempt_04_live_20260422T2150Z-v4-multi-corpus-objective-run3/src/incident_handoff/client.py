@@ -1,13 +1,15 @@
-WIRE_API = "chat_completions"
-LEGACY_WRAPPER = True
+WIRE_API = "responses"
+LEGACY_WRAPPER = False
 
 
 def request_wire_config():
     return {
         "wire_api": WIRE_API,
-        "transcript_mode": "legacy_messages",
+        "transcript_mode": "responses_events",
     }
 
 
 def extract_response_items(response):
-    return response["choices"][0]["message"]["content"]
+    if "output" in response:
+        return response["output"]
+    return response["items"]
