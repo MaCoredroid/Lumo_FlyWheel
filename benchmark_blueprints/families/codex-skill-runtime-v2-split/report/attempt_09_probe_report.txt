@@ -1,0 +1,21 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=attempt_09_full_live_20260423T224900Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   28.00    0.00    28    28  [28,28,28]  duplicate_automation_livex3,visible_only_bundlex3
+v2-noisy-distractor                3   19.00    0.00    19    19  [19,19,19]  duplicate_automation_livex3,visible_only_bundlex3
+v3-dirty-state                     3   16.00    0.00    16    16  [16,16,16]  duplicate_automation_livex3,visible_only_bundlex3
+v4-multi-corpus-objective          3   13.00    0.00    13    13  [13,13,13]  duplicate_automation_livex3,no_reuse_extensionx3,visible_only_bundlex3
+v5-recovery-in-thread              3   10.00    0.00    10    10  [10,10,10]  duplicate_automation_livex3,incident_blind_reenablex3,no_reuse_extensionx3,visible_only_bundlex3
+
+family_mean = 17.20   (window 15.0-25.0)
+max_variant_mean = 28.00   (cap 40.0)
+min_variant_mean = 10.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [PASS] family_mean in window: 17.20
+  [PASS] max variant <= cap: 28.00
+  [PASS] at least one variant <= hard floor: min variant mean = 10.00
+  [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: ok
+
+overall: ALL PASS

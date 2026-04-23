@@ -27,7 +27,7 @@ No network, browser, or subagents are needed for the benchmark itself.
 Every variant ships the following under `workspace_bundle/<variant_id>/`:
 
 ```text
-.codex/config.toml
+config/runtime.toml
 .scenario_variant
 AGENTS.md
 Dockerfile
@@ -57,7 +57,7 @@ The solver is allowed to add the canonical skill files that the broken workspace
 
 Family-wide starting defects:
 
-- `.codex/config.toml` still points at the monolith note and a copied legacy prompt.
+- `config/runtime.toml` still points at the monolith note and a copied legacy prompt.
 - `docs/runbooks/oncall.md` tells operators to use the duplicate automation.
 - `automations/handoff-copy.toml` is still marked canonical even though it is the stale duplicate.
 - `automations/handoff-primary.toml` points at a missing script path instead of the real handoff command.
@@ -95,7 +95,7 @@ New ceiling: `incident_blind_reenable`.
 
 ### Ladder target
 
-This family is not yet freeze-gate calibrated. The intended honest direction is:
+This family is freeze-gate calibrated by counted live probe `attempt_09_full_live_20260423T224900Z`. The honest signal direction is:
 
 - visible-only bundle work stays near `20`
 - duplicate-live cleanup failures cap at `<= 30`
@@ -103,14 +103,14 @@ This family is not yet freeze-gate calibrated. The intended honest direction is:
 - reuse misses cap at `<= 35`
 - incident-blind recoveries cap at `<= 30`
 
-The full Layer A live probe is still pending after this packaging pass.
+The counted Layer A live probe passed with a monotonic V1-V5 ladder.
 
 ## Expected Deliverables
 
 - `skills/shared_handoff_contract.md`
 - `skills/oncall_handoff/SKILL.md`
 - `skills/escalation_handoff/SKILL.md` for `v4` and `v5`
-- updated `.codex/config.toml`
+- updated `config/runtime.toml`
 - canonical `automations/handoff-primary.toml`
 - retired `automations/handoff-copy.toml`
 - updated `docs/runbooks/oncall.md`
@@ -142,7 +142,7 @@ Hidden surfaces:
 ## Trusted Final-State Checks
 
 - No writes outside the intended solver surface:
-  - `.codex/config.toml`
+  - `config/runtime.toml`
   - `automations/handoff-primary.toml`
   - `automations/handoff-copy.toml`
   - `docs/runbooks/oncall.md`
@@ -157,6 +157,9 @@ Hidden surfaces:
 
 - `visible_only_bundle` ≤ `20`
   Trigger: visible pytest and smoke pass, but hidden canonical-alignment checks are still missing.
+  Variant caps: V1 `28`, V2 `19`, V3 `16`, V4 `13`, V5 `10`.
+- `missing_primary_skill` = `0`
+  Trigger: no canonical `skills/oncall_handoff/SKILL.md` exists, which represents an empty/no-op submission.
 - `legacy_reference_live` ≤ `25`
   Trigger: any live surface still references `docs/oncall_handoff_monolith.md` or `skills/legacy_handoff.md`.
 - `duplicate_automation_live` ≤ `30`

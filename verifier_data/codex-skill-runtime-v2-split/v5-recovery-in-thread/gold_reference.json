@@ -1,6 +1,6 @@
 {
   "allowed_writes": [
-    ".codex/config.toml",
+    "config/runtime.toml",
     "automations/handoff-primary.toml",
     "automations/handoff-copy.toml",
     "docs/runbooks/oncall.md",
@@ -64,5 +64,6 @@
     "automations/handoff-primary.toml",
     "automations/handoff-copy.toml"
   ],
-  "variant_id": "v5-recovery-in-thread"
+  "variant_id": "v5-recovery-in-thread",
+  "visible_only_cap": 10
 }

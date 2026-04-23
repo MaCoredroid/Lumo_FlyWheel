@@ -1,7 +1,7 @@
 family_id: codex-skill-runtime-v2-split
 track: 3
 schema_version: cnb55.family.v1
-layer_a_status: harden_needed
+layer_a_status: accepted_live_probe
 layer_b_status: implemented_local
 
 grader_ref: verifiers/codex-skill-runtime-v2-split/score_skill_runtime.py

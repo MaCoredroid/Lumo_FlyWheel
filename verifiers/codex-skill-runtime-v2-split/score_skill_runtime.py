@@ -302,7 +302,9 @@ def main() -> int:
             )
         )
         if not hidden_core:
-            state.apply_ceiling("visible_only_bundle", 20)
+            state.apply_ceiling("visible_only_bundle", int(gold.get("visible_only_cap", 20)))
+    if not state.checks.get("hidden.skill_bundle_exists", False):
+        state.apply_ceiling("missing_primary_skill", 0)
     if not state.checks.get("hidden.legacy_refs_removed", True):
         state.apply_ceiling("legacy_reference_live", 25)
     if not state.checks.get("hidden.retired_automation", True):

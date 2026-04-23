@@ -1,0 +1,3 @@
+skill_paths = ["skills/oncall_handoff/SKILL.md"]
+canonical_automation = "automations/handoff-primary.toml"
+smoke_command = "python scripts/run_handoff.py --input fixtures/handoff_input.json --output out.md"

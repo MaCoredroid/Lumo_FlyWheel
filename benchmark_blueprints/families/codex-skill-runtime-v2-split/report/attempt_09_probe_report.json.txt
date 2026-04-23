@@ -1,0 +1,126 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=attempt_09_full_live_20260423T224900Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   28.00    0.00    28    28  [28,28,28]  duplicate_automation_livex3,visible_only_bundlex3
+v2-noisy-distractor                3   19.00    0.00    19    19  [19,19,19]  duplicate_automation_livex3,visible_only_bundlex3
+v3-dirty-state                     3   16.00    0.00    16    16  [16,16,16]  duplicate_automation_livex3,visible_only_bundlex3
+v4-multi-corpus-objective          3   13.00    0.00    13    13  [13,13,13]  duplicate_automation_livex3,no_reuse_extensionx3,visible_only_bundlex3
+v5-recovery-in-thread              3   10.00    0.00    10    10  [10,10,10]  duplicate_automation_livex3,incident_blind_reenablex3,no_reuse_extensionx3,visible_only_bundlex3
+
+family_mean = 17.20   (window 15.0-25.0)
+max_variant_mean = 28.00   (cap 40.0)
+min_variant_mean = 10.00   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [PASS] family_mean in window: 17.20
+  [PASS] max variant <= cap: 28.00
+  [PASS] at least one variant <= hard floor: min variant mean = 10.00
+  [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: ok
+
+overall: ALL PASS
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": true,
+    "family_mean": 17.2,
+    "family_mean_ok": true,
+    "hard_variant_ok": true,
+    "max_variant_mean": 28,
+    "max_variant_ok": true,
+    "min_variant_mean": 10,
+    "monotonic_breaks": [],
+    "monotonic_ok": true
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "duplicate_automation_live": 3,
+        "visible_only_bundle": 3
+      },
+      "max": 28,
+      "mean": 28,
+      "min": 28,
+      "n": 3,
+      "scores": [
+        28,
+        28,
+        28
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {
+        "duplicate_automation_live": 3,
+        "visible_only_bundle": 3
+      },
+      "max": 19,
+      "mean": 19,
+      "min": 19,
+      "n": 3,
+      "scores": [
+        19,
+        19,
+        19
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {
+        "duplicate_automation_live": 3,
+        "visible_only_bundle": 3
+      },
+      "max": 16,
+      "mean": 16,
+      "min": 16,
+      "n": 3,
+      "scores": [
+        16,
+        16,
+        16
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "duplicate_automation_live": 3,
+        "no_reuse_extension": 3,
+        "visible_only_bundle": 3
+      },
+      "max": 13,
+      "mean": 13,
+      "min": 13,
+      "n": 3,
+      "scores": [
+        13,
+        13,
+        13
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "duplicate_automation_live": 3,
+        "incident_blind_reenable": 3,
+        "no_reuse_extension": 3,
+        "visible_only_bundle": 3
+      },
+      "max": 10,
+      "mean": 10,
+      "min": 10,
+      "n": 3,
+      "scores": [
+        10,
+        10,
+        10
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    }
+  }
+}

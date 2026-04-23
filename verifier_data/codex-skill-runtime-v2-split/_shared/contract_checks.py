@@ -38,14 +38,14 @@ def run_checks(workspace: Path, gold: dict) -> dict[str, bool]:
     checks: dict[str, bool] = {}
     primary_skill = workspace / "skills/oncall_handoff/SKILL.md"
     shared_contract = workspace / gold["shared_contract_path"]
-    config = parse_toml(workspace / ".codex/config.toml")
+    config = parse_toml(workspace / "config/runtime.toml")
     primary_automation = parse_toml(workspace / "automations/handoff-primary.toml")
     copy_automation = parse_toml(workspace / "automations/handoff-copy.toml")
     runbook = read_text(workspace / "docs/runbooks/oncall.md")
     primary_skill_text = read_text(primary_skill)
     shared_text = read_text(shared_contract)
     live_surface_paths = [
-        ".codex/config.toml",
+        "config/runtime.toml",
         "automations/handoff-primary.toml",
         "automations/handoff-copy.toml",
         "docs/runbooks/oncall.md",

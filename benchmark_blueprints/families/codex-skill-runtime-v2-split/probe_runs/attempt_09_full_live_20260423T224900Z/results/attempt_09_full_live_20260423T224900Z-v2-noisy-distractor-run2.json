@@ -1,0 +1,83 @@
+{
+  "M_training": 0.6667,
+  "P_benchmark": 19,
+  "breakdown": {
+    "__bands": {
+      "hidden.config_paths": "M",
+      "hidden.legacy_refs_removed": "M",
+      "hidden.primary_automation": "M",
+      "hidden.skill_bundle_exists": "M",
+      "visible.pytest_pass": "M",
+      "visible.smoke_pass": "M"
+    },
+    "hidden.config_paths": 10,
+    "hidden.legacy_refs_removed": 10,
+    "hidden.primary_automation": 10,
+    "hidden.skill_bundle_exists": 10,
+    "visible.pytest_pass": 10,
+    "visible.smoke_pass": 10
+  },
+  "ceilings_applied": [
+    "visible_only_bundle",
+    "duplicate_automation_live"
+  ],
+  "checks": {
+    "hidden.config_paths": true,
+    "hidden.legacy_refs_removed": true,
+    "hidden.primary_automation": true,
+    "hidden.retired_automation": false,
+    "hidden.runbook_alignment": false,
+    "hidden.shared_contract": false,
+    "hidden.skill_bundle_exists": true,
+    "visible.pytest_pass": true,
+    "visible.smoke_pass": true
+  },
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.5,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": false,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": false,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 0.6667,
+  "raw_score_pre_ceiling": 67,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 19,
+  "shortcut_detected": false,
+  "smoke_output_tail": "# Handoff for search-indexer\n\n- Severity: sev2\n- Owner: search-oncall\n",
+  "visible_pytest_output_tail": "...                                                                      [100%]\n3 passed in 0.02s"
+}

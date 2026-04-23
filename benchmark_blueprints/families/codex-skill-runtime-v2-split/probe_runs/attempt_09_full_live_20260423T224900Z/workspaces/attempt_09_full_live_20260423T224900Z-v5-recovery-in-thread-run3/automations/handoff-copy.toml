@@ -1,0 +1,5 @@
+canonical = false
+enabled = false
+skill = "skills/oncall_handoff/SKILL.md"
+command = "python scripts/run_handoff.py --input fixtures/handoff_input.json --output out.md"
+retired_reason = "Duplicate heartbeat alias retired after INC-4412 rollback; use automations/handoff-primary.toml"

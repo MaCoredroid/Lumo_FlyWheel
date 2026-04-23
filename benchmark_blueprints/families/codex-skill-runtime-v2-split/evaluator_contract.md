@@ -22,7 +22,7 @@ Visible-check budget is intentionally shallow. Passing the visible slice alone i
 Hidden checks are deterministic file-contract checks driven by `gold_reference.json` and `hidden_tests/check_contract.py` per variant:
 
 - primary skill exists and points at the shared contract
-- `.codex/config.toml` registers only the expected canonical skill paths
+- `config/runtime.toml` registers only the expected canonical skill paths
 - live runbook matches the canonical command and primary automation
 - duplicate automation is retired semantically (`enabled = false`, `status = "retired"`, `replaced_by = "handoff-primary.toml"`)
 - stale monolith and legacy prompt references are absent from live surfaces
@@ -66,7 +66,8 @@ Checks that do not apply to a variant are excluded from the variant’s normaliz
 
 | Ceiling name | Max points | Trigger |
 | --- | ---: | --- |
-| `visible_only_bundle` | 20 | visible slice passes, but canonical hidden alignment still fails |
+| `visible_only_bundle` | 28/19/16/13/10 | visible slice passes, but canonical hidden alignment still fails; the cap follows the V1-V5 difficulty ladder |
+| `missing_primary_skill` | 0 | no canonical `skills/oncall_handoff/SKILL.md` exists |
 | `legacy_reference_live` | 25 | live surfaces still reference monolith or legacy prompt |
 | `duplicate_automation_live` | 30 | stale duplicate heartbeat still live |
 | `dirty_state_overwrite` | 30 | V3+ dirty sentinel files changed |

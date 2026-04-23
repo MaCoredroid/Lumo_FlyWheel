@@ -77,7 +77,7 @@ No network, browser, or subagents are needed for the benchmark itself.
 Every variant ships the following under `workspace_bundle/<variant_id>/`:
 
 ```text
-.codex/config.toml
+config/runtime.toml
 .scenario_variant
 AGENTS.md
 Dockerfile
@@ -107,7 +107,7 @@ The solver is allowed to add the canonical skill files that the broken workspace
 
 Family-wide starting defects:
 
-- `.codex/config.toml` still points at the monolith note and a copied legacy prompt.
+- `config/runtime.toml` still points at the monolith note and a copied legacy prompt.
 - `docs/runbooks/oncall.md` tells operators to use the duplicate automation.
 - `automations/handoff-copy.toml` is still marked canonical even though it is the stale duplicate.
 - `automations/handoff-primary.toml` points at a missing script path instead of the real handoff command.
@@ -145,7 +145,7 @@ New ceiling: `incident_blind_reenable`.
 
 ### Ladder target
 
-This family is not yet freeze-gate calibrated. The intended honest direction is:
+This family is freeze-gate calibrated by counted live probe `attempt_09_full_live_20260423T224900Z`. The honest signal direction is:
 
 - visible-only bundle work stays near `20`
 - duplicate-live cleanup failures cap at `<= 30`
@@ -153,14 +153,14 @@ This family is not yet freeze-gate calibrated. The intended honest direction is:
 - reuse misses cap at `<= 35`
 - incident-blind recoveries cap at `<= 30`
 
-The full Layer A live probe is still pending after this packaging pass.
+The counted Layer A live probe passed with a monotonic V1-V5 ladder.
 
 ## Expected Deliverables
 
 - `skills/shared_handoff_contract.md`
 - `skills/oncall_handoff/SKILL.md`
 - `skills/escalation_handoff/SKILL.md` for `v4` and `v5`
-- updated `.codex/config.toml`
+- updated `config/runtime.toml`
 - canonical `automations/handoff-primary.toml`
 - retired `automations/handoff-copy.toml`
 - updated `docs/runbooks/oncall.md`
@@ -192,7 +192,7 @@ Hidden surfaces:
 ## Trusted Final-State Checks
 
 - No writes outside the intended solver surface:
-  - `.codex/config.toml`
+  - `config/runtime.toml`
   - `automations/handoff-primary.toml`
   - `automations/handoff-copy.toml`
   - `docs/runbooks/oncall.md`
@@ -207,6 +207,9 @@ Hidden surfaces:
 
 - `visible_only_bundle` ≤ `20`
   Trigger: visible pytest and smoke pass, but hidden canonical-alignment checks are still missing.
+  Variant caps: V1 `28`, V2 `19`, V3 `16`, V4 `13`, V5 `10`.
+- `missing_primary_skill` = `0`
+  Trigger: no canonical `skills/oncall_handoff/SKILL.md` exists, which represents an empty/no-op submission.
 - `legacy_reference_live` ≤ `25`
   Trigger: any live surface still references `docs/oncall_handoff_monolith.md` or `skills/legacy_handoff.md`.
 - `duplicate_automation_live` ≤ `30`
@@ -264,7 +267,7 @@ Visible-check budget is intentionally shallow. Passing the visible slice alone i
 Hidden checks are deterministic file-contract checks driven by `gold_reference.json` and `hidden_tests/check_contract.py` per variant:
 
 - primary skill exists and points at the shared contract
-- `.codex/config.toml` registers only the expected canonical skill paths
+- `config/runtime.toml` registers only the expected canonical skill paths
 - live runbook matches the canonical command and primary automation
 - duplicate automation is retired semantically (`enabled = false`, `status = "retired"`, `replaced_by = "handoff-primary.toml"`)
 - stale monolith and legacy prompt references are absent from live surfaces
@@ -308,7 +311,8 @@ Checks that do not apply to a variant are excluded from the variant’s normaliz
 
 | Ceiling name | Max points | Trigger |
 | --- | ---: | --- |
-| `visible_only_bundle` | 20 | visible slice passes, but canonical hidden alignment still fails |
+| `visible_only_bundle` | 28/19/16/13/10 | visible slice passes, but canonical hidden alignment still fails; the cap follows the V1-V5 difficulty ladder |
+| `missing_primary_skill` | 0 | no canonical `skills/oncall_handoff/SKILL.md` exists |
 | `legacy_reference_live` | 25 | live surfaces still reference monolith or legacy prompt |
 | `duplicate_automation_live` | 30 | stale duplicate heartbeat still live |
 | `dirty_state_overwrite` | 30 | V3+ dirty sentinel files changed |
@@ -340,7 +344,7 @@ def family_yaml() -> str:
     return """family_id: codex-skill-runtime-v2-split
 track: 3
 schema_version: cnb55.family.v1
-layer_a_status: harden_needed
+layer_a_status: accepted_live_probe
 layer_b_status: implemented_local
 
 grader_ref: verifiers/codex-skill-runtime-v2-split/score_skill_runtime.py
@@ -650,7 +654,7 @@ def test_config_refs() -> str:
 
 
 def test_config_references_only_canonical_skill():
-    text = (Path(__file__).resolve().parents[1] / ".codex" / "config.toml").read_text()
+    text = (Path(__file__).resolve().parents[1] / "config" / "runtime.toml").read_text()
     assert "skills/oncall_handoff/SKILL.md" in text
     assert "docs/oncall_handoff_monolith.md" not in text
 """
@@ -752,14 +756,14 @@ def run_checks(workspace: Path, gold: dict) -> dict[str, bool]:
     checks: dict[str, bool] = {}
     primary_skill = workspace / "skills/oncall_handoff/SKILL.md"
     shared_contract = workspace / gold["shared_contract_path"]
-    config = parse_toml(workspace / ".codex/config.toml")
+    config = parse_toml(workspace / "config/runtime.toml")
     primary_automation = parse_toml(workspace / "automations/handoff-primary.toml")
     copy_automation = parse_toml(workspace / "automations/handoff-copy.toml")
     runbook = read_text(workspace / "docs/runbooks/oncall.md")
     primary_skill_text = read_text(primary_skill)
     shared_text = read_text(shared_contract)
     live_surface_paths = [
-        ".codex/config.toml",
+        "config/runtime.toml",
         "automations/handoff-primary.toml",
         "automations/handoff-copy.toml",
         "docs/runbooks/oncall.md",
@@ -870,7 +874,7 @@ Incident-safe rule:
 """
 
     files = {
-        ".codex/config.toml": config_text,
+        "config/runtime.toml": config_text,
         "automations/handoff-primary.toml": """canonical = true
 enabled = true
 skill = "skills/oncall_handoff/SKILL.md"
@@ -916,7 +920,7 @@ Use the same canonical handoff command instead of cloning the legacy prompt.
 
 def visible_only_files() -> dict[str, str]:
     return {
-        ".codex/config.toml": """skill_paths = ["skills/oncall_handoff/SKILL.md"]
+        "config/runtime.toml": """skill_paths = ["skills/oncall_handoff/SKILL.md"]
 canonical_automation = "automations/handoff-primary.toml"
 smoke_command = "python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md"
 """,
@@ -949,7 +953,7 @@ def build_variant_workspace(variant: str) -> Path:
     write_text(root / "AGENTS.md", agents_md())
     write_text(root / "Dockerfile", dockerfile())
     write_text(root / ".scenario_variant", scenario_variant(variant))
-    write_text(root / ".codex/config.toml", workspace_config())
+    write_text(root / "config/runtime.toml", workspace_config())
     write_text(root / "automations/handoff-primary.toml", primary_automation_broken())
     write_text(root / "automations/handoff-copy.toml", duplicate_automation_broken())
     write_text(root / "docs/oncall_handoff_monolith.md", monolith())
@@ -974,7 +978,7 @@ def build_variant_workspace(variant: str) -> Path:
 
 def gold_reference(variant: str, workspace_root: Path) -> dict:
     allowed_writes = [
-        ".codex/config.toml",
+        "config/runtime.toml",
         "automations/handoff-primary.toml",
         "automations/handoff-copy.toml",
         "docs/runbooks/oncall.md",
@@ -986,6 +990,14 @@ def gold_reference(variant: str, workspace_root: Path) -> dict:
     if require_reuse_skill:
         allowed_writes.append("skills/escalation_handoff/SKILL.md")
         config_skill_paths.append("skills/escalation_handoff/SKILL.md")
+    visible_only_caps = {
+        "v1-clean-baseline": 28,
+        "v2-noisy-distractor": 19,
+        "v3-dirty-state": 16,
+        "v4-multi-corpus-objective": 13,
+        "v5-recovery-in-thread": 10,
+    }
+    visible_only_cap = visible_only_caps[variant]
     dirty_hashes = {}
     for rel in ["skills/other_flow/SKILL.md", "skills/oncall_handoff_draft/SKILL.md"]:
         path = workspace_root / rel
@@ -1006,6 +1018,7 @@ def gold_reference(variant: str, workspace_root: Path) -> dict:
     return {
         "variant_id": variant,
         "pass_bar": 40,
+        "visible_only_cap": visible_only_cap,
         "allowed_writes": allowed_writes,
         "readonly_roots": readonly_roots,
         "shared_contract_path": "skills/shared_handoff_contract.md",

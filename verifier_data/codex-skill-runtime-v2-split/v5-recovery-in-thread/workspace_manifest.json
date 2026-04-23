@@ -1,11 +1,11 @@
 {
   "files": {
-    ".codex/config.toml": "ce5fd47118fb1dd462688c1765b3d03cebaa7bd7da3e27bb738caaaa7480257b",
     ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
     "AGENTS.md": "4f6451ddd36369d1bab8ef982fed07eb28da5c1950087c09c397a532c4856576",
     "Dockerfile": "8076b7a63a4a6d9afa5f5938ea2421245870612d830b306b48d0f46dc98ef5c4",
     "automations/handoff-copy.toml": "755e4ddd363544b1a9953f353c6ee4b4ef983014b9ff89691f8e05d94e1d3565",
     "automations/handoff-primary.toml": "ec045eb30afce6e97ce16dd35ba5c81e251de0cb024dfb69a890280f3d6508d0",
+    "config/runtime.toml": "ce5fd47118fb1dd462688c1765b3d03cebaa7bd7da3e27bb738caaaa7480257b",
     "docs/archive/legacy_alias_notes.md": "2ae0851f44245760edb4eeec83ae9babdbc80a2e9fc3f10bce781a95baa9e5e9",
     "docs/oncall_handoff_monolith.md": "440f09a51e01e4a31dfa11c617a944a8c7d131d9126ee0de0910136b87c765b2",
     "docs/runbooks/oncall.md": "4e83d7005ba361b13d3889744c138ad143cfe467fcd7faf0ea834a8db20f46a4",
@@ -17,7 +17,7 @@
     "skills/oncall_handoff_draft/SKILL.md": "f588d483708335c2decd04478d6c1c9d44dc1899a32550cb1486b1263f2bfb58",
     "skills/other_flow/SKILL.md": "cf7744cb17300843fda059b0fa15d2a4aa6196beefbf1f57ffb2f6d2a34d2873",
     "tests/test_automation_smoke.py": "492a0570e6871363f996bb6a4ceb917bde729dc16000dad5ddbaa47de1c0fdad",
-    "tests/test_config_refs.py": "2e7325a3e05514508f7b6e0a61be569a59c7e4b12f19e723c7c89dbd89353f0b",
+    "tests/test_config_refs.py": "ad1227008b64e69e3f75896a3fe44b4965cc445b3b58aef6237b65cf8c8057a3",
     "tests/test_skill_bundle.py": "99d8009b9d879502209169924423c0e031523971fdd46be5f646c0db7a411073"
   },
   "readonly_roots": [

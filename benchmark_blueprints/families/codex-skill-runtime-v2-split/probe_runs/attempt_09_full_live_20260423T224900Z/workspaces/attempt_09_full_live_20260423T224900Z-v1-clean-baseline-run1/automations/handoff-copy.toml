@@ -1,0 +1,5 @@
+canonical = false
+enabled = false
+skill = "skills/oncall_handoff/SKILL.md"
+retired_reason = "Retired duplicate automation; use automations/handoff-primary.toml."
+replaced_by = "automations/handoff-primary.toml"
