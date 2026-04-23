@@ -4,7 +4,7 @@ PIP := $(VENV)/bin/pip
 PYTEST := $(VENV)/bin/pytest
 LUMOSERVE := $(VENV)/bin/lumoserve
 
-.PHONY: venv bootstrap-runtime build-image download-qwen35-27b serve stop smoke gate1 test
+.PHONY: venv bootstrap-runtime build-image download-qwen35-27b serve stop smoke resume gate1 test
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -28,6 +28,9 @@ stop:
 
 smoke:
 	$(LUMOSERVE) --registry model_registry.yaml smoke-test qwen3.5-27b --enable-request-logging
+
+resume:
+	$(LUMOSERVE) --registry model_registry.yaml resume
 
 gate1:
 	VLLM_API_KEY=EMPTY scripts/codex_gate1_qwen35_27b.sh

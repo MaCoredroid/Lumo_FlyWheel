@@ -25,10 +25,23 @@ class ModelConfig:
     gpu_memory_utilization: float
     max_num_batched_tokens: int
     max_num_seqs: int
+    enable_chunked_prefill: bool = True
+    enable_prefix_caching: bool = True
     lora_modules: tuple[tuple[str, Path], ...] = ()
     max_lora_rank: int | None = None
     hf_revision: str | None = None
     sprint0_gate: str | None = None
+
+    def vllm_config(self) -> dict[str, Any]:
+        return {
+            "max_num_seqs": self.max_num_seqs,
+            "max_num_batched_tokens": self.max_num_batched_tokens,
+            "enable_chunked_prefill": True,
+            "enable_prefix_caching": True,
+            "gpu_memory_utilization": self.gpu_memory_utilization,
+            "max_model_len": self.max_model_len,
+            "kv_cache_dtype": self.kv_cache_dtype,
+        }
 
 
 def _require_model_surface_id(value: Any, *, field_name: str) -> str:
@@ -136,6 +149,8 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
     max_num_seqs = int(raw.get("max_num_seqs", 4))
     if max_num_seqs < 1:
         raise ValueError(f"Model {model_id} max_num_seqs must be >= 1; got {max_num_seqs}")
+    enable_chunked_prefill = bool(raw.get("enable_chunked_prefill", True))
+    enable_prefix_caching = bool(raw.get("enable_prefix_caching", True))
     max_lora_rank = raw.get("max_lora_rank")
     if max_lora_rank is not None:
         max_lora_rank = int(max_lora_rank)
@@ -154,6 +169,8 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
         gpu_memory_utilization=gpu_memory_utilization,
         max_num_batched_tokens=max_num_batched_tokens,
         max_num_seqs=max_num_seqs,
+        enable_chunked_prefill=enable_chunked_prefill,
+        enable_prefix_caching=enable_prefix_caching,
         lora_modules=lora_modules,
         max_lora_rank=max_lora_rank,
         sprint0_gate=sprint0_gate,

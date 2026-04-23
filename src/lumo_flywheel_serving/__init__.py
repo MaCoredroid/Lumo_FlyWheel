@@ -1,5 +1,6 @@
 """Lumo FlyWheel local vLLM serving helpers."""
 
+from .auto_research import OfflineAutoResearchRunner, SyntheticWorkloadDistribution
 from .data_pool import (
     CodexLongEnv,
     CodexLongFamily,
@@ -62,6 +63,15 @@ from .task_orchestrator import (
     verify_pre_grading_hashes,
     verify_pre_run_hashes,
 )
+from .tuned_config import (
+    RuntimeStateStore,
+    ServingRuntimeState,
+    StructuredValidationError,
+    TunedConfigBundle,
+    apply_tuned_vllm_config,
+    load_tuned_config_bundle,
+    persist_tuned_config_bundle,
+)
 
 __all__ = [
     "CodexLongEnv",
@@ -72,6 +82,7 @@ __all__ = [
     "DispatchDecision",
     "Gate4Outcome",
     "IntegrityError",
+    "OfflineAutoResearchRunner",
     "CacheFlushError",
     "CodexResult",
     "ConfigError",
@@ -87,6 +98,9 @@ __all__ = [
     "RunRecord",
     "RunResult",
     "SealState",
+    "ServingRuntimeState",
+    "StructuredValidationError",
+    "SyntheticWorkloadDistribution",
     "TaskDispatchError",
     "TaskOrchestrator",
     "TaskSpec",
@@ -107,15 +121,20 @@ __all__ = [
     "health_check",
     "load_codex_long_manifest",
     "load_codex_long_splits",
+    "load_tuned_config_bundle",
     "load_telemetry",
     "load_registry",
     "load_swe_bench_pools",
     "make_scenario_id",
+    "persist_tuned_config_bundle",
     "parse_prometheus_text",
+    "RuntimeStateStore",
     "TelemetryConfig",
     "TelemetryGapError",
     "TelemetryWriter",
+    "TunedConfigBundle",
     "TurnInfo",
+    "apply_tuned_vllm_config",
     "resolve_metric_schema",
     "sha256_tree",
     "verify_pre_grading_hashes",

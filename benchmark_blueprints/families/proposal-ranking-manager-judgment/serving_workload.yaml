@@ -1,0 +1,9 @@
+family_id: proposal-ranking-manager-judgment
+workload_distribution_id: prmj-v1-live
+latency_ceiling_ms: 35000
+p99_context_tokens: 24576
+avg_prompt_tokens: 4096
+avg_output_tokens: 1200
+rollout_baseline: 10.0
+measurement_window_minutes: 25
+gpu_memory_utilization_cap: 0.08

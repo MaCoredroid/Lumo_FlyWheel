@@ -10,6 +10,7 @@ from pathlib import Path
 
 import requests
 
+from .auto_research import OfflineAutoResearchRunner, SyntheticWorkloadDistribution, load_baseline_bundle
 from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .registry import load_registry
@@ -290,6 +291,8 @@ def _server(args: argparse.Namespace) -> ModelServer:
         logs_root=args.logs_root,
         triton_cache_root=args.triton_cache_root,
         use_sleep_mode=args.use_sleep_mode,
+        proxy_port=args.proxy_port,
+        state_root=args.state_root,
     )
 
 
@@ -516,6 +519,77 @@ def cmd_annotate_log(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_load_tuned_config(args: argparse.Namespace) -> int:
+    server = _server(args)
+    bundle = server.load_tuned_config(args.bundle_path)
+    print(
+        json.dumps(
+            {
+                "status": "loaded",
+                "bundle_id": bundle.bundle_id,
+                "model_id": bundle.model_id,
+                "weight_version_id": bundle.weight_version_id,
+                "bundle_path": str(Path(args.bundle_path)),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def cmd_resume(args: argparse.Namespace) -> int:
+    server = _server(args)
+    payload = server.resume_last_known_good(
+        from_baseline=args.from_baseline,
+        enable_request_logging=args.enable_request_logging,
+    )
+    print(json.dumps({"status": "resumed", **payload}, indent=2))
+    return 0
+
+
+def cmd_auto_research_run(args: argparse.Namespace) -> int:
+    registry = load_registry(args.registry)
+    model_config = registry[args.model_id]
+    workload = (
+        SyntheticWorkloadDistribution.from_file(
+            args.workload_file,
+            model_config=model_config,
+            family_id=args.family_id,
+        )
+        if args.workload_file
+        else SyntheticWorkloadDistribution.default_for(model_config=model_config, family_id=args.family_id)
+    )
+    runner = OfflineAutoResearchRunner(
+        model_config=model_config,
+        family_id=args.family_id,
+        output_root=args.tuned_config_root,
+        workload=workload,
+        baseline_bundle=load_baseline_bundle(args.baseline_bundle),
+        weight_version_id=args.weight_version_id,
+        iteration_cap=args.iteration_cap,
+        wall_clock_seconds=args.wall_clock_seconds,
+    )
+    result = runner.run()
+    print(
+        json.dumps(
+            {
+                "status": result.status,
+                "stopping_reason": result.stopping_reason,
+                "bundle_path": str(result.bundle_path) if result.bundle_path is not None else None,
+                "run_dir": str(result.run_dir),
+                "search_trace_path": str(result.search_trace_path),
+                "measurement_trace_path": str(result.measurement_trace_path),
+                "run_log_path": str(result.run_log_path),
+                "baseline_value": result.baseline_value,
+                "best_value": result.best_value,
+                "best_candidate_label": result.best_candidate_label,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Lumo FlyWheel vLLM serving tooling")
     parser.set_defaults(func=None)
@@ -524,9 +598,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--image", default=DEFAULT_VLLM_IMAGE)
     parser.add_argument("--dockerfile", default=str(DEFAULT_VLLM_DOCKERFILE))
     parser.add_argument("--container-name", default="lumo-vllm")
+    parser.add_argument("--proxy-port", type=int, default=8001)
     parser.add_argument("--logs-root", default="/logs")
     parser.add_argument("--triton-cache-root", default="/tmp/triton_cache")
     parser.add_argument("--use-sleep-mode", action="store_true")
+    parser.add_argument("--state-root", default=str(REPO_ROOT / "output" / "serving_state"))
+    parser.add_argument("--tuned-config-root", default=str(REPO_ROOT / "output" / "tuned_configs"))
 
     subparsers = parser.add_subparsers(dest="command")
 
@@ -575,6 +652,27 @@ def build_parser() -> argparse.ArgumentParser:
     annotate.add_argument("model_id")
     annotate.add_argument("entries", nargs="+")
     annotate.set_defaults(func=cmd_annotate_log)
+
+    load_tuned = subparsers.add_parser("load-tuned-config")
+    load_tuned.add_argument("bundle_path")
+    load_tuned.set_defaults(func=cmd_load_tuned_config)
+
+    auto_research = subparsers.add_parser("auto-research")
+    auto_research_subparsers = auto_research.add_subparsers(dest="auto_research_command")
+    auto_research_run = auto_research_subparsers.add_parser("run")
+    auto_research_run.add_argument("model_id")
+    auto_research_run.add_argument("--family-id", required=True)
+    auto_research_run.add_argument("--workload-file")
+    auto_research_run.add_argument("--baseline-bundle")
+    auto_research_run.add_argument("--weight-version-id")
+    auto_research_run.add_argument("--iteration-cap", type=int, default=12)
+    auto_research_run.add_argument("--wall-clock-seconds", type=float, default=4 * 60 * 60)
+    auto_research_run.set_defaults(func=cmd_auto_research_run)
+
+    resume = subparsers.add_parser("resume")
+    resume.add_argument("--enable-request-logging", action="store_true")
+    resume.add_argument("--from-baseline", action="store_true")
+    resume.set_defaults(func=cmd_resume)
     return parser
 
 

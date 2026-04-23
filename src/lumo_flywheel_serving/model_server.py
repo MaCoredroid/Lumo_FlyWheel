@@ -16,9 +16,19 @@ import requests
 
 from .metrics import parse_prometheus_text, resolve_metric_schema
 from .registry import ModelConfig, load_registry
+from .tuned_config import (
+    RuntimeStateStore,
+    StructuredValidationError,
+    TunedConfigBundle,
+    ValidationIssue,
+    apply_tuned_vllm_config,
+    default_weight_version_id,
+    load_tuned_config_bundle,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LOCAL_RUNTIME_ENV_FILENAME = ".lumo.local.env"
+DEFAULT_STATE_ROOT = REPO_ROOT / "output" / "serving_state"
 DEFAULT_VLLM_BASE_IMAGE = "nvcr.io/nvidia/pytorch:26.01-py3"
 DEFAULT_VLLM_IMAGE = "lumo-flywheel-vllm:26.01-py3-v0.19.0"
 DEFAULT_VLLM_DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
@@ -26,7 +36,7 @@ DEFAULT_INFERENCE_PROXY_PORT = 8001
 VLLM_ENABLE_RESPONSES_API_STORE = "1"
 QWEN_CHAT_TEMPLATE_HOST_PATH = REPO_ROOT / "docker" / "chat_templates" / "qwen3-openai-codex.jinja"
 QWEN_CHAT_TEMPLATE_CONTAINER_PATH = Path("/opt/lumo/chat_templates/qwen3-openai-codex.jinja")
-MIN_GPU_MEMORY_UTILIZATION = 0.15
+MIN_GPU_MEMORY_UTILIZATION = max(0.05, float(os.environ.get("LUMO_MIN_GPU_MEMORY_UTILIZATION", "0.05")))
 UNSUPPORTED_NVIDIA_SMI_GRACE_S = 20
 LOW_FREE_MEMORY_GRACE_RETRIES = 2
 LOW_FREE_MEMORY_GRACE_SLEEP_S = 45
@@ -49,6 +59,7 @@ class ModelServer:
         triton_cache_root: str | Path = "/tmp/triton_cache",
         use_sleep_mode: bool = False,
         proxy_port: int = DEFAULT_INFERENCE_PROXY_PORT,
+        state_root: str | Path = DEFAULT_STATE_ROOT,
     ) -> None:
         self.registry_path = Path(registry_path)
         self._load_local_runtime_env()
@@ -60,7 +71,8 @@ class ModelServer:
         self.triton_cache_root = Path(triton_cache_root)
         self.use_sleep_mode = use_sleep_mode
         self.proxy_port = proxy_port
-        self.current_model: str | None = None
+        self.state_store = RuntimeStateStore(state_root)
+        self.current_model = self.state_store.load().current_model_id
 
     def ensure_runtime_scaffolding(self) -> None:
         for path in (Path("/models"), self.logs_root, self.triton_cache_root):
@@ -94,6 +106,10 @@ class ModelServer:
             str(pid_path),
             "--log-path",
             str(log_path),
+            "--registry-path",
+            str(self.registry_path),
+            "--state-root",
+            str(self.state_store.root),
         ]
         with log_path.open("a", encoding="utf-8") as handle:
             process = subprocess.Popen(  # noqa: S603
@@ -190,10 +206,69 @@ class ModelServer:
             return value[1:-1]
         return value
 
+    def active_tuned_config_bundle(self, model_id: str) -> tuple[str | None, TunedConfigBundle | None]:
+        state = self.state_store.load()
+        bundle_path = state.active_tuned_config_path
+        if not bundle_path:
+            return None, None
+        bundle = load_tuned_config_bundle(bundle_path)
+        if bundle.model_id != model_id:
+            return None, None
+        return bundle_path, bundle
+
+    def resolved_model_config(self, model_id: str) -> tuple[ModelConfig, str | None, TunedConfigBundle | None]:
+        config = self.registry[model_id]
+        bundle_path, bundle = self.active_tuned_config_bundle(model_id)
+        if bundle is None:
+            return config, None, None
+        return apply_tuned_vllm_config(config, bundle), bundle_path, bundle
+
+    def load_tuned_config(self, bundle_path: str | Path) -> TunedConfigBundle:
+        bundle = load_tuned_config_bundle(bundle_path)
+        if bundle.model_id not in self.registry:
+            raise RuntimeError(
+                f"Tuned-config bundle model_id {bundle.model_id!r} is not present in registry {self.registry_path}"
+            )
+        self.state_store.activate_bundle(bundle_path, bundle)
+        return bundle
+
+    def invalidate(self, *, weight_version_id: str) -> None:
+        stripped = weight_version_id.strip()
+        if not stripped:
+            raise StructuredValidationError(
+                message="Invalid invalidate payload",
+                issues=[ValidationIssue(field="weight_version_id", message="must be a non-empty string")],
+            )
+        self.state_store.record_invalidate(weight_version_id=stripped)
+        try:
+            self.flush_prefix_cache()
+        except requests.RequestException:
+            return
+
+    def resume_last_known_good(self, *, from_baseline: bool, enable_request_logging: bool = False) -> dict[str, str | None]:
+        state = self.state_store.load()
+        model_id = state.last_known_good_model_id or state.current_model_id
+        if not model_id:
+            raise RuntimeError("No last-known-good model is recorded; serve or load a tuned config first.")
+        if from_baseline:
+            self.state_store.clear_active_bundle()
+        elif state.last_known_good_tuned_config_path:
+            self.load_tuned_config(state.last_known_good_tuned_config_path)
+        self.start(model_id=model_id, enable_request_logging=enable_request_logging)
+        refreshed = self.state_store.load()
+        return {
+            "model_id": refreshed.current_model_id,
+            "weight_version_id": refreshed.current_weight_version_id,
+            "tuned_config_path": refreshed.active_tuned_config_path,
+        }
+
     def start(self, model_id: str, enable_request_logging: bool = False) -> None:
         self.ensure_runtime_scaffolding()
         self._ensure_image_present()
-        config = self.registry[model_id]
+        config, active_bundle_path, active_bundle = self.resolved_model_config(model_id)
+        weight_version_id = (
+            active_bundle.weight_version_id if active_bundle is not None else default_weight_version_id(self.registry[model_id])
+        )
         self._reset_log(model_id)
         self.stop(missing_ok=True)
         self._recover_host_memory()
@@ -215,6 +290,8 @@ class ModelServer:
                     kv_cache_dtype=kv_cache_dtype,
                     gpu_memory_utilization=gpu_memory_utilization,
                     enforce_eager=enforce_eager,
+                    tuned_config_id=active_bundle.bundle_id if active_bundle is not None else None,
+                    weight_version_id=weight_version_id,
                 ),
                 capture_output=False,
             )
@@ -259,6 +336,12 @@ class ModelServer:
                 raise
         self._start_proxy()
         self.current_model = model_id
+        self.state_store.record_start(
+            model_id=model_id,
+            weight_version_id=weight_version_id,
+            active_bundle_path=active_bundle_path,
+            active_bundle_id=active_bundle.bundle_id if active_bundle is not None else None,
+        )
 
     def switch_model(self, model_id: str, enable_request_logging: bool = False) -> None:
         if self.use_sleep_mode and self.current_model == model_id and self._is_serving_model(model_id):
@@ -489,6 +572,8 @@ class ModelServer:
         kv_cache_dtype: str,
         gpu_memory_utilization: float,
         enforce_eager: bool,
+        tuned_config_id: str | None = None,
+        weight_version_id: str | None = None,
     ) -> list[str]:
         log_path = self.logs_path(model_id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -516,13 +601,15 @@ class ModelServer:
             str(config.max_model_len),
             "--gpu-memory-utilization",
             str(gpu_memory_utilization),
-            "--enable-prefix-caching",
-            "--enable-chunked-prefill",
             "--max-num-batched-tokens",
             str(config.max_num_batched_tokens),
             "--max-num-seqs",
             str(config.max_num_seqs),
         ]
+        if config.enable_prefix_caching:
+            vllm_args.append("--enable-prefix-caching")
+        if config.enable_chunked_prefill:
+            vllm_args.append("--enable-chunked-prefill")
         if config.lora_modules:
             vllm_args.extend(["--enable-lora", "--max-lora-rank", str(config.max_lora_rank), "--lora-modules"])
             vllm_args.extend(self._format_lora_modules(config))
@@ -553,6 +640,8 @@ class ModelServer:
             kv_cache_dtype=kv_cache_dtype,
             gpu_memory_utilization=gpu_memory_utilization,
             enforce_eager=enforce_eager,
+            tuned_config_id=tuned_config_id,
+            weight_version_id=weight_version_id,
         )
         shell_cmd = (
             "set -euo pipefail\n"
@@ -626,6 +715,8 @@ class ModelServer:
         kv_cache_dtype: str,
         gpu_memory_utilization: float,
         enforce_eager: bool,
+        tuned_config_id: str | None,
+        weight_version_id: str | None,
     ) -> str:
         payload = {
             "timestamp": datetime.now(UTC).isoformat(),
@@ -642,6 +733,8 @@ class ModelServer:
             "sleep_mode": self.use_sleep_mode,
             "lora_modules": [name for name, _path in config.lora_modules],
             "max_lora_rank": config.max_lora_rank,
+            "tuned_config_id": tuned_config_id or "baseline",
+            "weight_version_id": weight_version_id or default_weight_version_id(config),
             "launch_cmd": shlex.join(vllm_args),
         }
         encoded = json.dumps(payload)
@@ -660,6 +753,7 @@ class ModelServer:
             "    handle.write(f\"[VLLM-INIT] quantization={payload['quantization']} kv_cache_dtype={payload['kv_cache_dtype']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] max_model_len={payload['max_model_len']} gpu_memory_utilization={payload['gpu_memory_utilization']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] enforce_eager={str(payload['enforce_eager']).lower()}\\n\")\n"
+            "    handle.write(f\"[VLLM-INIT] tuned_config_id={payload['tuned_config_id']} weight_version_id={payload['weight_version_id']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] wire_api={payload['wire_api']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] responses_api_store={str(payload['responses_api_store']).lower()}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] dev_mode={str(payload['dev_mode']).lower()} sleep_mode={'enabled' if payload['sleep_mode'] else 'disabled'}\\n\")\n"
@@ -823,6 +917,8 @@ class ModelServer:
             return None
 
     def _wait_vram_free(self, timeout_s: int = 120, required_utilization: float | None = None) -> None:
+        if os.environ.get("LUMO_SKIP_VRAM_WAIT", "0").lower() in {"1", "true", "yes"}:
+            return
         deadline = time.time() + timeout_s
         last_snapshot: tuple[float, float] | None = None
         last_busy_pids: list[str] = []
