@@ -16,9 +16,15 @@ assumption_budget = "low"
 require_checked_commands = true
 require_current_vs_deprecated_split = true
 forbid_primary_use_of_legacy_alias = true
+forbid_invented_behavior_change = true
 forbid_out_of_bundle_evidence = true
+forbid_code_or_test_edits = true
 
 [grading]
 target_attack_band = "15-25"
 hard_fail_on_deprecated_primary_path = true
 cap_without_live_help_validation = 20
+
+[probe]
+family_local_runner = "verifier_data/runbook-code-reconciliation/probe_family.sh"
+expected_probe_variants = ["v1-clean-baseline", "v2-noisy-distractor", "v3-dirty-state", "v4-multi-corpus-objective", "v5-recovery-in-thread"]

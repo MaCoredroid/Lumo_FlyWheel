@@ -1,0 +1,36 @@
+{
+  "current_env_var": "RELEASE_PREVIEW_CONFIG",
+  "current_flag": "--config",
+  "deprecated_env_var": "PREVIEW_SETTINGS_PATH",
+  "deprecated_flag": "--settings",
+  "editable_files": [
+    "docs/runbooks/release_preview.md",
+    "artifacts/verification_notes.md",
+    "artifacts/deploy_note.md",
+    "artifacts/reconciliation_facts.json"
+  ],
+  "expected_current_command": "python src/release_preview/cli.py generate --config configs/release_preview.toml",
+  "legacy_alias": "python scripts/release_preview_helper.py build-preview",
+  "legacy_alias_name": "build-preview",
+  "legacy_primary_command": "python scripts/release_preview_helper.py build-preview --settings configs/release_preview.toml",
+  "pass_bar": 65,
+  "primary_entrypoint": "python src/release_preview/cli.py generate",
+  "readonly_tree_hashes": {
+    ".env.example": "4e7acfec6e2c7460d9520127bf5594a989ca5b2da2be9ff9c1ed0070f6f0cd53",
+    "Makefile": "49ba144441f33daceeda932f98efae325be7c4d5866ed6c799aecdc33b22419e",
+    "README_fragments": "5d3849d930117a4daad349e26ab94581720d1f9681f4b24dbe28b76739ddcea0",
+    "configs": "f3425f09e2179e7b223df1cde4822ee08000d10524281fb484279a5701ffc269",
+    "incident_context": "MISSING",
+    "release_context": "MISSING",
+    "scripts": "330c657783c49a0a88c860a86bbf739be3bffd689c4584f8fd2406f52c19154a",
+    "src": "5752fe876f32061c94f5dcaea2684120f2d1bb96a140007a97bbd0205efa06e6",
+    "tests": "1af0c633a3bb3dac60f5988a8a3597d1dcf6ab034a891579a1b6972d38530e10"
+  },
+  "required_evidence_commands": [
+    "python src/release_preview/cli.py --help",
+    "python src/release_preview/cli.py generate --help",
+    "python scripts/release_preview_helper.py build-preview --help",
+    "pytest -q tests/test_release_preview_cli.py"
+  ],
+  "variant_id": "v2-noisy-distractor"
+}

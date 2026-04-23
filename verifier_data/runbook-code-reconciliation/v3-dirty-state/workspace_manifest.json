@@ -1,0 +1,18 @@
+{
+  "files": {
+    ".env.example": "f029c793a0e63bedbeead5c309bf051f28d21e6b711021b6d271caefbdfaa972",
+    ".scenario_variant": "1c853e0ea547c3396c2e692323b7fa274664e6d61b2099589ec04bf37abfdaee",
+    "AGENTS.md": "d43c666fb1a460891d813842855df49559eb1bacc43363501239e39563e0d29b",
+    "Dockerfile": "8076b7a63a4a6d9afa5f5938ea2421245870612d830b306b48d0f46dc98ef5c4",
+    "Makefile": "539ea63197aa037317904c4614748ff4ae4a0374de11b0cb3f01fccbb3bb1082",
+    "README_fragments/current_path.md": "b4847b69a2d3aea5ea841a1589deabe82ffd15671c81be82df677b0b06a686b3",
+    "README_fragments/legacy_path.md": "c37fc2a3b7d1c2a96091301a4a001d5814878ae9fb9b153b19f84544e867cd6f",
+    "artifacts/reconciliation_facts.schema.json": "c37114f6035512120072614f9c82956be6aa49c95dc03d3a76ada8a8a1fe47f8",
+    "configs/release_preview.toml": "52964f16df5a10dd5dfbb94e0ba6fa497e30e867b3e27eaf99172af5f11a1be4",
+    "docs/runbooks/release_preview.md": "9ba1d1cbe4d8a281a960c85e6bea28abcf49fae9f76519376ed621b7a3a93a4b",
+    "scripts/release_preview_helper.py": "933560bfce1ba3e88915822f10b4549f09cdef7333e92d4cf425e25123d89838",
+    "src/release_preview/__init__.py": "75ad4f4c2943325f88064ad2beae890b59674be2bf0404b30afc5584dc4de4bb",
+    "src/release_preview/cli.py": "0ce77566809dae14571464b9d53f51decf7894089a2ea4f0564efe985d96b436",
+    "tests/test_release_preview_cli.py": "515eb91549defca146bca628aa0a9de9ac3fd449e7638243608160b7feda1dce"
+  }
+}

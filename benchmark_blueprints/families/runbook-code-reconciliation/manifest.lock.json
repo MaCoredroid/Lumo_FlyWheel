@@ -1,0 +1,31 @@
+{
+  "family_id": "runbook-code-reconciliation",
+  "schema_version": "cnb55.manifest.v1",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_repair_sha256": "ef5c244b22744297bd32c26985daa40e63fcfceba5704d63d6061b52d6d0a5e0",
+      "workspace_manifest_sha256": "8d4b40bd5ecd4cb61deec219ae0e486560fd5cd3e1e26a9676120ca4579f6ca8",
+      "workspace_tree_sha256": "a72850e29bfa673fa29ed30ffbee3499fc9d00b23d0884ce6104e134e9316655"
+    },
+    "v2-noisy-distractor": {
+      "gold_repair_sha256": "de42d923de741883cb5178b0620d6eb420e86f75c144d505ead1276d27fbe80e",
+      "workspace_manifest_sha256": "491baa4aa8c449cdecc7be0d63c585b2ae0b98d94ad1b1ba304a6df1bd79fc95",
+      "workspace_tree_sha256": "1497a5d50d352978a90fad253daf4ffbff4c58b870fbcf49eedb390f8feed549"
+    },
+    "v3-dirty-state": {
+      "gold_repair_sha256": "00248b3475e624343c611fe574f74c1bc4edd5ac79d345a09e879ea5ff1944ac",
+      "workspace_manifest_sha256": "a29680a1bd217c5222165a4c26070f362406005021b3464a089a85046e60158f",
+      "workspace_tree_sha256": "914ba1d304cf7750334989ada92978ad987e30dda928996c1a688a8b7103021f"
+    },
+    "v4-multi-corpus-objective": {
+      "gold_repair_sha256": "eb8d42a0618eef64ce3c75e6f33249f352d3efe717f1adf9e711060b081e11a5",
+      "workspace_manifest_sha256": "dfc7c8210a6b60833920fbbbca3f071e5d4f2e0038177f9f8f478970a8c9d551",
+      "workspace_tree_sha256": "a4cdb1adcdc44af3c5d311842b6f3f856a6891b81da6b114384fbf98dc1691d5"
+    },
+    "v5-recovery-in-thread": {
+      "gold_repair_sha256": "b5bd5ad4cecb4b26cbe0c22d8c56bb93b8c2cc1cbf7f644ee25238c5194efcc2",
+      "workspace_manifest_sha256": "5448c4af170af7c4cf75b30eabddbf2898c0dd53fddb157bcc980edb7120905f",
+      "workspace_tree_sha256": "2ed2cbbf7034986b458d2fdeea80e34ea5bf2e8f971dec97e836cb9e11089d4d"
+    }
+  }
+}

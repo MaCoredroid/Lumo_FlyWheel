@@ -7,42 +7,41 @@
 
 ## Scoring Breakdown
 
-- `35` points: Runbook patch correctly reflects the live command entrypoint, current primary flags, and current environment variables.
-- `20` points: `reconciliation_facts.json` accurately separates current versus deprecated names and records evidence commands.
-- `20` points: Verification notes include at least one directly checked command, what it proved, and one bounded caveat.
-- `15` points: Deploy note accurately explains operator impact without inventing behavior changes.
-- `10` points: Overall discipline in privileging code and live CLI help over stale prose.
+- `35` points: `docs/runbooks/release_preview.md` uses the current primary entrypoint, current flag, and current env var, and does not treat the compatibility alias as the default.
+- `20` points: `artifacts/reconciliation_facts.json` exactly matches the code-backed current/deprecated split and records evidence commands.
+- `20` points: `artifacts/verification_notes.md` contains direct command checks, code-backed inferences, and a bounded caveat.
+- `15` points: `artifacts/deploy_note.md` accurately explains the operator-facing runbook change without inventing a code behavior change.
+- `10` points: overall evidence discipline favors CLI help and code over README fragments.
 
 ## Caps
 
-- Cap at `20/100` if evidence comes from outside the provided benchmark bundle or if the solver substitutes workspace-wide absence checks for live bundle verification.
-- Cap at `20/100` if the solver does not directly verify any command or help output.
-- Cap at `25/100` if `reconciliation_facts.json` is internally consistent but not validated against the live path.
-- Cap at `30/100` if the runbook still recommends a legacy alias as the primary flow.
-- Cap at `15/100` if the runbook looks like harmonized docs rather than a code-grounded reconciliation.
-- Cap at `10/100` if the deploy note claims behavior changes beyond docs and operator instructions.
+- Cap at `20/100` if no direct help or pytest command is recorded.
+- Cap at `25/100` if the facts artifact is plausible but not validated against direct checks.
+- Cap at `30/100` if the runbook still recommends the legacy alias or deprecated config surface as the primary path.
+- Cap at `15/100` if the update reads like a docs merge rather than a code-grounded reconciliation.
+- Cap at `10/100` if the deploy note claims the alias or deprecated env var was removed.
 
 ## Automatic Failure Conditions
 
-- `0` if the runbook still uses a deprecated primary command path.
-- `0-5` if required artifacts are missing.
-- `0-5` if the solver invents flags, env vars, or helper behaviors not present in the bundle.
+- `0` if required artifacts are missing.
+- `0` if the runbook still uses the deprecated primary command path.
+- `0-5` if the submission invents a flag, env var, alias, or helper behavior not present in the bundle.
 
 ## Evidence Rules
 
-- Only files and commands inside the provided benchmark bundle count as evidence unless the task explicitly names an external surface.
-- The current primary instruction must be supported by code or live help, not just by a README.
-- Deprecated compatibility paths may appear only as secondary notes.
-- `evidence_commands` should be checkable commands, not generic statements.
+- Only files and commands inside the provided benchmark bundle count as evidence.
+- The current primary instruction must be supported by code or live help, not by a README fragment alone.
+- Deprecated compatibility paths may appear only as secondary caveats.
+- `evidence_commands` must be executable commands, not prose summaries.
 
 ## Judging Procedure
 
-1. Verify the patch and facts artifact exist.
+1. Verify the runbook patch and all three artifacts exist.
 2. Score primary-path correctness first.
-3. Apply caps before deploy-note polish.
-4. Check whether the submission would remain correct if README fragments were removed.
+3. Apply caps before polish.
+4. Check whether the answer would remain correct if the README fragments were removed.
 
 ## Meaningfulness Check
 
 - A valid task instance must contain at least one contradictory prose artifact and one code-grounded source of truth.
-- If the bundle allows a solver to succeed by copying the closest README verbatim, the task instance is invalid.
+- If a solver can pass by copying the closest README fragment verbatim, the task instance is invalid.

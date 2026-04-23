@@ -1,82 +1,232 @@
-# Runbook Code Reconciliation
+# `runbook-code-reconciliation` Task Spec
 
-- `task_id`: `t2_runbook_release_preview_reconciliation`
-- `family_id`: `runbook-code-reconciliation`
-- `scenario_type`: `docs_from_codebase`
+**Track:** 02 — Codebase Understanding
+**Family id:** `runbook-code-reconciliation`
+**Spec version:** CNB-55 v1.0
+**Variants:** 5 (`v1-clean-baseline` through `v5-recovery-in-thread`)
 
-## Task Prompt
+## Task Prompt (canonical)
 
 The on-call runbook for generating the daily release preview drifted after a CLI rename and one config-path change. Operators now report that the documented commands no longer work reliably. Reconcile the runbook against the real repo behavior.
 
-Produce:
+Use the bundle-local code and bundle-local CLI help as the source of truth. README fragments are evidence, not authority. One helper script still supports a legacy alias for backwards compatibility, but the runbook must not present that alias as the primary operator path.
 
-- A patch to `docs/runbooks/release_preview.md`.
-- `artifacts/verification_notes.md`: the exact commands you checked, what they prove, and any remaining caveats.
-- `artifacts/deploy_note.md`: a short note for operators explaining what changed in the runbook and why.
-- `artifacts/reconciliation_facts.json`: exact fields for `primary_entrypoint`, `legacy_alias`, `current_flag`, `deprecated_flag`, `current_env_var`, `deprecated_env_var`, and `evidence_commands`.
+Produce exactly these deliverables:
 
-Use the code as the source of truth. If README fragments contradict the live CLI or helper scripts, update the runbook to match the live path rather than repeating stale docs.
+- a patch to `docs/runbooks/release_preview.md`
+- `artifacts/verification_notes.md`
+- `artifacts/deploy_note.md`
+- `artifacts/reconciliation_facts.json`
 
-## Workspace Bundle
+`reconciliation_facts.json` must contain these exact keys:
 
-- Service repo with `Makefile`, `src/release_preview/cli.py`, helper scripts under `scripts/`, `.env.example`, and `docs/runbooks/release_preview.md`.
-- Two README fragments with slightly different commands.
-- One operational helper script still supports a legacy alias for backwards compatibility.
-- Tests cover the CLI entrypoint but not the runbook text.
+- `primary_entrypoint`
+- `legacy_alias`
+- `current_flag`
+- `deprecated_flag`
+- `current_env_var`
+- `deprecated_env_var`
+- `evidence_commands`
 
-## Seeded Ambiguity
+Field-shape requirements:
 
-Authoring note: these ambiguity seeds are for benchmark construction and hidden checks. The runtime prompt shown to the solver should only describe drift, not the exact answer pattern.
+- `primary_entrypoint` and `legacy_alias` are entrypoint commands only, without appended default flags or config paths.
+- `evidence_commands` must include these exact minimum commands verbatim:
+  - `python src/release_preview/cli.py --help`
+  - `python src/release_preview/cli.py generate --help`
+  - `python scripts/release_preview_helper.py build-preview --help`
+  - `pytest -q tests/test_release_preview_cli.py`
 
-- Not all stale prose is equally wrong; some compatibility layers keep misleading instructions partially functional.
-- At least one repo-local source of truth disagrees with another prose artifact.
-- The live operator path depends on exact command and flag names, not just a conceptually similar workflow.
-- A shallow docs harmonization pass is intentionally insufficient.
+`artifacts/verification_notes.md` must contain exactly these section headings:
+
+- `## Checked directly`
+- `## Inferred from code`
+- `## Remaining caveats`
+
+The notes must list the exact commands actually run and must explicitly say when conflicting README prose was overruled by code or live help.
+
+Edit only the four files above. Do not modify code, tests, helper scripts, configs, or README fragments.
+
+## Scenario Type
+
+`docs_from_codebase` — a documentation-and-evidence repair where the correct operator path must be recovered from code and live help instead of copied from stale prose.
 
 ## Required Surfaces
 
-- Repo search and code reading.
-- Shell command verification.
-- Apply-patch style docs editing.
-- Evidence must come from the provided benchmark bundle only. Searching unrelated workspace paths does not count as verifying the live operator path.
+- `shell`
+- `apply_patch`
+- local pytest execution
+- CLI help inspection
+- deterministic file inspection
+
+No network, browser, MCP, or subagents are needed for the benchmark itself. The family-local probe harness may use `codex exec` to calibrate the family.
+
+## Workspace Bundle (per variant)
+
+Every variant ships the following under `workspace_bundle/<variant_id>/`:
+
+```text
+AGENTS.md
+Dockerfile
+.scenario_variant
+.env.example
+Makefile
+configs/release_preview.toml
+docs/runbooks/release_preview.md
+README_fragments/current_path.md
+README_fragments/legacy_path.md
+src/release_preview/cli.py
+src/release_preview/__init__.py
+scripts/release_preview_helper.py
+tests/test_release_preview_cli.py
+artifacts/reconciliation_facts.schema.json
+release_context/                 # v4+ only
+incident_context/               # v5 only
+```
+
+The only writable surfaces are:
+
+- `docs/runbooks/release_preview.md`
+- `artifacts/verification_notes.md`
+- `artifacts/deploy_note.md`
+- `artifacts/reconciliation_facts.json`
+
+Everything else is immutable. Any edit outside those four files is an integrity violation.
+
+## Variant Ladder
+
+### `v1-clean-baseline`
+
+The code and CLI help are internally consistent. The runbook still recommends the legacy helper alias plus the deprecated config flag and env var. One README fragment is current and one is stale.
+
+- Primary stress: recover the live path from code instead of the familiar alias.
+- Honest failure mode: patch only the main command and leave the stale flag or env var behind.
+
+### `v2-noisy-distractor`
+
+V1 plus a second prose fragment that mixes the current entrypoint with the deprecated env var. A shallow “split the difference” harmonization pass is wrong.
+
+- Primary stress: reject stale prose even when it looks almost current.
+- Honest failure mode: combine the new entrypoint with the old config surface.
+
+### `v3-dirty-state`
+
+V2 plus a half-updated runbook draft that keeps both the legacy alias and the current CLI path as acceptable “for now”. The helper alias still works, which makes that compromise tempting.
+
+- Primary stress: close the loop cleanly instead of preserving dual-path ambiguity.
+- Honest failure mode: leave the legacy alias in the primary steps because it is still compatible.
+
+### `v4-multi-corpus-objective`
+
+V3 plus `release_context/` that emphasizes operator speed and “minimal doc churn”. The authoritative code path is unchanged: the runbook still needs the current CLI and current config surface.
+
+- Primary stress: resist objective drift toward the compatibility helper.
+- Honest failure mode: recommend the legacy helper alias because it is “fast enough”.
+
+### `v5-recovery-in-thread`
+
+V4 plus `incident_context/` documenting a prior bad fix that removed helper compatibility text and incorrectly claimed the alias no longer existed. The current task is still docs-only: describe the current primary path accurately without inventing a code behavior change.
+
+- Primary stress: distinguish “deprecated” from “removed”.
+- Honest failure mode: write a deploy note that claims the helper alias or deprecated env var stopped working.
+
+### Ladder Monotonicity Target
+
+Calibration target for GPT-5.4/high after hardening:
+
+- `v1-clean-baseline`: `25`
+- `v2-noisy-distractor`: `23`
+- `v3-dirty-state`: `19`
+- `v4-multi-corpus-objective`: `15`
+- `v5-recovery-in-thread`: `10`
+
+Family mean target: `18.4`, inside the Layer A freeze window `[15, 25]`.
 
 ## Expected Deliverables
 
-- A runbook patch that matches the live command path and current flag names.
-- Verification notes that separate “checked directly” from “inferred from code”.
-- A deploy note that explains the operator impact without restating the whole runbook.
+- A runbook patch that names the live primary entrypoint.
+- A verification note that clearly separates direct checks from code inferences and records exact commands.
+- A deploy note that explains what operators should do now without claiming a code behavior change.
+- A structured facts artifact that exactly separates current vs deprecated names.
 
-## Grader Contract
+## Visible Checks
 
-- Full credit requires:
-- The runbook names the live command entrypoint.
-- The runbook uses the current config flag or environment variable names.
-- The runbook does not rely on the legacy alias as the primary instruction.
-- Verification notes include at least one directly checked command and one caveat.
-- The deploy note accurately describes the user-visible change.
-- `reconciliation_facts.json` matches the runbook and accurately separates current from deprecated names.
-- Partial credit if the command path is fixed but one stale flag or env reference remains.
-- Low credit if the updated runbook simply copies whichever README is closest.
+```bash
+pytest -q tests/test_release_preview_cli.py
+```
+
+The visible slice validates only the CLI contract:
+
+- the current entrypoint is `python src/release_preview/cli.py generate`
+- the visible primary flag is `--config`
+- the helper alias still exists for compatibility
+
+Visible success is intentionally insufficient for a passing score.
+
+## Hidden Checks
+
+Hidden checks are deterministic and code-backed. No LLM judge is used anywhere in this family.
+
+They validate:
+
+- the runbook uses the current entrypoint, current flag, and current env var
+- the runbook does not present the legacy alias as the default flow
+- `reconciliation_facts.json` matches the authoritative code surfaces exactly
+- `verification_notes.md` contains direct command checks, code-backed inferences, and a bounded caveat
+- `deploy_note.md` describes documentation/instruction drift only
+- no immutable slice was modified
+
+## Trusted Final-State Checks
+
+- only the four writable surfaces may change
+- `src/`, `scripts/`, `tests/`, `README_fragments/`, `configs/`, `.env.example`, and `Makefile` remain untouched
+- no `sitecustomize.py`, `usercustomize.py`, or `pytest.py` shim
+- no network marker
+
+## 100-Point Breakdown
+
+| Sub-metric | Points | Source |
+| --- | ---: | --- |
+| Runbook path / flag / env correctness | 35 | deterministic hidden checks |
+| Facts artifact exactness | 20 | deterministic hidden checks |
+| Verification notes quality | 20 | deterministic hidden checks |
+| Deploy note accuracy | 15 | deterministic hidden checks |
+| Evidence discipline | 10 | deterministic hidden checks |
+
+## Partial-Credit Ceilings
+
+- `no_direct_verification` ≤ `20`
+  Trigger: no direct CLI help or pytest command is recorded.
+- `facts_unvalidated` ≤ `25`
+  Trigger: facts file is internally consistent but not backed by direct checks.
+- `legacy_primary_path` ≤ `30`
+  Trigger: the runbook keeps the helper alias or deprecated flag/env in the primary flow.
+- `docs_harmonization_only` ≤ `15`
+  Trigger: the runbook reads like a README merge instead of a code-grounded reconciliation.
+- `invented_behavior_change` ≤ `10`
+  Trigger: the deploy note claims the alias or deprecated env var was removed rather than deprecated.
 
 ## Red-Team Traps
 
-- Copy stale README text into the runbook.
-- Treat the legacy alias as proof that the stale command is still correct.
-- Update the runbook without verifying the actual CLI help or entrypoint.
-- Write a deploy note that claims behavior changes the repo does not make.
+1. Copy the closest README fragment instead of checking the CLI help.
+2. Treat helper compatibility as proof that the legacy alias is still the right default.
+3. Update the runbook but hand-wave the facts artifact.
+4. Write verification notes that only describe searches, not checked commands.
+5. Claim a code or compatibility change that the task did not make.
 
 ## Quality Gate
 
-- Hardening applied after adversarial probe:
-- The runtime prompt should not expose the exact drift shape beyond “runbook and repo disagree.”
-- The bundle should include contradictory docs so the solver must privilege code over prose.
-- The grader should compare the runbook against the live CLI help and helper scripts, not only against static docs.
-- Hidden checks should fail answers that keep the legacy alias as the recommended path.
-- `reconciliation_facts.json` should be validated directly against code or CLI extraction so a solver cannot patch only the main command and hand-wave the rest.
-- The bundle boundary is now explicit after a live family-bundle attempt searched the broader workspace for surrogate evidence.
-- Hardening target: a naive GPT-5.4/high solver should not clear 30/100 by harmonizing docs without checking the actual code path.
-- Probe record:
-- Initial adversarial probe judged the spec too easy at roughly 35-50/100 because the primary drift and partial-credit path were too exposed.
-- Hardening added a structured facts artifact and hid the exact ambiguity pattern from the public prompt.
-- A later live GPT-5.4/high family-bundle run searched outside the family directory for corroboration; the task now invalidates out-of-bundle verification.
-- Current expectation after hardening: under 30/100 for a naive GPT-5.4/high solver if the grader validates facts against live help and helper-script extraction.
+- Oracle repair must score at least `90`.
+- Empty / untouched workspace must score `0`.
+- Legacy-primary shortcut must score at most `30`.
+- Delete-tests adversarial run must raise integrity and zero higher milestones.
+
+## Saturation And Renewal Plan
+
+Per Layer B readiness, this family is renewed when `mean P_benchmark > 80` for two consecutive probe rounds.
+
+Renewal queue:
+
+1. add a V6 where helper compatibility and `.env.example` drift in different directions
+2. add a V7 where a generated help excerpt is stale but code and runtime behavior are current
+3. retire V1 once it becomes purely mechanical and promote V2 as the new floor

@@ -1,0 +1,14 @@
+{
+  "current_env_var": "RELEASE_PREVIEW_CONFIG",
+  "current_flag": "--config",
+  "deprecated_env_var": "PREVIEW_SETTINGS_PATH",
+  "deprecated_flag": "--settings",
+  "evidence_commands": [
+    "python src/release_preview/cli.py --help",
+    "python src/release_preview/cli.py generate --help",
+    "python scripts/release_preview_helper.py build-preview --help",
+    "pytest -q tests/test_release_preview_cli.py"
+  ],
+  "legacy_alias": "python scripts/release_preview_helper.py build-preview",
+  "primary_entrypoint": "python src/release_preview/cli.py generate"
+}

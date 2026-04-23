@@ -1,0 +1,21 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=20260423T053751Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   75.00   43.30    25   100  [25,100,100]  facts_unvalidatedx1
+v2-noisy-distractor                3   46.67   46.46    15   100  [25,100,15]  docs_harmonization_onlyx1,facts_unvalidatedx1
+v3-dirty-state                     3   71.67   49.07    15   100  [100,100,15]  docs_harmonization_onlyx1
+v4-multi-corpus-objective          3   43.33   49.07    15   100  [15,15,100]  docs_harmonization_onlyx2
+v5-recovery-in-thread              3   43.33   49.07    15   100  [100,15,15]  docs_harmonization_onlyx2
+
+family_mean = 56.00   (window 15.0-25.0)
+max_variant_mean = 75.00   (cap 40.0)
+min_variant_mean = 43.33   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 56.00
+  [FAIL] max variant <= cap: 75.00
+  [FAIL] at least one variant <= hard floor: min variant mean = 43.33
+  [FAIL] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: v2-noisy-distractor (46.7) < v3-dirty-state (71.7) beyond +/-3.0
+
+overall: HARDEN NEEDED

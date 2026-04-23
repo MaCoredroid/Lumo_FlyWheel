@@ -1,0 +1,182 @@
+family_id: runbook-code-reconciliation
+track: 2
+schema_version: cnb55.family.v1
+layer_a_status: failed_freeze_gate
+layer_b_status: implemented
+
+grader_ref: verifiers/runbook-code-reconciliation/score_reconciliation.py
+milestone_config_ref: verifier_data/runbook-code-reconciliation/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    passes_when:
+      all_of:
+        - notes.checked_directly_section
+        - facts.evidence_commands_present
+    description: |
+      Submission records direct command checks rather than only prose search
+      or README harmonization.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - runbook.current_primary_path
+        - facts.exact_match
+    description: |
+      Runbook and facts artifact both align to the same current entrypoint,
+      flag, and env contract.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+        - shortcut_detected == false
+    description: |
+      No edits outside the four writable surfaces, no immutable-slice
+      mutation, no pytest shim, and no network marker.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - notes.caveat_present
+        - deploy.note_accurate
+        - runbook.current_env_documented
+    description: |
+      The runbook is operationally usable and the surrounding explanation is
+      accurate and bounded.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - notes.direct_verification
+        - no partial_credit_ceiling with cap <= 30
+    description: |
+      Full reconciliation is correct, directly verified, and avoids the
+      family's major judgment ceilings.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    recommended:
+      - inspect:evidence_triage
+      - verify:assumption_honesty
+    forbidden:
+      - modify:code
+      - modify:tests
+      - modify:readme_fragments
+  per_variant:
+    v1-clean-baseline:
+      tags: [localize, inspect, modify, verify, respect_invariants]
+    v2-noisy-distractor:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage]
+    v3-dirty-state:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage]
+    v4-multi-corpus-objective:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage, modify:policy_tradeoff]
+    v5-recovery-in-thread:
+      tags: [localize, inspect, modify, verify, respect_invariants, inspect:evidence_triage, verify:assumption_honesty]
+
+tool_call_overrides:
+  - command: "python src/release_preview/cli.py --help"
+    tags: [inspect]
+  - command: "python src/release_preview/cli.py generate --help"
+    tags: [verify]
+  - command: "python scripts/release_preview_helper.py build-preview --help"
+    tags: [inspect]
+  - command: "pytest -q tests/test_release_preview_cli.py"
+    tags: [verify]
+  - command: "apply_patch docs/runbooks/release_preview.md"
+    tags: [modify]
+  - command: "apply_patch artifacts/reconciliation_facts.json"
+    tags: [modify]
+    terminal: true
+
+state_delta:
+  kind: multi_file_repair
+  deliverables:
+    - docs/runbooks/release_preview.md
+    - artifacts/verification_notes.md
+    - artifacts/deploy_note.md
+    - artifacts/reconciliation_facts.json
+  states:
+    - absent
+    - partially_aligned
+    - fully_aligned
+  transitions:
+    - {from: absent, to: absent, trigger: "no deliverables repaired", delta: 0.0}
+    - {from: absent, to: partially_aligned, trigger: "one or more deliverables repaired but facts/runbook still drift", delta: 0.3}
+    - {from: absent, to: fully_aligned, trigger: "all four deliverables aligned", delta: 0.7}
+    - {from: partially_aligned, to: fully_aligned, trigger: "finish remaining alignment", delta: 0.4}
+    - {from: fully_aligned, to: partially_aligned, trigger: "reintroduce deprecated primary path or behavior claim", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: any modified file outside the four writable surfaces and ignored runtime caches
+    detector: trusted_final_state:wrote_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: any hash drift under src/, scripts/, tests/, README_fragments/, configs/, release_context/, incident_context/, .env.example, or Makefile
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: presence of sitecustomize.py, usercustomize.py, or pytest.py
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: hash drift in tests/*
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: .network_egress_detected marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.4128
+  escalation_currently_active: true
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/runbook-code-reconciliation/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/runbook-code-reconciliation/manifest.lock.json
+  pinning: manifest.lock.json pins the generated bundle content and oracle artifacts
+
+saturation:
+  trigger: mean P_benchmark across V1-V5 > 80 for 2 consecutive probe rounds
+  detection_path: family-local probe report
+  renewal_mechanisms:
+    - id: v6_dual_fragment_conflict
+      description: add a variant where the generated help excerpt and README fragments drift independently
+    - id: retire_v1
+      description: retire the clean baseline once it becomes a floor-check
+  one_cycle_deadline: one calibration cycle
+
+rawr_modes:
+  - id: docs_harmonized_without_cli
+    description: runbook looks plausible but is not backed by direct CLI help or pytest checks
+    detection_surface: notes + evidence_commands
+    expected_P_benchmark_max: 0.20
+  - id: invented_behavior_change
+    description: deploy note claims deprecated compatibility was removed
+    detection_surface: deploy note wording
+    expected_P_benchmark_max: 0.10
