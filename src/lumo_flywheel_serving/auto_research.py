@@ -227,7 +227,7 @@ successor when you exit cleanly.
    Total wall-clock: ~{{per_candidate_wall_clock_minutes}} minutes.
 
 5. Read {{iteration_dir}}/measurement_trace.json. Pick ONE status from
-   {keep, discard, crash, baseline}. Then invoke:
+   {keep, discard, crash, baseline, harness_fault}. Then invoke:
      lumoserve auto-research commit-candidate \
        --round-id {{round_id}} \
        --iteration {{iteration}} \
@@ -1141,6 +1141,14 @@ class AutoResearchRoundManager:
             candidate_vllm_config=vllm_config,
             profile=selected_profile,
         )
+        promql_mismatch = not self._valid_latency_cross_checks(trace)
+        if promql_mismatch:
+            failures = list(trace.get("feasibility_failures", []))
+            if "promql_mismatch" not in failures:
+                failures.append("promql_mismatch")
+            trace["feasible"] = False
+            trace["feasibility_failures"] = failures
+
         trace.update(
             {
                 "round_id": round_id,
@@ -1180,6 +1188,8 @@ class AutoResearchRoundManager:
             "feasible": bool(trace["feasible"]),
             "objective_value": trace.get("sustained_concurrency"),
             "trace_path": str(trace_path),
+            "recommended_status": "harness_fault" if promql_mismatch else None,
+            "notes": "promql_mismatch" if promql_mismatch else None,
         }
 
     def commit_candidate(
@@ -1201,7 +1211,7 @@ class AutoResearchRoundManager:
             raise RuntimeError(f"Iteration artifacts missing for {iteration}")
 
         trace = json.loads(trace_path.read_text(encoding="utf-8"))
-        self._validate_measurement_trace(trace)
+        self._validate_measurement_trace(trace, status=status)
         generator = str(trace.get("generator", ""))
         if not generator.startswith("RealMeasurementHarness") and not allow_synthetic:
             raise RuntimeError(f"commit_refused: generator {generator!r} is not a production trace")
@@ -1232,6 +1242,11 @@ class AutoResearchRoundManager:
         self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
         self._assert_git_index_clean(context="commit_refused")
         self._write_results(round_dir / "results.tsv", updated_rows)
+        self._assert_dirty_paths_match_expected(
+            mutable_paths=[candidate_dir, round_dir / "results.tsv"],
+            bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
+            context="commit_refused",
+        )
 
         commit_message = self._candidate_commit_message(
             round_id=round_id,
@@ -1314,6 +1329,11 @@ class AutoResearchRoundManager:
             self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
             self._assert_git_index_clean(context="commit_refused")
             self._write_results(round_dir / "results.tsv", updated_rows)
+            self._assert_dirty_paths_match_expected(
+                mutable_paths=[rescreen_dir, round_dir / "results.tsv"],
+                bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
+                context="commit_refused",
+            )
             commit_message = self._candidate_commit_message(
                 round_id=round_id,
                 iteration=iteration,
@@ -1503,6 +1523,10 @@ class AutoResearchRoundManager:
             staged_paths.append((round_dir / "rescreen_trace.json").relative_to(self.repo_root))
         if (round_dir / "holdout_trace.json").exists():
             staged_paths.append((round_dir / "holdout_trace.json").relative_to(self.repo_root))
+        self._assert_dirty_paths_match_expected(
+            mutable_paths=[self.repo_root / path for path in staged_paths],
+            context="finalize-round refuses",
+        )
         finalize_commit_sha = self._commit_paths(
             staged_paths,
             commit_message,
@@ -1764,15 +1788,19 @@ class AutoResearchRoundManager:
             raise RuntimeError(f"bootstrap-round preflight failed: {detail}") from exc
         return completed.stdout.strip()
 
-    def _validate_measurement_trace(self, trace: dict[str, Any]) -> None:
+    def _validate_measurement_trace(self, trace: dict[str, Any], *, status: str) -> None:
         candidate_uuid = trace.get("candidate_uuid")
         if not isinstance(candidate_uuid, str) or not candidate_uuid.strip():
             raise RuntimeError("commit_refused: malformed_trace")
         profile = trace.get("profile")
         if profile not in {"screen", "full"}:
             raise RuntimeError("commit_refused: malformed_trace")
-        if not self._valid_latency_cross_checks(trace):
-            raise RuntimeError("commit_refused: malformed_trace")
+        promql_mismatch = not self._valid_latency_cross_checks(trace)
+        if status == "harness_fault":
+            if not promql_mismatch:
+                raise RuntimeError("commit_refused: harness_fault requires promql_mismatch")
+        elif promql_mismatch:
+            raise RuntimeError("commit_refused: promql_mismatch requires status harness_fault")
         if float(trace.get("reasoning_content_purity", 0.0)) != 1.0:
             raise RuntimeError("commit_refused: malformed_trace")
 
@@ -1881,6 +1909,44 @@ class AutoResearchRoundManager:
 
     def _git_status_short(self) -> str:
         return self._git(["status", "--short"]).stdout.strip()
+
+    def _dirty_entries(self) -> list[tuple[str, str]]:
+        lines = self._git(["status", "--short", "--untracked-files=all"]).stdout.splitlines()
+        entries: list[tuple[str, str]] = []
+        for line in lines:
+            if len(line) < 4:
+                continue
+            status = line[:2]
+            path = line[3:]
+            if " -> " in path:
+                path = path.split(" -> ", 1)[1]
+            entries.append((status, path))
+        return entries
+
+    def _assert_dirty_paths_match_expected(
+        self,
+        *,
+        mutable_paths: list[Path],
+        context: str,
+        bootstrap_paths: list[Path] | None = None,
+    ) -> None:
+        mutable = [path.relative_to(self.repo_root).as_posix().rstrip("/") for path in mutable_paths]
+        bootstrap = [
+            path.relative_to(self.repo_root).as_posix().rstrip("/")
+            for path in (bootstrap_paths or [])
+            if path.exists()
+        ]
+        unexpected: set[str] = set()
+        for status, path in self._dirty_entries():
+            if any(path == candidate or path.startswith(f"{candidate}/") for candidate in mutable):
+                continue
+            if any(path == candidate or path.startswith(f"{candidate}/") for candidate in bootstrap):
+                if status == "??":
+                    continue
+            unexpected.add(path)
+        if unexpected:
+            rendered = ", ".join(sorted(unexpected))
+            raise RuntimeError(f"{context}: dirty paths outside expected set: {rendered}")
 
     def _bootstrap_round_artifact_paths(self, round_dir: Path) -> list[Path]:
         paths = [
