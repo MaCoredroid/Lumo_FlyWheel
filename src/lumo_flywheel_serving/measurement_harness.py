@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import requests
+import yaml
 
 from .metrics import parse_prometheus_text
+from .tuned_config import make_tuned_config_bundle
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,10 @@ class RealMeasurementHarness:
         endpoint: str,
         metrics_scrape_url: str,
         admin_url: str,
+        model_id: str,
+        weight_version_id: str,
+        bundle_staging_dir: Path,
+        round_id: str | None = None,
     ) -> None:
         self.workload_spec = workload_spec
         self.seed_trace_path = Path(seed_trace_path)
@@ -53,6 +59,10 @@ class RealMeasurementHarness:
         self.endpoint = endpoint.rstrip("/")
         self.metrics_scrape_url = metrics_scrape_url
         self.admin_url = admin_url.rstrip("/")
+        self.model_id = model_id
+        self.weight_version_id = weight_version_id
+        self.bundle_staging_dir = Path(bundle_staging_dir)
+        self.round_id = round_id
 
     def measure(
         self,
@@ -62,6 +72,7 @@ class RealMeasurementHarness:
         window_s: int,
         target_concurrency_sweep: list[int],
     ) -> dict[str, Any]:
+        self._activate_candidate(candidate_vllm_config)
         started = time.time()
         before_metrics = self._metrics_snapshot()
         replay_entries = self._load_seed_trace(self.seed_trace_path)
@@ -127,6 +138,64 @@ class RealMeasurementHarness:
             "vllm_metrics_snapshot_ref": "",
             "seed_trace_replay_ref": "",
         }
+
+    def _activate_candidate(self, candidate_vllm_config: dict[str, Any]) -> None:
+        self.bundle_staging_dir.mkdir(parents=True, exist_ok=True)
+        bundle_path = self.bundle_staging_dir / f"candidate-{time.time_ns()}.yaml"
+        bundle = make_tuned_config_bundle(
+            model_id=self.model_id,
+            family_id=self.workload_spec.family_id,
+            weight_version_id=self.weight_version_id,
+            workload_distribution_id=self.workload_spec.workload_distribution_id,
+            vllm_config=dict(candidate_vllm_config),
+            objective={"metric": "measurement_staging", "value": 0},
+            measurement_trace_ref="pending-measurement-trace.json",
+            search_trace_ref="pending-search-trace.json",
+            baseline_bundle_id=None,
+            regression_guard={},
+            safety_rails={},
+            round_provenance={
+                "round_id": self.round_id,
+                "dry_run": True,
+                "staging_only": True,
+            },
+        )
+        bundle_path.write_text(yaml.safe_dump(bundle.as_dict(), sort_keys=False), encoding="utf-8")
+        try:
+            response = requests.post(
+                f"{self.admin_url}/load_tuned_config",
+                json={"bundle_path": str(bundle_path)},
+                timeout=30,
+            )
+            response.raise_for_status()
+            self._reset_prefix_cache()
+            self._wait_for_health()
+        finally:
+            try:
+                bundle_path.unlink()
+            except FileNotFoundError:
+                pass
+
+    def _reset_prefix_cache(self) -> None:
+        response = requests.post(self._server_root_url("/reset_prefix_cache"), timeout=30)
+        response.raise_for_status()
+
+    def _wait_for_health(self, timeout_s: float = 60.0) -> None:
+        deadline = time.monotonic() + timeout_s
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                response = requests.get(self._server_root_url("/health"), timeout=5)
+                response.raise_for_status()
+                return
+            except requests.RequestException as exc:
+                last_error = exc
+                time.sleep(1)
+        raise RuntimeError("Timed out waiting for /health after candidate load") from last_error
+
+    def _server_root_url(self, path: str) -> str:
+        base, _, _ = self.metrics_scrape_url.rpartition("/")
+        return f"{base}{path}"
 
     def _load_seed_trace(self, path: Path) -> list[dict[str, Any]]:
         if not path.is_file():
