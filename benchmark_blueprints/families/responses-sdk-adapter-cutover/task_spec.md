@@ -61,8 +61,8 @@ The starting workspace is intentionally broken in the same family-wide ways:
 
 Minimal cutover. The only visible transcript is an interleaved assistant/tool turn. The solver must normalize Responses items into event objects, preserve tool call ids, fix rendering, and move config/docs to the Responses path.
 
-- Primary stress: basic migration correctness.
-- Expected capable-model mean after hardening: about `28`.
+- Primary stress: baseline migration correctness plus alias-safe normalization of `function_call` / `function_call_output` items into the same replayable event model.
+- Expected capable-model mean after the next rerun: low-to-mid `20s`.
 
 ### `v2-noisy-distractor`
 
@@ -100,13 +100,13 @@ Adds `incident_context/` and `transcripts/future_event_passthrough.json` after a
 
 Calibration target for GPT-5.4/high after hardening:
 
-- `v1-clean-baseline`: `28`
+- `v1-clean-baseline`: `23`
 - `v2-noisy-distractor`: `23`
 - `v3-dirty-state`: `18`
 - `v4-multi-corpus-objective`: `15`
 - `v5-recovery-in-thread`: `10`
 
-Family mean target: `18.8`, within the Layer A freeze window `[15, 25]`.
+Family mean target: `17.8`, within the Layer A freeze window `[15, 25]`.
 
 ## Expected Deliverables
 
@@ -135,7 +135,7 @@ Hidden checks live under `verifier_data/responses-sdk-adapter-cutover/<variant>/
 
 Hidden surfaces by variant:
 
-- `v1`: interleaved tool-call and tool-result ordering, basic anti-flattening.
+- `v1`: interleaved tool-call and tool-result ordering, plus alias-safe normalization for `function_call` / `function_call_output`.
 - `v2`: multi-block assistant message normalization, no legacy live-path fallback.
 - `v3`: reordered chunk stability and deterministic replay of the canonical event stream.
 - `v4`: replay remains event-sourced rather than transcript-sourced under release-context pressure.

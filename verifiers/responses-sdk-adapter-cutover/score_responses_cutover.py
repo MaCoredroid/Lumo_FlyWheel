@@ -169,6 +169,26 @@ def normalize_and_check(files: dict[str, str], gold: dict[str, Any]) -> dict[str
     rendered = render.render_transcript(interleaved_events)
     checks["hidden.render_mentions_call_id"] = "call-1" in rendered and "tool_result" in rendered
 
+    alias_turn = AGENT_WS / "transcripts/function_alias_turn.json"
+    if alias_turn.exists():
+        alias_events = adapter.normalize_response_items(load_json(alias_turn))
+        alias_rendered = render.render_transcript(alias_events)
+        checks["hidden.function_alias_normalization"] = (
+            len(alias_events) == 3
+            and alias_events[0].get("kind") == "assistant_text"
+            and alias_events[1].get("kind") == "tool_call"
+            and alias_events[2].get("kind") == "tool_result"
+            and alias_events[1].get("call_id") == "call-alias-1"
+            and alias_events[2].get("call_id") == "call-alias-1"
+            and "alias" in str(alias_events[1].get("arguments", ""))
+            and "primary-owner" in str(alias_events[2].get("output", ""))
+            and replay.replay_from_serialized(replay.serialize_events(alias_events)) == alias_events
+            and "call-alias-1" in alias_rendered
+            and "tool_result" in alias_rendered
+        )
+    else:
+        checks["hidden.function_alias_normalization"] = True
+
     multi_message = AGENT_WS / "transcripts/multi_message_turn.json"
     if multi_message.exists():
         multi_events = adapter.normalize_response_items(load_json(multi_message))
@@ -322,6 +342,11 @@ def main() -> int:
         state.add("docs.tool_result_correlation", gold["weights"].get("docs.tool_result_correlation", 0))
     if checks["hidden.interleaved_order"]:
         state.add("hidden.interleaved_order", gold["weights"].get("hidden.interleaved_order", 0))
+    if checks["hidden.function_alias_normalization"]:
+        state.add(
+            "hidden.function_alias_normalization",
+            gold["weights"].get("hidden.function_alias_normalization", 0),
+        )
     if checks["hidden.multi_block_message"]:
         state.add("hidden.multi_block_message", gold["weights"].get("hidden.multi_block_message", 0))
     if checks["hidden.replay_roundtrip"]:
@@ -341,6 +366,7 @@ def main() -> int:
         1
         for key in (
             "hidden.interleaved_order",
+            "hidden.function_alias_normalization",
             "hidden.multi_block_message",
             "hidden.replay_roundtrip",
             "hidden.reordered_chunk_stability",
@@ -352,6 +378,8 @@ def main() -> int:
 
     if visible_ok and (hidden_successes < 3 or not checks["hidden.legacy_path_removed"]):
         state.apply_ceiling("visible_only_cutover", 20)
+    if not checks["hidden.function_alias_normalization"]:
+        state.apply_ceiling("responses_alias_blindness", 35)
     if not checks["hidden.multi_block_message"]:
         state.apply_ceiling("flattened_multi_event_turn", 25)
     if not checks["hidden.legacy_path_removed"]:

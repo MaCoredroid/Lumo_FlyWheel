@@ -30,12 +30,13 @@
     "docs.event_ordering": 5,
     "docs.tool_result_correlation": 5,
     "docs.variant_complete": 5,
+    "hidden.function_alias_normalization": 15,
     "hidden.future_event_passthrough": 0,
-    "hidden.interleaved_order": 20,
-    "hidden.legacy_path_removed": 20,
+    "hidden.interleaved_order": 15,
+    "hidden.legacy_path_removed": 15,
     "hidden.multi_block_message": 0,
     "hidden.reordered_chunk_stability": 0,
-    "hidden.replay_roundtrip": 20,
+    "hidden.replay_roundtrip": 15,
     "visible.pytest": 10
   }
 }

@@ -1,14 +1,14 @@
 {
   "family_id": "responses-sdk-adapter-cutover",
   "grader": {
-    "score_responses_cutover_py_sha256": "1ced1fd6698d239c4c38bc38049f21cf212935f34f75a549637ea350090254cc",
+    "score_responses_cutover_py_sha256": "52f0cb8bf13394232d045b64f4d052cee3930d061dfa0862ae47b8355a0f7319",
     "verify_sh_sha256": "f28e897b46accd7ec866fbd8a27c003eecd3faeb724aba635a8be4a48c1393db"
   },
   "schema_version": "cnb55.manifest.v2",
   "variants": {
     "v1-clean-baseline": {
-      "gold_reference_sha256": "937c66e1449b699d7faaf0a9b41fdf01f8026645cbead469cc44ea1b3979732e",
-      "workspace_manifest_sha256": "b169e95a88db81c7076317cea3caf8b772ec10707da3109be40520864d1b3436"
+      "gold_reference_sha256": "6462c56cc34363df138e55b344e4853d635c686e6039a1469809c415b714ad97",
+      "workspace_manifest_sha256": "80d7606636268a12a72d5fa2920fcce49489b81685edb2fbe3e7c910826d823f"
     },
     "v2-noisy-distractor": {
       "gold_reference_sha256": "a892da7e62a55337b5aaf432e1c80511685aff1acc36f50fed23ff05b9bbaf8b",

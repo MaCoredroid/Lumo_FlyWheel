@@ -14,6 +14,7 @@
     "tests/test_adapter.py": "480cd10ce47ede7f0cabd7166f0495dda72333bc7e0a7dbf99a4c08aa1fe9b8e",
     "tests/test_render.py": "082a491f46453434f2ec61d272c9b3c090a021738d2227633bd41cef2355d639",
     "tests/test_replay.py": "7df67bcb9ec108a71170f193700b1919a9aac10faab52a53c542c8b880f1c7c7",
+    "transcripts/function_alias_turn.json": "87103e0bb74d5966eda47b2b296f343dec19d7a78baedcb128c47254e20e2744",
     "transcripts/interleaved_tool_turn.json": "6ecc9a6cca6c535f0248f96f94cef21f933b1c550b7c4d8e68a429b36d18c501"
   },
   "variant_id": "v1-clean-baseline"

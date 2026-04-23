@@ -298,3 +298,35 @@ Overall verdict from the generated report: `HARDEN NEEDED`
   - `constraint_named_not_respected: declared_not_yet_implemented`
 - `delete_tests` remains in `integrity_adversarials`, not in `rawr_modes`
 - `current_observed_stdev_M_training` is refreshed to `0.28` from the fresh 15-run probe sample
+
+## `attempt_08` — `v1` hidden discriminator hardening without probe rerun
+
+### Why this change
+
+- `attempt_07` showed `v1-clean-baseline` remained the single easy leak at `91.67` mean while `v2` through `v5` still separated honestly on their intended ceilings.
+- The reviewer suggestion was to harden `v1` specifically, not to disturb the existing `v2`-`v5` ladder.
+
+### Family-local hardening applied
+
+- Added a withheld `v1` transcript fixture: `transcripts/function_alias_turn.json`
+  - uses `function_call` and `function_call_output`
+  - requires the same call-id correlation guarantees as the primary `tool_call` / `tool_result` path
+  - includes delimiter-heavy payload content so alias handling must stay replay-safe rather than shortcutting through a legacy wrapper
+- Added a new hidden scorer check: `hidden.function_alias_normalization`
+- Added a new ceiling: `responses_alias_blindness <= 35`
+  - fires when the alias event path is ignored or loses call-id correlation
+- Rebalanced `v1` weights to make room for the new hidden discriminator while leaving `v2` through `v5` untouched
+
+### Files and metadata updated
+
+- `workspace_bundle/v1-clean-baseline/transcripts/function_alias_turn.json`
+- `verifiers/responses-sdk-adapter-cutover/score_responses_cutover.py`
+- `verifier_data/responses-sdk-adapter-cutover/tools/build_family_assets.py`
+- regenerated `verifier_data/responses-sdk-adapter-cutover/v1-clean-baseline/{gold_reference.json,workspace_manifest.json}`
+- regenerated `benchmark_blueprints/families/responses-sdk-adapter-cutover/manifest.lock.json`
+- updated family-local contract docs in `task_spec.md` and `evaluator_contract.md`
+
+### Honest status
+
+- No fresh live probe was run in this attempt by explicit instruction.
+- This is a targeted hardening pass intended to pull `v1` down on the next rerun while preserving the already-observed `v2` through `v5` separation.

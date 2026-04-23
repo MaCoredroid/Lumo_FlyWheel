@@ -1,0 +1,22 @@
+[
+  {
+    "type": "message",
+    "content": [
+      {
+        "type": "output_text",
+        "text": "Checking alias-safe replay before handoff."
+      }
+    ]
+  },
+  {
+    "type": "function_call",
+    "id": "call-alias-1",
+    "tool_name": "lookup_owner",
+    "arguments": "{\"service\":\"incident-handoff|alias\",\"mode\":\"handoff\\nresume\"}"
+  },
+  {
+    "type": "function_call_output",
+    "tool_call_id": "call-alias-1",
+    "output": "primary-owner|ack\nresume-ready"
+  }
+]

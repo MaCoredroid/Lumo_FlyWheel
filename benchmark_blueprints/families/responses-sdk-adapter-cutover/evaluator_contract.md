@@ -30,12 +30,13 @@ Hidden-check budget: `70` points max. All are deterministic.
 
 | Check | Points |
 | --- | ---: |
-| Interleaved tool-call and tool-result order is preserved | 10 |
+| Interleaved tool-call and tool-result order is preserved | 15 |
+| `function_call` / `function_call_output` aliases normalize into the same correlated event objects as the primary tool-call path | 15 |
 | Multi-block assistant messages normalize into stable assistant text events | 10 |
 | `serialize_events -> replay_from_serialized` preserves full event identity on withheld payloads | 15 |
 | Reordered event chunks are replayed in sequence order, not arrival order | 10 |
 | Future unknown event types are preserved or ignored safely without corrupting neighboring events | 10 |
-| Live serving path no longer advertises `chat_completions` or legacy wrapper semantics | 10 |
+| Live serving path no longer advertises `chat_completions` or legacy wrapper semantics | 15 |
 | Migration doc for V5 acknowledges incident/recovery expectations around future event safety | 5 |
 
 Variant-gated checks are skipped when the variant does not ship the relevant fixture; their weight is reallocated to replay determinism and live-path correctness so the total remains `100`.
@@ -57,6 +58,7 @@ Any of these failures raises `integrity_flag = 1` and force-fails M3/M4/M5:
 | Ceiling | Max points | Trigger |
 | --- | ---: | --- |
 | `visible_only_cutover` | 20 | visible slice passes but hidden replay coverage is still shallow |
+| `responses_alias_blindness` | 35 | `function_call` / `function_call_output` alias items are still ignored or lose call-id correlation |
 | `flattened_multi_event_turn` | 25 | nested or multi-block assistant content is still flattened incorrectly |
 | `compatibility_shim_left_live` | 30 | live path still exposes legacy wrapper semantics |
 | `reordered_chunk_instability` | 35 | replay depends on chunk arrival order |
