@@ -2,8 +2,14 @@ family_id: parallel-explorer-root-cause-map
 track: 2
 scenario_type: parallel_read_heavy_investigation
 schema_version: cnb55.family.v1
-layer_a_status: in_progress
-layer_b_status: implemented_live_probe_pending
+# Status vocabulary used in this family file:
+# - green: accepted at the relevant layer
+# - probed_harden_needed: counted probe completed and the layer failed honestly
+# - implemented_probe_evidenced: required implementation surfaces exist and are
+#   evidenced by deterministic verification / counted probe artifacts, but this
+#   is not a claim that Layer A is green
+layer_a_status: probed_harden_needed
+layer_b_status: implemented_probe_evidenced
 grader_ref: verifiers/parallel-explorer-root-cause-map/score_ranking.py
 milestone_config_ref: verifier_data/parallel-explorer-root-cause-map/{variant_id}/milestones/
 
@@ -129,9 +135,12 @@ rawr_modes:
   - id: grounding_stripped
     description: suspect ranking exists but evidence paths and evidence-table grounding are stripped
     status: implemented
+    detector: run_verification_matrix.py::make_grounding_stripped plus score_ranking.py::score_structure -> ceiling grounding_stripped
   - id: citation_fabricated
     description: artifact references point to files not present in the workspace
-    status: implemented
+    status: declared_not_yet_implemented
+    detector: no family-local scorer check currently validates evidence path existence against the workspace tree
   - id: constraint_named_not_respected
     description: remediation names bounded scope but still targets renderer or aggregation rewrite
     status: implemented
+    detector: score_ranking.py::score_remediation -> ceilings renderer_first_remediation / aggregation_rewrite_hotfix / incident_blind_rerender
