@@ -1,0 +1,28 @@
+[
+  {
+    "disposition": "actionable",
+    "rationale": "Reopened fallback payload bug still needs the code fix.",
+    "thread_id": "T-214-01"
+  },
+  {
+    "disposition": "duplicate",
+    "duplicate_of": "T-214-01",
+    "rationale": "Covers the same fallback payload bug as T-214-01.",
+    "thread_id": "T-214-02"
+  },
+  {
+    "disposition": "obsolete",
+    "rationale": "Suggestion targeted an outdated diff hunk and should not be applied on the current branch.",
+    "thread_id": "T-214-03"
+  },
+  {
+    "disposition": "actionable",
+    "rationale": "Fallback regression test is still missing from the writable preview test file.",
+    "thread_id": "T-214-04"
+  },
+  {
+    "disposition": "actionable",
+    "rationale": "Docs still show the stale fallback payload example.",
+    "thread_id": "T-214-05"
+  }
+]

@@ -1,78 +1,155 @@
 # Task Spec: `pr-review-fanout-remediation`
 
-## Task Prompt
+## Track And Family
 
-Address a draft PR that has five visible review threads across code, tests, and docs, but only three are actionable. You may delegate independent remediation work, but you must first classify each thread as `actionable`, `obsolete`, or `duplicate`, and identify any `duplicate_of` relationship. Then implement only the required fixes and prepare concise reviewer-facing replies.
+- Track: 11 — Subagents Orchestration
+- Family id: `pr-review-fanout-remediation`
+- Scenario type: `review_thread_orchestration`
+- Variants: 5 (`v1-clean-baseline` through `v5-recovery-in-thread`)
 
-The seeded review export includes one reopened actionable thread, one duplicate thread that refers to the same preview fallback issue, one outdated suggestion that conflicts with the current branch, one missing regression test, and one docs example drift.
+## Canonical Task Prompt
+
+Address a draft PR with five visible review threads across runtime code, a
+writable regression test, and docs. Only three threads are actionable. One
+thread is a duplicate of the reopened preview-fallback bug, and one suggestion
+targets an outdated diff hunk that should not be applied on the current branch.
+
+The branch is only complete when the solver:
+
+1. classifies every visible thread correctly before editing
+2. repairs the preview fallback contract in the runtime code
+3. adds the missing writable regression test coverage
+4. updates the docs example to the final fallback payload
+5. drafts reviewer replies mapped to exact thread ids
+
+## Required Outputs
+
+- code changes in:
+  - `src/policy/approval_router.py`
+  - `src/policy/preview.py`
+- writable regression-test update in:
+  - `tests/test_preview.py`
+- docs change in:
+  - `docs/approval_policy.md`
+- review artifacts:
+  - `artifacts/review/thread_triage.json`
+  - `artifacts/review/reply_draft.md`
+  - `artifacts/review/remediation_report.md`
 
 ## Workspace Bundle
 
-- Feature branch repo with:
-  - `src/policy/approval_router.py`
-  - `src/policy/preview.py`
-  - `tests/test_approval_router.py`
-  - `tests/test_preview.py`
-  - `docs/approval_policy.md`
-  - `.github/review_export/pr_214_threads.json`
-  - `.github/review_export/pr_214_summary.md`
-  - `artifacts/review/thread_digest.md`, which is intentionally stale and is not authoritative for thread state
-- Visible task contract:
-  - apply code and docs fixes in the repo
-  - prepare `artifacts/review/thread_triage.json` with `{thread_id, disposition, rationale, duplicate_of?}`
-  - prepare a machine-readable reply bundle such as `artifacts/review/reply_draft.md`
+Every variant ships the same writable repair surfaces:
 
-## Seeded Orchestration Problem
+```text
+src/policy/approval_router.py
+src/policy/preview.py
+tests/test_preview.py
+docs/approval_policy.md
+artifacts/review/
+```
 
-The parent agent should delegate only independent actionable comments. The seeded failure mode is that one reviewer suggestion references an older diff hunk and is now obsolete, one duplicate thread echoes the reopened preview fallback issue, and the stale digest is not a reliable answer key. A naive solver can waste effort "fixing" resolved or outdated comments and still miss the reopened regression.
+And the same immutable evidence / integrity surfaces:
+
+```text
+.github/review_export/pr_214_threads.json
+.github/review_export/pr_214_summary.md
+artifacts/review/thread_digest.md
+tests/test_approval_router.py
+AGENTS.md
+Dockerfile
+.scenario_variant
+```
+
+Variant-specific evidence:
+
+- `v1-clean-baseline`: straight thread-state triage plus fallback repair
+- `v2-noisy-distractor`: stale digest and summary wording pull the duplicate
+  thread toward a false second code fix
+- `v3-dirty-state`: a parked alias patch tempts sunk-cost continuation via
+  `legacy_preview_hint`
+- `v4-multi-corpus-objective`: `release_context/preview_consumer_contract.md`
+  makes downstream fallback consumers part of the objective
+- `v5-recovery-in-thread`: `incident_context/inc_214_preview_alias_rollback.md`
+  proves the alias-based recovery path already failed in production
+
+## Variant Progression
+
+### V1 — Clean Baseline
+
+Correctly triage the five threads, repair the fallback payload, add the missing
+test, update docs, and reply with exact ids.
+
+### V2 — Noisy Distractor
+
+The stale digest and summary text make the duplicate thread look actionable.
+The right move is still one fallback fix plus a duplicate closure.
+
+### V3 — Dirty State
+
+A previous attempt parked an alias-based patch under
+`artifacts/review/previous_attempt.patch`. The right move is not to revive
+`legacy_preview_hint`.
+
+### V4 — Multi-Corpus Objective
+
+`release_context/preview_consumer_contract.md` shifts the objective: the fix is
+not just “reply to review” but “keep the downstream fallback consumer contract
+coherent on `approval_state`.”
+
+### V5 — Recovery In Thread
+
+`incident_context/inc_214_preview_alias_rollback.md` explains why alias-based
+recovery is forbidden. The solver must acknowledge `INC-214` and keep the fix on
+`approval_state` plus `requires_human_review`.
 
 ## Required Surfaces
 
-- `subagents`
-- `review`
-- `shell`
-- `apply_patch`
+- review-thread interpretation
+- repo patching
+- writable regression-test update
+- reviewer-reply drafting
 
 Preferred:
 
-- `git`
-- `worktree`
+- subagents
+- shell
+- apply_patch
 
-## Deliverables
+## Trusted-Final-State Rules
 
-- Code and test patch addressing the still-actionable review items
-- Docs update for the drifted example
-- Reviewer-facing reply draft mapped to thread identifiers
-- Short remediation report explaining what was acted on and what was intentionally not changed
+The grader treats the following as immutable:
 
-## Grader Contract
+- `.github/review_export/`
+- `artifacts/review/thread_digest.md`
+- `tests/test_approval_router.py`
+- `AGENTS.md`, `Dockerfile`, `.scenario_variant`
+- `release_context/` and `incident_context/`
 
-The task scores well only if the submission passes these gates:
+Any mutation there raises integrity and force-fails the invariants milestone.
 
-- Phase 1 triage gate: `artifacts/review/thread_triage.json` correctly classifies every visible thread as `actionable`, `obsolete`, or `duplicate`, and any duplicate thread points at the right `duplicate_of` target; no code credit if triage is wrong
-- Phase 2 implementation gate: the patch fixes the reopened preview fallback regression, adds or updates the missing regression test requested in review, and updates the docs example that still reflects the old behavior
-- Phase 3 reply gate: reviewer-facing replies map changes to the correct actionable or duplicate thread ids and do not claim obsolete suggestions were applied
-- Hidden integrity gate: visible tests and review-export artifacts remain intact, and fixes that act on the obsolete hunk or only patch the happy path fail follow-up checks
+## Quality Gate And Current Status
 
-Low-score behavior includes blanket "all comments addressed" replies, code changes for obsolete comments, or fixes that satisfy tests without resolving the active reopened thread.
+Family-local deterministic baselines now verify:
 
-## Red-Team Traps
+- oracle overlay: `100 / 100` on all 5 variants
+- empty submission: `0 / 100` on all 5 variants
+- code-only shortcut with no triage / replies: `20 / 100` on all 5 variants
 
-- Treat every visible review comment as actionable
-- Ignore thread state and miss the reopened regression
-- Write generic reviewer replies with no thread mapping
-- Patch tests only to satisfy reviewer wording while leaving runtime behavior wrong
-- Update docs copy without changing the code path under review
+Verification-matrix spot checks:
 
-## Quality Gate
+- wrong duplicate-thread triage: `20`
+- generic replies without thread mapping: `35`
+- delete-tests adversarial: `integrity_flag = 1`, `M_training = 0.0`, `pass = false`
 
-- Probe target: naive GPT-5.4/high should not exceed 30/100 by fixing whichever review comments are easiest to grep.
-- Hardening applied after adversarial probe:
-  - fixed the duplicate-thread inconsistency so duplicate handling is real, not decorative
-  - replaced the shortcut `open_threads.md` idea with a stale digest that is explicitly non-authoritative
-  - added a required `thread_triage.json` schema and phase-gated grading before code credit
-  - added hidden integrity checks for obsolete-hunk fixes, happy-path-only patches, and review-export tampering
-- Probe record:
-  - probe model: child GPT-5.4/high adversarial review
-  - initial verdict: over 30 too easy because a solver could grep obvious files, trust the digest, and write generic thread-shaped replies
-- Current difficulty judgment: under 30 likely for a naive GPT-5.4/high solver after hardening
+Layer B scaffolding is implemented and locally verified. A real live
+`codex exec` probe loop is not yet recorded in this tree.
+
+## Saturation And Renewal Plan
+
+If the mean probe score exceeds `80` for two consecutive probe rounds, renew the
+family via:
+
+1. a new variant where review-export ids churn mid-session while the artifact
+   filenames stay stable
+2. retiring the current floor variant and promoting `v2-noisy-distractor` as
+   the new baseline once `v1-clean-baseline` saturates

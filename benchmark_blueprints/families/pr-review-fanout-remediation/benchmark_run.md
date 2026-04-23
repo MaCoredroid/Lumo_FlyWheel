@@ -2,60 +2,100 @@
 
 ## Run Metadata
 
-- Run type: child-subagent benchmark attempt
+- Run type: child-subagent family implementation pass
 - Model: `gpt-5.4`
 - Reasoning effort: `high`
-- Agent id: `019da330-ea16-77b1-b6ff-47816d895312`
-- Context restriction: family-local artifacts only under this family directory
+- Scope restriction:
+  - `benchmark_blueprints/families/pr-review-fanout-remediation/**`
+  - `verifiers/pr-review-fanout-remediation/**`
+  - `verifier_data/pr-review-fanout-remediation/**`
 
-## Attempt Summary
+## attempt_00 — prose-only family stub
 
-The solver produced a thread triage, patch summary, docs update summary, reply bundle, and remediation report. It correctly separated actionable, obsolete, and duplicate work in abstract terms, but it used logical placeholder thread handles because literal thread ids from the review export were not available in the family-local artifacts.
+Initial state before this pass:
 
-Most important failure mode:
+- `task_spec.md`, `evaluator_contract.md`, and `benchmark_run.md` existed
+- no workspace bundle
+- no family-local scorer / verifier wrapper
+- no verifier data
+- no `family.yaml`
+- no `manifest.lock.json`
 
-- no literal thread ids from the benchmark review export
-- no quoted reviewer excerpts
-- no concrete code patch or test diff
+Recorded baseline from the earlier prose-only child attempt:
 
-## Scoring Against `evaluator_contract.md`
+- final score: `22 / 100`
+- strongest signal: logically plausible triage narrative, but no literal thread
+  ids, no real code / test patch, and no family-local artifact bundle
 
-### Thread-State Triage Accuracy: 10 / 35
+Conclusion:
 
-- dispositions were logically plausible: `10 / 25`
-- `duplicate_of` reasoning present: `0 / 10`
+- Layer A: not calibratable yet because there was no runnable family asset pack
+- Layer B: missing almost every required artifact
 
-Reason for loss:
+## attempt_01 — family asset pack + Layer B scaffolding
 
-- placeholder logical ids were used instead of literal export ids
+Implemented during this pass:
 
-### Implementation Of Actionable Review Items: 4 / 30
+- 5-variant workspace bundle under `workspace_bundle/`
+- deterministic dual-band scorer:
+  - `verifiers/pr-review-fanout-remediation/score_review_fanout.py`
+- verifier wrapper:
+  - `verifiers/pr-review-fanout-remediation/verify.sh`
+- family-local regen + matrix runners:
+  - `verifiers/pr-review-fanout-remediation/regen_family.py`
+  - `verifiers/pr-review-fanout-remediation/run_verification_matrix.py`
+  - `verifiers/pr-review-fanout-remediation/run_live_probe.py`
+- family-local verifier data:
+  - gold state, manifests, oracle overlays, hidden tests, milestone scripts
+- Layer B contract files:
+  - `family.yaml`
+  - `manifest.lock.json`
+  - `verification_matrix.md`
+  - `verification_matrix_v5-recovery-in-thread.md`
 
-- the answer described the intended fixes but did not provide actual benchmark-workspace code changes or test updates
+### Baseline Numeric Checks
 
-### Reviewer-Facing Reply Quality: 5 / 15
+Per variant (`v1`..`v5`):
 
-- reply discipline was good in spirit
-- no literal thread ids or reviewer excerpts were available
+| variant | oracle | empty | code-only shortcut |
+|---|---:|---:|---:|
+| v1-clean-baseline | 100 | 0 | 20 |
+| v2-noisy-distractor | 100 | 0 | 20 |
+| v3-dirty-state | 100 | 0 | 20 |
+| v4-multi-corpus-objective | 100 | 0 | 20 |
+| v5-recovery-in-thread | 100 | 0 | 20 |
 
-### Docs And Regression-Test Completeness: 3 / 10
+### Verification Matrix Spot Checks
 
-- docs and regression intent described, but no actual artifacts supplied
+V1:
 
-### Integrity And Anti-Tamper Compliance: 0 / 10
+- Oracle: `P=100`, `M=1.0000`, `pass=true`
+- Empty: `P=0`, `M=0.0000`, `pass=false`
+- Code-only shortcut: `20`
+- Wrong duplicate-thread triage: `20`
+- Generic replies without thread mapping: `35`
+- Delete-tests adversarial: `P=0`, `M=0.0000`, `integrity_flag=1`, `pass=false`
 
-- no basis to verify untouched review-export artifacts or obsolete-hunk avoidance in the actual workspace
+V5 stress rerun:
 
-## Caps Applied
+- Oracle remained `100`
+- Empty row correctly picked up `incident_blind_recovery`
+- Code-only shortcut stayed at `20`
+- Delete-tests adversarial again forced `integrity_flag=1`, `M=0.0000`,
+  `pass=false`
 
-- Effective cap triggered by evaluator intent: synthetic logical thread handles instead of literal review-export ids
+### What This Pass Did Not Do
 
-## Final Score
+- No live `codex exec` family probe was launched
+- No family-mean / monotonicity / max-variant freeze-gate numbers were claimed
+- No cross-family infrastructure was edited
 
-- Final score: `22 / 100`
+### Current Judgment
 
-## Final Judgment
+- Layer B: materially implemented and locally verified
+- Layer A: still pending honest probe calibration on the real evaluation loop
 
-- Target judgment: acceptable
-- Reason: the task stays coherent, but a solver limited to family-doc synthesis cannot reach substantial credit without real review-export identifiers and artifacts
+Next honest step, owned by the parent loop rather than this subagent:
 
+- run `python3 verifiers/pr-review-fanout-remediation/run_live_probe.py --n 3`
+  and record family-mean / monotonicity outcomes

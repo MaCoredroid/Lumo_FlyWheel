@@ -1,0 +1,36 @@
+{
+  "file_hashes": {
+    ".github/review_export/pr_214_summary.md": "f3b1a235f3be4827d7ee0db56fe71ea6587fcd9a1fc8dbc9507eefcefe346e4c",
+    ".github/review_export/pr_214_threads.json": "0197075696fb6609be9b663a8f15156010a5e3d4eb7d397fc0749ac69a12c727",
+    ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+    "AGENTS.md": "2e43df5b53c5b84c48002d8a2005ea65fc56a7d9f2134810b807ffbb362c6b55",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "artifacts/review/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/review/thread_digest.md": "730685f091a6cb555635295dd687e0f626c723b35bf87dfaace05d13c04bde7c",
+    "docs/approval_policy.md": "582aca71cefa9b11d75bc50ac08086f88df6aa573d05a42bd1c1d3288da27f3a",
+    "release_context/preview_consumer_contract.md": "d4e434002ae27fa0a41a3a6df8250a8a661a903217c4b45474ce5aa4c5d7dfb5",
+    "src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/policy/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/policy/approval_router.py": "55d619f210e3a3ec1d234da4d1ccff247ef279fe35c934394ba76d2b07f7e26c",
+    "src/policy/preview.py": "ed58fa6142825553a3a41d41f7459546146daa864342e4708a275309e3f554c4",
+    "tests/test_approval_router.py": "54ff74b980c358910c502d6b5d765173e995c25a4ad79ca5cdb9cc29fd57c1b8",
+    "tests/test_preview.py": "d5795e958e42f36b98797daf8a31d46f5e3a5b978b9ba78d116611b99055be60"
+  },
+  "files": [
+    ".github/review_export/pr_214_summary.md",
+    ".github/review_export/pr_214_threads.json",
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/review/.gitkeep",
+    "artifacts/review/thread_digest.md",
+    "docs/approval_policy.md",
+    "release_context/preview_consumer_contract.md",
+    "src/__init__.py",
+    "src/policy/__init__.py",
+    "src/policy/approval_router.py",
+    "src/policy/preview.py",
+    "tests/test_approval_router.py",
+    "tests/test_preview.py"
+  ]
+}

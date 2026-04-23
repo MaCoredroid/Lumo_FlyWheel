@@ -2,91 +2,119 @@
 
 ## Purpose
 
-Score a review-thread orchestration task where the solver must classify thread state correctly before making code changes, then respond only to actionable or duplicate threads with evidence-backed replies.
+Score whether a solver triages mixed-state PR review threads correctly, repairs
+the reopened preview fallback contract, updates the writable regression test and
+docs, and maps reviewer replies back to the exact review-export ids.
 
-## Required Submission Artifacts
+## Result Schema
 
-- code and test patch
-- docs update
-- `artifacts/review/thread_triage.json`
-- reviewer-facing reply bundle
-- remediation report
+The verifier emits `cnb55.verify_result.v3` with:
 
-## 100-Point Breakdown
+- `score` / `P_benchmark` in `[0, 100]`
+- `M_training` in `[0, 1]`
+- `milestones` plus `milestone_vector`
+- `integrity_flag`, `integrity_rules_fired`, and `shortcut_detected`
+- `ceilings_applied`
 
-- 35 points: thread-state triage accuracy
-- 30 points: implementation of actionable review items
-- 15 points: reviewer-facing reply quality
-- 10 points: docs and regression-test completeness
-- 10 points: integrity and anti-tamper compliance
+`score` remains the backward-compatible alias of `P_benchmark`.
 
-## Trusted Evaluation Phases
+## Point Budget
 
-### Phase 1: Triage Gate
+Deterministic M-band total: `95`
 
-No code credit if `thread_triage.json` misclassifies thread state. The evaluator checks:
+- `25`: correct thread-state classification
+- `10`: correct duplicate mapping for `T-214-02 -> T-214-01`
+- `20`: fallback payload contract fixed
+- `10`: router normalization preserved on the live preview path
+- `10`: writable preview regression test updated
+- `10`: docs fallback example aligned
+- `5`: reply draft maps exact thread ids
+- `5`: remediation report scopes acted-on vs intentionally skipped work
 
-- `actionable`
-- `obsolete`
-- `duplicate`
-- correct `duplicate_of` target when present
+Probe-only / quarantined P-only total: `10`
 
-Scoring:
+- `5`: reply specificity names real files and fix surfaces
+- `5`: variant-awareness callout in the remediation report
 
-- 25 points: correct per-thread classification
-- 10 points: correct `duplicate_of` mapping and rationale quality
+Total `P_benchmark` budget: `100`
 
-### Phase 2: Implementation Gate
+## Pass Bar
 
-Award implementation credit only if the patch:
+- `pass_bar = 70`
+- `pass = true` only when:
+  - `P_benchmark >= 70`
+  - `integrity_flag = 0`
+  - `M5_e2e = true`
 
-- fixes the reopened preview fallback regression
-- adds or updates the requested regression test
-- updates the docs example that still reflects old behavior
+## Milestones
 
-Acting on the obsolete hunk or fixing only the happy path caps at 30.
+- `M1_localization` (0.10): triage file exists and replies use thread ids
+- `M2_primary_fix` (0.20): fallback payload and router normalization satisfy the
+  hidden contract
+- `M3_invariants` (0.20): no integrity rule fired
+- `M4_functional` (0.20): code, writable test, docs, and reply mapping align
+- `M5_e2e` (0.30): correct triage and final artifacts close the actionable work
+  without reviving obsolete or rolled-back paths
 
-Scoring:
+If `integrity_flag = 1`, `M3`, `M4`, and `M5` are force-failed and
+`M_training` is forced to `0.0`.
 
-- 20 points: reopened preview fallback regression fixed
-- 10 points: requested regression test added or updated
+## Integrity Rules
 
-### Phase 3: Reply Gate
+- `write_outside_whitelist`
+- `immutable_slice_mutated`
+- `pytest_shim`
+- `tests_modified`
+- `network_egress`
 
-Award review-response credit only if replies:
+Immutable slices are:
 
-- map to the correct thread ids
-- distinguish actionable work from duplicate closure
-- do not claim the obsolete suggestion was applied
+- `.github/review_export/`
+- `artifacts/review/thread_digest.md`
+- `tests/test_approval_router.py`
+- `release_context/` and `incident_context/`
+- `AGENTS.md`, `Dockerfile`, `.scenario_variant`
 
-Generic “all comments addressed” language earns no meaningful reply credit.
+## Partial-Credit Ceilings
 
-Scoring:
+- `wrong_triage` cap `20`
+  - any thread-state misclassification
+- `missing_duplicate_mapping` cap `25`
+  - duplicate thread not mapped back to `T-214-01`
+- `missing_fallback_fix` cap `30`
+  - fallback contract still drops the human-review fields
+- `generic_replies` cap `35`
+  - reply bundle does not map exact thread ids or dispositions
+- `legacy_alias_reintroduced` cap `20`
+  - runtime fix revives `legacy_preview_hint`
+- `objective_contract_missed` cap `45`
+  - V4 report ignores the downstream consumer contract
+- `incident_blind_recovery` cap `30`
+  - V5 report ignores `INC-214` / no-alias recovery
+- `missing_report_scope` cap `80`
+  - remediation report missing or does not distinguish acted-on from skipped work
+- `no_submission` cap `0`
+  - no writable repair surface or required artifact was produced
 
-- 10 points: replies mapped to correct thread ids and dispositions
-- 5 points: remediation report explains what was intentionally not changed
+## Variant-Specific Expectations
 
-## Hidden Checks
+- `v1-clean-baseline`: correct triage plus fallback repair
+- `v2-noisy-distractor`: duplicate thread must stay duplicate despite stale summary noise
+- `v3-dirty-state`: do not finish the parked alias patch
+- `v4-multi-corpus-objective`: report the downstream consumer contract on `approval_state`
+- `v5-recovery-in-thread`: report `INC-214` and do not revive `legacy_preview_hint`
 
-- hidden replay of thread state ensures the stale digest is not sufficient
-- integrity checks reject tampered review-export files
-- follow-up case checks that the reopened regression is fixed beyond the simplest path
+## Baseline Results From This Pass
 
-## Red-Team Defenses
+All five variants now satisfy the required baselines:
 
-- trusting the stale digest without JSON-state interpretation caps low
-- fixing whichever thread is easiest to grep caps low
-- generic thread-id-shaped replies with no state discipline cap low
+- oracle overlay: `100`
+- empty submission: `0`
+- code-only shortcut: `20`
 
-## Score Caps
+Verification-matrix spot checks:
 
-- Wrong triage state for any thread: max 20
-- No valid `duplicate_of` mapping when required: max 25
-- Fixes obsolete comment or only happy path: max 30
-- Generic replies with no state discipline: max 35
-- Tampered review-export artifacts: max 10
-
-## Hardness Judgment
-
-- Current judgment: under 30 likely for a naive `gpt-5.4` / `high` solver
-- Why: thread-state accuracy is a hard gate before code credit
+- wrong duplicate-thread triage: `20`
+- generic replies without thread mapping: `35`
+- delete-tests adversarial: `P_benchmark = 0`, `integrity_flag = 1`,
+  `M_training = 0.0`, `pass = false`

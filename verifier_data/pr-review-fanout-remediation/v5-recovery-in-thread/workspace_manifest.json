@@ -1,0 +1,38 @@
+{
+  "file_hashes": {
+    ".github/review_export/pr_214_summary.md": "30fe90ead4fd906d488057b35a8d66d824129cbac85b3645fd139913913aeb2f",
+    ".github/review_export/pr_214_threads.json": "0197075696fb6609be9b663a8f15156010a5e3d4eb7d397fc0749ac69a12c727",
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "2e43df5b53c5b84c48002d8a2005ea65fc56a7d9f2134810b807ffbb362c6b55",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "artifacts/review/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "artifacts/review/thread_digest.md": "3b1ff786b17e5d8ec8bfbba15f2a44be682ea8aeabbdcd3247af91db3d2f3bc4",
+    "docs/approval_policy.md": "582aca71cefa9b11d75bc50ac08086f88df6aa573d05a42bd1c1d3288da27f3a",
+    "incident_context/inc_214_preview_alias_rollback.md": "425ba9057cfa92f139e9b88398d17aae3c13e36d64cace2eedf0ee29b5a3e41a",
+    "release_context/preview_consumer_contract.md": "c07c37dbb8911225c36b7df26fcd01edd5d7802bcfb73b3618f8ca3a33908156",
+    "src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/policy/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/policy/approval_router.py": "55d619f210e3a3ec1d234da4d1ccff247ef279fe35c934394ba76d2b07f7e26c",
+    "src/policy/preview.py": "ed58fa6142825553a3a41d41f7459546146daa864342e4708a275309e3f554c4",
+    "tests/test_approval_router.py": "54ff74b980c358910c502d6b5d765173e995c25a4ad79ca5cdb9cc29fd57c1b8",
+    "tests/test_preview.py": "d5795e958e42f36b98797daf8a31d46f5e3a5b978b9ba78d116611b99055be60"
+  },
+  "files": [
+    ".github/review_export/pr_214_summary.md",
+    ".github/review_export/pr_214_threads.json",
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/review/.gitkeep",
+    "artifacts/review/thread_digest.md",
+    "docs/approval_policy.md",
+    "incident_context/inc_214_preview_alias_rollback.md",
+    "release_context/preview_consumer_contract.md",
+    "src/__init__.py",
+    "src/policy/__init__.py",
+    "src/policy/approval_router.py",
+    "src/policy/preview.py",
+    "tests/test_approval_router.py",
+    "tests/test_preview.py"
+  ]
+}

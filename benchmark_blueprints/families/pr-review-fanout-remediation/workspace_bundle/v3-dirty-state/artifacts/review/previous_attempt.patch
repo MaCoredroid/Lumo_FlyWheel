@@ -1,0 +1,14 @@
+diff --git a/src/policy/preview.py b/src/policy/preview.py
++++ b/src/policy/preview.py
+@@
+-    return {
+-        "request_id": request_id,
+-        "status": "preview_unavailable",
+-        "actor": actor,
+-    }
++    return {
++        "request_id": request_id,
++        "status": "preview_unavailable",
++        "actor": actor,
++        "legacy_preview_hint": approval_state,
++    }

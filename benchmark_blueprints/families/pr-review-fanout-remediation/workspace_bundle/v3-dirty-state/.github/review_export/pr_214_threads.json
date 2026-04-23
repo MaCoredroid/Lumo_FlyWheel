@@ -1,0 +1,35 @@
+{
+  "pr_id": 214,
+  "threads": [
+    {
+      "path": "src/policy/preview.py",
+      "status": "open",
+      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
+      "thread_id": "T-214-01"
+    },
+    {
+      "path": "src/policy/preview.py",
+      "status": "open",
+      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
+      "thread_id": "T-214-02"
+    },
+    {
+      "path": "src/policy/approval_router.py",
+      "status": "outdated",
+      "summary": "Could we revive legacy_preview_branch here?",
+      "thread_id": "T-214-03"
+    },
+    {
+      "path": "tests/test_preview.py",
+      "status": "open",
+      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
+      "thread_id": "T-214-04"
+    },
+    {
+      "path": "docs/approval_policy.md",
+      "status": "open",
+      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
+      "thread_id": "T-214-05"
+    }
+  ]
+}
