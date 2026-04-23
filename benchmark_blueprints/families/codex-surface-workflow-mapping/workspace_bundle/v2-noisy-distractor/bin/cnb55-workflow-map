@@ -1,0 +1,291 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+SCHEMA_VERSION = "cnb55.workflow_mapping.v1"
+ARTIFACTS = ("skill", "toml", "automation", "mapping_note")
+ALLOWED_KINDS = {"heartbeat", "cron"}
+
+
+class ValidationError(Exception):
+    def __init__(self, code: int, messages: list[str]):
+        super().__init__("\n".join(messages))
+        self.code = code
+        self.messages = messages
+
+
+def load_json(path: Path) -> dict:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValidationError(2, [f"input file missing: {path}"]) from exc
+    except json.JSONDecodeError as exc:
+        raise ValidationError(2, [f"input file is not valid JSON: {exc}"]) from exc
+    if not isinstance(payload, dict):
+        raise ValidationError(2, ["top-level JSON value must be an object"])
+    return payload
+
+
+def ensure_rel_file(workspace: Path, rel: str) -> Path:
+    if not rel or rel.startswith("/") or ".." in Path(rel).parts:
+        raise ValidationError(4, [f"invalid source path: {rel!r}"])
+    path = workspace / rel
+    if not path.is_file():
+        raise ValidationError(4, [f"source path does not exist: {rel}"])
+    return path
+
+
+def command_grounded(workspace: Path, command: str, source_paths: list[str]) -> bool:
+    if not command.strip():
+        return False
+    for rel in source_paths:
+        text = ensure_rel_file(workspace, rel).read_text(encoding="utf-8")
+        if command in text:
+            return True
+    return False
+
+
+def validate_payload(workspace: Path, payload: dict) -> None:
+    errors: list[str] = []
+    required = {"schema_version", "variant_id", "skill", "toml", "automation", "mapping_note", "rejected_candidates"}
+    missing = sorted(required - set(payload))
+    extra = sorted(set(payload) - required)
+    for key in missing:
+        errors.append(f"missing required field: {key}")
+    for key in extra:
+        errors.append(f"unexpected top-level field: {key}")
+    if errors:
+        raise ValidationError(3, errors)
+
+    if payload["schema_version"] != SCHEMA_VERSION:
+        errors.append(f"schema_version must be {SCHEMA_VERSION}")
+
+    variant_file = (workspace / ".scenario_variant").read_text(encoding="utf-8").strip()
+    if payload["variant_id"] != variant_file:
+        errors.append("variant_id does not match .scenario_variant")
+
+    for section_name in ("skill", "toml"):
+        section = payload.get(section_name)
+        if not isinstance(section, dict):
+            errors.append(f"{section_name} must be an object")
+            continue
+        for field in ("entrypoint_command_literal", "workflow_scope", "source_paths"):
+            if field not in section:
+                errors.append(f"{section_name} missing {field}")
+        if not isinstance(section.get("source_paths"), list) or not section["source_paths"]:
+            errors.append(f"{section_name}.source_paths must be a non-empty array")
+        else:
+            for rel in section["source_paths"]:
+                ensure_rel_file(workspace, rel)
+            if not command_grounded(workspace, section.get("entrypoint_command_literal", ""), section["source_paths"]):
+                errors.append(f"{section_name} entrypoint command is not grounded in cited files")
+
+    automation = payload.get("automation")
+    if not isinstance(automation, dict):
+        errors.append("automation must be an object")
+    else:
+        for field in ("kind", "schedule_literal", "command_literal", "task_prompt", "source_paths"):
+            if field not in automation:
+                errors.append(f"automation missing {field}")
+        if automation.get("kind") not in ALLOWED_KINDS:
+            errors.append("automation.kind must be heartbeat or cron")
+        if not isinstance(automation.get("source_paths"), list) or not automation["source_paths"]:
+            errors.append("automation.source_paths must be a non-empty array")
+        else:
+            for rel in automation["source_paths"]:
+                ensure_rel_file(workspace, rel)
+            if not command_grounded(workspace, automation.get("command_literal", ""), automation["source_paths"]):
+                errors.append("automation command literal is not grounded in cited files")
+            if not command_grounded(workspace, automation.get("schedule_literal", ""), automation["source_paths"]):
+                errors.append("automation schedule literal is not grounded in cited files")
+
+    mapping_note = payload.get("mapping_note")
+    if not isinstance(mapping_note, dict) or not isinstance(mapping_note.get("decisions"), list):
+        errors.append("mapping_note.decisions must be an array")
+    else:
+        seen_artifacts: set[str] = set()
+        for decision in mapping_note["decisions"]:
+            if not isinstance(decision, dict):
+                errors.append("mapping_note decision entries must be objects")
+                continue
+            artifact = decision.get("artifact")
+            if artifact not in ARTIFACTS:
+                errors.append(f"invalid mapping artifact: {artifact!r}")
+            else:
+                seen_artifacts.add(artifact)
+            source_paths = decision.get("source_paths")
+            command_literals = decision.get("command_literals")
+            if not isinstance(source_paths, list) or not source_paths:
+                errors.append("mapping_note decision source_paths must be a non-empty array")
+                continue
+            for rel in source_paths:
+                ensure_rel_file(workspace, rel)
+            if not isinstance(command_literals, list) or not command_literals:
+                errors.append("mapping_note decision command_literals must be a non-empty array")
+                continue
+            for command in command_literals:
+                if not command_grounded(workspace, command, source_paths):
+                    errors.append(f"mapping_note command literal is not grounded: {command}")
+        if seen_artifacts != set(ARTIFACTS):
+            errors.append("mapping_note.decisions must cover skill, toml, automation, and mapping_note exactly once")
+
+    rejected = payload.get("rejected_candidates")
+    if not isinstance(rejected, list) or not rejected:
+        errors.append("rejected_candidates must be a non-empty array")
+    else:
+        for entry in rejected:
+            if not isinstance(entry, dict):
+                errors.append("rejected candidate entries must be objects")
+                continue
+            for field in ("path", "command_literal", "reason", "source_paths"):
+                if field not in entry:
+                    errors.append(f"rejected candidate missing {field}")
+            if isinstance(entry.get("source_paths"), list):
+                for rel in entry["source_paths"]:
+                    ensure_rel_file(workspace, rel)
+                if not command_grounded(workspace, entry.get("command_literal", ""), entry["source_paths"]):
+                    errors.append(f"rejected candidate command is not grounded: {entry.get('command_literal', '')}")
+
+    if errors:
+        raise ValidationError(3, errors)
+
+
+def render_skill(payload: dict) -> str:
+    skill = payload["skill"]
+    return "\n".join(
+        [
+            "# Workflow Mapping",
+            "",
+            "## Objective",
+            "",
+            skill["workflow_scope"],
+            "",
+            "## Entrypoint",
+            "",
+            f"`{skill['entrypoint_command_literal']}`",
+            "",
+            "## Evidence",
+            "",
+            *[f"- `{path}`" for path in skill["source_paths"]],
+            "",
+            "## Procedure",
+            "",
+            "1. Inspect the cited workflow files before reusing any draft artifact.",
+            "2. Use the exact entrypoint above across the config and automation artifacts.",
+            "3. Keep schedule semantics out of the task body.",
+        ]
+    )
+
+
+def render_toml(payload: dict) -> str:
+    toml = payload["toml"]
+    must_read = toml.get("must_read", [])
+    rendered = [
+        '[workflow]',
+        f'schema_version = "cnb55.workflow_mapping.v1"',
+        f'entrypoint = "{toml["entrypoint_command_literal"]}"',
+        f'workflow_scope = "{toml["workflow_scope"]}"',
+        'preferred_output_dir = "artifacts"',
+        '',
+        '[workflow.must_read]',
+        "paths = [" + ", ".join(json.dumps(item) for item in must_read) + "]",
+        '',
+        '[automation]',
+        f'kind = "{payload["automation"]["kind"]}"',
+        f'schedule_literal = "{payload["automation"]["schedule_literal"]}"',
+        f'command = "{payload["automation"]["command_literal"]}"',
+    ]
+    return "\n".join(rendered)
+
+
+def render_automation(payload: dict) -> str:
+    automation = payload["automation"]
+    return "\n".join(
+        [
+            "# Automation Proposal",
+            "",
+            "## Task",
+            "",
+            automation["task_prompt"],
+            "",
+            "## Schedule",
+            "",
+            f"- kind: `{automation['kind']}`",
+            f"- schedule_literal: `{automation['schedule_literal']}`",
+            f"- timezone: `America/Los_Angeles`",
+            "",
+            "## Command",
+            "",
+            f"`{automation['command_literal']}`",
+            "",
+            "## Evidence",
+            "",
+            *[f"- `{path}`" for path in automation["source_paths"]],
+        ]
+    )
+
+
+def render_mapping_note(payload: dict) -> str:
+    lines = ["# Mapping Note", ""]
+    for decision in payload["mapping_note"]["decisions"]:
+        lines.append(f"## {decision['artifact']}")
+        lines.append("")
+        lines.append(decision["rationale"])
+        lines.append("")
+        lines.append("Source paths:")
+        lines.extend(f"- `{path}`" for path in decision["source_paths"])
+        lines.append("")
+        lines.append("Command literals:")
+        lines.extend(f"- `{command}`" for command in decision["command_literals"])
+        lines.append("")
+    lines.append("## Rejected Candidates")
+    lines.append("")
+    for entry in payload["rejected_candidates"]:
+        lines.append(f"- `{entry['path']}`: {entry['reason']}")
+    return "\n".join(lines)
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 3 or argv[1] not in {"schema", "validate", "submit"}:
+        print("usage: cnb55-workflow-map [schema|validate|submit] workflow_input.json", file=sys.stderr)
+        return 2
+    command = argv[1]
+    workspace = Path.cwd()
+    if command == "schema":
+        schema = {
+            "schema_version": SCHEMA_VERSION,
+            "top_level_fields": ["skill", "toml", "automation", "mapping_note", "rejected_candidates"],
+            "automation_kind": ["heartbeat", "cron"],
+        }
+        print(json.dumps(schema, indent=2, sort_keys=True))
+        return 0
+
+    input_path = Path(argv[2])
+    try:
+        payload = load_json(input_path)
+        validate_payload(workspace, payload)
+    except ValidationError as exc:
+        for line in exc.messages:
+            print(line, file=sys.stderr)
+        return exc.code
+
+    if command == "validate":
+        print("valid")
+        return 0
+
+    artifacts = workspace / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    (artifacts / "workflow_map.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (artifacts / "SKILL.md").write_text(render_skill(payload) + "\n", encoding="utf-8")
+    (artifacts / "codex_triage.toml").write_text(render_toml(payload) + "\n", encoding="utf-8")
+    (artifacts / "automation_proposal.md").write_text(render_automation(payload) + "\n", encoding="utf-8")
+    (artifacts / "mapping_note.md").write_text(render_mapping_note(payload) + "\n", encoding="utf-8")
+    print("submitted")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

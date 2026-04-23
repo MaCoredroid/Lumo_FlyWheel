@@ -1,0 +1,119 @@
+family_id: codex-surface-workflow-mapping
+track: 2
+schema_version: cnb55.family.v1
+layer_a_status: probe_pending
+layer_b_status: green
+
+grader_ref: verifiers/codex-surface-workflow-mapping/score_workflow_mapping.py
+milestone_config_ref: verifier_data/codex-surface-workflow-mapping/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: enough cited source paths to prove the mapping came from repo evidence
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: canonical workflow_map.json exists and parses
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: no integrity violation and no stale primary entrypoint
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: skill, TOML, and automation align on the live workflow
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: schedule, scope, and stale-candidate rejection all match the gold mapping
+
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    recommended:
+      - inspect:evidence_triage
+      - modify:artifact_authoring
+      - verify:cross_surface_consistency
+  per_variant:
+    v1-clean-baseline: {}
+    v2-noisy-distractor:
+      variant_notes: stale helper and migration memo must be triaged correctly
+    v3-dirty-state:
+      variant_notes: abandoned Codex draft must be rejected explicitly
+    v4-multi-corpus-objective:
+      variant_notes: release context changes the workflow scope to blocker-first
+    v5-recovery-in-thread:
+      variant_notes: incident rollback forbids reusing the helper-based weekend flow
+
+tool_call_overrides:
+  - command: "cnb55-workflow-map schema"
+    tags: [inspect]
+  - command: "cnb55-workflow-map validate"
+    tags: [verify]
+  - command: "cnb55-workflow-map submit"
+    tags: [modify]
+    terminal: true
+
+state_delta:
+  kind: json_deliverable
+  deliverable_path: artifacts/workflow_map.json
+  states:
+    - absent
+    - present_and_invalid
+    - present_and_valid
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only turn", delta: 0.0}
+    - {from: absent, to: absent, trigger: "validate success", delta: 0.3}
+    - {from: absent, to: present_and_valid, trigger: "submit success", delta: 0.7}
+    - {from: absent, to: present_and_invalid, trigger: "raw invalid write", delta: 0.0}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "subsequent valid submit", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: any write outside artifacts/* and workflow_input.json
+  - id: immutable_slice_mutated
+    rule: readonly tree hash changed
+  - id: pytest_shim
+    rule: shim file present
+  - id: tests_modified
+    rule: visible test checksum changed
+  - id: network_egress
+    rule: .network_egress_detected marker present
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  type: manifest_locked
+  ref: benchmark_blueprints/families/codex-surface-workflow-mapping/manifest.lock.json
+
+rawr_modes:
+  grounding_stripped: implemented
+  citation_fabricated: declared_not_yet_implemented
+  constraint_named_not_respected: declared_not_yet_implemented
+
+saturation:
+  threshold_mean_P: 80
+  sustained_rounds: 2
+  renewal_queue:
+    - midrun-cadence-change
+    - contradictory-docs-vs-incident
+    - retire-v1

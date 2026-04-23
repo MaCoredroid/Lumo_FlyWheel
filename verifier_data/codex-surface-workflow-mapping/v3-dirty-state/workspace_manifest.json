@@ -1,0 +1,36 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "Makefile",
+    "artifacts/README.md",
+    "bin/cnb55-workflow-map",
+    "docs/ops/daily_triage.md",
+    "docs/ops/legacy_schedule.md",
+    "docs/ops/migration_notes.md",
+    "drafts/codex_skill_patch.md",
+    "fixtures/open_incidents.json",
+    "ops/automation/triage.cron",
+    "scripts/triage.py",
+    "scripts/triage_legacy.py",
+    "skills/legacy/daily_triage/SKILL.md",
+    "tests/test_workflow_map.py"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+    "AGENTS.md": "75fc6b8284a09a09958cbbe0d94571e8e39ecc4310a5d7d7ab0954a2c2e1a736",
+    "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+    "Makefile": "e5f1e6032288194f78aa9df973f7a0451f14ce0ba79e1de758d3e23065008ced",
+    "bin": "3754c0e2ffe6a15935d6079fa58a8dcbb5ce3cbb98a8c3fa87cadd89fc884631",
+    "docs": "9f372da0f63dc9cfc0c5235c65e9da34401ea88e6ec68f2825f60026a5469f6d",
+    "drafts": "32e56d450a2bcebe24511337572f0fbb9a383f837bfab377f6a04a4f8ed18a16",
+    "fixtures": "625154fc076fb9a3484ef5249e0c553e637c3a156bb1ef84741f5332f0b5a5a7",
+    "ops": "2396dcf33dd0adb9f4f3bc373f0e2f0032e281cc8e51a4063df9b0211c7ca147",
+    "scripts": "77b8baaf346d404ed634e54e74ff40a04fb85642a1d8766b3590bf090597eba2",
+    "skills": "b0ea34be5301b6746dcaea3705329c6e364207079d641a3253fa30cfb35f13ba",
+    "tests": "7b3cb0d21eb56533306da8bf77a6be8023d4d343e1c6badf00c78a5ca567500a"
+  },
+  "test_workflow_map_sha256": "223630c70879a64baccbe06e2994cb463bf1871a6dd6618777bf92ab5315037a",
+  "variant_id": "v3-dirty-state"
+}

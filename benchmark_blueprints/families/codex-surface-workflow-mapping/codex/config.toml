@@ -17,6 +17,8 @@ require_cross_artifact_consistency = true
 require_command_literals = true
 require_schedule_evidence = true
 forbid_out_of_bundle_evidence = true
+use_structured_output_cli = true
+require_rejected_stale_candidates = true
 
 [grading]
 target_attack_band = "15-25"

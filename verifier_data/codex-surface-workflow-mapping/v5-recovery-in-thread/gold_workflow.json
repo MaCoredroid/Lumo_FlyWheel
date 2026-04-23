@@ -1,0 +1,68 @@
+{
+  "allowed_automation_kinds": [
+    "heartbeat",
+    "cron"
+  ],
+  "expected_direct_command": "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md",
+  "expected_entrypoint_command": "make codex-daily-triage",
+  "expected_schedule_literal": "0 9 * * 1-5",
+  "incident_paths": [
+    "incident_context/weekend_rollback.md",
+    "incident_context/recovered_plan.md"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "ff02ce964d777fd2ff2923afd425fb281032ea228b14c7cc761f5c57901f160f",
+    "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+    "Makefile": "e5f1e6032288194f78aa9df973f7a0451f14ce0ba79e1de758d3e23065008ced",
+    "bin": "3754c0e2ffe6a15935d6079fa58a8dcbb5ce3cbb98a8c3fa87cadd89fc884631",
+    "docs": "0dbed4f4e86eda8fdf0037f035540a3f37df2106057794b5ba620512f439dec7",
+    "drafts": "32e56d450a2bcebe24511337572f0fbb9a383f837bfab377f6a04a4f8ed18a16",
+    "fixtures": "625154fc076fb9a3484ef5249e0c553e637c3a156bb1ef84741f5332f0b5a5a7",
+    "incident_context": "f2d3be511584dd6fc582d2eff453c3647897a30a722ff53eb8ce6f9521ef2965",
+    "ops": "2396dcf33dd0adb9f4f3bc373f0e2f0032e281cc8e51a4063df9b0211c7ca147",
+    "release_context": "33f77a6ca8c049723797fe396c4f3bf9f00c1719d8fd1ce67b37da2e4b510f44",
+    "scripts": "77b8baaf346d404ed634e54e74ff40a04fb85642a1d8766b3590bf090597eba2",
+    "skills": "b0ea34be5301b6746dcaea3705329c6e364207079d641a3253fa30cfb35f13ba",
+    "tests": "7b3cb0d21eb56533306da8bf77a6be8023d4d343e1c6badf00c78a5ca567500a"
+  },
+  "rejected_candidates": [
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "skills/legacy/daily_triage/SKILL.md",
+      "reason_keyword": "stale"
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_skill_patch.md",
+      "reason_keyword": "abandoned"
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "incident_context/weekend_rollback.md",
+      "reason_keyword": "rollback"
+    }
+  ],
+  "release_paths": [
+    "release_context/release_notes_2026_04.md",
+    "release_context/objective_shift.md"
+  ],
+  "required_paths": [
+    "Makefile",
+    "scripts/triage.py",
+    "docs/ops/daily_triage.md",
+    "ops/automation/triage.cron",
+    "fixtures/open_incidents.json",
+    "release_context/release_notes_2026_04.md",
+    "release_context/objective_shift.md",
+    "incident_context/weekend_rollback.md",
+    "incident_context/recovered_plan.md"
+  ],
+  "required_scope_keywords": [
+    "triage",
+    "blocker",
+    "on-call"
+  ],
+  "test_workflow_map_sha256": "223630c70879a64baccbe06e2994cb463bf1871a6dd6618777bf92ab5315037a",
+  "variant_id": "v5-recovery-in-thread"
+}

@@ -1,81 +1,157 @@
-# Codex Surface Workflow Mapping
+# `codex-surface-workflow-mapping` Task Spec
 
-- `task_id`: `t2_codex_surface_daily_triage_mapping`
-- `family_id`: `codex-surface-workflow-mapping`
-- `scenario_type`: `codex_native_workflow_design`
+**Track:** 02 — Codebase Understanding
+**Family id:** `codex-surface-workflow-mapping`
+**Spec version:** CNB-55 v1.0
+**Variants:** 5 (v1 through v5)
 
-## Task Prompt
+## Task Prompt (canonical)
 
-This repo has an existing script-driven daily incident triage workflow, but no durable Codex-native surface for it. Read the repo and convert the real workflow into Codex artifacts without inventing a new process.
+You are dropped into a small repo that already runs a script-driven triage workflow. The benchmark is not asking you to invent a workflow. It is asking you to map the live repo workflow into Codex-native artifacts without anchoring on stale drafts, deprecated helpers, or outdated schedule notes.
 
-Produce:
+Produce the family's four required artifacts through the structured-output CLI:
 
-- `artifacts/SKILL.md`: a repo-local skill for the triage workflow.
-- `artifacts/codex_triage.toml`: Codex config for the same workflow entrypoint.
-- `artifacts/automation_proposal.md`: a thread-heartbeat or cron-style automation proposal grounded in the repo’s real cadence and commands.
-- `artifacts/mapping_note.md`: a short note tying each artifact back to the exact scripts, Make targets, docs, or fixtures it came from, including source paths and the exact command literals that justified each mapping decision.
+- `artifacts/SKILL.md`
+- `artifacts/codex_triage.toml`
+- `artifacts/automation_proposal.md`
+- `artifacts/mapping_note.md`
 
-Do not scaffold generic agent boilerplate. The artifacts should reflect the workflow the repo already encodes.
+The canonical submission path is:
 
-## Workspace Bundle
+```
+./bin/cnb55-workflow-map schema
+./bin/cnb55-workflow-map validate workflow_input.json
+./bin/cnb55-workflow-map submit workflow_input.json
+```
 
-- Monorepo or service repo with `scripts/triage.py`, one or more Make targets, `docs/ops/daily_triage.md`, sample artifacts under `fixtures/`, and a stale abandoned skill draft.
-- One duplicate helper script that looks similar but is no longer the main path.
-- One calendar or schedule mention in docs that conflicts with the actual automation cadence used by the scripts.
+The agent writes `workflow_input.json` at workspace root. The CLI validates it, writes `artifacts/workflow_map.json` as the canonical scored payload, and renders the four human-facing artifacts listed above.
 
-## Seeded Ambiguity
+### Required structured-output schema
 
-Authoring note: these seeds guide benchmark construction and hidden checks. The solver-visible task prompt should not enumerate them directly.
+- `schema_version`: `cnb55.workflow_mapping.v1`
+- `variant_id`: exact contents of `.scenario_variant`
+- `skill.entrypoint_command_literal`
+- `toml.entrypoint_command_literal`
+- `automation.kind`
+- `automation.schedule_literal`
+- `automation.command_literal`
+- `automation.task_prompt`
+- `mapping_note.decisions[]`
+- `rejected_candidates[]`
 
-- More than one artifact looks reusable, but at least one attractive option is stale.
-- Entry-point, cadence, and repo evidence do not line up cleanly unless the solver checks multiple surfaces.
-- Generic Codex scaffolding can look polished while still being disconnected from the actual workflow.
-- Correct automation design depends on separating task semantics from schedule semantics.
+Every cited `source_paths[]` entry must be a real file inside the provided workspace bundle. Every `command_literal` must appear verbatim in at least one cited source file. Schedule literals are validated the same way. Out-of-bundle evidence is invalid.
+
+## Scenario Type
+
+`codebase_understanding` — the agent must read the repo, resolve which workflow path is live, distinguish stale vs. current surfaces, and express that mapping consistently across multiple deliverables.
 
 ## Required Surfaces
 
-- Repo search and code or docs inspection.
-- Skill authoring.
-- Codex config authoring.
-- Automation design grounded in repo evidence.
-- Evidence must come from the provided benchmark bundle only. Cross-repo or authoring-note scavenging does not count as workflow proof.
+- Shell for repo inspection and optional test execution.
+- File reads across `scripts/`, `docs/`, `ops/automation/`, `fixtures/`, and any variant-specific `release_context/` or `incident_context/`.
+- Structured-output CLI usage via `./bin/cnb55-workflow-map`.
+- Codex artifact authoring via the CLI-rendered outputs under `artifacts/`.
+
+No network, no browser, no sibling-family evidence, no benchmark-authoring note scavenging.
+
+## Workspace Bundle (per variant)
+
+Every variant ships:
+
+```
+.scenario_variant
+AGENTS.md
+Dockerfile
+Makefile
+bin/cnb55-workflow-map
+scripts/
+docs/
+ops/automation/
+fixtures/
+skills/legacy/
+tests/test_workflow_map.py
+artifacts/README.md
+```
+
+Variant-specific files add noise or state pressure:
+
+- V2 adds a migration memo and a more tempting deprecated helper path.
+- V3 adds an abandoned Codex patch draft under `drafts/`.
+- V4 adds `release_context/` proving the workflow scope is blocker-first, not generic queue review.
+- V5 adds `incident_context/` showing a weekend helper-based automation was rolled back.
+
+## Difficulty Ladder
+
+### v1 — clean-baseline
+
+One live path (`make codex-daily-triage`), one stale skill draft, one conflicting legacy schedule note.
+
+### v2 — noisy-distractor
+
+Adds a migration memo and deprecated helper that look current on superficial grep.
+
+### v3 — dirty-state
+
+Adds an abandoned Codex patch that points at the wrong helper. The agent must not treat partial work as proof of the live path.
+
+### v4 — multi-corpus-objective
+
+Adds `release_context/` showing the workflow has shifted to blocker-first triage for the on-call rotation. A generic “daily queue sweep” mapping is now wrong.
+
+### v5 — recovery-in-thread
+
+Adds `incident_context/` showing the weekend helper-based automation caused noise and was rolled back. Re-using that path is a judgment failure, not an acceptable alternate interpretation.
 
 ## Expected Deliverables
 
-- A skill that points to the real workflow entrypoint and scope.
-- A TOML config artifact consistent with the same workflow.
-- An automation proposal whose prompt describes the task itself and whose cadence matches evidence.
-- A mapping note that cites the source artifacts used.
+- `artifacts/workflow_map.json` — canonical grader input written by the CLI.
+- `artifacts/SKILL.md` — repo-local skill pointing at the live workflow.
+- `artifacts/codex_triage.toml` — Codex config artifact consistent with the same entrypoint and scope.
+- `artifacts/automation_proposal.md` — schedule and task semantics separated cleanly.
+- `artifacts/mapping_note.md` — artifact-by-artifact explanation citing exact source paths and exact command literals.
 
 ## Grader Contract
 
-- Full credit requires:
-- The skill uses the live script or Make target rather than the stale draft path.
-- The TOML artifact and skill agree on entrypoint and scope.
-- The automation proposal uses a cadence justified by repo evidence.
-- The mapping note cites concrete repo sources for every major artifact decision and includes exact command literals for each mapped entrypoint.
-- The artifacts avoid generic placeholders that could fit any repo.
-- Partial credit if the workflow mapping is mostly right but one surface is stale or generic.
-- Low credit if the output is polished but disconnected from repo reality.
+### Visible checks
 
-## Red-Team Traps
+```
+pytest -q tests/test_workflow_map.py
+```
 
-- Reuse the stale skill draft with light edits.
-- Invent a daily automation because it sounds plausible.
-- Point different artifacts at different workflow entrypoints.
-- Write a generic skill that never mentions the repo’s actual commands, fixtures, or docs.
+Visible checks are capped at 30 points. They verify the canonical JSON exists, parses, matches `cnb55.workflow_mapping.v1`, writes the four deliverables, keeps schedule semantics separate from the task section, and includes one rejected stale candidate.
 
-## Quality Gate
+### Hidden checks
 
-- Hardening applied after adversarial probe:
-- The runtime prompt should not expose which candidate script or cadence is stale.
-- The grader should require cross-artifact consistency between skill, TOML, and automation proposal.
-- Hidden checks should compare the chosen entrypoint against tests or current docs so stale scripts do not score.
-- The automation proposal should lose credit if it bakes schedule details into the task prompt or ignores the repo’s real cadence.
-- `mapping_note.md` should be validated for exact source paths and command literals so one lucky entrypoint guess is not enough.
-- The bundle boundary is now explicit so family-bundle runs cannot upgrade guesses with unrelated workspace evidence.
-- Hardening target: a naive GPT-5.4/high solver should not clear 30/100 by producing high-quality but repo-agnostic Codex scaffolding.
-- Probe record:
-- Initial adversarial probe judged the spec too easy at roughly 35-55/100 because a shallow solver could keep all artifacts internally consistent around one lucky entrypoint.
-- Hardening added exact source-path and command-literal requirements and hid the stale-entrypoint clues from the public prompt.
-- Current expectation after hardening: under 30/100 for a naive GPT-5.4/high solver if the grader enforces source-backed mapping consistency.
+Hidden scoring verifies:
+
+- the live entrypoint is `make codex-daily-triage`, not `python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md`
+- skill, TOML, and automation all point at the same live entrypoint
+- the mapping is grounded in the shipped repo files
+- schedule evidence resolves to `0 9 * * 1-5` and is kept out of `automation.task_prompt`
+- stale and dirty-state candidates are explicitly rejected
+- V4+ reads `release_context/` and preserves blocker-first scope
+- V5 reads `incident_context/` and does not re-introduce the rolled-back helper path
+
+## Partial-Credit Ceilings
+
+- `no_submission` ≤ 0
+- `malformed_submission` ≤ 10
+- `inconsistent_entrypoints` ≤ 0
+- `stale_entrypoint` ≤ 20
+- `wrong_schedule` ≤ 25
+- `schedule_in_prompt` ≤ 30
+- `ungrounded_mapping` ≤ 25
+- `generic_mapping` ≤ 25
+- `dirty_state_reuse` ≤ 35
+- `objective_drift` ≤ 30
+- `incident_blind_reuse` ≤ 25
+
+## Saturation and Renewal Plan
+
+Trigger when mean `P_benchmark > 80` for two consecutive probe rounds.
+
+Renewal queue:
+
+1. Mid-run staffing/cadence change injected after the first inspection turn.
+2. Contradictory repo-vs-incident automation evidence that must be flagged explicitly.
+3. Retire V1 once the floor check saturates and promote a harder V2-derived baseline.

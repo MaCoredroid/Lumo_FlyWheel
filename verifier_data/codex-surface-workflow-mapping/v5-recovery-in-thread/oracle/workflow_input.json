@@ -1,0 +1,129 @@
+{
+  "automation": {
+    "command_literal": "make codex-daily-triage",
+    "kind": "heartbeat",
+    "schedule_literal": "0 9 * * 1-5",
+    "source_paths": [
+      "ops/automation/triage.cron",
+      "docs/ops/daily_triage.md"
+    ],
+    "task_prompt": "Triage blocker incidents for the on-call rotation before any general queue cleanup."
+  },
+  "mapping_note": {
+    "decisions": [
+      {
+        "artifact": "skill",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md"
+        ],
+        "rationale": "The skill uses the live Make target and cites the direct script only as backing evidence.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/daily_triage.md",
+          "scripts/triage.py"
+        ]
+      },
+      {
+        "artifact": "toml",
+        "command_literals": [
+          "make codex-daily-triage"
+        ],
+        "rationale": "The TOML config keeps the same live entrypoint and points the agent at the repo surfaces it must read.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/daily_triage.md",
+          "fixtures/open_incidents.json"
+        ]
+      },
+      {
+        "artifact": "automation",
+        "command_literals": [
+          "make codex-daily-triage",
+          "0 9 * * 1-5"
+        ],
+        "rationale": "The automation proposal keeps task text separate from the weekday schedule literal grounded in the cron file.",
+        "source_paths": [
+          "ops/automation/triage.cron",
+          "docs/ops/daily_triage.md"
+        ]
+      },
+      {
+        "artifact": "mapping_note",
+        "command_literals": [
+          "make codex-daily-triage",
+          "python3 scripts/triage.py --window active --emit-md reports/daily_triage.md",
+          "0 9 * * 1-5"
+        ],
+        "rationale": "The mapping note ties each artifact back to the exact repo files and exact literals that justify the decision.",
+        "source_paths": [
+          "Makefile",
+          "docs/ops/daily_triage.md",
+          "fixtures/open_incidents.json",
+          "incident_context/recovered_plan.md",
+          "incident_context/weekend_rollback.md",
+          "ops/automation/triage.cron",
+          "release_context/objective_shift.md",
+          "release_context/release_notes_2026_04.md",
+          "scripts/triage.py"
+        ]
+      }
+    ]
+  },
+  "rejected_candidates": [
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "skills/legacy/daily_triage/SKILL.md",
+      "reason": "Rejected because this path is stale relative to the live workflow mapping.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md",
+        "skills/legacy/daily_triage/SKILL.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "drafts/codex_skill_patch.md",
+      "reason": "Rejected because this path is abandoned relative to the live workflow mapping.",
+      "source_paths": [
+        "docs/ops/legacy_schedule.md",
+        "drafts/codex_skill_patch.md"
+      ]
+    },
+    {
+      "command_literal": "python3 scripts/triage_legacy.py --window today --emit-md reports/daily_triage.md",
+      "path": "incident_context/weekend_rollback.md",
+      "reason": "Rejected because this path is rollback relative to the live workflow mapping.",
+      "source_paths": [
+        "incident_context/recovered_plan.md",
+        "incident_context/weekend_rollback.md"
+      ]
+    }
+  ],
+  "schema_version": "cnb55.workflow_mapping.v1",
+  "skill": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "source_paths": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "scripts/triage.py"
+    ],
+    "workflow_scope": "Triage blocker incidents for the on-call rotation before any general queue cleanup."
+  },
+  "toml": {
+    "entrypoint_command_literal": "make codex-daily-triage",
+    "must_read": [
+      "docs/ops/daily_triage.md",
+      "ops/automation/triage.cron",
+      "fixtures/open_incidents.json",
+      "release_context/objective_shift.md",
+      "incident_context/weekend_rollback.md"
+    ],
+    "source_paths": [
+      "Makefile",
+      "docs/ops/daily_triage.md",
+      "fixtures/open_incidents.json"
+    ],
+    "workflow_scope": "Triage blocker incidents for the on-call rotation before any general queue cleanup."
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

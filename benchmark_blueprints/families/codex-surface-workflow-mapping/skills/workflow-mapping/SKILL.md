@@ -13,10 +13,11 @@ Map the real workflow, not the most convenient-looking draft or script.
 3. Use the same entrypoint across all artifacts.
 4. Quote exact commands and source paths in the mapping note.
 5. Separate task semantics from schedule semantics in the automation proposal.
+6. Use the family CLI to render the final artifacts instead of hand-authoring divergent files.
 
 ## Guardrails
 
 - Internal consistency is necessary but not sufficient.
 - A stale skill draft can be useful evidence but not the final source of truth.
 - Generic Codex scaffolding should lose to repo-grounded specificity every time.
-
+- Bundle-local evidence only. If a command or schedule literal is not present in the shipped workspace files, it does not count.
