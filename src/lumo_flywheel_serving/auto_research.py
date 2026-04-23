@@ -43,6 +43,7 @@ PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "finalize-round",
     "status",
 )
+AUTO_RESEARCH_HELP_SUBCOMMANDS = PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS + ("run",)
 RESULTS_COLUMNS = [
     "candidate_uuid",
     "parent_candidate_uuid",
@@ -874,15 +875,22 @@ class AutoResearchRoundManager:
 
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         round_id = f"{model_id}-{family_id}-{sprint}-{timestamp}"
+        round_branch = self._round_branch_name(
+            model_id=model_id,
+            family_id=family_id,
+            sprint=sprint,
+            timestamp=timestamp,
+        )
         round_dir = round_root / round_id
         if round_dir.exists():
             raise RuntimeError(f"Round directory already exists: {round_dir}")
+
+        parent_head_sha = self._git(["rev-parse", "HEAD"]).stdout.strip()
+        self._git(["checkout", "-b", round_branch], capture_output=False)
+
         round_dir.mkdir(parents=True)
         candidates_dir = round_dir / "candidates"
         candidates_dir.mkdir()
-
-        parent_head_sha = self._git(["rev-parse", "HEAD"]).stdout.strip()
-        round_branch = self._git(["rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
 
         spec = RoundSpecRecord(
             round_id=round_id,
@@ -945,6 +953,12 @@ class AutoResearchRoundManager:
             raise RuntimeError("Candidate must live under the round directory")
         iteration_id = candidate_path.parent.name
         self._validate_iteration_id(iteration_id)
+        selected_profile = profile or ("full" if iteration_id.startswith("rescreen_") else "screen")
+        self._validate_measure_request(
+            spec=spec,
+            iteration_id=iteration_id,
+            profile=selected_profile,
+        )
         candidate = load_yaml_file(candidate_path)
         if not isinstance(candidate, dict):
             raise RuntimeError(f"Candidate yaml must be a mapping: {candidate_path}")
@@ -954,7 +968,6 @@ class AutoResearchRoundManager:
         vllm_config = {key: candidate[key] for key in candidate if key in ALLOWED_VLLM_CONFIG_KEYS or key == "harness_overrides"}
         candidate_uuid = str(uuid4())
         candidate_label = f"candidate-{iteration_id}" if iteration_id.isdigit() else iteration_id
-        selected_profile = profile or ("full" if iteration_id.startswith("rescreen_") else "screen")
 
         workload = SyntheticWorkloadDistribution.from_file(
             spec.workload_file,
@@ -1197,7 +1210,7 @@ class AutoResearchRoundManager:
             feasible_rows = [row for row in rows if row.feasible and row.objective_value]
             if not feasible_rows:
                 raise RuntimeError("No feasible rows to finalize")
-            winner_row = max(feasible_rows, key=lambda row: float(row.objective_value or "0"))
+            winner_row = self._pick_winner_row(feasible_rows, objective_field="objective_value")
             winner_parent_uuid = winner_row.candidate_uuid
         else:
             rescreen_rows = [
@@ -1213,8 +1226,7 @@ class AutoResearchRoundManager:
             holdout = json.loads(holdout_path.read_text(encoding="utf-8"))
             if not bool(holdout.get("pass")):
                 raise RuntimeError("finalize-round refuses because holdout validation failed")
-            rescreen_rows.sort(key=lambda row: float(row.objective_mean), reverse=True)
-            winner_rescreen = rescreen_rows[0]
+            winner_rescreen = self._pick_winner_row(rescreen_rows, objective_field="objective_mean")
             winner_parent_uuid = winner_rescreen.parent_candidate_uuid
             winner_rescreen_uuid = winner_rescreen.candidate_uuid
             winner_row = next(
@@ -1506,7 +1518,7 @@ class AutoResearchRoundManager:
             raise RuntimeError("bootstrap-round preflight failed: codex cli missing or wrong version") from exc
 
         help_output = self._run_cli_probe(["auto-research", "--help"])
-        for subcommand in PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS:
+        for subcommand in AUTO_RESEARCH_HELP_SUBCOMMANDS:
             if subcommand not in help_output:
                 raise RuntimeError(f"bootstrap-round preflight failed: cli subcommand missing: {subcommand}")
             payload = json.loads(self._run_cli_probe(["auto-research", subcommand, "--help-only"]))
@@ -1663,9 +1675,49 @@ class AutoResearchRoundManager:
     def _git_status_short(self) -> str:
         return self._git(["status", "--short"]).stdout.strip()
 
+    @staticmethod
+    def _round_branch_name(*, model_id: str, family_id: str, sprint: str, timestamp: str) -> str:
+        return f"autoresearch/{model_id}/{family_id}/{sprint}/{timestamp}"
+
     def _validate_iteration_id(self, iteration: str) -> None:
         if ITERATION_ID_RE.fullmatch(iteration) is None:
             raise RuntimeError(f"Invalid iteration id: {iteration}")
+
+    def _validate_measure_request(self, *, spec: RoundSpecRecord, iteration_id: str, profile: str) -> None:
+        if profile not in {"screen", "full"}:
+            raise RuntimeError(f"measure_refused: unsupported profile {profile!r}")
+        if iteration_id.isdigit() and int(iteration_id) > spec.iteration_cap:
+            raise RuntimeError(
+                f"measure_refused: iteration {iteration_id} exceeds iteration_cap {spec.iteration_cap}"
+            )
+        if iteration_id.startswith("rescreen_"):
+            rescreen_index = int(iteration_id.split("_", 1)[1])
+            if rescreen_index > spec.rescreen_top_k:
+                raise RuntimeError(
+                    f"measure_refused: iteration {iteration_id} exceeds rescreen_top_k {spec.rescreen_top_k}"
+                )
+            if profile != "full":
+                raise RuntimeError("measure_refused: rescreen iterations require the full profile")
+
+    @staticmethod
+    def _metric_tie_break_value(value: str) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float("inf")
+
+    def _pick_winner_row(self, rows: list[ResultsRow], *, objective_field: str) -> ResultsRow:
+        return min(
+            rows,
+            key=lambda row: (
+                -self._metric_tie_break_value(getattr(row, objective_field)),
+                self._metric_tie_break_value(row.ttft_p95_ms),
+                self._metric_tie_break_value(row.tpot_p95_ms),
+                self._metric_tie_break_value(row.turn_latency_p95_ms),
+                row.iteration,
+                row.candidate_uuid,
+            ),
+        )
 
     def _read_results(self, path: Path) -> list[ResultsRow]:
         if not path.exists():

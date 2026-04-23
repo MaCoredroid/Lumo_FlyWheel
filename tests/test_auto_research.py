@@ -201,6 +201,38 @@ kv_cache_dtype: fp8_e5m2
     assert status["phase"] == "finalized"
 
 
+def test_bootstrap_round_creates_dedicated_round_branch(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+
+    current_branch = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    assert current_branch == bootstrap["round_branch"]
+    assert current_branch.startswith(
+        "autoresearch/qwen3.5-27b/proposal-ranking-manager-judgment/sprint-0/"
+    )
+
+
 def test_commit_candidate_rejects_synthetic_measurement_trace(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     manager = auto_research.AutoResearchRoundManager(
@@ -313,6 +345,53 @@ kv_cache_dtype: fp8_e5m2
 
     with pytest.raises(RuntimeError, match="results row already exists"):
         manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+
+
+def test_measure_rejects_iteration_past_round_caps(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+
+    too_far_main = round_dir / "candidates" / "013"
+    too_far_main.mkdir()
+    too_far_main.joinpath("candidate.yaml").write_text(
+        """
+max_num_seqs: 4
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.90
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="exceeds iteration_cap 12"):
+        manager.measure(round_id=bootstrap["round_id"], candidate_path=too_far_main / "candidate.yaml")
+
+    too_far_rescreen = round_dir / "candidates" / "rescreen_04"
+    too_far_rescreen.mkdir()
+    too_far_rescreen.joinpath("candidate.yaml").write_text(
+        too_far_main.joinpath("candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="exceeds rescreen_top_k 3"):
+        manager.measure(round_id=bootstrap["round_id"], candidate_path=too_far_rescreen / "candidate.yaml")
 
 
 def test_commit_candidate_rejects_malformed_trace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -471,3 +550,126 @@ def test_offline_auto_research_runner_backward_compatibility(tmp_path: Path) -> 
 
     assert result.status in {"retained_baseline", "produced_bundle"}
     assert result.run_log_path.is_file()
+
+
+def test_finalize_round_breaks_rescreen_ties_with_latency(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    measurements = iter(
+        [
+            {"objective": 9, "ttft": 1900.0, "tpot": 12.0, "turn": 4200.0},
+            {"objective": 10, "ttft": 1800.0, "tpot": 11.0, "turn": 4100.0},
+            {"objective": 11, "ttft": 2600.0, "tpot": 14.0, "turn": 4700.0},
+            {"objective": 10, "ttft": 1200.0, "tpot": 10.0, "turn": 3900.0},
+        ]
+    )
+
+    def fake_measure(self, candidate_vllm_config, *, warmup_s, window_s, target_concurrency_sweep):
+        del self, candidate_vllm_config, warmup_s, window_s, target_concurrency_sweep
+        sample = next(measurements)
+        return {
+            "generator": "RealMeasurementHarness v0.1.0",
+            "candidate_vllm_config": {
+                "max_num_seqs": 4,
+                "max_num_batched_tokens": 8192,
+                "enable_chunked_prefill": True,
+                "enable_prefix_caching": True,
+                "gpu_memory_utilization": 0.9,
+                "max_model_len": 131072,
+                "kv_cache_dtype": "fp8_e5m2",
+            },
+            "resolved": {
+                "attention_backend": "flash-attn-4",
+                "deltanet_kernel": "triton-chunked-delta-v2",
+                "torch_compile_mode": "default",
+            },
+            "cache_isolation": {
+                "cache_salt": "",
+                "prefix_cache_reset_at_bootstrap": True,
+                "first_10_req_prefix_cache_hit_rate": 0.02,
+                "last_10_req_prefix_cache_hit_rate": 0.71,
+            },
+            "windows": {"warmup_s": 120, "measurement_s": 600},
+            "per_request_latencies": [],
+            "ttft_p95_ms": {"driver": sample["ttft"], "promql": sample["ttft"], "delta_pct": 0.0},
+            "tpot_p95_ms": {"driver": sample["tpot"], "promql": sample["tpot"], "delta_pct": 0.0},
+            "turn_latency_p95_ms": {"driver": sample["turn"], "promql": sample["turn"], "delta_pct": 0.0},
+            "sustained_concurrency": sample["objective"],
+            "rollout_throughput": 12.5,
+            "reasoning_content_purity": 1.0,
+            "determinism_pass_rate": 1.0,
+            "no_oom_events": True,
+            "feasible": True,
+            "feasibility_failures": [],
+            "vllm_metrics_snapshot_ref": "",
+            "seed_trace_replay_ref": "",
+        }
+
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", fake_measure)
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+
+    candidate_payload = """
+max_num_seqs: 4
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.90
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+"""
+    for iteration in ("001", "002"):
+        candidate_dir = round_dir / "candidates" / iteration
+        candidate_dir.mkdir()
+        candidate_dir.joinpath("candidate.yaml").write_text(candidate_payload, encoding="utf-8")
+        manager.measure(round_id=round_id, candidate_path=candidate_dir / "candidate.yaml")
+        manager.commit_candidate(
+            round_id=round_id,
+            iteration=iteration,
+            status="keep",
+            notes=f"candidate {iteration}",
+        )
+
+    round_spec_path = round_dir / "round_spec.yaml"
+    round_spec = auto_research.load_yaml_file(round_spec_path)
+    assert isinstance(round_spec, dict)
+    round_spec["noise_floor"] = 5.0
+    round_spec_path.write_text(
+        auto_research.yaml.safe_dump(round_spec, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    rescreen = manager.rescreen(round_id=round_id, top_k=2)
+    assert len(rescreen["rescreened"]) == 2
+
+    (round_dir / "holdout_trace.json").write_text(
+        json.dumps({"pass": True, "candidate_uuid": rescreen["rescreened"][1]["parent_candidate_uuid"]}, indent=2),
+        encoding="utf-8",
+    )
+
+    finalized = manager.finalize_round(round_id=round_id, dry_run=False)
+
+    winner_commit = subprocess.run(
+        ["git", "log", "-1", "--format=%(trailers:key=Winner-Candidate-UUID,valueonly)"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    second_parent_uuid = manager._read_results(round_dir / "results.tsv")[1].candidate_uuid
+
+    assert finalized["winner_iteration"] == "002"
+    assert finalized["winner_candidate_uuid"] == second_parent_uuid
+    assert winner_commit == second_parent_uuid
