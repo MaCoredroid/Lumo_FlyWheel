@@ -1,0 +1,24 @@
+CNB-55 live probe report — release-manifest-v2-modernization
+
+command: python3 verifiers/release-manifest-v2-modernization/run_live_probe.py --attempt attempt_08_counted_live_probe --timeout-seconds 600 --runs 3 --model gpt-5.4 --reasoning-effort high --variants v1-clean-baseline v2-noisy-distractor v3-dirty-state v4-multi-corpus-objective v5-recovery-in-thread
+
+family_mean = 100.00   (window 15-25)
+max_variant_mean = 100.00   (cap 40)
+min_variant_mean = 100.00   (must have at least one <= 10)
+monotonicity within +/-3 = True
+
+variant                            n    mean   stdev   min   max  scores
+--------------------------------------------------------------------------
+v1-clean-baseline                  3  100.00    0.00   100   100  [100, 100, 100]
+v2-noisy-distractor                3  100.00    0.00   100   100  [100, 100, 100]
+v3-dirty-state                     3  100.00    0.00   100   100  [100, 100, 100]
+v4-multi-corpus-objective          3  100.00    0.00   100   100  [100, 100, 100]
+v5-recovery-in-thread              3  100.00    0.00   100   100  [100, 100, 100]
+
+Acceptance checks:
+  family_mean in window: False
+  max variant <= cap: False
+  at least one variant <= hard floor: False
+  monotonic V1>=V2>=V3>=V4>=V5 +/-3: True
+
+overall: HARDEN NEEDED

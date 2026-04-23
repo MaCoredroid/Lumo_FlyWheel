@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import shutil
+import statistics
 import subprocess
 import tempfile
 import time
@@ -38,60 +39,135 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text())
 
 
-def monotonicity(values: list[int], tolerance: int = 3) -> bool:
+def monotonicity(values: list[float], tolerance: int = 3) -> bool:
     return all(values[i] + tolerance >= values[i + 1] for i in range(len(values) - 1))
 
 
-def summarise(results: list[dict]) -> dict:
+def summarize_variant(results: list[dict]) -> dict:
     scores = [int(item["score"]) for item in results]
+    m_scores = [float(item["M_training"]) for item in results]
     return {
-        "family_mean": round(sum(scores) / len(scores), 2) if scores else 0.0,
-        "max_variant_score": max(scores) if scores else 0,
-        "min_variant_score": min(scores) if scores else 0,
-        "monotonicity_tolerance_3": monotonicity(scores, tolerance=3),
-        "freeze_gate_window": [15, 25],
+        "n": len(scores),
+        "scores": scores,
+        "m_training_scores": m_scores,
+        "mean": round(statistics.mean(scores), 2),
+        "stdev": round(statistics.stdev(scores), 2) if len(scores) > 1 else 0.0,
+        "min": min(scores),
+        "max": max(scores),
+        "mean_M_training": round(statistics.mean(m_scores), 4),
     }
 
 
-def acceptance(summary: dict) -> str:
-    mean_ok = 15 <= summary["family_mean"] <= 25
-    max_ok = summary["max_variant_score"] <= 40
-    min_ok = summary["min_variant_score"] <= 10
-    mono_ok = summary["monotonicity_tolerance_3"]
-    if mean_ok and max_ok and min_ok and mono_ok:
-        return "Layer A freeze gate passed"
-    return "Layer A freeze gate not yet passed"
+def summarize_family(by_variant: dict[str, list[dict]]) -> dict:
+    variant_order = list(by_variant.keys())
+    variant_summaries = {variant: summarize_variant(rows) for variant, rows in by_variant.items()}
+    means = [variant_summaries[variant]["mean"] for variant in variant_order]
+    return {
+        "variant_order": variant_order,
+        "variants": variant_summaries,
+        "family_mean": round(statistics.mean(means), 2),
+        "max_variant_mean": max(means),
+        "min_variant_mean": min(means),
+        "monotonicity_tolerance_3": monotonicity(means, tolerance=3),
+        "family_mean_window": [15, 25],
+        "max_variant_cap": 40,
+        "min_variant_floor": 10,
+    }
 
 
-def write_markdown(attempt_dir: Path, command: str, results: list[dict], summary: dict) -> None:
+def assess(summary: dict) -> dict:
+    family_mean_ok = 15 <= summary["family_mean"] <= 25
+    max_variant_ok = summary["max_variant_mean"] <= 40
+    min_variant_ok = summary["min_variant_mean"] <= 10
+    monotonic_ok = bool(summary["monotonicity_tolerance_3"])
+    return {
+        "family_mean_ok": family_mean_ok,
+        "max_variant_ok": max_variant_ok,
+        "min_variant_ok": min_variant_ok,
+        "monotonic_ok": monotonic_ok,
+        "all_pass": family_mean_ok and max_variant_ok and min_variant_ok and monotonic_ok,
+    }
+
+
+def write_probe_report(path: Path, command: str, summary: dict, assessment: dict) -> None:
+    lines = [
+        f"CNB-55 live probe report — {FAMILY_ID}",
+        "",
+        f"command: {command}",
+        "",
+        f"family_mean = {summary['family_mean']:.2f}   (window {summary['family_mean_window'][0]}-{summary['family_mean_window'][1]})",
+        f"max_variant_mean = {summary['max_variant_mean']:.2f}   (cap {summary['max_variant_cap']})",
+        f"min_variant_mean = {summary['min_variant_mean']:.2f}   (must have at least one <= {summary['min_variant_floor']})",
+        f"monotonicity within +/-3 = {summary['monotonicity_tolerance_3']}",
+        "",
+        f"{'variant':<32} {'n':>3} {'mean':>7} {'stdev':>7} {'min':>5} {'max':>5}  scores",
+        "-" * 74,
+    ]
+    for variant in summary["variant_order"]:
+        item = summary["variants"][variant]
+        lines.append(
+            f"{variant:<32} {item['n']:>3} {item['mean']:>7.2f} {item['stdev']:>7.2f} "
+            f"{item['min']:>5} {item['max']:>5}  {item['scores']}"
+        )
+    lines.extend(
+        [
+            "",
+            "Acceptance checks:",
+            f"  family_mean in window: {assessment['family_mean_ok']}",
+            f"  max variant <= cap: {assessment['max_variant_ok']}",
+            f"  at least one variant <= hard floor: {assessment['min_variant_ok']}",
+            f"  monotonic V1>=V2>=V3>=V4>=V5 +/-3: {assessment['monotonic_ok']}",
+            "",
+            f"overall: {'ALL PASS' if assessment['all_pass'] else 'HARDEN NEEDED'}",
+        ]
+    )
+    path.write_text("\n".join(lines) + "\n")
+
+
+def write_markdown(attempt_dir: Path, command: str, rows: list[dict], summary: dict, assessment: dict) -> None:
     lines = [
         f"# {attempt_dir.name} live probe",
         "",
         f"- command: `{command}`",
         f"- family mean: `{summary['family_mean']}`",
-        f"- max variant score: `{summary['max_variant_score']}`",
-        f"- min variant score: `{summary['min_variant_score']}`",
+        f"- max variant mean: `{summary['max_variant_mean']}`",
+        f"- min variant mean: `{summary['min_variant_mean']}`",
         f"- monotonicity within +/-3: `{summary['monotonicity_tolerance_3']}`",
-        f"- judgment: `{acceptance(summary)}`",
+        f"- Layer A judgment: `{'passed' if assessment['all_pass'] else 'not yet passed'}`",
         "",
-        "| variant | codex_exit | seconds | score | M_training | pass | integrity | ceilings | errors |",
-        "|---|---:|---:|---:|---:|---|---:|---|---|",
+        "| variant | run | codex_exit | seconds | score | M_training | pass | integrity | ceilings | errors |",
+        "|---|---:|---:|---:|---:|---:|---|---:|---|---|",
     ]
-    for item in results:
+    for item in rows:
         ceilings = ",".join(item["ceilings"]) or "—"
         errors = ",".join(item["errors"]) or "—"
         lines.append(
-            f"| {item['variant']} | {item['codex_exit']} | {item['seconds']} | {item['score']} | "
-            f"{item['M_training']:.2f} | {item['pass']} | {item['integrity_flag']} | {ceilings} | {errors} |"
+            f"| {item['variant']} | {item['run_index']} | {item['codex_exit']} | {item['seconds']} | "
+            f"{item['score']} | {item['M_training']:.2f} | {item['pass']} | {item['integrity_flag']} | "
+            f"{ceilings} | {errors} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Per-Variant Means",
+            "",
+            "| variant | mean | stdev | min | max | scores |",
+            "|---|---:|---:|---:|---:|---|",
+        ]
+    )
+    for variant in summary["variant_order"]:
+        item = summary["variants"][variant]
+        lines.append(
+            f"| {variant} | {item['mean']:.2f} | {item['stdev']:.2f} | {item['min']} | {item['max']} | {item['scores']} |"
         )
     (attempt_dir / "summary.md").write_text("\n".join(lines) + "\n")
 
 
-def run_variant(variant: str, timeout_seconds: int, attempt_dir: Path) -> dict:
+def run_variant(variant: str, run_index: int, timeout_seconds: int, attempt_dir: Path, model: str, reasoning_effort: str) -> dict:
     logs_dir = attempt_dir / "codex_logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
-    log_path = logs_dir / f"{variant}.log"
-    work_root = Path(tempfile.mkdtemp(prefix=f"{FAMILY_ID}_{variant}_"))
+    log_path = logs_dir / f"{variant}-run{run_index:02d}.log"
+    work_root = Path(tempfile.mkdtemp(prefix=f"{FAMILY_ID}_{variant}_run{run_index:02d}_"))
     ws = work_root / "workspace"
     shutil.copytree(WORKSPACE_BUNDLE / variant, ws)
     result_path = work_root / "verify_result.json"
@@ -112,13 +188,17 @@ def run_variant(variant: str, timeout_seconds: int, attempt_dir: Path) -> dict:
                 "--color",
                 "never",
                 "--ephemeral",
+                "--model",
+                model,
+                "-c",
+                f'model_reasoning_effort="{reasoning_effort}"',
                 PROMPT,
             ],
             stdout=log_file,
             stderr=subprocess.STDOUT,
             check=False,
         )
-    elapsed = int(time.time() - start)
+    elapsed = round(time.time() - start, 2)
 
     env = os.environ.copy()
     env.update(
@@ -135,9 +215,11 @@ def run_variant(variant: str, timeout_seconds: int, attempt_dir: Path) -> dict:
 
     return {
         "variant": variant,
+        "run_index": run_index,
         "codex_exit": proc.returncode,
         "seconds": elapsed,
         "score": int(result["score"]),
+        "P_benchmark": int(result["P_benchmark"]),
         "M_training": float(result["M_training"]),
         "pass": bool(result["pass"]),
         "integrity_flag": int(result["integrity_flag"]),
@@ -145,6 +227,8 @@ def run_variant(variant: str, timeout_seconds: int, attempt_dir: Path) -> dict:
         "errors": list(result.get("errors", [])),
         "result_path": str(result_path),
         "log_path": str(log_path),
+        "model": model,
+        "reasoning_effort": reasoning_effort,
     }
 
 
@@ -152,6 +236,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--attempt", required=True)
     parser.add_argument("--timeout-seconds", type=int, default=900)
+    parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument("--model", default="gpt-5.4")
+    parser.add_argument("--reasoning-effort", default="high")
     parser.add_argument("--variants", nargs="*", default=DEFAULT_VARIANTS)
     args = parser.parse_args()
 
@@ -160,23 +247,47 @@ def main() -> int:
         shutil.rmtree(attempt_dir)
     attempt_dir.mkdir(parents=True, exist_ok=True)
 
-    results = [run_variant(variant, args.timeout_seconds, attempt_dir) for variant in args.variants]
-    summary = summarise(results)
+    rows: list[dict] = []
+    by_variant: dict[str, list[dict]] = {variant: [] for variant in args.variants}
+    for variant in args.variants:
+        for run_index in range(1, args.runs + 1):
+            row = run_variant(
+                variant=variant,
+                run_index=run_index,
+                timeout_seconds=args.timeout_seconds,
+                attempt_dir=attempt_dir,
+                model=args.model,
+                reasoning_effort=args.reasoning_effort,
+            )
+            rows.append(row)
+            by_variant[variant].append(row)
+
     command = (
         f"python3 verifiers/{FAMILY_ID}/run_live_probe.py --attempt {args.attempt} "
-        f"--timeout-seconds {args.timeout_seconds} --variants {' '.join(args.variants)}"
+        f"--timeout-seconds {args.timeout_seconds} --runs {args.runs} "
+        f"--model {args.model} --reasoning-effort {args.reasoning_effort} "
+        f"--variants {' '.join(args.variants)}"
     )
+
+    probe_runs_path = attempt_dir / "probe_runs.jsonl"
+    with probe_runs_path.open("w") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+    summary = summarize_family(by_variant)
+    assessment = assess(summary)
     payload = {
         "family_id": FAMILY_ID,
         "attempt": args.attempt,
         "command": command,
         "prompt": PROMPT,
-        "results": results,
+        "rows": rows,
         "summary": summary,
-        "acceptance_judgment": acceptance(summary),
+        "assessment": assessment,
     }
     (attempt_dir / "summary.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    write_markdown(attempt_dir, command, results, summary)
+    write_markdown(attempt_dir, command, rows, summary, assessment)
+    write_probe_report(FAMILY / "report" / f"{args.attempt}_probe_report.txt", command, summary, assessment)
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
 

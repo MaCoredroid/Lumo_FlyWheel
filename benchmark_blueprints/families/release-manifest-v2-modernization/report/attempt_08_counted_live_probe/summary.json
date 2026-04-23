@@ -1,0 +1,381 @@
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean_ok": false,
+    "max_variant_ok": false,
+    "min_variant_ok": false,
+    "monotonic_ok": true
+  },
+  "attempt": "attempt_08_counted_live_probe",
+  "command": "python3 verifiers/release-manifest-v2-modernization/run_live_probe.py --attempt attempt_08_counted_live_probe --timeout-seconds 600 --runs 3 --model gpt-5.4 --reasoning-effort high --variants v1-clean-baseline v2-noisy-distractor v3-dirty-state v4-multi-corpus-objective v5-recovery-in-thread",
+  "family_id": "release-manifest-v2-modernization",
+  "prompt": "Read AGENTS.md in this directory and follow it exactly. Repair the release-path modernization in place, run the visible checks, and write artifacts/release_smoke_report.json by running `python deploy/check_release.py --env staging --emit-json artifacts/release_smoke_report.json`. Do not modify read-only surfaces or anything outside the allowed repair paths.",
+  "rows": [
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v1-clean-baseline-run01.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v1-clean-baseline_run01_0evdfkdy/verify_result.json",
+      "run_index": 1,
+      "score": 100,
+      "seconds": 147.53,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v1-clean-baseline-run02.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v1-clean-baseline_run02_gch04zdw/verify_result.json",
+      "run_index": 2,
+      "score": 100,
+      "seconds": 96.93,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v1-clean-baseline-run03.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v1-clean-baseline_run03_9zzj24to/verify_result.json",
+      "run_index": 3,
+      "score": 100,
+      "seconds": 105.27,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v2-noisy-distractor-run01.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v2-noisy-distractor_run01_colvamus/verify_result.json",
+      "run_index": 1,
+      "score": 100,
+      "seconds": 97.94,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v2-noisy-distractor-run02.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v2-noisy-distractor_run02_ugt00owv/verify_result.json",
+      "run_index": 2,
+      "score": 100,
+      "seconds": 112.71,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v2-noisy-distractor-run03.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v2-noisy-distractor_run03_9aikg1_n/verify_result.json",
+      "run_index": 3,
+      "score": 100,
+      "seconds": 124.5,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v3-dirty-state-run01.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v3-dirty-state_run01_u0lyt6fb/verify_result.json",
+      "run_index": 1,
+      "score": 100,
+      "seconds": 95.76,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v3-dirty-state-run02.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v3-dirty-state_run02_1wi1o2td/verify_result.json",
+      "run_index": 2,
+      "score": 100,
+      "seconds": 107.95,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v3-dirty-state-run03.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v3-dirty-state_run03__x4_u9ct/verify_result.json",
+      "run_index": 3,
+      "score": 100,
+      "seconds": 108.54,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v4-multi-corpus-objective-run01.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v4-multi-corpus-objective_run01_e42gjk0m/verify_result.json",
+      "run_index": 1,
+      "score": 100,
+      "seconds": 107.77,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v4-multi-corpus-objective-run02.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v4-multi-corpus-objective_run02_qjz1368u/verify_result.json",
+      "run_index": 2,
+      "score": 100,
+      "seconds": 135.15,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v4-multi-corpus-objective-run03.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v4-multi-corpus-objective_run03_7gdba_kz/verify_result.json",
+      "run_index": 3,
+      "score": 100,
+      "seconds": 122.73,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v5-recovery-in-thread-run01.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v5-recovery-in-thread_run01_xwju8gwp/verify_result.json",
+      "run_index": 1,
+      "score": 100,
+      "seconds": 148.46,
+      "variant": "v5-recovery-in-thread"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v5-recovery-in-thread-run02.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v5-recovery-in-thread_run02_itzc_cx0/verify_result.json",
+      "run_index": 2,
+      "score": 100,
+      "seconds": 137.07,
+      "variant": "v5-recovery-in-thread"
+    },
+    {
+      "M_training": 1.0,
+      "P_benchmark": 100,
+      "ceilings": [],
+      "codex_exit": 0,
+      "errors": [],
+      "integrity_flag": 0,
+      "log_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/codex_logs/v5-recovery-in-thread-run03.log",
+      "model": "gpt-5.4",
+      "pass": true,
+      "reasoning_effort": "high",
+      "result_path": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/release-manifest-v2-modernization_v5-recovery-in-thread_run03_k0wtsi0p/verify_result.json",
+      "run_index": 3,
+      "score": 100,
+      "seconds": 139.09,
+      "variant": "v5-recovery-in-thread"
+    }
+  ],
+  "summary": {
+    "family_mean": 100,
+    "family_mean_window": [
+      15,
+      25
+    ],
+    "max_variant_cap": 40,
+    "max_variant_mean": 100,
+    "min_variant_floor": 10,
+    "min_variant_mean": 100,
+    "monotonicity_tolerance_3": true,
+    "variant_order": [
+      "v1-clean-baseline",
+      "v2-noisy-distractor",
+      "v3-dirty-state",
+      "v4-multi-corpus-objective",
+      "v5-recovery-in-thread"
+    ],
+    "variants": {
+      "v1-clean-baseline": {
+        "m_training_scores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "max": 100,
+        "mean": 100,
+        "mean_M_training": 1.0,
+        "min": 100,
+        "n": 3,
+        "scores": [
+          100,
+          100,
+          100
+        ],
+        "stdev": 0.0
+      },
+      "v2-noisy-distractor": {
+        "m_training_scores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "max": 100,
+        "mean": 100,
+        "mean_M_training": 1.0,
+        "min": 100,
+        "n": 3,
+        "scores": [
+          100,
+          100,
+          100
+        ],
+        "stdev": 0.0
+      },
+      "v3-dirty-state": {
+        "m_training_scores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "max": 100,
+        "mean": 100,
+        "mean_M_training": 1.0,
+        "min": 100,
+        "n": 3,
+        "scores": [
+          100,
+          100,
+          100
+        ],
+        "stdev": 0.0
+      },
+      "v4-multi-corpus-objective": {
+        "m_training_scores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "max": 100,
+        "mean": 100,
+        "mean_M_training": 1.0,
+        "min": 100,
+        "n": 3,
+        "scores": [
+          100,
+          100,
+          100
+        ],
+        "stdev": 0.0
+      },
+      "v5-recovery-in-thread": {
+        "m_training_scores": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "max": 100,
+        "mean": 100,
+        "mean_M_training": 1.0,
+        "min": 100,
+        "n": 3,
+        "scores": [
+          100,
+          100,
+          100
+        ],
+        "stdev": 0.0
+      }
+    }
+  }
+}

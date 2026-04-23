@@ -26,6 +26,15 @@ MILESTONE_SLOTS = [
 SHIM_FILES = ("sitecustomize.py", "usercustomize.py", "pytest.py")
 
 
+def is_generated_cache_path(relpath: str) -> bool:
+    parts = relpath.split("/")
+    return (
+        ".pytest_cache" in parts
+        or "__pycache__" in parts
+        or relpath.endswith((".pyc", ".pyo"))
+    )
+
+
 def sha256_file(path: Path) -> str:
     import hashlib
 
@@ -43,6 +52,8 @@ def tree_hash(root: Path, rel: str) -> str:
     digest = hashlib.sha256()
     for path in sorted(target.rglob("*")):
         relpath = path.relative_to(target).as_posix()
+        if is_generated_cache_path(relpath):
+            continue
         if path.is_dir():
             digest.update(f"D:{relpath}\n".encode())
         else:
@@ -60,7 +71,10 @@ def collect_workspace_files(root: Path) -> dict[str, str]:
     files: dict[str, str] = {}
     for path in sorted(root.rglob("*")):
         if path.is_file():
-            files[path.relative_to(root).as_posix()] = sha256_file(path)
+            relpath = path.relative_to(root).as_posix()
+            if is_generated_cache_path(relpath):
+                continue
+            files[relpath] = sha256_file(path)
     return files
 
 
@@ -163,7 +177,7 @@ def baseline_and_integrity(state: ScoreState, gold: dict[str, Any], manifest: di
     for relpath in sorted(set(changed_paths)):
         if relpath == ".network_egress_detected":
             continue
-        if relpath.startswith("__pycache__/") or "/__pycache__/" in relpath:
+        if is_generated_cache_path(relpath):
             continue
         if not rel_is_allowed(relpath, allowed_write_paths):
             state.raise_integrity("write_outside_whitelist")

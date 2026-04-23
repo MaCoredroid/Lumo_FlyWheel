@@ -32,6 +32,24 @@
     regenerated the family, and started a narrowed `v1-clean-baseline` rerun.
     The post-fix live run did not finish within the turn budget, so no scored
     post-fix result is recorded yet.
+- `attempt_07_counted_live_probe`
+  - model: `gpt-5.4`
+  - reasoning: `high`
+  - command:
+    `python3 verifiers/release-manifest-v2-modernization/run_live_probe.py --attempt attempt_07_counted_live_probe --timeout-seconds 600 --runs 3 --model gpt-5.4 --reasoning-effort high`
+  - result: diagnostic only after the runner CLI fix. It completed all 15
+    runs, but normal `pytest` byproducts under `.pytest_cache/` and
+    `tests/__pycache__/` falsely raised `write_outside_whitelist`,
+    `immutable_slice_mutated`, and `tests_modified`. The same V1 workspace
+    rescored to `100` after generated-cache paths were ignored by the
+    family-local scorer, so this attempt is superseded and not counted.
+- `attempt_08_counted_live_probe`
+  - model: `gpt-5.4`
+  - reasoning: `high`
+  - command:
+    `python3 verifiers/release-manifest-v2-modernization/run_live_probe.py --attempt attempt_08_counted_live_probe --timeout-seconds 600 --runs 3 --model gpt-5.4 --reasoning-effort high`
+  - result: counted post-change full-family live probe across all five variants
+    and all three runs per variant. It saturated at `100/100` for every run.
 
 ## Attempt 03 Evidence
 
@@ -63,11 +81,61 @@ Layer A calibration under a real live probe.
 
 ## Live Probe Status
 
-- current status: `pending`
-- exact state:
-  - one pre-fix live run (`attempt_04` / `v1-clean-baseline`) completed at
-    `20/100` and identified the hidden-path blocker
-  - the blocker was removed by moving the writable config surface to
-    `codex/config.toml`
-  - the post-fix live rerun was started but not completed before this turn
-    ended
+- current status: `completed`
+- counted live probe: `attempt_08_counted_live_probe`
+- artifact root:
+  `benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe/`
+- generated report:
+  `benchmark_blueprints/families/release-manifest-v2-modernization/report/attempt_08_counted_live_probe_probe_report.txt`
+- runner note: this Codex CLI build does not accept a top-level
+  `--reasoning-effort` flag, so the family-local runner records the requested
+  flag in the benchmark command and invokes each child `codex exec` with
+  `--model gpt-5.4 -c model_reasoning_effort="high"`.
+
+## Attempt 08 Counted Live Probe
+
+- exact command:
+  `python3 verifiers/release-manifest-v2-modernization/run_live_probe.py --attempt attempt_08_counted_live_probe --timeout-seconds 600 --runs 3 --model gpt-5.4 --reasoning-effort high`
+- exact child prompt:
+  `Read AGENTS.md in this directory and follow it exactly. Repair the release-path modernization in place, run the visible checks, and write artifacts/release_smoke_report.json by running 'python deploy/check_release.py --env staging --emit-json artifacts/release_smoke_report.json'. Do not modify read-only surfaces or anything outside the allowed repair paths.`
+- exact matrix refresh commands:
+  `python3 verifiers/release-manifest-v2-modernization/run_verification_matrix.py --variant v1-clean-baseline --out benchmark_blueprints/families/release-manifest-v2-modernization/verification_matrix.md`
+  `python3 verifiers/release-manifest-v2-modernization/run_verification_matrix.py --variant v5-recovery-in-thread --out benchmark_blueprints/families/release-manifest-v2-modernization/verification_matrix_v5-recovery-in-thread.md`
+
+| variant | n | scores | mean | stdev | min | max | mean M_training |
+|---|---:|---|---:|---:|---:|---:|---:|
+| `v1-clean-baseline` | 3 | `[100, 100, 100]` | 100.00 | 0.00 | 100 | 100 | 1.0000 |
+| `v2-noisy-distractor` | 3 | `[100, 100, 100]` | 100.00 | 0.00 | 100 | 100 | 1.0000 |
+| `v3-dirty-state` | 3 | `[100, 100, 100]` | 100.00 | 0.00 | 100 | 100 | 1.0000 |
+| `v4-multi-corpus-objective` | 3 | `[100, 100, 100]` | 100.00 | 0.00 | 100 | 100 | 1.0000 |
+| `v5-recovery-in-thread` | 3 | `[100, 100, 100]` | 100.00 | 0.00 | 100 | 100 | 1.0000 |
+
+Layer A gate values:
+
+| gate | value | threshold | pass |
+|---|---:|---|---|
+| family mean | 100.00 | 15-25 | false |
+| max variant mean | 100.00 | <= 40 | false |
+| min variant mean | 100.00 | <= 10 | false |
+| monotonic V1 >= V2 >= V3 >= V4 >= V5 within +/-3 | true | true | true |
+
+Layer B verification matrix outputs after the scorer patch:
+
+| matrix | Oracle | Empty | RAWR grounding_stripped | Prod-alias shortcut | Context-blind finish | Delete-tests adversarial |
+|---|---:|---:|---:|---:|---:|---:|
+| `verification_matrix.md` / V1 | 100 | 0 | 20 | 20 | 100 | 0 + integrity |
+| `verification_matrix_v5-recovery-in-thread.md` / V5 | 100 | 0 | 20 | 20 | 20 | 0 + integrity |
+
+Spot-check diagnosis:
+
+- V5 run 03 read the recovery context, preserved the no-prod-alias guardrail,
+  documented `INC-342`, ordered dry-run before `artifact_manifest output`
+  before staging smoke, and emitted a valid smoke report.
+- All 15 live runs made only allowed substantive edits and passed the hidden
+  release alignment pack after generated cache byproducts were excluded from
+  integrity hashing.
+- The attempt therefore fails Layer A by saturation, not by a remaining
+  writable-surface or scorer-integrity bug. Forcing the family into the 15-25
+  window would require hiding requirements that are visible, legitimate release
+  maintenance context. Under the skill's legitimate-difficulty rule this is a
+  mechanical score floor / renewal problem, not a reason to add fake ambiguity.
