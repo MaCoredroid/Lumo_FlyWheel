@@ -803,6 +803,20 @@ def test_auto_research_help_only_registered(capsys: pytest.CaptureFixture[str]) 
     assert json.loads(capsys.readouterr().out) == {"subcommand": "status", "status": "registered"}
 
 
+def test_auto_research_help_only_registered_without_required_args(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(["auto-research", "measure", "--help-only"])
+    assert args.func(args) == 0
+    assert json.loads(capsys.readouterr().out) == {"subcommand": "measure", "status": "registered"}
+
+
+def test_auto_research_measure_requires_arguments_after_help_only_check() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(["auto-research", "measure"])
+    with pytest.raises(RuntimeError, match="--round-id, --candidate"):
+        args.func(args)
+
+
 def test_auto_research_status_reports_missing_round(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     repo = _init_auto_research_repo(tmp_path)
     monkeypatch.setattr(cli, "REPO_ROOT", repo)

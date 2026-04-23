@@ -565,9 +565,24 @@ def _auto_research_help_only(args: argparse.Namespace) -> int:
     return -1
 
 
+def _require_auto_research_args(args: argparse.Namespace, *names: str) -> None:
+    missing: list[str] = []
+    for name in names:
+        value = getattr(args, name)
+        if isinstance(value, str):
+            if not value.strip():
+                missing.append(name)
+        elif value is None:
+            missing.append(name)
+    if missing:
+        rendered = ", ".join(f"--{name.replace('_', '-')}" for name in missing)
+        raise RuntimeError(f"Missing required arguments: {rendered}")
+
+
 def cmd_auto_research_bootstrap_round(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    _require_auto_research_args(args, "model_id", "family_id", "sprint", "workload_file")
     manager = _auto_research_manager(args)
     payload = manager.bootstrap_round(
         model_id=args.model_id,
@@ -584,6 +599,7 @@ def cmd_auto_research_bootstrap_round(args: argparse.Namespace) -> int:
 def cmd_auto_research_measure(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    _require_auto_research_args(args, "round_id", "candidate")
     manager = _auto_research_manager(args)
     payload = manager.measure(round_id=args.round_id, candidate_path=args.candidate)
     print(json.dumps(payload, indent=2))
@@ -593,6 +609,7 @@ def cmd_auto_research_measure(args: argparse.Namespace) -> int:
 def cmd_auto_research_commit_candidate(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    _require_auto_research_args(args, "round_id", "iteration", "status", "notes")
     manager = _auto_research_manager(args)
     payload = manager.commit_candidate(
         round_id=args.round_id,
@@ -607,6 +624,7 @@ def cmd_auto_research_commit_candidate(args: argparse.Namespace) -> int:
 def cmd_auto_research_rescreen(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    _require_auto_research_args(args, "round_id")
     manager = _auto_research_manager(args)
     payload = manager.rescreen(round_id=args.round_id, top_k=args.top_k, profile=args.profile)
     print(json.dumps(payload, indent=2))
@@ -616,6 +634,7 @@ def cmd_auto_research_rescreen(args: argparse.Namespace) -> int:
 def cmd_auto_research_validate_holdout(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    _require_auto_research_args(args, "round_id", "candidate_uuid")
     manager = _auto_research_manager(args)
     payload = manager.validate_holdout(round_id=args.round_id, candidate_uuid=args.candidate_uuid)
     print(json.dumps(payload, indent=2))
@@ -625,6 +644,7 @@ def cmd_auto_research_validate_holdout(args: argparse.Namespace) -> int:
 def cmd_auto_research_finalize_round(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    _require_auto_research_args(args, "round_id")
     manager = _auto_research_manager(args)
     payload = manager.finalize_round(round_id=args.round_id, dry_run=args.dry_run)
     print(json.dumps(payload, indent=2))
@@ -634,6 +654,7 @@ def cmd_auto_research_finalize_round(args: argparse.Namespace) -> int:
 def cmd_auto_research_status(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    _require_auto_research_args(args, "round_id")
     manager = _auto_research_manager(args)
     try:
         payload = manager.status(round_id=args.round_id)
@@ -647,6 +668,7 @@ def cmd_auto_research_status(args: argparse.Namespace) -> int:
 def cmd_auto_research_run(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    _require_auto_research_args(args, "model_id", "family_id", "workload_file")
     manager = _auto_research_manager(args)
     payload = manager.run_non_agent(
         model_id=args.model_id,
@@ -732,58 +754,58 @@ def build_parser() -> argparse.ArgumentParser:
     auto_research_subparsers = auto_research.add_subparsers(dest="auto_research_command")
     auto_bootstrap = auto_research_subparsers.add_parser("bootstrap-round")
     auto_bootstrap.add_argument("--help-only", action="store_true")
-    auto_bootstrap.add_argument("--model-id", required=True)
-    auto_bootstrap.add_argument("--family-id", required=True)
-    auto_bootstrap.add_argument("--sprint", required=True)
-    auto_bootstrap.add_argument("--workload-file", required=True)
+    auto_bootstrap.add_argument("--model-id")
+    auto_bootstrap.add_argument("--family-id")
+    auto_bootstrap.add_argument("--sprint")
+    auto_bootstrap.add_argument("--workload-file")
     auto_bootstrap.add_argument("--weight-version-id")
     auto_bootstrap.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_bootstrap.set_defaults(func=cmd_auto_research_bootstrap_round)
 
     auto_measure = auto_research_subparsers.add_parser("measure")
     auto_measure.add_argument("--help-only", action="store_true")
-    auto_measure.add_argument("--round-id", required=True)
-    auto_measure.add_argument("--candidate", required=True)
+    auto_measure.add_argument("--round-id")
+    auto_measure.add_argument("--candidate")
     auto_measure.set_defaults(func=cmd_auto_research_measure)
 
     auto_commit = auto_research_subparsers.add_parser("commit-candidate")
     auto_commit.add_argument("--help-only", action="store_true")
-    auto_commit.add_argument("--round-id", required=True)
-    auto_commit.add_argument("--iteration", required=True)
-    auto_commit.add_argument("--status", required=True, choices=["baseline", "keep", "discard", "crash", "harness_fault"])
-    auto_commit.add_argument("--notes", required=True)
+    auto_commit.add_argument("--round-id")
+    auto_commit.add_argument("--iteration")
+    auto_commit.add_argument("--status", choices=["baseline", "keep", "discard", "crash", "harness_fault"])
+    auto_commit.add_argument("--notes")
     auto_commit.set_defaults(func=cmd_auto_research_commit_candidate)
 
     auto_rescreen = auto_research_subparsers.add_parser("rescreen")
     auto_rescreen.add_argument("--help-only", action="store_true")
-    auto_rescreen.add_argument("--round-id", required=True)
+    auto_rescreen.add_argument("--round-id")
     auto_rescreen.add_argument("--top-k", type=int, default=3)
     auto_rescreen.add_argument("--profile", default="full")
     auto_rescreen.set_defaults(func=cmd_auto_research_rescreen)
 
     auto_holdout = auto_research_subparsers.add_parser("validate-holdout")
     auto_holdout.add_argument("--help-only", action="store_true")
-    auto_holdout.add_argument("--round-id", required=True)
-    auto_holdout.add_argument("--candidate-uuid", required=True)
+    auto_holdout.add_argument("--round-id")
+    auto_holdout.add_argument("--candidate-uuid")
     auto_holdout.set_defaults(func=cmd_auto_research_validate_holdout)
 
     auto_finalize = auto_research_subparsers.add_parser("finalize-round")
     auto_finalize.add_argument("--help-only", action="store_true")
-    auto_finalize.add_argument("--round-id", required=True)
+    auto_finalize.add_argument("--round-id")
     auto_finalize.add_argument("--dry-run", action="store_true")
     auto_finalize.set_defaults(func=cmd_auto_research_finalize_round)
 
     auto_status = auto_research_subparsers.add_parser("status")
     auto_status.add_argument("--help-only", action="store_true")
-    auto_status.add_argument("--round-id", required=True)
+    auto_status.add_argument("--round-id")
     auto_status.add_argument("--json", action="store_true")
     auto_status.set_defaults(func=cmd_auto_research_status)
 
     auto_research_run = auto_research_subparsers.add_parser("run")
     auto_research_run.add_argument("--help-only", action="store_true")
-    auto_research_run.add_argument("model_id")
-    auto_research_run.add_argument("--family-id", required=True)
-    auto_research_run.add_argument("--workload-file", required=True)
+    auto_research_run.add_argument("model_id", nargs="?")
+    auto_research_run.add_argument("--family-id")
+    auto_research_run.add_argument("--workload-file")
     auto_research_run.add_argument("--baseline-bundle")
     auto_research_run.add_argument("--weight-version-id")
     auto_research_run.add_argument("--iteration-cap", type=int, default=12)

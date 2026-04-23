@@ -34,6 +34,15 @@ ALLOWED_VLLM_CONFIG_KEYS = {
     "max_model_len",
     "kv_cache_dtype",
 }
+PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
+    "bootstrap-round",
+    "measure",
+    "commit-candidate",
+    "rescreen",
+    "validate-holdout",
+    "finalize-round",
+    "status",
+)
 RESULTS_COLUMNS = [
     "candidate_uuid",
     "parent_candidate_uuid",
@@ -71,7 +80,12 @@ Deliverables:
 - lumoserve auto-research validate-holdout
 - lumoserve auto-research finalize-round
 - lumoserve auto-research status
+- lumoserve auto-research run
 - tests/fixtures/synthetic_measurement.py
+- tests covering unit + dry-run integration paths
+- pre-flight checks for production bootstrap
+- output/auto_research/<round_id>/impl_brief.md
+- output/auto_research/<round_id>/iteration_brief.md
 - skills/auto-research-round-manager/SKILL.md
 """
 
@@ -721,6 +735,9 @@ class RoundSpecRecord:
     weight_version_id: str
     workload_file: str
     workload_distribution_id: str
+    latency_ceiling_ms: int
+    tpot_ceiling_ms: int
+    turn_latency_ceiling_ms: int
     active_layer: str = "L1"
     iteration_cap: int = 12
     rescreen_top_k: int = 3
@@ -749,6 +766,9 @@ class RoundSpecRecord:
             "weight_version_id": self.weight_version_id,
             "workload_file": self.workload_file,
             "workload_distribution_id": self.workload_distribution_id,
+            "latency_ceiling_ms": self.latency_ceiling_ms,
+            "tpot_ceiling_ms": self.tpot_ceiling_ms,
+            "turn_latency_ceiling_ms": self.turn_latency_ceiling_ms,
             "active_layer": self.active_layer,
             "iteration_cap": self.iteration_cap,
             "rescreen_top_k": self.rescreen_top_k,
@@ -784,6 +804,9 @@ class RoundSpecRecord:
             weight_version_id=str(payload["weight_version_id"]),
             workload_file=str(payload["workload_file"]),
             workload_distribution_id=str(payload["workload_distribution_id"]),
+            latency_ceiling_ms=int(payload["latency_ceiling_ms"]),
+            tpot_ceiling_ms=int(payload["tpot_ceiling_ms"]),
+            turn_latency_ceiling_ms=int(payload["turn_latency_ceiling_ms"]),
             active_layer=str(payload.get("active_layer", "L1")),
             iteration_cap=int(payload.get("iteration_cap", 12)),
             rescreen_top_k=int(payload.get("rescreen_top_k", 3)),
@@ -841,8 +864,13 @@ class AutoResearchRoundManager:
         seed_trace_path = workload_file.parent / workload.seed_trace_ref
         if not seed_trace_path.is_file():
             raise RuntimeError(f"Seed trace file does not exist: {seed_trace_path}")
-        if harness_type != "synthetic" and self._git_status_short():
-            raise RuntimeError("bootstrap-round requires a clean git worktree")
+        if harness_type != "synthetic":
+            self._run_bootstrap_preflight(
+                model_config=model_config,
+                family_id=family_id,
+                weight_version_id=weight_version_id,
+                workload=workload,
+            )
 
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         round_id = f"{model_id}-{family_id}-{sprint}-{timestamp}"
@@ -853,10 +881,8 @@ class AutoResearchRoundManager:
         candidates_dir = round_dir / "candidates"
         candidates_dir.mkdir()
 
-        round_branch = f"autoresearch/{model_id}/{family_id}/{sprint}/{timestamp}"
         parent_head_sha = self._git(["rev-parse", "HEAD"]).stdout.strip()
-        if harness_type != "synthetic":
-            self._git(["checkout", "-b", round_branch], capture_output=False)
+        round_branch = self._git(["rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
 
         spec = RoundSpecRecord(
             round_id=round_id,
@@ -869,6 +895,9 @@ class AutoResearchRoundManager:
             weight_version_id=weight_version_id or default_weight_version_id(model_config),
             workload_file=str(workload_file),
             workload_distribution_id=workload.workload_distribution_id,
+            latency_ceiling_ms=workload.latency_ceiling_ms,
+            tpot_ceiling_ms=workload.tpot_ceiling_ms,
+            turn_latency_ceiling_ms=workload.turn_latency_ceiling_ms,
             parent_head_sha=parent_head_sha,
             harness_type=harness_type,
             round_started_at=time.time(),
@@ -966,6 +995,8 @@ class AutoResearchRoundManager:
         trace_path.write_text(json.dumps(trace, indent=2, sort_keys=True), encoding="utf-8")
 
         rows = self._read_results(round_dir / "results.tsv")
+        if any(row.iteration == iteration_id for row in rows):
+            raise RuntimeError(f"measure_refused: results row already exists for iteration {iteration_id}")
         rows.append(self._trace_to_pending_row(trace))
         self._write_results(round_dir / "results.tsv", rows)
         return {
@@ -996,6 +1027,7 @@ class AutoResearchRoundManager:
             raise RuntimeError(f"Iteration artifacts missing for {iteration}")
 
         trace = json.loads(trace_path.read_text(encoding="utf-8"))
+        self._validate_measurement_trace(trace)
         generator = str(trace.get("generator", ""))
         if not generator.startswith("RealMeasurementHarness") and not allow_synthetic:
             raise RuntimeError(f"commit_refused: generator {generator!r} is not a production trace")
@@ -1446,6 +1478,114 @@ class AutoResearchRoundManager:
         if fixture_cls is None:
             raise RuntimeError("SyntheticMeasurementFixture is not defined")
         return fixture_cls
+
+    def _run_bootstrap_preflight(
+        self,
+        *,
+        model_config: ModelConfig,
+        family_id: str,
+        weight_version_id: str | None,
+        workload: SyntheticWorkloadDistribution,
+    ) -> None:
+        if RealMeasurementHarness is None:
+            raise RuntimeError("bootstrap-round preflight failed: harness module missing")
+        if os.environ.get("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT"):
+            raise RuntimeError("bootstrap-round preflight failed: non-agent mode enabled")
+        if self._git_status_short():
+            raise RuntimeError("bootstrap-round requires a clean git worktree")
+        if shutil.which("codex") is None:
+            raise RuntimeError("bootstrap-round preflight failed: codex cli missing")
+        try:
+            subprocess.run(
+                ["codex", "--version"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+            raise RuntimeError("bootstrap-round preflight failed: codex cli missing or wrong version") from exc
+
+        help_output = self._run_cli_probe(["auto-research", "--help"])
+        for subcommand in PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS:
+            if subcommand not in help_output:
+                raise RuntimeError(f"bootstrap-round preflight failed: cli subcommand missing: {subcommand}")
+            payload = json.loads(self._run_cli_probe(["auto-research", subcommand, "--help-only"]))
+            if payload != {"subcommand": subcommand, "status": "registered"}:
+                raise RuntimeError(f"bootstrap-round preflight failed: cli subcommand missing: {subcommand}")
+
+        resolved_weight_version = weight_version_id or default_weight_version_id(model_config)
+        for bundle_path in sorted((self.tuned_config_root / family_id / resolved_weight_version).glob("*.yaml")):
+            bundle = load_yaml_file(bundle_path)
+            if not isinstance(bundle, dict):
+                continue
+            tuned_bundle = bundle.get("tuned_config_bundle")
+            if not isinstance(tuned_bundle, dict):
+                continue
+            round_provenance = tuned_bundle.get("round_provenance")
+            if isinstance(round_provenance, dict) and bool(round_provenance.get("dry_run")):
+                raise RuntimeError("bootstrap-round preflight failed: dry_run_bundle_exists")
+
+        if not workload.seed_trace_ref:
+            raise RuntimeError("bootstrap-round preflight failed: seed trace missing")
+
+    def _run_cli_probe(self, args: list[str]) -> str:
+        env = os.environ.copy()
+        src_root = str(Path(__file__).resolve().parents[1])
+        existing_pythonpath = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = src_root if not existing_pythonpath else f"{src_root}:{existing_pythonpath}"
+        try:
+            completed = subprocess.run(
+                [sys.executable, "-m", "lumo_flywheel_serving.cli", *args],
+                cwd=self.repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        except subprocess.CalledProcessError as exc:
+            stdout = exc.stdout.strip()
+            stderr = exc.stderr.strip()
+            detail = stdout or stderr or f"exit {exc.returncode}"
+            raise RuntimeError(f"bootstrap-round preflight failed: {detail}") from exc
+        return completed.stdout.strip()
+
+    def _validate_measurement_trace(self, trace: dict[str, Any]) -> None:
+        candidate_uuid = trace.get("candidate_uuid")
+        if not isinstance(candidate_uuid, str) or not candidate_uuid.strip():
+            raise RuntimeError("commit_refused: malformed_trace")
+        profile = trace.get("profile")
+        if profile not in {"screen", "full"}:
+            raise RuntimeError("commit_refused: malformed_trace")
+        if not self._valid_latency_cross_checks(trace):
+            raise RuntimeError("commit_refused: malformed_trace")
+        if float(trace.get("reasoning_content_purity", 0.0)) != 1.0:
+            raise RuntimeError("commit_refused: malformed_trace")
+
+        cache_isolation = trace.get("cache_isolation")
+        if not isinstance(cache_isolation, dict):
+            raise RuntimeError("commit_refused: malformed_trace")
+        if cache_isolation.get("cache_salt") != candidate_uuid:
+            raise RuntimeError("commit_refused: malformed_trace")
+        try:
+            first_ten_hit_rate = float(cache_isolation["first_10_req_prefix_cache_hit_rate"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError("commit_refused: malformed_trace") from exc
+        if first_ten_hit_rate > 0.10:
+            raise RuntimeError("commit_refused: malformed_trace")
+
+    @staticmethod
+    def _valid_latency_cross_checks(trace: dict[str, Any]) -> bool:
+        for key in ("ttft_p95_ms", "tpot_p95_ms", "turn_latency_p95_ms"):
+            payload = trace.get(key)
+            if not isinstance(payload, dict):
+                return False
+            try:
+                delta_pct = float(payload["delta_pct"])
+            except (KeyError, TypeError, ValueError):
+                return False
+            if delta_pct > 10.0:
+                return False
+        return True
 
     def _trace_to_pending_row(self, trace: dict[str, Any]) -> ResultsRow:
         objective_value = ""
