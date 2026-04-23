@@ -1,0 +1,25 @@
+{
+  "family_id": "codex-skill-runtime-v2-split",
+  "variants": {
+    "v1-clean-baseline": {
+      "verifier_data_sha256": "b9e8daed1c99662129fb3f1c8122fb247e0c687dc6a643d6922d8dcacd138574",
+      "workspace_sha256": "626b550483582c2c88d8fd5659b8ac0c127f539562f791b1378b18e1740d3e68"
+    },
+    "v2-noisy-distractor": {
+      "verifier_data_sha256": "d507589a311d10723d9d3cc912ce230af0581ab236ebf98ca511071ac7b17d8f",
+      "workspace_sha256": "6e19260511cf4af245462e4eb3296e99ceeb0ebb7344b7d792026b38c049075a"
+    },
+    "v3-dirty-state": {
+      "verifier_data_sha256": "1992e172c82350f394414324cf2b9bee4905febd990ad94721ef4bac0d0fd725",
+      "workspace_sha256": "631dac577959d2bc86f8021deb44f93d89d0127d11eba621d06d72318d013a77"
+    },
+    "v4-multi-corpus-objective": {
+      "verifier_data_sha256": "2896edb82a0724fc70433fbe0bfec28cf14b5cbe00f2dcab43e27a2ea07c7853",
+      "workspace_sha256": "2af92d9affc517f2e1a873946c0c2af0f9344a26c314e0e91156977e3d355186"
+    },
+    "v5-recovery-in-thread": {
+      "verifier_data_sha256": "93ec62c1e5f35da32612d0de61773651aeacfd6f223e7da1ac41479bcf1edde9",
+      "workspace_sha256": "e8fdd949a3a1147a48ab5a9a6e3a95c02faa278a501abd2e03288023c909b9c6"
+    }
+  }
+}

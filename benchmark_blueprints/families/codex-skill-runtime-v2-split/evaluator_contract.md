@@ -1,38 +1,93 @@
 # `codex-skill-runtime-v2-split` Evaluator Contract
 
+**Track:** 03 — Refactor Modernization
+**Spec conformance:** CNB-55 v1.0 §7
+**Judge model for LLM-as-judge rubrics:** none; this family uses deterministic code-backed checks only.
+
 ## Evaluation Goal
-Score whether a solver turns a monolithic Codex runtime bundle into a canonical, executable skill/config/automation bundle instead of creating plausible but disconnected files.
+
+Score whether a solver converts a monolithic runtime bundle into one canonical structured skill/runtime package instead of producing plausible but disconnected docs, config, and automation files.
 
 ## Visible Checks
-- `pytest -q tests/test_skill_bundle.py tests/test_config_refs.py tests/test_automation_smoke.py`
-- `python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md`
 
-## Trusted Checks
-- No live references remain to the monolithic prompt path.
-- Exactly one canonical automation controls the workflow.
-- Config and runbook point at real runnable paths.
+```bash
+pytest -q tests/test_skill_bundle.py tests/test_config_refs.py tests/test_automation_smoke.py
+python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md
+```
+
+Visible-check budget is intentionally shallow. Passing the visible slice alone is capped at `20`.
 
 ## Hidden Checks
-- Follow-up additions reuse the structured bundle instead of cloning stale text.
-- Dirty-workspace sentinel files remain untouched.
-- Duplicate automation cleanup is semantic, not cosmetic.
 
-## 100-Point Breakdown
-- `10`: visible tests pass.
-- `10`: smoke command succeeds from the authored bundle.
-- `20`: hidden follow-up bundle proves a second skill or heartbeat reuses the canonical structure.
-- `20`: hidden stale-reference pack proves monolith and duplicate references are fully retired.
-- `20`: hidden duplicate-automation pack proves cleanup is semantic, not cosmetic.
-- `10`: trusted canonical-alignment checks pass across skill, config, automation, and runbook.
-- `10`: hidden dirty-workspace preservation checks pass.
+Hidden checks are deterministic file-contract checks driven by `gold_reference.json` and `hidden_tests/check_contract.py` per variant:
 
-## Caps
-- If the command path is not actually runnable, total score is capped at `20`.
-- If duplicate automations remain semantically live, total score is capped at `25`.
-- If only the visible bundle is proven and no hidden follow-up reuse pack is exercised, total score is capped at `20`.
-- If the fix is mostly docs/config/file creation without canonical alignment, total score is capped at `20`.
-- If tests or smoke are bypassed, total score is capped at `0`.
+- primary skill exists and points at the shared contract
+- `.codex/config.toml` registers only the expected canonical skill paths
+- live runbook matches the canonical command and primary automation
+- duplicate automation is retired semantically (`enabled = false`, `status = "retired"`, `replaced_by = "handoff-primary.toml"`)
+- stale monolith and legacy prompt references are absent from live surfaces
+- V3+ dirty sentinel files remain byte-identical
+- V4+ escalation follow-up skill reuses the shared contract
+- V5 runbook records the duplicate-heartbeat rollback rule
 
-## Passing Interpretation
-- Target benchmark-design outcome: a naive GPT-5.4/high solver should land around `20/100`.
-- Scores above `30` indicate the family still rewards scaffolding too easily.
+## Trusted Final-State Checks
+
+Any failure below raises `shortcut_detected = true` and `integrity_flag = 1`:
+
+- visible tests modified
+- readonly files outside the allowed solver surface changed
+- shim files present
+- network egress marker present
+
+## Scoring Model
+
+The scorer computes raw points from deterministic checks, normalizes them to `0..100`, and then applies post-aggregation ceilings.
+
+Default weight map:
+
+| Check | Max points |
+| --- | ---: |
+| Visible pytest pass | 10 |
+| Visible smoke pass | 10 |
+| Primary skill bundle exists | 10 |
+| Shared contract exists and is referenced | 10 |
+| Config paths align with gold | 10 |
+| Runbook aligns with canonical live path | 10 |
+| Primary automation semantics align | 10 |
+| Duplicate automation is retired semantically | 10 |
+| Legacy refs removed from live surfaces | 10 |
+| Dirty sentinel preserved (V3+) | 5 |
+| Reuse extension present (V4+) | 10 |
+| Incident note present (V5) | 5 |
+
+Checks that do not apply to a variant are excluded from the variant’s normalization denominator.
+
+## Partial-Credit Ceilings
+
+| Ceiling name | Max points | Trigger |
+| --- | ---: | --- |
+| `visible_only_bundle` | 20 | visible slice passes, but canonical hidden alignment still fails |
+| `legacy_reference_live` | 25 | live surfaces still reference monolith or legacy prompt |
+| `duplicate_automation_live` | 30 | stale duplicate heartbeat still live |
+| `dirty_state_overwrite` | 30 | V3+ dirty sentinel files changed |
+| `no_reuse_extension` | 35 | V4+ lacks shared-contract follow-up skill |
+| `incident_blind_reenable` | 30 | V5 lacks incident-safe recovery note or re-enables duplicate heartbeat |
+
+Multiple ceilings stack as `min(...)`.
+
+## Oracle / Empty / Shortcut Expectations
+
+Local deterministic baselines after this packaging pass:
+
+- Oracle profile: `100`
+- Empty workspace: `0`
+- Visible-only profile: `20`
+- Duplicate-live shortcut: `30`
+- Delete-tests adversarial: `0`, `integrity_flag = 1`
+
+## Determinism Contract
+
+- Scorer is stdlib-only Python.
+- Hidden checks are deterministic file-content checks only.
+- JSON output keys are sorted.
+- No LLM-as-judge surface exists in this family.

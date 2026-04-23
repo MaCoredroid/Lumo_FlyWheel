@@ -1,4 +1,4 @@
-version = 1
+version = 2
 family_id = "codex-skill-runtime-v2-split"
 profile = "configured_codex"
 wire_api = "responses"
@@ -13,8 +13,8 @@ paths = ["skills/canonical-bundle-audit/SKILL.md"]
 
 [validation]
 commands = [
-  "pytest -q tests/test_skill_bundle.py tests/test_config_refs.py tests/test_automation_smoke.py",
-  "python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md",
+  "python3 verifiers/codex-skill-runtime-v2-split/build_family_assets.py",
+  "python3 verifiers/codex-skill-runtime-v2-split/run_verification_matrix.py --variant v1-clean-baseline --out benchmark_blueprints/families/codex-skill-runtime-v2-split/verification_matrix.md",
 ]
 
 [scoring]

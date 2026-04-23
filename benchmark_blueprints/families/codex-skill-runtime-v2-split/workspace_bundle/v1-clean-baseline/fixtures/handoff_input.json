@@ -1,0 +1,5 @@
+{
+  "owner": "search-oncall",
+  "service": "search-indexer",
+  "severity": "sev2"
+}

@@ -1,0 +1,147 @@
+family_id: codex-skill-runtime-v2-split
+track: 3
+schema_version: cnb55.family.v1
+layer_a_status: harden_needed
+layer_b_status: implemented_local
+
+grader_ref: verifiers/codex-skill-runtime-v2-split/score_skill_runtime.py
+milestone_config_ref: verifier_data/codex-skill-runtime-v2-split/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: Live bundle surfaces were localized and the canonical skill structure was introduced.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: Visible pytest and smoke path both pass with the canonical skill/config/automation layout.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No integrity violation, no shim, and no readonly mutation.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: Primary skill, config, runbook, and automation all align on one live command path.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: Variant-specific reuse and incident semantics are satisfied end to end without triggering a shallow ceiling.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+    recommended:
+      - inspect:evidence_triage
+      - inspect:prioritize
+      - modify:policy_tradeoff
+      - verify:assumption_honesty
+  per_variant:
+    v1-clean-baseline: {}
+    v2-noisy-distractor:
+      variant_notes: stale duplicate automation must be retired semantically
+    v3-dirty-state:
+      variant_notes: unrelated dirty skill state must remain untouched
+    v4-multi-corpus-objective:
+      variant_notes: reusable follow-up skill must reuse the shared contract
+    v5-recovery-in-thread:
+      variant_notes: runbook must record incident-safe duplicate-heartbeat recovery
+
+tool_call_overrides:
+  - command: "pytest -q tests/test_skill_bundle.py tests/test_config_refs.py tests/test_automation_smoke.py"
+    tags: [verify]
+  - command: "python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md"
+    tags: [verify]
+
+state_delta:
+  kind: workspace_patchset
+  aggregate_clamp: [0.0, 1.0]
+  states:
+    - broken_bundle
+    - visible_green_hidden_red
+    - hidden_green_full
+  transitions:
+    - {from: broken_bundle, to: broken_bundle, trigger: "read-only or wrong edits", delta: 0.0}
+    - {from: broken_bundle, to: visible_green_hidden_red, trigger: "visible pytest plus smoke green", delta: 0.5}
+    - {from: broken_bundle, to: hidden_green_full, trigger: "all canonical hidden checks green", delta: 1.0}
+    - {from: visible_green_hidden_red, to: visible_green_hidden_red, trigger: "visible-only repeat", delta: 0.0}
+    - {from: visible_green_hidden_red, to: hidden_green_full, trigger: "hidden canonical and variant checks fixed", delta: 0.5}
+    - {from: "*", to: "*", trigger: "integrity_flag = 1", delta: -0.5}
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: "file write outside the intended solver surface"
+    detector: trusted_final_state:wrote_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: "readonly benchmark files changed"
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: "presence of sitecustomize.py, usercustomize.py, or pytest.py"
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: "visible pytest files changed"
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: ".network_egress_detected marker present"
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+  notes: "This family uses deterministic code-backed checks only."
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  type: manifest_locked
+  ref: manifest.lock.json
+  workspace_bundle_root: benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/
+
+saturation:
+  threshold_mean_P: 80
+  sustained_rounds: 2
+  renewal_queue:
+    - multi-adjacent-handoff-reuse
+    - automation-memory-drift
+    - retire-v1
+
+rawr_modes:
+  grounding_stripped:
+    status: implemented
+    description: visible bundle exists but canonical semantic alignment is stripped away
+    expected_P_benchmark_max: 0.20
+  citation_fabricated:
+    status: declared_not_yet_implemented
+    description: reserved for future doc-grounding mismatch surface
+    expected_P_benchmark_max: 0.40
+  constraint_named_not_respected:
+    status: implemented
+    description: runbook names duplicate-heartbeat retirement but automation semantics still violate it
+    expected_P_benchmark_max: 0.30
+
+integrity_adversarials:
+  delete_tests:
+    status: implemented
+    classification: integrity_adversarial
+    expected_P_benchmark: 0
+    expected_integrity_flag: 1
+    detector_rules:
+      - immutable_slice_mutated
+      - tests_modified
+      - write_outside_whitelist

@@ -1,0 +1,8 @@
+{
+  ".codex/config.toml": "skill_paths = [\"skills/oncall_handoff/SKILL.md\"]\ncanonical_automation = \"automations/handoff-primary.toml\"\nsmoke_command = \"python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md\"\n",
+  "automations/handoff-copy.toml": "canonical = false\nenabled = false\nstatus = \"retired\"\nreplaced_by = \"handoff-primary.toml\"\nskill = \"skills/oncall_handoff/SKILL.md\"\ncommand = \"python scripts/run_handoff.py --input fixtures/handoff_input.json --output out.md\"\n",
+  "automations/handoff-primary.toml": "canonical = true\nenabled = true\nskill = \"skills/oncall_handoff/SKILL.md\"\ncommand = \"python scripts/run_handoff.py --input fixtures/handoff_input.json --output out.md\"\n",
+  "docs/runbooks/oncall.md": "# Oncall Runbook\n\nUse `skills/oncall_handoff/SKILL.md` with `automations/handoff-primary.toml`.\nSmoke check:\n`python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md`\n",
+  "skills/oncall_handoff/SKILL.md": "# Oncall Handoff\n\nUse `skills/shared_handoff_contract.md`.\n\n1. Keep the live handoff on `automations/handoff-primary.toml`.\n2. Run `python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md`.\n3. Do not route operators back to the legacy monolith or duplicate heartbeat.\n",
+  "skills/shared_handoff_contract.md": "# Shared Handoff Contract\n\nCanonical command:\n`python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md`\n\nCanonical heartbeat:\n`automations/handoff-primary.toml`\n\nRetired duplicate:\n`automations/handoff-copy.toml`\n"
+}

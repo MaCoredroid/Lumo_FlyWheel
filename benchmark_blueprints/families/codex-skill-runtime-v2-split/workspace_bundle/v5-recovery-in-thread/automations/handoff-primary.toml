@@ -1,0 +1,4 @@
+canonical = false
+enabled = true
+skill = "skills/legacy_handoff.md"
+command = "python scripts/missing.py --input fixtures/handoff_input.json --output out.md"

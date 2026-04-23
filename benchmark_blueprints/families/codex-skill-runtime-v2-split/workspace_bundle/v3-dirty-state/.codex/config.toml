@@ -1,0 +1,3 @@
+skill_paths = ["docs/oncall_handoff_monolith.md", "skills/legacy_handoff.md"]
+canonical_automation = "automations/handoff-copy.toml"
+smoke_command = "python scripts/missing.py --input fixtures/handoff_input.json --output out.md"

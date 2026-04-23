@@ -1,2 +1,0 @@
-canonical = false
-command = "python scripts/missing.py --input fixtures/handoff_input.json --output out.md"

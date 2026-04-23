@@ -1,0 +1,66 @@
+{
+  "allowed_writes": [
+    ".codex/config.toml",
+    "automations/handoff-primary.toml",
+    "automations/handoff-copy.toml",
+    "docs/runbooks/oncall.md",
+    "skills/shared_handoff_contract.md",
+    "skills/oncall_handoff/SKILL.md"
+  ],
+  "command_substring": "scripts/run_handoff.py",
+  "config_skill_paths": [
+    "skills/oncall_handoff/SKILL.md"
+  ],
+  "dirty_sentinel_hashes": {
+    "skills/oncall_handoff_draft/SKILL.md": "f588d483708335c2decd04478d6c1c9d44dc1899a32550cb1486b1263f2bfb58",
+    "skills/other_flow/SKILL.md": "cf7744cb17300843fda059b0fa15d2a4aa6196beefbf1f57ffb2f6d2a34d2873"
+  },
+  "forbidden_live_markers": [
+    "docs/oncall_handoff_monolith.md",
+    "skills/legacy_handoff.md"
+  ],
+  "incident_keywords": [
+    "duplicate page rollback",
+    "handoff-copy.toml",
+    "do not re-enable"
+  ],
+  "pass_bar": 40,
+  "readonly_roots": [
+    "tests",
+    "fixtures",
+    "scripts/run_handoff.py",
+    "docs/oncall_handoff_monolith.md",
+    "skills/legacy_handoff.md",
+    "docs/archive",
+    "release_context",
+    "incident_context",
+    "skills/other_flow/SKILL.md",
+    "skills/oncall_handoff_draft/SKILL.md"
+  ],
+  "require_incident_note": false,
+  "require_reuse_skill": false,
+  "reuse_skill_forbidden": [
+    "docs/oncall_handoff_monolith.md",
+    "skills/legacy_handoff.md"
+  ],
+  "reuse_skill_required": [
+    "Escalation follow-up",
+    "skills/shared_handoff_contract.md"
+  ],
+  "runbook_forbidden": [
+    "docs/oncall_handoff_monolith.md",
+    "skills/legacy_handoff.md"
+  ],
+  "runbook_required": [
+    "skills/oncall_handoff/SKILL.md",
+    "automations/handoff-primary.toml",
+    "python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md"
+  ],
+  "shared_contract_path": "skills/shared_handoff_contract.md",
+  "shared_contract_required": [
+    "python scripts/run_handoff.py --input fixtures/handoff_input.json --output /tmp/handoff.md",
+    "automations/handoff-primary.toml",
+    "automations/handoff-copy.toml"
+  ],
+  "variant_id": "v3-dirty-state"
+}
