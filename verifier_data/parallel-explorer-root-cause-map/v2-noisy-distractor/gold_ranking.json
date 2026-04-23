@@ -1,0 +1,38 @@
+{
+  "aggregation_file": "src/release_readiness/core/aggregation.py",
+  "aggregation_suspect_id": "S2-aggregation-grouping",
+  "aggregation_symbol": "merge_blocked_owner_rows",
+  "allowed_write_paths": [
+    "brief",
+    "brief_input.json"
+  ],
+  "baseline_scores": {
+    "empty": 0,
+    "oracle": 100,
+    "renderer_shortcut": 20
+  },
+  "contradictory_artifact_path": "artifacts/logs/operator_note_2026_04_15.md",
+  "env_suspect_id": "S4-env-watchlist-parser",
+  "pass_bar": 74,
+  "patch_target_file": "src/release_readiness/adapters/fs_source.py",
+  "patch_target_symbol": "normalize_fs_owner_alias",
+  "primary_file": "src/release_readiness/adapters/fs_source.py",
+  "primary_suspect_id": "S1-fs-alias-normalization",
+  "primary_symbol": "normalize_fs_owner_alias",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "f1fb40a47c903162d580ada97b07c0c73f4b7607bda5d4d078c09f1642f354dd",
+    "AGENTS.md": "8179865899cf5203348d9864cda39007c66486586877843bc1000cebc8faefee",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "artifacts": "6d0766a9feac8ccea905e4784d73c191062637c3dd9585e2ab3018e389d97bb0",
+    "bin": "e690d0e20961a52ba4b487cb273c842e61ff975ad475652f987f8a463aea2453",
+    "docs": "49fccae75a4a290858c6dd0c5fe3e226e0b016cd34ceb5d498e094f03ce9aaa6",
+    "src": "9342b7142a8d3b1cf4fc4936ea2dcb50a9c813eda47f41a44ed0c62f01d79189",
+    "tests": "e2cbe5309324ff58d678a6b706f9cdbf9ad6e442a1880358a4651d06ddfe1c53"
+  },
+  "renderer_file": "src/release_readiness/renderers/markdown_renderer.py",
+  "renderer_suspect_id": "S3-renderer-duplicate-headings",
+  "renderer_symbol": "render_blocked_owner_section",
+  "required_context_path": "",
+  "required_test_quote": "assert summary[\"blocked_owner_total\"] == 2, \"scheduler aliases should collapse to the same blocked owner\"",
+  "variant_id": "v2-noisy-distractor"
+}

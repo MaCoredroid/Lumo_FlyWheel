@@ -1,0 +1,127 @@
+{
+  "accepted": "S1-fs-alias-normalization",
+  "evidence_table": [
+    {
+      "claim": "The file-backed adapter emits a space-preserving owner key that disagrees with the env path.",
+      "file": "src/release_readiness/adapters/fs_source.py",
+      "symbol": "normalize_fs_owner_alias",
+      "test_or_artifact": "artifacts/logs/runtime_snapshot_2026_04_14.json",
+      "why_misleading": "Visible markdown duplication happens later and should not be mistaken for the first divergence."
+    },
+    {
+      "claim": "Aggregation trusts `owner_key` verbatim, so the upstream mismatch becomes duplicate blocked owners.",
+      "file": "src/release_readiness/core/aggregation.py",
+      "symbol": "merge_blocked_owner_rows",
+      "test_or_artifact": "tests/test_root_cause_map.py::test_scheduler_aliases_collapse_before_rendering",
+      "why_misleading": "A dedupe in aggregation would mask the symptom but leaves the root normalization bug in place."
+    },
+    {
+      "claim": "The renderer prints what it is given and does not create new owner buckets.",
+      "file": "src/release_readiness/renderers/markdown_renderer.py",
+      "symbol": "render_blocked_owner_section",
+      "test_or_artifact": "artifacts/logs/rendered_report_excerpt.md",
+      "why_misleading": "The duplicated headings are downstream-visible and can trick a shallow read into blaming formatting."
+    },
+    {
+      "claim": "The failing test is asserting a unique-owner invariant that breaks before rendering.",
+      "file": "tests/test_root_cause_map.py",
+      "symbol": "test_scheduler_aliases_collapse_before_rendering",
+      "test_or_artifact": "assert summary[\"blocked_owner_total\"] == 2, \"scheduler aliases should collapse to the same blocked owner\"",
+      "why_misleading": "A renderer-only patch cannot make this assertion true because the count is wrong upstream."
+    }
+  ],
+  "investigation_threads": [
+    {
+      "files": [
+        "src/release_readiness/adapters/fs_source.py",
+        "src/release_readiness/adapters/env_source.py",
+        "src/release_readiness/core/aggregation.py"
+      ],
+      "finding": "The scheduler file path preserves space-separated owner keys, the env path hyphenates them, and aggregation buckets on the mismatched keys without re-canonicalizing.",
+      "question": "Where do owner aliases diverge before the count is computed?"
+    },
+    {
+      "files": [
+        "src/release_readiness/renderers/markdown_renderer.py",
+        "artifacts/logs/rendered_report_excerpt.md",
+        "artifacts/logs/operator_note_2026_04_15.md"
+      ],
+      "finding": "The renderer only reflects the split buckets it is handed; contradictory artifacts over-emphasize the symptom, but the runtime snapshot shows the duplication existed before rendering.",
+      "question": "Is the renderer a cause or just a visible symptom?"
+    }
+  ],
+  "ranking": [
+    {
+      "evidence_paths": [
+        "src/release_readiness/adapters/fs_source.py",
+        "src/release_readiness/core/aggregation.py",
+        "tests/test_root_cause_map.py",
+        "artifacts/logs/runtime_snapshot_2026_04_14.json"
+      ],
+      "file": "src/release_readiness/adapters/fs_source.py",
+      "rank": 1,
+      "role": "primary",
+      "summary": "The file-backed scheduler path emits space-preserving owner keys like `team ops`, while the env path emits hyphenated keys like `team-ops`; aggregation trusts `owner_key` verbatim, so aliases split before totals are counted.",
+      "suspect_id": "S1-fs-alias-normalization",
+      "symbol": "normalize_fs_owner_alias"
+    },
+    {
+      "evidence_paths": [
+        "src/release_readiness/core/aggregation.py",
+        "artifacts/logs/runtime_snapshot_2026_04_14.json",
+        "tests/test_root_cause_map.py"
+      ],
+      "file": "src/release_readiness/core/aggregation.py",
+      "rank": 2,
+      "role": "amplifier",
+      "summary": "Aggregation is where the bug becomes visible because it keys buckets on the already-split `owner_key`, but it is consuming bad upstream normalization rather than inventing new aliases itself.",
+      "suspect_id": "S2-aggregation-grouping",
+      "symbol": "merge_blocked_owner_rows"
+    },
+    {
+      "evidence_paths": [
+        "src/release_readiness/adapters/env_source.py",
+        "artifacts/logs/runtime_snapshot_2026_04_14.json"
+      ],
+      "file": "src/release_readiness/adapters/env_source.py",
+      "rank": 3,
+      "role": "secondary",
+      "summary": "The env path is consistent and hyphen-normalized; it matters only because it disagrees with the file-backed path after the refactor.",
+      "suspect_id": "S4-env-watchlist-parser",
+      "symbol": "normalize_env_owner_token"
+    },
+    {
+      "evidence_paths": [
+        "src/release_readiness/renderers/markdown_renderer.py",
+        "artifacts/logs/rendered_report_excerpt.md",
+        "artifacts/logs/runtime_snapshot_2026_04_14.json"
+      ],
+      "file": "src/release_readiness/renderers/markdown_renderer.py",
+      "rank": 4,
+      "role": "downstream-only",
+      "summary": "The renderer faithfully prints the already-duplicated owner buckets; it explains the visible symptom but not the inflated `blocked_owner_total`.",
+      "suspect_id": "S3-renderer-duplicate-headings",
+      "symbol": "render_blocked_owner_section"
+    }
+  ],
+  "remediation_plan": {
+    "non_goals": [
+      "do not patch the renderer first",
+      "do not broad-rewrite aggregation during the hotfix window"
+    ],
+    "patch_target_file": "src/release_readiness/adapters/fs_source.py",
+    "patch_target_symbol": "normalize_fs_owner_alias",
+    "validation_steps": [
+      "pytest tests/test_root_cause_map.py -q",
+      "confirm runtime snapshot keys collapse to `team-ops` and `platform-infra` before rendering"
+    ],
+    "why_smallest_safe_patch": "Repairing file-backed owner canonicalization keeps the aggregation contract stable and removes the duplicate buckets before they can inflate totals or render duplicate headings."
+  },
+  "schema_version": "cnb55.root_cause_brief.v1",
+  "variant_id": "v2-noisy-distractor",
+  "verification_note": {
+    "contradictory_artifact": "artifacts/logs/operator_note_2026_04_15.md",
+    "failing_assertion": "assert summary[\"blocked_owner_total\"] == 2, \"scheduler aliases should collapse to the same blocked owner\"",
+    "resolution": "This artifact is downstream-only and misleading because the runtime snapshot already shows split owner keys before rendering."
+  }
+}

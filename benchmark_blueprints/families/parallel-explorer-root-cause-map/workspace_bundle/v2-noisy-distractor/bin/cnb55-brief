@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd()
+BRIEF_DIR = ROOT / "brief"
+VARIANT_ID = (ROOT / ".scenario_variant").read_text().strip()
+SCHEMA_VERSION = "cnb55.root_cause_brief.v1"
+SUSPECT_IDS = {
+    "S1-fs-alias-normalization",
+    "S2-aggregation-grouping",
+    "S3-renderer-duplicate-headings",
+    "S4-env-watchlist-parser",
+}
+ROLE_IDS = {"primary", "amplifier", "downstream-only", "secondary"}
+
+
+def fail(message: str) -> int:
+    print(message, file=sys.stderr)
+    return 1
+
+
+def load_input(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def validate(data: dict) -> list[str]:
+    errors: list[str] = []
+    if data.get("schema_version") != SCHEMA_VERSION:
+        errors.append("schema_version mismatch")
+    if data.get("variant_id") != VARIANT_ID:
+        errors.append("variant_id mismatch")
+    ranking = data.get("ranking")
+    if not isinstance(ranking, list) or len(ranking) != 4:
+        errors.append("ranking must contain 4 suspects")
+    else:
+        try:
+            ranks = sorted(int(item.get("rank")) for item in ranking)
+        except Exception:
+            ranks = []
+        if ranks != [1, 2, 3, 4]:
+            errors.append("ranking ranks must be contiguous 1..4")
+        if data.get("accepted") != ranking[0].get("suspect_id"):
+            errors.append("accepted must match rank 1 suspect")
+        seen: set[str] = set()
+        for entry in ranking:
+            if entry.get("suspect_id") not in SUSPECT_IDS:
+                errors.append(f"unknown suspect_id: {entry.get('suspect_id')}")
+            if entry.get("role") not in ROLE_IDS:
+                errors.append(f"unknown role: {entry.get('role')}")
+            suspect_id = str(entry.get("suspect_id"))
+            if suspect_id in seen:
+                errors.append(f"duplicate suspect_id: {suspect_id}")
+            seen.add(suspect_id)
+            if not entry.get("file") or not entry.get("symbol"):
+                errors.append("ranking entries need file and symbol")
+            if len(entry.get("evidence_paths", [])) < 1:
+                errors.append("ranking entries need evidence_paths")
+    threads = data.get("investigation_threads")
+    if not isinstance(threads, list) or len(threads) < 2:
+        errors.append("need at least two investigation_threads")
+    evidence_rows = data.get("evidence_table")
+    if not isinstance(evidence_rows, list) or len(evidence_rows) < 4:
+        errors.append("need at least four evidence_table rows")
+    else:
+        for row in evidence_rows[:4]:
+            if not row.get("file") or not row.get("symbol") or not row.get("test_or_artifact"):
+                errors.append("evidence_table rows require file, symbol, and test_or_artifact")
+    plan = data.get("remediation_plan", {})
+    if len(plan.get("validation_steps", [])) < 2:
+        errors.append("need at least two validation_steps")
+    if len(plan.get("non_goals", [])) < 2:
+        errors.append("need at least two remediation non_goals")
+    note = data.get("verification_note", {})
+    if not note.get("failing_assertion") or not note.get("contradictory_artifact") or not note.get("resolution"):
+        errors.append("verification_note incomplete")
+    return errors
+
+
+def render_markdown(data: dict) -> str:
+    lines = [
+        "# Root Cause Brief",
+        "",
+        f"- Variant: `{data['variant_id']}`",
+        f"- Accepted suspect: `{data['accepted']}`",
+        "",
+        "## Ranked Suspects",
+    ]
+    for entry in data["ranking"]:
+        lines.extend(
+            [
+                f"### {entry['rank']}. {entry['suspect_id']}",
+                f"- Role: `{entry['role']}`",
+                f"- File: `{entry['file']}`",
+                f"- Symbol: `{entry['symbol']}`",
+                f"- Summary: {entry['summary']}",
+                f"- Evidence: {', '.join(entry['evidence_paths'])}",
+                "",
+            ]
+        )
+    lines.append("## Investigation Threads")
+    for thread in data["investigation_threads"]:
+        lines.extend(
+            [
+                f"- Question: {thread['question']}",
+                f"  Files: {', '.join(thread['files'])}",
+                f"  Finding: {thread['finding']}",
+            ]
+        )
+    lines.extend(["", "## Evidence Table", ""])
+    for row in data["evidence_table"]:
+        lines.extend(
+            [
+                f"- Claim: {row['claim']}",
+                f"  File: `{row['file']}`",
+                f"  Symbol: `{row['symbol']}`",
+                f"  Artifact: `{row['test_or_artifact']}`",
+                f"  Why misleading: {row['why_misleading']}",
+            ]
+        )
+    plan = data["remediation_plan"]
+    lines.extend(
+        [
+            "",
+            "## Remediation Plan",
+            f"- Patch target: `{plan['patch_target_file']}` :: `{plan['patch_target_symbol']}`",
+            f"- Why smallest safe patch: {plan['why_smallest_safe_patch']}",
+            f"- Validation steps: {', '.join(plan['validation_steps'])}",
+            f"- Non-goals: {', '.join(plan['non_goals'])}",
+            "",
+            "## Verification Note",
+            f"- Failing assertion: {data['verification_note']['failing_assertion']}",
+            f"- Contradictory artifact: `{data['verification_note']['contradictory_artifact']}`",
+            f"- Resolution: {data['verification_note']['resolution']}",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def cmd_schema() -> int:
+    schema = {
+        "schema_version": SCHEMA_VERSION,
+        "variant_id": VARIANT_ID,
+        "accepted": "S1-fs-alias-normalization",
+        "ranking": [
+            {
+                "suspect_id": "S1-fs-alias-normalization",
+                "rank": 1,
+                "file": "src/release_readiness/adapters/fs_source.py",
+                "symbol": "normalize_fs_owner_alias",
+                "role": "primary",
+                "summary": "true root cause summary",
+                "evidence_paths": ["src/release_readiness/adapters/fs_source.py"],
+            }
+        ],
+        "investigation_threads": [
+            {"question": "thread question", "files": ["path"], "finding": "finding"}
+        ],
+        "evidence_table": [
+            {
+                "claim": "claim",
+                "file": "path",
+                "symbol": "symbol",
+                "test_or_artifact": "artifact",
+                "why_misleading": "why",
+            }
+        ],
+        "remediation_plan": {
+            "patch_target_file": "src/release_readiness/adapters/fs_source.py",
+            "patch_target_symbol": "normalize_fs_owner_alias",
+            "why_smallest_safe_patch": "why",
+            "validation_steps": ["pytest tests/test_root_cause_map.py -q", "inspect rendered output"],
+            "non_goals": ["do not patch renderer", "do not broad-rewrite aggregation"],
+        },
+        "verification_note": {
+            "failing_assertion": "exact assertion",
+            "contradictory_artifact": "artifact path",
+            "resolution": "resolution",
+        },
+    }
+    print(json.dumps(schema, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_validate(path: Path) -> int:
+    try:
+        data = load_input(path)
+    except Exception as exc:
+        return fail(f"unable to read {path}: {exc}")
+    errors = validate(data)
+    if errors:
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1
+    print("valid")
+    return 0
+
+
+def cmd_submit(path: Path) -> int:
+    try:
+        data = load_input(path)
+    except Exception as exc:
+        return fail(f"unable to read {path}: {exc}")
+    errors = validate(data)
+    if errors:
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1
+    BRIEF_DIR.mkdir(parents=True, exist_ok=True)
+    (BRIEF_DIR / "manager_brief.json").write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    (BRIEF_DIR / "manager_brief.md").write_text(render_markdown(data) + "\n")
+    print("submitted")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 2:
+        return fail("usage: cnb55-brief {schema|validate|submit} [file]")
+    command = argv[1]
+    if command == "schema":
+        return cmd_schema()
+    if command in {"validate", "submit"}:
+        if len(argv) != 3:
+            return fail(f"usage: cnb55-brief {command} FILE")
+        path = Path(argv[2])
+        return cmd_validate(path) if command == "validate" else cmd_submit(path)
+    return fail(f"unknown command: {command}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

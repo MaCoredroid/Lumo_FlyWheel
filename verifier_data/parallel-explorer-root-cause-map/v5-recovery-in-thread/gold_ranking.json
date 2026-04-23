@@ -1,0 +1,40 @@
+{
+  "aggregation_file": "src/release_readiness/core/aggregation.py",
+  "aggregation_suspect_id": "S2-aggregation-grouping",
+  "aggregation_symbol": "merge_blocked_owner_rows",
+  "allowed_write_paths": [
+    "brief",
+    "brief_input.json"
+  ],
+  "baseline_scores": {
+    "empty": 0,
+    "oracle": 100,
+    "renderer_shortcut": 20
+  },
+  "contradictory_artifact_path": "incident_context/INC-447-renderer-rollback.md",
+  "env_suspect_id": "S4-env-watchlist-parser",
+  "pass_bar": 60,
+  "patch_target_file": "src/release_readiness/adapters/fs_source.py",
+  "patch_target_symbol": "normalize_fs_owner_alias",
+  "primary_file": "src/release_readiness/adapters/fs_source.py",
+  "primary_suspect_id": "S1-fs-alias-normalization",
+  "primary_symbol": "normalize_fs_owner_alias",
+  "readonly_tree_hashes": {
+    ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+    "AGENTS.md": "ed810cb9ae86c5f2a29eb28eab0f7c55083d56109fdd71b2750de6683f6c48e2",
+    "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+    "artifacts": "96e08e025d921a94351a25aced2a1ea5b5a37964e0e009f071afa35e45e29f97",
+    "bin": "e690d0e20961a52ba4b487cb273c842e61ff975ad475652f987f8a463aea2453",
+    "docs": "49fccae75a4a290858c6dd0c5fe3e226e0b016cd34ceb5d498e094f03ce9aaa6",
+    "incident_context": "84619c45c2179076d4eb817c2add88a717cf2615048b30a7b6dbcc32f4c80246",
+    "release_context": "3c275bfbbf92c6470b1360355cc0bc34c8f6059d6b5ceb543fce98300ac9730a",
+    "src": "9342b7142a8d3b1cf4fc4936ea2dcb50a9c813eda47f41a44ed0c62f01d79189",
+    "tests": "e2cbe5309324ff58d678a6b706f9cdbf9ad6e442a1880358a4651d06ddfe1c53"
+  },
+  "renderer_file": "src/release_readiness/renderers/markdown_renderer.py",
+  "renderer_suspect_id": "S3-renderer-duplicate-headings",
+  "renderer_symbol": "render_blocked_owner_section",
+  "required_context_path": "incident_context/inc-447-renderer-rollback.md",
+  "required_test_quote": "assert summary[\"blocked_owner_total\"] == 2, \"scheduler aliases should collapse to the same blocked owner\"",
+  "variant_id": "v5-recovery-in-thread"
+}

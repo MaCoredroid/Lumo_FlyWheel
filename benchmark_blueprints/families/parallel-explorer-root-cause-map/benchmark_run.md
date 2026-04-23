@@ -1,77 +1,94 @@
 # Benchmark Run: `parallel-explorer-root-cause-map`
 
-## Run Metadata
+## Model Under Test
 
-- Run type: child-subagent benchmark attempt
-- Model: `gpt-5.4`
-- Reasoning effort: `high`
-- Agent id: `019da330-e928-7362-8458-31c62e37c1ff`
-- Context restriction: family-local artifacts only under this family directory
+```
+codex exec --model gpt-5.4 --reasoning-effort high
+```
 
-## Attempt Summary
+## Target Difficulty Shape
 
-The solver produced a plausible root-cause brief, a ranked suspect list, an evidence table, a bounded remediation plan, and a verification note. The answer correctly oriented around normalization flowing into aggregation and ruled out the renderer as the primary cause, but it relied heavily on family-spec language rather than benchmark-workspace evidence.
+| Variant | Added difficulty axis | Probe target |
+|---|---|---:|
+| `v1-clean-baseline` | clean normalization-versus-renderer read | ~28 |
+| `v2-noisy-distractor` | stale renderer-centric artifacts | ~24 |
+| `v3-dirty-state` | sunk-cost renderer patch trap | ~20 |
+| `v4-multi-corpus-objective` | hotfix-scope constraint against aggregation rewrite | ~16 |
+| `v5-recovery-in-thread` | prior renderer rollback must be acknowledged | ~10 |
 
-Most important failure mode:
+Family target:
 
-- exact symbol names were missing
-- the evidence table cited `task_spec.md` language as evidence
-- the verification note could not quote the actual failing assertion from the workspace
+- family mean in `[15, 25]`
+- max variant mean `<= 40`
+- at least one variant mean `<= 10`
+- monotonic non-increasing V1 → V5 within `±3`
 
-## Scoring Against `evaluator_contract.md`
+## attempt_00 — baseline family design
 
-### Structure And Submission Completeness: 16 / 20
+Design goals:
 
-- suspect list present: `5 / 5`
-- evidence table present: `8 / 10`
-- verification note plus non-goals present: `3 / 5`
+- make the true cause live in `normalize_fs_owner_alias()` feeding `merge_blocked_owner_rows()`
+- keep `render_blocked_owner_section()` visibly noisy but causally downstream
+- force evidence-backed disproof of stale docs and operator notes
+- use a structured CLI brief so the scorer can grade exact symbols and exact artifact references deterministically
+- keep remediation read-only and bounded: identify the smallest safe patch, not implement it
 
-Reason for loss:
+Seeded false leads:
 
-- the verification note did not contain the actual failing assertion text from the benchmark workspace
+- duplicated markdown headings
+- stale `docs/triage-policy.md` guidance
+- V3 abandoned renderer hotfix patch
+- V4 temptation to dedupe inside aggregation
+- V5 temptation to repeat a previously rolled-back renderer fix
 
-### Causal Accuracy And Symbol-Level Tracing: 6 / 35
+## attempt_01 — family generation + deterministic sanity
 
-- causal direction roughly correct: `6 / 15`
-- adapter, aggregation, renderer, and artifact references with exact symbols: `0 / 10`
-- competing-evidence explanation: `0 / 10`
+Completed in this turn:
 
-Reason for loss:
+- authored full workspace bundles for V1–V5
+- authored family CLI `bin/cnb55-brief`
+- authored deterministic scorer with dual-band output and integrity checks
+- generated oracle briefs, workspace manifests, gold data, milestone scripts, and manifest lock
+- generated verification matrices for V1 and V5
+- verified the seeded visible failure in V1 with `pytest tests/test_root_cause_map.py -q`
 
-- symbol-level tracing was missing and the answer explicitly admitted the exact symbols were unavailable
-- the explanation depended on benchmark-family prose rather than workspace-grounded evidence
+Observed deterministic baselines:
 
-### False-Lead Disproof And Contradictory-Artifact Handling: 4 / 20
+- oracle: `100 / 100` on all five variants
+- empty: `0 / 100` on all five variants
+- renderer-shortcut: `20 / 100` on all five variants
 
-- renderer false lead ruled out in principle: `4 / 10`
-- contradictory artifact handled with exact evidence: `0 / 10`
+Verification matrix snapshots:
 
-Reason for loss:
+- V1 (`verification_matrix.md`):
+  - Oracle `100`
+  - Empty `0`
+  - RAWR grounding stripped `30` via `grounding_stripped`
+  - Pick renderer `20`
+  - Top1 wrong `20`
+  - Delete-tests adversarial `0` with integrity flag
+- V5 (`verification_matrix_v5-recovery-in-thread.md`):
+  - Oracle `100`
+  - Empty `0`
+  - RAWR grounding stripped `30` via `grounding_stripped`
+  - Pick renderer `20`
+  - Top1 wrong `20`
+  - Delete-tests adversarial `0` with integrity flag
 
-- the answer named the false lead but did not disambiguate it with actual workspace artifacts
+Visible workspace failure:
 
-### Orchestration Synthesis Across Non-Overlapping Subquestions: 4 / 15
+- `pytest tests/test_root_cause_map.py -q` fails with:
+  - `assert summary["blocked_owner_total"] == 2, "scheduler aliases should collapse to the same blocked owner"`
+  - observed `4 == 2`
 
-- two-pass synthesis claimed: `4 / 15`
+Live probe status at this stage:
 
-Reason for loss:
-
-- the answer described two lines of inquiry, but there was no benchmark-workspace evidence showing true non-overlapping exploration
-
-### Bounded Remediation Quality And Non-Goals: 7 / 10
-
-- remediation remained bounded and non-goals were explicit: `7 / 10`
-
-## Caps Applied
-
-- Effective cap triggered by evaluator intent: the submission used family-local benchmark-design files as primary evidence rather than benchmark-workspace evidence
-
-## Final Score
-
-- Final score: `20 / 100`
-
-## Final Judgment
-
-- Target judgment: acceptable
-- Reason: the run stayed meaningful but could not exceed a low score without exact symbols, exact failing assertions, and real workspace evidence
-
+- one live V1 smoke run completed via `verifiers/parallel-explorer-root-cause-map/run_live_probe.py`
+- observed V1 smoke result after rescoring with cache-safe integrity rules:
+  - `codex_exit=0`
+  - `codex_seconds=152`
+  - `raw_score_pre_ceiling=89`
+  - final `P_benchmark=35`
+  - ceiling: `missing_contradictory_disproof`
+  - misses: contradictory artifact disproof and explicit non-goals ruling out renderer + aggregation churn
+- interpretation: the workspace and CLI are live-runnable, and the family is already producing a meaningful first-live miss; the **full live probe loop is still pending**

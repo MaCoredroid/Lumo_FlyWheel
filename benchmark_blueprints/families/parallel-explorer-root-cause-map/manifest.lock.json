@@ -1,0 +1,120 @@
+{
+  "cli": {
+    "cnb55_brief_sha256": "b83c979137b48175b9cee0535453e91659f0d22fb8a7cf831865d70de78f1623"
+  },
+  "grader": {
+    "score_ranking_py_sha256": "ee23e0a0a53d83ad94ba11148bbe5f738d3a8ad4e30720d6dadded703b642607",
+    "verify_sh_sha256": "4b05e7c10ae4a52387bef7c2d79cf7c94f39d40ea96c4d024f7ec0f075d175d3"
+  },
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_ranking_sha256": "5e619c531e1565fdbcfa357c54aa2644618e419d96a26bd8859ddc0c6d1ac765",
+        "oracle_brief_json_sha256": "8477c5032a31026542ad40a4b2e1f80f838257422055c9b963755d9900eae52b",
+        "oracle_brief_md_sha256": "886b52ecc333f8d956d210d0ac0a3dbbfeb9c2b913d0ff922d9ae58d55d1580d",
+        "workspace_manifest_sha256": "5502445dc2dda4a19a7b6cdb1b10c28974f5b41f17fbf8cd2e1e70daad31700d"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "862d289ccc8f205cc1fcd6605334a45a0fc6292424b98eeb9b227c4a2f8fa4ee",
+        "AGENTS.md": "ae0524b7601a2d087f4e63bc43d62e075ce7b1c00ba5c5076d10a84d92c6d1ea",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts": "96e08e025d921a94351a25aced2a1ea5b5a37964e0e009f071afa35e45e29f97",
+        "bin": "e690d0e20961a52ba4b487cb273c842e61ff975ad475652f987f8a463aea2453",
+        "docs": "49fccae75a4a290858c6dd0c5fe3e226e0b016cd34ceb5d498e094f03ce9aaa6",
+        "src": "9342b7142a8d3b1cf4fc4936ea2dcb50a9c813eda47f41a44ed0c62f01d79189",
+        "tests": "e2cbe5309324ff58d678a6b706f9cdbf9ad6e442a1880358a4651d06ddfe1c53"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_ranking_sha256": "edea260176a7a503cc11b1846fc13ee3e38f0f0d0a7e2e5bdbdacdbdf9abbb3b",
+        "oracle_brief_json_sha256": "9271a01403a56995b3282dd1d25c8694bcf4555fddaf45ef98addc290797be8f",
+        "oracle_brief_md_sha256": "54fab64e26ce9a48cb654bb65f1839bbee00d6b3ce530ce036a5e816aa601a12",
+        "workspace_manifest_sha256": "8da2de997352e1064c0c03e058d513182521cab6b6fe9ab68abde4a97b5f1381"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "f1fb40a47c903162d580ada97b07c0c73f4b7607bda5d4d078c09f1642f354dd",
+        "AGENTS.md": "8179865899cf5203348d9864cda39007c66486586877843bc1000cebc8faefee",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts": "6d0766a9feac8ccea905e4784d73c191062637c3dd9585e2ab3018e389d97bb0",
+        "bin": "e690d0e20961a52ba4b487cb273c842e61ff975ad475652f987f8a463aea2453",
+        "docs": "49fccae75a4a290858c6dd0c5fe3e226e0b016cd34ceb5d498e094f03ce9aaa6",
+        "src": "9342b7142a8d3b1cf4fc4936ea2dcb50a9c813eda47f41a44ed0c62f01d79189",
+        "tests": "e2cbe5309324ff58d678a6b706f9cdbf9ad6e442a1880358a4651d06ddfe1c53"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_ranking_sha256": "e2c8c87403f62e8f4fc77409e9298a770933a7b3bd1a5db7f5533c20ae6fbc0d",
+        "oracle_brief_json_sha256": "d290510726eaf4da1a6a62d5d49545a9e8b7d0e980f1502b617fa1d2e0df30da",
+        "oracle_brief_md_sha256": "e95ccae83636ae3be3f834d74c7bd353f13679cc1bb8afb9e961e2aec60f07d4",
+        "workspace_manifest_sha256": "f63f91457ad1c6756aafcc95f4723a845d7b46bc984d314daaf08d30a9398825"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "fdc62f17d056667cff21d79f952b69698e909ea4d276ac5b4fff4947912b2301",
+        "AGENTS.md": "20a4e44466a2ef103df34f416718b09e401d8bf5b6449f5fb5cb9c4a98552db2",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts": "d5953dc33c0986560e4bde100e210e68c7017a51de40eba338801e2880270afd",
+        "bin": "e690d0e20961a52ba4b487cb273c842e61ff975ad475652f987f8a463aea2453",
+        "docs": "49fccae75a4a290858c6dd0c5fe3e226e0b016cd34ceb5d498e094f03ce9aaa6",
+        "src": "9342b7142a8d3b1cf4fc4936ea2dcb50a9c813eda47f41a44ed0c62f01d79189",
+        "tests": "e2cbe5309324ff58d678a6b706f9cdbf9ad6e442a1880358a4651d06ddfe1c53"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_ranking_sha256": "e4cc6b457f1c0c457c5dc537701e2ca812733a0be2bef1ec2ba08138a4b86d3e",
+        "oracle_brief_json_sha256": "605175fb5c117409c51e1ae010a0f54f9c6b727b8865542ea00e3d8317224a5b",
+        "oracle_brief_md_sha256": "f27e5bcfec5b6e08de26eba60af25fa4a1a980d8d78eb850d591bbeec21c3b2c",
+        "workspace_manifest_sha256": "9a4df68c695e998a7a827afe24d323cb58d30dca277452b2502043f277e1fb24"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+        "AGENTS.md": "338cce7da42121491978ae0d377c13379a23386478b5bd198a0b3d25502a01f6",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts": "96e08e025d921a94351a25aced2a1ea5b5a37964e0e009f071afa35e45e29f97",
+        "bin": "e690d0e20961a52ba4b487cb273c842e61ff975ad475652f987f8a463aea2453",
+        "docs": "49fccae75a4a290858c6dd0c5fe3e226e0b016cd34ceb5d498e094f03ce9aaa6",
+        "release_context": "9ee05777992355a8c89a80389c90f5a227acbdacc33694e2fd204652c033b187",
+        "src": "9342b7142a8d3b1cf4fc4936ea2dcb50a9c813eda47f41a44ed0c62f01d79189",
+        "tests": "e2cbe5309324ff58d678a6b706f9cdbf9ad6e442a1880358a4651d06ddfe1c53"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_ranking_sha256": "06a2658b578f994e89d7c0d546bdb947b9ff65810d9e18cd6def95b4724db871",
+        "oracle_brief_json_sha256": "7da74bf4ca9a89765d253f3f6280d0f02b2b832858bbfabe25a862e646318dac",
+        "oracle_brief_md_sha256": "e7cdbfb8f0ee94a4838ef834d6d533674fa981c8850c9461db8bfa5685a1ca06",
+        "workspace_manifest_sha256": "bb3765a18b5b5bf81650dd6cdd1f5cc38664854d06b998ca33c26695d60975d3"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+        "AGENTS.md": "ed810cb9ae86c5f2a29eb28eab0f7c55083d56109fdd71b2750de6683f6c48e2",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts": "96e08e025d921a94351a25aced2a1ea5b5a37964e0e009f071afa35e45e29f97",
+        "bin": "e690d0e20961a52ba4b487cb273c842e61ff975ad475652f987f8a463aea2453",
+        "docs": "49fccae75a4a290858c6dd0c5fe3e226e0b016cd34ceb5d498e094f03ce9aaa6",
+        "incident_context": "84619c45c2179076d4eb817c2add88a717cf2615048b30a7b6dbcc32f4c80246",
+        "release_context": "3c275bfbbf92c6470b1360355cc0bc34c8f6059d6b5ceb543fce98300ac9730a",
+        "src": "9342b7142a8d3b1cf4fc4936ea2dcb50a9c813eda47f41a44ed0c62f01d79189",
+        "tests": "e2cbe5309324ff58d678a6b706f9cdbf9ad6e442a1880358a4651d06ddfe1c53"
+      }
+    }
+  }
+}

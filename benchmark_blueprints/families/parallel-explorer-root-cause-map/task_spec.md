@@ -2,34 +2,97 @@
 
 ## Task Prompt
 
-Investigate why the `release_readiness` CLI started over-reporting blocked owners after a scheduler refactor. You are allowed to use explorer-style subagents for read-heavy analysis, but you must return one unified root-cause brief and one bounded remediation plan. Do not land speculative code. The benchmark bundle includes conflicting runtime logs, stale docs, and several plausible suspects across aggregation, adapter normalization, and report rendering.
+Investigate why the `release_readiness` CLI started over-reporting blocked owners after a scheduler refactor. The workspace contains a plausible renderer symptom, stale operator guidance, and at least one tempting in-progress hotfix that is not the real fix. You may use explorer-style subagents for read-heavy analysis, but the final deliverable is one unified root-cause brief plus one bounded remediation plan. Do not land speculative code.
 
-Your final answer in the task should identify the true root cause, explain why the other top suspects are not primary causes, cite exact files and functions, and propose the smallest safe patch plan.
+Your finished brief must identify the true causal path from owner normalization into aggregation, explain why the renderer is only a downstream symptom, quote the exact failing assertion, and name the smallest safe patch target. Strong answers show at least two non-overlapping investigation threads and explicitly disprove at least one attractive false lead.
+
+## Structured Output Contract
+
+The family uses a CLI-shaped deliverable, even though the task is read-only.
+
+- Author `brief_input.json` at the workspace root.
+- Run `./bin/cnb55-brief validate brief_input.json`.
+- Run `./bin/cnb55-brief submit brief_input.json`.
+- The CLI writes canonical outputs to `brief/manager_brief.json` and `brief/manager_brief.md`.
+
+Schema version: `cnb55.root_cause_brief.v1`
+
+Required top-level fields:
+
+- `schema_version`
+- `variant_id`
+- `accepted`
+- `ranking`
+- `investigation_threads`
+- `evidence_table`
+- `remediation_plan`
+- `verification_note`
+
+## Suspect Taxonomy
+
+The solver must rank these seeded suspects:
+
+- `S1-fs-alias-normalization`
+- `S2-aggregation-grouping`
+- `S3-renderer-duplicate-headings`
+- `S4-env-watchlist-parser`
+
+The point of the task is not naming an arbitrary component. The point is proving which suspect is primary, which one only amplifies the defect, and which one is merely downstream-visible.
 
 ## Workspace Bundle
 
-- Medium Python repo with:
-  - `src/release_readiness/core/aggregation.py`
-  - `src/release_readiness/adapters/fs_source.py`
-  - `src/release_readiness/adapters/env_source.py`
-  - `src/release_readiness/renderers/markdown_renderer.py`
-  - `tests/` with mostly passing suites and one failing investigative assertion
-  - `docs/triage-policy.md`
-  - `artifacts/logs/` with contradictory operator notes and runtime snapshots
-  - `artifacts/review/incident_thread.md` summarizing a noisy handoff
-- One visible failing command:
-  - `pytest tests/test_root_cause_map.py -q`
-- No patch is required for success; the output artifact is a report plus bounded plan.
+Each variant ships the same top-level structure:
 
-## Seeded Orchestration Problem
+- `AGENTS.md`
+- `Dockerfile`
+- `bin/cnb55-brief`
+- `brief/`
+- `src/release_readiness/`
+- `tests/test_root_cause_map.py`
+- `docs/triage-policy.md`
+- `artifacts/logs/`
+- `artifacts/review/incident_thread.md`
 
-The parent agent should split the read-heavy investigation into at least two non-overlapping explorer questions, for example:
+Variant-specific optional corpora:
 
-- trace how owner totals are computed and where duplicates can enter
-- trace how environment aliases and watchlist owners are normalized before aggregation
-- inspect whether Markdown rendering is only exposing an upstream defect or introducing one
+- `release_context/` for V4+
+- `incident_context/` for V5
+- `artifacts/wip/` for V3
 
-The seeded trap is that renderer-facing evidence is more salient than the true defect. Only a cross-check of normalization, aggregation, and rendered output can distinguish the primary cause from downstream symptoms. A shallow single-path read can produce a plausible but wrong answer.
+## Deliverables
+
+- Ranked suspect list with all four suspects, contiguous ranks, and exact file + symbol references.
+- At least two non-overlapping investigation threads.
+- Evidence table with at least four rows.
+- One bounded remediation plan naming the intended patch target and explicit non-goals.
+- One verification note quoting the exact failing assertion and one contradictory artifact that was ruled out.
+
+## Variant Progression
+
+### V1 Clean Baseline
+
+- Minimal false leads.
+- True cause is discoverable by reading adapter normalization plus aggregation.
+
+### V2 Noisy Distractor
+
+- Adds stale operator notes and doc language that over-emphasize renderer output.
+- Strong answer must disprove stale renderer-centric guidance with workspace evidence.
+
+### V3 Dirty State
+
+- Adds an abandoned renderer hotfix patch under `artifacts/wip/`.
+- Strong answer must avoid finishing sunk-cost work or treating that patch as the fix.
+
+### V4 Multi-Corpus Objective
+
+- Adds `release_context/` clarifying the hotfix window and downstream contract risk.
+- Strong answer still identifies the same root cause, but the remediation plan must stay adapter-local rather than proposing a broad aggregation rewrite.
+
+### V5 Recovery In Thread
+
+- Adds `incident_context/` documenting a prior renderer-only hotfix that was rolled back.
+- Strong answer must acknowledge the rollback and explicitly avoid re-selecting the renderer path.
 
 ## Required Surfaces
 
@@ -42,45 +105,28 @@ Preferred:
 - `review`
 - `worktree`
 
-## Deliverables
-
-- Root-cause brief with exact file and symbol references
-- Ranked suspect list covering at least three candidate causes
-- Evidence table with at least four rows: claim, exact file plus symbol, exact test or artifact evidence, and why competing evidence is misleading
-- One bounded remediation plan with explicit non-goals
-- Verification note quoting the exact failing assertion and at least one contradictory artifact entry that was ruled out with explanation
-
-## Grader Contract
-
-The task scores well only if the submission:
-
-- identifies the true causal path from normalization into aggregation
-- explicitly rules out the renderer as a primary cause
-- cites at least one adapter symbol, one aggregation symbol, one renderer symbol ruled out, and one test or artifact location, all with correct causal roles
-- proposes a minimal patch plan that fixes source normalization rather than output formatting
-- explains why at least one conflicting log, doc, or review artifact is stale, misleading, or downstream-only
-- presents findings from at least two non-overlapping explorer questions and integrates both into the final brief
-- avoids speculative code changes outside the named bounded remediation
-
-Low-score behaviors include generic "investigate adapters" advice, grep-only blame assignment, repeating task-spec language without workspace-derived symbol evidence, or a plan that edits the renderer first.
-
-## Red-Team Traps
-
-- Blame `markdown_renderer.py` because visible logs mention doubled headings and blocked totals
-- Treat stale `docs/triage-policy.md` language as source-of-truth over code paths
-- Read only one suspect path and ignore conflicting evidence in adapter normalization
-- Propose a broad refactor instead of one bounded fix
-- Omit disproof for top false-positive suspects
-
 ## Quality Gate
 
-- Probe target: naive GPT-5.4/high explorer fanout should not exceed 30/100 by summarizing logs and naming the most visible suspect.
-- Hardening applied after adversarial probe:
-  - removed the answer leak naming the true root cause directly
-  - added an evidence-table requirement and contradictory-artifact disproof requirement
-  - made orchestration credit depend on synthesizing at least two non-overlapping explorer questions
-  - made symbol-level causal tracing mandatory before substantial credit
-- Probe record:
-  - probe model: child GPT-5.4/high adversarial review
-  - initial verdict: over 30 too easy because the first draft leaked the answer and allowed spec-completable writeups
-- Current difficulty judgment: under 30 likely for a naive GPT-5.4/high solver after hardening
+Naive solver target:
+
+- leaderboard probe should struggle to stay above `30 / 100` without exact symbol tracing, contradictory-artifact disproof, and a bounded remediation target.
+
+Current hardening levers:
+
+- symbol-level scoring instead of prose-only scoring
+- explicit penalty for renderer-first fixes
+- explicit penalty for missing contradictory-artifact disproof
+- explicit penalty for single-path investigations
+- variant-gated penalties for sunk-cost patch completion, aggregation-overreach, and incident-blind rerender proposals
+
+## Saturation And Renewal Plan
+
+Trigger:
+
+- if the moving mean `P_benchmark` exceeds `80` for two consecutive probe rounds, mark the family `saturation_renewal_due`.
+
+Planned renewal queue:
+
+- add a V6 variant where scheduler aliases change mid-thread after the first investigation pass
+- add a V7 variant where two contradictory operator snapshots must be reconciled before the root cause can be trusted
+- retire the easiest floor variant if V1 becomes pure formality

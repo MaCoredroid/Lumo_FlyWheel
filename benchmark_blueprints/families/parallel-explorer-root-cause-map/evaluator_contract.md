@@ -2,87 +2,101 @@
 
 ## Purpose
 
-Score a read-heavy orchestration task where the solver must decompose investigation work across non-overlapping explorer questions, synthesize the results, and identify the true root cause without landing speculative code.
+Score a read-heavy orchestration task where the solver must decompose investigation work across non-overlapping explorer questions, synthesize the results, and identify the true causal path without shipping speculative code.
 
-## Required Submission Artifacts
+## Submission Artifacts
 
-- Root-cause brief
-- Ranked suspect list
-- Evidence table
-- Bounded remediation plan
-- Verification note
+Required:
 
-## 100-Point Breakdown
-
-- 20 points: structure and submission completeness
-- 35 points: causal accuracy and symbol-level tracing
-- 20 points: false-lead disproof and contradictory-artifact handling
-- 15 points: orchestration synthesis across non-overlapping subquestions
-- 10 points: bounded remediation quality and non-goals
-
-## Trusted Evaluation Phases
-
-### Phase 1: Structure Gate
-
-Reject or cap at 20 if any of these are missing:
-
-- ranked suspect list with at least three candidates
+- ranked suspect list covering all four seeded suspects
+- at least two investigation threads
 - evidence table with at least four rows
-- explicit remediation non-goals
-- verification note quoting a failing assertion
+- bounded remediation plan
+- verification note
 
-Scoring:
+## Score Breakdown
 
-- 5 points: ranked suspect list quality
-- 10 points: evidence table completeness
-- 5 points: verification note and remediation non-goals
+Visible deterministic band (`M_training`, 90 points total):
 
-### Phase 2: Causal Accuracy Gate
+- 25 points: structural completeness
+- 36 points: correct primary cause + symbol-level causal trace
+- 14 points: renderer disproof + contradictory-artifact handling
+- 15 points: bounded remediation target + non-goals
 
-Award core credit only if the submission:
+Probe-only deterministic band (`P_only`, 10 points total):
 
-- traces a causal path from normalization into aggregation
-- names one adapter symbol, one aggregation symbol, one renderer symbol ruled out, and one test or artifact location
-- explains why at least one conflicting artifact is stale, misleading, or downstream-only
+- 4 points: suspect-ranking richness
+- 3 points: cross-thread synthesis quality
+- 3 points: bounded-plan clarity
 
-Cap at 30 if the answer blames only the renderer, gives grep-level references, or repeats prompt terminology without symbol-level evidence.
+Total `P_benchmark = M_band + P_only`.
 
-Scoring:
+## Visible Checks
 
-- 15 points: correct causal path from normalization into aggregation
-- 10 points: correct adapter, aggregation, renderer-ruled-out, and artifact references
-- 10 points: explanation of why competing evidence is downstream-only
+### Structure Gate — 25 points
 
-### Phase 3: Orchestration Gate
+- 6 points: ranked suspect list is complete and contiguous
+- 6 points: at least two non-overlapping investigation threads
+- 8 points: evidence table has at least four rows with file + symbol references
+- 5 points: verification note and remediation non-goals are present
 
-Award orchestration credit only if the final brief clearly integrates findings from at least two non-overlapping explorer questions. A single linear read, even if partially correct, cannot score above 30.
+### Causal Accuracy Gate — 36 points
 
-Scoring:
+- 10 points: accepted suspect is `S1-fs-alias-normalization`
+- 10 points: top-ranked file + symbol are `src/release_readiness/adapters/fs_source.py` + `normalize_fs_owner_alias`
+- 8 points: aggregation suspect is present with `src/release_readiness/core/aggregation.py` + `merge_blocked_owner_rows`
+- 8 points: exact failing assertion is quoted and tied back to the normalization → aggregation path
 
-- 15 points: synthesis of at least two non-overlapping explorer findings
-- 10 points: bounded remediation quality
+### Disproof Gate — 14 points
 
-## Hidden Checks
+- 8 points: renderer suspect is explicitly ruled downstream-only with `src/release_readiness/renderers/markdown_renderer.py` + `render_blocked_owner_section`
+- 6 points: one contradictory artifact is explicitly named and explained away as stale, misleading, or downstream-only
 
-- hidden fixture confirms the renderer is a downstream symptom rather than the primary cause
-- hidden scoring script checks for one adapter symbol, one aggregation symbol, and one ruled-out renderer symbol
-- hidden artifact set includes at least one contradictory clue that must be explicitly disambiguated
+### Remediation Gate — 15 points
 
-## Red-Team Defenses
+- 10 points: patch target stays on `src/release_readiness/adapters/fs_source.py` + `normalize_fs_owner_alias`
+- 5 points: non-goals explicitly rule out renderer-first or broad aggregation rewrite work
 
-- no substantial credit for naming the most obvious suspect without disproof work
-- no substantial credit for broad rewrite plans that skip the bounded remediation requirement
-- no orchestration credit for answers that could have been written from the spec alone
+## Probe-Only Checks
+
+- suspect summaries are specific rather than generic
+- the two investigation threads are genuinely different surfaces
+- the remediation plan names a smallest safe patch and validation sequence
 
 ## Score Caps
 
-- Missing any required artifact: max 20
-- No symbol-level evidence: max 30
-- No contradictory-artifact disproof: max 35
-- No multi-path synthesis: max 30
-- Speculative code rewrite plan instead of bounded remediation: max 40
+- missing brief file: max `0`
+- malformed structured brief: max `10`
+- wrong primary suspect: max `20`
+- no symbol-level causal trace: max `30`
+- renderer selected as primary cause: max `25`
+- fewer than two non-overlapping investigation threads: max `30`
+- missing contradictory-artifact disproof: max `35`
+- renderer-first remediation target: max `35`
+- V3 sunk-cost renderer patch selected as fix: max `30`
+- V4 aggregation-rewrite plan despite hotfix constraints: max `40`
+- V5 no incident acknowledgment: max `15`
+
+## Hidden Checks
+
+- hidden scorer verifies exact seeded suspect ids, not free-form prose guesses
+- hidden scorer verifies one adapter symbol, one aggregation symbol, and one renderer symbol with the correct causal roles
+- hidden scorer verifies the exact failing assertion string
+- hidden scorer verifies the contradictory artifact path for each variant
+- hidden scorer verifies the patch target remains on source normalization rather than renderer formatting
+
+## Baselines
+
+- oracle brief must score `>= 90`
+- empty brief must score `0`
+- shortcut brief that picks the renderer as primary must score `<= 25`
 
 ## Hardness Judgment
 
-- Current judgment: under 30 likely for a naive `gpt-5.4` / `high` solver
-- Why: the contract requires falsifiable evidence, symbol-level tracing, and multi-path synthesis before substantial credit
+Expected failure modes for naive probes:
+
+- blame the renderer because the visible output is duplicated
+- stop after one thread and never reconcile the conflicting artifacts
+- propose a broad dedupe in aggregation instead of fixing source normalization
+- treat V3’s abandoned renderer patch as momentum instead of noise
+- ignore V5’s rollback note and re-select the previously reverted renderer fix

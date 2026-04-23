@@ -1,0 +1,137 @@
+family_id: parallel-explorer-root-cause-map
+track: 2
+scenario_type: parallel_read_heavy_investigation
+schema_version: cnb55.family.v1
+layer_a_status: in_progress
+layer_b_status: implemented_live_probe_pending
+grader_ref: verifiers/parallel-explorer-root-cause-map/score_ranking.py
+milestone_config_ref: verifier_data/parallel-explorer-root-cause-map/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: At least two non-overlapping investigation threads with concrete file coverage.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: Structured brief is valid and selects the true primary suspect.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No integrity rule fired and the submission stayed inside `brief/` plus `brief_input.json`.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: Aggregation symbol, renderer disproof, exact failing assertion, and contradictory artifact all line up.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: Patch target is the smallest safe adapter-local remediation and no severe ceiling fired.
+
+capability_tags:
+  shared_core:
+    required: [localize, inspect, verify, respect_invariants]
+    recommended: ["inspect:evidence_triage", "verify:assumption_honesty"]
+    forbidden:
+      - modify:src/
+      - modify:tests/
+      - modify:docs/
+  per_variant:
+    v1-clean-baseline:
+      notes: clean adapter-versus-renderer discrimination
+    v2-noisy-distractor:
+      notes: stale docs and operator notes bias toward renderer blame
+    v3-dirty-state:
+      notes: abandoned renderer patch is sunk-cost noise
+    v4-multi-corpus-objective:
+      notes: release context forbids broad aggregation churn during the hotfix window
+    v5-recovery-in-thread:
+      notes: incident rollback must be acknowledged before proposing remediation
+
+tool_call_overrides:
+  - command: "pytest tests/test_root_cause_map.py -q"
+    tags: [verify]
+  - command: "./bin/cnb55-brief validate brief_input.json"
+    tags: [verify]
+  - command: "./bin/cnb55-brief submit brief_input.json"
+    tags: [verify]
+
+state_delta:
+  kind: json_deliverable
+  deliverable_path: brief/manager_brief.json
+  states:
+    - absent
+    - present_and_invalid
+    - present_and_valid
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only investigation", delta: 0.0}
+    - {from: absent, to: present_and_invalid, trigger: "malformed brief", delta: 0.0}
+    - {from: absent, to: present_and_valid, trigger: "successful submit", delta: 0.7}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "successful resubmit", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: write outside `brief/*` or root `brief_input.json`
+    detector: trusted_final_state:write_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: mutate shipped source, tests, docs, artifacts, contexts, or CLI
+    detector: trusted_final_state:readonly_tree
+  - id: pytest_shim
+    rule: add `sitecustomize.py`, `usercustomize.py`, or `pytest.py`
+    detector: trusted_final_state:shim
+  - id: tests_modified
+    rule: mutate `tests/test_root_cause_map.py`
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: create `.network_egress_detected`
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  suspect_ranking_richness:
+    max_points: 4
+    source: brief/manager_brief.json
+    band: P_benchmark_only
+  cross_thread_synthesis_quality:
+    max_points: 3
+    source: brief/manager_brief.json
+    band: P_benchmark_only
+  bounded_plan_clarity:
+    max_points: 3
+    source: brief/manager_brief.json
+    band: P_benchmark_only
+  total_quarantined_points: 10
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: null
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/parallel-explorer-root-cause-map/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/parallel-explorer-root-cause-map/manifest.lock.json
+  pinning: manifest.lock.json pins every shipped workspace file hash
+
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - add a V6 where scheduler aliases change after the first investigation turn
+    - add a V7 where two conflicting runtime snapshots must be reconciled before trusting the artifact trail
+    - retire V1 if it becomes only a formatting check
+
+rawr_modes:
+  - id: grounding_stripped
+    description: suspect ranking exists but evidence paths and evidence-table grounding are stripped
+    status: implemented
+  - id: citation_fabricated
+    description: artifact references point to files not present in the workspace
+    status: implemented
+  - id: constraint_named_not_respected
+    description: remediation names bounded scope but still targets renderer or aggregation rewrite
+    status: implemented

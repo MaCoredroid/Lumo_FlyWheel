@@ -1,0 +1,8 @@
+diff --git a/src/release_readiness/renderers/markdown_renderer.py b/src/release_readiness/renderers/markdown_renderer.py
+@@
+-        lines.append(f"### {owner['display_owner']}")
++        if owner['display_owner'] not in seen:
++            lines.append(f"### {owner['display_owner']}")
+
+# abandoned: this hid the duplicate display symptom without changing upstream
+# owner keys

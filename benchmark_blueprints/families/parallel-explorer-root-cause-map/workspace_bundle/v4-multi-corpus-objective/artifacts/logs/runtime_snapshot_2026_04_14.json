@@ -1,0 +1,16 @@
+{
+  "blocked_owner_total": 4,
+  "note": "duplicate owner keys were already present before markdown rendering",
+  "observed_owner_keys": [
+    "team ops",
+    "team-ops",
+    "platform infra",
+    "platform-infra"
+  ],
+  "rendered_headings": [
+    "Team Ops",
+    "team-ops",
+    "Platform Infra",
+    "platform-infra"
+  ]
+}
