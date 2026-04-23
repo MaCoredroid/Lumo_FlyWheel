@@ -1,0 +1,32 @@
+# Probe Report — attempt_04_live_probe_counted
+
+Model: `codex exec --model gpt-5.4 -c 'model_reasoning_effort="high"'`
+Runs per variant: `3`
+Variants: `v1-clean-baseline, v2-noisy-distractor, v3-dirty-state, v4-multi-corpus-objective, v5-recovery-in-thread`
+
+| Variant | n | mean P | stdev P | mean M | stdev M | min | max | scores | ceilings |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| v1-clean-baseline | 3 | 47.67 | 32.06 | 0.4767 | 0.3206 | 25 | 93 | [93, 25, 25] | missing_symbol_adjacency |
+| v2-noisy-distractor | 3 | 98.00 | 0.00 | 0.9800 | 0.0000 | 98 | 98 | [98, 98, 98] | — |
+| v3-dirty-state | 3 | 70.33 | 32.06 | 0.7033 | 0.3206 | 25 | 93 | [25, 93, 93] | missing_symbol_adjacency, pre_owner_routing_claim, store_claimed_as_decision_layer |
+| v4-multi-corpus-objective | 3 | 47.67 | 32.06 | 0.4767 | 0.3206 | 25 | 93 | [25, 25, 93] | missing_symbol_adjacency, store_claimed_as_decision_layer |
+| v5-recovery-in-thread | 3 | 26.67 | 2.36 | 0.2667 | 0.0236 | 25 | 30 | [25, 30, 25] | incident_blind_reselect, missing_symbol_adjacency |
+
+## Layer A checks
+
+- family_mean in [15, 25]: `58.07` -> `FAIL`
+- max variant mean <= 40: `98.00` -> `FAIL`
+- at least one variant mean <= 10: `26.67` -> `FAIL`
+- monotonic V1>=V2>=V3>=V4>=V5 within +/-3: `FAIL`
+
+## Layer B probe metadata
+
+- family mean M_training: `0.5807`
+- current observed stdev M_training: `0.3474`
+
+## Artifacts
+
+- Runs JSONL: `families/request-path-evidence-brief/report/attempt_04_live_probe_counted/probe_runs.jsonl`
+- Summary JSON: `families/request-path-evidence-brief/report/attempt_04_live_probe_counted/summary.json`
+- Logs: `families/request-path-evidence-brief/report/attempt_04_live_probe_counted/logs`
+- Saved artifacts: `families/request-path-evidence-brief/report/attempt_04_live_probe_counted/artifacts`

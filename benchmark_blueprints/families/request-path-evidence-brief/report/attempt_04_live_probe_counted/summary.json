@@ -1,0 +1,137 @@
+{
+  "acceptance": {
+    "at_least_one_variant_le_10": false,
+    "family_mean_window": false,
+    "max_variant_le_40": false,
+    "monotonic_with_tolerance_3": false
+  },
+  "current_observed_stdev_M_training": 0.3474,
+  "family_mean": 58.07,
+  "family_mean_M_training": 0.5807,
+  "max_variant_mean": 98.0,
+  "min_variant_mean": 26.67,
+  "rows": [
+    {
+      "ceilings": [
+        "missing_symbol_adjacency"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.93,
+        0.25,
+        0.25
+      ],
+      "max": 93,
+      "mean": 47.67,
+      "mean_M_training": 0.4767,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        93,
+        25,
+        25
+      ],
+      "stdev": 32.06,
+      "stdev_M_training": 0.3206,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.98,
+        0.98,
+        0.98
+      ],
+      "max": 98,
+      "mean": 98.0,
+      "mean_M_training": 0.98,
+      "min": 98,
+      "n": 3,
+      "scores": [
+        98,
+        98,
+        98
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "ceilings": [
+        "missing_symbol_adjacency",
+        "pre_owner_routing_claim",
+        "store_claimed_as_decision_layer"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.93,
+        0.93
+      ],
+      "max": 93,
+      "mean": 70.33,
+      "mean_M_training": 0.7033,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        93,
+        93
+      ],
+      "stdev": 32.06,
+      "stdev_M_training": 0.3206,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "ceilings": [
+        "missing_symbol_adjacency",
+        "store_claimed_as_decision_layer"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.93
+      ],
+      "max": 93,
+      "mean": 47.67,
+      "mean_M_training": 0.4767,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        25,
+        93
+      ],
+      "stdev": 32.06,
+      "stdev_M_training": 0.3206,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "ceilings": [
+        "incident_blind_reselect",
+        "missing_symbol_adjacency"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.3,
+        0.25
+      ],
+      "max": 30,
+      "mean": 26.67,
+      "mean_M_training": 0.2667,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        30,
+        25
+      ],
+      "stdev": 2.36,
+      "stdev_M_training": 0.0236,
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}

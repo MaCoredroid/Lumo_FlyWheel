@@ -1,8 +1,8 @@
 {
   "grader": {
-    "score_trace_py_sha256": "1debbe64b3e703b3edadec21618e1496626c3eb415706a90ad1cb7462c5b41df"
+    "score_trace_py_sha256": "42f94e9c0a7db87e9dd5ac14c1845f05788ac16f2bf75b01553dc429524f6ff6"
   },
-  "last_regen_utc": "2026-04-23T04:43:29Z",
+  "last_regen_utc": "2026-04-23T05:23:43Z",
   "schema_version": "cnb55.manifest.v2",
   "variants": {
     "v1-clean-baseline": {
@@ -11,7 +11,7 @@
       "observed_oracle_score": 99,
       "observed_shortcut_score": 25,
       "verifier_data": {
-        "gold_path_sha256": "3e597f12f0e271006cc078756f99e97f399303f1f8bae533dba486f67d335aca",
+        "gold_path_sha256": "4c8303ae7ba4c6e19339c9e7b1ea0c3313a1f9f43edc8cd50afac4dc2a28ffd7",
         "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
         "oracle_brief_md_sha256": "b27ebf0cd384bb997f77226b6519187fde62b65cab66390a029483a64e4ec3d0",
         "oracle_correction_md_sha256": "aa616603daf3d6127405e0a03bd9bd5395b8082230126fdd60c4a7042b7ad482",
@@ -20,7 +20,7 @@
       },
       "workspace_trees": {
         ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
-        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "AGENTS.md": "ba5dcab9adf61d0d5747d74cdc5e6d02d40cc2b536a9702c36d7895af1da0254",
         "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
         "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
         "docs": "bb0b95cedf9b879e3463e97d27cd9842a7672f2452906dd787065816af498799",
@@ -35,7 +35,7 @@
       "observed_oracle_score": 99,
       "observed_shortcut_score": 25,
       "verifier_data": {
-        "gold_path_sha256": "7f5e2743fbb4353bf8d5acbc13ec4e2e0bd497349a724e0a623dde33d87294e2",
+        "gold_path_sha256": "be1131b3cc539ba4695de1c720b43bb61fbe0e191ce1ea818708243263452f4c",
         "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
         "oracle_brief_md_sha256": "698cb365511f89b17060b8d0475b554fc9b02e9fe0470d1e463e20af8e5cfd08",
         "oracle_correction_md_sha256": "aa616603daf3d6127405e0a03bd9bd5395b8082230126fdd60c4a7042b7ad482",
@@ -44,7 +44,7 @@
       },
       "workspace_trees": {
         ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
-        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "AGENTS.md": "ba5dcab9adf61d0d5747d74cdc5e6d02d40cc2b536a9702c36d7895af1da0254",
         "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
         "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
         "docs": "bb0b95cedf9b879e3463e97d27cd9842a7672f2452906dd787065816af498799",
@@ -59,7 +59,7 @@
       "observed_oracle_score": 99,
       "observed_shortcut_score": 25,
       "verifier_data": {
-        "gold_path_sha256": "cce41c183dc9c7a14a1b1c8eed41c311aa5dda63d7f24b131e1a4a5da0333e08",
+        "gold_path_sha256": "e567e9451414505dbf94bb441d6f7f6fa64eda6a83eb06dc13fbeffb8ecd72cb",
         "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
         "oracle_brief_md_sha256": "c9dda98750780c63e25296c0b65b0ad7f78fccf73c8badc4ad97ba74ed339b47",
         "oracle_correction_md_sha256": "aa616603daf3d6127405e0a03bd9bd5395b8082230126fdd60c4a7042b7ad482",
@@ -68,7 +68,7 @@
       },
       "workspace_trees": {
         ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
-        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "AGENTS.md": "ba5dcab9adf61d0d5747d74cdc5e6d02d40cc2b536a9702c36d7895af1da0254",
         "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
         "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
         "docs": "bb0b95cedf9b879e3463e97d27cd9842a7672f2452906dd787065816af498799",
@@ -83,7 +83,7 @@
       "observed_oracle_score": 99,
       "observed_shortcut_score": 25,
       "verifier_data": {
-        "gold_path_sha256": "02a4a5ff4375a9ece42b600c9adc04c7cedb7422e300a0a1bc87efbec8f5c118",
+        "gold_path_sha256": "b5d195e96f62f840dd63a1028a70ea277a28e3f4d17409f4a674f15286dcbc10",
         "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
         "oracle_brief_md_sha256": "2180028b778c4231b3e3e31847817c92b0399763c04e74bb0ba95d510d837d62",
         "oracle_correction_md_sha256": "aa616603daf3d6127405e0a03bd9bd5395b8082230126fdd60c4a7042b7ad482",
@@ -92,7 +92,7 @@
       },
       "workspace_trees": {
         ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
-        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "AGENTS.md": "ba5dcab9adf61d0d5747d74cdc5e6d02d40cc2b536a9702c36d7895af1da0254",
         "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
         "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
         "docs": "65d90391e1fa5aa9466e25230e25ff94a669ae5e2304f1a5cb246ab1ceae96d6",
@@ -108,7 +108,7 @@
       "observed_oracle_score": 100,
       "observed_shortcut_score": 25,
       "verifier_data": {
-        "gold_path_sha256": "3828695d4b45762f6605c2640ed09a67c0b4ffcc6a729fe1f1b708a566606950",
+        "gold_path_sha256": "b062bcf93da0eff749cf937d2ccff1aa946c2cd4e05931e5ead8b63be89e4734",
         "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
         "oracle_brief_md_sha256": "b7b8066cbc1f1858869a14c60981f40efa4a30139072ffe9542d2a429bb59717",
         "oracle_correction_md_sha256": "0b3b6d82af791055e622cac5716b6909b386822ebf3fe75201fb5b604c7a5145",
@@ -117,7 +117,7 @@
       },
       "workspace_trees": {
         ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
-        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "AGENTS.md": "ba5dcab9adf61d0d5747d74cdc5e6d02d40cc2b536a9702c36d7895af1da0254",
         "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
         "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
         "docs": "ad89f79d22e567d766acb13666ae066838148449f0eae4d43d8bfc6705ac5d3d",

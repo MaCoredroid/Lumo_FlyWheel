@@ -1,0 +1,11 @@
+# Request Path Evidence Brief
+
+Support note verdict: the support note is not correct.
+
+The live path starts at `sync_app/cli.py::main`, where `--owner` is parsed and passed directly into `sync_app/service.py::sync_item`. Inside `sync_app/service.py::sync_item`, the code calls `sync_app/service.py::_resolve_owner` first, so the effective owner and `owner_source` are decided before serialization. The base record is then created by `sync_app/store.py::make_record`, which stores only `name`, `status`, and `owner`. After that, `sync_app/serializer.py::build_routing_key` computes `routing_key` from the resolved owner and item name, and `sync_app/serializer.py::serialize_payload` injects both `owner_source` and `routing_key` into the emitted payload.
+
+That means the first support-note claim is wrong: `owner_source` does not come from storage. Storage only receives the already resolved owner through `sync_app/store.py::make_record`; it never derives or persists `owner_source`. The second claim is also wrong: `routing_key` is not computed before the CLI applies `--owner`, because `sync_app/cli.py::main` passes `args.owner` into `sync_app/service.py::sync_item`, and only then does `sync_app/serializer.py::build_routing_key` run on the resolved owner.
+
+The tests confirm the same live behavior. `tests/test_sync.py::test_service_resolves_explicit_owner_before_serialization` expects `owner_source == "explicit"` and `routing_key == "pm-oncall:launch-checklist"` when `owner="pm-oncall"` is passed. `tests/test_sync.py::test_service_uses_default_owner_when_flag_is_missing` expects `owner_source == "default"` and a routing key built from the default owner. `tests/test_sync.py::test_cli_accepts_owner_flag_and_preserves_existing_fields` confirms the CLI path preserves the explicit owner through emission.
+
+The misleading candidates are legacy or unused helpers, not the live request path. `sync_app/store.py::legacy_make_record_with_owner_source` and `sync_app/store.py::legacy_build_routing_key` are not referenced by the service or CLI path, and `sync_app/serializer.py::draft_owner_source_from_record` is a draft fallback reader that is likewise unused by `sync_app/service.py::sync_item`. Based on repo-local evidence, the needed fix is documentation/support-note correction only, not a storage-layer code change.

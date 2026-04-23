@@ -1,0 +1,93 @@
+{
+  "M_training": 0.25,
+  "P_benchmark": 25,
+  "breakdown": {
+    "hidden.brief_grounding": 5,
+    "hidden.correction_grounding": 4,
+    "hidden.field_derivation.emission": 4,
+    "hidden.field_derivation.owner_source": 8,
+    "hidden.field_derivation.routing_key": 8,
+    "hidden.live_path_adjacency": 2,
+    "hidden.live_path_nodes": 8,
+    "hidden.test_observations": 10,
+    "phase2.brief_exists": 4,
+    "phase2.correction_exists": 4,
+    "phase2.no_shim": 4,
+    "phase2.no_stray_files": 4,
+    "phase2.path_map_schema": 8,
+    "phase2.sections_present": 6,
+    "phase2.variant_match": 4
+  },
+  "breakdown_bands": {
+    "hidden.brief_grounding": "M",
+    "hidden.correction_grounding": "M",
+    "hidden.field_derivation.emission": "M",
+    "hidden.field_derivation.owner_source": "M",
+    "hidden.field_derivation.routing_key": "M",
+    "hidden.live_path_adjacency": "M",
+    "hidden.live_path_nodes": "M",
+    "hidden.test_observations": "M",
+    "phase2.brief_exists": "M",
+    "phase2.correction_exists": "M",
+    "phase2.no_shim": "M",
+    "phase2.no_stray_files": "M",
+    "phase2.path_map_schema": "M",
+    "phase2.sections_present": "M",
+    "phase2.variant_match": "M"
+  },
+  "ceilings_applied": [
+    "missing_symbol_adjacency"
+  ],
+  "elapsed_sec": 0.0042,
+  "errors": [
+    "live_path matched nodes=4/6 edges=2/5 for v1-clean-baseline",
+    "required decoy was not rejected with a concrete reason"
+  ],
+  "family_id": "request-path-evidence-brief",
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.5,
+    "slots": [
+      {
+        "passed_bool": true,
+        "slot": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": true,
+        "slot": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": false
+  },
+  "observed_live_path_exact_matches": 4,
+  "pass": false,
+  "raw_score_pre_ceiling": 83,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 25,
+  "shortcut_detected": false,
+  "variant_id": "v1-clean-baseline"
+}

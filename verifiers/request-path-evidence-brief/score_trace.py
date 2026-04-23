@@ -80,6 +80,65 @@ def lower_contains_any(text: str, needles: list[str] | tuple[str, ...]) -> bool:
     return any(needle.lower() in lowered for needle in needles)
 
 
+def normalize_symbol_ref(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    if "::" in text:
+        text = text.split("::")[-1]
+    if "/" in text:
+        text = text.split("/")[-1]
+    if "." in text:
+        text = text.split(".")[-1]
+    return text.strip()
+
+
+def collect_strings(value: Any) -> list[str]:
+    out: list[str] = []
+    if isinstance(value, str):
+        out.append(value)
+    elif isinstance(value, dict):
+        for nested in value.values():
+            out.extend(collect_strings(nested))
+    elif isinstance(value, list):
+        for nested in value:
+            out.extend(collect_strings(nested))
+    return out
+
+
+def relation_present(live_steps: list[dict[str, Any]], left_idx: int, right_idx: int) -> bool:
+    left = live_steps[left_idx]
+    right = live_steps[right_idx]
+    left_symbol = normalize_symbol_ref(left.get("symbol"))
+    right_symbol = normalize_symbol_ref(right.get("symbol"))
+    left_callee = normalize_symbol_ref(left.get("callee_symbol"))
+    right_caller = normalize_symbol_ref(right.get("caller_symbol"))
+    if left_callee == right_symbol:
+        return True
+    if right_caller == left_symbol:
+        return True
+    if right_caller == "sync_item" and left_symbol in {"_resolve_owner", "make_record", "build_routing_key"}:
+        return True
+    if left_symbol == "sync_item" and right_caller == "sync_item":
+        return True
+    return False
+
+
+def field_mentions_target(value: Any, expected_file: str, expected_symbol: str) -> bool:
+    strings = collect_strings(value)
+    symbol_token = expected_symbol.lower()
+    file_token = expected_file.lower()
+    for text in strings:
+        lowered = text.lower()
+        if file_token in lowered and symbol_token in lowered:
+            return True
+        if normalize_symbol_ref(text).lower() == symbol_token:
+            return True
+    return False
+
+
 @dataclass
 class ScorerState:
     errors: list[str] = field(default_factory=list)
@@ -249,33 +308,43 @@ def score_live_path(state: ScorerState, gold: dict[str, Any]) -> None:
         state.add_error("live_path must be a list")
         return
 
-    exact_matches = 0
-    adjacency_ok = True
-    for idx, expected_step in enumerate(expected):
-        if idx >= len(live) or not isinstance(live[idx], dict):
-            adjacency_ok = False
-            break
-        step = live[idx]
-        if (
-            step.get("file") == expected_step["file"]
-            and step.get("symbol") == expected_step["symbol"]
-            and step.get("caller_symbol") == expected_step["caller_symbol"]
-            and step.get("callee_symbol") == expected_step["callee_symbol"]
-        ):
-            exact_matches += 1
+    if not all(isinstance(step, dict) for step in live):
+        state.add_error("live_path entries must be objects")
+        state.apply_ceiling("missing_symbol_adjacency", 25)
+        return
 
+    live_steps = [step for step in live if isinstance(step, dict)]
+    expected_nodes = [(step["file"], step["symbol"]) for step in expected]
+    observed_positions: list[int | None] = []
+    for expected_file, expected_symbol in expected_nodes:
+        idx = None
+        for pos, step in enumerate(live_steps):
+            if step.get("file") == expected_file and step.get("symbol") == expected_symbol:
+                idx = pos
+                break
+        observed_positions.append(idx)
+
+    matched_nodes = sum(1 for pos in observed_positions if pos is not None)
+
+    matched_relations = 0
+    for left_pos, right_pos in zip(observed_positions, observed_positions[1:]):
+        if left_pos is None or right_pos is None or left_pos >= right_pos:
+            continue
+        if relation_present(live_steps, left_pos, right_pos):
+            matched_relations += 1
+
+    exact_matches = matched_nodes
     state.live_path_exact_matches = exact_matches
-    state.add("hidden.live_path_sequence", exact_matches * 3)
-    if len(live) == len(expected) and exact_matches == len(expected):
-        state.add("hidden.live_path_complete", 2)
+    state.add("hidden.live_path_nodes", exact_matches * 2)
+    state.add("hidden.live_path_adjacency", matched_relations)
+
+    if matched_nodes == len(expected_nodes) and matched_relations == len(expected_nodes) - 1:
+        state.add("hidden.live_path_complete", 3)
         state.milestones["M4_functional"] = True
     else:
-        adjacency_ok = False
         state.add_error(
-            f"live_path matched {exact_matches}/{len(expected)} expected steps for {VARIANT_ID}"
+            f"live_path matched nodes={matched_nodes}/{len(expected_nodes)} edges={matched_relations}/{len(expected_nodes) - 1} for {VARIANT_ID}"
         )
-
-    if not adjacency_ok:
         state.apply_ceiling("missing_symbol_adjacency", 25)
 
 
@@ -290,17 +359,22 @@ def score_field_derivations(state: ScorerState, gold: dict[str, Any]) -> None:
     for field_name, points in (("owner_source", 8), ("routing_key", 8), ("emission", 4)):
         expected = gold["field_derivations"][field_name]
         got = derivations.get(field_name)
-        if isinstance(got, dict) and got.get("file") == expected["file"] and got.get("symbol") == expected["symbol"]:
+        if field_mentions_target(got, expected["file"], expected["symbol"]):
             state.add(f"hidden.field_derivation.{field_name}", points)
         else:
             state.add_error(f"{field_name} derivation mismatch")
 
     owner_got = derivations.get("owner_source", {})
-    if isinstance(owner_got, dict) and owner_got.get("file") == "sync_app/store.py":
+    owner_blob = json.dumps(owner_got, sort_keys=True).lower()
+    if "sync_app/store.py" in owner_blob and "not_derived_from" not in owner_blob and "not_derived_in" not in owner_blob:
         state.apply_ceiling("store_claimed_as_decision_layer", 25)
 
     routing_got = derivations.get("routing_key", {})
-    if isinstance(routing_got, dict) and routing_got.get("file") != "sync_app/serializer.py":
+    routing_blob = json.dumps(routing_got, sort_keys=True).lower()
+    if (
+        ("sync_app/store.py" in routing_blob and "not_derived_in" not in routing_blob)
+        or "before owner resolution" in routing_blob
+    ):
         state.apply_ceiling("pre_owner_routing_claim", 30)
 
     if state.breakdown.get("hidden.field_derivation.owner_source", 0) > 0:
@@ -316,13 +390,21 @@ def score_test_observations(state: ScorerState, gold: dict[str, Any]) -> None:
         return
 
     matched = 0
-    expected = {(entry["file"], entry["symbol"]) for entry in gold["test_observations"]}
+    matched_expected: set[tuple[str, str]] = set()
+    expected = [
+        (entry["file"], entry["symbol"])
+        for entry in gold["test_observations"]
+    ]
     for item in observations:
         if not isinstance(item, dict):
             continue
-        key = (item.get("file"), item.get("symbol"))
-        if key in expected:
-            matched += 1
+        for expected_file, expected_symbol in expected:
+            key = (expected_file, expected_symbol)
+            if key in matched_expected:
+                continue
+            if field_mentions_target(item, expected_file, expected_symbol):
+                matched_expected.add(key)
+                matched += 1
     state.add("hidden.test_observations", min(matched, len(expected)) * 5)
     if matched >= 1:
         state.milestones["M1_localization"] = True
@@ -346,7 +428,9 @@ def score_decoy_and_variant_rules(state: ScorerState, gold: dict[str, Any]) -> N
             continue
         if item.get("file") == target["file"] and item.get("symbol") == target["symbol"]:
             reason = str(item.get("reason", ""))
-            if lower_contains_any(reason, tuple(target["reason_keywords"])):
+            if lower_contains_any(reason, tuple(target["reason_keywords"])) or lower_contains_any(
+                reason, ("legacy", "unused", "not live", "not imported", "not referenced")
+            ):
                 matched = True
                 break
     if matched:
@@ -381,16 +465,22 @@ def score_written_artifacts(state: ScorerState, gold: dict[str, Any]) -> None:
     if brief_hits < 3 or correction_hits < 3:
         state.apply_ceiling("weak_markdown_grounding", 45)
 
-    if not lower_contains_any(state.brief_text, ("support note is incorrect", "support note is wrong", "support note is stale")):
+    brief_lower = state.brief_text.lower()
+    if not (
+        "support note" in brief_lower
+        and (
+            "incorrect" in brief_lower
+            or "wrong" in brief_lower
+            or "stale" in brief_lower
+            or "not correct" in brief_lower
+        )
+    ):
         state.add_error("brief does not explicitly reject the stale support note")
         state.apply_ceiling("no_support_note_verdict", 35)
     if "scenario_families/" in state.brief_text or "scenario_families/" in state.correction_text:
         state.apply_ceiling("external_evidence", 20)
     if lower_contains_any(state.brief_text + "\n" + state.correction_text, ("https://", "http://", "/Users/")):
         state.apply_ceiling("external_evidence", 20)
-
-    if lower_contains_any(state.brief_text + "\n" + state.correction_text, ("before the cli applies --owner", "before cli applies --owner")):
-        state.apply_ceiling("pre_owner_routing_claim", 30)
 
     if VARIANT_ID == "v5-recovery-in-thread":
         if lower_contains_any(state.correction_text, ("rollback", "rolled back", "incident")):
@@ -452,6 +542,7 @@ def main() -> int:
         "variant_id": VARIANT_ID,
         "score": state.final_score(),
         "P_benchmark": state.final_score(),
+        "raw_score_pre_ceiling": state.raw_score,
         "M_training": state.final_m(),
         "pass": state.final_score() >= int(gold.get("pass_bar", 40)) and state.integrity_flag == 0,
         "shortcut_detected": state.shortcut,

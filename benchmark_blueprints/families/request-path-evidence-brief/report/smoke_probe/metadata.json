@@ -1,0 +1,29 @@
+{
+  "attempt": "smoke_probe",
+  "codex_command": [
+    "codex",
+    "exec",
+    "--cd",
+    "<workspace>",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "workspace-write",
+    "--color",
+    "never",
+    "--ephemeral",
+    "--model",
+    "gpt-5.4",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "Read AGENTS.md in this directory and follow it exactly. Produce the three required files under artifacts/. Do not modify any file outside artifacts/."
+  ],
+  "created_at_epoch": 1776921652,
+  "model": "gpt-5.4",
+  "n": 1,
+  "prompt": "Read AGENTS.md in this directory and follow it exactly. Produce the three required files under artifacts/. Do not modify any file outside artifacts/.",
+  "reasoning_effort": "high",
+  "timeout_seconds": 600,
+  "variants": [
+    "v1-clean-baseline"
+  ]
+}

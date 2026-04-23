@@ -1,0 +1,139 @@
+{
+  "acceptance": {
+    "at_least_one_variant_le_10": false,
+    "family_mean_window": false,
+    "max_variant_le_40": false,
+    "monotonic_with_tolerance_3": true
+  },
+  "current_observed_stdev_M_training": 0.2228,
+  "family_mean": 33.73,
+  "family_mean_M_training": 0.3373,
+  "max_variant_mean": 68.67,
+  "min_variant_mean": 25.0,
+  "rows": [
+    {
+      "ceilings": [
+        "missing_symbol_adjacency"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.93,
+        0.25,
+        0.88
+      ],
+      "max": 93,
+      "mean": 68.67,
+      "mean_M_training": 0.6867,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        93,
+        25,
+        88
+      ],
+      "stdev": 30.94,
+      "stdev_M_training": 0.3094,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "ceilings": [
+        "missing_symbol_adjacency"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "ceilings": [
+        "missing_symbol_adjacency",
+        "pre_owner_routing_claim",
+        "store_claimed_as_decision_layer"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "ceilings": [
+        "missing_symbol_adjacency"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "ceilings": [
+        "incident_blind_reselect",
+        "missing_symbol_adjacency",
+        "store_claimed_as_decision_layer"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.25,
+        0.25,
+        0.25
+      ],
+      "max": 25,
+      "mean": 25.0,
+      "mean_M_training": 0.25,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}

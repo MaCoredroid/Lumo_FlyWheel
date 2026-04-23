@@ -1,0 +1,9 @@
+# Request Path Brief
+
+Support note verdict: the support note is not correct.
+
+The live request path starts at `sync_app/cli.py::main`, where `--owner` is parsed and passed directly into `sync_app/service.py::sync_item`. Inside `sync_app/service.py::sync_item`, `sync_app/service.py::_resolve_owner` decides both the effective owner value and the `owner_source` label before any record is built. The service then calls `sync_app/store.py::make_record` with only `name`, `status`, and resolved `owner`; storage never receives or derives `owner_source`. After that, the same service function computes `routing_key` with `sync_app/serializer.py::build_routing_key` using the resolved owner, and finally emits both derived fields through `sync_app/serializer.py::serialize_payload`.
+
+That means the support note is wrong on both disputed points. `owner_source` does not come from storage; it is created in `sync_app/service.py::_resolve_owner` and added only during `sync_app/serializer.py::serialize_payload`. `routing_key` is not computed before the CLI applies `--owner`; the CLI forwards `args.owner` into `sync_app/service.py::sync_item`, and `sync_item` computes `routing_key` afterward from the resolved owner. The tests in `tests/test_sync.py::test_service_resolves_explicit_owner_before_serialization`, `tests/test_sync.py::test_service_uses_default_owner_when_flag_is_missing`, and `tests/test_sync.py::test_cli_accepts_owner_flag_and_preserves_existing_fields` confirm both the explicit-owner and default-owner cases.
+
+The repo-local documentation already points in the same direction. `docs/data_flow.md` states that `sync_item` resolves the effective owner, persists the base record, and then emits the payload, which matches the code path above. Based on the current repo state, there is no evidence that a storage-layer fix is needed; the correction belongs in the support note wording, not repo behavior.

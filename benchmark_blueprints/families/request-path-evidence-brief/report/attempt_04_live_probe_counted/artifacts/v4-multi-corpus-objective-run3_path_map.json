@@ -1,0 +1,193 @@
+{
+  "schema_version": "cnb55.request_path_map.v1",
+  "variant_id": "v4-multi-corpus-objective",
+  "live_path": [
+    {
+      "file": "sync_app/cli.py",
+      "symbol": "main",
+      "role": "parses --owner and forwards the parsed value into the service entrypoint",
+      "caller_symbol": "__main__",
+      "callee_symbol": "sync_app.service.sync_item"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "request orchestrator that resolves the effective owner, persists the base record, derives routing_key, and assembles the emitted payload",
+      "caller_symbol": "sync_app.cli.main",
+      "callee_symbol": "sync_app.service._resolve_owner"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "_resolve_owner",
+      "role": "derives effective_owner and owner_source from the CLI owner or the configured default owner",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": "sync_app.service._load_defaults"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "persists the base record using the resolved owner only",
+      "caller_symbol": "sync_app.cli.main",
+      "callee_symbol": "sync_app.store.make_record"
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "make_record",
+      "role": "returns the stored/base record with name, status, and owner only",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": null
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "derives routing_key from the same resolved owner and request name",
+      "caller_symbol": "sync_app.cli.main",
+      "callee_symbol": "sync_app.serializer.build_routing_key"
+    },
+    {
+      "file": "sync_app/serializer.py",
+      "symbol": "build_routing_key",
+      "role": "formats routing_key as slug(owner):slug(name)",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": "sync_app.serializer._slugify"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "hands the stored record plus already-derived owner_source and routing_key to the serializer",
+      "caller_symbol": "sync_app.cli.main",
+      "callee_symbol": "sync_app.serializer.serialize_payload"
+    },
+    {
+      "file": "sync_app/serializer.py",
+      "symbol": "serialize_payload",
+      "role": "emits the payload by copying the record and attaching owner_source and routing_key",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": null
+    },
+    {
+      "file": "sync_app/cli.py",
+      "symbol": "main",
+      "role": "JSON-serializes the emitted payload for CLI output",
+      "caller_symbol": "__main__",
+      "callee_symbol": "json.dumps"
+    }
+  ],
+  "field_derivations": {
+    "owner_source": {
+      "derived_in": {
+        "file": "sync_app/service.py",
+        "symbol": "_resolve_owner"
+      },
+      "inputs": [
+        "CLI --owner value when present and non-blank",
+        "config/defaults.json owner when --owner is omitted or blank"
+      ],
+      "logic": [
+        "returns [trimmed owner, explicit] when owner is provided",
+        "returns [default owner, default] otherwise"
+      ],
+      "not_derived_in": [
+        "sync_app.store.make_record",
+        "sync_app.serializer.serialize_payload"
+      ]
+    },
+    "routing_key": {
+      "derived_in": {
+        "file": "sync_app/serializer.py",
+        "symbol": "build_routing_key"
+      },
+      "invoked_from": {
+        "file": "sync_app/service.py",
+        "symbol": "sync_item"
+      },
+      "inputs": [
+        "effective_owner returned by _resolve_owner",
+        "name passed to sync_item"
+      ],
+      "logic": "slugify(owner) + ':' + slugify(name)",
+      "not_derived_in": [
+        "sync_app.cli.main before owner parsing",
+        "sync_app.store.make_record"
+      ]
+    },
+    "emission": {
+      "record_creation": {
+        "file": "sync_app/store.py",
+        "symbol": "make_record",
+        "fields": [
+          "name",
+          "status",
+          "owner"
+        ]
+      },
+      "payload_assembly": {
+        "file": "sync_app/serializer.py",
+        "symbol": "serialize_payload",
+        "adds": [
+          "owner_source",
+          "routing_key"
+        ]
+      },
+      "cli_output": {
+        "file": "sync_app/cli.py",
+        "symbol": "main",
+        "format": "json.dumps(payload, sort_keys=True)"
+      }
+    }
+  },
+  "test_observations": [
+    {
+      "source": "tests/test_sync.py::test_service_resolves_explicit_owner_before_serialization",
+      "observation": "sync_item(owner='pm-oncall') yields owner='pm-oncall', owner_source='explicit', routing_key='pm-oncall:launch-checklist'"
+    },
+    {
+      "source": "tests/test_sync.py::test_service_uses_default_owner_when_flag_is_missing",
+      "observation": "sync_item() falls back to config/defaults.json owner and sets owner_source='default' while routing_key uses that same default owner"
+    },
+    {
+      "source": "tests/test_sync.py::test_cli_accepts_owner_flag_and_preserves_existing_fields",
+      "observation": "CLI path preserves the explicit owner through to the emitted payload"
+    },
+    {
+      "source": "local CLI run: python -m sync_app.cli --name 'Launch Checklist' --status pending --owner pm-oncall",
+      "observation": "emitted JSON included owner_source='explicit' and routing_key='pm-oncall:launch-checklist'"
+    },
+    {
+      "source": "local CLI run: python -m sync_app.cli --name 'Launch Checklist' --status pending",
+      "observation": "emitted JSON included owner='pm-oncall', owner_source='default', and routing_key='pm-oncall:launch-checklist' from the configured default owner"
+    }
+  ],
+  "rejected_decoys": [
+    {
+      "file": "ops/support_note.md",
+      "symbol": null,
+      "claim": "owner_source looks like it comes from storage and routing_key is probably computed before the CLI applies --owner",
+      "reason_rejected": "live code derives owner_source in service._resolve_owner and computes routing_key in service.sync_item after the CLI has already passed owner into the service"
+    },
+    {
+      "file": "ops/previous_session_path.md",
+      "symbol": null,
+      "claim": "store helper likely became the source of truth after the serializer cleanup",
+      "reason_rejected": "the file is explicitly an unfinished draft, and the live store helper make_record only returns name/status/owner"
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "legacy_make_record_with_owner_source",
+      "claim": "storage may be the live source of owner_source",
+      "reason_rejected": "sync_item does not call this legacy helper; it calls make_record instead"
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "legacy_build_routing_key",
+      "claim": "routing_key may come from store",
+      "reason_rejected": "sync_item calls serializer.build_routing_key, not the legacy store helper"
+    },
+    {
+      "file": "release_context/future_serializer_split.md",
+      "symbol": null,
+      "claim": "owner attribution may move into serializer helpers",
+      "reason_rejected": "the document is future-state design intent only and does not describe current live behavior"
+    }
+  ]
+}

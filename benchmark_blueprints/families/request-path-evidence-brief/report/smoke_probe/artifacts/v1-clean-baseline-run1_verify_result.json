@@ -1,0 +1,72 @@
+{
+  "M_training": 0.1,
+  "P_benchmark": 10,
+  "breakdown": {
+    "hidden.brief_grounding": 5,
+    "hidden.correction_grounding": 4,
+    "phase2.brief_exists": 4,
+    "phase2.correction_exists": 4
+  },
+  "breakdown_bands": {
+    "hidden.brief_grounding": "M",
+    "hidden.correction_grounding": "M",
+    "phase2.brief_exists": "M",
+    "phase2.correction_exists": "M"
+  },
+  "ceilings_applied": [
+    "malformed_path_map",
+    "no_support_note_verdict"
+  ],
+  "elapsed_sec": 0.0046,
+  "errors": [
+    "path_map schema_version must be cnb55.request_path_map.v1, got None",
+    "brief does not explicitly reject the stale support note"
+  ],
+  "family_id": "request-path-evidence-brief",
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.2,
+    "slots": [
+      {
+        "passed_bool": false,
+        "slot": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": false,
+        "slot": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": false,
+    "M2_primary_fix": false,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": false
+  },
+  "observed_live_path_exact_matches": 0,
+  "pass": false,
+  "raw_score_pre_ceiling": 17,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 10,
+  "shortcut_detected": false,
+  "variant_id": "v1-clean-baseline"
+}

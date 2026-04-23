@@ -70,7 +70,7 @@
   "pass_bar": 40,
   "readonly_tree_hashes": {
     ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
-    "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+    "AGENTS.md": "ba5dcab9adf61d0d5747d74cdc5e6d02d40cc2b536a9702c36d7895af1da0254",
     "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
     "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
     "docs": "bb0b95cedf9b879e3463e97d27cd9842a7672f2452906dd787065816af498799",

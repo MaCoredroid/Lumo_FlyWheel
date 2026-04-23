@@ -1,0 +1,107 @@
+{
+  "schema_version": "cnb55.request_path_map.v1",
+  "variant_id": "v2-noisy-distractor",
+  "live_path": [
+    {
+      "file": "sync_app/cli.py",
+      "symbol": "main",
+      "role": "parse CLI args and forward --owner into the service layer",
+      "caller_symbol": "process argv",
+      "callee_symbol": "sync_app.service.sync_item"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "orchestrate owner resolution, record creation, routing-key derivation, and payload emission",
+      "caller_symbol": "sync_app.cli.main",
+      "callee_symbol": "sync_app.service._resolve_owner"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "_resolve_owner",
+      "role": "derive effective owner and owner_source from explicit CLI input or config defaults",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": "sync_app.service._load_defaults"
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "make_record",
+      "role": "materialize the base record with name, status, and resolved owner only",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": null
+    },
+    {
+      "file": "sync_app/serializer.py",
+      "symbol": "build_routing_key",
+      "role": "derive routing_key from the resolved owner and item name",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": "sync_app.serializer._slugify"
+    },
+    {
+      "file": "sync_app/serializer.py",
+      "symbol": "serialize_payload",
+      "role": "emit the final payload by copying the base record and adding owner_source and routing_key",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": null
+    }
+  ],
+  "field_derivations": {
+    "owner_source": {
+      "decided_in": "sync_app.service._resolve_owner",
+      "consumed_in": "sync_app.serializer.serialize_payload",
+      "rule": "return \"explicit\" when a non-empty owner argument is provided; otherwise load config/defaults.json owner and return \"default\"",
+      "storage_layer_involvement": "sync_app.store.make_record does not derive or persist owner_source on the live path"
+    },
+    "routing_key": {
+      "decided_in": "sync_app.serializer.build_routing_key",
+      "inputs": [
+        "effective_owner from sync_app.service._resolve_owner",
+        "name argument passed into sync_app.service.sync_item"
+      ],
+      "rule": "slugify owner and name, then join as owner:name",
+      "ordering": "computed after sync_app.cli.main passes --owner into sync_app.service.sync_item and after effective_owner is resolved"
+    },
+    "emission": {
+      "record_source": "sync_app.store.make_record",
+      "payload_enrichment": "sync_app.serializer.serialize_payload",
+      "json_output": "sync_app.cli.main",
+      "rule": "copy the base record, append owner_source and routing_key, then return json.dumps(payload, sort_keys=True)"
+    }
+  },
+  "test_observations": [
+    {
+      "source": "tests/test_sync.py::test_service_resolves_explicit_owner_before_serialization",
+      "observation": "explicit owner input produces owner=pm-oncall, owner_source=explicit, routing_key=pm-oncall:launch-checklist"
+    },
+    {
+      "source": "tests/test_sync.py::test_service_uses_default_owner_when_flag_is_missing",
+      "observation": "missing owner input falls back to config/defaults.json owner and emits owner_source=default"
+    },
+    {
+      "source": "tests/test_sync.py::test_cli_accepts_owner_flag_and_preserves_existing_fields",
+      "observation": "the CLI path preserves the same derived fields seen in the service-level explicit-owner case"
+    }
+  ],
+  "rejected_decoys": [
+    {
+      "file": "sync_app/serializer.py",
+      "symbol": "draft_owner_source_from_record",
+      "reason": "helper is never called on the live path; rg only finds its definition"
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "legacy_make_record_with_owner_source",
+      "reason": "legacy helper is never called on the live path; rg only finds its definition"
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "legacy_build_routing_key",
+      "reason": "legacy helper is never called on the live path; rg only finds its definition"
+    },
+    {
+      "file": "ops/support_note.md",
+      "symbol": "support note bullets",
+      "reason": "historical note conflicts with the current implementation and tests"
+    }
+  ]
+}

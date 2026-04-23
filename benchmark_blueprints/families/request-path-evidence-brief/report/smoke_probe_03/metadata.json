@@ -1,0 +1,29 @@
+{
+  "attempt": "smoke_probe_03",
+  "codex_command": [
+    "codex",
+    "exec",
+    "--cd",
+    "<workspace>",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "workspace-write",
+    "--color",
+    "never",
+    "--ephemeral",
+    "--model",
+    "gpt-5.4",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "Read AGENTS.md in this directory and follow it exactly. Read the repo before writing. Produce exactly three files under artifacts/: request_path_brief.md, path_map.json, and docs_correction.md. In request_path_brief.md, explicitly say whether the support note is correct. In path_map.json, use the exact top-level key schema_version with value cnb55.request_path_map.v1. Do not modify any file outside artifacts/."
+  ],
+  "created_at_epoch": 1776922091,
+  "model": "gpt-5.4",
+  "n": 1,
+  "prompt": "Read AGENTS.md in this directory and follow it exactly. Read the repo before writing. Produce exactly three files under artifacts/: request_path_brief.md, path_map.json, and docs_correction.md. In request_path_brief.md, explicitly say whether the support note is correct. In path_map.json, use the exact top-level key schema_version with value cnb55.request_path_map.v1. Do not modify any file outside artifacts/.",
+  "reasoning_effort": "high",
+  "timeout_seconds": 600,
+  "variants": [
+    "v1-clean-baseline"
+  ]
+}

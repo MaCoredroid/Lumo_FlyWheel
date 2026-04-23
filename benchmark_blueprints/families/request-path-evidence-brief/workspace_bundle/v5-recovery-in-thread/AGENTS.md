@@ -10,8 +10,9 @@ Rules:
   - `artifacts/path_map.json`
   - `artifacts/docs_correction.md`
 - Use repo-local evidence only.
+- `request_path_brief.md` must explicitly state whether the support note is correct.
 - In markdown outputs, cite concrete evidence with backticked `path::symbol` tokens, for example `sync_app/service.py::_resolve_owner`.
-- `artifacts/path_map.json` must use schema `cnb55.request_path_map.v1` and include:
+- `artifacts/path_map.json` must include `schema_version: "cnb55.request_path_map.v1"` and include:
   - `variant_id`
   - `live_path[]` with `file`, `symbol`, `role`, `caller_symbol`, `callee_symbol`
   - `field_derivations.owner_source`

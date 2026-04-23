@@ -1,0 +1,92 @@
+{
+  "acceptance": {
+    "at_least_one_variant_le_10": true,
+    "family_mean_window": false,
+    "max_variant_le_40": true,
+    "monotonic_with_tolerance_3": true
+  },
+  "current_observed_stdev_M_training": 0.0,
+  "family_mean": 2.0,
+  "family_mean_M_training": 0.1,
+  "max_variant_mean": 10.0,
+  "min_variant_mean": 0.0,
+  "rows": [
+    {
+      "ceilings": [
+        "malformed_path_map",
+        "no_support_note_verdict"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.1
+      ],
+      "max": 10,
+      "mean": 10.0,
+      "mean_M_training": 0.1,
+      "min": 10,
+      "n": 1,
+      "scores": [
+        10
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [],
+      "max": 0,
+      "mean": 0.0,
+      "mean_M_training": 0.0,
+      "min": 0,
+      "n": 0,
+      "scores": [],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [],
+      "max": 0,
+      "mean": 0.0,
+      "mean_M_training": 0.0,
+      "min": 0,
+      "n": 0,
+      "scores": [],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [],
+      "max": 0,
+      "mean": 0.0,
+      "mean_M_training": 0.0,
+      "min": 0,
+      "n": 0,
+      "scores": [],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "ceilings": [],
+      "integrity_hits": 0,
+      "m_scores": [],
+      "max": 0,
+      "mean": 0.0,
+      "mean_M_training": 0.0,
+      "min": 0,
+      "n": 0,
+      "scores": [],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}

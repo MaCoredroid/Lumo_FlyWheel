@@ -1,0 +1,165 @@
+{
+  "schema_version": "cnb55.request_path_map.v1",
+  "variant_id": "v1-clean-baseline",
+  "live_path": [
+    {
+      "file": "sync_app/cli.py",
+      "symbol": "main",
+      "role": "CLI entrypoint parses --owner and forwards it to the service layer.",
+      "caller_symbol": null,
+      "callee_symbol": "sync_app.service.sync_item"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "Orchestrates owner resolution, base-record creation, routing-key derivation, and payload emission.",
+      "caller_symbol": "sync_app.cli.main",
+      "callee_symbol": "sync_app.service._resolve_owner"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "_resolve_owner",
+      "role": "Derives effective owner and owner_source from explicit --owner or config defaults.",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": "sync_app.service._load_defaults"
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "Builds the persisted base record using the already-resolved owner.",
+      "caller_symbol": "sync_app.service._resolve_owner",
+      "callee_symbol": "sync_app.store.make_record"
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "make_record",
+      "role": "Creates the base record with name, status, and owner only.",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": null
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "Computes routing_key from the resolved effective owner and item name.",
+      "caller_symbol": "sync_app.store.make_record",
+      "callee_symbol": "sync_app.serializer.build_routing_key"
+    },
+    {
+      "file": "sync_app/serializer.py",
+      "symbol": "build_routing_key",
+      "role": "Formats routing_key from owner and name after slugification.",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": null
+    },
+    {
+      "file": "sync_app/service.py",
+      "symbol": "sync_item",
+      "role": "Emits final payload by attaching owner_source and routing_key to the base record.",
+      "caller_symbol": "sync_app.serializer.build_routing_key",
+      "callee_symbol": "sync_app.serializer.serialize_payload"
+    },
+    {
+      "file": "sync_app/serializer.py",
+      "symbol": "serialize_payload",
+      "role": "Adds owner_source and routing_key to a copy of the record for emission.",
+      "caller_symbol": "sync_app.service.sync_item",
+      "callee_symbol": null
+    }
+  ],
+  "field_derivations": {
+    "owner_source": {
+      "derived_in": {
+        "file": "sync_app/service.py",
+        "symbol": "_resolve_owner"
+      },
+      "rule": "Returns \"explicit\" when a non-empty owner argument is supplied; otherwise returns \"default\" with config/defaults.json owner.",
+      "emitted_via": {
+        "file": "sync_app/serializer.py",
+        "symbol": "serialize_payload"
+      },
+      "not_derived_from": [
+        {
+          "file": "sync_app/store.py",
+          "symbol": "make_record",
+          "reason": "Base record contains only name, status, and owner."
+        },
+        {
+          "file": "sync_app/serializer.py",
+          "symbol": "draft_owner_source_from_record",
+          "reason": "Helper reads a record field but is not used by the live sync path."
+        }
+      ]
+    },
+    "routing_key": {
+      "derived_in": {
+        "file": "sync_app/serializer.py",
+        "symbol": "build_routing_key"
+      },
+      "inputs": [
+        "effective_owner from sync_app.service._resolve_owner",
+        "name passed into sync_app.service.sync_item"
+      ],
+      "invoked_from": {
+        "file": "sync_app/service.py",
+        "symbol": "sync_item"
+      },
+      "rule": "Slugifies owner and name, then formats `<owner>:<name>`.",
+      "timing": "Computed after CLI owner forwarding and after owner resolution, before serialize_payload emission."
+    },
+    "emission": {
+      "record_basis": {
+        "file": "sync_app/store.py",
+        "symbol": "make_record"
+      },
+      "payload_emitter": {
+        "file": "sync_app/serializer.py",
+        "symbol": "serialize_payload"
+      },
+      "rule": "Final payload is a copy of the base record plus owner_source and routing_key."
+    }
+  },
+  "test_observations": [
+    {
+      "file": "tests/test_sync.py",
+      "symbol": "test_service_resolves_explicit_owner_before_serialization",
+      "observation": "Explicit owner `pm-oncall` yields owner_source `explicit` and routing_key `pm-oncall:launch-checklist`."
+    },
+    {
+      "file": "tests/test_sync.py",
+      "symbol": "test_service_uses_default_owner_when_flag_is_missing",
+      "observation": "Missing --owner falls back to config/defaults.json owner and emits owner_source `default`."
+    },
+    {
+      "file": "tests/test_sync.py",
+      "symbol": "test_cli_accepts_owner_flag_and_preserves_existing_fields",
+      "observation": "CLI path preserves explicit owner through to emitted owner_source and routing_key."
+    },
+    {
+      "file": "tests/test_docs.py",
+      "symbol": "test_docs_reference_owner_path_surfaces",
+      "observation": "Repo docs intentionally reference --owner, owner_source, routing_key, and sync_item."
+    }
+  ],
+  "rejected_decoys": [
+    {
+      "file": "sync_app/serializer.py",
+      "symbol": "draft_owner_source_from_record",
+      "reason": "Suggests owner_source could be inferred from a stored record, but it is unused in the live path."
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "legacy_make_record_with_owner_source",
+      "reason": "Legacy helper adds owner_source in storage, but sync_item does not call it."
+    },
+    {
+      "file": "sync_app/store.py",
+      "symbol": "legacy_build_routing_key",
+      "reason": "Legacy routing helper is unused; live code imports and calls sync_app.serializer.build_routing_key."
+    },
+    {
+      "file": "ops/support_note.md",
+      "symbol": "support_note_2026_04_10",
+      "reason": "Narrative speculation conflicts with the implemented call path and tests."
+    }
+  ]
+}
