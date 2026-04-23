@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -56,18 +57,19 @@ def _prepare_codex_home(repo_root: Path, run_dir: Path, *, family: str, model: s
     source_config = repo_root / "benchmark_blueprints" / "families" / family / "codex" / "config.toml"
     if not source_config.exists():
         raise SystemExit(f"missing family codex config: {source_config}")
+    metadata = tomllib.loads(source_config.read_text(encoding="utf-8"))
+    reasoning_effort = str(metadata.get("reasoning_effort", "high"))
     codex_home = run_dir / "codex-home"
     config_dir = codex_home / ".codex"
     config_dir.mkdir(parents=True, exist_ok=True)
-    base_config = source_config.read_text(encoding="utf-8").rstrip()
-    suffix = "\n".join(
+    runtime_config = "\n".join(
         [
-            "",
             f'model = "{model}"',
             'model_provider = "localvllm"',
             'approval_policy = "never"',
             'sandbox_mode = "danger-full-access"',
             'personality = "pragmatic"',
+            f'model_reasoning_effort = "{reasoning_effort}"',
             "",
             '[model_providers.localvllm]',
             'name = "localvllm"',
@@ -76,7 +78,7 @@ def _prepare_codex_home(repo_root: Path, run_dir: Path, *, family: str, model: s
             "",
         ]
     )
-    (config_dir / "config.toml").write_text(f"{base_config}{suffix}", encoding="utf-8")
+    (config_dir / "config.toml").write_text(runtime_config, encoding="utf-8")
     return codex_home
 
 

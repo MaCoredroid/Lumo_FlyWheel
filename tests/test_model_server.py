@@ -333,6 +333,12 @@ def test_next_gpu_memory_utilization_stops_before_context_floor() -> None:
     assert ModelServer._next_gpu_memory_utilization("Free memory on device cuda:0", current=0.15) is None
 
 
+def test_next_gpu_memory_utilization_for_kv_cache_startup_raises_floor() -> None:
+    assert ModelServer._next_gpu_memory_utilization_for_kv_cache_startup(current=0.08) == 0.30
+    assert ModelServer._next_gpu_memory_utilization_for_kv_cache_startup(current=0.30) == 0.35
+    assert ModelServer._next_gpu_memory_utilization_for_kv_cache_startup(current=0.95) is None
+
+
 def test_wait_vram_free_uses_grace_period_when_nvidia_smi_is_unsupported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -720,7 +726,7 @@ models:
     monkeypatch.setattr(
         server,
         "_build_run_command",
-        lambda model_id, config, enable_request_logging, kv_cache_dtype, gpu_memory_utilization, enforce_eager: (
+        lambda model_id, config, enable_request_logging, kv_cache_dtype, gpu_memory_utilization, enforce_eager, **kwargs: (
             launch_targets.append(gpu_memory_utilization) or ["docker", "run"]
         ),
     )
@@ -747,6 +753,75 @@ models:
 
     assert waits == [MIN_GPU_MEMORY_UTILIZATION, 0.88]
     assert launch_targets == [0.9, 0.88]
+
+
+def test_start_raises_gpu_memory_target_after_kv_cache_startup_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 32768
+    gpu_memory_utilization: 0.08
+    max_num_batched_tokens: 6144
+    max_num_seqs: 1
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    waits: list[float | None] = []
+    launch_targets: list[float] = []
+    ready_attempts = 0
+
+    monkeypatch.setattr(server, "_ensure_image_present", lambda: None)
+    monkeypatch.setattr(server, "_reset_log", lambda model_id: None)
+    monkeypatch.setattr(server, "stop", lambda missing_ok=False: None)
+    monkeypatch.setattr(server, "_recover_host_memory", lambda: None)
+    monkeypatch.setattr(
+        server,
+        "_wait_vram_free",
+        lambda timeout_s=120, required_utilization=None: waits.append(required_utilization),
+    )
+    monkeypatch.setattr(
+        server,
+        "_build_run_command",
+        lambda model_id, config, enable_request_logging, kv_cache_dtype, gpu_memory_utilization, enforce_eager, **kwargs: (
+            launch_targets.append(gpu_memory_utilization) or ["docker", "run"]
+        ),
+    )
+    monkeypatch.setattr(
+        server,
+        "_run",
+        lambda cmd, capture_output=False, check=True: subprocess.CompletedProcess(cmd, 0, stdout="", stderr=""),
+    )
+
+    def fake_wait_ready(model_id: str, timeout_s: int = 900) -> None:
+        nonlocal ready_attempts
+        ready_attempts += 1
+        if ready_attempts == 1:
+            raise RuntimeError(
+                "Available KV cache memory: -27.97 GiB\n"
+                "ValueError: No available memory for the cache blocks. "
+                "Try increasing `gpu_memory_utilization` when initializing the engine."
+            )
+
+    monkeypatch.setattr(server, "_wait_ready", fake_wait_ready)
+    monkeypatch.setattr(server, "_start_proxy", lambda: None)
+
+    server.start("qwen3.5-27b")
+
+    assert waits == [MIN_GPU_MEMORY_UTILIZATION, 0.30]
+    assert launch_targets == [0.08, 0.30]
 
 
 def test_switch_model_restarts_when_sleep_mode_state_is_stale(

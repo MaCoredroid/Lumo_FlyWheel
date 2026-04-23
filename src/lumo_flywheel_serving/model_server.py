@@ -37,6 +37,7 @@ VLLM_ENABLE_RESPONSES_API_STORE = "1"
 QWEN_CHAT_TEMPLATE_HOST_PATH = REPO_ROOT / "docker" / "chat_templates" / "qwen3-openai-codex.jinja"
 QWEN_CHAT_TEMPLATE_CONTAINER_PATH = Path("/opt/lumo/chat_templates/qwen3-openai-codex.jinja")
 MIN_GPU_MEMORY_UTILIZATION = max(0.05, float(os.environ.get("LUMO_MIN_GPU_MEMORY_UTILIZATION", "0.05")))
+MIN_KV_CACHE_STARTUP_UTILIZATION = 0.30
 UNSUPPORTED_NVIDIA_SMI_GRACE_S = 20
 LOW_FREE_MEMORY_GRACE_RETRIES = 2
 LOW_FREE_MEMORY_GRACE_SLEEP_S = 45
@@ -303,6 +304,7 @@ class ModelServer:
                 error_text = str(exc)
                 incompatible_fp8_kv = "fp8_e5m2 kv-cache is not supported with fp8 checkpoints."
                 insufficient_memory = "Free memory on device cuda:0"
+                no_kv_cache_memory = "No available memory for the cache blocks."
                 fp8_cutlass_internal_error = "cutlass_scaled_mm"
                 retry_utilization = gpu_memory_utilization
                 if incompatible_fp8_kv in error_text and kv_cache_dtype != "auto":
@@ -323,6 +325,14 @@ class ModelServer:
                         error_text,
                         current=gpu_memory_utilization,
                     )
+                    if next_gpu_memory_utilization is not None:
+                        low_memory_grace_retries = 0
+                        gpu_memory_utilization = next_gpu_memory_utilization
+                        retry_utilization = next_gpu_memory_utilization
+                        self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
+                        continue
+                if no_kv_cache_memory in error_text:
+                    next_gpu_memory_utilization = self._next_gpu_memory_utilization_for_kv_cache_startup(current=gpu_memory_utilization)
                     if next_gpu_memory_utilization is not None:
                         low_memory_grace_retries = 0
                         gpu_memory_utilization = next_gpu_memory_utilization
@@ -561,6 +571,15 @@ class ModelServer:
 
         stepped = round(current - 0.05, 2)
         if stepped >= MIN_GPU_MEMORY_UTILIZATION:
+            return stepped
+        return None
+
+    @staticmethod
+    def _next_gpu_memory_utilization_for_kv_cache_startup(current: float) -> float | None:
+        if current < MIN_KV_CACHE_STARTUP_UTILIZATION:
+            return MIN_KV_CACHE_STARTUP_UTILIZATION
+        stepped = round(current + 0.05, 2)
+        if stepped <= 0.95:
             return stepped
         return None
 

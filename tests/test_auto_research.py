@@ -51,4 +51,4 @@ def test_offline_auto_research_produces_bundle_for_proposal_ranking_family(tmp_p
     bundle = load_tuned_config_bundle(result.bundle_path)
     assert bundle.family_id == "proposal-ranking-manager-judgment"
     assert bundle.regression_guard["delta"] > 0
-    assert bundle.vllm_config["gpu_memory_utilization"] <= 0.08
+    assert bundle.vllm_config["gpu_memory_utilization"] == 0.30

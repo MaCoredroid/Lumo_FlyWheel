@@ -11,6 +11,8 @@ from .registry import ModelConfig
 from .tuned_config import TunedConfigBundle, default_weight_version_id, make_tuned_config_bundle, persist_tuned_config_bundle
 from .yaml_utils import load_yaml_file
 
+MIN_LIVE_STARTUP_GPU_MEMORY_UTILIZATION = 0.30
+
 
 @dataclass(frozen=True)
 class SyntheticWorkloadDistribution:
@@ -467,9 +469,12 @@ class OfflineAutoResearchRunner:
 
     def _clamp_gpu_memory_utilization(self, value: float) -> float:
         cap = self.workload.gpu_memory_utilization_cap
+        # Sprint 0 is locked to the real Qwen 27B vLLM startup path, so do not
+        # emit tuned bundles below the observed live startup floor even when the
+        # synthetic workload cap is more aggressive.
         if cap is None:
-            return value
-        return min(value, cap)
+            return max(value, MIN_LIVE_STARTUP_GPU_MEMORY_UTILIZATION)
+        return max(min(value, cap), MIN_LIVE_STARTUP_GPU_MEMORY_UTILIZATION)
 
     def _apply_workload_caps(self, candidate: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(candidate)
