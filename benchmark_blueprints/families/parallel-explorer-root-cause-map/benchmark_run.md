@@ -92,3 +92,60 @@ Live probe status at this stage:
   - ceiling: `missing_contradictory_disproof`
   - misses: contradictory artifact disproof and explicit non-goals ruling out renderer + aggregation churn
 - interpretation: the workspace and CLI are live-runnable, and the family is already producing a meaningful first-live miss; the **full live probe loop is still pending**
+
+## attempt_02 — real whole-family live probe (`probe_run_id=20260423T051922Z`)
+
+Exact commands run:
+
+```bash
+python3 verifiers/parallel-explorer-root-cause-map/run_live_probe.py --probe-run-id 20260423T051922Z --runs 3 --timeout 900
+python3 scripts/probe_report.py \
+  benchmark_blueprints/families/parallel-explorer-root-cause-map/report/probe_runs.jsonl \
+  --probe-run-id 20260423T051922Z \
+  --emit-json \
+  > benchmark_blueprints/families/parallel-explorer-root-cause-map/report/attempt_02_probe_report.txt
+```
+
+Family-local outputs:
+
+- probe rows: `report/attempt_02_probe_runs.jsonl`
+- aggregated report: `report/attempt_02_probe_report.txt`
+- live logs: `report/live_probe_logs/20260423T051922Z-*.log`
+
+Per-variant results:
+
+| Variant | n | mean | stdev | min | max | scores | ceilings |
+|---|---:|---:|---:|---:|---:|---|---|
+| `v1-clean-baseline` | 3 | 35.00 | 0.00 | 35 | 35 | `[35,35,35]` | `missing_contradictory_disproof x3` |
+| `v2-noisy-distractor` | 3 | 95.00 | 0.00 | 95 | 95 | `[95,95,95]` | `-` |
+| `v3-dirty-state` | 3 | 35.00 | 0.00 | 35 | 35 | `[35,35,35]` | `missing_contradictory_disproof x3` |
+| `v4-multi-corpus-objective` | 3 | 35.00 | 0.00 | 35 | 35 | `[35,35,35]` | `missing_contradictory_disproof x3` |
+| `v5-recovery-in-thread` | 3 | 35.00 | 0.00 | 35 | 35 | `[35,35,35]` | `missing_contradictory_disproof x3` |
+
+Layer A gate values:
+
+- family mean: `47.00` -> FAIL (target `[15,25]`)
+- max variant mean: `95.00` -> FAIL (target `<= 40`)
+- min variant mean: `35.00` -> FAIL (target `<= 10`)
+- monotonic V1>=V2>=V3>=V4>=V5 within ±3: FAIL
+  - break: `v1-clean-baseline (35.0) < v2-noisy-distractor (95.0)`
+- oracle baseline: `100 / 100 / 100 / 100 / 100` -> PASS
+- empty baseline: `0 / 0 / 0 / 0 / 0` -> PASS
+- shortcut baseline: `20 / 20 / 20 / 20 / 20` -> PASS
+
+Spot-check diagnosis from actual live briefs:
+
+- **V1**. The live brief in `/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/probe_v1-clean-baseline_7l9w3fx7/workspace/brief/manager_brief.md` correctly identifies `normalize_fs_owner_alias` as the primary cause, correctly rules the renderer downstream-only, quotes the exact failing assertion, and explicitly explains away `artifacts/logs/operator_note_2026_04_14.md` as weaker contradictory evidence. The score still caps at `35` because the scorer currently expects the contradictory artifact path to be exactly `docs/triage-policy.md` in V1. That is too narrow for the evidence the agent is actually using.
+- **V2**. The live brief in `/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/probe_v2-noisy-distractor_6cpy_tji/workspace/brief/manager_brief.md` also identifies the correct root cause, but V2's contradictory artifact path in `gold_ranking.json` is already the operator note (`artifacts/logs/operator_note_2026_04_15.md`). That means V2 escapes the `missing_contradictory_disproof` ceiling entirely and lands at `95`, producing the V1<V2 inversion.
+
+Interpretation:
+
+- This attempt does **not** show the model missing the core root-cause task. It shows a **variant-design / scorer-alignment problem**:
+  - V1 / V3 / V4 / V5 all collapse onto the same `35` cap because the contradictory-artifact acceptance logic is too path-specific.
+  - V2 is much easier because its contradictory artifact is the exact operator note the model naturally chooses to disprove, so it clears the ceiling and jumps to `95`.
+- That is a calibration defect, not an honest frontier-difficulty curve. The next hardening pass should fix the contradictory-artifact contract so each variant's disproof target is either unambiguous from the evidence or the scorer accepts the legitimate alternative artifact paths the task naturally supports.
+
+Next-attempt hypothesis:
+
+- Replace the exact-path contradictory-artifact check with a variant-local accepted set or a stronger symbol+resolution check, then re-probe.
+- Keep the change family-local and singular; do not edit shared probe infra.

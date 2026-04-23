@@ -19,10 +19,17 @@ SCORER = REPO / "verifiers/parallel-explorer-root-cause-map/score_ranking.py"
 REPORT_DIR = FAMILY / "report"
 RUNS_JSONL = REPORT_DIR / "probe_runs.jsonl"
 LOG_DIR = REPORT_DIR / "live_probe_logs"
+VARIANT_ORDER = [
+    "v1-clean-baseline",
+    "v2-noisy-distractor",
+    "v3-dirty-state",
+    "v4-multi-corpus-objective",
+    "v5-recovery-in-thread",
+]
 
 
-def run_once(variant: str, run_index: int, timeout_seconds: int) -> dict:
-    tag = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + f"-{variant}-run{run_index}"
+def run_once(probe_run_id: str, variant: str, run_index: int, timeout_seconds: int) -> dict:
+    tag = f"{probe_run_id}-{variant}-run{run_index}"
     work = Path(tempfile.mkdtemp(prefix=f"probe_{variant}_"))
     ws = work / "workspace"
     result_file = work / "verify_result.json"
@@ -66,7 +73,7 @@ def run_once(variant: str, run_index: int, timeout_seconds: int) -> dict:
     subprocess.run([sys.executable, str(SCORER)], env=env, check=True)
     scored = json.loads(result_file.read_text())
     rec = {
-        "probe_run_id": tag.rsplit("-", 1)[0],
+        "probe_run_id": probe_run_id,
         "variant": variant,
         "run_index": run_index,
         "codex_exit": completed.returncode,
@@ -85,18 +92,22 @@ def run_once(variant: str, run_index: int, timeout_seconds: int) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--variant", default="v1-clean-baseline")
+    parser.add_argument("--variant", action="append", dest="variants")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--probe-run-id", default=None)
     args = parser.parse_args()
 
+    variants = args.variants or list(VARIANT_ORDER)
+    probe_run_id = args.probe_run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     with RUNS_JSONL.open("a") as out:
-        for run_index in range(1, args.runs + 1):
-            rec = run_once(args.variant, run_index, args.timeout)
-            out.write(json.dumps(rec, sort_keys=True) + "\n")
-            print(json.dumps(rec, sort_keys=True))
+        for variant in variants:
+            for run_index in range(1, args.runs + 1):
+                rec = run_once(probe_run_id, variant, run_index, args.timeout)
+                out.write(json.dumps(rec, sort_keys=True) + "\n")
+                print(json.dumps(rec, sort_keys=True))
     return 0
 
 
