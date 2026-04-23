@@ -4,11 +4,11 @@ Repo-level checklist for the canonical 55 CNB-55 families.
 
 ## Track 01 Core Implementation
 
-- [ ] `responses-sdk-adapter-cutover`
-- [ ] `responses-tool-schema-cutover`
-- [ ] `sandbox-policy-ci-drift`
-- [ ] `transcript-merge-regression`
-- [ ] `workspace-approval-state-threading`
+- [x] ~~`responses-sdk-adapter-cutover`~~
+- [x] ~~`responses-tool-schema-cutover`~~
+- [x] ~~`sandbox-policy-ci-drift`~~
+- [x] ~~`transcript-merge-regression`~~
+- [x] ~~`workspace-approval-state-threading`~~
 
 ## Track 02 Codebase Understanding
 
@@ -56,7 +56,7 @@ Repo-level checklist for the canonical 55 CNB-55 families.
 - [ ] `mcp-routing-parameter-fidelity`
 - [ ] `multi-tool-transaction-repair`
 - [ ] `partial-failure-rollback-recovery`
-- [x] `policy-aware-request-resolution`
+- [x] ~~`policy-aware-request-resolution`~~
 
 ## Track 08 Skills Tooling
 
@@ -76,16 +76,16 @@ Repo-level checklist for the canonical 55 CNB-55 families.
 
 ## Track 10 Strategic Management & Long-Horizon Evolution
 
-- [x] `backlog-decomposition-scheduler`
-- [x] `multi-round-software-evolution`
-- [ ] `objective-driven-repo-improvement`
-- [x] `proposal-ranking-manager-judgment`
-- [x] `release-note-to-plan-translation`
+- [x] ~~`backlog-decomposition-scheduler`~~
+- [x] ~~`multi-round-software-evolution`~~
+- [x] ~~`objective-driven-repo-improvement`~~
+- [x] ~~`proposal-ranking-manager-judgment`~~
+- [x] ~~`release-note-to-plan-translation`~~
 
 ## Track 11 Subagents Orchestration
 
-- [ ] `candidate-worktree-shootout`
-- [ ] `delegation-merge-salvage`
-- [ ] `fanout-fullstack-release-blocker`
-- [x] `incident-retro-runbook-closure`
-- [ ] `nightly-regression-watch`
+- [x] ~~`candidate-worktree-shootout`~~
+- [x] ~~`delegation-merge-salvage`~~
+- [x] ~~`fanout-fullstack-release-blocker`~~
+- [x] ~~`incident-retro-runbook-closure`~~
+- [x] ~~`nightly-regression-watch`~~
