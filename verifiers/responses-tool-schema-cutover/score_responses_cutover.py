@@ -348,7 +348,7 @@ def apply_ceilings(
             state.apply_ceiling("contract_drift", 50)
 
     if visible_ok and not changed["tests_changed"]:
-        state.apply_ceiling("no_test_regression_guard", 60)
+        state.apply_ceiling("no_test_regression_guard", 35)
 
 
 def milestone_vector(milestones: dict[str, bool]) -> dict[str, Any]:

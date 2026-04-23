@@ -204,3 +204,33 @@ Probe run id: `20260423T000148Z`
 
 - Layer B declaration is now more honest than the prior `green` claim because the canonical taxonomy and latest variance state are explicitly recorded in `family.yaml`, but reviewer acceptance is still pending.
 - Layer A remains open after the required post-fix rerun. The latest fresh live probe is even easier than `attempt_02`, with `family_mean = 54.00` and no variant mean below `36.67`.
+
+## Attempt 04 — scorer hardening only, no live rerun in this turn
+
+### Why this change
+
+- Reviewer follow-up asked for a family-local hardening pass that reduces
+  `no_test_regression_guard` saturation and improves `v1` discrimination.
+- `attempt_03` showed that runs which repaired runtime/config/docs and passed
+  hidden replay checks, but still never strengthened visible regression tests,
+  were routinely landing in the `50-60` band.
+- That was too generous for the declared task contract because visible test
+  strengthening is already an explicit deliverable rather than an optional
+  polish step.
+
+### Hardening applied
+
+- lowered `no_test_regression_guard` cap from `60` to `35` in the family scorer
+- updated `evaluator_contract.md` to document the new cap and the reason it was
+  changed
+
+### Scope
+
+- family-local only
+- no live probe rerun in this turn by explicit user instruction
+
+### Honest status after attempt 04
+
+- This is a design-only hardening step recorded ahead of the next rerun.
+- `attempt_03` remains the latest live evidence on file until a later whole-family
+  probe is run against the hardened scorer.

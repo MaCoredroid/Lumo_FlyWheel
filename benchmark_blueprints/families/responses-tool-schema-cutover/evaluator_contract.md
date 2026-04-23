@@ -65,7 +65,14 @@ pytest -q tests/test_adapter_contract.py tests/test_replay_render.py
 - `call_id_ordinal_shortcut` → `25`
 - `adapter_or_reducer_gap` → `30`
 - `contract_drift` → `50`
-- `no_test_regression_guard` → `60`
+- `no_test_regression_guard` → `35`
+
+`attempt_04` hardening note: this cap was lowered from `60` to `35` after the
+recorded `attempt_03` live rerun showed repeated code/config/docs repairs
+clearing into the `50-60` band without strengthening either visible regression
+test file. The task contract already requires visible regression coverage as a
+first-class deliverable, so keeping those runs above the mid-30s overstated
+real completion, especially for `v1-clean-baseline`.
 
 ## Integrity Rules
 
