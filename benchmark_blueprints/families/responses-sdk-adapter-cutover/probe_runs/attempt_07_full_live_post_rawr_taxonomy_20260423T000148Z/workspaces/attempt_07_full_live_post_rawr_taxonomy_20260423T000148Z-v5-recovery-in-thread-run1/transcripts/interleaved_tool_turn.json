@@ -1,0 +1,5 @@
+[
+  {"type": "message", "content": [{"type": "output_text", "text": "Checking"}]},
+  {"type": "tool_call", "call_id": "call-1", "name": "lookup_owner", "arguments": "{\"id\": 1}"},
+  {"type": "tool_result", "call_id": "call-1", "output": "oncall-primary"}
+]

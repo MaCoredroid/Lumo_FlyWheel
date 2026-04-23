@@ -1,0 +1,122 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   91.67    7.64    85   100  [100,85,90]  -
+v2-noisy-distractor                3   25.00    0.00    25    25  [25,25,25]  flattened_multi_event_turnx3
+v3-dirty-state                     3   25.00    0.00    25    25  [25,25,25]  flattened_multi_event_turnx3,reordered_chunk_instabilityx3
+v4-multi-corpus-objective          3   25.00    0.00    25    25  [25,25,25]  flattened_multi_event_turnx3,reordered_chunk_instabilityx3
+v5-recovery-in-thread              3   23.33    2.89    20    25  [25,20,25]  compatibility_shim_left_livex1,flattened_multi_event_turnx2,future_event_corruptionx3,reordered_chunk_instabilityx3,visible_only_cutoverx1
+
+family_mean = 38.00   (window 15.0-25.0)
+max_variant_mean = 91.67   (cap 40.0)
+min_variant_mean = 23.33   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 38.00
+  [FAIL] max variant <= cap: 91.67
+  [FAIL] at least one variant <= hard floor: min variant mean = 23.33
+  [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: ok
+
+overall: HARDEN NEEDED
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 38.0,
+    "family_mean_ok": false,
+    "hard_variant_ok": false,
+    "max_variant_mean": 91.66666666666667,
+    "max_variant_ok": false,
+    "min_variant_mean": 23.333333333333332,
+    "monotonic_breaks": [],
+    "monotonic_ok": true
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {},
+      "max": 100,
+      "mean": 91.66666666666667,
+      "min": 85,
+      "n": 3,
+      "scores": [
+        100,
+        85,
+        90
+      ],
+      "shortcut_runs": 0,
+      "stdev": 7.637626158259733
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {
+        "flattened_multi_event_turn": 3
+      },
+      "max": 25,
+      "mean": 25,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {
+        "flattened_multi_event_turn": 3,
+        "reordered_chunk_instability": 3
+      },
+      "max": 25,
+      "mean": 25,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "flattened_multi_event_turn": 3,
+        "reordered_chunk_instability": 3
+      },
+      "max": 25,
+      "mean": 25,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        25,
+        25,
+        25
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "compatibility_shim_left_live": 1,
+        "flattened_multi_event_turn": 2,
+        "future_event_corruption": 3,
+        "reordered_chunk_instability": 3,
+        "visible_only_cutover": 1
+      },
+      "max": 25,
+      "mean": 23.333333333333332,
+      "min": 20,
+      "n": 3,
+      "scores": [
+        25,
+        20,
+        25
+      ],
+      "shortcut_runs": 0,
+      "stdev": 2.886751345948129
+    }
+  }
+}

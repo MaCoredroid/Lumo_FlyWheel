@@ -228,3 +228,73 @@ Overall verdict from the generated report: `HARDEN NEEDED`
   - `benchmark_blueprints/families/responses-sdk-adapter-cutover/verification_matrix_v5.md`
   - `benchmark_blueprints/families/responses-sdk-adapter-cutover/evaluator_contract.md`
 - RAWR taxonomy is now auditable independently from integrity/adversarial rows, which is the HLD §4 expectation.
+
+## `attempt_07` — fresh whole-family live probe after taxonomy fix
+
+### Why this was required
+
+- `attempt_06` changed family-local metadata in `family.yaml`, so the pre-fix live probe was no longer sufficient evidence for this review round.
+- This rerun keeps the Layer B taxonomy fix honest by showing the family still behaves the same under a fresh whole-family live `codex exec` pass after the metadata change.
+
+### Commands run
+
+```bash
+PROBE_RUN_ID='attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z' \
+N=3 \
+CODEX_TIMEOUT=900 \
+benchmark_blueprints/families/responses-sdk-adapter-cutover/tools/run_live_probe.sh
+
+python3 scripts/probe_report.py \
+  benchmark_blueprints/families/responses-sdk-adapter-cutover/probe_runs/attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z/probe_runs.jsonl \
+  --probe-run-id attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z \
+  > benchmark_blueprints/families/responses-sdk-adapter-cutover/probe_runs/attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z/probe_report.txt
+
+python3 scripts/probe_report.py \
+  benchmark_blueprints/families/responses-sdk-adapter-cutover/probe_runs/attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z/probe_runs.jsonl \
+  --probe-run-id attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z \
+  --emit-json \
+  > benchmark_blueprints/families/responses-sdk-adapter-cutover/probe_runs/attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z/probe_report.json
+```
+
+### Artifacts
+
+- JSONL: `benchmark_blueprints/families/responses-sdk-adapter-cutover/probe_runs/attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z/probe_runs.jsonl`
+- Text report: `benchmark_blueprints/families/responses-sdk-adapter-cutover/probe_runs/attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z/probe_report.txt`
+- JSON report: `benchmark_blueprints/families/responses-sdk-adapter-cutover/probe_runs/attempt_07_full_live_post_rawr_taxonomy_20260423T000148Z/probe_report.json`
+
+### Per-variant table
+
+| Variant | Scores | Mean | Stdev | Dominant ceilings |
+| --- | --- | ---: | ---: | --- |
+| `v1-clean-baseline` | `[100, 85, 90]` | `91.67` | `7.64` | none |
+| `v2-noisy-distractor` | `[25, 25, 25]` | `25.00` | `0.00` | `flattened_multi_event_turn` x3 |
+| `v3-dirty-state` | `[25, 25, 25]` | `25.00` | `0.00` | `flattened_multi_event_turn` x3, `reordered_chunk_instability` x3 |
+| `v4-multi-corpus-objective` | `[25, 25, 25]` | `25.00` | `0.00` | `flattened_multi_event_turn` x3, `reordered_chunk_instability` x3 |
+| `v5-recovery-in-thread` | `[25, 20, 25]` | `23.33` | `2.89` | `future_event_corruption` x3, `reordered_chunk_instability` x3, `flattened_multi_event_turn` x2 |
+
+### Layer A gate values
+
+- `family_mean = 38.00` — `FAIL` (target window `[15, 25]`)
+- `max_variant_mean = 91.67` — `FAIL` (cap `<= 40`)
+- `min_variant_mean = 23.33` — `FAIL` (need at least one variant `<= 10`)
+- monotonic `V1 >= V2 >= V3 >= V4 >= V5` within tolerance — `PASS`
+
+Overall verdict from the generated report: `HARDEN NEEDED`
+
+### Post-fix diagnosis
+
+- The Layer B taxonomy change did not alter the family's live behavioral signal.
+- `v1` is still too easy, and the floor remains above the intended hard-variant threshold.
+- `v2` through `v5` still discriminate on the intended hidden semantics:
+  - `v2`: repeated `flattened_multi_event_turn`
+  - `v3` and `v4`: repeated `flattened_multi_event_turn` plus `reordered_chunk_instability`
+  - `v5`: repeated `future_event_corruption`, plus intermittent `flattened_multi_event_turn`, `reordered_chunk_instability`, `visible_only_cutover`, and `compatibility_shim_left_live`
+
+### Metadata honesty check
+
+- `family.yaml` remains canonical on RAWR taxonomy after the rerun:
+  - `grounding_stripped: implemented`
+  - `citation_fabricated: declared_not_yet_implemented`
+  - `constraint_named_not_respected: declared_not_yet_implemented`
+- `delete_tests` remains in `integrity_adversarials`, not in `rawr_modes`
+- `current_observed_stdev_M_training` is refreshed to `0.28` from the fresh 15-run probe sample
