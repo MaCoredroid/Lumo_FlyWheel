@@ -1,0 +1,12 @@
+{
+  "request": {
+    "base_url": "http://127.0.0.1:8001/v1",
+    "previous_response_id": "resp_turn_001",
+    "provider": "legacy_vllm",
+    "store": true
+  },
+  "response": {
+    "id": "resp_turn_002",
+    "status": "completed"
+  }
+}

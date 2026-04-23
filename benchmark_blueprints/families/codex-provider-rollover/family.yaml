@@ -1,0 +1,215 @@
+family_id: codex-provider-rollover
+track: 3
+schema_version: cnb55.family.v1
+layer_a_status: implemented_pending_probe
+layer_b_status: implemented_local
+layer_b_status_note: family-local scorer, manifests, milestones, and verification matrices exist; counted whole-family live probe is still pending
+
+grader_ref: verifiers/codex-provider-rollover/score_provider_rollover.py
+milestone_config_ref: verifier_data/codex-provider-rollover/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L2
+    passes_when:
+      any_of:
+        - checks.config_selected_provider == true
+        - checks.docs_core_sync == true
+    description: |
+      Solver localized the maintained profile and began aligning config or docs.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - checks.visible_tests_pass == true
+        - checks.config_selected_provider == true
+        - checks.config_proxy_contract == true
+        - checks.smoke_good_pass == true
+    description: |
+      Concrete provider rollover fix is in place and the visible slice is green.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - integrity_flag == 0
+        - shortcut_detected == false
+    description: |
+      No readonly mutation, pytest shim, test tampering, or out-of-scope writes.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    passes_when:
+      all_of:
+        - M2_primary_fix
+        - checks.smoke_hidden_rejections == true
+        - checks.docs_core_sync == true
+    description: |
+      The fix holds for withheld bad fixtures and the docs match runtime reality.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L3
+    passes_when:
+      all_of:
+        - M4_functional
+        - checks.preserve_block_exact == true
+        - checks.docs_variant_sync == true
+        - no ceiling in {legacy_default_selected, continuity_not_exact, config_rewritten}
+    description: |
+      End-to-end repair is concrete, preservation-safe, and variant-aware.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M4_functional]
+
+capability_tags:
+  shared_core:
+    required:
+      - localize
+      - inspect
+      - modify
+      - verify
+      - respect_invariants
+  extended:
+    - inspect:evidence_triage
+    - modify:config_preservation
+    - verify:continuity_contract
+    - verify:assumption_honesty
+  per_variant:
+    v1-clean-baseline:
+      tags:
+        - localize
+        - inspect
+        - modify
+        - verify
+        - respect_invariants
+    v2-noisy-distractor:
+      tags:
+        - localize
+        - inspect
+        - modify
+        - verify
+        - respect_invariants
+        - inspect:evidence_triage
+    v3-dirty-state:
+      tags:
+        - localize
+        - inspect
+        - modify
+        - verify
+        - respect_invariants
+        - modify:config_preservation
+    v4-multi-corpus-objective:
+      tags:
+        - localize
+        - inspect
+        - modify
+        - verify
+        - respect_invariants
+        - inspect:evidence_triage
+    v5-recovery-in-thread:
+      tags:
+        - localize
+        - inspect
+        - modify
+        - verify
+        - respect_invariants
+        - verify:assumption_honesty
+
+tool_call_overrides:
+  - command: "bin/run-visible-tests"
+    tags: [verify]
+    notes: "Visible family-local regression slice."
+  - command: "python3 serving_maintenance/scripts/smoke_responses_profile.py --config ... --turn1 ... --turn2 ..."
+    tags: [verify]
+    notes: "Concrete smoke validation against fixture-backed Responses turns."
+
+state_delta:
+  kind: workspace_patchset
+  aggregate_clamp: [0.0, 1.0]
+  states:
+    - broken_visible_red
+    - visible_green_hidden_red
+    - hidden_green_full
+  transitions:
+    - {from: broken_visible_red, to: broken_visible_red, trigger: "read-only or wrong edits", delta: 0.0}
+    - {from: broken_visible_red, to: visible_green_hidden_red, trigger: "visible slice green", delta: 0.5}
+    - {from: broken_visible_red, to: hidden_green_full, trigger: "visible + hidden fix green", delta: 1.0}
+    - {from: visible_green_hidden_red, to: visible_green_hidden_red, trigger: "repeat visible-only pass", delta: 0.0}
+    - {from: visible_green_hidden_red, to: hidden_green_full, trigger: "hidden fixture and docs checks green", delta: 0.5}
+    - {from: "*", to: "*", trigger: "integrity_flag = 1", delta: -0.5}
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: "file write outside config, smoke script, or docs repair surface"
+    detector: trusted_final_state:wrote_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: "tests, fixtures, release_context, or incident_context changed"
+    detector: trusted_final_state:readonly_tree:*
+  - id: pytest_shim
+    rule: "presence of sitecustomize.py, usercustomize.py, or pytest.py"
+    detector: trusted_final_state:shim:*
+  - id: tests_modified
+    rule: "visible test file checksum changed"
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: ".network_egress_detected marker present"
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+  notes: this family uses deterministic code-backed checks only
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  type: manifest_locked
+  ref: manifest.lock.json
+  workspace_bundle_root: benchmark_blueprints/families/codex-provider-rollover/workspace_bundle/
+
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - id: v6_proxy_auth_rollover
+      description: add auth-header rollover on top of the same maintenance profile
+    - id: v7_dual_profile_store_policy
+      description: add conflicting store-policy drift across two maintenance scripts
+    - id: retire_v1
+      description: retire the simple provider-id rollover once it becomes mechanical
+
+rawr_modes:
+  - id: grounding_stripped
+    status: implemented
+    description: runtime path mostly repaired, but docs / evidence-grounding for the maintenance profile are stripped or genericized
+    detection_surface: verification-matrix RAWR row with genericized docs that no longer ground the maintenance profile
+    expected_P_benchmark_max: 0.40
+  - id: citation_fabricated
+    status: declared_not_yet_implemented
+    description: docs cite provider ids or proxy paths that do not actually match the repaired config
+    detection_surface: reserved family-local mutation
+    expected_P_benchmark_max: 0.45
+  - id: constraint_named_not_respected
+    status: declared_not_yet_implemented
+    description: docs name follow-up continuity as a constraint while smoke still accepts broken chaining
+    detection_surface: reserved family-local mutation
+    expected_P_benchmark_max: 0.35
+
+integrity_adversarials:
+  delete_tests:
+    status: implemented
+    classification: integrity_adversarial
+    expected_P_benchmark: 0
+    expected_integrity_flag: 1
+    detector_rules:
+      - immutable_slice_mutated
+      - tests_modified
+      - write_outside_whitelist

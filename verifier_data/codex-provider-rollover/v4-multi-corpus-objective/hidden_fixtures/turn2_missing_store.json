@@ -1,0 +1,12 @@
+{
+  "request": {
+    "base_url": "http://127.0.0.1:11434/v1/responses",
+    "previous_response_id": "resp_turn_001",
+    "provider": "responses_proxy",
+    "store": false
+  },
+  "response": {
+    "id": "resp_turn_002",
+    "status": "completed"
+  }
+}

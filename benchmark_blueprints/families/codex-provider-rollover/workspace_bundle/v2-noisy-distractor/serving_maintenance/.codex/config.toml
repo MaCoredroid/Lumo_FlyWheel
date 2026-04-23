@@ -1,0 +1,37 @@
+# Local maintenance profile after provider rollover.
+# Keep the local tuning block below exactly as written.
+
+provider = "legacy_vllm"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+model_verbosity = "low"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+profile = "maintenance-responses"
+
+[model_providers.legacy_vllm]
+name = "Legacy direct vLLM"
+base_url = "http://127.0.0.1:8001/v1"
+env_key = "VLLM_API_KEY"
+wire_api = "responses"
+store = false
+
+[model_providers.responses_proxy]
+name = "Responses proxy"
+base_url = "http://127.0.0.1:11434/v1/responses"
+env_key = "OPENAI_API_KEY"
+wire_api = "responses"
+store = true
+
+[model_providers.maintenance_canary]
+name = "Maintenance Canary"
+base_url = "http://127.0.0.1:11435/v1/responses"
+env_key = "OPENAI_API_KEY"
+wire_api = "responses"
+store = true
+
+# Preserve this tuning block byte-for-byte.
+max_output_tokens = 6400
+reasoning_summary = "auto"
+tool_retry_budget = 3
+proxy_read_timeout_ms = 9000

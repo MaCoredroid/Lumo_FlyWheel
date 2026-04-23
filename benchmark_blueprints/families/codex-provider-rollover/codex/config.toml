@@ -1,12 +1,13 @@
 # Benchmark-local Codex config for the Codex Provider Rollover family.
 
-[model_providers.family_local]
+[model_providers.responses_proxy]
 name = "Family Local Responses Proxy"
-base_url = "http://127.0.0.1:8001/v1"
-env_key = "VLLM_API_KEY"
+base_url = "http://127.0.0.1:11434/v1/responses"
+env_key = "OPENAI_API_KEY"
 wire_api = "responses"
+store = true
 
-provider = "family_local"
+provider = "responses_proxy"
 model = "gpt-5.4"
 model_reasoning_effort = "high"
 model_verbosity = "low"

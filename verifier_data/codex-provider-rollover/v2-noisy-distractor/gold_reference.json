@@ -1,0 +1,41 @@
+{
+  "allowed_writes": [
+    "serving_maintenance/.codex/config.toml",
+    "serving_maintenance/scripts/smoke_responses_profile.py",
+    "serving_maintenance/docs/provider_rollover.md",
+    "serving_maintenance/docs/smoke.md"
+  ],
+  "expected_base_url": "http://127.0.0.1:11434/v1/responses",
+  "expected_env_key": "OPENAI_API_KEY",
+  "expected_provider": "responses_proxy",
+  "family_id": "codex-provider-rollover",
+  "negative_smoke_fixtures": [
+    "turn2_missing_store.json",
+    "turn2_wrong_previous.json",
+    "turn2_wrong_provider.json"
+  ],
+  "pass_threshold": 90,
+  "preserve_block": "# Preserve this tuning block byte-for-byte.\nmax_output_tokens = 6400\nreasoning_summary = \"auto\"\ntool_retry_budget = 3\nproxy_read_timeout_ms = 9000\n",
+  "readonly_roots": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "bin",
+    "tests",
+    "serving_maintenance/fixtures",
+    "release_context",
+    "incident_context",
+    "serving_maintenance/templates",
+    "serving_maintenance/scripts/rewrite_profile_from_template.py"
+  ],
+  "required_doc_keywords": [
+    "responses_proxy",
+    "maintenance_canary is not the maintained default",
+    "previous_response_id"
+  ],
+  "variant_ceiling": {
+    "cap": 35,
+    "name": "canary_anchoring"
+  },
+  "variant_id": "v2-noisy-distractor"
+}

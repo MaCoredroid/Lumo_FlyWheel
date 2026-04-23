@@ -1,0 +1,30 @@
+{
+  "family_id": "codex-provider-rollover",
+  "grader": {
+    "score_provider_rollover_py_sha256": "8073b69011ca9922592c6ea7b3c6998b3aedc85dc9e3e78dbb5112cf035259cb",
+    "verify_sh_sha256": "27b833d9796be61887573895e0d334f3faf202893d83ac04f6844f30f9186f06"
+  },
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_reference_sha256": "202bfc7102b6c0ff2fedc42cceb00de1f81d08dc16869ef14326f5a5d7746ef2",
+      "workspace_manifest_sha256": "f3772ae52bf001df0d2373a68a1cabe849c6cd1b5b97f6e806dd9bd6b9a67bef"
+    },
+    "v2-noisy-distractor": {
+      "gold_reference_sha256": "145ad416b06e9e52355594e4d0bba5f5843efa4a209fd30603150238b66cbfea",
+      "workspace_manifest_sha256": "ebc290f1ad0816147df4616b523f8260a13140cd859c289fd7ed0b9972726cff"
+    },
+    "v3-dirty-state": {
+      "gold_reference_sha256": "c62e6882cd8dc1dc0d44029a8ac84593873e7c082903418b1eff5cae7a0b0319",
+      "workspace_manifest_sha256": "46b50263615a99eb94b603da2653c0174b8b58dcfab47008344430a38d66fab4"
+    },
+    "v4-multi-corpus-objective": {
+      "gold_reference_sha256": "08e9f1f14a1b900a5651813e9a08d7fd46ec081ebb4ba6b08b8c30a22e35034a",
+      "workspace_manifest_sha256": "d646b403f146d789ae07b7ee1f86253eb261b6ae8f3e7d0595f7305143775b07"
+    },
+    "v5-recovery-in-thread": {
+      "gold_reference_sha256": "6f4dd88a39f1c545f8f5e84af9ceef9912b14d909d8e7e1461935106a054d9f1",
+      "workspace_manifest_sha256": "a91a01337260ae41e51605aeabc8500a9c944c0f25455a982e0e61bf96538ab2"
+    }
+  }
+}

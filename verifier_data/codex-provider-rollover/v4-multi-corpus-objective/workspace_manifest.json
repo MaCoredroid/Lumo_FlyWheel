@@ -1,0 +1,21 @@
+{
+  "files": {
+    ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+    "AGENTS.md": "52e78f367ea2011b63615942b50f0666d02059517cf6f17bc72ab166b3a1eb56",
+    "Dockerfile": "30968e58fc3fffcc6a08a9285657d6332c37cbfa7b21e22fe1d2bf36220839f8",
+    "bin/run-visible-tests": "e5f766f3d3a7979568d5860b040bcf7c114c777e0cc786a3613f10d1bdb51f9f",
+    "release_context/maintenance_window.md": "7fb81c7db133be53d1c813eeec7a0cb166ac6eae962696114e49abafb3d801de",
+    "release_context/operator_ticket.md": "8914a833cd4175014a9b1739fdd6b86c37bccec694ddb1650ed96f05a998f6ef",
+    "serving_maintenance/.codex/config.toml": "cffc8e294bdbe52219915e55d8bc1eb48a17b37ee373c0a809301f3f5a046ab4",
+    "serving_maintenance/docs/provider_rollover.md": "8d1fc89ec088b48d03f830331692e47f8591c704d052e9271321ce5f66f1e155",
+    "serving_maintenance/docs/smoke.md": "d29b39f23145141c14e6a0cf783504bbc16c512977d00784d970e48a1a71ddba",
+    "serving_maintenance/fixtures/http/turn1_ok.json": "5bf4fb1a878578b985ddf6e292cf9d524db1c79f73afab19a98871b87bea5af4",
+    "serving_maintenance/fixtures/http/turn2_missing_store.json": "dbd45a2e66a0f3db83d237260fcbb12dfae4204147865e5f4fe16e844511eb51",
+    "serving_maintenance/fixtures/http/turn2_ok.json": "d8a1acc3dc257e1de5b5129e89cfdd53ee88fd0653089977d3dfe8ec1d214511",
+    "serving_maintenance/scripts/smoke_responses_profile.py": "80b1bd91c9a6415152d5932e36143209413b6d59d3ec211ab4515d25716e8602",
+    "tests/test_config_profile.py": "b50cc19f839687e2c2d2589e2a48958a435f627cc6d78fb8ecb74d138ae0e979",
+    "tests/test_docs_sync.py": "b780ff3e5ecd67ac53c88106fd440f9f76326160b7e5156d8cdfbe91e708dce3",
+    "tests/test_smoke_profile.py": "03bb848cc02d42d1a18c843c31d4eb95aedbef62fa37f4ff9a7e66afb9119123"
+  },
+  "schema_version": "cnb55.workspace_manifest.v1"
+}

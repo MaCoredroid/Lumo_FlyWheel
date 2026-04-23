@@ -1,67 +1,227 @@
-# Codex Provider Rollover
+# `codex-provider-rollover` Task Spec
 
-Scenario type: `config_rollover_and_smoke`
+**Track:** 03 — Refactor Modernization
+**Family id:** `codex-provider-rollover`
+**Spec version:** CNB-55 v1.0
+**Variants:** 5 (`v1-clean-baseline` through `v5-recovery-in-thread`)
 
-## Task prompt
-Restore the local Responses-path maintenance profile after a provider rollover. The repo’s `.codex/config.toml`, the maintenance smoke probe, and the operator docs drifted after the serving stack moved from a direct vLLM endpoint to the local proxy-backed Responses path. A one-turn smoke still passes, but follow-up chaining fails because the config points at the wrong provider id and the smoke script does not assert `previous_response_id` continuity. Repair the maintenance profile so the configured Codex path, smoke probe, and docs agree again. Preserve unrelated experimental config knobs already present in the local file.
+## Task Prompt (canonical)
 
-## Workspace bundle
-- `serving_maintenance/.codex/config.toml` with one stale provider stanza, one active provider stanza, and locally edited experimental knobs that must survive.
-- `serving_maintenance/scripts/smoke_responses_profile.py` that validates turn one but not follow-up chaining.
-- `serving_maintenance/fixtures/http/turn1_ok.json` and `turn2_missing_store.json` showing the current failure mode.
-- `serving_maintenance/docs/provider_rollover.md` and `docs/smoke.md` with partially outdated command examples and endpoint references.
-- `serving_maintenance/tests/` covering TOML loading, smoke behavior, and docs snippets; hidden tests assert that the repaired smoke checks provider id, proxy base URL, and multi-turn continuity without deleting the user’s local tuning keys.
+Restore the local maintenance Codex profile after a provider rollover. The repo
+was moved from a direct vLLM endpoint to a proxy-backed Responses route, but
+the maintenance profile drifted:
 
-## Seeded automation or maintenance drift
-- The config still targets a legacy provider name and direct backend URL even though the maintenance profile is supposed to use the proxy-backed Responses route.
-- The smoke script accepts any successful first response id and never probes turn-two retrieval or `previous_response_id` chaining.
-- Docs still describe a valid-looking but wrong direct-endpoint workflow.
-- The local config contains extra speed knobs; naïve rewrites that replace the entire file will lose them and fail hidden checks.
+- `serving_maintenance/.codex/config.toml` still selects the legacy provider.
+- `serving_maintenance/scripts/smoke_responses_profile.py` only proves first
+  turn success and does not assert exact `previous_response_id` continuity.
+- `serving_maintenance/docs/provider_rollover.md` and
+  `serving_maintenance/docs/smoke.md` still describe the wrong provider id or
+  direct endpoint workflow.
 
-## Required surfaces
+Repair the concrete maintenance workspace in place. Preserve the unrelated
+local tuning block in the TOML file exactly as written. Do not rewrite tests,
+fixtures, or read-only rollout evidence.
+
+## Required Surfaces
+
 - `shell`
 - `apply_patch`
-- `automation`
-- TOML diff reasoning
-- Terminal smoke execution against fixture-backed responses
+- terminal test execution
+- TOML editing with preservation discipline
+- JSON fixture inspection
+- docs update
 
-## Deliverables
-- A repaired `.codex/config.toml` or equivalent provider config artifact that preserves unrelated local tuning keys.
-- A code patch for the smoke probe so it asserts multi-turn continuity on the maintained Responses path.
-- A docs update for the operator-facing rollover instructions.
-- A short verification note showing the repaired one-turn and follow-up expectations.
+No network, browser, or subagents are required for the benchmark itself.
 
-## Grader contract
-- Visible tests must pass for config parsing, smoke probe behavior, docs references, and exact turn-two continuity using `previous_response_id`.
-- Trusted checks verify that:
-  - The active provider stanza points at the proxy-backed Responses route rather than the deprecated direct endpoint.
-  - The selected default provider id and proxy base URL are validated together rather than as separate strings.
-  - Experimental local tuning keys present in the seeded file are preserved.
-  - The smoke probe explicitly checks follow-up chaining using `previous_response_id`.
-  - The legacy provider may remain in the file for history, but it must not remain selected as default.
-- Hidden checks introduce:
-  - A config file with reordered keys and comments to punish wholesale regeneration.
-  - A misleading first-turn success fixture where turn two fails unless the correct provider and store path are used.
-  - A docs snippet test ensuring the command examples and config path all point at the same provider id.
-  - A raw-file preservation check that unrelated local tuning lines survive byte-for-byte.
-- Scoring cap: if the default provider remains legacy-selected, or if turn-two continuity is not asserted exactly, the submission cannot score above `20/100`.
+## Workspace Bundle (per variant)
 
-## Red-team traps
-- Rewrite the whole TOML file from scratch and drop unrelated local knobs.
-- Make the smoke probe assert only that turn one returns an id.
-- Patch docs alone while leaving the configured provider id stale.
-- Hardcode the visible response ids or fixture filenames.
-- Add a second provider stanza and leave the legacy one selected as default.
+Every variant ships the following under `workspace_bundle/<variant_id>/`:
 
-## Quality gate
-- Actual GPT-5.4/high family-bundle run score: `21/100` under the current evaluator.
-- Naive GPT-5.4/high under-30 verdict after hardening: `yes`.
-- Run method note: actual child-agent solver attempt against the family bundle only; concrete `serving_maintenance/` workspace files were not present in this authoring repo, so the submission could outline the repair but not prove continuity or key preservation by execution.
-- Hardening applied after probe:
-  - Follow-up chaining is required, so a one-turn smoke fix is intentionally incomplete.
-  - Hidden tests preserve comments and reordered keys to punish file replacement instead of targeted edits.
-  - The grader requires preservation of local tuning keys, blocking simplistic template overwrite strategies.
-  - Exact `previous_response_id` continuity is now part of visible grading, not a hidden nice-to-have.
-  - Default-provider selection and proxy base URL are now coupled, closing the “fix one field only” path.
-  - Wrong default-provider semantics or missing exact continuity now hard-cap the score at 20.
-- Residual risk accepted: a solver might still patch the right fields by luck, but without continuity semantics and byte-preservation it should remain in the low 20s.
+```text
+AGENTS.md
+Dockerfile
+.scenario_variant
+bin/run-visible-tests
+serving_maintenance/.codex/config.toml
+serving_maintenance/scripts/smoke_responses_profile.py
+serving_maintenance/fixtures/http/turn1_ok.json
+serving_maintenance/fixtures/http/turn2_ok.json
+serving_maintenance/fixtures/http/turn2_missing_store.json
+serving_maintenance/docs/provider_rollover.md
+serving_maintenance/docs/smoke.md
+tests/test_config_profile.py
+tests/test_docs_sync.py
+tests/test_smoke_profile.py
+release_context/*            # V4+ only
+incident_context/*           # V5 only
+```
+
+## Seeded Modernization Breakage
+
+The starting workspace is intentionally broken in the same family-wide ways:
+
+- top-level `provider` still points at the legacy direct endpoint profile
+- smoke script reports success after turn one and does not reject bad turn-two
+  chaining
+- docs are out of sync with the actual proxy-backed Responses path
+- the local tuning block is present in the config file and must survive
+  byte-for-byte across the repair
+
+## Variant Progression
+
+### `v1-clean-baseline`
+
+Single-profile rollover. The solver must move the selected provider to the
+Responses proxy path, require `store = true`, and validate exact
+`previous_response_id` continuity on the second turn.
+
+- Primary stress: basic modernization correctness.
+- Expected capable-model mean after live calibration: low `20s`.
+
+### `v2-noisy-distractor`
+
+Adds a stale canary note and an extra provider stanza that looks attractive but
+is not the maintained profile. The correct fix is still the canonical
+`responses_proxy` profile, not the canary or the legacy direct route.
+
+- Primary stress: ignoring plausible-but-wrong provider distractors.
+- New ceiling: `canary_anchoring`.
+- Expected capable-model mean: about `20`.
+
+### `v3-dirty-state`
+
+Adds a read-only template-rewrite helper and template TOML. The tempting but
+wrong move is to regenerate the entire config from the template, which drops
+the local tuning block and fails preservation checks.
+
+- Primary stress: precise patching instead of destructive regeneration.
+- New ceiling: `template_overwrite`.
+- Expected capable-model mean: about `17`.
+
+### `v4-multi-corpus-objective`
+
+Adds `release_context/` showing the operational objective is the specific
+maintenance profile used during proxy-backed Responses cutovers, not a generic
+"make the smoke green" cleanup. Docs must align to the maintenance profile
+label and proxy-backed route.
+
+- Primary stress: objective alignment across added evidence.
+- New ceiling: `maintenance_profile_drift`.
+- Expected capable-model mean: about `14`.
+
+### `v5-recovery-in-thread`
+
+Adds `incident_context/` documenting a rollback caused by a prior hotfix that
+checked only first-turn success while leaving `store = false` and follow-up
+retrieval broken. The updated docs must acknowledge that rollback and the smoke
+must reject the same failure shape deterministically.
+
+- Primary stress: recovery-aware modernization under incident evidence.
+- New ceiling: `rollback_blind`.
+- Expected capable-model mean: about `10`.
+
+### Ladder Monotonicity Target
+
+Calibration target for GPT-5.4/high after the first counted live rerun:
+
+- `v1-clean-baseline`: `22`
+- `v2-noisy-distractor`: `20`
+- `v3-dirty-state`: `17`
+- `v4-multi-corpus-objective`: `14`
+- `v5-recovery-in-thread`: `10`
+
+Family mean target: `16.6`, within the Layer A freeze window `[15, 25]`.
+
+## Expected Deliverables
+
+- targeted update to `serving_maintenance/.codex/config.toml`
+- strengthened `serving_maintenance/scripts/smoke_responses_profile.py`
+- aligned `serving_maintenance/docs/provider_rollover.md`
+- aligned `serving_maintenance/docs/smoke.md`
+
+No other workspace writes are necessary or allowed.
+
+## Visible Checks
+
+```bash
+bin/run-visible-tests
+```
+
+Visible checks cover:
+
+- selected provider id is the proxy-backed Responses profile
+- the selected provider stanza has the expected base URL and `store = true`
+- good turn-two continuity passes and bad turn-two continuity fails
+- docs mention the selected provider and exact `previous_response_id` follow-up
+
+Visible success is intentionally insufficient for a passing score.
+
+## Hidden Checks
+
+Hidden checks are deterministic and code-backed only. No LLM judge is used.
+
+- alternative bad follow-up fixtures must fail for the same continuity contract,
+  not because the script hardcoded one fixture filename
+- provider id, base URL, and `store` must be validated as one coupled contract
+- the local tuning block must remain byte-for-byte identical
+- docs must stay aligned with the selected provider id and variant-specific
+  release / incident expectations
+- read-only surfaces must remain untouched
+
+## Trusted Final-State Checks
+
+- no edits outside:
+  - `serving_maintenance/.codex/config.toml`
+  - `serving_maintenance/scripts/smoke_responses_profile.py`
+  - `serving_maintenance/docs/provider_rollover.md`
+  - `serving_maintenance/docs/smoke.md`
+- no edits to `tests/`, `serving_maintenance/fixtures/`, `release_context/`, or
+  `incident_context/`
+- no `sitecustomize.py`, `usercustomize.py`, or `pytest.py` shim
+- no `.network_egress_detected` marker
+
+## Partial-Credit Ceilings
+
+- `no_visible_green` ≤ `25`
+  Trigger: visible test slice still fails.
+- `legacy_default_selected` ≤ `20`
+  Trigger: selected provider remains `legacy_vllm` or another non-canonical id.
+- `proxy_route_incorrect` ≤ `30`
+  Trigger: selected provider stanza is not the proxy-backed Responses route with
+  `store = true`.
+- `continuity_not_exact` ≤ `20`
+  Trigger: smoke does not require exact `previous_response_id` chaining and bad
+  hidden fixtures are not rejected.
+- `config_rewritten` ≤ `30`
+  Trigger: the preserved local tuning block is not byte-identical.
+- `docs_unaligned` ≤ `40`
+  Trigger: provider id, proxy route, or `previous_response_id` semantics are
+  inconsistent across docs.
+- `canary_anchoring` ≤ `35`
+  Trigger: V2 docs or config anchor on the distractor canary profile.
+- `template_overwrite` ≤ `30`
+  Trigger: V3 drops the tuning block or reintroduces template markers.
+- `maintenance_profile_drift` ≤ `45`
+  Trigger: V4 ignores release-context maintenance-profile requirements.
+- `rollback_blind` ≤ `35`
+  Trigger: V5 ignores the rollback context around `store = true` and follow-up
+  continuity.
+
+## Red-Team Traps
+
+1. Rewrite the whole TOML file and lose the local tuning block.
+2. Make the smoke check only that turn one produced an id.
+3. Patch docs alone while leaving the selected provider stale.
+4. Hardcode fixture filenames or response ids instead of validating structure.
+5. Select the canary or legacy provider because it looks superficially valid.
+
+## Saturation And Renewal Plan
+
+Per Layer B readiness, this family is renewed when `mean P_benchmark > 80` for
+two consecutive probe rounds.
+
+Renewal queue:
+
+1. Add a V6 with proxy auth header rollover layered onto the same profile.
+2. Add a V7 with per-profile store-policy drift across two maintenance scripts.
+3. Retire V1 once provider-id rollover becomes purely mechanical.
