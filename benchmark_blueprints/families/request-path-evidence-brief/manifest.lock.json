@@ -1,0 +1,132 @@
+{
+  "grader": {
+    "score_trace_py_sha256": "1debbe64b3e703b3edadec21618e1496626c3eb415706a90ad1cb7462c5b41df"
+  },
+  "last_regen_utc": "2026-04-23T04:43:29Z",
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_brief_score": 0,
+      "observed_grounding_stripped_score": 35,
+      "observed_oracle_score": 99,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_path_sha256": "3e597f12f0e271006cc078756f99e97f399303f1f8bae533dba486f67d335aca",
+        "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
+        "oracle_brief_md_sha256": "b27ebf0cd384bb997f77226b6519187fde62b65cab66390a029483a64e4ec3d0",
+        "oracle_correction_md_sha256": "aa616603daf3d6127405e0a03bd9bd5395b8082230126fdd60c4a7042b7ad482",
+        "oracle_path_map_sha256": "35ae845600ec7a061b03286349c1232d20903bdf07d32281ee9a133093c170b1",
+        "workspace_manifest_sha256": "c476575e5fb4ebf58f4aa9995ac3834bbdf113f00b9d04243c90f87768420f16"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
+        "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
+        "docs": "bb0b95cedf9b879e3463e97d27cd9842a7672f2452906dd787065816af498799",
+        "ops": "1912b2906c6b8cf029124b752ecb178375c09466a629ed4e774642526cdf7a79",
+        "sync_app": "7601466d72a3445b5decea2e799fd0e4f5e1b753dbb636853a0582df8c95f99f",
+        "tests": "8940433564feb04c336394c4f3cdd46f5a0b66874170e0c57bfd7a3b9c66d717"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_brief_score": 0,
+      "observed_grounding_stripped_score": 35,
+      "observed_oracle_score": 99,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_path_sha256": "7f5e2743fbb4353bf8d5acbc13ec4e2e0bd497349a724e0a623dde33d87294e2",
+        "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
+        "oracle_brief_md_sha256": "698cb365511f89b17060b8d0475b554fc9b02e9fe0470d1e463e20af8e5cfd08",
+        "oracle_correction_md_sha256": "aa616603daf3d6127405e0a03bd9bd5395b8082230126fdd60c4a7042b7ad482",
+        "oracle_path_map_sha256": "a0bfdbcf7e4530e61af344e335be388f54b306dd78d3f598d758b8a04ab93dbf",
+        "workspace_manifest_sha256": "c476575e5fb4ebf58f4aa9995ac3834bbdf113f00b9d04243c90f87768420f16"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
+        "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
+        "docs": "bb0b95cedf9b879e3463e97d27cd9842a7672f2452906dd787065816af498799",
+        "ops": "1912b2906c6b8cf029124b752ecb178375c09466a629ed4e774642526cdf7a79",
+        "sync_app": "7601466d72a3445b5decea2e799fd0e4f5e1b753dbb636853a0582df8c95f99f",
+        "tests": "8940433564feb04c336394c4f3cdd46f5a0b66874170e0c57bfd7a3b9c66d717"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_brief_score": 0,
+      "observed_grounding_stripped_score": 35,
+      "observed_oracle_score": 99,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_path_sha256": "cce41c183dc9c7a14a1b1c8eed41c311aa5dda63d7f24b131e1a4a5da0333e08",
+        "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
+        "oracle_brief_md_sha256": "c9dda98750780c63e25296c0b65b0ad7f78fccf73c8badc4ad97ba74ed339b47",
+        "oracle_correction_md_sha256": "aa616603daf3d6127405e0a03bd9bd5395b8082230126fdd60c4a7042b7ad482",
+        "oracle_path_map_sha256": "42accd757596ed9214c41f3cb0b45ef937c8de85b0f3c71707515869bcfdcf25",
+        "workspace_manifest_sha256": "61b664353f40d308deef1f1a3df67c2eb9737f3206eb340ebf9b17a419941c04"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
+        "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
+        "docs": "bb0b95cedf9b879e3463e97d27cd9842a7672f2452906dd787065816af498799",
+        "ops": "d66ff5c45649f900c26217eb01e58d8944241582b63ef0fc00c46605cd874151",
+        "sync_app": "7601466d72a3445b5decea2e799fd0e4f5e1b753dbb636853a0582df8c95f99f",
+        "tests": "8940433564feb04c336394c4f3cdd46f5a0b66874170e0c57bfd7a3b9c66d717"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_brief_score": 0,
+      "observed_grounding_stripped_score": 35,
+      "observed_oracle_score": 99,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_path_sha256": "02a4a5ff4375a9ece42b600c9adc04c7cedb7422e300a0a1bc87efbec8f5c118",
+        "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
+        "oracle_brief_md_sha256": "2180028b778c4231b3e3e31847817c92b0399763c04e74bb0ba95d510d837d62",
+        "oracle_correction_md_sha256": "aa616603daf3d6127405e0a03bd9bd5395b8082230126fdd60c4a7042b7ad482",
+        "oracle_path_map_sha256": "43584ee86f4d1d04693db5cbbda5765bbb98484074601591a1ccd26a648ce026",
+        "workspace_manifest_sha256": "e799cc2b4d48e3889d77efe365106bbb5ca9b0beb9d30df764d7809fb56fb43b"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
+        "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
+        "docs": "65d90391e1fa5aa9466e25230e25ff94a669ae5e2304f1a5cb246ab1ceae96d6",
+        "ops": "d66ff5c45649f900c26217eb01e58d8944241582b63ef0fc00c46605cd874151",
+        "release_context": "e4e553abb9ce99639d739673f51bfc27544b38c1a6b03f87d425a734d2e1797f",
+        "sync_app": "7601466d72a3445b5decea2e799fd0e4f5e1b753dbb636853a0582df8c95f99f",
+        "tests": "8940433564feb04c336394c4f3cdd46f5a0b66874170e0c57bfd7a3b9c66d717"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_brief_score": 0,
+      "observed_grounding_stripped_score": 30,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 25,
+      "verifier_data": {
+        "gold_path_sha256": "3828695d4b45762f6605c2640ed09a67c0b4ffcc6a729fe1f1b708a566606950",
+        "hidden_tests_tree_sha256": "9b75075c797284feb7b57c6a7498ae22da924b27e38591a6621717ff31c80daf",
+        "oracle_brief_md_sha256": "b7b8066cbc1f1858869a14c60981f40efa4a30139072ffe9542d2a429bb59717",
+        "oracle_correction_md_sha256": "0b3b6d82af791055e622cac5716b6909b386822ebf3fe75201fb5b604c7a5145",
+        "oracle_path_map_sha256": "133b49e7ede5a0258a49ce6662fe81782f9a716c9103192c0c79be15e592a2d7",
+        "workspace_manifest_sha256": "1dea9ccfb7983952d3da3d6d6fa410761e7a11ff8fe1b39aa5be2212f9e70de7"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+        "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+        "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
+        "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
+        "docs": "ad89f79d22e567d766acb13666ae066838148449f0eae4d43d8bfc6705ac5d3d",
+        "incident_context": "60c25a07deb33f70e837b55ff939520375e15878656a4bcafd4726f0cdebbf75",
+        "ops": "d66ff5c45649f900c26217eb01e58d8944241582b63ef0fc00c46605cd874151",
+        "release_context": "e4e553abb9ce99639d739673f51bfc27544b38c1a6b03f87d425a734d2e1797f",
+        "sync_app": "7601466d72a3445b5decea2e799fd0e4f5e1b753dbb636853a0582df8c95f99f",
+        "tests": "8940433564feb04c336394c4f3cdd46f5a0b66874170e0c57bfd7a3b9c66d717"
+      }
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "field_derivations": {
+    "emission": {
+      "file": "sync_app/serializer.py",
+      "symbol": "serialize_payload",
+      "why": "emits owner_source and routing_key into the final payload"
+    },
+    "owner_source": {
+      "file": "sync_app/service.py",
+      "symbol": "_resolve_owner",
+      "why": "selects explicit vs default owner and labels the source"
+    },
+    "routing_key": {
+      "file": "sync_app/serializer.py",
+      "symbol": "build_routing_key",
+      "why": "derives the key from the resolved owner and task name"
+    }
+  },
+  "live_path": [
+    {
+      "callee_symbol": "sync_app.service.sync_item",
+      "caller_symbol": "argv.--owner",
+      "file": "sync_app/cli.py",
+      "role": "cli_entry",
+      "step": 1,
+      "symbol": "main"
+    },
+    {
+      "callee_symbol": "sync_app.service._resolve_owner",
+      "caller_symbol": "sync_app.cli.main",
+      "file": "sync_app/service.py",
+      "role": "service_orchestrator",
+      "step": 2,
+      "symbol": "sync_item"
+    },
+    {
+      "callee_symbol": "sync_app.store.make_record",
+      "caller_symbol": "sync_app.service.sync_item",
+      "file": "sync_app/service.py",
+      "role": "owner_selection",
+      "step": 3,
+      "symbol": "_resolve_owner"
+    },
+    {
+      "callee_symbol": "sync_app.serializer.build_routing_key",
+      "caller_symbol": "sync_app.service.sync_item",
+      "file": "sync_app/store.py",
+      "role": "storage_write_shape",
+      "step": 4,
+      "symbol": "make_record"
+    },
+    {
+      "callee_symbol": "sync_app.serializer.serialize_payload",
+      "caller_symbol": "sync_app.service.sync_item",
+      "file": "sync_app/serializer.py",
+      "role": "derived_field",
+      "step": 5,
+      "symbol": "build_routing_key"
+    },
+    {
+      "callee_symbol": null,
+      "caller_symbol": "sync_app.service.sync_item",
+      "file": "sync_app/serializer.py",
+      "role": "emission",
+      "step": 6,
+      "symbol": "serialize_payload"
+    }
+  ],
+  "rejected_decoys": [
+    {
+      "file": "sync_app/store.py",
+      "reason": "looks plausible but the live code builds routing_key in serializer, not in the store helper",
+      "symbol": "legacy_build_routing_key"
+    }
+  ],
+  "schema_version": "cnb55.request_path_map.v1",
+  "summary": "The support note is incorrect. owner_source is decided in service, routing_key is derived in serializer after owner resolution, and both fields are emitted during payload serialization.",
+  "support_note_verdict": {
+    "file": "ops/support_note.md",
+    "symbol": "escalation_summary",
+    "verdict": "incorrect"
+  },
+  "test_observations": [
+    {
+      "file": "tests/test_sync.py",
+      "proves": [
+        "cli_forwards_owner",
+        "owner_source_explicit",
+        "routing_key_uses_resolved_owner"
+      ],
+      "symbol": "test_cli_accepts_owner_flag_and_preserves_existing_fields"
+    },
+    {
+      "file": "tests/test_sync.py",
+      "proves": [
+        "default_owner_path",
+        "owner_source_default"
+      ],
+      "symbol": "test_service_uses_default_owner_when_flag_is_missing"
+    }
+  ],
+  "variant_id": "v2-noisy-distractor"
+}

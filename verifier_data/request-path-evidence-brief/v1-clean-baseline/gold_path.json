@@ -1,0 +1,127 @@
+{
+  "field_derivations": {
+    "emission": {
+      "file": "sync_app/serializer.py",
+      "symbol": "serialize_payload",
+      "why": "emits owner_source and routing_key into the final payload"
+    },
+    "owner_source": {
+      "file": "sync_app/service.py",
+      "symbol": "_resolve_owner",
+      "why": "selects explicit vs default owner and labels the source"
+    },
+    "routing_key": {
+      "file": "sync_app/serializer.py",
+      "symbol": "build_routing_key",
+      "why": "derives the key from the resolved owner and task name"
+    }
+  },
+  "forbidden_positive_files": [],
+  "live_path": [
+    {
+      "callee_symbol": "sync_app.service.sync_item",
+      "caller_symbol": "argv.--owner",
+      "file": "sync_app/cli.py",
+      "role": "cli_entry",
+      "step": 1,
+      "symbol": "main"
+    },
+    {
+      "callee_symbol": "sync_app.service._resolve_owner",
+      "caller_symbol": "sync_app.cli.main",
+      "file": "sync_app/service.py",
+      "role": "service_orchestrator",
+      "step": 2,
+      "symbol": "sync_item"
+    },
+    {
+      "callee_symbol": "sync_app.store.make_record",
+      "caller_symbol": "sync_app.service.sync_item",
+      "file": "sync_app/service.py",
+      "role": "owner_selection",
+      "step": 3,
+      "symbol": "_resolve_owner"
+    },
+    {
+      "callee_symbol": "sync_app.serializer.build_routing_key",
+      "caller_symbol": "sync_app.service.sync_item",
+      "file": "sync_app/store.py",
+      "role": "storage_write_shape",
+      "step": 4,
+      "symbol": "make_record"
+    },
+    {
+      "callee_symbol": "sync_app.serializer.serialize_payload",
+      "caller_symbol": "sync_app.service.sync_item",
+      "file": "sync_app/serializer.py",
+      "role": "derived_field",
+      "step": 5,
+      "symbol": "build_routing_key"
+    },
+    {
+      "callee_symbol": null,
+      "caller_symbol": "sync_app.service.sync_item",
+      "file": "sync_app/serializer.py",
+      "role": "emission",
+      "step": 6,
+      "symbol": "serialize_payload"
+    }
+  ],
+  "pass_bar": 40,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "c7488030424b817a46d4c15eddf2398c44db47010ed19fe1182e6d11cc6a559b",
+    "Dockerfile": "ef99c527dcd710e84155d2fda6ed0974ba98ce95e3f045e5b3efaecab49730ff",
+    "config": "e60d05828a5cfcd7aca6828a817da5b87157797e666249e5db461fe911240ca2",
+    "docs": "bb0b95cedf9b879e3463e97d27cd9842a7672f2452906dd787065816af498799",
+    "ops": "1912b2906c6b8cf029124b752ecb178375c09466a629ed4e774642526cdf7a79",
+    "sync_app": "7601466d72a3445b5decea2e799fd0e4f5e1b753dbb636853a0582df8c95f99f",
+    "tests": "8940433564feb04c336394c4f3cdd46f5a0b66874170e0c57bfd7a3b9c66d717"
+  },
+  "required_brief_tokens": [
+    "sync_app/cli.py::main",
+    "sync_app/service.py::sync_item",
+    "sync_app/service.py::_resolve_owner",
+    "sync_app/serializer.py::build_routing_key",
+    "sync_app/serializer.py::serialize_payload"
+  ],
+  "required_correction_tokens": [
+    "ops/support_note.md::escalation_summary",
+    "sync_app/service.py::_resolve_owner",
+    "sync_app/store.py::make_record",
+    "sync_app/serializer.py::build_routing_key",
+    "sync_app/serializer.py::serialize_payload"
+  ],
+  "required_decoy": {
+    "file": "sync_app/store.py",
+    "reason": "not imported or called from the live service path; storage only returns the base record",
+    "reason_keywords": [
+      "not imported",
+      "not called",
+      "base record",
+      "storage only"
+    ],
+    "symbol": "legacy_make_record_with_owner_source"
+  },
+  "schema_version": "cnb55.request_path_gold.v1",
+  "test_observations": [
+    {
+      "file": "tests/test_sync.py",
+      "proves": [
+        "cli_forwards_owner",
+        "owner_source_explicit",
+        "routing_key_uses_resolved_owner"
+      ],
+      "symbol": "test_cli_accepts_owner_flag_and_preserves_existing_fields"
+    },
+    {
+      "file": "tests/test_sync.py",
+      "proves": [
+        "default_owner_path",
+        "owner_source_default"
+      ],
+      "symbol": "test_service_uses_default_owner_when_flag_is_missing"
+    }
+  ],
+  "variant_id": "v1-clean-baseline"
+}

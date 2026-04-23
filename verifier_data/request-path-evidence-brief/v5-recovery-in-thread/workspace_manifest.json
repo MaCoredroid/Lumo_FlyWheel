@@ -1,0 +1,27 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/README.md",
+    "config/defaults.json",
+    "docs/cli.md",
+    "docs/data_flow.md",
+    "incident_context/prior_docs_correction.md",
+    "incident_context/rollback_note.md",
+    "ops/previous_session_path.md",
+    "ops/support_note.md",
+    "release_context/future_serializer_split.md",
+    "release_context/release_notes_2026_06.md",
+    "sync_app/__init__.py",
+    "sync_app/cli.py",
+    "sync_app/serializer.py",
+    "sync_app/service.py",
+    "sync_app/store.py",
+    "tests/conftest.py",
+    "tests/test_docs.py",
+    "tests/test_sync.py",
+    "tests/test_trace_outputs.py"
+  ],
+  "schema_version": "cnb55.workspace_manifest.v1"
+}

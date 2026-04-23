@@ -1,0 +1,85 @@
+family_id: request-path-evidence-brief
+track: 2
+schema_version: cnb55.family.v1
+layer_a_status: implemented_pending_probe
+layer_b_status: implemented_pending_probe
+grader_ref: verifiers/request-path-evidence-brief/score_trace.py
+milestone_config_ref: verifier_data/request-path-evidence-brief/{variant_id}/milestones/
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: Path map and at least one test observation exist.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: Field-derivation claims identify the live owner-selection step.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No immutable slices or tests changed.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: Live path matches the gold hop sequence.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: All artifacts exist, the support note is corrected, and the final score clears the pass bar.
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+  extended:
+    - {parent: inspect, sub_tag: evidence_triage, semantics: "separate live code from stale notes and future-state docs"}
+    - {parent: inspect, sub_tag: prioritize, semantics: "walk the live call chain in order instead of grepping every mention"}
+    - {parent: verify, sub_tag: assumption_honesty, semantics: "name a plausible decoy and explain why it is not live"}
+tool_call_overrides:
+  - command: "python -m sync_app.cli"
+    tags: [inspect, verify]
+  - command: "pytest -q"
+    tags: [verify]
+state_delta:
+  kind: json_deliverable
+  deliverable_path: artifacts/path_map.json
+  states: [absent, present_and_invalid, present_and_valid]
+  aggregate_clamp: [0.0, 1.0]
+integrity_rules:
+  - {id: write_outside_whitelist, rule: "writes outside artifacts/request_path_brief.md, artifacts/path_map.json, or artifacts/docs_correction.md"}
+  - {id: immutable_slice_mutated, rule: "readonly repo inputs changed"}
+  - {id: pytest_shim, rule: "sitecustomize.py, usercustomize.py, or pytest.py added"}
+  - {id: tests_modified, rule: "visible tests changed"}
+  - {id: network_egress, rule: ".network_egress_detected marker present"}
+llm_judge_quarantine:
+  total_quarantined_points: 0
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0000
+  escalation_currently_active: false
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/request-path-evidence-brief/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/request-path-evidence-brief/manifest.lock.json
+rawr_modes:
+  - id: grounding_stripped
+    description: "Path map is present but the markdown brief and correction lose concrete evidence tokens."
+    detection_surface: weak_markdown_grounding ceiling plus markdown grounding loss
+    expected_P_benchmark_max: 0.45
+    status: implemented
+  - id: citation_fabricated
+    description: "Markdown cites plausible file::symbol tokens that do not match the submitted path map."
+    detection_surface: not yet implemented as a standalone synthesizer
+    expected_P_benchmark_max: 0.40
+    status: declared_not_yet_implemented
+  - id: constraint_named_not_respected
+    description: "Submission names the support note as stale but still routes the live path through a decoy helper."
+    detection_surface: decoy and adjacency ceilings
+    expected_P_benchmark_max: 0.35
+    status: implemented
+saturation:
+  trigger: "mean P_benchmark > 80 for 2 consecutive probe rounds"
+  renewal_mechanisms:
+    - {id: v6-multi-entrypoint-trace, description: "add a second CLI entrypoint that shares serializer code but changes the live ingress"}
+    - {id: v7-cross-test-shadowing, description: "add conflicting test helper names that further separate observed behavior from dead helpers"}

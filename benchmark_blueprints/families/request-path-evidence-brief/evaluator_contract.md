@@ -1,49 +1,148 @@
-# Evaluator Contract
+# `request-path-evidence-brief` Evaluator Contract
 
-- `family_id`: `request-path-evidence-brief`
-- `task_id`: `t2_request_path_owner_source_brief`
-- `total_points`: `100`
-- `target_attack_band_for_naive_gpt_5_4_high`: `15-25`
+**Track:** 02 — Codebase Understanding  
+**Family id:** `request-path-evidence-brief`  
+**Spec conformance:** CNB-55 v1.0 §7  
+**Scorer:** `verifiers/request-path-evidence-brief/score_trace.py`
 
-## Scoring Breakdown
+## Evaluation Goal
 
-- `25` points: Correctly identifies the live ingress for `--owner` and the layer where effective owner selection actually happens.
-- `20` points: Correctly distinguishes `owner_source` derivation from `routing_key` derivation and names the emission surface that exposes both.
-- `20` points: `path_map.json` is internally consistent, ordered, and includes valid `caller_symbol` and `callee_symbol` adjacency for the claimed live chain.
-- `15` points: Submission rejects at least one plausible but non-live helper or path and explains why it is not live.
-- `10` points: `docs_correction.md` is narrow, evidence-backed, and avoids speculative code changes.
-- `10` points: Overall scope discipline, citation quality, and absence of fabricated certainty.
+Score whether the solver can reconstruct a live request path from code and tests, reject a plausible decoy, and write a narrow correction note without inventing or patching behavior.
 
-## Caps
+This family is deterministic. There is no LLM-as-judge component in the active score path.
 
-- Cap at `20/100` if evidence comes from outside the provided benchmark bundle, even when the traced path is internally coherent.
-- Cap at `20/100` if the submission lacks repo-grounded symbol or file references for the live chain.
-- Cap at `25/100` if `path_map.json` omits adjacency or includes adjacency that cannot be reconciled with the narrative.
-- Cap at `35/100` if the submission never rejects a decoy or plausible false path.
-- Cap at `15/100` if the solver edits behavior or proposes refactors instead of explaining the path.
-- Cap at `10/100` if the response is mostly architecture prose without a machine-checkable path artifact.
+## Visible Checks (30 points max)
 
-## Automatic Failure Conditions
+Run:
 
-- `0` if the solver claims the stale support note is correct without direct counterevidence handling.
-- `0` if required artifacts are missing entirely.
-- `0-5` if the solver invents repo files, symbols, or tests not present in the provided workspace bundle.
+```bash
+pytest -q tests/test_sync.py tests/test_docs.py tests/test_trace_outputs.py
+```
 
-## Evidence Rules
+Allocated as:
 
-- Only files and commands inside the provided benchmark bundle count as evidence unless the task explicitly names an external surface.
-- Positive claims about the live path must cite concrete files and symbols.
-- Negative claims about decoys must cite at least one concrete mismatch such as no live caller, wrong layer, or dead helper status.
-- The evaluator should prefer contradiction checks over keyword presence.
+| Check | Points |
+| --- | ---: |
+| `artifacts/request_path_brief.md` exists | 4 |
+| `artifacts/docs_correction.md` exists | 4 |
+| `artifacts/path_map.json` parses and uses `cnb55.request_path_map.v1` | 8 |
+| `variant_id` matches `.scenario_variant` | 4 |
+| required `path_map.json` sections exist | 6 |
+| no stray writes outside the allowed artifact files | 4 |
 
-## Judging Procedure
+## Hidden Checks (70 points)
 
-1. Verify all required deliverables exist.
-2. Score correctness of the live path and field-derivation claims.
-3. Apply caps before adding style or scope points.
-4. Record whether the submission would still score the same if stripped of unsupported assertions.
+### Live-path reconstruction
+
+| Check | Points |
+| --- | ---: |
+| exact ordered hop sequence in `live_path[]` | 18 |
+| live-path completeness bonus | 2 |
+
+### Field derivations
+
+| Check | Points |
+| --- | ---: |
+| `owner_source` derivation matches live service step | 8 |
+| `routing_key` derivation matches live serializer step | 8 |
+| emission step matches final serializer hop | 4 |
+
+### Test evidence
+
+| Check | Points |
+| --- | ---: |
+| explicit-owner proving test cited | 5 |
+| default-owner proving test cited | 5 |
+
+### Decoy rejection
+
+| Check | Points |
+| --- | ---: |
+| required variant decoy rejected with a concrete non-liveness reason | 5 |
+
+### Markdown grounding
+
+| Check | Points |
+| --- | ---: |
+| brief contains the required `path::symbol` evidence tokens | 5 |
+| docs correction contains the required `path::symbol` evidence tokens | 5 |
+
+### Variant-specific recovery
+
+| Check | Points |
+| --- | ---: |
+| V5 correction acknowledges rollback or incident context | 5 |
+
+V1–V4 do not use the final row; their deterministic oracle ceiling remains 99 rather than 100.
+
+## Partial-Credit Ceilings
+
+Ceilings are hard caps applied after raw aggregation.
+
+| Ceiling | Max score | Trigger |
+| --- | ---: | --- |
+| `no_artifacts` | 0 | `artifacts/path_map.json` missing |
+| `malformed_path_map` | 10 | `path_map.json` is not valid JSON or has the wrong schema |
+| `missing_symbol_adjacency` | 25 | ordered hop sequence or `caller_symbol` / `callee_symbol` adjacency is broken |
+| `store_claimed_as_decision_layer` | 25 | submission says storage decides `owner_source` |
+| `pre_owner_routing_claim` | 30 | submission says `routing_key` is derived before owner resolution or outside serializer |
+| `no_support_note_verdict` | 35 | brief never explicitly rejects the stale support note |
+| `no_decoy_rejection` | 35 | no plausible decoy is rejected |
+| `weak_markdown_grounding` | 45 | markdown outputs lack enough concrete `path::symbol` grounding |
+| `dirty_state_trust` | 40 | V3 submission treats the abandoned previous-session draft as live evidence |
+| `future_architecture_anchor` | 45 | V4 submission treats future release planning notes as implemented behavior |
+| `incident_blind_reselect` | 30 | V5 submission repeats the rolled-back correction without incident acknowledgment |
+| `external_evidence` | 20 | cites sibling scenario bundles, URLs, or machine-local paths outside the bundle |
+
+## Trusted Final-State Checks
+
+Failure triggers integrity flag `H=1` and force-fails later milestones:
+
+- writes outside the allowed artifact files,
+- mutation of readonly repo inputs,
+- test edits,
+- pytest shims,
+- network-egress marker presence.
+
+Integrity rules live in `family.yaml` and must match scorer call sites 1:1.
+
+## Milestones / Dual-Band Output
+
+The scorer emits `cnb55.verify_result.v3` with:
+
+- `score` / `P_benchmark`
+- `M_training`
+- `milestones`
+- `milestone_vector`
+- `integrity_flag`
+- `ceilings_applied`
+
+Milestones:
+
+- `M1_localization`: path map and test observations exist
+- `M2_primary_fix`: field-derivation claims localize the live owner-selection step
+- `M3_invariants`: readonly inputs stay unchanged
+- `M4_functional`: live path matches the gold hop sequence
+- `M5_e2e`: all artifacts exist and the final score clears the pass bar
+
+This family currently keeps all active points in the deterministic band. `llm_judge_quarantine.total_quarantined_points = 0`.
+
+## Oracle / Empty / Shortcut Targets
+
+Observed from the regenerated manifest:
+
+| Variant set | Oracle | Empty | Shortcut | Grounding stripped |
+| --- | ---: | ---: | ---: | ---: |
+| V1–V4 | 99 | 0 | 25 | 35 |
+| V5 | 100 | 0 | 25 | 30 |
+
+These satisfy the authored baseline goals:
+
+- oracle near ceiling,
+- empty at 0,
+- shortcut at or below 30,
+- markdown-grounding failure clearly below pass.
 
 ## Meaningfulness Check
 
-- The task remains meaningful only if a real repo bundle can support a precise live-chain reconstruction plus one decoy rejection.
-- If a provided bundle does not contain enough symbol-level evidence to score above `60` for a careful solver, the authored task instance should be rejected as incoherent.
+Reject the family if any future edit makes the live path under-specified. A careful solver must still be able to answer the task from the shipped code, tests, and notes alone; otherwise this stops being a trace task and becomes an ambiguity trap.
