@@ -2,7 +2,7 @@ family_id: release-manifest-v2-modernization
 track: 3
 scenario_type: migration_refactor
 schema_version: cnb55.family.v1
-layer_a_status: pending_live_probe
+layer_a_status: failed_freeze_gate_by_saturation
 layer_b_status: implemented_pending_review
 grader_ref: verifiers/release-manifest-v2-modernization/score_release_modernization.py
 milestone_config_ref: verifier_data/release-manifest-v2-modernization/{variant_id}/milestones/
@@ -117,6 +117,7 @@ initial_state:
 
 saturation:
   threshold_mean_P: 80
+  saturation_renewal_due: true
   renewal_queue:
     - add a V6 where the manifest output name changes mid-cutover
     - retire the easy floor variant if V1 stops discriminating

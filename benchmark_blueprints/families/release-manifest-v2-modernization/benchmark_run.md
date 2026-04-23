@@ -139,3 +139,17 @@ Spot-check diagnosis:
   window would require hiding requirements that are visible, legitimate release
   maintenance context. Under the skill's legitimate-difficulty rule this is a
   mechanical score floor / renewal problem, not a reason to add fake ambiguity.
+
+## Renewal Queue Decision After Attempt 08
+
+- `family.yaml#layer_a_status` is now
+  `failed_freeze_gate_by_saturation`.
+- `family.yaml#saturation.saturation_renewal_due` is now `true`.
+- next renewal mechanism to pull: add the queued V6 where the manifest output
+  name changes mid-cutover. This is the better next lever because `attempt_08`
+  shows the current V1-V5 progression is fully solved by `gpt-5.4 high`, while
+  the V6 item adds a concrete release-contract drift dimension without hiding
+  requirements or penalizing correct maintenance work.
+- do not rerun the live probe for this metadata-only cleanup. The existing
+  `attempt_08_counted_live_probe` evidence remains the current counted probe
+  record until scorer or task behavior changes.
