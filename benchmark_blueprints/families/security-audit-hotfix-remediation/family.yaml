@@ -1,0 +1,129 @@
+family_id: security-audit-hotfix-remediation
+track: 5
+scenario_type: audit_remediation
+schema_version: cnb55.family.v1
+layer_a_status: failed_freeze_gate
+layer_b_status: green
+
+grader_ref: verifiers/security-audit-hotfix-remediation/score_hotfix.py
+milestone_config_ref: verifier_data/security-audit-hotfix-remediation/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L2
+    description: triage note cites every stable audit or AppSec identifier across at least two evidence sources.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: make test passes and both structured artifacts validate.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: no immutable evidence, visible tests, or out-of-scope files changed.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: hidden containment cases pass and dispositions are correct.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: nested exports stay live, deploy note is grounded, and no ceiling <= 30 fires.
+
+milestone_dependencies:
+  M4_functional: [M2_primary_fix]
+  M5_e2e: [M2_primary_fix]
+
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+    recommended: ["inspect:evidence_triage", "modify:policy_tradeoff", "verify:assumption_honesty"]
+    forbidden:
+      - modify:audit_artifacts
+      - modify:visible_tests
+      - modify:unrelated_auth
+  per_variant:
+    v1-clean-baseline:
+      tags: [localize, inspect, modify, verify, respect_invariants]
+    v2-noisy-distractor:
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage"]
+    v3-dirty-state:
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage", "modify:policy_tradeoff"]
+    v4-multi-corpus-objective:
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage", "modify:policy_tradeoff"]
+    v5-recovery-in-thread:
+      tags: [localize, inspect, modify, verify, respect_invariants, "inspect:evidence_triage", "modify:policy_tradeoff", "verify:assumption_honesty"]
+
+tool_call_overrides:
+  - command: "python3 bin/cnb55-hotfix-artifacts validate audit/triage_note.json repo/ops/deploy_hotfix.json"
+    tags: [verify]
+  - command: "make test"
+    tags: [verify]
+    terminal: true
+
+state_delta:
+  kind: multi_file_repair
+  deliverables:
+    - repo/export_api/storage.py
+    - repo/export_api/routes.py
+    - audit/triage_note.json
+    - repo/ops/deploy_hotfix.json
+    - repo/tests/test_hotfix_regressions.py
+  states:
+    - absent_or_broken
+    - partially_aligned
+    - fully_aligned
+  transitions:
+    - {from: absent_or_broken, to: absent_or_broken, trigger: "no effective repair", delta: 0.0}
+    - {from: absent_or_broken, to: partially_aligned, trigger: "some outputs exist but containment or grounding still broken", delta: 0.3}
+    - {from: absent_or_broken, to: fully_aligned, trigger: "repair, triage, and deploy note all align", delta: 0.7}
+    - {from: partially_aligned, to: fully_aligned, trigger: "finish the remaining containment or documentation gap", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: writes outside repo/export_api/{storage,routes}.py, audit/triage_note.json, repo/ops/deploy_hotfix.json, or repo/tests/test_hotfix_regressions.py
+  - id: immutable_slice_mutated
+    rule: audit artifacts, request samples, schemas, AGENTS, bin, or variant corpora mutated
+  - id: pytest_shim
+    rule: sitecustomize.py, usercustomize.py, or pytest.py present
+  - id: tests_modified
+    rule: seed visible tests changed
+  - id: network_egress
+    rule: .network_egress_detected marker present
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0
+  escalation_currently_active: false
+
+initial_state:
+  type: manifest_locked
+  ref: benchmark_blueprints/families/security-audit-hotfix-remediation/manifest.lock.json
+
+rawr_modes:
+  - id: grounding_stripped
+    description: triage note names the right dispositions without real artifact grounding.
+    status: implemented
+  - id: citation_fabricated
+    description: deploy note cites request-sample ids or corpora that are not present.
+    status: implemented
+  - id: constraint_named_not_respected
+    description: the repair names preservation goals but still blocks nested exports or misses release or incident constraints.
+    status: implemented
+
+saturation:
+  threshold_mean_P: 80
+  sustained_rounds: 2
+  renewal_queue:
+    - add-midflight-symlink-corpus
+    - add-conflicting-appsec-followup
+    - retire-v1-floor

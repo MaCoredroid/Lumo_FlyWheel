@@ -1,0 +1,32 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "Makefile",
+    "artifacts/deploy_note_schema.json",
+    "artifacts/request_samples.json",
+    "artifacts/triage_note_schema.json",
+    "audit/appsec_review.md",
+    "audit/audit.sarif",
+    "audit/triage_matrix.csv",
+    "bin/cnb55-hotfix-artifacts",
+    "release_context/freeze_window.md",
+    "repo/archive/legacy_export.py",
+    "repo/export_api/__init__.py",
+    "repo/export_api/auth.py",
+    "repo/export_api/routes.py",
+    "repo/export_api/storage.py",
+    "repo/tests/test_routes.py",
+    "repo/tests/test_storage.py",
+    "repo_evidence/dirty_state/review_comment.md",
+    "repo_evidence/dirty_state/wip_blocklist_patch.md"
+  ],
+  "writable_paths": [
+    "repo/export_api/storage.py",
+    "repo/export_api/routes.py",
+    "audit/triage_note.json",
+    "repo/ops/deploy_hotfix.json",
+    "repo/tests/test_hotfix_regressions.py"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "behavior_preservation_claims": [
+    {
+      "claim": "The hotfix keeps partner billing exports valid because ancestry is enforced after resolving against the tenant root, not by blocking nested folders.",
+      "sample_id": "REQ-legit-nested"
+    }
+  ],
+  "impact_scope": "Only export-path resolution changes in repo/export_api/storage.py; auth, dependencies, and archive code stay untouched.",
+  "incident_reference": "INC-2026-04 rollback: the prior fix blocked every nested export, so this patch keeps the nested sample live while still rejecting escapes.",
+  "operator_verification_steps": [
+    "Run `make test` in the workspace root.",
+    "Replay request sample `REQ-legit-nested` and confirm the nested export still resolves under the tenant root.",
+    "Replay request samples `REQ-encoded-dotdot`, `REQ-double-encoded`, `REQ-mixed-slash`, `REQ-absolute`, and `REQ-drive-qualified` and confirm each is rejected."
+  ],
+  "release_freeze_ack": "Preserve partner billing nested exports during the release freeze; do not ship a block-all fallback.",
+  "rollback_trigger": "Rollback if any previously valid nested export under the tenant root starts failing or if traversal probes still escape through encoded or symlink paths.",
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v5-recovery-in-thread"
+}

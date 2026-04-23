@@ -1,0 +1,80 @@
+{
+  "baseline_writable_hashes": {
+    "audit/triage_note.json": "MISSING",
+    "repo/export_api/routes.py": "c071674cb7af3887f048605b82a4686cdf1111fdc409895fc88707ba7bbe6244",
+    "repo/export_api/storage.py": "a27d672abca6dac7896bf5a34120d66bf9cc725cae0df2841789a2bd390cd979",
+    "repo/ops/deploy_hotfix.json": "MISSING",
+    "repo/tests/test_hotfix_regressions.py": "MISSING"
+  },
+  "pass_bar": 70,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+    "AGENTS.md": "f019502020d93555def805207f250e132d6c4d7af9153210742af29d6980b219",
+    "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+    "Makefile": "6f6c8a12c717ea5e8bbda5c4f7bd85cc87c42ae2f1cef54ffbe58e6cfc6451e4",
+    "artifacts": "ace0ce49e74d5175293283bfff7cd100097d153956c95b7b78c0d0c3fddf145d",
+    "audit/appsec_review.md": "5d46ce796ff6c9306155669fdac21ef8f3e56f04487fb112f7500dc98f584806",
+    "audit/audit.sarif": "d092a4b556c34f0b4d133154587cb80c86a39cdcb866e95ec5fe8b2e16c88ad0",
+    "audit/triage_matrix.csv": "fb67d9871591dc07b5daff4f014a225a4b9013c9ede9ea659a0fd902943f486e",
+    "bin": "a87219f47f572ed0a5912b97a4af39422778489db4176b4378b93009b3045e46",
+    "release_context": "1f02e519e401a3ddac18d2610ae237a5e5b24f444081f021fe40ecb2f98bd665",
+    "repo/archive": "64f1b02fc37639d3eba572ee91db0d985bc53f2e8f8e7cf852f3f18a0dc13770",
+    "repo/export_api/auth.py": "1064fda90d77574822f852401168b8756356ee86a1607020660094864660ea8f",
+    "repo/tests/test_routes.py": "4853ab03d125d82a4f7575731f131b2dcf284db47553788768fbffd4854fd7af",
+    "repo/tests/test_storage.py": "ecff1104aaa67ebc12e7220d42994246158359f2741fdcc3ac855d9f0438e440",
+    "repo_evidence": "2a9cc27dc0534659f3d2e781f8c718f2ac92b8a270fb04cb6bd48c57e608b113"
+  },
+  "requires_dirty_state_rejection": true,
+  "requires_incident_reference": false,
+  "requires_release_ack": true,
+  "triage_items": {
+    "APPSEC-EXP-17": {
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "actionable_hotfix",
+      "rule_or_file": "tenant-export path traversal",
+      "source": "appsec"
+    },
+    "APPSEC-KEY-03": {
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "out_of_scope",
+      "rule_or_file": "JWT rotation request",
+      "source": "appsec"
+    },
+    "APPSEC-LOG-12": {
+      "affected_path": "repo/export_api/routes.py",
+      "disposition": "monitor_only",
+      "rule_or_file": "verbose audit logging follow-up",
+      "source": "appsec"
+    },
+    "SARIF-PY-ARCHIVE-019": {
+      "affected_path": "repo/archive/legacy_export.py",
+      "disposition": "false_positive",
+      "rule_or_file": "py/archived-scan-noise",
+      "source": "sarif"
+    },
+    "SARIF-PY-AUTH-014": {
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "out_of_scope",
+      "rule_or_file": "py/jwt-key-rotation",
+      "source": "sarif"
+    },
+    "SARIF-PY-TRAVERSAL-001": {
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "actionable_hotfix",
+      "rule_or_file": "py/export-path-traversal",
+      "source": "sarif"
+    }
+  },
+  "variant_id": "v4-multi-corpus-objective",
+  "visible_test_hashes": {
+    "repo/tests/test_routes.py": "34eb9255c9cc5f52b3d31dac9f6f1a9b1d78bea1a4bcc3e23e5055be23e4f455",
+    "repo/tests/test_storage.py": "b91584aee34bc6c3782e7eaa9aafcc60c03ad1c29446d0a9236fa1be4f6dda42"
+  },
+  "writable_paths": [
+    "repo/export_api/storage.py",
+    "repo/export_api/routes.py",
+    "audit/triage_note.json",
+    "repo/ops/deploy_hotfix.json",
+    "repo/tests/test_hotfix_regressions.py"
+  ]
+}

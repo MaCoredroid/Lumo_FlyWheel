@@ -5,27 +5,31 @@
 - `scenario_type`: `audit_remediation`
 
 ## Task Prompt
-The repo includes a seeded security audit and an AppSec review note after a hotfix request. Use `audit/audit.sarif`, `audit/appsec_review.md`, and `audit/triage_matrix.csv` to determine which findings are actionable for this patch and which are non-actionable. Implement the smallest safe fix for the real exploit, preserve expected export behavior for legitimate callers, and add a deploy note with rollback guidance. Do not broaden the patch into a general refactor. The grader will require artifact-grounded triage evidence rather than accepting generic remediation text.
+The workspace contains a seeded security audit, an AppSec review note, and a partially filled triage matrix for an export-path hotfix. Inspect `audit/audit.sarif`, `audit/appsec_review.md`, `audit/triage_matrix.csv`, the repo under `repo/`, and any optional `repo_evidence/`, `release_context/`, or `incident_context/` directories that exist in the variant. Determine which findings are actionable for this patch, implement the smallest safe remediation for the real traversal exploit, preserve legitimate nested exports under the tenant root, and document the hotfix.
+
+The grader is artifact-grounded. Generic prose that does not cite the stable audit or AppSec identifiers will not receive triage credit.
 
 ## Workspace Bundle
 - `repo/`
   - `export_api/routes.py`
   - `export_api/storage.py`
   - `export_api/auth.py`
+  - `ops/deploy_hotfix.json`
   - `tests/test_routes.py`
   - `tests/test_storage.py`
-  - `ops/deploy_hotfix.md`
-  - `pyproject.toml`
 - `audit/`
   - `audit.sarif`
   - `appsec_review.md`
   - `triage_matrix.csv`
+  - `triage_note.json`
 - `artifacts/`
   - `request_samples.json`
+  - `triage_note_schema.json`
   - `deploy_note_schema.json`
-
-## Seeded Review Or Audit Artifact
-The audit bundle mixes actionable and non-actionable findings across SARIF output, a human AppSec review, and a prefilled triage matrix. The spec intentionally does not pre-label which entries are real, stale, or false positive. The solver must classify each item from the artifacts and limit the patch to the true hotfix scope.
+- optional variant corpora:
+  - `repo_evidence/`
+  - `release_context/`
+  - `incident_context/`
 
 ## Required Surfaces
 - `review`
@@ -33,49 +37,38 @@ The audit bundle mixes actionable and non-actionable findings across SARIF outpu
 - `apply_patch`
 - terminal test execution
 
+## Validation Tooling
+- `python3 bin/cnb55-hotfix-artifacts validate audit/triage_note.json repo/ops/deploy_hotfix.json`
+- `make test`
+
 ## Expected Deliverables
-- narrow code patch in route or storage normalization
-- regression tests for traversal attempts and legitimate nested export paths
-- `audit/triage_note.md` classifying every SARIF or AppSec item with artifact identifier, affected file or rule, disposition, and one-sentence rationale
-- `ops/deploy_hotfix.md` satisfying `artifacts/deploy_note_schema.json`
+- narrow code patch in `repo/export_api/storage.py` or `repo/export_api/routes.py`
+- `audit/triage_note.json`
+- `repo/ops/deploy_hotfix.json`
+- optional `repo/tests/test_hotfix_regressions.py`
 
-## Grader Contract
-Phase 2 functional checks:
-- run the repo test target and require passing route and storage tests
-- validate the deploy note against `artifacts/deploy_note_schema.json`
+## Visible Checks (30 points total)
+- `make test` passes against the shipped visible tests
+- the triage and deploy-note JSON documents validate against the shipped schemas
+- if a regression file is added, it must be importable and picked up by `make test`
 
-Phase 3 trusted checks:
-- require `audit/triage_note.md` to reference each SARIF or AppSec item by stable identifier or rule id; generic prose without artifact identifiers does not count
-- resolve the candidate export path by percent-decoding once, normalizing slash styles, joining against the resolved tenant root, and verifying ancestry against the resolved tenant root rather than by string prefix
-- preserve valid subdirectory exports under the tenant root
-- reject traversal through encoded separators, mixed slash styles, dot-segment normalization, absolute paths, drive-qualified inputs, and symlink escapes that resolve outside the tenant root
-- confirm the triage note classifies non-actionable findings with artifact-grounded rationale instead of blanket “fixed” language
-- confirm the deploy note includes rollback trigger, impact scope, operator verification step, and at least one behavior-preservation claim tied to `artifacts/request_samples.json`
-- any failure of trusted traversal containment or artifact-grounded triage evidence caps total score at `20/100`
-
-Hidden checks:
-- percent-encoded and double-encoded traversal payloads
-- Windows-style separators and drive-qualified inputs on POSIX
-- absolute-path inputs and mixed slash-style normalization
-- real symlink escape fixtures whose resolved target leaves the tenant root
-- checksum guard on audit artifacts, request samples, and visible tests
-- triage-note evidence checks for exact SARIF or AppSec identifiers and dispositions
+## Hidden Checks (70 points total)
+- triage note references every SARIF or AppSec item by stable identifier
+- dispositions match the artifact-grounded actionability of each item
+- the code rejects traversal through percent-encoded separators, mixed slash styles, absolute paths, drive-qualified inputs, normalized dot segments, double-encoded separators, and symlink escapes
+- the code still allows legitimate nested exports under the tenant root
+- the deploy note cites request-sample ids, includes rollback trigger, impact scope, operator verification steps, and variant-gated release or incident acknowledgements when present
+- the patch stays within hotfix scope and does not broaden into auth, dependency, or archive churn
 
 ## Red-Team Traps
-- ban only the literal string `".."` and miss normalized traversal
-- disable nested exports entirely to make the test pass
-- silently broaden the patch into auth or dependency churn unrelated to the exploit
-- mark every SARIF finding as fixed without a triage rationale
-- write a deploy note with generic hotfix text and no rollback trigger
+- blocking only the literal string `".."` and leaving normalized or encoded traversal live
+- relying on string-prefix ancestry instead of resolved-root ancestry
+- disabling nested exports entirely
+- marking every finding as fixed or actionable without artifact-grounded triage
+- acknowledging neither the release freeze nor the prior rollback when those variant corpora exist
 
-## Quality Gate
-- The task must force the solver to separate one real exploit from surrounding audit noise.
-- Hidden traversal cases must prevent simplistic string-blocklist fixes from earning partial credit too easily.
-- The hotfix note must be structured and schema-validated so boilerplate cannot pass.
-- Post-probe hardening:
-  - Removed the leaked statement that only one finding is real and forced artifact-grounded classification.
-  - Added resolved-root ancestry and symlink escape requirements so string-prefix fixes fail.
-  - Added a hard score cap when trusted traversal or triage checks fail.
-- Adversarial probe verdict before hardening: `no`.
-- Naive GPT-5.4/high under-30 target after hardening: `yes`, only if failing trusted traversal or artifact-grounded triage checks caps the score below 30.
-- Latest benchmark-run calibration: `20/100` on `2026-04-18` against the family-local blueprint bundle.
+## Saturation and Renewal Plan
+Trigger saturation review when the mean `P_benchmark` stays above `80` for two consecutive probe rounds. Renewal queue:
+1. add a variant where the symlink escape arrives mid-session through a checked-in patch review
+2. add a variant with contradictory AppSec follow-up notes that must be reconciled explicitly
+3. retire `v1-clean-baseline` if it becomes a pure floor check

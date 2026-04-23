@@ -1,0 +1,141 @@
+{
+  "gate": {
+    "all_pass": false,
+    "family_mean": 20,
+    "family_mean_ok": true,
+    "hard_variant_ok": false,
+    "max_observed_stdev_M_training": 0.0,
+    "max_variant_mean": 20,
+    "max_variant_ok": true,
+    "min_variant_mean": 20,
+    "monotonic_breaks": [],
+    "monotonic_ok": true
+  },
+  "model": "gpt-5.4",
+  "probe_run_id": "20260423T230531Z",
+  "reasoning": "high",
+  "repeats": 3,
+  "variants": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "artifact_grounding_missing": 2,
+        "blanket_triage": 1,
+        "triage_misclassification": 3
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        79,
+        77,
+        77
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {
+        "artifact_grounding_missing": 2,
+        "triage_misclassification": 3
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        79,
+        74,
+        80
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {
+        "triage_misclassification": 3
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        85,
+        85,
+        85
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "artifact_grounding_missing": 1,
+        "release_freeze_unacknowledged": 1,
+        "triage_misclassification": 3
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        85,
+        85,
+        75
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "artifact_grounding_missing": 1,
+        "triage_misclassification": 3
+      },
+      "max": 20,
+      "mean": 20,
+      "mean_M_training": 0.2,
+      "min": 20,
+      "n": 3,
+      "raw_scores": [
+        85,
+        80,
+        80
+      ],
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0,
+      "stdev_M_training": 0.0
+    }
+  }
+}

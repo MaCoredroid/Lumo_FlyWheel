@@ -1,0 +1,78 @@
+{
+  "items": [
+    {
+      "affected_path": "repo/export_api/storage.py",
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "disposition": "actionable_hotfix",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/triage_matrix.csv"
+      ],
+      "rationale": "This item maps to the live export-path exploit in repo/export_api/storage.py and must be remediated in the hotfix.",
+      "rule_or_file": "py/export-path-traversal",
+      "source": "sarif"
+    },
+    {
+      "affected_path": "repo/export_api/auth.py",
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "disposition": "out_of_scope",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/triage_matrix.csv"
+      ],
+      "rationale": "This follow-up is real but it is not part of the narrow export-path hotfix and would broaden scope into auth remediation.",
+      "rule_or_file": "py/jwt-key-rotation",
+      "source": "sarif"
+    },
+    {
+      "affected_path": "repo/export_api/storage.py",
+      "artifact_id": "APPSEC-EXP-17",
+      "disposition": "actionable_hotfix",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/audit.sarif"
+      ],
+      "rationale": "This item maps to the live export-path exploit in repo/export_api/storage.py and must be remediated in the hotfix.",
+      "rule_or_file": "tenant-export path traversal",
+      "source": "appsec"
+    },
+    {
+      "affected_path": "repo/export_api/auth.py",
+      "artifact_id": "APPSEC-KEY-03",
+      "disposition": "out_of_scope",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ],
+      "rationale": "This follow-up is real but it is not part of the narrow export-path hotfix and would broaden scope into auth remediation.",
+      "rule_or_file": "JWT rotation request",
+      "source": "appsec"
+    },
+    {
+      "affected_path": "repo/archive/legacy_export.py",
+      "artifact_id": "SARIF-PY-ARCHIVE-019",
+      "disposition": "false_positive",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/triage_matrix.csv"
+      ],
+      "rationale": "The artifact points at archived code outside the live export path, so it does not describe a real hotfix obligation for this repo slice.",
+      "rule_or_file": "py/archived-scan-noise",
+      "source": "sarif"
+    },
+    {
+      "affected_path": "repo/export_api/routes.py",
+      "artifact_id": "APPSEC-LOG-12",
+      "disposition": "monitor_only",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ],
+      "rationale": "This is a valid follow-up, but it is an operational or logging clean-up item rather than the exploit-driving hotfix.",
+      "rule_or_file": "verbose audit logging follow-up",
+      "source": "appsec"
+    }
+  ],
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "v2-noisy-distractor"
+}

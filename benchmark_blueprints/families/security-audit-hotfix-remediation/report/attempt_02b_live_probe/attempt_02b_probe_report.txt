@@ -1,0 +1,23 @@
+# attempt_02b live probe report
+
+command: `python3 verifiers/security-audit-hotfix-remediation/run_live_probe.py --repeats 3 --timeout 900 --jsonl-out benchmark_blueprints/families/security-audit-hotfix-remediation/report/attempt_02b_live_probe/probe_runs.jsonl --summary-out benchmark_blueprints/families/security-audit-hotfix-remediation/report/attempt_02b_live_probe/summary.json`
+probe_run_id: `20260423T230531Z`
+
+| variant | scores | mean | raw_scores | ceiling_hits |
+|---|---|---:|---|---|
+| v1-clean-baseline | [20, 20, 20] | 20.00 | [79, 77, 77] | {'artifact_grounding_missing': 2, 'blanket_triage': 1, 'triage_misclassification': 3} |
+| v2-noisy-distractor | [20, 20, 20] | 20.00 | [79, 74, 80] | {'artifact_grounding_missing': 2, 'triage_misclassification': 3} |
+| v3-dirty-state | [20, 20, 20] | 20.00 | [85, 85, 85] | {'triage_misclassification': 3} |
+| v4-multi-corpus-objective | [20, 20, 20] | 20.00 | [85, 85, 75] | {'artifact_grounding_missing': 1, 'release_freeze_unacknowledged': 1, 'triage_misclassification': 3} |
+| v5-recovery-in-thread | [20, 20, 20] | 20.00 | [85, 80, 80] | {'artifact_grounding_missing': 1, 'triage_misclassification': 3} |
+
+all_pass: False
+family_mean: 20
+family_mean_ok: True
+hard_variant_ok: False
+max_observed_stdev_M_training: 0.0
+max_variant_mean: 20
+max_variant_ok: True
+min_variant_mean: 20
+monotonic_breaks: []
+monotonic_ok: True

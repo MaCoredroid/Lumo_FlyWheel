@@ -1,0 +1,66 @@
+{
+  "baseline_writable_hashes": {
+    "audit/triage_note.json": "MISSING",
+    "repo/export_api/routes.py": "c071674cb7af3887f048605b82a4686cdf1111fdc409895fc88707ba7bbe6244",
+    "repo/export_api/storage.py": "a27d672abca6dac7896bf5a34120d66bf9cc725cae0df2841789a2bd390cd979",
+    "repo/ops/deploy_hotfix.json": "MISSING",
+    "repo/tests/test_hotfix_regressions.py": "MISSING"
+  },
+  "pass_bar": 70,
+  "readonly_tree_hashes": {
+    ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+    "AGENTS.md": "f019502020d93555def805207f250e132d6c4d7af9153210742af29d6980b219",
+    "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+    "Makefile": "6f6c8a12c717ea5e8bbda5c4f7bd85cc87c42ae2f1cef54ffbe58e6cfc6451e4",
+    "artifacts": "ace0ce49e74d5175293283bfff7cd100097d153956c95b7b78c0d0c3fddf145d",
+    "audit/appsec_review.md": "0e4c33ff9fac86179e2939f2e60162332c7756d4b39e031f2a2dc8053c9f8218",
+    "audit/audit.sarif": "facd7b4297c44e2a654b3868f0e6eb759608067ccd9ce20e1a692fb4d39aa8fd",
+    "audit/triage_matrix.csv": "1f2d37d5fc88d7722b358501a9d1d7329eac79467f7b0fa358dba2cc68c21b8c",
+    "bin": "a87219f47f572ed0a5912b97a4af39422778489db4176b4378b93009b3045e46",
+    "repo/archive": "64f1b02fc37639d3eba572ee91db0d985bc53f2e8f8e7cf852f3f18a0dc13770",
+    "repo/export_api/auth.py": "1064fda90d77574822f852401168b8756356ee86a1607020660094864660ea8f",
+    "repo/tests/test_routes.py": "4853ab03d125d82a4f7575731f131b2dcf284db47553788768fbffd4854fd7af",
+    "repo/tests/test_storage.py": "ecff1104aaa67ebc12e7220d42994246158359f2741fdcc3ac855d9f0438e440"
+  },
+  "requires_dirty_state_rejection": false,
+  "requires_incident_reference": false,
+  "requires_release_ack": false,
+  "triage_items": {
+    "APPSEC-EXP-17": {
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "actionable_hotfix",
+      "rule_or_file": "tenant-export path traversal",
+      "source": "appsec"
+    },
+    "APPSEC-KEY-03": {
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "out_of_scope",
+      "rule_or_file": "JWT rotation request",
+      "source": "appsec"
+    },
+    "SARIF-PY-AUTH-014": {
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "out_of_scope",
+      "rule_or_file": "py/jwt-key-rotation",
+      "source": "sarif"
+    },
+    "SARIF-PY-TRAVERSAL-001": {
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "actionable_hotfix",
+      "rule_or_file": "py/export-path-traversal",
+      "source": "sarif"
+    }
+  },
+  "variant_id": "v1-clean-baseline",
+  "visible_test_hashes": {
+    "repo/tests/test_routes.py": "34eb9255c9cc5f52b3d31dac9f6f1a9b1d78bea1a4bcc3e23e5055be23e4f455",
+    "repo/tests/test_storage.py": "b91584aee34bc6c3782e7eaa9aafcc60c03ad1c29446d0a9236fa1be4f6dda42"
+  },
+  "writable_paths": [
+    "repo/export_api/storage.py",
+    "repo/export_api/routes.py",
+    "audit/triage_note.json",
+    "repo/ops/deploy_hotfix.json",
+    "repo/tests/test_hotfix_regressions.py"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "item_required_fields": [
+    "artifact_id",
+    "source",
+    "rule_or_file",
+    "affected_path",
+    "disposition",
+    "rationale",
+    "evidence_paths"
+  ],
+  "required_fields": [
+    "schema_version",
+    "variant_id",
+    "items"
+  ],
+  "schema_version": "cnb55.audit_triage.schema.v1"
+}
