@@ -1,0 +1,2 @@
+candidate_uuid	parent_candidate_uuid	iteration	candidate_label	feasible	objective_value	objective_mean	objective_ci_95	measurement_count	ttft_p95_ms	tpot_p95_ms	turn_latency_p95_ms	rollout_throughput	reasoning_content_purity	determinism_pass_rate	status	notes
+fbb4fa39-2684-473a-a151-3e39ab3c6922		baseline_a	baseline_a	false				1	50905.318	86.275	145443.767	6.667	1.0	1.0	baseline	default-config baseline replay a
