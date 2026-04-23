@@ -71,57 +71,218 @@ You are the implementation agent. Your job is to deliver the substrate
 the v0.1 auto-research round will run on top of. This is a one-shot
 implementation task, not a research loop.
 
-Deliverables:
-- src/lumo_flywheel_serving/measurement_harness.py
-- scripts/capture_seed_workload.py
-- lumoserve auto-research bootstrap-round
-- lumoserve auto-research measure
-- lumoserve auto-research commit-candidate
-- lumoserve auto-research rescreen
-- lumoserve auto-research validate-holdout
-- lumoserve auto-research finalize-round
-- lumoserve auto-research status
-- lumoserve auto-research run
-- tests/fixtures/synthetic_measurement.py
-- tests covering unit + dry-run integration paths
-- pre-flight checks for production bootstrap
-- output/auto_research/<round_id>/impl_brief.md
-- output/auto_research/<round_id>/iteration_brief.md
-- skills/auto-research-round-manager/SKILL.md
+## Context docs (read all three first)
+
+- Parent HLD:  docs/HLD-Serving-Backend-AutoResearch-v0_1.md
+- Sub-spec:    docs/HLD-Serving-Backend-AutoResearch-v0_1-SubSpec-AutoResearchAgent.md
+- Parent §5.6 (measurement harness), §5.9 (bundle schema), §9.3 (verification)
+
+## Deliverables (all must land on main)
+
+1. src/lumo_flywheel_serving/measurement_harness.py
+   - class RealMeasurementHarness per sub-spec §9.1
+   - measure() method per §9.1 signature
+   - emits MeasuredTrace per §9.2 schema with generator =
+     "RealMeasurementHarness v0.1.0"
+   - implements the parent §5.6 loop: /admin/load_tuned_config,
+     /health wait, seed-trace replay, per-request latency capture,
+     /metrics scrape at window boundaries, PromQL-derived p95
+     cross-check, purity sample, determinism probe, KV-poisoning probe
+
+2. scripts/capture_seed_workload.py
+   - runs family eval set through default-config serving stack once
+   - persists per-request jsonl: prompt_tokens, output_tokens,
+     thinking_tokens, turn_index
+   - emits workload_distribution_id = sha256 of the persisted file
+
+3. CLI subcommands under `lumoserve auto-research …` — all 7 required
+   for Phase A completion, plus the backward-compat `run`:
+   - bootstrap-round   (sub-spec §8.1)
+   - measure           (sub-spec §8.2)
+   - commit-candidate  (sub-spec §8.3)
+   - rescreen          (sub-spec §8.4 — required by finalize-round)
+   - validate-holdout  (sub-spec §8.5 — required by finalize-round)
+   - finalize-round    (sub-spec §8.6 — refuses without rescreen + holdout
+                         unless --dry-run is passed, §8.6a)
+   - status            (sub-spec §8.7 — read-only round state for Python)
+   Existing `run` subcommand stays but is env-guarded per §8.8.
+
+4. skills/auto-research-round-manager/SKILL.md — full rewrite
+   - Python outer loop per sub-spec §11
+   - spawns `codex exec` per iteration (sub-spec §2.3)
+   - owns stop criteria (sub-spec §11.3)
+   - calls bootstrap-round, loop-of-codex-exec, finalize-round,
+     live family gate in that order
+
+5. tests/fixtures/synthetic_measurement.py
+   - move SyntheticMeasurementHarness here, rename to
+     SyntheticMeasurementFixture, emit generator =
+     "SyntheticMeasurementFixture v<n>"
+   - commit-candidate must REFUSE this generator per sub-spec §6.3
+
+6. Unit + integration tests:
+   - unit: each CLI subcommand
+   - unit: skill watchdog paths (silence, out-of-scope write,
+           unsigned commit)
+   - integration: dry-run round against SyntheticMeasurementFixture
+                  (allowed only under LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1)
+   - integration: precondition refuses when harness module absent
+
+7. Pre-flight checks for the skill (sub-spec §11.1):
+   - RealMeasurementHarness imports cleanly
+   - codex --version returns expected version
+   - git status clean
+   - workload yaml has seed_trace_ref pointing at existing jsonl
+   - LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT unset
+
+8. Codex-facing brief templates (strings in the skill):
+   - impl_brief.md   (this file — you may update if you discover
+                       the spec is wrong; note the update in §14)
+   - iteration_brief.md (sub-spec §5.2 template — ship verbatim)
+
+## Done when
+
+- All 8 items above land on main
+- All unit + integration tests pass
+- A dry-run round against SyntheticMeasurementFixture completes
+  successfully end-to-end (demonstrates the wiring is correct,
+  does not prove the real harness works)
+- `python -c "from lumo_flywheel_serving.measurement_harness \
+   import RealMeasurementHarness"` succeeds
+- sub-spec §9.3.AR.7 and §9.3.AR.12 verification items pass
+
+## You may
+
+- install packages and add dependencies to pyproject.toml
+  (Phase A is the only phase where this is allowed)
+- modify any file in the repo
+- create new files under src/, scripts/, skills/, tests/
+- refactor existing code that conflicts with the new surface
+
+## You may not
+
+- ship a Phase A deliverable that calls SyntheticMeasurementFixture
+  from production code paths
+- modify docs/ without updating the corresponding sub-spec section
+- leave any test failing
+- declare done without running the dry-run round end-to-end
+
+## Exit protocol
+
+Open one PR with all 8 deliverables. Title:
+  "Phase A: auto-research substrate (LLD-SB-06)"
+Body: checklist from "Done when" above, all items checked.
 """
 
 ITERATION_BRIEF_TEMPLATE = """# Auto-Research Iteration {{iteration}} of Round {{round_id}}
 
-You are running ONE iteration of an auto-research round. Python is
-running the round and will spawn your successor when you exit cleanly.
+You are running ONE iteration of an auto-research round. You are not
+running the round. Python is running the round and will spawn your
+successor when you exit cleanly.
 
-Round identity:
-- round_id: {{round_id}}
-- model_id: {{model_id}}
-- family_id: {{family_id}}
-- active_layer: {{active_layer}}
-- round_branch: {{round_branch}}
-- round_spec_ref: {{round_dir}}/round_spec.yaml
+## Round identity (read-only — DO NOT edit)
 
-This iteration:
-- iteration: {{iteration}}
-- iteration_dir: {{iteration_dir}}
-- prior_results_ref: {{round_dir}}/results.tsv
+- round_id:            {{round_id}}
+- model_id:            {{model_id}}
+- family_id:           {{family_id}}
+- active_layer:        {{active_layer}}
+- round_branch:        {{round_branch}}
+- round_spec_ref:      {{round_dir}}/round_spec.yaml
 
-Steps:
-1. Read round_spec.yaml and results.tsv.
-2. Write one candidate to {{iteration_dir}}/candidate.yaml.
-3. Run:
-   lumoserve auto-research measure --round-id {{round_id}} --candidate {{iteration_dir}}/candidate.yaml
-4. Read {{iteration_dir}}/measurement_trace.json and then run:
-   lumoserve auto-research commit-candidate --round-id {{round_id}} --iteration {{iteration}} --status <status> --notes "<one-line rationale>"
-5. Exit 0.
+## This iteration
 
-Hard rules:
-- Write only under {{iteration_dir}}.
-- Do not modify round_spec.yaml, iteration_brief.md, results.tsv directly, src/, docs/, or benchmark_blueprints/.
-- Do not call finalize-round.
-- If a CLI call keeps failing, write {{iteration_dir}}/BLOCKED.md and exit 2.
+- iteration:           {{iteration}}          # e.g. "007"
+- iteration_dir:       {{round_dir}}/candidates/{{iteration}}/
+- prior_results_ref:   {{round_dir}}/results.tsv   # all rows up to {{iteration}}-1
+
+## Your job (exactly four steps — do them in this order)
+
+1. Read {{round_dir}}/round_spec.yaml to understand the SLO ceilings,
+   iteration_cap, and active_layer for this round.
+
+2. Read {{round_dir}}/results.tsv. Look at every prior row. Study the
+   pattern of feasible vs infeasible candidates, the constraint each
+   infeasible candidate tripped, the TTFT/TPOT/TurnLatency numbers of
+   the feasible ones, and the objective value trend.
+
+3. Propose ONE candidate for this iteration. Write it to:
+     {{iteration_dir}}/candidate.yaml
+   Schema: parent HLD §5.3.2 L1 action space keys only. No L0, no L2,
+   no L3 keys. No extra keys. The baseline case (iteration=000) is
+   the default-config dict from the model registry.
+
+4. Invoke:
+     lumoserve auto-research measure \
+       --round-id {{round_id}} \
+       --candidate {{iteration_dir}}/candidate.yaml
+   The CLI will:
+     - /admin/load_tuned_config with your candidate's vllm_config
+     - wait for /health
+     - drive RealMeasurementHarness for warmup + measurement window
+     - write measurement_trace.json next to candidate.yaml
+     - append one row to results.tsv with a stable candidate_uuid
+       populated (no commit_sha column — see §7.2)
+     - print one JSON object to stdout including {candidate_uuid, ...}
+     - exit 0 on success, non-zero with structured error on fault
+   Total wall-clock: ~{{per_candidate_wall_clock_minutes}} minutes.
+
+5. Read {{iteration_dir}}/measurement_trace.json. Pick ONE status from
+   {keep, discard, crash, baseline}. Then invoke:
+     lumoserve auto-research commit-candidate \
+       --round-id {{round_id}} \
+       --iteration {{iteration}} \
+       --status <status> \
+       --notes "<one-line rationale grounded in the trace>"
+   The CLI will create one git commit with message format §7.3.
+
+6. Exit with code 0.
+
+## Hard rules (sub-spec §6 — verified by watchdog + CLI)
+
+R1. You may write ONLY under {{iteration_dir}}. The CLI rejects other
+    paths.
+R2. You may NOT modify round_spec.yaml, iteration_brief.md, results.tsv
+    (except via the CLI), or anything under src/ docs/ benchmark_blueprints/.
+R3. You may NOT call `pip install` or any package-install command.
+R4. You may NOT hand-compute objective values. The only source of
+    truth is measurement_trace.json.
+R5. You may NOT make git commits yourself — only via `commit-candidate`.
+R6. You do NOT decide whether the round continues. Exit 0 when this
+    iteration is done. Python decides what happens next.
+R7. You do NOT call `finalize-round`. That is Python's job when the
+    round is done. Calling it yourself is a R2 violation and the
+    watchdog will kill the round.
+R8. If a CLI call returns non-zero, read the error. Retry at most
+    twice. If still failing, write a one-line explanation to
+    {{iteration_dir}}/BLOCKED.md and exit with code 2.
+
+## What "done" looks like for this iteration
+
+- {{iteration_dir}}/candidate.yaml exists and is valid
+- {{iteration_dir}}/measurement_trace.json exists with
+  generator starting with "RealMeasurementHarness"
+- One new row in results.tsv with a candidate_uuid column
+  populated
+- One new commit on {{round_branch}} whose message carries both
+  a `Candidate-UUID: <uuid>` trailer (matching the results.tsv
+  row) and a `Signed-off-by: lumoserve-auto-research-cli` trailer
+- You have exited with code 0
+
+## Out-of-scope for this iteration (Python handles)
+
+- Deciding whether to run iteration {{next_iteration}}
+- Detecting diminishing returns across iterations
+- Detecting 3-in-a-row OOM hard-infeasibility
+- Running the live family gate
+- Writing the bundle yaml
+- Merging the round branch
+
+## Reference material (read if needed — do not modify)
+
+- Parent HLD:     docs/HLD-Serving-Backend-AutoResearch-v0_1.md
+- Sub-spec:       docs/HLD-Serving-Backend-AutoResearch-v0_1-SubSpec-AutoResearchAgent.md
+- Workload yaml:  {{workload_file}}
+- CLI help:       lumoserve auto-research --help
 """
 
 
@@ -1064,6 +1225,8 @@ class AutoResearchRoundManager:
                 updated_rows.append(row)
         if not matched:
             raise RuntimeError("commit_refused: pending results row missing or candidate_uuid mismatch")
+        staged_paths = [candidate_dir.relative_to(self.repo_root), (round_dir / "results.tsv").relative_to(self.repo_root)]
+        self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
         self._write_results(round_dir / "results.tsv", updated_rows)
 
         commit_message = self._candidate_commit_message(
@@ -1072,8 +1235,12 @@ class AutoResearchRoundManager:
             row=next(row for row in updated_rows if row.iteration == iteration and row.candidate_uuid == str(trace.get("candidate_uuid"))),
             trace_path=trace_path.relative_to(self.repo_root),
         )
-        staged_paths = [candidate_dir.relative_to(self.repo_root), (round_dir / "results.tsv").relative_to(self.repo_root)]
-        commit_sha = self._commit_paths(staged_paths, commit_message, spec.harness_type == "synthetic")
+        commit_sha = self._commit_paths(
+            staged_paths,
+            commit_message,
+            spec.harness_type == "synthetic",
+            context="commit_refused",
+        )
         return {
             "iteration": iteration,
             "candidate_uuid": str(trace.get("candidate_uuid")),
@@ -1145,7 +1312,12 @@ class AutoResearchRoundManager:
                 extra_trailers=[f"Rescreen-Of-UUID: {parent.candidate_uuid}"],
             )
             staged_paths = [rescreen_dir.relative_to(self.repo_root), (round_dir / "results.tsv").relative_to(self.repo_root)]
-            commit_sha = self._commit_paths(staged_paths, commit_message, spec.harness_type == "synthetic")
+            commit_sha = self._commit_paths(
+                staged_paths,
+                commit_message,
+                spec.harness_type == "synthetic",
+                context="commit_refused",
+            )
             rescreen_rows.append(
                 {
                     "iteration": iteration,
@@ -1321,7 +1493,12 @@ class AutoResearchRoundManager:
             staged_paths.append((round_dir / "rescreen_trace.json").relative_to(self.repo_root))
         if (round_dir / "holdout_trace.json").exists():
             staged_paths.append((round_dir / "holdout_trace.json").relative_to(self.repo_root))
-        finalize_commit_sha = self._commit_paths(staged_paths, commit_message, spec.harness_type == "synthetic")
+        finalize_commit_sha = self._commit_paths(
+            staged_paths,
+            commit_message,
+            spec.harness_type == "synthetic",
+            context="finalize-round refuses",
+        )
         return {
             "round_id": round_id,
             "bundle_path": str(bundle_path),
@@ -1663,11 +1840,15 @@ class AutoResearchRoundManager:
         message_lines.append(f"Signed-off-by: {SIGNED_OFF_BY}")
         return "\n".join(message_lines) + "\n"
 
-    def _commit_paths(self, paths: list[Path], message: str, skip_git: bool) -> str:
+    def _commit_paths(self, paths: list[Path], message: str, skip_git: bool, *, context: str) -> str:
+        self._assert_only_allowed_staged_paths(paths, context=context)
         if skip_git:
             return f"synthetic-{uuid4()}"
         rel_paths = [str(path) for path in paths]
-        self._git(["add", *rel_paths], capture_output=False)
+        # Round artifacts intentionally live under output/, which is ignored
+        # for normal development but must be committed to the experiment ledger.
+        self._git(["add", "-f", *rel_paths], capture_output=False)
+        self._assert_only_allowed_staged_paths(paths, context=context)
         self._git(["commit", "-m", message], capture_output=False)
         return self._git(["rev-parse", "HEAD"]).stdout.strip()
 
@@ -1690,6 +1871,21 @@ class AutoResearchRoundManager:
 
     def _git_status_short(self) -> str:
         return self._git(["status", "--short"]).stdout.strip()
+
+    def _assert_only_allowed_staged_paths(self, allowed_paths: list[Path], *, context: str) -> None:
+        allowed = [path.as_posix().rstrip("/") for path in allowed_paths]
+        staged = {
+            line.strip()
+            for line in self._git(["diff", "--cached", "--name-only"]).stdout.splitlines()
+            if line.strip()
+        }
+        unexpected = sorted(
+            path
+            for path in staged
+            if not any(path == candidate or path.startswith(f"{candidate}/") for candidate in allowed)
+        )
+        if unexpected:
+            raise RuntimeError(f"{context}: staged paths outside allow-list: {', '.join(unexpected)}")
 
     @staticmethod
     def _round_branch_name(*, model_id: str, family_id: str, sprint: str, timestamp: str) -> str:
