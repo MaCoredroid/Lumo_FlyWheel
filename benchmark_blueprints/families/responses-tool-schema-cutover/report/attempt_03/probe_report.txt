@@ -1,0 +1,126 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=20260423T000148Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   70.00   26.46    50   100  [100,50,60]  contract_driftx1,no_test_regression_guardx2
+v2-noisy-distractor                3   36.67   32.15     0    60  [60,0,50]  contract_driftx2,no_test_regression_guardx3
+v3-dirty-state                     3   53.33    5.77    50    60  [50,60,50]  contract_driftx2,no_test_regression_guardx3
+v4-multi-corpus-objective          3   53.33    5.77    50    60  [50,50,60]  contract_driftx2,no_test_regression_guardx3
+v5-recovery-in-thread              3   56.67    5.77    50    60  [60,60,50]  contract_driftx1,no_test_regression_guardx3
+
+family_mean = 54.00   (window 15.0-25.0)
+max_variant_mean = 70.00   (cap 40.0)
+min_variant_mean = 36.67   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 54.00
+  [FAIL] max variant <= cap: 70.00
+  [FAIL] at least one variant <= hard floor: min variant mean = 36.67
+  [FAIL] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: v2-noisy-distractor (36.7) < v3-dirty-state (53.3) beyond +/-3.0; v4-multi-corpus-objective (53.3) < v5-recovery-in-thread (56.7) beyond +/-3.0
+
+overall: HARDEN NEEDED
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 54.0,
+    "family_mean_ok": false,
+    "hard_variant_ok": false,
+    "max_variant_mean": 70,
+    "max_variant_ok": false,
+    "min_variant_mean": 36.666666666666664,
+    "monotonic_breaks": [
+      "v2-noisy-distractor (36.7) < v3-dirty-state (53.3) beyond +/-3.0",
+      "v4-multi-corpus-objective (53.3) < v5-recovery-in-thread (56.7) beyond +/-3.0"
+    ],
+    "monotonic_ok": false
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {
+        "contract_drift": 1,
+        "no_test_regression_guard": 2
+      },
+      "max": 100,
+      "mean": 70,
+      "min": 50,
+      "n": 3,
+      "scores": [
+        100,
+        50,
+        60
+      ],
+      "shortcut_runs": 0,
+      "stdev": 26.457513110645905
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {
+        "contract_drift": 2,
+        "no_test_regression_guard": 3
+      },
+      "max": 60,
+      "mean": 36.666666666666664,
+      "min": 0,
+      "n": 3,
+      "scores": [
+        60,
+        0,
+        50
+      ],
+      "shortcut_runs": 1,
+      "stdev": 32.145502536643185
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {
+        "contract_drift": 2,
+        "no_test_regression_guard": 3
+      },
+      "max": 60,
+      "mean": 53.333333333333336,
+      "min": 50,
+      "n": 3,
+      "scores": [
+        50,
+        60,
+        50
+      ],
+      "shortcut_runs": 0,
+      "stdev": 5.773502691896258
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "contract_drift": 2,
+        "no_test_regression_guard": 3
+      },
+      "max": 60,
+      "mean": 53.333333333333336,
+      "min": 50,
+      "n": 3,
+      "scores": [
+        50,
+        50,
+        60
+      ],
+      "shortcut_runs": 0,
+      "stdev": 5.773502691896258
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "contract_drift": 1,
+        "no_test_regression_guard": 3
+      },
+      "max": 60,
+      "mean": 56.666666666666664,
+      "min": 50,
+      "n": 3,
+      "scores": [
+        60,
+        60,
+        50
+      ],
+      "shortcut_runs": 0,
+      "stdev": 5.773502691896258
+    }
+  }
+}

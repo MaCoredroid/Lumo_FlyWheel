@@ -114,3 +114,93 @@ The scorer and manifests used for the live probe matched the family-local Layer 
 
 - Layer B remains implemented and evidenced locally.
 - Layer A is still open after the first real whole-family live probe. The measured signal is not a missing-artifact problem anymore; it is a calibration problem driven mainly by `no_test_regression_guard` / `contract_drift` ceilings plus integrity variance from out-of-whitelist pytest helper writes.
+
+## Attempt 03 — post-attestation-fix whole-family live rerun
+
+### Why this attempt exists
+
+- Family-local metadata changed in `family.yaml` to make Layer A / Layer B attestation and RAWR taxonomy canonical and honest for review.
+- Per the current review-round rule, any family-local change requires a fresh whole-family live `codex exec` probe after the fix, even if the scorer and workspace bundle are otherwise unchanged.
+
+### Commands run
+
+```bash
+python3 verifiers/responses-tool-schema-cutover/run_live_probe.py --attempt attempt_03 --n 3 --model gpt-5.4 --reasoning-effort high
+python3 scripts/probe_report.py benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_03/probe_runs.jsonl --probe-run-id 20260423T000148Z --emit-json | tee benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_03/probe_report.txt
+python3 - <<'PY'
+import json
+from pathlib import Path
+import yaml
+p = Path('benchmark_blueprints/families/responses-tool-schema-cutover/family.yaml')
+data = yaml.safe_load(p.read_text())
+assert data['layer_a_status'] == 'failed_freeze_gate'
+assert data['layer_b_status'] == 'implemented_pending_review'
+assert data['seeds']['current_observed_stdev_M_training'] == 0.189
+assert data['seeds']['escalation_currently_active'] is True
+expected = {
+    'grounding_stripped': 'implemented',
+    'citation_fabricated': 'declared_not_yet_implemented',
+    'constraint_named_not_respected': 'implemented',
+}
+modes = {row['id']: row for row in data['rawr_modes']}
+assert set(modes) == set(expected)
+for mode_id, status in expected.items():
+    assert modes[mode_id]['status'] == status
+print(json.dumps({
+    'parsed': True,
+    'layer_a_status': data['layer_a_status'],
+    'layer_b_status': data['layer_b_status'],
+    'current_observed_stdev_M_training': data['seeds']['current_observed_stdev_M_training'],
+    'escalation_currently_active': data['seeds']['escalation_currently_active'],
+    'rawr_modes': data['rawr_modes'],
+}, indent=2))
+PY
+```
+
+### Probe artifacts
+
+- run ledger: `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_03/probe_runs.jsonl`
+- text report: `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_03/probe_report.txt`
+- metadata: `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_03/probe_meta.json`
+- per-run verifier outputs / diffs / logs: `benchmark_blueprints/families/responses-tool-schema-cutover/report/attempt_03/<variant>/run_0{1,2,3}/`
+
+### Whole-family live results
+
+Probe run id: `20260423T000148Z`
+
+| Variant | Scores | Mean | Stdev | Ceiling hits |
+| --- | --- | ---: | ---: | --- |
+| `v1-clean-baseline` | `[100, 50, 60]` | `70.00` | `26.46` | `contract_drift x1`, `no_test_regression_guard x2` |
+| `v2-noisy-distractor` | `[60, 0, 50]` | `36.67` | `32.15` | `contract_drift x2`, `no_test_regression_guard x3` |
+| `v3-dirty-state` | `[50, 60, 50]` | `53.33` | `5.77` | `contract_drift x2`, `no_test_regression_guard x3` |
+| `v4-multi-corpus-objective` | `[50, 50, 60]` | `53.33` | `5.77` | `contract_drift x2`, `no_test_regression_guard x3` |
+| `v5-recovery-in-thread` | `[60, 60, 50]` | `56.67` | `5.77` | `contract_drift x1`, `no_test_regression_guard x3` |
+
+### Layer A gate values
+
+- `family_mean = 54.00` vs required `[15, 25]` -> `FAIL`
+- `max_variant_mean = 70.00` vs required `<= 40` -> `FAIL`
+- `min_variant_mean = 36.67` vs required `<= 10` -> `FAIL`
+- monotonic `V1 >= V2 >= V3 >= V4 >= V5` within `+/- 3` -> `FAIL`
+  - `v2-noisy-distractor (36.7) < v3-dirty-state (53.3)` beyond `+/- 3.0`
+  - `v4-multi-corpus-objective (53.3) < v5-recovery-in-thread (56.7)` beyond `+/- 3.0`
+
+### Metadata honesty updates tied to this attempt
+
+- `family.yaml` attestation now reflects recorded reality:
+  - `layer_a_status: failed_freeze_gate`
+  - `layer_b_status: implemented_pending_review`
+- canonical RAWR taxonomy in `family.yaml` is now:
+  - `grounding_stripped` -> `implemented`
+  - `citation_fabricated` -> `declared_not_yet_implemented`
+  - `constraint_named_not_respected` -> `implemented`
+- the latest full probe observed `current_observed_stdev_M_training = 0.189`, so `escalation_currently_active` is now `true`
+
+### Legacy matrix naming note
+
+- The older attempt-01 verification matrices still include a legacy `Chronology-blind fix` row name. That row remains preserved as historical family-local evidence, but it is **not** the canonical HLD §4 `citation_fabricated` RAWR mode and is no longer used as the family’s taxonomy declaration.
+
+### Outcome
+
+- Layer B declaration is now more honest than the prior `green` claim because the canonical taxonomy and latest variance state are explicitly recorded in `family.yaml`, but reviewer acceptance is still pending.
+- Layer A remains open after the required post-fix rerun. The latest fresh live probe is even easier than `attempt_02`, with `family_mean = 54.00` and no variant mean below `36.67`.

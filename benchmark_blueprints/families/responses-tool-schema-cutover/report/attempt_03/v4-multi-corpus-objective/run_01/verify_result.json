@@ -1,0 +1,110 @@
+{
+  "M_training": 0.5,
+  "P_benchmark": 50,
+  "breakdown": {
+    "__bands": {
+      "contract.config_updated": "M",
+      "core.call_id_join": "M",
+      "core.hidden_replay_oracle": "M",
+      "core.multi_call_preserved": "M",
+      "core.visible_render_exact": "M",
+      "partial_progress.heuristic": "P_only",
+      "phase2.visible_pytest": "M"
+    },
+    "contract.config_updated": 10,
+    "core.call_id_join": 15,
+    "core.hidden_replay_oracle": 15,
+    "core.multi_call_preserved": 10,
+    "core.visible_render_exact": 10,
+    "partial_progress.heuristic": 6,
+    "phase2.visible_pytest": 20
+  },
+  "ceilings_applied": [
+    "contract_drift",
+    "no_test_regression_guard"
+  ],
+  "changed_paths": [
+    "codex/config.toml",
+    "docs/migrations/responses-cutover.md",
+    "gateway/adapter.py",
+    "gateway/reducer.py"
+  ],
+  "contracts": {
+    "config_ok": true,
+    "docs_ok": false
+  },
+  "errors": [],
+  "hidden_cases": {
+    "call_id_ratio": 1.0,
+    "details": [
+      {
+        "call_ids_ok": true,
+        "id": "stable-summary",
+        "preserved_ok": true,
+        "render_ok": true
+      }
+    ],
+    "preserved_ratio": 1.0,
+    "render_ratio": 1.0
+  },
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.5,
+    "slots": [
+      {
+        "passed_bool": true,
+        "slot_id": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot_id": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot_id": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 80,
+  "raw_score_pre_ceiling": 86,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 50,
+  "shortcut_detected": false,
+  "variant_id": "v4-multi-corpus-objective",
+  "visible_case": {
+    "call_id_ratio": 1.0,
+    "details": [
+      {
+        "call_ids_ok": true,
+        "id": "visible",
+        "preserved_ok": true,
+        "render_ok": true
+      }
+    ],
+    "preserved_ratio": 1.0,
+    "render_ratio": 1.0
+  },
+  "wall_clock_seconds": 0.32
+}
