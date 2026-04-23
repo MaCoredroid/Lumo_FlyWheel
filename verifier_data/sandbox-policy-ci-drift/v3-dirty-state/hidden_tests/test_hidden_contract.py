@@ -81,6 +81,23 @@ def test_archive_noise_stays_archived_when_present() -> None:
         assert "manual-review" not in active
 
 
+def test_dirty_state_requires_rejecting_fixture_only_shortcut_when_present() -> None:
+    dirty_state = ROOT / "repo_evidence" / "abandoned_helper_patch.md"
+    if dirty_state.exists():
+        note = (ROOT / "docs" / "releases" / "policy-rename.md").read_text(encoding="utf-8").lower()
+        assert (
+            "visible fixture" in note
+            or "happy-path fixture" in note
+            or "fixture-only" in note
+        )
+        assert (
+            "shortcut" in note
+            or "abandoned" in note
+            or "real config" in note
+            or "real configs" in note
+        )
+
+
 def test_release_context_requires_preview_consumer_alignment_when_present() -> None:
     context = ROOT / "release_context" / "preview-consumer-contract.md"
     if context.exists():

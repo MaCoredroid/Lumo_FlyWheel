@@ -199,6 +199,10 @@ def main() -> int:
         state.apply_ceiling("rollback_context_unacknowledged", 10)
         state.add_error("incident rollback rationale missing from release note")
 
+    if not surfaces.dirty_state_shortcut_rejected_ok:
+        state.apply_ceiling("dirty_state_shortcut_unacknowledged", 20)
+        state.add_error("dirty-state helper shortcut not explicitly rejected in release note")
+
     if surfaces.helper_shortcut_clean:
         state.add("integrity.helper_shortcut_removed", 10)
     else:

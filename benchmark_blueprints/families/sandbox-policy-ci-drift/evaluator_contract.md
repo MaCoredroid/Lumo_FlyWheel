@@ -31,6 +31,7 @@ enum rename without dropping the one required compatibility alias.
 - Cap at `10/100` for docs-only or workflow-only patches.
 - Cap at `20/100` for rename-everything patches that remove deprecated compatibility.
 - Cap at `20/100` for helper-path fixture normalization shortcuts.
+- Cap at `20/100` in `V3+` when the release note does not explicitly reject the abandoned visible-fixture helper shortcut as not being a real config fix.
 - Cap at `20/100` in `V4+` when the release note ignores the preview-consumer/operator contract introduced by `release_context/preview-consumer-contract.md`.
 - Cap at `10/100` in `V5` when the release note fixes the code path but does not acknowledge the rollback and why `workspace-write` input compatibility was preserved.
 - Cap at `25/100` if preview output still emits deprecated names.
@@ -46,6 +47,7 @@ enum rename without dropping the one required compatibility alias.
 - Workflow file uses one consistent canonical token family.
 - `scripts/run_ci.py` does not normalize only the visible fixture.
 - Release note documents compatibility plus canonical output.
+- `V3+`: when dirty-state evidence points to the abandoned helper patch, the release note explicitly says the visible-fixture shortcut was abandoned and did not fix real configs.
 - `V4+`: release note acknowledges that preview JSON is consumed directly by operators and stays canonical-only for that downstream surface.
 - `V5`: release note explicitly names the rollback and the compatibility reason for preserving deprecated `workspace-write` on input.
 
@@ -59,6 +61,6 @@ enum rename without dropping the one required compatibility alias.
 ## Variant Hardness Notes
 - `V1`: one clean rename drift; compatibility still matters.
 - `V2`: stale archive noise should not leak into active surfaces.
-- `V3`: abandoned helper-path shortcut must be rejected.
+- `V3`: abandoned helper-path shortcut must be rejected both in code and in the operator note, so a generic release note no longer clears the dirty-state rung.
 - `V4`: release-context consumers make operator-facing preview language part of correctness, not polish.
 - `V5`: incident recovery forbids dropping the deprecated alias and requires rollback-aware release-note language.

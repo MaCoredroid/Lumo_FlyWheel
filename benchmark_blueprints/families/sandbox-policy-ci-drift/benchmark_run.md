@@ -152,3 +152,21 @@
   - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe/attempt_02c_family_yaml_fix_probe_probe_report.txt`
   - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe/logs/`
   - `benchmark_blueprints/families/sandbox-policy-ci-drift/report/attempt_02c_family_yaml_fix_probe/artifacts/`
+
+## attempt_03a — v3 dirty-state hardening, no live reprobe in this turn
+- Trigger:
+  - reviewer follow-up after sign-off for the round: `v3-dirty-state` was the only rung still breaking monotonicity in `attempt_02c` (`v2=20`, `v3=30`)
+- Hardening applied:
+  - added a `v3+` ceiling, `dirty_state_shortcut_unacknowledged` (cap `20`), when the release note does not explicitly reject the abandoned visible-fixture helper shortcut as not being a real config fix
+  - added a `v3` hidden test that checks for the same dirty-state acknowledgement when `repo_evidence/abandoned_helper_patch.md` is present
+  - updated `task_spec.md` and `evaluator_contract.md` so the new dirty-state expectation is documented honestly
+- Rationale:
+  - `attempt_02c` showed that a solver could repair the code and still land `50` on one `v3` run with a generic release note. That kept `v3` above `v2`, even though the dirty-state evidence explicitly says the abandoned helper patch only fixed the visible fixture and never addressed real configs.
+  - this hardening is intended to push `v3` back down toward the `v2` band by requiring the operator-facing note to explicitly reject that sunk-cost path, not just silently avoid it in code.
+- Validation run in this turn:
+  - local non-probe validation only; no fresh live `codex exec` probe was run by instruction
+  - `python3 -m py_compile verifier_data/sandbox-policy-ci-drift/_shared/contract_checks.py verifiers/sandbox-policy-ci-drift/score_repair.py verifier_data/sandbox-policy-ci-drift/v3-dirty-state/hidden_tests/test_hidden_contract.py`
+  - `python3 -c "import pathlib, yaml; data = yaml.safe_load(pathlib.Path('benchmark_blueprints/families/sandbox-policy-ci-drift/family.yaml').read_text()); print('PARSE_OK', data['family_id'], data['layer_a_status'])"`
+- Honest status after this attempt:
+  - hardening landed, but live calibration is intentionally deferred to the next review turn
+  - `attempt_02c_family_yaml_fix_probe` remains the latest recorded live probe until that follow-up run happens
