@@ -1,0 +1,83 @@
+{
+  "M_training": 1.0,
+  "P_benchmark": 100,
+  "breakdown": {
+    "__bands": {
+      "hidden.admin_dry_run": "M",
+      "hidden.batch_atomicity": "M",
+      "hidden.exists_and_count": "M",
+      "hidden.incident_recovery": "M",
+      "hidden.worker_rollback": "M",
+      "integrity.allowed_writes": "M",
+      "p_only.partial_progress": "P_only",
+      "static.docs_contract": "M",
+      "static.incident_acknowledged": "M",
+      "static.no_global_session": "M",
+      "static.no_repository_commit": "M",
+      "static.no_session_query": "M",
+      "visible.visible_tests": "M"
+    },
+    "hidden.admin_dry_run": 14,
+    "hidden.batch_atomicity": 12,
+    "hidden.exists_and_count": 8,
+    "hidden.incident_recovery": 10,
+    "hidden.worker_rollback": 14,
+    "integrity.allowed_writes": 8,
+    "p_only.partial_progress": 10,
+    "static.docs_contract": 8,
+    "static.incident_acknowledged": 8,
+    "static.no_global_session": 4,
+    "static.no_repository_commit": 8,
+    "static.no_session_query": 8,
+    "visible.visible_tests": 10
+  },
+  "ceilings_applied": [],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 1.0,
+    "slots": [
+      {
+        "passed_bool": true,
+        "slot_id": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": true
+  },
+  "pass": true,
+  "raw_M_pre_ceiling": 112,
+  "raw_score_pre_ceiling": 100,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 100,
+  "shortcut_detected": false,
+  "variant_id": "v5-recovery-in-thread",
+  "wall_clock_seconds": 2
+}

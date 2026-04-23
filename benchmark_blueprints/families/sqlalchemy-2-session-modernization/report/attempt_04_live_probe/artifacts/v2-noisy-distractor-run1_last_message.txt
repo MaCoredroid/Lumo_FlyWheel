@@ -1,0 +1,6 @@
+Implemented the SQLAlchemy 2 modernization in the allowed files.
+
+`app/repository.py` now uses `select(...)`-based reads and no longer commits inside helper functions; `create_entry()` flushes instead so the caller’s transaction stays open. `app/worker.py` and `app/admin_cli.py` now each own an explicit per-operation transaction and roll back on failures or dry runs, so intermediate `processing` / `queued` states do not leak into persisted data. I also updated [docs/deploy/sqlalchemy2-cutover.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v2-noisy-distractor-run1/workspace/docs/deploy/sqlalchemy2-cutover.md) to match the new behavior.
+
+Validation passed with `pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py` (`3 passed`). The only remaining output was a non-fatal pytest cache warning from a parent repo path outside this writable workspace.
+

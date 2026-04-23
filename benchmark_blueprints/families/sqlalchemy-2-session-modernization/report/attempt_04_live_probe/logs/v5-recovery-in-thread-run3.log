@@ -1,0 +1,1851 @@
+Implemented the SQLAlchemy 2 modernization inside the allowed surface only. Repository reads now use `select(...)` and no longer own commits in [app/repository.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py:1). The API create path now stays inside the caller’s transaction instead of committing from the repository layer in [app/api.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py:1).
+
+The worker and admin CLI now each own an explicit begin/commit/rollback unit of work, so forced failures roll back `processing`/`queued` state instead of leaking retry state across attempts: [app/worker.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py:1), [app/admin_cli.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py:1). I also rewrote the deploy note to reflect the prior rollback, required recovery checks, and precise rollback steps in [docs/deploy/sqlalchemy2-cutover.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md:1).
+
+Validation passed with the exact required command: `pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py` -> `3 passed`. The only warning was pytest being unable to write `.pytest_cache` outside the writable area.
+
+--- STDERR ---
+Reading additional input from stdin...
+OpenAI Codex v0.120.0 (research preview)
+--------
+workdir: /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/zhiyuanma/.codex/memories]
+reasoning effort: high
+reasoning summaries: none
+session id: 019dbbf7-afb7-7fc3-9cca-79965bbc7c64
+--------
+user
+Read AGENTS.md in this directory and follow it exactly. Inspect the current code and docs before editing. Fix the SQLAlchemy 2 modernization task in this workspace. Keep edits within the allowed files from AGENTS.md. Run `pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py` before you finish. Do not modify tests, seed data, or contextual note files.
+2026-04-23T20:11:05.295713Z  WARN codex_core::shell_snapshot: Failed to delete shell snapshot at "/Users/zhiyuanma/.codex/shell_snapshots/019dbbf7-afb7-7fc3-9cca-79965bbc7c64.tmp-1776975065021107000": Os { code: 2, kind: NotFound, message: "No such file or directory" }
+2026-04-23T20:11:05.540032Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:05.540480Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:06.774008Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:06.774589Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:06.779258Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:06.779623Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:06.784489Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:06.784874Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:06.790875Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:06.791318Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:09.525651Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:09.526320Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:09.533101Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:09.533608Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:09.540043Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:09.540539Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:09.547306Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:09.547749Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+I’m reading the repo-local instructions and the current implementation first, then I’ll trace the API, worker, admin CLI, and deploy note to make the SQLAlchemy 2 transaction-boundary fix without touching anything outside the allowed files.
+exec
+/bin/zsh -lc 'rg -n "sqlalchemy|session|transaction|rollback|retry|cutover" /Users/zhiyuanma/.codex/memories/MEMORY.md' in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+9:- rollout_summaries/2026-04-22T02-10-58-CU8E-lumo_flywheel_hld_red_team_web_research_v0_6.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/21/rollout-2026-04-21T19-10-58-019db2f4-7477-71a3-85cf-224bdbdb4358.jsonl, updated_at=2026-04-22T02:25:22+00:00, thread_id=019db2f4-7477-71a3-85cf-224bdbdb4358, first pass stayed high-level and benchmark-literature-backed)
+19:- rollout_summaries/2026-04-22T02-10-58-CU8E-lumo_flywheel_hld_red_team_web_research_v0_6.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/21/rollout-2026-04-21T19-10-58-019db2f4-7477-71a3-85cf-224bdbdb4358.jsonl, updated_at=2026-04-22T02:25:22+00:00, thread_id=019db2f4-7477-71a3-85cf-224bdbdb4358, second pass validated major governance improvements but preserved explicit pushback)
+54:- rollout_summaries/2026-04-20T02-25-01-6g3F-lumo_flywheel_restart_55_family_benchmark_hardening.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/19/rollout-2026-04-19T19-25-01-019da8b4-9aec-7f53-a23a-8c34ad982743.jsonl, updated_at=2026-04-20T06:45:21+00:00, thread_id=019da8b4-9aec-7f53-a23a-8c34ad982743, sequential restart landed two hardened families before interruption)
+64:- rollout_summaries/2026-04-20T01-26-50-hNyD-cnb55_linux_cli_track_restructure_and_family_skeletons.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/19/rollout-2026-04-19T18-26-50-019da87f-5659-75b1-92be-ec4c577228cf.jsonl, updated_at=2026-04-20T02:23:29+00:00, thread_id=019da87f-5659-75b1-92be-ec4c577228cf, Linux CLI track doc and 15 replacement family skeletons landed)
+74:- rollout_summaries/2026-04-19T00-08-52-5lfd-cnb55_family_owned_benchmark_artifacts_and_scored_runs.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/18/rollout-2026-04-18T17-08-52-019da311-96ea-7940-81db-98ce9165d02b.jsonl, updated_at=2026-04-19T01:12:20+00:00, thread_id=019da311-96ea-7940-81db-98ce9165d02b, blueprint layer landed; family-owned rollout partially verified)
+84:- rollout_summaries/2026-04-21T05-18-14-XDyN-cnb55_worker_orchestration_and_family_live_probe_batch.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T22-18-14-019dae79-8a96-7421-8bf5-0ff152c17f01.jsonl, updated_at=2026-04-23T08:33:58+00:00, thread_id=019dae79-8a96-7421-8bf5-0ff152c17f01, repo-root checklist landed with 55 items and one checked family)
+94:- rollout_summaries/2026-04-21T05-18-14-XDyN-cnb55_worker_orchestration_and_family_live_probe_batch.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T22-18-14-019dae79-8a96-7421-8bf5-0ff152c17f01.jsonl, updated_at=2026-04-23T08:33:58+00:00, thread_id=019dae79-8a96-7421-8bf5-0ff152c17f01, five-worker launch required payload and fork-context corrections before stabilizing)
+104:- rollout_summaries/2026-04-21T05-18-14-XDyN-cnb55_worker_orchestration_and_family_live_probe_batch.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T22-18-14-019dae79-8a96-7421-8bf5-0ff152c17f01.jsonl, updated_at=2026-04-23T08:33:58+00:00, thread_id=019dae79-8a96-7421-8bf5-0ff152c17f01, resumed workers were updated in place with a stricter whole-family verification mandate)
+114:- rollout_summaries/2026-04-18T06-01-32-I71J-codex_bench_family_count_and_freeze_thresholds.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/17/rollout-2026-04-17T23-01-32-019d9f2e-1e10-75e2-b20f-bbbe0f996537.jsonl, updated_at=2026-04-18T06:02:24+00:00, thread_id=019d9f2e-1e10-75e2-b20f-bbbe0f996537, docs-and-tests investigation only; no new test landed)
+182:- rollout_summaries/2026-04-21T02-53-23-OFNi-lumoalpha_live_market_hardener_redteam_spec_review.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T19-53-23-019dadf4-ef3c-71b2-925e-b0485e13fea4.jsonl, updated_at=2026-04-21T02:55:12+00:00, thread_id=019dadf4-ef3c-71b2-925e-b0485e13fea4, question-only review highlighted acceptance-contract ambiguities)
+183:- rollout_summaries/2026-04-21T01-52-36-PVhT-live_market_codex_exec_v13_redteam_review.md (cwd=/Users/zhiyuanma/.codex/worktrees/9e79/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T18-52-36-019dadbd-47fd-7282-900e-2a7a0b4e7461.jsonl, updated_at=2026-04-21T02:53:02+00:00, thread_id=019dadbd-47fd-7282-900e-2a7a0b4e7461, first-pass review surfaced Stage-1 and proxy-gating risks)
+193:- rollout_summaries/2026-04-21T01-52-36-PVhT-live_market_codex_exec_v13_redteam_review.md (cwd=/Users/zhiyuanma/.codex/worktrees/9e79/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T18-52-36-019dadbd-47fd-7282-900e-2a7a0b4e7461.jsonl, updated_at=2026-04-21T02:53:02+00:00, thread_id=019dadbd-47fd-7282-900e-2a7a0b4e7461, follow-up was interrupted before a second substantive pass)
+203:- rollout_summaries/2026-04-21T23-16-46-7Lv2-lumoalpha_live_market_redteam_spec_review_and_run_chain.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/21/rollout-2026-04-21T16-16-46-019db254-f9db-7290-9a86-bee4bbb52358.jsonl, updated_at=2026-04-22T01:59:27+00:00, thread_id=019db254-f9db-7290-9a86-bee4bbb52358, design-note review and published-run re-scan converged on runner/host closure semantics)
+213:- rollout_summaries/2026-04-23T02-35-16-ffWa-lumoalpha_live_market_spec_review_rev3.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/22/rollout-2026-04-22T19-35-16-019db831-10b9-77c1-b898-12e06baab37a.jsonl, updated_at=2026-04-23T07:28:33+00:00, thread_id=019db831-10b9-77c1-b898-12e06baab37a, repeated rev3 re-scan narrowed the remaining blocker to PIT-tier identity pinning)
+263:- rollout_summaries/2026-04-21T05-17-11-UW8L-install_repo_local_benchmark_family_authoring_skill.md (cwd=/Users/zhiyuanma/.codex/worktrees/67cf/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T22-17-11-019dae78-945b-7f60-9f99-5d1142dd3bf7.jsonl, updated_at=2026-04-21T05:18:05+00:00, thread_id=019dae78-945b-7f60-9f99-5d1142dd3bf7, repo-local skill bundle copied into the personal skills directory)
+273:- rollout_summaries/2026-04-21T05-18-14-XDyN-cnb55_worker_orchestration_and_family_live_probe_batch.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T22-18-14-019dae79-8a96-7421-8bf5-0ff152c17f01.jsonl, updated_at=2026-04-23T08:33:58+00:00, thread_id=019dae79-8a96-7421-8bf5-0ff152c17f01, repo-local reinstall replaced a drifted installed copy and revalidated parity)
+307:- rollout_summaries/2026-04-20T01-45-25-auXn-lumoalpha_curator_migration_spec_red_team_review.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/19/rollout-2026-04-19T18-45-25-019da890-5aa8-7c91-9c05-111d78cf6f19.jsonl, updated_at=2026-04-20T02:17:18+00:00, thread_id=019da890-5aa8-7c91-9c05-111d78cf6f19, first pass surfaced internal contradictions and open product questions)
+317:- rollout_summaries/2026-04-20T01-45-25-auXn-lumoalpha_curator_migration_spec_red_team_review.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/19/rollout-2026-04-19T18-45-25-019da890-5aa8-7c91-9c05-111d78cf6f19.jsonl, updated_at=2026-04-20T02:17:18+00:00, thread_id=019da890-5aa8-7c91-9c05-111d78cf6f19, re-review confirmed the remaining issue is a cross-doc held_out split)
+333:- The pinned product decisions from the successful re-review were: `held_out` is a graduation-time red-team input plus decay input; all 10 families are equally eligible to graduate on day one; legacy re-hardening prioritizes epistemic cleanliness with a hard pause / flat-book posture; curator stays outside the loop at weekly cadence; weekly curator writes/no-op acknowledgements are post-cutover governance, not cutover gating; `vault` is retired as a concept, with only the code-similarity algorithm surviving in `red_team/similarity/` [Task 2]
+351:- rollout_summaries/2026-04-18T21-35-03-4ltE-lumoalpha_third_party_framework_comparison_sota_ref_bundle.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/18/rollout-2026-04-18T14-35-03-019da284-c44d-70c0-a65a-a5ec1fc4b0a2.jsonl, updated_at=2026-04-19T00:04:42+00:00, thread_id=019da284-c44d-70c0-a65a-a5ec1fc4b0a2, vendoring and ignore rules verified)
+361:- rollout_summaries/2026-04-18T21-35-03-4ltE-lumoalpha_third_party_framework_comparison_sota_ref_bundle.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/18/rollout-2026-04-18T14-35-03-019da284-c44d-70c0-a65a-a5ec1fc4b0a2.jsonl, updated_at=2026-04-19T00:04:42+00:00, thread_id=019da284-c44d-70c0-a65a-a5ec1fc4b0a2, file-level donor map and repo-local anchors preserved)
+371:- rollout_summaries/2026-04-18T21-35-03-4ltE-lumoalpha_third_party_framework_comparison_sota_ref_bundle.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/18/rollout-2026-04-18T14-35-03-019da284-c44d-70c0-a65a-a5ec1fc4b0a2.jsonl, updated_at=2026-04-19T00:04:42+00:00, thread_id=019da284-c44d-70c0-a65a-a5ec1fc4b0a2, final artifact bundle in repo root)
+381:- rollout_summaries/2026-04-20T00-40-26-8rFP-ignore_third_party_amend_and_force_push.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/19/rollout-2026-04-19T17-40-26-019da854-daf9-78b2-8e33-7beece3675ed.jsonl, updated_at=2026-04-20T00:43:57+00:00, thread_id=019da854-daf9-78b2-8e33-7beece3675ed, tracked gitlinks removed from amended commit and pushed with force-with-lease)
+420:- rollout_summaries/2026-04-17T22-54-05-TSnz-market_data_source_and_api_key_discovery.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/17/rollout-2026-04-17T15-54-05-019d9da6-c3fb-76d3-a77f-146adcfa7375.jsonl, updated_at=2026-04-17T22:56:30+00:00, thread_id=019d9da6-c3fb-76d3-a77f-146adcfa7375, direct path-finding completed)
+453:- rollout_summaries/2026-04-17T20-33-36-CJ8Z-lld05_evaluator_dual_track_redteam_cleanup.md (cwd=/Users/zhiyuanma/work/CursorWS/codex-fly-wheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/17/rollout-2026-04-17T13-33-36-019d9d26-2797-75a0-9680-612324a91141.jsonl, updated_at=2026-04-17T21:10:40+00:00, thread_id=019d9d26-2797-75a0-9680-612324a91141, repo file became the durable artifact)
+463:- rollout_summaries/2026-04-17T20-33-36-CJ8Z-lld05_evaluator_dual_track_redteam_cleanup.md (cwd=/Users/zhiyuanma/work/CursorWS/codex-fly-wheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/17/rollout-2026-04-17T13-33-36-019d9d26-2797-75a0-9680-612324a91141.jsonl, updated_at=2026-04-17T21:10:40+00:00, thread_id=019d9d26-2797-75a0-9680-612324a91141, signed off as v0.3 after second red-team pass)
+481:- SWE-bench wrapper and artifact contracts in LLD-03 should be attempt-scoped to avoid retry/regrade clobbering, and `model_name_or_path` should point at the producing model/harness rather than the evaluator CLI [Task 2]
+497:- rollout_summaries/2026-04-22T17-19-50-mVlW-sp500_stock_reference_refresh_and_memory_update.md (cwd=/Users/zhiyuanma/work/CursorWS/Fin_Skill, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/22/rollout-2026-04-22T10-19-56-019db634-8e0d-7cd3-a04c-c2d055c1dc94.jsonl, updated_at=2026-04-22T17:28:08+00:00, thread_id=019db634-8e0d-7cd3-a04c-c2d055c1dc94, refreshed rerun confirmed the canonical output paths and direct automation-memory write path again)
+498:- rollout_summaries/2026-04-21T17-02-59-a7xc-sp500_sepa_estimate_automation_refresh.md (cwd=/Users/zhiyuanma/work/CursorWS/Fin_Skill, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/21/rollout-2026-04-21T10-02-59-019db0fe-c204-7822-9fca-ef96996469b6.jsonl, updated_at=2026-04-21T17:05:00+00:00, thread_id=019db0fe-c204-7822-9fca-ef96996469b6, fresh rerun plus automation-memory refresh)
+508:- rollout_summaries/2026-04-10T17-00-00-Itb3-sp500_sepa_actionable_report_and_stage_gate_recalibration.md (cwd=/Users/zhiyuanma/work/CursorWS/Fin_Skill, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/10/rollout-2026-04-10T10-00-00-019d7856-14b1-7333-9a53-fb1a0c14d191.jsonl, updated_at=2026-04-10T19:21:09+00:00, thread_id=019d7856-14b1-7333-9a53-fb1a0c14d191, report generator, actionable fields, and stage-gate recalibration landed)
+518:- rollout_summaries/2026-04-17T17-18-22-aVxe-sp500_stock_list_repeated_runs_investigation_and_fix.md (cwd=/Users/zhiyuanma/work/CursorWS/Fin_Skill, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/17/rollout-2026-04-17T10-18-22-019d9c73-69b0-7cb2-850c-050d3f918220.jsonl, updated_at=2026-04-17T19:45:58+00:00, thread_id=019d9c73-69b0-7cb2-850c-050d3f918220, root cause traced to stale ranking inputs)
+528:- rollout_summaries/2026-04-17T17-18-22-aVxe-sp500_stock_list_repeated_runs_investigation_and_fix.md (cwd=/Users/zhiyuanma/work/CursorWS/Fin_Skill, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/17/rollout-2026-04-17T10-18-22-019d9c73-69b0-7cb2-850c-050d3f918220.jsonl, updated_at=2026-04-17T19:45:58+00:00, thread_id=019d9c73-69b0-7cb2-850c-050d3f918220, patched and regenerated)
+532:- enrich_sp500_actionable_fields.py, build_sp500_report.py, fetch_estimate_with_retry, score_trend, score_fund, score_est_mom, score_timing, Strong Buy Setup, Watch List, sp500_sepa_estimate_report.md
+556:- The patch that fixed the repeated-list regression added `fetch_estimate_with_retry` integration and recomputed `score_trend`, `score_fund`, `score_est_mom`, `score_timing`, and `composite_score` in `enrich_sp500_actionable_fields.py` before report generation [Task 4]
+579:- rollout_summaries/2026-04-15T01-24-09-R0VP-lumo_swarm_v38_quality_report_and_skill_update.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/14/rollout-2026-04-14T18-24-09-019d8ebd-132c-7d62-8a1c-7485be1ca0c9.jsonl, updated_at=2026-04-15T20:49:28+00:00, thread_id=019d8ebd-132c-7d62-8a1c-7485be1ca0c9, latest-run report and skill update completed)
+589:- rollout_summaries/2026-04-16T15-26-43-uNVr-alpha_quality_breakthrough_live_redteam_loop.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/16/rollout-2026-04-16T08-26-43-019d96e6-d57f-7400-85e3-b0e6ac2e7aed.jsonl, updated_at=2026-04-16T23:37:22+00:00, thread_id=019d96e6-d57f-7400-85e3-b0e6ac2e7aed, intensified live red-team loop with repeated respawns)
+590:- rollout_summaries/2026-04-15T20-47-17-h9Z0-alpha_quality_breakthrough_live_swarm_loop.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/15/rollout-2026-04-15T13-47-17-019d92e5-f41f-7b32-9580-a4bf2fcdbbc2.jsonl, updated_at=2026-04-16T15:22:23+00:00, thread_id=019d92e5-f41f-7b32-9580-a4bf2fcdbbc2, repeated live fixes on main; final state still partial)
+591:- rollout_summaries/2026-04-13T05-27-29-C9fu-lumoalpha_live_verifier_loop_and_skill_tightening.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/12/rollout-2026-04-12T22-27-29-019d854f-2406-7202-911c-d670f1dd3cd4.jsonl, updated_at=2026-04-14T01:10:38+00:00, thread_id=019d854f-2406-7202-911c-d670f1dd3cd4, early keep-pulling and skill-tightening contract landed)
+637:- rollout_summaries/2026-04-15T01-11-42-RsmK-lumo_swarm_autoloop_spec_v38_redteam_doc_patch.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoAlpha, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/14/rollout-2026-04-14T18-11-42-019d8eb1-ae00-7943-8406-c62b2ccbda6a.jsonl, updated_at=2026-04-15T01:24:02+00:00, thread_id=019d8eb1-ae00-7943-8406-c62b2ccbda6a, committed and pushed doc-only patch)
+641:- lumo_swarm_autoloop_spec_v38_FULL.md, query_search_ledger_at, cancel_old_session_entries, cancel_old_data_entries, save_swarm_state, parent-directory fsync, CAS cancellation, in_flight_all, in_flight_current, single-writer, commit 545632f
+653:- `cancel_old_session_entries()` and `cancel_old_data_entries()` should count only successful CAS cancellations, not the size of the initial queued snapshot [Task 1]
+655:- Consumers should re-read `swarm_state.json` every dequeue cycle and honor `reset_in_progress` / `rotation_in_progress` cutover barriers [Task 1]
+671:- rollout_summaries/2026-04-15T01-49-50-cDN8-lumo_mainagent_repo_init_add_everything_readme_buff.md (cwd=/Users/zhiyuanma/work/CursorWS/LumoMainAgentSkill, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/14/rollout-2026-04-14T18-49-50-019d8ed4-968d-7903-a6c3-9e75c10faed2.jsonl, updated_at=2026-04-15T01:53:18+00:00, thread_id=019d8ed4-968d-7903-a6c3-9e75c10faed2, full bootstrap + docs rewrite completed)
+681:- rollout_summaries/2026-04-19T06-17-56-2Msw-git_init_first_commit_main_push_success.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_AI_Native, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/18/rollout-2026-04-18T23-17-56-019da463-7d44-7562-b1bb-9e2d62aea498.jsonl, updated_at=2026-04-19T06:18:47+00:00, thread_id=019da463-7d44-7562-b1bb-9e2d62aea498, exact command sequence executed successfully)
+715:- rollout_summaries/2026-04-20T01-25-10-mePv-ignore_codex_config_toml.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/19/rollout-2026-04-19T18-25-10-019da87d-cea3-7cb2-9bbd-3c8cd3b16f01.jsonl, updated_at=2026-04-20T01:25:54+00:00, thread_id=019da87d-cea3-7cb2-9bbd-3c8cd3b16f01, ignore rule plus index cleanup recorded)
+741:- rollout_summaries/2026-04-23T07-29-52-2Rfk-keep_local_changes_pull_latest_main.md (cwd=/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/23/rollout-2026-04-23T00-29-52-019db93e-c695-70d0-ace3-20683786f16a.jsonl, updated_at=2026-04-23T07:31:32+00:00, thread_id=019db93e-c695-70d0-ace3-20683786f16a, stashed tracked+untracked work, rebased onto origin/main, then restored the working tree cleanly)
+771:- rollout_summaries/2026-04-21T20-33-11-hc13-meta_partner_engineering_genai_resume_tailor_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/0528/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/21/rollout-2026-04-21T13-33-11-019db1bf-33de-71b3-8552-1a24a32e4a79.jsonl, updated_at=2026-04-21T20:37:39+00:00, thread_id=019db1bf-33de-71b3-8552-1a24a32e4a79, Meta Partner Engineering GenAI tailoring exported successfully after branch creation and print-density tightening)
+781:- rollout_summaries/2026-04-14T21-47-25-1Epc-markresume_openai_resume_refresh_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/2ec1/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/14/rollout-2026-04-14T14-47-25-019d8df6-a8b0-7300-9f64-208667f35912.jsonl, updated_at=2026-04-14T21:51:30+00:00, thread_id=019d8df6-a8b0-7300-9f64-208667f35912, final 2-page PDF delivered)
+782:- rollout_summaries/2026-04-14T20-51-05-azaP-resume_rewrite_microsoft_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/7ed5/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/14/rollout-2026-04-14T13-51-05-019d8dc3-12e1-7600-a2ab-86d8a4d9218b.jsonl, updated_at=2026-04-14T20:54:06+00:00, thread_id=019d8dc3-12e1-7600-a2ab-86d8a4d9218b, Microsoft-targeted rewrite verified with Playwright CLI and `pdfinfo`)
+783:- rollout_summaries/2026-04-13T20-06-16-eRMa-amd_resume_tailoring_pdf_export.md (cwd=/Users/zhiyuanma/.codex/worktrees/fa62/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/13/rollout-2026-04-13T13-06-16-019d8873-b0dd-7b10-8670-810140814d9e.jsonl, updated_at=2026-04-13T20:08:49+00:00, thread_id=019d8873-b0dd-7b10-8670-810140814d9e, AMD-targeted rewrite exported as single-page PDF)
+784:- rollout_summaries/2026-04-12T20-35-36-fG35-linkedin_4383789942_resume_update_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/83e3/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/12/rollout-2026-04-12T13-35-36-019d8368-2f07-7842-854f-d4c65d94ba8f.jsonl, updated_at=2026-04-12T20:39:21+00:00, thread_id=019d8368-2f07-7842-854f-d4c65d94ba8f, LinkedIn job 4383789942 content swap verified in headless Chrome)
+785:- rollout_summaries/2026-04-11T23-58-41-MOp0-linkedin_4383844588_resume_refresh_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/075a/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/11/rollout-2026-04-11T16-58-41-019d7efb-c01c-72f3-a438-1e1b0c249c26.jsonl, updated_at=2026-04-12T00:03:05+00:00, thread_id=019d7efb-c01c-72f3-a438-1e1b0c249c26, LinkedIn currentJobId 4383844588 refresh exported with direct Chrome CLI)
+786:- rollout_summaries/2026-04-07T17-44-23-fnwW-anthropic_resume_update_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/2420/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/07/rollout-2026-04-07T10-44-23-019d690b-a3fc-7b41-b58f-aacf592c4c2e.jsonl, updated_at=2026-04-07T17:49:53+00:00, thread_id=019d690b-a3fc-7b41-b58f-aacf592c4c2e, Anthropic-targeted content swap and 2-page PDF)
+787:- rollout_summaries/2026-04-06T20-37-15-VT9e-resume_update_xai_5063929007_pdf_export.md (cwd=/Users/zhiyuanma/.codex/worktrees/83fd/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/06/rollout-2026-04-06T13-37-15-019d6483-892a-7f13-b53e-a534d4331450.jsonl, updated_at=2026-04-06T20:40:07+00:00, thread_id=019d6483-892a-7f13-b53e-a534d4331450, xAI-targeted content swap and 2-page PDF)
+788:- rollout_summaries/2026-04-06T17-48-54-oV2v-microsoft_resume_pdf_branch_update.md (cwd=/Users/zhiyuanma/.codex/worktrees/3684/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/06/rollout-2026-04-06T10-48-54-019d63e9-6834-7cc3-9898-190cd0354e7f.jsonl, updated_at=2026-04-06T17:52:48+00:00, thread_id=019d63e9-6834-7cc3-9898-190cd0354e7f, Microsoft-targeted content swap and 2-page PDF)
+789:- rollout_summaries/2026-04-02T17-04-32-HXgu-nvidia_resume_rewrite_no_header_footer.md (cwd=/Users/zhiyuanma/.codex/worktrees/54d8/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/02/rollout-2026-04-02T10-04-32-019d4f27-5b91-75f2-9e43-b9ac302f2cf2.jsonl, updated_at=2026-04-02T17:09:29+00:00, thread_id=019d4f27-5b91-75f2-9e43-b9ac302f2cf2, NVIDIA-targeted rewrite regenerated without print headers/footers)
+790:- rollout_summaries/2026-04-03T17-10-39-tMsv-markresume_google_resume_tailor_and_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/8925/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/03/rollout-2026-04-03T10-10-39-019d5453-515b-7480-a27d-da645ce68c4f.jsonl, updated_at=2026-04-03T17:19:14+00:00, thread_id=019d5453-515b-7480-a27d-da645ce68c4f, Google-targeted content swap and PDF generation)
+791:- rollout_summaries/2026-04-03T17-13-18-arR5-openai_ashby_resume_update_pdf_export.md (cwd=/Users/zhiyuanma/.codex/worktrees/4c2d/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/03/rollout-2026-04-03T10-13-18-019d5455-be1b-7de3-ab8a-ce7f08f4b097.jsonl, updated_at=2026-04-03T17:16:58+00:00, thread_id=019d5455-be1b-7de3-ab8a-ce7f08f4b097, OpenAI Ashby-targeted content swap with validated 2-page PDF)
+792:- rollout_summaries/2026-03-30T17-07-31-FsWg-anthropic_4952079008_resume_refresh_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/bdf7/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/03/30/rollout-2026-03-30T10-07-31-019d3fb7-0222-7f73-8389-bd75b523f114.jsonl, updated_at=2026-03-30T17:12:33+00:00, thread_id=019d3fb7-0222-7f73-8389-bd75b523f114, Anthropic Greenhouse 4952079008 refresh exported and verified)
+802:- rollout_summaries/2026-04-14T21-47-25-1Epc-markresume_openai_resume_refresh_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/2ec1/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/14/rollout-2026-04-14T14-47-25-019d8df6-a8b0-7300-9f64-208667f35912.jsonl, updated_at=2026-04-14T21:51:30+00:00, thread_id=019d8df6-a8b0-7300-9f64-208667f35912, print CSS tightened after first export overflowed)
+803:- rollout_summaries/2026-04-07T17-44-23-fnwW-anthropic_resume_update_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/2420/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/07/rollout-2026-04-07T10-44-23-019d690b-a3fc-7b41-b58f-aacf592c4c2e.jsonl, updated_at=2026-04-07T17:49:53+00:00, thread_id=019d690b-a3fc-7b41-b58f-aacf592c4c2e, final project spill fixed by print-style tightening)
+804:- rollout_summaries/2026-04-06T17-48-54-oV2v-microsoft_resume_pdf_branch_update.md (cwd=/Users/zhiyuanma/.codex/worktrees/3684/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/06/rollout-2026-04-06T10-48-54-019d63e9-6834-7cc3-9898-190cd0354e7f.jsonl, updated_at=2026-04-06T17:52:48+00:00, thread_id=019d63e9-6834-7cc3-9898-190cd0354e7f, print-only CSS density pass reduced export from 3 pages to 2)
+805:- rollout_summaries/2026-04-03T17-10-39-tMsv-markresume_google_resume_tailor_and_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/8925/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/03/rollout-2026-04-03T10-10-39-019d5453-515b-7480-a27d-da645ce68c4f.jsonl, updated_at=2026-04-03T17:19:14+00:00, thread_id=019d5453-515b-7480-a27d-da645ce68c4f, earlier Google run ended at 3 pages and shows the pre-tightening failure mode)
+806:- rollout_summaries/2026-04-03T17-13-18-arR5-openai_ashby_resume_update_pdf_export.md (cwd=/Users/zhiyuanma/.codex/worktrees/4c2d/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/03/rollout-2026-04-03T10-13-18-019d5455-be1b-7de3-ab8a-ce7f08f4b097.jsonl, updated_at=2026-04-03T17:16:58+00:00, thread_id=019d5455-be1b-7de3-ab8a-ce7f08f4b097, Chrome headers/footers and 3-page export fixed with print CSS plus `--no-pdf-header-footer`)
+816:- rollout_summaries/2026-04-21T17-21-38-qGse-mark_resume_skill_jd_local_material_synthesis.md (cwd=/Users/zhiyuanma/.codex/worktrees/f585/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/21/rollout-2026-04-21T10-21-38-019db10f-d72b-71d3-b526-0f5ad11d317e.jsonl, updated_at=2026-04-21T17:22:48+00:00, thread_id=019db10f-d72b-71d3-b526-0f5ad11d317e, mark-resume skill updated to support JD-only synthesis from local evidence)
+826:- rollout_summaries/2026-04-21T00-12-40-hpGR-anthropic_markresume_resume_tailoring_aborted.md (cwd=/Users/zhiyuanma/.codex/worktrees/12b5/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/20/rollout-2026-04-20T17-12-40-019dad61-ca3b-72f2-ae7f-6d51e8c324bd.jsonl, updated_at=2026-04-21T00:13:03+00:00, thread_id=019dad61-ca3b-72f2-ae7f-6d51e8c324bd, turn was aborted before edits or PDF verification completed)
+836:- rollout_summaries/2026-04-23T00-03-42-UB1b-markresume_togetherai_resume_tailor_pdf_export.md (cwd=/Users/zhiyuanma/.codex/worktrees/e945/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/22/rollout-2026-04-22T17-03-42-019db7a6-4c85-7d91-abbb-a1745c66989d.jsonl, updated_at=2026-04-23T00:11:43+00:00, thread_id=019db7a6-4c85-7d91-abbb-a1745c66989d, Together AI ML Engineer targeting needed both content compression and print tightening to hit 2 pages)
+837:- rollout_summaries/2026-04-23T00-03-15-nanl-microsoft_coreai_resume_tailor_export_2_page_pdf.md (cwd=/Users/zhiyuanma/.codex/worktrees/9257/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/22/rollout-2026-04-22T17-03-15-019db7a5-e1e0-71b3-bc26-a9818c5dd207.jsonl, updated_at=2026-04-23T00:08:25+00:00, thread_id=019db7a5-e1e0-71b3-bc26-a9818c5dd207, Microsoft CoreAI Software Engineer 2 targeting reached 2 pages after print-only density pass)
+847:- rollout_summaries/2026-04-23T00-04-33-iUwr-vercel_workflows_resume_tailor_and_pdf_export.md (cwd=/Users/zhiyuanma/.codex/worktrees/e760/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/22/rollout-2026-04-22T17-04-33-019db7a7-12ce-7ad3-acd6-495d487d3b4b.jsonl, updated_at=2026-04-23T00:24:00+00:00, thread_id=019db7a7-12ce-7ad3-acd6-495d487d3b4b, Vercel Workflows targeting exported at a verified 3 pages and included a drafted answer for the "coolest thing built/team" application prompt)
+906:- rollout_summaries/2026-03-28T23-25-54-VPWm-markresume_resume_refresh_and_push.md (cwd=/Users/zhiyuanma/work/CursorWS/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/03/28/rollout-2026-03-28T16-25-54-019d36c4-b5e1-7220-991d-b65ac0d292c6.jsonl, updated_at=2026-03-28T23:40:23+00:00, thread_id=019d36c4-b5e1-7220-991d-b65ac0d292c6, staged note committed and pushed on main)
+916:- rollout_summaries/2026-03-28T23-25-54-VPWm-markresume_resume_refresh_and_push.md (cwd=/Users/zhiyuanma/work/CursorWS/MarkResume, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/03/28/rollout-2026-03-28T16-25-54-019d36c4-b5e1-7220-991d-b65ac0d292c6.jsonl, updated_at=2026-03-28T23:40:23+00:00, thread_id=019d36c4-b5e1-7220-991d-b65ac0d292c6, hardcoded resume refreshed and pushed after local browser verification)
+946:- rollout_summaries/2026-03-27T20-02-35-U8gw-tax_checklist_strikethrough_edits.md (cwd=/Users/zhiyuanma/work/CursorWS/TAX2025, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/03/27/rollout-2026-03-27T13-02-35-019d30e4-36cc-7530-80d4-db42e5ca12a0.jsonl, updated_at=2026-03-27T20:04:08+00:00, thread_id=019d30e4-36cc-7530-80d4-db42e5ca12a0, repeated checklist cleanup handled with targeted patches)
+976:- rollout_summaries/2026-03-24T20-30-32-A57Z-kmp5_streaming_kmp_code_review.md (cwd=/Users/zhiyuanma/work/CursorWS, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/03/24/rollout-2026-03-24T13-30-32-019d218a-b963-7131-8866-0bf9803838f3.jsonl, updated_at=2026-03-24T20:32:48+00:00, thread_id=019d218a-b963-7131-8866-0bf9803838f3, direct review plus runtime checks surfaced correctness gaps)
+1001:applies_to: cwd=/Users/zhiyuanma; reuse_rule=reuse for similar UI-blocking incidents on this machine, but treat the specific process IDs, window titles, and app ownership as session-specific.
+1007:- rollout_summaries/2026-04-14T17-16-51-jZxm-force_stop_black_windowing_chrome_on_macos.md (cwd=/Users/zhiyuanma, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/14/rollout-2026-04-14T10-16-51-019d8cfe-f10f-7dc1-8057-c6b8d8f213d0.jsonl, updated_at=2026-04-14T17:20:56+00:00, thread_id=019d8cfe-f10f-7dc1-8057-c6b8d8f213d0, untitled Chrome blocker identified and killed without closing other Chrome windows)
+1027:- Symptom: screenshot-based inspection fails with `could not create image from display`. Cause: `screencapture` was not usable in this session. Fix: rely on process/window enumeration instead of screenshots [Task 1]
+1039:- rollout_summaries/2026-04-11T23-34-54-wuAE-mac_disk_cleanup_large_targets_and_xcode_simulator_pruning.md (cwd=/Users/zhiyuanma, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/11/rollout-2026-04-11T16-34-54-019d7ee5-f9c0-7da2-b505-2db928f9bd38.jsonl, updated_at=2026-04-11T23:47:29+00:00, thread_id=019d7ee5-f9c0-7da2-b505-2db928f9bd38, top-space offenders identified and prioritized)
+1049:- rollout_summaries/2026-04-11T23-34-54-wuAE-mac_disk_cleanup_large_targets_and_xcode_simulator_pruning.md (cwd=/Users/zhiyuanma, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/11/rollout-2026-04-11T16-34-54-019d7ee5-f9c0-7da2-b505-2db928f9bd38.jsonl, updated_at=2026-04-11T23:47:29+00:00, thread_id=019d7ee5-f9c0-7da2-b505-2db928f9bd38, requested targets removed except protected metadata residue)
+1059:- rollout_summaries/2026-04-11T23-34-54-wuAE-mac_disk_cleanup_large_targets_and_xcode_simulator_pruning.md (cwd=/Users/zhiyuanma, rollout_path=/Users/zhiyuanma/.codex/sessions/2026/04/11/rollout-2026-04-11T16-34-54-019d7ee5-f9c0-7da2-b505-2db928f9bd38.jsonl, updated_at=2026-04-11T23:47:29+00:00, thread_id=019d7ee5-f9c0-7da2-b505-2db928f9bd38, Xcode/support/runtime cleanup verified with simctl)
+
+exec
+/bin/zsh -lc "pwd && ls -la && echo '--- AGENTS ---' && sed -n '1,220p' AGENTS.md" in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+total 24
+drwxr-xr-x@ 12 zhiyuanma  staff   384 Apr 23 12:06 .
+drwxr-xr-x@  3 zhiyuanma  staff    96 Apr 23 13:11 ..
+-rw-r--r--@  1 zhiyuanma  staff    22 Apr 23 12:05 .scenario_variant
+-rw-r--r--@  1 zhiyuanma  staff  1051 Apr 23 12:06 AGENTS.md
+-rw-r--r--@  1 zhiyuanma  staff   107 Apr 23 12:05 Dockerfile
+drwxr-xr-x@  8 zhiyuanma  staff   256 Apr 18 17:50 app
+drwxr-xr-x@  3 zhiyuanma  staff    96 Apr 23 12:05 artifacts
+drwxr-xr-x@  3 zhiyuanma  staff    96 Apr 23 12:03 docs
+drwxr-xr-x@  4 zhiyuanma  staff   128 Apr 23 12:06 incident_context
+drwxr-xr-x@  3 zhiyuanma  staff    96 Apr 23 12:06 release_context
+drwxr-xr-x@  3 zhiyuanma  staff    96 Apr 23 12:05 seed
+drwxr-xr-x@  5 zhiyuanma  staff   160 Apr 18 17:50 tests
+--- AGENTS ---
+You are modernizing a small `ledger-sync` service to SQLAlchemy 2.x semantics.
+
+Work inside this workspace only. The intended fix is behavioral, not just
+syntactic: repository access should use SQLAlchemy 2-style selects, and the API,
+worker, and admin CLI should each have explicit transaction boundaries with
+correct rollback behavior.
+
+Allowed edits:
+- `app/*.py`
+- `docs/deploy/sqlalchemy2-cutover.md`
+
+Do not modify tests, seed data, or any contextual note files. Preserve any file
+that looks like surrounding project context unless the task prompt explicitly
+requires changing it.
+
+Validation surface:
+- `pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py`
+
+Deliver a real transaction-boundary modernization. Do not solve this by adding
+blanket helper-level commits, a global session, or a legacy compatibility shim.
+This variant adds both release and incident context. The last cutover attempt
+was rolled back after retry-state leakage, so the fix and the deploy note must
+both acknowledge recovery and rollback behavior.
+
+2026-04-23T20:11:26.055945Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:26.056363Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:26.062433Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:26.062980Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:26.068966Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:26.069368Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:26.075115Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:26.075539Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+I’ve confirmed the local constraints. Next I’m reading the service code and the targeted tests together so I can fix the transaction boundaries against the actual expected behavior rather than patching blindly.
+exec
+/bin/zsh -lc 'rg --files app tests docs | sort' in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+app/admin_cli.py
+app/api.py
+app/db.py
+app/models.py
+app/repository.py
+app/worker.py
+docs/deploy/sqlalchemy2-cutover.md
+tests/test_admin_cli.py
+tests/test_api.py
+tests/test_worker.py
+
+exec
+/bin/zsh -lc "sed -n '1,220p' app/db.py && printf '\\n---\\n' && sed -n '1,240p' app/models.py && printf '\\n---\\n' && sed -n '1,260p' app/repository.py" in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.models import Base
+
+
+def make_session_factory(url):
+    engine = create_engine(url, future=True)
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine, future=True, expire_on_commit=False)
+
+---
+from sqlalchemy import Integer, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class LedgerEntry(Base):
+    __tablename__ = "ledger_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    external_id: Mapped[str] = mapped_column(String, unique=True)
+    amount: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String, default="pending")
+
+---
+from app.models import LedgerEntry
+
+
+def create_entry(session, external_id, amount):
+    entry = LedgerEntry(external_id=external_id, amount=amount, status="pending")
+    session.add(entry)
+    session.commit()
+    return entry
+
+
+def get_entry(session, external_id):
+    return session.query(LedgerEntry).filter_by(external_id=external_id).one()
+
+
+def entry_exists(session, external_id):
+    return (
+        session.query(LedgerEntry.id)
+        .filter_by(external_id=external_id)
+        .first()
+        is not None
+    )
+
+
+def pending_entry_count(session):
+    return session.query(LedgerEntry).filter_by(status="pending").count()
+
+exec
+/bin/zsh -lc "sed -n '1,260p' app/api.py && printf '\\n---\\n' && sed -n '1,260p' app/worker.py && printf '\\n---\\n' && sed -n '1,260p' app/admin_cli.py" in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+from app.repository import create_entry, get_entry
+
+
+def create_ledger_entry(session, external_id, amount):
+    return create_entry(session, external_id, amount)
+
+
+def read_ledger_status(session, external_id):
+    return get_entry(session, external_id).status
+
+---
+from app.repository import get_entry
+
+
+def settle_entry(session_factory, external_id, fail_after_mark=False):
+    with session_factory() as session:
+        entry = get_entry(session, external_id)
+        entry.status = "processing"
+        session.commit()
+        if fail_after_mark:
+            raise RuntimeError("boom")
+        entry.status = "settled"
+        session.commit()
+
+
+def settle_batch(session_factory, external_ids, fail_after_first=False):
+    with session_factory() as session:
+        for index, external_id in enumerate(external_ids):
+            entry = get_entry(session, external_id)
+            entry.status = "processing"
+            session.commit()
+            if fail_after_first and index == 0:
+                raise RuntimeError("batch-boom")
+            entry.status = "settled"
+            session.commit()
+
+---
+from app.repository import get_entry
+
+
+def plan_batch(session_factory, external_id, dry_run=True):
+    with session_factory() as session:
+        entry = get_entry(session, external_id)
+        entry.status = "queued"
+        if dry_run:
+            session.commit()
+            return {"external_id": external_id, "dry_run": True}
+        session.commit()
+        return {"external_id": external_id, "dry_run": False}
+
+
+def reconcile_batch(session_factory, external_ids, dry_run=True, fail_after_first=False):
+    with session_factory() as session:
+        results = []
+        for index, external_id in enumerate(external_ids):
+            entry = get_entry(session, external_id)
+            entry.status = "queued"
+            session.commit()
+            results.append({"external_id": external_id, "dry_run": dry_run})
+            if fail_after_first and index == 0:
+                raise RuntimeError("cli-boom")
+        return results
+
+exec
+/bin/zsh -lc "sed -n '1,260p' tests/test_api.py && printf '\\n---\\n' && sed -n '1,260p' tests/test_worker.py && printf '\\n---\\n' && sed -n '1,260p' tests/test_admin_cli.py && printf '\\n---\\n' && sed -n '1,260p' docs/deploy/sqlalchemy2-cutover.md" in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from app.api import create_ledger_entry, read_ledger_status
+from app.db import make_session_factory
+
+
+def test_create_and_read_entry(tmp_path):
+    session_factory = make_session_factory(f"sqlite:///{tmp_path / 'ledger.sqlite'}")
+    with session_factory.begin() as session:
+        create_ledger_entry(session, "ext-1", 25)
+        assert read_ledger_status(session, "ext-1") == "pending"
+    with session_factory() as session:
+        assert read_ledger_status(session, "ext-1") == "pending"
+
+---
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from app.db import make_session_factory
+from app.repository import create_entry, get_entry
+from app.worker import settle_entry
+
+
+def test_worker_failure_does_not_persist_processing_status(tmp_path):
+    session_factory = make_session_factory(f"sqlite:///{tmp_path / 'ledger.sqlite'}")
+    with session_factory.begin() as session:
+        create_entry(session, "ext-1", 25)
+    try:
+        settle_entry(session_factory, "ext-1", fail_after_mark=True)
+    except RuntimeError:
+        pass
+    with session_factory() as session:
+        assert get_entry(session, "ext-1").status == "pending"
+
+---
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from app.admin_cli import plan_batch
+from app.db import make_session_factory
+from app.repository import create_entry, get_entry
+
+
+def test_dry_run_does_not_persist_status_change(tmp_path):
+    session_factory = make_session_factory(f"sqlite:///{tmp_path / 'ledger.sqlite'}")
+    with session_factory.begin() as session:
+        create_entry(session, "ext-1", 25)
+    plan_batch(session_factory, "ext-1", dry_run=True)
+    with session_factory() as session:
+        assert get_entry(session, "ext-1").status == "pending"
+
+---
+# SQLAlchemy 2 Cutover
+
+Keep the legacy compatibility shim in place and avoid changing transaction
+boundaries during the cutover. Repository helpers may continue committing on
+their own so the API, worker, and admin commands all preserve the legacy
+behavior until a later release.
+
+2026-04-23T20:11:40.311904Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:40.312665Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:40.319727Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:40.320357Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:40.328135Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:40.328686Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:40.336192Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:40.336699Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+The code is small and the failure mode is clear: repository helpers still commit, and the worker/CLI are committing mid-operation so retries can leak `processing` or `queued` state. I’m checking the adjacent release and incident notes now so the deploy note reflects the rollback/recovery expectations baked into this variant.
+exec
+/bin/zsh -lc "find incident_context -maxdepth 2 -type f -print | sort | xargs -I{} sh -c 'echo \"--- {} ---\"; sed -n \"1,220p\" \"{}\"'" in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+exec
+/bin/zsh -lc "find release_context -maxdepth 2 -type f -print | sort | xargs -I{} sh -c 'echo \"--- {} ---\"; sed -n \"1,220p\" \"{}\"'" in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+--- incident_context/recovery-checklist.md ---
+## Recovery Checklist
+
+Before retrying the cutover:
+- prove rollback leaves rows at `pending` after forced failures
+- prove dry-run stays read-only
+- document the rollback steps for operators
+--- incident_context/retry-state-rollback.md ---
+## Incident 2026-04-07
+
+The prior SQLAlchemy 2 cutover was rolled back after a failed worker retry left
+rows in `processing` and the admin dry-run path queued real work. The incident
+was not caused by `select()` itself; it was caused by preserving legacy helper
+commits across the retry and planning flows.
+
+ succeeded in 0ms:
+--- release_context/current-cutover-gate.md ---
+## Release Gate
+
+- Retry-state leakage is a blocker.
+- Admin dry-run cannot queue records.
+- Rollback steps must be precise enough for on-call use.
+
+2026-04-23T20:11:51.478428Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:51.479050Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:51.485437Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:51.485941Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:51.491961Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:51.492404Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:11:51.498553Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:11:51.498960Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+Plan:
+1. Refactor the repository layer to SQLAlchemy 2-style `select()` access and remove helper-owned commits.
+2. Move commit/rollback ownership to the API, worker, and admin CLI with one explicit transaction boundary per unit of work, including batch behavior.
+3. Update the deploy note to call out the prior rollback, recovery checks, and operator rollback steps.
+4. Run `pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py` and fix anything that still leaks state.
+exec
+/bin/zsh -lc "nl -ba app/repository.py && printf '\\n---\\n' && nl -ba app/api.py && printf '\\n---\\n' && nl -ba app/worker.py && printf '\\n---\\n' && nl -ba app/admin_cli.py && printf '\\n---\\n' && nl -ba docs/deploy/sqlalchemy2-cutover.md" in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+     1	from app.models import LedgerEntry
+     2	
+     3	
+     4	def create_entry(session, external_id, amount):
+     5	    entry = LedgerEntry(external_id=external_id, amount=amount, status="pending")
+     6	    session.add(entry)
+     7	    session.commit()
+     8	    return entry
+     9	
+    10	
+    11	def get_entry(session, external_id):
+    12	    return session.query(LedgerEntry).filter_by(external_id=external_id).one()
+    13	
+    14	
+    15	def entry_exists(session, external_id):
+    16	    return (
+    17	        session.query(LedgerEntry.id)
+    18	        .filter_by(external_id=external_id)
+    19	        .first()
+    20	        is not None
+    21	    )
+    22	
+    23	
+    24	def pending_entry_count(session):
+    25	    return session.query(LedgerEntry).filter_by(status="pending").count()
+
+---
+     1	from app.repository import create_entry, get_entry
+     2	
+     3	
+     4	def create_ledger_entry(session, external_id, amount):
+     5	    return create_entry(session, external_id, amount)
+     6	
+     7	
+     8	def read_ledger_status(session, external_id):
+     9	    return get_entry(session, external_id).status
+
+---
+     1	from app.repository import get_entry
+     2	
+     3	
+     4	def settle_entry(session_factory, external_id, fail_after_mark=False):
+     5	    with session_factory() as session:
+     6	        entry = get_entry(session, external_id)
+     7	        entry.status = "processing"
+     8	        session.commit()
+     9	        if fail_after_mark:
+    10	            raise RuntimeError("boom")
+    11	        entry.status = "settled"
+    12	        session.commit()
+    13	
+    14	
+    15	def settle_batch(session_factory, external_ids, fail_after_first=False):
+    16	    with session_factory() as session:
+    17	        for index, external_id in enumerate(external_ids):
+    18	            entry = get_entry(session, external_id)
+    19	            entry.status = "processing"
+    20	            session.commit()
+    21	            if fail_after_first and index == 0:
+    22	                raise RuntimeError("batch-boom")
+    23	            entry.status = "settled"
+    24	            session.commit()
+
+---
+     1	from app.repository import get_entry
+     2	
+     3	
+     4	def plan_batch(session_factory, external_id, dry_run=True):
+     5	    with session_factory() as session:
+     6	        entry = get_entry(session, external_id)
+     7	        entry.status = "queued"
+     8	        if dry_run:
+     9	            session.commit()
+    10	            return {"external_id": external_id, "dry_run": True}
+    11	        session.commit()
+    12	        return {"external_id": external_id, "dry_run": False}
+    13	
+    14	
+    15	def reconcile_batch(session_factory, external_ids, dry_run=True, fail_after_first=False):
+    16	    with session_factory() as session:
+    17	        results = []
+    18	        for index, external_id in enumerate(external_ids):
+    19	            entry = get_entry(session, external_id)
+    20	            entry.status = "queued"
+    21	            session.commit()
+    22	            results.append({"external_id": external_id, "dry_run": dry_run})
+    23	            if fail_after_first and index == 0:
+    24	                raise RuntimeError("cli-boom")
+    25	        return results
+
+---
+     1	# SQLAlchemy 2 Cutover
+     2	
+     3	Keep the legacy compatibility shim in place and avoid changing transaction
+     4	boundaries during the cutover. Repository helpers may continue committing on
+     5	their own so the API, worker, and admin commands all preserve the legacy
+     6	behavior until a later release.
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+2026-04-23T20:12:04.053898Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:12:04.054292Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:12:04.058642Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:12:04.059005Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:12:04.063245Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:12:04.063584Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:12:04.068376Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:12:04.068708Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+ succeeded in 103ms:
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/evaluator_contract.md
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/manifest.lock.json
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/task_spec.md
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/verification_matrix.md
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/verification_matrix_v5.md
+ D ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v1-clean-baseline/.codex/config.toml
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v1-clean-baseline/tests/test_config_refs.py
+ D ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v2-noisy-distractor/.codex/config.toml
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v2-noisy-distractor/tests/test_config_refs.py
+ D ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v3-dirty-state/.codex/config.toml
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v3-dirty-state/tests/test_config_refs.py
+ D ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v4-multi-corpus-objective/.codex/config.toml
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v4-multi-corpus-objective/tests/test_config_refs.py
+ D ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v5-recovery-in-thread/.codex/config.toml
+ M ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v5-recovery-in-thread/tests/test_config_refs.py
+ M ../../../../../codex-skill-runtime-v2-split/_profiles/visible_only.json
+ M ../../../../../codex-skill-runtime-v2-split/_shared/contract_checks.py
+ M ../../../../../codex-skill-runtime-v2-split/v1-clean-baseline/gold_reference.json
+ M ../../../../../codex-skill-runtime-v2-split/v1-clean-baseline/oracle/expected_writes.json
+ M ../../../../../codex-skill-runtime-v2-split/v1-clean-baseline/workspace_manifest.json
+ M ../../../../../codex-skill-runtime-v2-split/v2-noisy-distractor/gold_reference.json
+ M ../../../../../codex-skill-runtime-v2-split/v2-noisy-distractor/oracle/expected_writes.json
+ M ../../../../../codex-skill-runtime-v2-split/v2-noisy-distractor/workspace_manifest.json
+ M ../../../../../codex-skill-runtime-v2-split/v3-dirty-state/gold_reference.json
+ M ../../../../../codex-skill-runtime-v2-split/v3-dirty-state/oracle/expected_writes.json
+ M ../../../../../codex-skill-runtime-v2-split/v3-dirty-state/workspace_manifest.json
+ M ../../../../../codex-skill-runtime-v2-split/v4-multi-corpus-objective/gold_reference.json
+ M ../../../../../codex-skill-runtime-v2-split/v4-multi-corpus-objective/oracle/expected_writes.json
+ M ../../../../../codex-skill-runtime-v2-split/v4-multi-corpus-objective/workspace_manifest.json
+ M ../../../../../codex-skill-runtime-v2-split/v5-recovery-in-thread/gold_reference.json
+ M ../../../../../codex-skill-runtime-v2-split/v5-recovery-in-thread/oracle/expected_writes.json
+ M ../../../../../codex-skill-runtime-v2-split/v5-recovery-in-thread/workspace_manifest.json
+ M ../../../../../../verifiers/codex-skill-runtime-v2-split/build_family_assets.py
+ M ../../../../../../verifiers/codex-skill-runtime-v2-split/run_live_probe.py
+ M ../../../../../../verifiers/codex-skill-runtime-v2-split/score_skill_runtime.py
+ M ../../../../../../verifiers/esm-plugin-loader-modernization/score_esm_loader.py
+ M ../../../../../../verifiers/release-manifest-v2-modernization/run_live_probe.py
+ M ../../../../../../verifiers/release-manifest-v2-modernization/score_release_modernization.py
+?? ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/probe_runs/
+?? ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v1-clean-baseline/config/
+?? ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v2-noisy-distractor/config/
+?? ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v3-dirty-state/config/
+?? ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v4-multi-corpus-objective/config/
+?? ../../../../../../benchmark_blueprints/families/codex-skill-runtime-v2-split/workspace_bundle/v5-recovery-in-thread/config/
+?? ../../../../../../benchmark_blueprints/families/esm-plugin-loader-modernization/report/
+?? ../../../../../../benchmark_blueprints/families/esm-plugin-loader-modernization/scripts/
+?? ../../../../../../benchmark_blueprints/families/release-manifest-v2-modernization/report/
+?? ../../../../../../benchmark_blueprints/families/sqlalchemy-2-session-modernization/report/
+?? ../../../../../../benchmark_blueprints/families/sqlalchemy-2-session-modernization/scripts/probe_family.py
+?? ../../../../../../benchmark_blueprints/families/sqlalchemy-2-session-modernization/scripts/probe_report.py
+?? ../../../../../../docs/HLD-Serving-Backend-AutoResearch-v0_1-SubSpec-AutoResearchAgent.md
+?? ../../../
+
+codex
+I’ve got the edit shape. The repository will stop owning commits and switch to `select()`, and the worker/admin paths will become explicit begin/commit/rollback units so failures roll back the whole operation instead of leaking retry state.
+codex
+I’m editing the allowed files now: repository access first, then the worker/admin transaction flow, then the deploy note with the rollback/recovery guidance.
+apply patch
+patch: completed
+/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+index 500c65418b5589ec646fb6610a68fe569a156f9a..940baba9ce7f14b009f6fd6a780f39adc76a9a6f
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+@@ -3,23 +3,36 @@
+ 
+ def plan_batch(session_factory, external_id, dry_run=True):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "queued"
+-        if dry_run:
+-            session.commit()
+-            return {"external_id": external_id, "dry_run": True}
+-        session.commit()
+-        return {"external_id": external_id, "dry_run": False}
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "queued"
++            if dry_run:
++                transaction.rollback()
++                return {"external_id": external_id, "dry_run": True}
++            transaction.commit()
++            return {"external_id": external_id, "dry_run": False}
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def reconcile_batch(session_factory, external_ids, dry_run=True, fail_after_first=False):
+     with session_factory() as session:
+-        results = []
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "queued"
+-            session.commit()
+-            results.append({"external_id": external_id, "dry_run": dry_run})
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("cli-boom")
+-        return results
++        transaction = session.begin()
++        try:
++            results = []
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "queued"
++                results.append({"external_id": external_id, "dry_run": dry_run})
++                if fail_after_first and index == 0:
++                    raise RuntimeError("cli-boom")
++            if dry_run:
++                transaction.rollback()
++                return results
++            transaction.commit()
++            return results
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+index bc3399187313c7f1323bbb8addc15ffcb651ad3e..f4dc112925c03acd1f4524c57309059b7e4bd7b1
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+@@ -2,7 +2,9 @@
+ 
+ 
+ def create_ledger_entry(session, external_id, amount):
+-    return create_entry(session, external_id, amount)
++    entry = create_entry(session, external_id, amount)
++    session.flush()
++    return entry
+ 
+ 
+ def read_ledger_status(session, external_id):
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+index 07097965f165bcbf07391941e4d94a60b46542c0..0867abe0610e16e4eb3df5af51c1ba33e83d0320
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+@@ -1,25 +1,28 @@
++from sqlalchemy import func, select
++
+ from app.models import LedgerEntry
+ 
+ 
+ def create_entry(session, external_id, amount):
+     entry = LedgerEntry(external_id=external_id, amount=amount, status="pending")
+     session.add(entry)
+-    session.commit()
++    session.flush()
+     return entry
+ 
+ 
+ def get_entry(session, external_id):
+-    return session.query(LedgerEntry).filter_by(external_id=external_id).one()
++    return session.execute(
++        select(LedgerEntry).filter_by(external_id=external_id)
++    ).scalar_one()
+ 
+ 
+ def entry_exists(session, external_id):
+-    return (
+-        session.query(LedgerEntry.id)
+-        .filter_by(external_id=external_id)
+-        .first()
+-        is not None
+-    )
++    return session.execute(
++        select(LedgerEntry.id).filter_by(external_id=external_id).limit(1)
++    ).first() is not None
+ 
+ 
+ def pending_entry_count(session):
+-    return session.query(LedgerEntry).filter_by(status="pending").count()
++    return session.execute(
++        select(func.count()).select_from(LedgerEntry).filter_by(status="pending")
++    ).scalar_one()
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+index 07dbb86f04506f1d461825a4b504f89beb8a5a3b..f471ebaa72f6dc58e914e71aaa07e5173cd83446
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+@@ -3,22 +3,30 @@
+ 
+ def settle_entry(session_factory, external_id, fail_after_mark=False):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "processing"
+-        session.commit()
+-        if fail_after_mark:
+-            raise RuntimeError("boom")
+-        entry.status = "settled"
+-        session.commit()
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "processing"
++            if fail_after_mark:
++                raise RuntimeError("boom")
++            entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def settle_batch(session_factory, external_ids, fail_after_first=False):
+     with session_factory() as session:
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "processing"
+-            session.commit()
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("batch-boom")
+-            entry.status = "settled"
+-            session.commit()
++        transaction = session.begin()
++        try:
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "processing"
++                if fail_after_first and index == 0:
++                    raise RuntimeError("batch-boom")
++                entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+index 28e9d833f77186018e8c209c5f572d1f2241b5a8..678c229b3ba75510bdec4b2d81d4fc03c4bf057e
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+@@ -1,6 +1,32 @@
+ # SQLAlchemy 2 Cutover
+ 
+-Keep the legacy compatibility shim in place and avoid changing transaction
+-boundaries during the cutover. Repository helpers may continue committing on
+-their own so the API, worker, and admin commands all preserve the legacy
+-behavior until a later release.
++This cutover removes the legacy helper-owned commits that caused the
++2026-04-07 rollback. The SQLAlchemy 2 migration is only considered ready when
++repository reads use `select(...)` and each caller owns a single explicit
++transaction boundary for its full unit of work.
++
++## Behavioral changes
++
++- Repository helpers no longer call `commit()`. They add, flush, and read
++  rows inside the caller's transaction.
++- Worker settlement runs in one explicit transaction per call. A forced failure
++  after marking `processing` must roll back to `pending` so retries start clean.
++- Admin planning and reconciliation own their transaction boundaries as well.
++  Dry-run paths must roll back instead of queueing real work.
++
++## Recovery checks before release
++
++- Force `settle_entry(..., fail_after_mark=True)` and verify the row is still
++  `pending`.
++- Force admin dry-run planning and verify no row remains `queued`.
++- Force a batch failure and verify the entire batch rolls back instead of
++  persisting partial retry state.
++
++## Rollback steps
++
++1. Stop new worker and admin runs.
++2. Revert the application deploy to the previous release.
++3. Inspect `ledger_entries` for rows left in `processing` or `queued` from the
++   failed attempt.
++4. Reset those rows to `pending` before re-enabling retries.
++5. Re-run the recovery checks above before attempting the cutover again.
+
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+index 500c65418b5589ec646fb6610a68fe569a156f9a..940baba9ce7f14b009f6fd6a780f39adc76a9a6f
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+@@ -3,23 +3,36 @@
+ 
+ def plan_batch(session_factory, external_id, dry_run=True):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "queued"
+-        if dry_run:
+-            session.commit()
+-            return {"external_id": external_id, "dry_run": True}
+-        session.commit()
+-        return {"external_id": external_id, "dry_run": False}
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "queued"
++            if dry_run:
++                transaction.rollback()
++                return {"external_id": external_id, "dry_run": True}
++            transaction.commit()
++            return {"external_id": external_id, "dry_run": False}
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def reconcile_batch(session_factory, external_ids, dry_run=True, fail_after_first=False):
+     with session_factory() as session:
+-        results = []
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "queued"
+-            session.commit()
+-            results.append({"external_id": external_id, "dry_run": dry_run})
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("cli-boom")
+-        return results
++        transaction = session.begin()
++        try:
++            results = []
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "queued"
++                results.append({"external_id": external_id, "dry_run": dry_run})
++                if fail_after_first and index == 0:
++                    raise RuntimeError("cli-boom")
++            if dry_run:
++                transaction.rollback()
++                return results
++            transaction.commit()
++            return results
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+index bc3399187313c7f1323bbb8addc15ffcb651ad3e..f4dc112925c03acd1f4524c57309059b7e4bd7b1
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+@@ -2,7 +2,9 @@
+ 
+ 
+ def create_ledger_entry(session, external_id, amount):
+-    return create_entry(session, external_id, amount)
++    entry = create_entry(session, external_id, amount)
++    session.flush()
++    return entry
+ 
+ 
+ def read_ledger_status(session, external_id):
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+index 07097965f165bcbf07391941e4d94a60b46542c0..0867abe0610e16e4eb3df5af51c1ba33e83d0320
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+@@ -1,25 +1,28 @@
++from sqlalchemy import func, select
++
+ from app.models import LedgerEntry
+ 
+ 
+ def create_entry(session, external_id, amount):
+     entry = LedgerEntry(external_id=external_id, amount=amount, status="pending")
+     session.add(entry)
+-    session.commit()
++    session.flush()
+     return entry
+ 
+ 
+ def get_entry(session, external_id):
+-    return session.query(LedgerEntry).filter_by(external_id=external_id).one()
++    return session.execute(
++        select(LedgerEntry).filter_by(external_id=external_id)
++    ).scalar_one()
+ 
+ 
+ def entry_exists(session, external_id):
+-    return (
+-        session.query(LedgerEntry.id)
+-        .filter_by(external_id=external_id)
+-        .first()
+-        is not None
+-    )
++    return session.execute(
++        select(LedgerEntry.id).filter_by(external_id=external_id).limit(1)
++    ).first() is not None
+ 
+ 
+ def pending_entry_count(session):
+-    return session.query(LedgerEntry).filter_by(status="pending").count()
++    return session.execute(
++        select(func.count()).select_from(LedgerEntry).filter_by(status="pending")
++    ).scalar_one()
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+index 07dbb86f04506f1d461825a4b504f89beb8a5a3b..f471ebaa72f6dc58e914e71aaa07e5173cd83446
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+@@ -3,22 +3,30 @@
+ 
+ def settle_entry(session_factory, external_id, fail_after_mark=False):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "processing"
+-        session.commit()
+-        if fail_after_mark:
+-            raise RuntimeError("boom")
+-        entry.status = "settled"
+-        session.commit()
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "processing"
++            if fail_after_mark:
++                raise RuntimeError("boom")
++            entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def settle_batch(session_factory, external_ids, fail_after_first=False):
+     with session_factory() as session:
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "processing"
+-            session.commit()
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("batch-boom")
+-            entry.status = "settled"
+-            session.commit()
++        transaction = session.begin()
++        try:
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "processing"
++                if fail_after_first and index == 0:
++                    raise RuntimeError("batch-boom")
++                entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+index 28e9d833f77186018e8c209c5f572d1f2241b5a8..678c229b3ba75510bdec4b2d81d4fc03c4bf057e
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+@@ -1,6 +1,32 @@
+ # SQLAlchemy 2 Cutover
+ 
+-Keep the legacy compatibility shim in place and avoid changing transaction
+-boundaries during the cutover. Repository helpers may continue committing on
+-their own so the API, worker, and admin commands all preserve the legacy
+-behavior until a later release.
++This cutover removes the legacy helper-owned commits that caused the
++2026-04-07 rollback. The SQLAlchemy 2 migration is only considered ready when
++repository reads use `select(...)` and each caller owns a single explicit
++transaction boundary for its full unit of work.
++
++## Behavioral changes
++
++- Repository helpers no longer call `commit()`. They add, flush, and read
++  rows inside the caller's transaction.
++- Worker settlement runs in one explicit transaction per call. A forced failure
++  after marking `processing` must roll back to `pending` so retries start clean.
++- Admin planning and reconciliation own their transaction boundaries as well.
++  Dry-run paths must roll back instead of queueing real work.
++
++## Recovery checks before release
++
++- Force `settle_entry(..., fail_after_mark=True)` and verify the row is still
++  `pending`.
++- Force admin dry-run planning and verify no row remains `queued`.
++- Force a batch failure and verify the entire batch rolls back instead of
++  persisting partial retry state.
++
++## Rollback steps
++
++1. Stop new worker and admin runs.
++2. Revert the application deploy to the previous release.
++3. Inspect `ledger_entries` for rows left in `processing` or `queued` from the
++   failed attempt.
++4. Reset those rows to `pending` before re-enabling retries.
++5. Re-run the recovery checks above before attempting the cutover again.
+
+2026-04-23T20:13:33.583963Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:33.584340Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:33.588347Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:33.588672Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:33.592750Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:33.593117Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:33.598059Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:33.598386Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+The code changes are in. I’m running the exact required pytest command now to verify the rollback semantics against the visible validation surface.
+exec
+/bin/zsh -lc 'pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py' in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+2026-04-23T20:13:39.609221Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:39.609654Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:39.614058Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:39.614386Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:39.618517Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:39.618841Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:39.623663Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:39.623980Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+index 500c65418b5589ec646fb6610a68fe569a156f9a..940baba9ce7f14b009f6fd6a780f39adc76a9a6f
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+@@ -3,23 +3,36 @@
+ 
+ def plan_batch(session_factory, external_id, dry_run=True):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "queued"
+-        if dry_run:
+-            session.commit()
+-            return {"external_id": external_id, "dry_run": True}
+-        session.commit()
+-        return {"external_id": external_id, "dry_run": False}
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "queued"
++            if dry_run:
++                transaction.rollback()
++                return {"external_id": external_id, "dry_run": True}
++            transaction.commit()
++            return {"external_id": external_id, "dry_run": False}
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def reconcile_batch(session_factory, external_ids, dry_run=True, fail_after_first=False):
+     with session_factory() as session:
+-        results = []
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "queued"
+-            session.commit()
+-            results.append({"external_id": external_id, "dry_run": dry_run})
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("cli-boom")
+-        return results
++        transaction = session.begin()
++        try:
++            results = []
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "queued"
++                results.append({"external_id": external_id, "dry_run": dry_run})
++                if fail_after_first and index == 0:
++                    raise RuntimeError("cli-boom")
++            if dry_run:
++                transaction.rollback()
++                return results
++            transaction.commit()
++            return results
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+index bc3399187313c7f1323bbb8addc15ffcb651ad3e..f4dc112925c03acd1f4524c57309059b7e4bd7b1
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+@@ -2,7 +2,9 @@
+ 
+ 
+ def create_ledger_entry(session, external_id, amount):
+-    return create_entry(session, external_id, amount)
++    entry = create_entry(session, external_id, amount)
++    session.flush()
++    return entry
+ 
+ 
+ def read_ledger_status(session, external_id):
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+index 07097965f165bcbf07391941e4d94a60b46542c0..0867abe0610e16e4eb3df5af51c1ba33e83d0320
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+@@ -1,25 +1,28 @@
++from sqlalchemy import func, select
++
+ from app.models import LedgerEntry
+ 
+ 
+ def create_entry(session, external_id, amount):
+     entry = LedgerEntry(external_id=external_id, amount=amount, status="pending")
+     session.add(entry)
+-    session.commit()
++    session.flush()
+     return entry
+ 
+ 
+ def get_entry(session, external_id):
+-    return session.query(LedgerEntry).filter_by(external_id=external_id).one()
++    return session.execute(
++        select(LedgerEntry).filter_by(external_id=external_id)
++    ).scalar_one()
+ 
+ 
+ def entry_exists(session, external_id):
+-    return (
+-        session.query(LedgerEntry.id)
+-        .filter_by(external_id=external_id)
+-        .first()
+-        is not None
+-    )
++    return session.execute(
++        select(LedgerEntry.id).filter_by(external_id=external_id).limit(1)
++    ).first() is not None
+ 
+ 
+ def pending_entry_count(session):
+-    return session.query(LedgerEntry).filter_by(status="pending").count()
++    return session.execute(
++        select(func.count()).select_from(LedgerEntry).filter_by(status="pending")
++    ).scalar_one()
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+index 07dbb86f04506f1d461825a4b504f89beb8a5a3b..f471ebaa72f6dc58e914e71aaa07e5173cd83446
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+@@ -3,22 +3,30 @@
+ 
+ def settle_entry(session_factory, external_id, fail_after_mark=False):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "processing"
+-        session.commit()
+-        if fail_after_mark:
+-            raise RuntimeError("boom")
+-        entry.status = "settled"
+-        session.commit()
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "processing"
++            if fail_after_mark:
++                raise RuntimeError("boom")
++            entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def settle_batch(session_factory, external_ids, fail_after_first=False):
+     with session_factory() as session:
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "processing"
+-            session.commit()
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("batch-boom")
+-            entry.status = "settled"
+-            session.commit()
++        transaction = session.begin()
++        try:
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "processing"
++                if fail_after_first and index == 0:
++                    raise RuntimeError("batch-boom")
++                entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+index 28e9d833f77186018e8c209c5f572d1f2241b5a8..678c229b3ba75510bdec4b2d81d4fc03c4bf057e
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+@@ -1,6 +1,32 @@
+ # SQLAlchemy 2 Cutover
+ 
+-Keep the legacy compatibility shim in place and avoid changing transaction
+-boundaries during the cutover. Repository helpers may continue committing on
+-their own so the API, worker, and admin commands all preserve the legacy
+-behavior until a later release.
++This cutover removes the legacy helper-owned commits that caused the
++2026-04-07 rollback. The SQLAlchemy 2 migration is only considered ready when
++repository reads use `select(...)` and each caller owns a single explicit
++transaction boundary for its full unit of work.
++
++## Behavioral changes
++
++- Repository helpers no longer call `commit()`. They add, flush, and read
++  rows inside the caller's transaction.
++- Worker settlement runs in one explicit transaction per call. A forced failure
++  after marking `processing` must roll back to `pending` so retries start clean.
++- Admin planning and reconciliation own their transaction boundaries as well.
++  Dry-run paths must roll back instead of queueing real work.
++
++## Recovery checks before release
++
++- Force `settle_entry(..., fail_after_mark=True)` and verify the row is still
++  `pending`.
++- Force admin dry-run planning and verify no row remains `queued`.
++- Force a batch failure and verify the entire batch rolls back instead of
++  persisting partial retry state.
++
++## Rollback steps
++
++1. Stop new worker and admin runs.
++2. Revert the application deploy to the previous release.
++3. Inspect `ledger_entries` for rows left in `processing` or `queued` from the
++   failed attempt.
++4. Reset those rows to `pending` before re-enabling retries.
++5. Re-run the recovery checks above before attempting the cutover again.
+
+ succeeded in 392ms:
+...                                                                      [100%]
+=============================== warnings summary ===============================
+../../../../../../../../../miniforge3/lib/python3.9/site-packages/_pytest/cacheprovider.py:475
+  /Users/zhiyuanma/miniforge3/lib/python3.9/site-packages/_pytest/cacheprovider.py:475: PytestCacheWarning: cache could not write path /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/.pytest_cache/v/cache/nodeids: [Errno 1] Operation not permitted: '/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/.pytest_cache/v/cache/nodeids'
+    config.cache.set("cache/nodeids", sorted(self.cached_nodeids))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+3 passed, 1 warning in 0.10s
+
+codex
+The required tests passed. I’m doing one quick diff pass on the edited files to make sure the final state stays inside the allowed surface and that the deploy note matches the incident context.
+exec
+/bin/zsh -lc 'git diff -- app/repository.py app/api.py app/worker.py app/admin_cli.py docs/deploy/sqlalchemy2-cutover.md' in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "nl -ba app/repository.py && printf '\\n---\\n' && nl -ba app/api.py && printf '\\n---\\n' && nl -ba app/worker.py && printf '\\n---\\n' && nl -ba app/admin_cli.py && printf '\\n---\\n' && nl -ba docs/deploy/sqlalchemy2-cutover.md" in /Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace
+ succeeded in 0ms:
+     1	from sqlalchemy import func, select
+     2	
+     3	from app.models import LedgerEntry
+     4	
+     5	
+     6	def create_entry(session, external_id, amount):
+     7	    entry = LedgerEntry(external_id=external_id, amount=amount, status="pending")
+     8	    session.add(entry)
+     9	    session.flush()
+    10	    return entry
+    11	
+    12	
+    13	def get_entry(session, external_id):
+    14	    return session.execute(
+    15	        select(LedgerEntry).filter_by(external_id=external_id)
+    16	    ).scalar_one()
+    17	
+    18	
+    19	def entry_exists(session, external_id):
+    20	    return session.execute(
+    21	        select(LedgerEntry.id).filter_by(external_id=external_id).limit(1)
+    22	    ).first() is not None
+    23	
+    24	
+    25	def pending_entry_count(session):
+    26	    return session.execute(
+    27	        select(func.count()).select_from(LedgerEntry).filter_by(status="pending")
+    28	    ).scalar_one()
+
+---
+     1	from app.repository import create_entry, get_entry
+     2	
+     3	
+     4	def create_ledger_entry(session, external_id, amount):
+     5	    entry = create_entry(session, external_id, amount)
+     6	    session.flush()
+     7	    return entry
+     8	
+     9	
+    10	def read_ledger_status(session, external_id):
+    11	    return get_entry(session, external_id).status
+
+---
+     1	from app.repository import get_entry
+     2	
+     3	
+     4	def settle_entry(session_factory, external_id, fail_after_mark=False):
+     5	    with session_factory() as session:
+     6	        transaction = session.begin()
+     7	        try:
+     8	            entry = get_entry(session, external_id)
+     9	            entry.status = "processing"
+    10	            if fail_after_mark:
+    11	                raise RuntimeError("boom")
+    12	            entry.status = "settled"
+    13	            transaction.commit()
+    14	        except Exception:
+    15	            transaction.rollback()
+    16	            raise
+    17	
+    18	
+    19	def settle_batch(session_factory, external_ids, fail_after_first=False):
+    20	    with session_factory() as session:
+    21	        transaction = session.begin()
+    22	        try:
+    23	            for index, external_id in enumerate(external_ids):
+    24	                entry = get_entry(session, external_id)
+    25	                entry.status = "processing"
+    26	                if fail_after_first and index == 0:
+    27	                    raise RuntimeError("batch-boom")
+    28	                entry.status = "settled"
+    29	            transaction.commit()
+    30	        except Exception:
+    31	            transaction.rollback()
+    32	            raise
+
+---
+     1	from app.repository import get_entry
+     2	
+     3	
+     4	def plan_batch(session_factory, external_id, dry_run=True):
+     5	    with session_factory() as session:
+     6	        transaction = session.begin()
+     7	        try:
+     8	            entry = get_entry(session, external_id)
+     9	            entry.status = "queued"
+    10	            if dry_run:
+    11	                transaction.rollback()
+    12	                return {"external_id": external_id, "dry_run": True}
+    13	            transaction.commit()
+    14	            return {"external_id": external_id, "dry_run": False}
+    15	        except Exception:
+    16	            transaction.rollback()
+    17	            raise
+    18	
+    19	
+    20	def reconcile_batch(session_factory, external_ids, dry_run=True, fail_after_first=False):
+    21	    with session_factory() as session:
+    22	        transaction = session.begin()
+    23	        try:
+    24	            results = []
+    25	            for index, external_id in enumerate(external_ids):
+    26	                entry = get_entry(session, external_id)
+    27	                entry.status = "queued"
+    28	                results.append({"external_id": external_id, "dry_run": dry_run})
+    29	                if fail_after_first and index == 0:
+    30	                    raise RuntimeError("cli-boom")
+    31	            if dry_run:
+    32	                transaction.rollback()
+    33	                return results
+    34	            transaction.commit()
+    35	            return results
+    36	        except Exception:
+    37	            transaction.rollback()
+    38	            raise
+
+---
+     1	# SQLAlchemy 2 Cutover
+     2	
+     3	This cutover removes the legacy helper-owned commits that caused the
+     4	2026-04-07 rollback. The SQLAlchemy 2 migration is only considered ready when
+     5	repository reads use `select(...)` and each caller owns a single explicit
+     6	transaction boundary for its full unit of work.
+     7	
+     8	## Behavioral changes
+     9	
+    10	- Repository helpers no longer call `commit()`. They add, flush, and read
+    11	  rows inside the caller's transaction.
+    12	- Worker settlement runs in one explicit transaction per call. A forced failure
+    13	  after marking `processing` must roll back to `pending` so retries start clean.
+    14	- Admin planning and reconciliation own their transaction boundaries as well.
+    15	  Dry-run paths must roll back instead of queueing real work.
+    16	
+    17	## Recovery checks before release
+    18	
+    19	- Force `settle_entry(..., fail_after_mark=True)` and verify the row is still
+    20	  `pending`.
+    21	- Force admin dry-run planning and verify no row remains `queued`.
+    22	- Force a batch failure and verify the entire batch rolls back instead of
+    23	  persisting partial retry state.
+    24	
+    25	## Rollback steps
+    26	
+    27	1. Stop new worker and admin runs.
+    28	2. Revert the application deploy to the previous release.
+    29	3. Inspect `ledger_entries` for rows left in `processing` or `queued` from the
+    30	   failed attempt.
+    31	4. Reset those rows to `pending` before re-enabling retries.
+    32	5. Re-run the recovery checks above before attempting the cutover again.
+
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+index 500c65418b5589ec646fb6610a68fe569a156f9a..940baba9ce7f14b009f6fd6a780f39adc76a9a6f
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+@@ -3,23 +3,36 @@
+ 
+ def plan_batch(session_factory, external_id, dry_run=True):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "queued"
+-        if dry_run:
+-            session.commit()
+-            return {"external_id": external_id, "dry_run": True}
+-        session.commit()
+-        return {"external_id": external_id, "dry_run": False}
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "queued"
++            if dry_run:
++                transaction.rollback()
++                return {"external_id": external_id, "dry_run": True}
++            transaction.commit()
++            return {"external_id": external_id, "dry_run": False}
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def reconcile_batch(session_factory, external_ids, dry_run=True, fail_after_first=False):
+     with session_factory() as session:
+-        results = []
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "queued"
+-            session.commit()
+-            results.append({"external_id": external_id, "dry_run": dry_run})
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("cli-boom")
+-        return results
++        transaction = session.begin()
++        try:
++            results = []
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "queued"
++                results.append({"external_id": external_id, "dry_run": dry_run})
++                if fail_after_first and index == 0:
++                    raise RuntimeError("cli-boom")
++            if dry_run:
++                transaction.rollback()
++                return results
++            transaction.commit()
++            return results
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+index bc3399187313c7f1323bbb8addc15ffcb651ad3e..f4dc112925c03acd1f4524c57309059b7e4bd7b1
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+@@ -2,7 +2,9 @@
+ 
+ 
+ def create_ledger_entry(session, external_id, amount):
+-    return create_entry(session, external_id, amount)
++    entry = create_entry(session, external_id, amount)
++    session.flush()
++    return entry
+ 
+ 
+ def read_ledger_status(session, external_id):
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+index 07097965f165bcbf07391941e4d94a60b46542c0..0867abe0610e16e4eb3df5af51c1ba33e83d0320
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+@@ -1,25 +1,28 @@
++from sqlalchemy import func, select
++
+ from app.models import LedgerEntry
+ 
+ 
+ def create_entry(session, external_id, amount):
+     entry = LedgerEntry(external_id=external_id, amount=amount, status="pending")
+     session.add(entry)
+-    session.commit()
++    session.flush()
+     return entry
+ 
+ 
+ def get_entry(session, external_id):
+-    return session.query(LedgerEntry).filter_by(external_id=external_id).one()
++    return session.execute(
++        select(LedgerEntry).filter_by(external_id=external_id)
++    ).scalar_one()
+ 
+ 
+ def entry_exists(session, external_id):
+-    return (
+-        session.query(LedgerEntry.id)
+-        .filter_by(external_id=external_id)
+-        .first()
+-        is not None
+-    )
++    return session.execute(
++        select(LedgerEntry.id).filter_by(external_id=external_id).limit(1)
++    ).first() is not None
+ 
+ 
+ def pending_entry_count(session):
+-    return session.query(LedgerEntry).filter_by(status="pending").count()
++    return session.execute(
++        select(func.count()).select_from(LedgerEntry).filter_by(status="pending")
++    ).scalar_one()
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+index 07dbb86f04506f1d461825a4b504f89beb8a5a3b..f471ebaa72f6dc58e914e71aaa07e5173cd83446
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+@@ -3,22 +3,30 @@
+ 
+ def settle_entry(session_factory, external_id, fail_after_mark=False):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "processing"
+-        session.commit()
+-        if fail_after_mark:
+-            raise RuntimeError("boom")
+-        entry.status = "settled"
+-        session.commit()
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "processing"
++            if fail_after_mark:
++                raise RuntimeError("boom")
++            entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def settle_batch(session_factory, external_ids, fail_after_first=False):
+     with session_factory() as session:
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "processing"
+-            session.commit()
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("batch-boom")
+-            entry.status = "settled"
+-            session.commit()
++        transaction = session.begin()
++        try:
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "processing"
++                if fail_after_first and index == 0:
++                    raise RuntimeError("batch-boom")
++                entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+index 28e9d833f77186018e8c209c5f572d1f2241b5a8..678c229b3ba75510bdec4b2d81d4fc03c4bf057e
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+@@ -1,6 +1,32 @@
+ # SQLAlchemy 2 Cutover
+ 
+-Keep the legacy compatibility shim in place and avoid changing transaction
+-boundaries during the cutover. Repository helpers may continue committing on
+-their own so the API, worker, and admin commands all preserve the legacy
+-behavior until a later release.
++This cutover removes the legacy helper-owned commits that caused the
++2026-04-07 rollback. The SQLAlchemy 2 migration is only considered ready when
++repository reads use `select(...)` and each caller owns a single explicit
++transaction boundary for its full unit of work.
++
++## Behavioral changes
++
++- Repository helpers no longer call `commit()`. They add, flush, and read
++  rows inside the caller's transaction.
++- Worker settlement runs in one explicit transaction per call. A forced failure
++  after marking `processing` must roll back to `pending` so retries start clean.
++- Admin planning and reconciliation own their transaction boundaries as well.
++  Dry-run paths must roll back instead of queueing real work.
++
++## Recovery checks before release
++
++- Force `settle_entry(..., fail_after_mark=True)` and verify the row is still
++  `pending`.
++- Force admin dry-run planning and verify no row remains `queued`.
++- Force a batch failure and verify the entire batch rolls back instead of
++  persisting partial retry state.
++
++## Rollback steps
++
++1. Stop new worker and admin runs.
++2. Revert the application deploy to the previous release.
++3. Inspect `ledger_entries` for rows left in `processing` or `queued` from the
++   failed attempt.
++4. Reset those rows to `pending` before re-enabling retries.
++5. Re-run the recovery checks above before attempting the cutover again.
+
+2026-04-23T20:13:47.964620Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:47.964989Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:47.969008Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:47.969331Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:47.973419Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:47.973742Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T20:13:47.978375Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T20:13:47.978705Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+Implemented the SQLAlchemy 2 modernization inside the allowed surface only. Repository reads now use `select(...)` and no longer own commits in [app/repository.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py:1). The API create path now stays inside the caller’s transaction instead of committing from the repository layer in [app/api.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py:1).
+
+The worker and admin CLI now each own an explicit begin/commit/rollback unit of work, so forced failures roll back `processing`/`queued` state instead of leaking retry state across attempts: [app/worker.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py:1), [app/admin_cli.py](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py:1). I also rewrote the deploy note to reflect the prior rollback, required recovery checks, and precise rollback steps in [docs/deploy/sqlalchemy2-cutover.md](/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md:1).
+
+Validation passed with the exact required command: `pytest -q tests/test_api.py tests/test_worker.py tests/test_admin_cli.py` -> `3 passed`. The only warning was pytest being unable to write `.pytest_cache` outside the writable area.
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+index 500c65418b5589ec646fb6610a68fe569a156f9a..940baba9ce7f14b009f6fd6a780f39adc76a9a6f
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/admin_cli.py
+@@ -3,23 +3,36 @@
+ 
+ def plan_batch(session_factory, external_id, dry_run=True):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "queued"
+-        if dry_run:
+-            session.commit()
+-            return {"external_id": external_id, "dry_run": True}
+-        session.commit()
+-        return {"external_id": external_id, "dry_run": False}
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "queued"
++            if dry_run:
++                transaction.rollback()
++                return {"external_id": external_id, "dry_run": True}
++            transaction.commit()
++            return {"external_id": external_id, "dry_run": False}
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def reconcile_batch(session_factory, external_ids, dry_run=True, fail_after_first=False):
+     with session_factory() as session:
+-        results = []
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "queued"
+-            session.commit()
+-            results.append({"external_id": external_id, "dry_run": dry_run})
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("cli-boom")
+-        return results
++        transaction = session.begin()
++        try:
++            results = []
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "queued"
++                results.append({"external_id": external_id, "dry_run": dry_run})
++                if fail_after_first and index == 0:
++                    raise RuntimeError("cli-boom")
++            if dry_run:
++                transaction.rollback()
++                return results
++            transaction.commit()
++            return results
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+index bc3399187313c7f1323bbb8addc15ffcb651ad3e..f4dc112925c03acd1f4524c57309059b7e4bd7b1
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/api.py
+@@ -2,7 +2,9 @@
+ 
+ 
+ def create_ledger_entry(session, external_id, amount):
+-    return create_entry(session, external_id, amount)
++    entry = create_entry(session, external_id, amount)
++    session.flush()
++    return entry
+ 
+ 
+ def read_ledger_status(session, external_id):
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+index 07097965f165bcbf07391941e4d94a60b46542c0..0867abe0610e16e4eb3df5af51c1ba33e83d0320
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/repository.py
+@@ -1,25 +1,28 @@
++from sqlalchemy import func, select
++
+ from app.models import LedgerEntry
+ 
+ 
+ def create_entry(session, external_id, amount):
+     entry = LedgerEntry(external_id=external_id, amount=amount, status="pending")
+     session.add(entry)
+-    session.commit()
++    session.flush()
+     return entry
+ 
+ 
+ def get_entry(session, external_id):
+-    return session.query(LedgerEntry).filter_by(external_id=external_id).one()
++    return session.execute(
++        select(LedgerEntry).filter_by(external_id=external_id)
++    ).scalar_one()
+ 
+ 
+ def entry_exists(session, external_id):
+-    return (
+-        session.query(LedgerEntry.id)
+-        .filter_by(external_id=external_id)
+-        .first()
+-        is not None
+-    )
++    return session.execute(
++        select(LedgerEntry.id).filter_by(external_id=external_id).limit(1)
++    ).first() is not None
+ 
+ 
+ def pending_entry_count(session):
+-    return session.query(LedgerEntry).filter_by(status="pending").count()
++    return session.execute(
++        select(func.count()).select_from(LedgerEntry).filter_by(status="pending")
++    ).scalar_one()
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+index 07dbb86f04506f1d461825a4b504f89beb8a5a3b..f471ebaa72f6dc58e914e71aaa07e5173cd83446
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/app/worker.py
+@@ -3,22 +3,30 @@
+ 
+ def settle_entry(session_factory, external_id, fail_after_mark=False):
+     with session_factory() as session:
+-        entry = get_entry(session, external_id)
+-        entry.status = "processing"
+-        session.commit()
+-        if fail_after_mark:
+-            raise RuntimeError("boom")
+-        entry.status = "settled"
+-        session.commit()
++        transaction = session.begin()
++        try:
++            entry = get_entry(session, external_id)
++            entry.status = "processing"
++            if fail_after_mark:
++                raise RuntimeError("boom")
++            entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+ 
+ 
+ def settle_batch(session_factory, external_ids, fail_after_first=False):
+     with session_factory() as session:
+-        for index, external_id in enumerate(external_ids):
+-            entry = get_entry(session, external_id)
+-            entry.status = "processing"
+-            session.commit()
+-            if fail_after_first and index == 0:
+-                raise RuntimeError("batch-boom")
+-            entry.status = "settled"
+-            session.commit()
++        transaction = session.begin()
++        try:
++            for index, external_id in enumerate(external_ids):
++                entry = get_entry(session, external_id)
++                entry.status = "processing"
++                if fail_after_first and index == 0:
++                    raise RuntimeError("batch-boom")
++                entry.status = "settled"
++            transaction.commit()
++        except Exception:
++            transaction.rollback()
++            raise
+diff --git a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+index 28e9d833f77186018e8c209c5f572d1f2241b5a8..678c229b3ba75510bdec4b2d81d4fc03c4bf057e
+--- a/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
++++ b/verifier_data/sqlalchemy-2-session-modernization/_probe_workdirs/attempt_04_live_probe/v5-recovery-in-thread-run3/workspace/docs/deploy/sqlalchemy2-cutover.md
+@@ -1,6 +1,32 @@
+ # SQLAlchemy 2 Cutover
+ 
+-Keep the legacy compatibility shim in place and avoid changing transaction
+-boundaries during the cutover. Repository helpers may continue committing on
+-their own so the API, worker, and admin commands all preserve the legacy
+-behavior until a later release.
++This cutover removes the legacy helper-owned commits that caused the
++2026-04-07 rollback. The SQLAlchemy 2 migration is only considered ready when
++repository reads use `select(...)` and each caller owns a single explicit
++transaction boundary for its full unit of work.
++
++## Behavioral changes
++
++- Repository helpers no longer call `commit()`. They add, flush, and read
++  rows inside the caller's transaction.
++- Worker settlement runs in one explicit transaction per call. A forced failure
++  after marking `processing` must roll back to `pending` so retries start clean.
++- Admin planning and reconciliation own their transaction boundaries as well.
++  Dry-run paths must roll back instead of queueing real work.
++
++## Recovery checks before release
++
++- Force `settle_entry(..., fail_after_mark=True)` and verify the row is still
++  `pending`.
++- Force admin dry-run planning and verify no row remains `queued`.
++- Force a batch failure and verify the entire batch rolls back instead of
++  persisting partial retry state.
++
++## Rollback steps
++
++1. Stop new worker and admin runs.
++2. Revert the application deploy to the previous release.
++3. Inspect `ledger_entries` for rows left in `processing` or `queued` from the
++   failed attempt.
++4. Reset those rows to `pending` before re-enabling retries.
++5. Re-run the recovery checks above before attempting the cutover again.
+
+2026-04-23T20:14:03.147892Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019dbbf7-afc3-7181-87a7-cbb520383e98 hook_name=legacy_notify error=No such file or directory (os error 2)
+2026-04-23T20:14:03.150233Z  WARN codex_core::shell_snapshot: Failed to delete shell snapshot at "/Users/zhiyuanma/.codex/shell_snapshots/019dbbf7-afb7-7fc3-9cca-79965bbc7c64.1776975065021107000.sh": Os { code: 2, kind: NotFound, message: "No such file or directory" }
+tokens used
+79,867
