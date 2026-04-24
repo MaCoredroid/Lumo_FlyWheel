@@ -2,7 +2,7 @@ family_id: review-thread-ui-hardening
 track: 10
 schema_version: cnb55.family.v1
 layer_a_status: failed_freeze_gate
-layer_b_status: green
+layer_b_status: implemented_pending_review
 grader_ref: verifiers/review-thread-ui-hardening/score_ranking.py
 milestone_config_ref: verifier_data/review-thread-ui-hardening/{variant_id}/milestones/
 
@@ -162,3 +162,20 @@ saturation:
       description: introduce a mid-run thread export that changes the active viewport after the first attempted fix
     - id: retire_v1
       description: retire V1 and promote V2 if the baseline stops discriminating
+
+rawr_modes:
+  - id: grounding_stripped
+    status: implemented
+    description: Submission preserves the structured brief/reply surface but omits the grounded runtime/config changes needed to support it.
+    detection_surface: structural required_changed_files absence plus artifact_only ceiling in verifiers/review-thread-ui-hardening/score_ranking.py
+    verification_matrix_row: Artifact-only
+  - id: citation_fabricated
+    status: declared_not_yet_implemented
+    description: Evidence or reply text names review artifacts that do not actually support the claimed thread, viewport, or route.
+    detection_surface: not implemented
+    blocker: Needs a structural evidence-reference detector that maps cited artifacts and screenshot notes to thread ids, viewport ids, and routes.
+  - id: constraint_named_not_respected
+    status: declared_not_yet_implemented
+    description: Submission names the relevant constraint but still edits the wrong thread, stale viewport, or rollback-invalid route.
+    detection_surface: not implemented
+    blocker: Needs a structural detector that distinguishes constraint acknowledgement from actual compliance across thread mapping, viewport mapping, and V5 rollback scope.
