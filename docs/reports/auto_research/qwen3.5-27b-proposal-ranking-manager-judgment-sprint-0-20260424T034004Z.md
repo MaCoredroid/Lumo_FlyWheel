@@ -19,6 +19,12 @@ Generated: 2026-04-24T07:08:38Z
 
 No tuned bundle was accepted. The terminal result is `ROUND_INFEASIBLE` because no rescreened row remained eligible for winner selection: both rescreen rows were marked `inconsistent_rescreen`. Serving should therefore retain the default baseline config.
 
+## Post-Run Measurement Bug Finding
+
+The flat `0.006667` screen throughput values are not a real performance signal. Each screen trace completed exactly 4 replay requests and the harness divided by the configured screen window, so every screen row computed `4 / 600 = 0.006667`. Each full rescreen also completed 4 replay requests and divided by the configured full window, so each rescreen computed `4 / 1500 = 0.002667`. That denominator mismatch is what produced the apparent `inconsistent_rescreen` failure.
+
+The raw candidate rows below are still useful for auditing configs, feasibility gates, latency diagnostics, UUIDs, and commit linkage. The `eval_throughput`, `objective_mean`, and rescreen ranking from this run should be treated as invalid until the round is rerun with the fixed harness.
+
 ## Data Sources
 
 - `output/auto_research/qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T034004Z/round_spec.yaml`
@@ -70,7 +76,7 @@ kv_cache_dtype: fp8_e5m2
 | rescreen_01 | baseline_a | 92c6559a-55ac-49e9-925f-3b1f52de3666 | 0.002667 | 0.005 | 0.004 | inconsistent_rescreen | e8f78212e8ec |
 | rescreen_02 | baseline_b | b262c644-9274-45e3-991b-4d4ea6bd99d3 | 0.002667 | 0.005 | 0.004 | inconsistent_rescreen | 147fe9dc6b90 |
 
-Both rescreens were feasible but inconsistent with their parent screen throughput. Because `noise_floor` was `0.0`, the drop from `0.006667` to `0.002667` made both rows ineligible for winner contention.
+Both rescreens were feasible but inconsistent with their parent screen throughput. Because `noise_floor` was `0.0`, the drop from `0.006667` to `0.002667` made both rows ineligible for winner contention. The post-run bug finding above explains why that drop was caused by throughput denominator accounting rather than by a proven full-window performance regression.
 
 ## Holdout Trace Note
 
@@ -84,4 +90,4 @@ This holdout trace is retained as raw evidence, but it is not an accepted winner
 
 ## Final Decision
 
-The round evaluated stable candidates, but all main-loop rows were committed as `discard`, the only rescreened rows were baseline replays, and both rescreens were inconsistent. The data-backed decision is to emit no tuned bundle and keep the baseline/default vLLM config for `qwen3.5-27b` on `proposal-ranking-manager-judgment`.
+The round evaluated stable candidates, but all main-loop rows were committed as `discard`, the only rescreened rows were baseline replays, and both rescreens were inconsistent under the buggy throughput denominator. The operationally safe decision for this run remains to emit no tuned bundle and keep the baseline/default vLLM config for `qwen3.5-27b` on `proposal-ranking-manager-judgment`. A corrected round is needed before selecting a tuned config.

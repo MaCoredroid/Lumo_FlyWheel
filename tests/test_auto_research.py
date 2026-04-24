@@ -1224,6 +1224,68 @@ def test_real_measurement_harness_loads_candidate_and_flushes_prefix_cache(
     assert trace["sustained_concurrency"] == 2
 
 
+def test_real_measurement_harness_throughput_uses_elapsed_replay_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_trace = tmp_path / "seed_trace.jsonl"
+    _write_trace(seed_trace, prompt_tokens=64, output_tokens=32)
+    workload_spec = measurement_harness.WorkloadSpec(
+        family_id="proposal-ranking-manager-judgment",
+        workload_distribution_id="prmj-v1-live",
+        seed_trace_ref=seed_trace,
+        holdout_trace_ref=None,
+        latency_ceiling_ms=35000,
+        tpot_ceiling_ms=80,
+        turn_latency_ceiling_ms=35000,
+        avg_prompt_tokens=64,
+        avg_output_tokens=32,
+        measurement_window_minutes=1,
+        rollout_baseline=0.01,
+    )
+    harness = measurement_harness.RealMeasurementHarness(
+        workload_spec=workload_spec,
+        seed_trace_path=seed_trace,
+        slo=measurement_harness.SLO(ttft_ms=35000, tpot_ms=80, turn_ms=35000),
+        endpoint="http://127.0.0.1:8001/v1",
+        metrics_scrape_url="http://127.0.0.1:8000/metrics",
+        admin_url="http://127.0.0.1:8001/admin",
+        model_id="qwen3.5-27b",
+        weight_version_id="rev-123",
+        bundle_staging_dir=tmp_path / "measure-staging",
+        round_id="round-123",
+    )
+    replay = [
+        {
+            "req_id": f"req-{index:04d}",
+            "ttft_ms": 10.0,
+            "tpot_ms": 1.0,
+            "turn_latency_ms": 100.0,
+            "thinking_tokens": 0,
+            "response_tokens": 100,
+            "concurrency_when_dispatched": 1,
+        }
+        for index in range(1, 5)
+    ]
+    clock = iter([100.0, 104.0, 200.0, 204.0])
+
+    monkeypatch.setattr(harness, "_activate_candidate", lambda candidate_vllm_config: None)
+    monkeypatch.setattr(harness, "_metrics_snapshot", lambda: {})
+    monkeypatch.setattr(harness, "_replay_requests", lambda replay_entries, candidate_vllm_config: replay)
+    monkeypatch.setattr(measurement_harness.time, "time", lambda: next(clock))
+
+    screen = harness.measure({}, warmup_s=120, window_s=600, target_concurrency=4)
+    full = harness.measure({}, warmup_s=300, window_s=1500, target_concurrency=4)
+
+    assert screen["windows"]["measurement_s"] == 600
+    assert full["windows"]["measurement_s"] == 1500
+    assert screen["windows"]["measurement_elapsed_s"] == 4.0
+    assert full["windows"]["measurement_elapsed_s"] == 4.0
+    assert screen["eval_throughput"] == 1.0
+    assert full["eval_throughput"] == 1.0
+    assert screen["rollout_throughput"] == 100.0
+    assert full["rollout_throughput"] == 100.0
+
+
 def test_offline_auto_research_runner_backward_compatibility(tmp_path: Path) -> None:
     registry_path = tmp_path / "model_registry.yaml"
     workload_path = (

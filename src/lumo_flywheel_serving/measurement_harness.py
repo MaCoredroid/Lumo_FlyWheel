@@ -89,9 +89,10 @@ class RealMeasurementHarness:
         ttft_values = [float(entry["ttft_ms"]) for entry in per_request_latencies]
         tpot_values = [float(entry["tpot_ms"]) for entry in per_request_latencies]
         turn_values = [float(entry["turn_latency_ms"]) for entry in per_request_latencies]
-        eval_throughput = len(per_request_latencies) / max(window_s, 1)
+        measurement_elapsed_s = max(ended - started, 1e-9)
+        eval_throughput = len(per_request_latencies) / measurement_elapsed_s
         rollout_throughput = (
-            sum(float(entry["response_tokens"]) for entry in per_request_latencies) / max(window_s, 1)
+            sum(float(entry["response_tokens"]) for entry in per_request_latencies) / measurement_elapsed_s
             if per_request_latencies
             else 0.0
         )
@@ -130,6 +131,7 @@ class RealMeasurementHarness:
             "windows": {
                 "warmup_s": warmup_s,
                 "measurement_s": window_s,
+                "measurement_elapsed_s": round(measurement_elapsed_s, 3),
                 "measurement_start_wallclock": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started)),
                 "measurement_end_wallclock": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ended)),
             },
