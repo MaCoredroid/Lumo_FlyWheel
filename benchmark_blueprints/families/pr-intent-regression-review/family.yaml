@@ -1,8 +1,8 @@
 family_id: pr-intent-regression-review
 track: 4
 schema_version: cnb55.family.v1
-layer_a_status: pending_live_probe
-layer_b_status: assets_ready_pending_probe
+layer_a_status: failed_freeze_gate
+layer_b_status: green
 grader_ref: verifiers/pr-intent-regression-review/score_review.py
 milestone_config_ref: verifier_data/pr-intent-regression-review/{variant_id}/milestones/
 milestones:
@@ -67,7 +67,24 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     stdev_flag_high_variance: 0.15
-  current_observed_stdev_M_training: null
+  current_observed_stdev_M_training: 0.0491
+layer_a_review:
+  latest_probe_attempt: attempt_02d_live_probe_counted_final
+  verdict: monotonic_near_miss_after_real_live_probe
+  attestation: |
+    The counted whole-family live probe completed at
+    `report/attempt_02d_live_probe_counted_final/` with:
+
+    - family_mean = 17.33
+    - max_variant_mean = 20.00
+    - min_variant_mean = 10.00
+    - monotonic = fail
+
+    The only failing §10.1 gate is the monotonic break
+    `v1-clean-baseline (16.67) < v2-noisy-distractor (20.00) beyond +/-3.0`.
+    Mean/max/floor all passed on the counted post-change run. See
+    `benchmark_run.md` attempt_02a / attempt_02b / attempt_02d for the exact
+    command chain and per-variant scores.
 initial_state:
   type: manifest_locked
   ref: benchmark_blueprints/families/pr-intent-regression-review/manifest.lock.json

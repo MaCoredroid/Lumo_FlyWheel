@@ -1,0 +1,48 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v1-clean-baseline",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR adds markdown coverage, but it also breaks the unchanged automation contract by changing the no-flag CLI default away from JSON and by routing explicit JSON exports through the markdown renderer.",
+  "findings": [
+    {
+      "title": "No-flag CLI invocations now emit markdown instead of the documented JSON default",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 13,
+        "end": 16
+      },
+      "linked_surface": "repo/docs/export_contract.md",
+      "impact": "The unchanged export contract says nightly automation shells out without flags and expects machine-readable JSON with a top-level version field. Switching the parser default to markdown makes release-readiness <input> print the human markdown view instead, so existing no-flag consumers no longer receive the JSON payload the PR says should stay intact.",
+      "test_gap": "Visible CI only covers the markdown path, while the JSON contract suite is skipped in this stack.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/flattened_diff.md",
+        "review/ci_snapshot.md",
+        "repo/docs/export_contract.md",
+        "artifacts/parser_default.txt",
+        "artifacts/default_cli_output.txt"
+      ]
+    },
+    {
+      "title": "Explicit --output json now returns a quoted markdown string rather than the JSON object contract",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/tests/test_json_contract_notes.md",
+      "impact": "The unchanged JSON contract notes say explicit --output json must keep returning a dictionary-like payload. After remapping the json renderer to render_markdown, export_report(..., output='json') returns a string, so the existing CLI json branch serializes that markdown text as a quoted JSON literal instead of the object downstream consumers expect.",
+      "test_gap": "There is markdown snapshot coverage, but no active test in this stack that exercises export_report(..., output='json') or the CLI json branch.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/flattened_diff.md",
+        "review/ci_snapshot.md",
+        "repo/tests/test_json_contract_notes.md",
+        "artifacts/export_report_json_type.txt",
+        "artifacts/explicit_json_cli_output.txt"
+      ]
+    }
+  ]
+}

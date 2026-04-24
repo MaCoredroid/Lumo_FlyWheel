@@ -1,0 +1,47 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v2-noisy-distractor",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR claims to add Markdown support without changing JSON behavior, but it breaks both automation-facing contracts: the no-flag CLI path now defaults to Markdown, and explicit --output json now returns a Markdown string instead of the historical JSON object.",
+  "findings": [
+    {
+      "title": "Switching the CLI default to markdown breaks no-flag automation callers",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 13,
+        "end": 16
+      },
+      "linked_surface": "repo/docs/export_contract.md",
+      "impact": "The unchanged export contract says nightly automation shells out without flags and relies on JSON with a top-level version field. Changing the parser default to markdown makes the default CLI invocation emit human-readable text instead, so existing no-flag consumers stop receiving machine-readable JSON.",
+      "test_gap": "Visible CI only exercised the markdown path, and the updated markdown tests never assert that invoking the CLI without --output still produces JSON.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "review/ci_snapshot.md",
+        "repo/docs/export_contract.md",
+        "repo/src/release_readiness/cli.py"
+      ]
+    },
+    {
+      "title": "The json renderer registry entry now routes explicit JSON requests to markdown",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/src/release_readiness/cli.py",
+      "impact": "The unchanged CLI json branch still treats the rendered value as the automation payload and serializes it with json.dumps. Repointing the json registry entry at render_markdown makes export_report(..., output='json') return a string, so explicit --output json now prints a JSON-escaped Markdown blob instead of the dictionary-like payload callers expect.",
+      "test_gap": "The changed tests cover only markdown snapshots; there is still no exercised assertion that export_report(..., output='json') returns the legacy object shape.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/src/release_readiness/renderers/registry.py",
+        "repo/src/release_readiness/export.py",
+        "repo/src/release_readiness/cli.py",
+        "repo/tests/test_json_contract_notes.md"
+      ]
+    }
+  ]
+}

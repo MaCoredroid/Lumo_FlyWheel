@@ -1,0 +1,82 @@
+{
+  "M_training": 0.2222,
+  "P_benchmark": 20,
+  "breakdown": {
+    "__bands": {
+      "anchors.changed_lines": "M",
+      "anchors.cross_surface_linkage": "M",
+      "context.grounded": "M",
+      "integrity.evidence_discipline": "M",
+      "phase2.finding_count": "M",
+      "phase2.findings_md_present": "M",
+      "phase2.packet_present": "M",
+      "phase2.schema_version": "M",
+      "phase2.summary_md_present": "M",
+      "phase2.variant_match": "M",
+      "summary.intent_verdict": "P_only"
+    },
+    "anchors.changed_lines": 8,
+    "anchors.cross_surface_linkage": 8,
+    "context.grounded": 5,
+    "integrity.evidence_discipline": 5,
+    "phase2.finding_count": 4,
+    "phase2.findings_md_present": 1,
+    "phase2.packet_present": 2,
+    "phase2.schema_version": 3,
+    "phase2.summary_md_present": 1,
+    "phase2.variant_match": 3,
+    "summary.intent_verdict": 5
+  },
+  "ceilings_applied": [
+    "unanchored_or_wrong_findings",
+    "missed_second_seeded_issue"
+  ],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.5,
+    "slots": [
+      {
+        "passed_bool": true,
+        "slot_id": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot_id": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot_id": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot_id": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 40,
+  "raw_score_pre_ceiling": 45,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 20,
+  "shortcut_detected": true,
+  "variant_id": "v4-multi-corpus-objective",
+  "wall_clock_seconds": 0
+}

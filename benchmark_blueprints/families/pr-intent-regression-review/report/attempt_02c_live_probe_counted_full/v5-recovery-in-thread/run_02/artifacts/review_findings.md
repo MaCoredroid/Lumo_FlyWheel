@@ -1,0 +1,15 @@
+# Review Findings
+
+## Changing the CLI default to markdown breaks the existing no-flag automation path
+- severity: high
+- changed: repo/src/release_readiness/cli.py:13-16
+- linked surface: release_context/nightly_export_consumer.md
+- impact: The unchanged nightly fanout shells out to `release-readiness input.json` without `--output` and parses stdout as JSON keyed by the top-level `version` field. After this change the default stdout becomes markdown, so that consumer will fail again on the same path called out in the rollback note.
+- evidence: review/pr_description.md, review/flattened_diff.md, release_context/nightly_export_consumer.md, incident_context/inc_241_markdown_rollout_rollback.md
+
+## The renderer registry makes explicit `--output json` return markdown text instead of the JSON payload
+- severity: high
+- changed: repo/src/release_readiness/renderers/registry.py:6-8
+- linked surface: repo/docs/export_contract.md
+- impact: The unchanged contract requires explicit `--output json` to remain byte-for-byte compatible with the historical machine-readable object. Mapping `json` to `render_markdown` changes `export_report(..., output="json")` from a dict into a markdown string, so the CLI now emits a JSON-encoded string instead of an object and downstream callers lose the top-level `version` field they key on.
+- evidence: review/flattened_diff.md, repo/docs/export_contract.md, repo/tests/test_json_contract_notes.md, review/ci_snapshot.md

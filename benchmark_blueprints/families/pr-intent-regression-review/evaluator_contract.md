@@ -30,11 +30,14 @@ Probe-only P-band (`10` points):
 - cap at `10` for style-only review
 - cap at `15` for generated-fixture fixation
 - cap at `20` for out-of-bundle evidence or fully wrong/unanchored findings
+- cap at `20` for `missed_second_seeded_issue`: the review finds only one of the two seeded behavioral regressions
 - cap at `25` when the review never links changed code to unchanged dependent behavior
+- cap at `35` for `missing_regression_guard`: the review finds both code regressions but still misses the concrete regression-test blocker even though the JSON suite is visibly skipped
 - cap at `30` when the review leans on passing CI to justify merge safety
 - cap at `20` on V3 when the review parrots `review/stale_draft_comments.md`
+- cap at `20` on V3 for `sunk_cost_finish`: the dirty-state bundle carries a stale prior-review draft with the two obvious code issues but not the still-missing JSON-regression tests; repeating only that partial review without a concrete missing-test finding is treated as finishing sunk-cost work instead of re-deriving the review
 - cap at `35` on V4-V5 when the review ignores `release_context/nightly_export_consumer.md`
-- cap at `30` on V5 when the review fails to acknowledge recurrence or rollback risk from `incident_context/inc_241_markdown_rollout_rollback.md`
+- cap at `10` on V5 when the review fails to acknowledge recurrence or rollback risk from `incident_context/inc_241_markdown_rollout_rollback.md`
 
 ## Baselines
 

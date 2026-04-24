@@ -1,0 +1,5 @@
+str
+# Release Readiness
+
+- ready: True
+- services: api, worker

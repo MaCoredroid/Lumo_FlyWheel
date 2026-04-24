@@ -1,0 +1,23 @@
+probe_run_id=20260423T230627Z
+family=pr-intent-regression-review
+attempt=attempt_02a_live_probe_initial
+n=1
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+--------------------------------------------------------------------------------------------------------------
+v1-clean-baseline                  1   20.00    0.00    20    20  [20]  out_of_bundle_evidencex1,unanchored_or_wrong_findingsx1
+v2-noisy-distractor                1   20.00    0.00    20    20  [20]  unanchored_or_wrong_findingsx1
+v3-dirty-state                     1   85.00    0.00    85    85  [85]  -
+v4-multi-corpus-objective          1   20.00    0.00    20    20  [20]  unanchored_or_wrong_findingsx1
+v5-recovery-in-thread              1   20.00    0.00    20    20  [20]  incident_blind_repeatx1,unanchored_or_wrong_findingsx1
+
+family_mean = 33.00 (target 15-25)
+max_variant_mean = 85.00 (cap 40)
+min_variant_mean = 20.00 (need <= 10)
+monotonic_ok = False
+monotonic_breaks = ['v2-noisy-distractor (20.00) < v3-dirty-state (85.00) beyond +/-3.0']
+
+family_mean_ok = False
+max_variant_ok = False
+hard_variant_ok = False
+all_pass = False

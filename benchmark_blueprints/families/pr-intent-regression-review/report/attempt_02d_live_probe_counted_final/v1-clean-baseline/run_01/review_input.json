@@ -1,0 +1,44 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v1-clean-baseline",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR adds markdown coverage, but it breaks both automation-facing JSON contracts that the PR description said would remain intact: the no-flag CLI path no longer emits JSON, and the explicit json renderer now returns markdown text.",
+  "findings": [
+    {
+      "title": "Changing the CLI default to markdown breaks no-flag automation consumers",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 12,
+        "end": 16
+      },
+      "linked_surface": "repo/docs/export_contract.md",
+      "impact": "The unchanged export contract says callers shell out without flags and expect a machine-readable object with a top-level version field. After this change, invoking the CLI with no --output flag emits markdown instead, so existing automation consumers will stop receiving parseable JSON.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/flattened_diff.md",
+        "repo/docs/export_contract.md",
+        "artifacts/runtime_checks.md"
+      ],
+      "test_gap": "Visible CI only covers markdown snapshots, and the JSON contract suite is explicitly skipped in this stack."
+    },
+    {
+      "title": "The json renderer key now dispatches to markdown output",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/tests/test_json_contract_notes.md",
+      "impact": "export_report still defaults output='json' and the unchanged contract notes say explicit --output json must remain dictionary-like. With the registry now mapping json to render_markdown, the explicit json path returns a string, and the CLI serializes that as a quoted markdown blob instead of the prior JSON object shape.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/tests/test_json_contract_notes.md",
+        "artifacts/runtime_checks.md"
+      ],
+      "test_gap": "There is no active test in this stack asserting that output='json' returns the historical object payload."
+    }
+  ]
+}

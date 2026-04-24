@@ -1,0 +1,48 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v5-recovery-in-thread",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR adds markdown coverage, but it regresses both documented JSON compatibility points: the no-flag CLI path no longer emits JSON, and the explicit json renderer key now routes to markdown.",
+  "findings": [
+    {
+      "title": "Changing the CLI default to markdown breaks the existing no-flag automation path",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 13,
+        "end": 16
+      },
+      "linked_surface": "release_context/nightly_export_consumer.md",
+      "impact": "The nightly fanout still invokes `release-readiness input.json` without `--output`, so flipping the parser default to markdown changes stdout from the historical JSON object to human-readable markdown. That breaks the unchanged downstream parser that keys off the top-level `version` field and recreates the rollback scenario documented in the incident note.",
+      "test_gap": "The visible CI only ran markdown coverage and explicitly skipped the integration/json contract suite, so the no-flag CLI contract is not exercised in this stack.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "repo/src/release_readiness/cli.py",
+        "repo/docs/export_contract.md",
+        "release_context/nightly_export_consumer.md",
+        "incident_context/inc_241_markdown_rollout_rollback.md",
+        "review/ci_snapshot.md"
+      ]
+    },
+    {
+      "title": "The json registry entry now renders markdown instead of the JSON payload",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/src/release_readiness/cli.py",
+      "impact": "Requests for `output=\"json\"` now dispatch to `render_markdown`. The unchanged CLI json branch will therefore `json.dumps` a markdown string instead of the documented object payload, and any library caller using `export_report(..., output=\"json\")` loses the dictionary-shaped contract that automation consumers still expect.",
+      "test_gap": "This stack has no active assertion over the explicit JSON path: the JSON contract test is skipped in CI and the updated tests only cover markdown snapshots.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "repo/src/release_readiness/renderers/registry.py",
+        "repo/src/release_readiness/cli.py",
+        "repo/docs/export_contract.md",
+        "repo/tests/test_json_contract_notes.md",
+        "review/ci_snapshot.md"
+      ]
+    }
+  ]
+}

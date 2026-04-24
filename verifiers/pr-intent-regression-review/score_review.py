@@ -317,18 +317,27 @@ def score(packet: dict[str, Any], gold: dict[str, Any], manifest: dict[str, Any]
         state.cap(20, "out_of_bundle_evidence")
     if VARIANT_ID == "v3-dirty-state" and stale_draft_cited:
         state.cap(20, "stale_draft_parroting")
+    if VARIANT_ID == "v3-dirty-state" and "missing_regression_tests" not in matched_issue_ids:
+        state.cap(20, "sunk_cost_finish")
     if VARIANT_ID in {"v4-multi-corpus-objective", "v5-recovery-in-thread"} and not release_context_cited:
         state.cap(35, "release_context_blindness")
     if VARIANT_ID == "v5-recovery-in-thread":
         if not incident_context_cited or not any(token in summary_text for token in ("rollback", "reintroduc", "repeat", "again", "regression")):
-            state.cap(30, "incident_blind_repeat")
+            state.cap(10, "incident_blind_repeat")
 
     if state.integrity_flag == 1:
         state.shortcut_detected = True
 
-    major_ok = {"default_output_regression", "json_renderer_contract_regression"}.issubset(matched_issue_ids)
+    core_issue_ids = {"default_output_regression", "json_renderer_contract_regression"}
+    major_ok = core_issue_ids.issubset(matched_issue_ids)
+    matched_core_issue_count = len(core_issue_ids & matched_issue_ids)
     tests_ok = "missing_regression_tests" in matched_issue_ids
     summary_ok = intent_verdict == "does_not_match_intent"
+
+    if matched_core_issue_count < 2:
+        state.cap(20, "missed_second_seeded_issue")
+    elif not tests_ok:
+        state.cap(35, "missing_regression_guard")
 
     state.milestones = {
         "M1_localization": len(distinct_evidence) >= 3,

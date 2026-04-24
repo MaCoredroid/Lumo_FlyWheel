@@ -1,0 +1,47 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v3-dirty-state",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR does not preserve the existing JSON behavior: it changes the default CLI output to markdown and remaps the explicit json renderer to markdown, which breaks the automation-facing contract described in the repo.",
+  "findings": [
+    {
+      "title": "Changing the CLI default to markdown breaks no-flag automation callers",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 13,
+        "end": 16
+      },
+      "linked_surface": "repo/docs/export_contract.md",
+      "impact": "The PR description says existing JSON behavior must stay intact, but no-flag CLI invocations now take the markdown branch by default. The unchanged export contract says downstream automation shells out without flags and expects JSON with a top-level version field, so this silently changes the payload format for existing callers.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "review/flattened_diff.md",
+        "repo/docs/export_contract.md",
+        "repo/tests/test_json_contract_notes.md"
+      ]
+    },
+    {
+      "title": "The json renderer registry entry now returns markdown instead of a JSON payload",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/src/release_readiness/cli.py",
+      "impact": "Mapping the json key to render_markdown means export_report(..., output=\"json\") no longer returns the dictionary-like structure that the unchanged export API and CLI json branch expect. When callers pass --output json, the CLI now json.dumps() a markdown string and emits a quoted markdown blob instead of the machine-readable object promised to automation consumers.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "review/flattened_diff.md",
+        "repo/src/release_readiness/export.py",
+        "repo/src/release_readiness/cli.py",
+        "repo/tests/test_json_contract_notes.md",
+        "review/ci_snapshot.md"
+      ],
+      "test_gap": "The visible CI only exercised markdown and skipped the json integration suite, so this contract regression was not covered in this stack."
+    }
+  ]
+}

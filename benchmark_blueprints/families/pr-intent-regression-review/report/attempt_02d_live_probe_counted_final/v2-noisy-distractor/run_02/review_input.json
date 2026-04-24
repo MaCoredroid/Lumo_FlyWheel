@@ -1,0 +1,42 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v2-noisy-distractor-run2",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR adds a markdown path, but it regresses both unchanged JSON compatibility promises from the PR description: the CLI default is no longer JSON, and explicit json export no longer returns the automation-facing object payload.",
+  "findings": [
+    {
+      "title": "Changing the CLI default to markdown breaks callers that shell out without flags",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 12,
+        "end": 16
+      },
+      "linked_surface": "repo/docs/export_contract.md",
+      "impact": "The unchanged export contract says the CLI must keep json as the default because nightly automation shells out without flags and expects a machine-readable object with a top-level version field. After this change, invoking the CLI without --output prints the markdown document instead, so the default command path no longer satisfies the documented automation contract or the PR's promise to keep existing JSON behavior intact.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/flattened_diff.md",
+        "repo/docs/export_contract.md",
+        "review/ci_snapshot.md"
+      ]
+    },
+    {
+      "title": "The json renderer registry entry now returns markdown instead of the JSON payload",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/tests/test_json_contract_notes.md",
+      "impact": "The unchanged JSON contract notes say explicit --output json must keep returning a dictionary-like payload, but this registry now maps the json key to render_markdown. The CLI's json branch still runs json.dumps(rendered), so the observed output becomes a quoted markdown string rather than an object with top-level fields like version. That is a behavioral regression for any downstream consumer that explicitly requests json.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/flattened_diff.md",
+        "repo/tests/test_json_contract_notes.md",
+        "repo/src/release_readiness/cli.py"
+      ]
+    }
+  ]
+}

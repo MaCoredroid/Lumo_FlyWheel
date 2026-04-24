@@ -76,11 +76,11 @@ Variant-specific additions:
 - `v2-noisy-distractor`
   Same core regressions, but diff noise is larger because markdown fixture churn and docs edits are mixed in.
 - `v3-dirty-state`
-  Same core regressions plus a stale prior review draft that is style-heavy and intentionally non-blocking.
+  Same core regressions plus a stale prior review draft that covers only the two obvious code issues. A strong review must not simply complete that partial draft; it still needs the concrete missing-test blocker.
 - `v4-multi-corpus-objective`
   Same code changes, but release context shows a downstream nightly consumer that shells out without `--output`.
 - `v5-recovery-in-thread`
-  Same code changes, plus an incident note showing the default-output regression already caused a rollback once.
+  Same code changes, plus an incident note showing the default-output regression already caused a rollback once. A review that re-identifies the code bug but misses the recurrence/rollback framing should score as a hard-floor miss.
 
 ## Required Surfaces
 
