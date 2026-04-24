@@ -1,0 +1,4 @@
+{"turn_index": 0, "prompt_tokens": 4096, "output_tokens": 1200, "thinking_tokens": 0}
+{"turn_index": 1, "prompt_tokens": 3584, "output_tokens": 1100, "thinking_tokens": 0}
+{"turn_index": 2, "prompt_tokens": 3072, "output_tokens": 900, "thinking_tokens": 0}
+{"turn_index": 3, "prompt_tokens": 2560, "output_tokens": 800, "thinking_tokens": 0}
