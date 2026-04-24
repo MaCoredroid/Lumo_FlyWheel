@@ -1,0 +1,42 @@
+tuned_config_bundle:
+  bundle_id: 4578f36a-b3e9-47da-876d-4ac31cfcc5ad
+  produced_at: '2026-04-24T10:18:15+00:00'
+  weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+  model_id: qwen3.5-27b
+  family_id: proposal-ranking-manager-judgment
+  workload_distribution_id: prmj-v1-live
+  vllm_config:
+    max_num_seqs: 4
+    max_num_batched_tokens: 12288
+    enable_chunked_prefill: true
+    enable_prefix_caching: false
+    gpu_memory_utilization: 0.92
+    max_model_len: 131072
+    kv_cache_dtype: fp8_e5m2
+  request_shaping: {}
+  kernel_selection: {}
+  lora_policy: {}
+  objective:
+    metric: eval_throughput
+    value: 0.009775
+  measurement_trace_ref: output/auto_research/qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T072126Z/measurement_trace_combined.json
+  search_trace_ref: output/auto_research/qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T072126Z/search_trace.json
+  baseline_bundle_id: null
+  regression_guard:
+    noise_floor: 0.0024760000000000008
+  safety_rails:
+    regression_guard_passed: true
+  round_provenance:
+    dry_run: false
+    round_id: qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T072126Z
+    round_branch: autoresearch/qwen3.5-27b/proposal-ranking-manager-judgment/sprint-0/20260424T072126Z
+    winner_iteration: '003'
+    winner_candidate_uuid: b027d1e4-f239-4108-b9d9-d391c752cbac
+    winner_rescreen_uuid: 6a53b4b3-97d6-4b84-a113-cea88e14045d
+    sub_spec_version: v0.1.11
+    agent_session_dir_ref: output/auto_research/qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T072126Z/candidates
+    agent_model_pin:
+      model: gpt-5.4
+      reasoning_effort: high
+    results_tsv_ref: output/auto_research/qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T072126Z/results.tsv
+    holdout_validation: pass

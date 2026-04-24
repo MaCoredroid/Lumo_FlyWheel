@@ -1,0 +1,111 @@
+{
+  "pass": true,
+  "reasons_failed": [],
+  "candidate_uuid": "b027d1e4-f239-4108-b9d9-d391c752cbac",
+  "harness": "real",
+  "trace": {
+    "generator": "RealMeasurementHarness v0.1.0",
+    "candidate_vllm_config": {
+      "max_num_seqs": 4,
+      "max_num_batched_tokens": 12288,
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.92,
+      "max_model_len": 131072,
+      "kv_cache_dtype": "fp8_e5m2"
+    },
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "cache_isolation": {
+      "cache_salt": "",
+      "prefix_cache_reset_at_bootstrap": true,
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0
+    },
+    "windows": {
+      "warmup_s": 300,
+      "measurement_s": 1500,
+      "measurement_elapsed_s": 296.074,
+      "measurement_start_wallclock": "2026-04-24T10:13:18Z",
+      "measurement_end_wallclock": "2026-04-24T10:18:15Z"
+    },
+    "per_request_latencies": [
+      {
+        "req_id": "req-0001",
+        "ttft_ms": 41406.664,
+        "tpot_ms": 85.442,
+        "turn_latency_ms": 118304.755,
+        "thinking_tokens": 0,
+        "response_tokens": 900,
+        "concurrency_when_dispatched": 3
+      },
+      {
+        "req_id": "req-0002",
+        "ttft_ms": 74393.438,
+        "tpot_ms": 191.888,
+        "turn_latency_ms": 212552.68,
+        "thinking_tokens": 0,
+        "response_tokens": 720,
+        "concurrency_when_dispatched": 3
+      },
+      {
+        "req_id": "req-0003",
+        "ttft_ms": 103620.436,
+        "tpot_ms": 300.684,
+        "turn_latency_ms": 296058.389,
+        "thinking_tokens": 0,
+        "response_tokens": 640,
+        "concurrency_when_dispatched": 3
+      }
+    ],
+    "diagnostics": {
+      "ttft_p95_ms": {
+        "driver": 74393.438,
+        "promql": 74393.438,
+        "delta_pct": 0.0
+      },
+      "tpot_p95_ms": {
+        "driver": 191.888,
+        "promql": 191.888,
+        "delta_pct": 0.0
+      },
+      "turn_latency_p95_ms": {
+        "driver": 212552.68,
+        "promql": 212552.68,
+        "delta_pct": 0.0
+      },
+      "rollout_throughput": 7.633,
+      "target_concurrency": 4
+    },
+    "ttft_p95_ms": {
+      "driver": 74393.438,
+      "promql": 74393.438,
+      "delta_pct": 0.0
+    },
+    "tpot_p95_ms": {
+      "driver": 191.888,
+      "promql": 191.888,
+      "delta_pct": 0.0
+    },
+    "turn_latency_p95_ms": {
+      "driver": 212552.68,
+      "promql": 212552.68,
+      "delta_pct": 0.0
+    },
+    "sustained_concurrency": 4,
+    "eval_throughput": 0.010133,
+    "rollout_throughput": 7.633,
+    "window_completed": true,
+    "reasoning_content_purity": 1.0,
+    "determinism_pass_rate": 1.0,
+    "no_oom_events": true,
+    "feasible": true,
+    "feasibility_failures": [],
+    "vllm_metrics_snapshot_ref": "",
+    "seed_trace_replay_ref": "",
+    "harness_health_warnings": []
+  }
+}

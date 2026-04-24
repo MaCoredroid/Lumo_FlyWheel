@@ -1,0 +1,20 @@
+[
+  {
+    "iteration": "rescreen_01",
+    "candidate_uuid": "6a53b4b3-97d6-4b84-a113-cea88e14045d",
+    "parent_candidate_uuid": "b027d1e4-f239-4108-b9d9-d391c752cbac",
+    "commit_sha": "303b987d19a28e436fd6d52915d3fd7bf5002793"
+  },
+  {
+    "iteration": "rescreen_02",
+    "candidate_uuid": "f39fbad4-6103-403f-9889-6349207c0dab",
+    "parent_candidate_uuid": "5d736dbd-272a-4277-896b-a6c4e75f6a0d",
+    "commit_sha": "132967e084589ea93be880cc6229f92f4152c33c"
+  },
+  {
+    "iteration": "rescreen_03",
+    "candidate_uuid": "2624ed8a-8dcf-4a52-84a2-89ab15fc69e3",
+    "parent_candidate_uuid": "ee91ed6f-648e-4b48-8f61-78409c12c6a1",
+    "commit_sha": "e67aae4010b64f76284598b8196b43bcabbb4b60"
+  }
+]

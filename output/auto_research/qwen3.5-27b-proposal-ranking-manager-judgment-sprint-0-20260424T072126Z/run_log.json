@@ -1,0 +1,12 @@
+{
+  "round_id": "qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T072126Z",
+  "winner_iteration": "003",
+  "winner_candidate_uuid": "b027d1e4-f239-4108-b9d9-d391c752cbac",
+  "winner_rescreen_uuid": "6a53b4b3-97d6-4b84-a113-cea88e14045d",
+  "bundle_path": "/home/mark/shared/lumoFlyWheel/output/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260424T1018150000_4578f36a.yaml",
+  "dry_run": false,
+  "feasible_count": 17,
+  "iterations_total": 17,
+  "rescreened_count": 3,
+  "holdout_validation": "pass"
+}
