@@ -2,7 +2,7 @@ family_id: pr-intent-regression-review
 track: 4
 schema_version: cnb55.family.v1
 layer_a_status: failed_freeze_gate
-layer_b_status: green
+layer_b_status: implemented_pending_review
 grader_ref: verifiers/pr-intent-regression-review/score_review.py
 milestone_config_ref: verifier_data/pr-intent-regression-review/{variant_id}/milestones/
 milestones:
@@ -96,6 +96,10 @@ saturation:
 rawr_modes:
   - id: grounding_stripped
     description: "Correct changed-file anchors but missing unchanged linked surfaces/evidence grounding."
+    status: implemented
+  - id: citation_fabricated
+    description: "Review fabricates evidence or cites files/lines that are not present in the supplied PR bundle."
+    status: declared_not_yet_implemented
   - id: constraint_named_not_respected
     description: "Review names the JSON contract but still claims the PR matches intent."
     status: declared_not_yet_implemented
