@@ -669,6 +669,71 @@ def test_l2_candidate_plan_varies_only_enforced_fields() -> None:
     ) == len(candidates)
 
 
+def test_l2_iteration_prompt_keeps_advisory_fields_out_of_action_space(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    bundle_path = _write_l1_bundle(repo)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+        active_layer="L2",
+        baseline_bundle=bundle_path,
+    )
+    ctx = RoundContext.from_bootstrap_json(
+        bootstrap,
+        harness_mode="synthetic",
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    prompt = round_driver._iteration_prompt(ctx, iteration="001", next_iteration="002")
+
+    assert "Vary only the three enforced fields" in prompt
+    assert "concurrency_cap_eval, concurrency_cap_rollout, admission_queue_depth_max" in prompt
+    assert "Keep advisory fields fixed as metadata: per_request_kv_budget=131072, priority_preemption=off" in prompt
+
+
+def test_l2_enforcement_validation_rejects_missing_advisory_metadata() -> None:
+    request_shaping = {
+        "concurrency_cap_eval": 3,
+        "concurrency_cap_rollout": 1,
+        "admission_queue_depth_max": 64,
+        "per_request_kv_budget": 65536,
+        "priority_preemption": "strict",
+    }
+    record = {
+        "mode": "enforced",
+        "real_proxy_enforcement": True,
+        "enforced_fields": [
+            "concurrency_cap_eval",
+            "concurrency_cap_rollout",
+            "admission_queue_depth_max",
+        ],
+        "advisory_fields": [],
+        "field_values": {
+            "concurrency_cap_eval": {"value": 3, "enforcement": "enforced"},
+            "concurrency_cap_rollout": {"value": 1, "enforcement": "enforced"},
+            "admission_queue_depth_max": {"value": 64, "enforcement": "enforced"},
+        },
+    }
+
+    with pytest.raises(RuntimeError, match="advisory_fields mismatch"):
+        auto_research.AutoResearchRoundManager._validate_l2_enforcement_record(
+            record,
+            context="AR.28 L2 enforcement coverage for candidate-001",
+            request_shaping=request_shaping,
+        )
+
+
 def test_bootstrap_prefers_composite_descriptor_and_enforces_version_pin(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     workload_path = _write_composite_workload(repo)

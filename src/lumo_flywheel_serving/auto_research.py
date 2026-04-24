@@ -2482,7 +2482,12 @@ class AutoResearchRoundManager:
         }
 
     @staticmethod
-    def _validate_l2_enforcement_record(record: Any, *, context: str) -> dict[str, Any]:
+    def _validate_l2_enforcement_record(
+        record: Any,
+        *,
+        context: str,
+        request_shaping: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         if not isinstance(record, dict):
             raise RuntimeError(f"{context}: missing request_shaping_enforcement")
         mode = record.get("mode")
@@ -2499,17 +2504,30 @@ class AutoResearchRoundManager:
         unsupported_advisory = sorted(set(advisory_fields) - set(ADVISORY_REQUEST_SHAPING_FIELDS))
         if unsupported_advisory:
             raise RuntimeError(f"{context}: unsupported advisory request_shaping fields: {unsupported_advisory}")
+        if request_shaping is not None:
+            expected_advisory = [field for field in ADVISORY_REQUEST_SHAPING_FIELDS if field in request_shaping]
+            if advisory_fields != expected_advisory:
+                raise RuntimeError(f"{context}: request_shaping_enforcement.advisory_fields mismatch")
         field_values = record.get("field_values")
         if not isinstance(field_values, dict):
             raise RuntimeError(f"{context}: request_shaping_enforcement.field_values must be a mapping")
+        stray_advisory_values = sorted(
+            field for field in ADVISORY_REQUEST_SHAPING_FIELDS if field in field_values and field not in advisory_fields
+        )
+        if stray_advisory_values:
+            raise RuntimeError(f"{context}: advisory field_values present without advisory_fields: {stray_advisory_values}")
         for field in advisory_fields:
             payload = field_values.get(field)
             if not isinstance(payload, dict) or payload.get("enforcement") != "advisory" or "value" not in payload:
                 raise RuntimeError(f"{context}: advisory field {field} is not marked advisory")
+            if request_shaping is not None and payload.get("value") != request_shaping.get(field):
+                raise RuntimeError(f"{context}: advisory field {field} value mismatch")
         for field in ENFORCED_REQUEST_SHAPING_FIELDS:
             payload = field_values.get(field)
             if not isinstance(payload, dict) or payload.get("enforcement") != "enforced" or "value" not in payload:
                 raise RuntimeError(f"{context}: enforced field {field} is not marked enforced")
+            if request_shaping is not None and payload.get("value") != request_shaping.get(field):
+                raise RuntimeError(f"{context}: enforced field {field} value mismatch")
         return record
 
     def _apply_request_shaping_trace(
@@ -3166,16 +3184,22 @@ class AutoResearchRoundManager:
     ) -> dict[str, Any]:
         if spec.active_layer.upper() != "L2":
             return {"mode": "not_l2", "enforced_fields": [], "advisory_fields": []}
-        records_by_row = [
-            (
-                row,
-                self._validate_l2_enforcement_record(
-                    self._trace_for_row(round_dir, row).get("request_shaping_enforcement"),
-                    context=f"AR.28 L2 enforcement coverage for {row.iteration}",
-                ),
+        records_by_row = []
+        for row in rows:
+            trace = self._trace_for_row(round_dir, row)
+            request_shaping = trace.get("candidate_request_shaping")
+            if not isinstance(request_shaping, dict):
+                raise RuntimeError(f"AR.28 L2 enforcement coverage for {row.iteration}: missing candidate_request_shaping")
+            records_by_row.append(
+                (
+                    row,
+                    self._validate_l2_enforcement_record(
+                        trace.get("request_shaping_enforcement"),
+                        context=f"AR.28 L2 enforcement coverage for {row.iteration}",
+                        request_shaping=request_shaping,
+                    ),
+                )
             )
-            for row in rows
-        ]
         winner_records = [
             record
             for row, record in records_by_row

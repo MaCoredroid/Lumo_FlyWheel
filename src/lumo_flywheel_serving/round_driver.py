@@ -344,11 +344,16 @@ def _iteration_prompt(ctx: RoundContext, *, iteration: str, next_iteration: str)
     template = template.replace("lumoserve auto-research", f"{lumoserve_cmd} auto-research")
     active_layer = str(ctx.round_spec.get("active_layer", "L1")).upper()
     if active_layer == "L2":
+        frozen_vllm_config = ctx.round_spec.get("frozen_vllm_config") or {}
+        advisory_kv_budget = frozen_vllm_config.get("max_model_len", "<frozen max_model_len>")
         candidate_schema_instruction = (
             "Schema: parent HLD §5.3.3 L2 request_shaping keys only: "
             "concurrency_cap_eval, concurrency_cap_rollout, admission_queue_depth_max, "
-            "per_request_kv_budget, priority_preemption. No L0, no L1, no L3 keys. "
-            "No extra keys. The lower-layer vllm_config is frozen from baseline_bundle_path."
+            "per_request_kv_budget, priority_preemption. Vary only the three enforced fields: "
+            "concurrency_cap_eval, concurrency_cap_rollout, admission_queue_depth_max. "
+            f"Keep advisory fields fixed as metadata: per_request_kv_budget={advisory_kv_budget}, "
+            "priority_preemption=off. No L0, no L1, no L3 keys. No extra keys. "
+            "The lower-layer vllm_config is frozen from baseline_bundle_path."
         )
     else:
         candidate_schema_instruction = (
