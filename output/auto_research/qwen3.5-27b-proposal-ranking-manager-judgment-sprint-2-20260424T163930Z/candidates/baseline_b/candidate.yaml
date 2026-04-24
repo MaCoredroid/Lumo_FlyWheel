@@ -1,0 +1,5 @@
+concurrency_cap_eval: 4
+concurrency_cap_rollout: 0
+admission_queue_depth_max: 128
+per_request_kv_budget: 131072
+priority_preemption: 'off'

@@ -1,0 +1,42 @@
+round_id: qwen3.5-27b-proposal-ranking-manager-judgment-sprint-2-20260424T163930Z
+round_root: /home/mark/shared/lumoFlyWheel/output/auto_research
+round_dir: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-proposal-ranking-manager-judgment-sprint-2-20260424T163930Z
+worktree_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-proposal-ranking-manager-judgment-sprint-2-20260424T163930Z
+round_branch: autoresearch/qwen3.5-27b/proposal-ranking-manager-judgment/sprint-2/20260424T163930Z
+model_id: qwen3.5-27b
+family_id: proposal-ranking-manager-judgment
+sprint: sprint-2
+weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+workload_file: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/families/proposal-ranking-manager-judgment/serving_workload.yaml
+workload_distribution_id: prmj-v1-live
+latency_ceiling_ms: 35000
+tpot_ceiling_ms: 80
+turn_latency_ceiling_ms: 35000
+active_layer: L2
+target_concurrency: 4
+iteration_cap: 12
+rescreen_top_k: 3
+round_wall_clock_s: 28800
+screen_warmup_s: 120
+screen_measurement_s: 600
+full_warmup_s: 300
+full_measurement_s: 1500
+screen_profile_s: 900
+full_profile_s: 1980
+per_iteration_codex_wall_clock_s: 2700
+diminishing_returns_window_k: 4
+noise_floor: 0.0
+parent_head_sha: 200b729d912eda0256b8c8d5c39110693f934ddd
+harness_type: real
+round_started_at: 1777048770.7878077
+sub_spec_version: v0.1.11
+baseline_bundle_path: /home/mark/shared/lumoFlyWheel/output/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260424T1018150000_4578f36a.yaml
+baseline_bundle_id: 4578f36a-b3e9-47da-876d-4ac31cfcc5ad
+frozen_vllm_config:
+  max_num_seqs: 4
+  max_num_batched_tokens: 12288
+  enable_chunked_prefill: true
+  enable_prefix_caching: false
+  gpu_memory_utilization: 0.92
+  max_model_len: 131072
+  kv_cache_dtype: fp8_e5m2
