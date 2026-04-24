@@ -648,7 +648,9 @@ At normal stop, the best feasible configuration per layer / family / sub-level i
 
 ### 5.9 Output artifact — the tuned-config bundle
 
-A single YAML blob persisted to `/data/tuned_configs/<family_id>/<weight_version_id>/<run_id>.yaml` on internal NVMe. Schema:
+A single YAML blob persisted to `/data/tuned_configs/<family_id>/<weight_version_id>/<run_id>.yaml` on internal NVMe.
+
+**`family_id` may name a composite workload** (sub-spec hardening plan v0.1.1+). The `family_id` field in this schema and in the §6.4 validity rule historically names a single CNB-55 family declared under `benchmark_blueprints/families/<family_id>/`. As of the hardening plan, `family_id` MAY also name a **composite workload** (e.g. `multi-family-v5`) declared under `benchmark_blueprints/workloads/<family_id>/`. When present, the runtime resolves the workload descriptor by searching `workloads/<family_id>/workload.yaml` first, then falling back to `families/<family_id>/serving_workload.yaml`. Everything downstream of resolution — bundle storage path, §6.4 hard-pin, admission-layer routing, reasoning-content purity, etc. — treats the composite `family_id` identically to a single-family `family_id`. This preserves the §6.4 bundle-validity contract verbatim; the only change is that a single `family_id` value can now refer to a pool of underlying families whose workload characteristics were composed into one trace. Schema:
 
 ```yaml
 tuned_config_bundle:
@@ -657,7 +659,7 @@ tuned_config_bundle:
   model_id: qwen3.5-27b                              # HARD-PINNED in bundle-validity rule (§6.4)
   family_id: <family>                                # HARD-PINNED in bundle-validity rule (§6.4)
   weight_version_id: <sha>                           # METADATA — does NOT pin; re-validated via weight_sensitive flag (§6.4)
-  workload_distribution_id: <hash>                   # METADATA — informational
+  workload_distribution_id: <hash>                   # HARD-PINNED in bundle-validity rule (§6.4) — amended per hardening plan v0.1.3-plan P1-SS
   # Layer 0 is split across two kernel families. Each is independently tuned (§5.3.1).
   layer_0_deltanet:
     l0a_select:
@@ -767,7 +769,7 @@ tuned_config_bundle:
   mutation_artifacts_ref: <path | null>              # directory of accepted mutation .patch files (both families) + rejected-mutation log for this run
 ```
 
-`environment_pin` + `serving_posture_pin` + `model_id` + `family_id` constitute the bundle-validity rule enforced at bootstrap — see §6.4. `weight_version_id` is metadata, not a pin; weight rotation re-validates only mutations whose `weight_sensitive: true` flag is set (plus the default-baseline regression guard).
+`environment_pin` + `serving_posture_pin` + `model_id` + `family_id` + **`workload_distribution_id`** (promoted to hard-pinned in hardening plan v0.1.3-plan P1-SS, canonical computation per v0.1.4-plan P1-YY above) constitute the bundle-validity rule enforced at bootstrap — see §6.4. `weight_version_id` is metadata, not a pin; weight rotation re-validates only mutations whose `weight_sensitive: true` flag is set (plus the default-baseline regression guard).
 
 Campaign bootstrap loads the bundle via `POST /admin/load_tuned_config` (§4.5). Bundles are immutable — a new tune produces a new bundle, never mutates an existing one.
 
@@ -823,6 +825,8 @@ The atomic rename is the key correctness primitive. `inotify` (preferred) or pol
 
 A single, explicit rule governs whether a previously-tuned bundle can be loaded against the currently-running serving stack. The serving backend applies this rule exactly once — at bootstrap, when `POST /admin/load_tuned_config` or the equivalent startup path resolves the bundle. If the rule refuses, the serving stack falls back to the default-config baseline; it does **not** silently degrade or partially apply a bundle.
 
+**Composite family_id values are treated identically.** Per §5.9, `family_id` MAY name a composite workload (e.g. `multi-family-v5`). The validity rule below does not distinguish single-family from composite values — both are hard-pinned on the `family_id` string. A bundle whose `family_id: multi-family-v5` loads only into a serving stack whose resolved family identity is also `multi-family-v5`. Cross-loading (single-family bundle into composite-family stack, or vice versa) is a refusal case.
+
 **The rule, in one statement.** A bundle is valid if and only if **every** field below in the bundle matches the live serving process's corresponding attestation, exactly:
 
 | Bundle field | Hard pin? | Source of truth at bootstrap |
@@ -844,7 +848,71 @@ A single, explicit rule governs whether a previously-tuned bundle can be loaded 
 | `serving_posture_pin.thinking_token_budget` | yes | default chat-template / server-level value (must equal `family_spec.thinking_budget` — §4.1) |
 | `serving_posture_pin.request_level_thinking_override_policy` | yes | admission-layer policy (MUST be `reject` for campaign traffic — §4.1) |
 | `weight_version_id` | **no — metadata only** | see "weight rotation" below |
-| `workload_distribution_id` | **no — metadata only** | informational; changing it does not refuse the bundle |
+| `workload_distribution_id` | **yes** (promoted from metadata in hardening plan v0.1.3-plan P1-SS) | Computed by a canonical, non-circular procedure (see below). For composite `family_id` values this is load-bearing — swapping the composite's pool / trace / workload.yaml without re-tuning is exactly the kind of drift the validity rule must catch. For single-family `family_id` values it's also pinned (same rule for both) — seed-trace regeneration without a re-tune is strictly stronger than the previous "metadata" behavior, and prevents silently-stale bundles from applying against a changed workload. |
+
+**Canonical `workload_distribution_id` computation (P1-YY fix, hardening-plan v0.1.4-plan).** The earlier v0.1.3-plan draft defined the id as `sha256(seed_trace.jsonl + holdout_trace.jsonl + workload.yaml)`. That is circular because `workload.yaml` itself contains the `workload_distribution_id` field, so writing the hash changes the hashed file. The canonical non-circular definition:
+
+```python
+def compute_workload_distribution_id(descriptor_path: Path) -> str:
+    """Layout-agnostic (P1-FFF fix).
+
+    Accepts the resolved workload-descriptor path — either the composite
+    `workloads/<family_id>/workload.yaml` or the legacy single-family
+    `families/<family_id>/serving_workload.yaml`. Reads `seed_trace_ref`
+    and `holdout_trace_ref` from the descriptor (both are required fields
+    in any v0.1.12+ descriptor, whatever layout it lives under) to locate
+    the two trace files. Trace refs may be absolute or relative-to-descriptor.
+    """
+    import hashlib, yaml
+
+    def _h(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    ydata = yaml.safe_load(descriptor_path.read_text())
+    seed_path    = _resolve_ref(descriptor_path, ydata["seed_trace_ref"])
+    holdout_path = _resolve_ref(descriptor_path, ydata["holdout_trace_ref"])
+    seed_hash    = _h(seed_path)
+    holdout_hash = _h(holdout_path)
+
+    # Null the self-referential field BEFORE serializing for hashing.
+    # Produces a stable canonical form independent of the current id value.
+    ydata["workload_distribution_id"] = None
+    yaml_canonical = yaml.safe_dump(
+        ydata, sort_keys=True, default_flow_style=False
+    ).encode("utf-8")
+    yaml_hash = hashlib.sha256(yaml_canonical).hexdigest()
+
+    composite = (seed_hash + holdout_hash + yaml_hash).encode("ascii")
+    return hashlib.sha256(composite).hexdigest()
+
+
+def _resolve_ref(descriptor_path: Path, ref: str) -> Path:
+    """Resolve a trace ref relative to the descriptor's directory, or
+    accept an absolute path. Both layouts work:
+      composite:   workloads/multi-family-v5/{workload.yaml, seed_trace.jsonl, holdout_trace.jsonl}
+      legacy:      families/<family>/{serving_workload.yaml, seed_trace.jsonl, holdout_trace.jsonl}
+      either:      any path referenced via `seed_trace_ref: /abs/path/...`
+    """
+    ref_path = Path(ref)
+    return ref_path if ref_path.is_absolute() else (descriptor_path.parent / ref_path).resolve()
+```
+
+Four properties matter:
+1. **Non-circular.** The descriptor yaml is canonicalized with `workload_distribution_id = None` before hashing; writing the hash back in afterward doesn't change the canonical form, so the id is a fixed point under this procedure.
+2. **Stable under yaml-comment or key-order edits.** `sort_keys=True` + `default_flow_style=False` + fixed indentation make the yaml hash robust to whitespace / ordering changes in the source file.
+3. **Sensitive to content drift.** Any change to seed trace bytes, holdout trace bytes, or any non-self-referential descriptor field changes the id.
+4. **Layout-agnostic (P1-FFF).** Works for both composite `workloads/<family_id>/workload.yaml` and legacy `families/<family_id>/serving_workload.yaml` so long as each descriptor declares `seed_trace_ref` and `holdout_trace_ref` (both are required fields). Legacy descriptors that don't yet carry these fields need to have them added — tracked as a v0.1.12 sub-spec migration item for the legacy path.
+
+**When the id is written (P1-GGG fix — capture mints, bootstrap verifies).** The canonical id is written into the descriptor **exactly once**, by the capture step that produces the trace files (the §2.1.2 composite-capture script for composite layouts, or the legacy single-family equivalent). Subsequent steps — including `bootstrap-round` — **only verify**; they never mint or mutate the id. Rationale: bootstrap minting at launch time would silently bless whatever descriptor+trace bytes happen to be present, which is the exact drift the hard pin is supposed to catch.
+
+**`bootstrap-round` verification contract (P1-GGG).** At bootstrap:
+- Read the descriptor's declared `workload_distribution_id`.
+- If missing (`null` or absent): **refuse** with `descriptor_missing_workload_distribution_id` — the capture step was not completed.
+- Re-compute `compute_workload_distribution_id(descriptor_path)` from the live bytes.
+- If declared ≠ computed: **refuse** with `descriptor_workload_distribution_id_mismatch` — the descriptor's content drifted after capture.
+- Otherwise: proceed, recording the verified id in `round_spec.yaml.workload_distribution_id`.
+
+**Verification at `/admin/load_tuned_config` (§6.4 refusal path).** The serving stack re-runs `compute_workload_distribution_id(descriptor_path)` against the resolved descriptor path (composite or legacy, per §5.9 lookup order). If it differs from the bundle's pinned value, refusal with `mismatching_field: workload_distribution_id`.
 
 Exactly one rule. No soft overrides, no "close enough" matching on version strings, no implicit upgrades. A mismatch on any hard-pinned field refuses the bundle; the refusal is logged with the specific mismatching field(s) and the serving stack uses the default baseline until a re-tune produces a new bundle.
 
@@ -961,7 +1029,13 @@ Binary per item. Each item has a verifiable artifact the verifier agent can insp
 - [ ] **9.3.8** **Three-dim SLO enforcement (§4.1 / §5.4).** A synthetic workload that would violate `TPOT_p95 ≤ L_tpot` at a candidate's concurrency level is rejected by the objective check even if `TTFT_p95` and `TurnLatency_p95` both pass. Artifact: test log showing the rejected candidate's three-dim measurements and the constraint that tripped.
 - [ ] **9.3.9** **Thinking contract & reasoning-content purity (§4.1, §5.4 constraint 8).** Every thinking token emitted during a measurement run surfaces under `reasoning_content`; zero thinking tokens leak into `content`. `thinking_token_budget` from the bundle is honored (stream truncation fires when the budget is exceeded, producing a `thinking_truncated` telemetry flag). Artifact: response-dump audit showing `reasoning_content_purity = 1.0` across ≥10k sampled streams, plus one budget-truncation test log.
 - [ ] **9.3.9.a** **Admission-layer request-level thinking-override rejection (§4.1 override-rejection policy).** The admission layer rejects (before any GPU work) every request that attempts to override the serving-posture thinking contract. Specifically: (i) a request carrying `chat_template_kwargs.enable_thinking = false` is rejected with HTTP 4xx, structured error `code = thinking_override_forbidden`, and no tokens are generated; (ii) a request carrying `chat_template_kwargs.enable_thinking = true` against the same server default is likewise rejected (the rule rejects the *presence* of the override field, not its value, to avoid silent drift if the server default changes); (iii) a request carrying `extra_body.thinking_token_budget = <any>` is rejected with the same structured code; (iv) a well-formed request that sets neither field is accepted and produces a normal streamed response governed by the server-side `enable_thinking` / `thinking_token_budget` from the bundle. The rejection emits a telemetry row tagged `rejection_reason = thinking_override_forbidden` countable in the admission-control rejection metric. Artifact: four request/response transcripts (three rejections + one acceptance) plus the corresponding telemetry rows.
-- [ ] **9.3.10** **Bundle-validity rule refusal (§6.4).** A bundle whose `environment_pin.vllm_version` does not match the live process's `vllm.__version__` is refused at `POST /admin/load_tuned_config` with a structured error naming the mismatching field; the serving stack falls back to the default-config baseline. A bundle whose `serving_posture_pin.limit_mm_per_prompt_image` is 0 loaded into a process launched without that flag is likewise refused. Artifact: two `/admin/load_tuned_config` test transcripts (env drift + posture drift), each showing the refusal payload and the fallback path.
+- [ ] **9.3.10** **Bundle-validity rule refusal (§6.4) — covers all hard-pinned fields including `workload_distribution_id`.** The `/admin/load_tuned_config` refusal path is exercised for every category of hard pin:
+  - **Environment drift.** A bundle whose `environment_pin.vllm_version` does not match the live process's `vllm.__version__` is refused with a structured error naming the mismatching field; serving falls back to the default-config baseline.
+  - **Serving-posture drift.** A bundle whose `serving_posture_pin.limit_mm_per_prompt_image` is 0 loaded into a process launched without that flag is likewise refused.
+  - **Workload-content drift (new v0.1.3-plan+).** A bundle whose `workload_distribution_id` was pinned at capture time is refused when loaded against a resolved workload descriptor (composite `workloads/<family_id>/workload.yaml` OR legacy `families/<family_id>/serving_workload.yaml`) whose re-computed canonical hash (per §5.9 `compute_workload_distribution_id()`) differs from the pinned value — e.g., mutating a single byte in the descriptor's seed trace jsonl after a bundle is published should produce `mismatching_field: workload_distribution_id`. This is the scenario the hardening plan's AR.36 also covers; the parent check exists so a §9.3 verifier can confirm the refusal path is exercised even without reading the sub-spec.
+  - **Missing workload_distribution_id at bootstrap (new v0.1.5-plan+).** A workload descriptor whose `workload_distribution_id` field is absent or `null` causes `bootstrap-round` to refuse with `descriptor_missing_workload_distribution_id` per §5.9's capture-mints / bootstrap-verifies contract. Hardening plan AR.37 covers the bootstrap-time version of this check; this §9.3.10 item covers the load-time version.
+  
+  Artifact: **four** `/admin/load_tuned_config` + `bootstrap-round` test transcripts — environment drift, posture drift, descriptor-hash mismatch, descriptor-missing-id — each showing the refusal payload and the fallback path. Delegates to hardening-plan AR.36 and AR.37 for the detailed procedural checks; this parent item exists so verifiers checking §6.4 end-to-end don't miss the workload-content pin.
 - [ ] **9.3.11** **Weight-sensitive re-parity-check (§6.4).** A bundle containing a mutation flagged `weight_sensitive: true` is loaded; a subsequent `weight_version_id` rotation triggers the re-parity-check against the new weights; a failing re-parity-check downgrades the affected mutation to its family's L0-autotune winner and tags the bundle `weight_rotation_downgraded: true`. Artifact: bundle-state-before/after dump + re-parity-check log.
 - [ ] **9.3.12** **Vision tower disabled at launch (§4.5).** The serving process refuses to start if `--limit-mm-per-prompt image=0` is missing from the launch command, and the pre-boot check emits a structured error naming the missing argument. Artifact: test log of the refused launch.
 - [ ] **9.3.13** **`attention_backend` force-selected on Blackwell, not left to vLLM auto-select.** On an SM100+ target, `layer_0_gatedattn.l0a_select.attention_backend` in the shipped bundle resolves to a concrete, non-`vllm-default` value (one of `flash-attn-4`, `flash-attn-3`, `flash-attn-2`, `flashinfer`, `triton`) — never to `vllm-default` and never unset. The verifier additionally confirms: (a) the selected backend beat both `vllm-default` *and* the runner-up in the L0-GatedAttn-a trace on the §5.4 objective; (b) if the selected backend is `flashinfer`, the trace records an accuracy-screen pass against GitHub vllm-project/vllm #35138 on the family's workload; (c) if the selected backend is not `flash-attn-4` on SM100+, §11.10 carries an entry naming the reason. Artifact: bundle YAML with the non-default `attention_backend`, L0-GatedAttn-a trace showing the comparison, and (for `flashinfer` selection) the accuracy-screen log.
