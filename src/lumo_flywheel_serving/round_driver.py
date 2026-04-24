@@ -13,6 +13,23 @@ import yaml
 from .auto_research import AutoResearchRoundManager, OfflineAutoResearchRunner, load_baseline_bundle
 from .registry import load_registry
 
+ROUND_PASSED = "ROUND_PASSED"
+ROUND_INFEASIBLE = "ROUND_INFEASIBLE"
+ROUND_BLOCKED = "ROUND_BLOCKED"
+ROUND_BUNDLE_REJECTED = "ROUND_BUNDLE_REJECTED"
+ROUND_BUNDLE_READY = "ROUND_BUNDLE_READY"
+
+TERMINAL_OUTCOMES = frozenset(
+    {
+        ROUND_PASSED,
+        ROUND_INFEASIBLE,
+        ROUND_BLOCKED,
+        ROUND_BUNDLE_REJECTED,
+        ROUND_BUNDLE_READY,
+    }
+)
+HONEST_TERMINAL_EXIT_ZERO = frozenset({ROUND_PASSED, ROUND_INFEASIBLE})
+
 
 @dataclass(frozen=True)
 class RoundContext:
@@ -136,7 +153,7 @@ def run_round(ctx: RoundContext) -> RoundResult:
             return _result_from_status(
                 manager,
                 ctx,
-                outcome="ROUND_INFEASIBLE",
+                outcome=ROUND_INFEASIBLE,
                 stopping_reason="no_feasible_rescreen_winner",
                 bundle_path=None,
                 holdout_validation="not_run",
@@ -156,7 +173,7 @@ def run_round(ctx: RoundContext) -> RoundResult:
             return _result_from_status(
                 manager,
                 ctx,
-                outcome="ROUND_INFEASIBLE",
+                outcome=ROUND_INFEASIBLE,
                 stopping_reason="holdout_rejected",
                 bundle_path=None,
                 holdout_validation="fail",
@@ -169,7 +186,7 @@ def run_round(ctx: RoundContext) -> RoundResult:
         return _result_from_status(
             manager,
             ctx,
-            outcome="ROUND_BUNDLE_READY",
+            outcome=ROUND_BUNDLE_READY,
             stopping_reason="ok",
             bundle_path=str(finalized["bundle_path"]),
             holdout_validation="pass",
@@ -179,7 +196,7 @@ def run_round(ctx: RoundContext) -> RoundResult:
         return _result_from_status(
             manager,
             ctx,
-            outcome="ROUND_BLOCKED",
+            outcome=ROUND_BLOCKED,
             stopping_reason="exception",
             bundle_path=None,
             holdout_validation="not_run",
@@ -419,6 +436,19 @@ def _result_from_status(
     )
     result.write_report(ctx.round_dir / "round_result.json")
     return result
+
+
+def run_round_exit_code(result: RoundResult) -> int:
+    """CLI policy: JSON outcome is authoritative; exit code reports lifecycle health."""
+    if result.outcome in HONEST_TERMINAL_EXIT_ZERO:
+        return 0
+    if result.outcome == ROUND_BUNDLE_READY and not _bundle_ready_needs_live_gate(result):
+        return 0
+    return 1
+
+
+def _bundle_ready_needs_live_gate(result: RoundResult) -> bool:
+    return result.live_gate not in {"pass", "skipped_fixture_mode"}
 
 
 def _git(args: list[str], *, cwd: Path) -> str:

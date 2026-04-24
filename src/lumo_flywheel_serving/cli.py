@@ -15,7 +15,7 @@ from .auto_research import AutoResearchRoundManager, OfflineAutoResearchRunner, 
 from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .registry import load_registry
-from .round_driver import RoundContext, run_round
+from .round_driver import RoundContext, run_round, run_round_exit_code
 
 
 def _prefix_cache_probe_messages(prior_reply: str | None = None) -> list[dict[str, str]]:
@@ -716,7 +716,7 @@ def cmd_auto_research_run_round(args: argparse.Namespace) -> int:
     )
     result = run_round(ctx)
     print(json.dumps(result.as_dict(), indent=2))
-    return 0 if result.outcome in {"ROUND_BUNDLE_READY", "ROUND_BASELINE_RETAINED"} else 1
+    return run_round_exit_code(result)
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -27,6 +27,8 @@ from .yaml_utils import load_yaml_file
 MIN_LIVE_STARTUP_GPU_MEMORY_UTILIZATION = 0.30
 SIGNED_OFF_BY = "lumoserve-auto-research-cli <auto-research@lumo-flywheel>"
 MIN_CODEX_CLI_VERSION = (0, 120, 0)
+REAL_MEASUREMENT_GENERATOR_PREFIX = "RealMeasurementHarness"
+SYNTHETIC_MEASUREMENT_GENERATOR_PREFIX = "SyntheticMeasurementFixture"
 ALLOWED_VLLM_CONFIG_KEYS = {
     "max_num_seqs",
     "max_num_batched_tokens",
@@ -932,7 +934,7 @@ class RoundSpecRecord:
     parent_head_sha: str = ""
     harness_type: str = "real"
     round_started_at: float = 0.0
-    sub_spec_version: str = "v0.1.11"
+    sub_spec_version: str = "v0.1.12"
     baseline_bundle_path: str = ""
     baseline_bundle_id: str = ""
     frozen_vllm_config: dict[str, Any] = field(default_factory=dict)
@@ -1011,7 +1013,7 @@ class RoundSpecRecord:
             parent_head_sha=str(payload.get("parent_head_sha", "")),
             harness_type=str(payload.get("harness_type", "real")),
             round_started_at=float(payload.get("round_started_at", 0.0)),
-            sub_spec_version=str(payload.get("sub_spec_version", "v0.1.11")),
+            sub_spec_version=str(payload.get("sub_spec_version", "v0.1.12")),
             baseline_bundle_path=str(payload.get("baseline_bundle_path", "")),
             baseline_bundle_id=str(payload.get("baseline_bundle_id", "")),
             frozen_vllm_config=dict(payload.get("frozen_vllm_config") or {}),
@@ -1309,8 +1311,11 @@ class AutoResearchRoundManager:
         trace = json.loads(trace_path.read_text(encoding="utf-8"))
         self._validate_measurement_trace(trace, status=status)
         generator = str(trace.get("generator", ""))
-        if not generator.startswith("RealMeasurementHarness") and not allow_synthetic:
-            raise RuntimeError(f"commit_refused: generator {generator!r} is not a production trace")
+        self._validate_measurement_generator(
+            generator,
+            harness_type=spec.harness_type,
+            context="commit_refused",
+        )
 
         rows = self._read_results(round_dir / "results.tsv")
         matched = False
@@ -1362,7 +1367,7 @@ class AutoResearchRoundManager:
         commit_sha = self._commit_paths(
             staged_paths,
             commit_message,
-            spec.harness_type == "synthetic",
+            False,
             branch=spec.round_branch,
             context="commit_refused",
         )
@@ -1420,8 +1425,11 @@ class AutoResearchRoundManager:
             trace = json.loads((rescreen_dir / "measurement_trace.json").read_text(encoding="utf-8"))
             self._validate_measurement_trace(trace, status="rescreened")
             generator = str(trace.get("generator", ""))
-            if not generator.startswith("RealMeasurementHarness") and spec.harness_type != "synthetic":
-                raise RuntimeError(f"commit_refused: generator {generator!r} is not a production trace")
+            self._validate_measurement_generator(
+                generator,
+                harness_type=spec.harness_type,
+                context="commit_refused",
+            )
             objective_parent = float(parent.eval_throughput)
             objective_rescreen = float(trace["eval_throughput"])
             objective_mean = (objective_parent + objective_rescreen) / 2.0
@@ -1476,7 +1484,7 @@ class AutoResearchRoundManager:
             commit_sha = self._commit_paths(
                 staged_paths,
                 commit_message,
-                spec.harness_type == "synthetic",
+                False,
                 branch=spec.round_branch,
                 context="commit_refused",
             )
@@ -1536,6 +1544,11 @@ class AutoResearchRoundManager:
             profile="full",
             use_holdout=True,
         )
+        self._validate_measurement_generator(
+            str(trace.get("generator", "")),
+            harness_type=spec.harness_type,
+            context="validate-holdout refuses",
+        )
         passed = bool(trace.get("feasible"))
         payload = {
             "pass": passed,
@@ -1554,7 +1567,7 @@ class AutoResearchRoundManager:
         rows = self._read_results(round_dir / "results.tsv")
         if not rows:
             raise RuntimeError("Cannot finalize an empty round")
-        self._validate_finalize_generator_consistency(round_dir)
+        self._validate_finalize_generator_consistency(round_dir, harness_type=spec.harness_type)
         self._validate_finalize_harness_fault_rows(rows)
 
         winner_row: ResultsRow | None = None
@@ -1679,6 +1692,7 @@ class AutoResearchRoundManager:
             f"rescreened_count={sum(1 for row in rows if row.status == 'rescreened')} holdout_validation={'skipped' if dry_run else 'pass'}\n"
             f"stopping_reason=ok\n\n"
             f"Winner-Candidate-UUID: {winner_parent_uuid}\n"
+            f"{'Fixture-Mode: true\n' if spec.harness_type == 'synthetic' else ''}"
             f"Signed-off-by: {SIGNED_OFF_BY}\n"
         )
         staged_paths = [
@@ -1715,7 +1729,7 @@ class AutoResearchRoundManager:
         finalize_commit_sha = self._commit_paths(
             staged_paths,
             commit_message,
-            spec.harness_type == "synthetic",
+            False,
             branch=spec.round_branch,
             context="finalize-round refuses",
         )
@@ -2260,6 +2274,23 @@ class AutoResearchRoundManager:
             raise RuntimeError("commit_refused: malformed_trace")
 
     @staticmethod
+    def _validate_measurement_generator(
+        generator: str,
+        *,
+        harness_type: str,
+        context: str,
+    ) -> None:
+        if harness_type == "real":
+            if generator.startswith(REAL_MEASUREMENT_GENERATOR_PREFIX):
+                return
+            raise RuntimeError(f"{context}: generator {generator!r} is not a production trace")
+        if harness_type == "synthetic":
+            if generator.startswith(SYNTHETIC_MEASUREMENT_GENERATOR_PREFIX):
+                return
+            raise RuntimeError(f"{context}: generator {generator!r} is not a synthetic fixture trace")
+        raise RuntimeError(f"{context}: unsupported harness_type {harness_type!r}")
+
+    @staticmethod
     def _valid_latency_cross_checks(trace: dict[str, Any]) -> bool:
         for key in ("ttft_p95_ms", "tpot_p95_ms", "turn_latency_p95_ms"):
             payload = trace.get(key)
@@ -2538,13 +2569,18 @@ class AutoResearchRoundManager:
         except (TypeError, ValueError):
             return float("inf")
 
-    def _validate_finalize_generator_consistency(self, round_dir: Path) -> None:
+    def _validate_finalize_generator_consistency(self, round_dir: Path, *, harness_type: str) -> None:
         generators: set[str] = set()
         for trace_path in sorted((round_dir / "candidates").glob("*/measurement_trace.json")):
             trace = json.loads(trace_path.read_text(encoding="utf-8"))
             generator = str(trace.get("generator") or "")
             if not generator:
                 raise RuntimeError("finalize-round refuses because a measurement trace is missing generator")
+            self._validate_measurement_generator(
+                generator,
+                harness_type=harness_type,
+                context="finalize-round refuses",
+            )
             generators.add(generator)
         if len(generators) > 1:
             raise RuntimeError("finalize-round refuses because measurement generator changed mid-round")

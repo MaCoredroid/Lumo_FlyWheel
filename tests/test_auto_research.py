@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from lumo_flywheel_serving import auto_research, measurement_harness
-from lumo_flywheel_serving.round_driver import RoundContext, run_round
+from lumo_flywheel_serving.round_driver import RoundContext, RoundResult, run_round, run_round_exit_code
 
 
 def _write_registry(path: Path) -> None:
@@ -726,6 +726,53 @@ kv_cache_dtype: fp8_e5m2
             status="keep",
             notes="should be refused",
             harness="real",
+        )
+
+
+def test_commit_candidate_rejects_real_measurement_trace_in_synthetic_mode(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+max_num_seqs: 4
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.90
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+""",
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    trace_path = candidate_dir / "measurement_trace.json"
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    trace["generator"] = "RealMeasurementHarness v0.1.0"
+    trace_path.write_text(json.dumps(trace, indent=2), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="synthetic fixture trace"):
+        manager.commit_candidate(
+            round_id=bootstrap["round_id"],
+            iteration="001",
+            status="keep",
+            notes="should be refused",
         )
 
 
@@ -2281,7 +2328,7 @@ kv_cache_dtype: fp8_e5m2
     second_trace["generator"] = "RealMeasurementHarness v0.1.0"
     second_trace_path.write_text(json.dumps(second_trace, indent=2), encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="measurement generator changed mid-round"):
+    with pytest.raises(RuntimeError, match="synthetic fixture trace"):
         manager.finalize_round(round_id=round_id, dry_run=True)
 
 
@@ -2383,3 +2430,51 @@ def test_run_round_synthetic_completes_end_to_end(tmp_path: Path, monkeypatch: p
     assert report["schema_version"] == "lumo.auto_research.round_result.v1"
     assert report["outcome"] == "ROUND_BUNDLE_READY"
     assert report["round_id"] == result.round_id
+    generators = {
+        json.loads(path.read_text(encoding="utf-8"))["generator"]
+        for path in sorted((ctx.round_dir / "candidates").glob("*/measurement_trace.json"))
+    }
+    assert generators
+    assert all(generator.startswith("SyntheticMeasurementFixture") for generator in generators)
+    fixture_trailers = subprocess.run(
+        [
+            "git",
+            "log",
+            "--format=%H%x00%(trailers:key=Fixture-Mode,valueonly)",
+            f"main..{bootstrap['round_branch']}",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    commit_trailers = {
+        line.split("\0", 1)[0]: line.split("\0", 1)[1]
+        for line in fixture_trailers
+        if "\0" in line
+    }
+    assert commit_trailers
+    assert all(value == "true" for value in commit_trailers.values())
+
+
+def test_run_round_exit_code_distinguishes_honest_terminal_outcomes() -> None:
+    def result(outcome: str, live_gate: str = "not_run") -> RoundResult:
+        return RoundResult(
+            round_id="round",
+            round_branch="autoresearch/test",
+            outcome=outcome,
+            stopping_reason="test",
+            bundle_path=None,
+            iterations_total=0,
+            feasible_count=0,
+            rescreened_count=0,
+            holdout_validation="not_run",
+            live_gate=live_gate,
+        )
+
+    assert run_round_exit_code(result("ROUND_PASSED", live_gate="pass")) == 0
+    assert run_round_exit_code(result("ROUND_INFEASIBLE", live_gate="skipped_no_bundle")) == 0
+    assert run_round_exit_code(result("ROUND_BUNDLE_READY", live_gate="skipped_fixture_mode")) == 0
+    assert run_round_exit_code(result("ROUND_BUNDLE_READY", live_gate="not_run")) == 1
+    assert run_round_exit_code(result("ROUND_BLOCKED")) == 1
+    assert run_round_exit_code(result("ROUND_BUNDLE_REJECTED", live_gate="fail")) == 1
