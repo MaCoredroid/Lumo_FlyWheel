@@ -67,6 +67,7 @@ avg_prompt_tokens: 4096
 avg_output_tokens: 1200
 rollout_baseline: 10.0
 measurement_window_minutes: 25
+target_concurrency: 4
 gpu_memory_utilization_cap: 0.08
 seed_trace_ref: seed_trace.jsonl
 holdout_trace_ref: holdout_trace.jsonl
@@ -1222,6 +1223,7 @@ def test_real_measurement_harness_loads_candidate_and_flushes_prefix_cache(
     assert events[1] == ("POST", "http://127.0.0.1:8000/reset_prefix_cache")
     assert ("GET", "http://127.0.0.1:8000/health") in events
     assert trace["sustained_concurrency"] == 2
+    assert {entry["concurrency_when_dispatched"] for entry in trace["per_request_latencies"]} == {2}
 
 
 def test_real_measurement_harness_throughput_uses_elapsed_replay_time(
@@ -1270,7 +1272,11 @@ def test_real_measurement_harness_throughput_uses_elapsed_replay_time(
 
     monkeypatch.setattr(harness, "_activate_candidate", lambda candidate_vllm_config: None)
     monkeypatch.setattr(harness, "_metrics_snapshot", lambda: {})
-    monkeypatch.setattr(harness, "_replay_requests", lambda replay_entries, candidate_vllm_config: replay)
+    monkeypatch.setattr(
+        harness,
+        "_replay_requests",
+        lambda replay_entries, candidate_vllm_config, *, target_concurrency: replay,
+    )
     monkeypatch.setattr(measurement_harness.time, "time", lambda: next(clock))
 
     screen = harness.measure({}, warmup_s=120, window_s=600, target_concurrency=4)
@@ -1284,6 +1290,55 @@ def test_real_measurement_harness_throughput_uses_elapsed_replay_time(
     assert full["eval_throughput"] == 1.0
     assert screen["rollout_throughput"] == 100.0
     assert full["rollout_throughput"] == 100.0
+
+
+def test_measure_uses_round_target_concurrency_not_candidate_max_num_seqs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    seen_target_concurrency: list[int] = []
+
+    def fake_measure(self, candidate_vllm_config, **kwargs):
+        del self, candidate_vllm_config
+        seen_target_concurrency.append(kwargs["target_concurrency"])
+        return _real_trace()
+
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", fake_measure)
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    round_spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    assert round_spec["target_concurrency"] == 4
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+max_num_seqs: 32
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.92
+max_model_len: 32768
+kv_cache_dtype: fp8_e5m2
+""",
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+
+    assert seen_target_concurrency == [4]
 
 
 def test_offline_auto_research_runner_backward_compatibility(tmp_path: Path) -> None:

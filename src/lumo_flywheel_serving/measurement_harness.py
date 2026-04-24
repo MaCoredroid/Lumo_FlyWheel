@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -81,7 +82,11 @@ class RealMeasurementHarness:
         window_completed = False
         before_metrics = self._metrics_snapshot()
         replay_entries = self._load_seed_trace(self.seed_trace_path)
-        per_request_latencies = self._replay_requests(replay_entries, candidate_vllm_config)
+        per_request_latencies = self._replay_requests(
+            replay_entries,
+            candidate_vllm_config,
+            target_concurrency=max(int(target_concurrency), 1),
+        )
         after_metrics = self._metrics_snapshot()
         ended = time.time()
         window_completed = True
@@ -242,10 +247,13 @@ class RealMeasurementHarness:
         self,
         replay_entries: list[dict[str, Any]],
         candidate_vllm_config: dict[str, Any],
+        *,
+        target_concurrency: int,
     ) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
+        concurrency = max(1, min(int(target_concurrency), len(replay_entries)))
         model_name = str(candidate_vllm_config.get("served_model_name", candidate_vllm_config.get("model_id", "qwen3.5-27b")))
-        for index, entry in enumerate(replay_entries, start=1):
+
+        def replay_one(index: int, entry: dict[str, Any]) -> dict[str, Any]:
             prompt_tokens = int(entry.get("prompt_tokens", self.workload_spec.avg_prompt_tokens))
             output_tokens = int(entry.get("output_tokens", self.workload_spec.avg_output_tokens))
             thinking_tokens = int(entry.get("thinking_tokens", 0))
@@ -268,18 +276,19 @@ class RealMeasurementHarness:
             remaining_ms = max(1.0, wall_ms - ttft_ms)
             token_count = max(output_tokens + thinking_tokens, 1)
             tpot_ms = remaining_ms / token_count
-            results.append(
-                {
-                    "req_id": f"req-{index:04d}",
-                    "ttft_ms": round(ttft_ms, 3),
-                    "tpot_ms": round(tpot_ms, 3),
-                    "turn_latency_ms": round(wall_ms, 3),
-                    "thinking_tokens": thinking_tokens,
-                    "response_tokens": output_tokens,
-                    "concurrency_when_dispatched": 1,
-                }
-            )
-        return results
+            return {
+                "req_id": f"req-{index:04d}",
+                "ttft_ms": round(ttft_ms, 3),
+                "tpot_ms": round(tpot_ms, 3),
+                "turn_latency_ms": round(wall_ms, 3),
+                "thinking_tokens": thinking_tokens,
+                "response_tokens": output_tokens,
+                "concurrency_when_dispatched": concurrency,
+            }
+
+        with ThreadPoolExecutor(max_workers=concurrency) as executor:
+            futures = [executor.submit(replay_one, index, entry) for index, entry in enumerate(replay_entries, start=1)]
+            return sorted((future.result() for future in futures), key=lambda entry: str(entry["req_id"]))
 
     def _metrics_snapshot(self) -> dict[str, float]:
         response = requests.get(self.metrics_scrape_url, timeout=10)

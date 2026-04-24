@@ -302,6 +302,7 @@ class SyntheticWorkloadDistribution:
     avg_output_tokens: int
     rollout_baseline: float
     measurement_window_minutes: int = 30
+    target_concurrency: int = 4
     gpu_memory_utilization_cap: float | None = None
     seed_trace_ref: str | None = None
     holdout_trace_ref: str | None = None
@@ -317,6 +318,7 @@ class SyntheticWorkloadDistribution:
             "avg_output_tokens": 768,
             "latency_ceiling_ms": 650,
             "rollout_baseline": 14.0,
+            "target_concurrency": 4,
             "tpot_ceiling_ms": 80,
             "turn_latency_ceiling_ms": 20000,
         }
@@ -329,6 +331,7 @@ class SyntheticWorkloadDistribution:
             avg_prompt_tokens=payload["avg_prompt_tokens"],
             avg_output_tokens=payload["avg_output_tokens"],
             rollout_baseline=payload["rollout_baseline"],
+            target_concurrency=payload["target_concurrency"],
             tpot_ceiling_ms=payload["tpot_ceiling_ms"],
             turn_latency_ceiling_ms=payload["turn_latency_ceiling_ms"],
         )
@@ -351,6 +354,7 @@ class SyntheticWorkloadDistribution:
         payload.setdefault("avg_output_tokens", 768)
         payload.setdefault("latency_ceiling_ms", 650)
         payload.setdefault("rollout_baseline", 14.0)
+        payload.setdefault("target_concurrency", 4)
         payload.setdefault("tpot_ceiling_ms", 80)
         payload.setdefault("turn_latency_ceiling_ms", int(payload["latency_ceiling_ms"]))
         payload.setdefault(
@@ -365,6 +369,7 @@ class SyntheticWorkloadDistribution:
             avg_prompt_tokens=int(payload["avg_prompt_tokens"]),
             avg_output_tokens=int(payload["avg_output_tokens"]),
             rollout_baseline=float(payload["rollout_baseline"]),
+            target_concurrency=int(payload["target_concurrency"]),
             measurement_window_minutes=int(payload.get("measurement_window_minutes", 30)),
             gpu_memory_utilization_cap=(
                 float(payload["gpu_memory_utilization_cap"])
@@ -400,6 +405,7 @@ class SyntheticWorkloadDistribution:
             avg_output_tokens=self.avg_output_tokens,
             measurement_window_minutes=self.measurement_window_minutes,
             rollout_baseline=self.rollout_baseline,
+            target_concurrency=self.target_concurrency,
         )
 
 
@@ -906,6 +912,7 @@ class RoundSpecRecord:
     tpot_ceiling_ms: int
     turn_latency_ceiling_ms: int
     active_layer: str = "L1"
+    target_concurrency: int = 4
     iteration_cap: int = 12
     rescreen_top_k: int = 3
     round_wall_clock_s: int = 8 * 60 * 60
@@ -938,6 +945,7 @@ class RoundSpecRecord:
             "tpot_ceiling_ms": self.tpot_ceiling_ms,
             "turn_latency_ceiling_ms": self.turn_latency_ceiling_ms,
             "active_layer": self.active_layer,
+            "target_concurrency": self.target_concurrency,
             "iteration_cap": self.iteration_cap,
             "rescreen_top_k": self.rescreen_top_k,
             "round_wall_clock_s": self.round_wall_clock_s,
@@ -977,6 +985,7 @@ class RoundSpecRecord:
             tpot_ceiling_ms=int(payload["tpot_ceiling_ms"]),
             turn_latency_ceiling_ms=int(payload["turn_latency_ceiling_ms"]),
             active_layer=str(payload.get("active_layer", "L1")),
+            target_concurrency=int(payload.get("target_concurrency", 4)),
             iteration_cap=int(payload.get("iteration_cap", 12)),
             rescreen_top_k=int(payload.get("rescreen_top_k", 3)),
             round_wall_clock_s=int(payload.get("round_wall_clock_s", 8 * 60 * 60)),
@@ -1076,6 +1085,7 @@ class AutoResearchRoundManager:
             latency_ceiling_ms=workload.latency_ceiling_ms,
             tpot_ceiling_ms=workload.tpot_ceiling_ms,
             turn_latency_ceiling_ms=workload.turn_latency_ceiling_ms,
+            target_concurrency=workload.target_concurrency,
             parent_head_sha=parent_head_sha,
             harness_type=harness_type,
             round_started_at=time.time(),
@@ -1799,7 +1809,7 @@ class AutoResearchRoundManager:
         warmup_s = spec.full_warmup_s if profile == "full" else spec.screen_warmup_s
         measurement_s = spec.full_measurement_s if profile == "full" else spec.screen_measurement_s
         measurable_config = {key: value for key, value in candidate_vllm_config.items() if key in ALLOWED_VLLM_CONFIG_KEYS}
-        target_concurrency = int(candidate_vllm_config.get("max_num_seqs", 1) or 1)
+        target_concurrency = int(spec.target_concurrency)
         try:
             return harness.measure(
                 measurable_config,

@@ -6,6 +6,7 @@ avg_prompt_tokens: 4096
 avg_output_tokens: 1200
 rollout_baseline: 10.0
 measurement_window_minutes: 25
+target_concurrency: 4
 gpu_memory_utilization_cap: 0.08
 seed_trace_ref: seed_trace.jsonl
 holdout_trace_ref: holdout_trace.jsonl
