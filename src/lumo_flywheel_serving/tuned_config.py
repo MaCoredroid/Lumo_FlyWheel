@@ -361,6 +361,9 @@ def make_tuned_config_bundle(
     regression_guard: dict[str, Any],
     safety_rails: dict[str, Any],
     round_provenance: dict[str, Any] | None = None,
+    request_shaping: dict[str, Any] | None = None,
+    kernel_selection: dict[str, Any] | None = None,
+    lora_policy: dict[str, Any] | None = None,
 ) -> TunedConfigBundle:
     return TunedConfigBundle(
         bundle_id=str(uuid4()),
@@ -370,9 +373,9 @@ def make_tuned_config_bundle(
         family_id=family_id,
         workload_distribution_id=workload_distribution_id,
         vllm_config=dict(vllm_config),
-        request_shaping={},
-        kernel_selection={},
-        lora_policy={},
+        request_shaping=dict(request_shaping or {}),
+        kernel_selection=dict(kernel_selection or {}),
+        lora_policy=dict(lora_policy or {}),
         objective=dict(objective),
         measurement_trace_ref=measurement_trace_ref,
         search_trace_ref=search_trace_ref,

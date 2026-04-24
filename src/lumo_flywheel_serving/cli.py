@@ -592,6 +592,8 @@ def cmd_auto_research_bootstrap_round(args: argparse.Namespace) -> int:
         workload_file=args.workload_file,
         weight_version_id=args.weight_version_id,
         round_root=args.round_root,
+        active_layer=args.active_layer,
+        baseline_bundle=args.baseline_bundle,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -700,6 +702,8 @@ def cmd_auto_research_run_round(args: argparse.Namespace) -> int:
         round_root=args.round_root,
         harness_type=args.harness,
         skip_preflight=args.harness == "synthetic",
+        active_layer=args.active_layer,
+        baseline_bundle=args.baseline_bundle,
     )
     ctx = RoundContext.from_bootstrap_json(
         bootstrap,
@@ -791,6 +795,8 @@ def build_parser() -> argparse.ArgumentParser:
     auto_bootstrap.add_argument("--sprint")
     auto_bootstrap.add_argument("--workload-file")
     auto_bootstrap.add_argument("--weight-version-id")
+    auto_bootstrap.add_argument("--active-layer", choices=["L1", "L2"], default="L1")
+    auto_bootstrap.add_argument("--baseline-bundle")
     auto_bootstrap.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_bootstrap.set_defaults(func=cmd_auto_research_bootstrap_round)
 
@@ -844,6 +850,8 @@ def build_parser() -> argparse.ArgumentParser:
     auto_run_round.add_argument("--sprint", default="sprint-0")
     auto_run_round.add_argument("--workload-file")
     auto_run_round.add_argument("--weight-version-id")
+    auto_run_round.add_argument("--active-layer", choices=["L1", "L2"], default="L1")
+    auto_run_round.add_argument("--baseline-bundle")
     auto_run_round.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_run_round.add_argument("--iteration-cap", type=int, default=12)
     auto_run_round.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))

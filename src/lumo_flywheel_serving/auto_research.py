@@ -36,6 +36,14 @@ ALLOWED_VLLM_CONFIG_KEYS = {
     "max_model_len",
     "kv_cache_dtype",
 }
+ALLOWED_REQUEST_SHAPING_KEYS = {
+    "concurrency_cap_eval",
+    "concurrency_cap_rollout",
+    "admission_queue_depth_max",
+    "per_request_kv_budget",
+    "priority_preemption",
+}
+PRIORITY_PREEMPTION_VALUES = {"off", "rollout-preempts", "strict"}
 PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "bootstrap-round",
     "measure",
@@ -213,16 +221,14 @@ successor when you exit cleanly.
 
 3. Propose ONE candidate for this iteration. Write it to:
      {{iteration_dir}}/candidate.yaml
-   Schema: parent HLD §5.3.2 L1 action space keys only. No L0, no L2,
-   no L3 keys. No extra keys. The baseline case (iteration=000) is
-   the default-config dict from the model registry.
+   {{candidate_schema_instruction}}
 
 4. Invoke:
      lumoserve auto-research measure \
        --round-id {{round_id}} \
        --candidate {{iteration_dir}}/candidate.yaml
    The CLI will:
-     - /admin/load_tuned_config with your candidate's vllm_config
+     - compose the active-layer candidate with frozen lower-layer config
      - wait for /health
      - drive RealMeasurementHarness for warmup + measurement window
      - write measurement_trace.json next to candidate.yaml
@@ -927,6 +933,9 @@ class RoundSpecRecord:
     harness_type: str = "real"
     round_started_at: float = 0.0
     sub_spec_version: str = "v0.1.11"
+    baseline_bundle_path: str = ""
+    baseline_bundle_id: str = ""
+    frozen_vllm_config: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -962,6 +971,9 @@ class RoundSpecRecord:
             "harness_type": self.harness_type,
             "round_started_at": self.round_started_at,
             "sub_spec_version": self.sub_spec_version,
+            "baseline_bundle_path": self.baseline_bundle_path,
+            "baseline_bundle_id": self.baseline_bundle_id,
+            "frozen_vllm_config": dict(self.frozen_vllm_config),
         }
 
     @classmethod
@@ -1000,6 +1012,9 @@ class RoundSpecRecord:
             harness_type=str(payload.get("harness_type", "real")),
             round_started_at=float(payload.get("round_started_at", 0.0)),
             sub_spec_version=str(payload.get("sub_spec_version", "v0.1.11")),
+            baseline_bundle_path=str(payload.get("baseline_bundle_path", "")),
+            baseline_bundle_id=str(payload.get("baseline_bundle_id", "")),
+            frozen_vllm_config=dict(payload.get("frozen_vllm_config") or {}),
         )
 
 
@@ -1030,13 +1045,37 @@ class AutoResearchRoundManager:
         round_root: str | Path,
         harness_type: str = "real",
         skip_preflight: bool = False,
+        active_layer: str = "L1",
+        baseline_bundle: str | Path | None = None,
     ) -> dict[str, Any]:
         workload_file = Path(workload_file).resolve()
         round_root = Path(round_root).resolve()
+        active_layer = active_layer.upper()
+        if active_layer not in {"L1", "L2"}:
+            raise RuntimeError(f"Unsupported active_layer: {active_layer}")
         registry = load_registry(self.registry_path)
         if model_id not in registry:
             raise RuntimeError(f"Unknown model_id: {model_id}")
         model_config = registry[model_id]
+        frozen_bundle = load_baseline_bundle(baseline_bundle)
+        if active_layer == "L2" and frozen_bundle is None:
+            raise RuntimeError("L2 bootstrap requires --baseline-bundle")
+        if active_layer == "L1" and frozen_bundle is not None:
+            raise RuntimeError("L1 bootstrap does not accept --baseline-bundle")
+        if frozen_bundle is not None:
+            if frozen_bundle.model_id != model_id:
+                raise RuntimeError(
+                    f"baseline bundle model_id {frozen_bundle.model_id!r} does not match {model_id!r}"
+                )
+            if frozen_bundle.family_id != family_id:
+                raise RuntimeError(
+                    f"baseline bundle family_id {frozen_bundle.family_id!r} does not match {family_id!r}"
+                )
+            if weight_version_id is not None and frozen_bundle.weight_version_id != weight_version_id:
+                raise RuntimeError(
+                    f"baseline bundle weight_version_id {frozen_bundle.weight_version_id!r} does not match {weight_version_id!r}"
+                )
+            weight_version_id = frozen_bundle.weight_version_id
         workload = SyntheticWorkloadDistribution.from_file(workload_file, model_config=model_config, family_id=family_id)
         if not workload.seed_trace_ref:
             raise RuntimeError("Workload file is missing seed_trace_ref")
@@ -1089,6 +1128,10 @@ class AutoResearchRoundManager:
             parent_head_sha=parent_head_sha,
             harness_type=harness_type,
             round_started_at=time.time(),
+            active_layer=active_layer,
+            baseline_bundle_path=str(Path(baseline_bundle).resolve()) if baseline_bundle is not None else "",
+            baseline_bundle_id=frozen_bundle.bundle_id if frozen_bundle is not None else "",
+            frozen_vllm_config=dict(frozen_bundle.vllm_config) if frozen_bundle is not None else {},
         )
         self._write_yaml(round_dir / "round_spec.yaml", spec.as_dict())
         (round_dir / "impl_brief.md").write_text(IMPL_BRIEF_TEMPLATE, encoding="utf-8")
@@ -1096,7 +1139,11 @@ class AutoResearchRoundManager:
         self._write_results(round_dir / "results.tsv", [])
         (round_dir / ".round.lock").write_text(json.dumps({"round_id": round_id, "created_at": time.time()}), encoding="utf-8")
 
-        default_candidate = model_config.vllm_config()
+        default_candidate = (
+            self._default_request_shaping(dict(frozen_bundle.vllm_config))
+            if active_layer == "L2" and frozen_bundle is not None
+            else model_config.vllm_config()
+        )
         for suffix in ("a", "b"):
             baseline_dir = candidates_dir / f"baseline_{suffix}"
             baseline_dir.mkdir()
@@ -1154,15 +1201,7 @@ class AutoResearchRoundManager:
         candidate = load_yaml_file(candidate_path)
         if not isinstance(candidate, dict):
             raise RuntimeError(f"Candidate yaml must be a mapping: {candidate_path}")
-        allowed_extra_keys = {"harness_overrides"} if spec.harness_type == "synthetic" else set()
-        unknown_keys = sorted(set(candidate) - ALLOWED_VLLM_CONFIG_KEYS - allowed_extra_keys)
-        if unknown_keys:
-            raise RuntimeError(f"Candidate contains unsupported keys: {unknown_keys}")
-        vllm_config = {
-            key: candidate[key]
-            for key in candidate
-            if key in ALLOWED_VLLM_CONFIG_KEYS or key in allowed_extra_keys
-        }
+        vllm_config, request_shaping = self._compose_candidate_for_layer(spec=spec, candidate=candidate)
         rows = self._read_results(round_dir / "results.tsv")
         if any(row.iteration == iteration_id for row in rows):
             raise RuntimeError(f"measure_refused: results row already exists for iteration {iteration_id}")
@@ -1178,6 +1217,7 @@ class AutoResearchRoundManager:
             spec=spec,
             workload=workload,
             candidate_vllm_config=vllm_config,
+            candidate_request_shaping=request_shaping,
             profile=selected_profile,
         )
         self._normalize_trace(trace)
@@ -1197,8 +1237,24 @@ class AutoResearchRoundManager:
                 "parent_candidate_uuid": parent_candidate_uuid,
                 "profile": selected_profile,
                 "candidate_vllm_config": {key: value for key, value in vllm_config.items() if key in ALLOWED_VLLM_CONFIG_KEYS},
+                "active_layer": spec.active_layer,
             }
         )
+        if spec.active_layer == "L2":
+            trace.update(
+                {
+                    "candidate_request_shaping": dict(request_shaping),
+                    "frozen_lower_layer": {
+                        "source_bundle_path": spec.baseline_bundle_path,
+                        "source_bundle_id": spec.baseline_bundle_id,
+                        "vllm_config": {
+                            key: value
+                            for key, value in vllm_config.items()
+                            if key in ALLOWED_VLLM_CONFIG_KEYS
+                        },
+                    },
+                }
+            )
         trace["cache_isolation"]["cache_salt"] = candidate_uuid
         trace["cache_isolation"]["prefix_cache_reset_at_bootstrap"] = True
 
@@ -1468,10 +1524,15 @@ class AutoResearchRoundManager:
                     f"Unknown parent candidate_uuid for holdout validation: {row.parent_candidate_uuid}"
                 )
         candidate_yaml = round_dir / "candidates" / target_row.iteration / "candidate.yaml"
+        winner_candidate = load_yaml_file(candidate_yaml)
+        if not isinstance(winner_candidate, dict):
+            raise RuntimeError(f"Candidate yaml must be a mapping: {candidate_yaml}")
+        vllm_config, request_shaping = self._compose_candidate_for_layer(spec=spec, candidate=winner_candidate)
         trace = self._run_harness(
             spec=spec,
             workload=workload,
-            candidate_vllm_config=load_yaml_file(candidate_yaml),
+            candidate_vllm_config=vllm_config,
+            candidate_request_shaping=request_shaping,
             profile="full",
             use_holdout=True,
         )
@@ -1546,6 +1607,15 @@ class AutoResearchRoundManager:
         if winner_row is None:
             raise RuntimeError("Unable to determine winner")
 
+        winner_candidate = load_yaml_file(round_dir / "candidates" / winner_row.iteration / "candidate.yaml")
+        if not isinstance(winner_candidate, dict):
+            raise RuntimeError(f"Candidate yaml must be a mapping for winner iteration {winner_row.iteration}")
+        winner_vllm_config, winner_request_shaping = self._compose_candidate_for_layer(
+            spec=spec,
+            candidate=winner_candidate,
+        )
+        lower_layer_bundle = load_baseline_bundle(spec.baseline_bundle_path or None)
+
         measurement_trace_ref = round_dir / "measurement_trace_combined.json"
         search_trace_ref = round_dir / "search_trace.json"
         measurement_trace_combined = []
@@ -1557,23 +1627,30 @@ class AutoResearchRoundManager:
             family_id=spec.family_id,
             weight_version_id=spec.weight_version_id,
             workload_distribution_id=spec.workload_distribution_id,
-            vllm_config=load_yaml_file(round_dir / "candidates" / winner_row.iteration / "candidate.yaml"),
+            vllm_config=winner_vllm_config,
+            request_shaping=winner_request_shaping,
+            kernel_selection=dict(lower_layer_bundle.kernel_selection) if lower_layer_bundle is not None else None,
+            lora_policy=dict(lower_layer_bundle.lora_policy) if lower_layer_bundle is not None else None,
             objective={
                 "metric": "eval_throughput",
                 "value": float(winner_row.objective_mean or winner_row.eval_throughput or "0"),
             },
             measurement_trace_ref=str(measurement_trace_ref.relative_to(self.repo_root)),
             search_trace_ref=str(search_trace_ref.relative_to(self.repo_root)),
-            baseline_bundle_id=None,
+            baseline_bundle_id=spec.baseline_bundle_id or None,
             regression_guard={"noise_floor": spec.noise_floor},
             safety_rails={"regression_guard_passed": True},
             round_provenance={
                 "dry_run": dry_run,
                 "round_id": round_id,
                 "round_branch": spec.round_branch,
+                "active_layer": spec.active_layer,
                 "winner_iteration": winner_row.iteration,
                 "winner_candidate_uuid": winner_parent_uuid,
                 "winner_rescreen_uuid": winner_rescreen_uuid or None,
+                "baseline_bundle_path": spec.baseline_bundle_path or None,
+                "baseline_bundle_id": spec.baseline_bundle_id or None,
+                "request_shaping_enforcement": self._request_shaping_enforcement_record(spec),
                 "sub_spec_version": spec.sub_spec_version,
                 "agent_session_dir_ref": str((round_dir / "candidates").relative_to(self.repo_root)),
                 "agent_model_pin": {"model": "gpt-5.4", "reasoning_effort": "high"},
@@ -1774,9 +1851,14 @@ class AutoResearchRoundManager:
         spec: RoundSpecRecord,
         workload: SyntheticWorkloadDistribution,
         candidate_vllm_config: dict[str, Any],
+        candidate_request_shaping: dict[str, Any] | None = None,
         profile: str,
         use_holdout: bool = False,
     ) -> dict[str, Any]:
+        target_concurrency = self._target_concurrency_for_measurement(
+            spec=spec,
+            request_shaping=candidate_request_shaping,
+        )
         if spec.harness_type == "synthetic":
             fixture_cls = self._load_synthetic_fixture()
             harness = fixture_cls(workload)
@@ -1786,6 +1868,13 @@ class AutoResearchRoundManager:
                 label="fixture",
                 profile=profile,
             )
+            if candidate_request_shaping:
+                self._apply_request_shaping_trace(
+                    evaluation,
+                    spec=spec,
+                    request_shaping=candidate_request_shaping,
+                    target_concurrency=target_concurrency,
+                )
             return evaluation
 
         workload_spec = workload.to_workload_spec(base_dir=Path(spec.workload_file).parent)
@@ -1809,9 +1898,8 @@ class AutoResearchRoundManager:
         warmup_s = spec.full_warmup_s if profile == "full" else spec.screen_warmup_s
         measurement_s = spec.full_measurement_s if profile == "full" else spec.screen_measurement_s
         measurable_config = {key: value for key, value in candidate_vllm_config.items() if key in ALLOWED_VLLM_CONFIG_KEYS}
-        target_concurrency = int(spec.target_concurrency)
         try:
-            return harness.measure(
+            trace = harness.measure(
                 measurable_config,
                 warmup_s=warmup_s,
                 window_s=measurement_s,
@@ -1820,12 +1908,205 @@ class AutoResearchRoundManager:
         except TypeError as exc:
             if "target_concurrency" not in str(exc):
                 raise
-            return harness.measure(
+            trace = harness.measure(
                 measurable_config,
                 warmup_s=warmup_s,
                 window_s=measurement_s,
                 target_concurrency_sweep=[target_concurrency],
             )
+        if candidate_request_shaping:
+            self._apply_request_shaping_trace(
+                trace,
+                spec=spec,
+                request_shaping=candidate_request_shaping,
+                target_concurrency=target_concurrency,
+            )
+        return trace
+
+    def _compose_candidate_for_layer(
+        self,
+        *,
+        spec: RoundSpecRecord,
+        candidate: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        active_layer = spec.active_layer.upper()
+        if active_layer == "L1":
+            allowed_extra_keys = {"harness_overrides"} if spec.harness_type == "synthetic" else set()
+            unknown_keys = sorted(set(candidate) - ALLOWED_VLLM_CONFIG_KEYS - allowed_extra_keys)
+            if unknown_keys:
+                raise RuntimeError(f"Candidate contains unsupported keys: {unknown_keys}")
+            return (
+                {
+                    key: candidate[key]
+                    for key in candidate
+                    if key in ALLOWED_VLLM_CONFIG_KEYS or key in allowed_extra_keys
+                },
+                {},
+            )
+        if active_layer == "L2":
+            unknown_keys = sorted(set(candidate) - ALLOWED_REQUEST_SHAPING_KEYS)
+            missing_keys = sorted(ALLOWED_REQUEST_SHAPING_KEYS - set(candidate))
+            if unknown_keys:
+                raise RuntimeError(f"Candidate contains unsupported keys for L2: {unknown_keys}")
+            if missing_keys:
+                raise RuntimeError(f"Candidate is missing required L2 request_shaping keys: {missing_keys}")
+            if not spec.frozen_vllm_config:
+                raise RuntimeError("L2 round spec is missing frozen_vllm_config")
+            request_shaping = self._validate_request_shaping(candidate, frozen_vllm_config=spec.frozen_vllm_config)
+            return dict(spec.frozen_vllm_config), request_shaping
+        raise RuntimeError(f"Unsupported active_layer: {spec.active_layer}")
+
+    @staticmethod
+    def _default_request_shaping(vllm_config: dict[str, Any]) -> dict[str, Any]:
+        max_num_seqs = int(vllm_config["max_num_seqs"])
+        max_model_len = int(vllm_config["max_model_len"])
+        return {
+            "concurrency_cap_eval": max_num_seqs,
+            "concurrency_cap_rollout": 0,
+            "admission_queue_depth_max": 128,
+            "per_request_kv_budget": max_model_len,
+            "priority_preemption": "off",
+        }
+
+    @staticmethod
+    def _request_shaping_candidate_plan(frozen_vllm_config: dict[str, Any]) -> list[dict[str, Any]]:
+        baseline = AutoResearchRoundManager._default_request_shaping(frozen_vllm_config)
+        max_num_seqs = int(frozen_vllm_config["max_num_seqs"])
+        max_model_len = int(frozen_vllm_config["max_model_len"])
+        kv_half = max(max_model_len // 2, max_model_len // 4)
+        kv_three_quarter = max((max_model_len * 3) // 4, max_model_len // 4)
+        raw_candidates = [
+            baseline,
+            {
+                **baseline,
+                "concurrency_cap_eval": max(1, max_num_seqs - 1),
+                "concurrency_cap_rollout": min(1, max_num_seqs - max(1, max_num_seqs - 1)),
+                "priority_preemption": "strict",
+            },
+            {
+                **baseline,
+                "concurrency_cap_eval": max(1, max_num_seqs // 2),
+                "concurrency_cap_rollout": max_num_seqs - max(1, max_num_seqs // 2),
+                "admission_queue_depth_max": 64,
+                "per_request_kv_budget": kv_half,
+                "priority_preemption": "rollout-preempts",
+            },
+            {
+                **baseline,
+                "admission_queue_depth_max": 0,
+                "per_request_kv_budget": kv_three_quarter,
+                "priority_preemption": "strict",
+            },
+            {
+                **baseline,
+                "concurrency_cap_eval": max_num_seqs,
+                "concurrency_cap_rollout": 0,
+                "admission_queue_depth_max": 512,
+                "per_request_kv_budget": kv_half,
+                "priority_preemption": "off",
+            },
+            {
+                **baseline,
+                "concurrency_cap_eval": max(1, max_num_seqs - 2),
+                "concurrency_cap_rollout": min(2, max_num_seqs - max(1, max_num_seqs - 2)),
+                "admission_queue_depth_max": 256,
+                "per_request_kv_budget": kv_three_quarter,
+                "priority_preemption": "rollout-preempts",
+            },
+        ]
+        unique: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for candidate in raw_candidates:
+            key = json.dumps(candidate, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(candidate)
+        return unique
+
+    @staticmethod
+    def _validate_request_shaping(
+        candidate: dict[str, Any],
+        *,
+        frozen_vllm_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        max_num_seqs = int(frozen_vllm_config["max_num_seqs"])
+        max_model_len = int(frozen_vllm_config["max_model_len"])
+
+        def require_int(key: str, minimum: int, maximum: int) -> int:
+            value = candidate.get(key)
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise RuntimeError(f"L2 request_shaping {key} must be an integer")
+            if value < minimum or value > maximum:
+                raise RuntimeError(f"L2 request_shaping {key} must be between {minimum} and {maximum}")
+            return value
+
+        eval_cap = require_int("concurrency_cap_eval", 1, max_num_seqs)
+        rollout_cap = require_int("concurrency_cap_rollout", 0, max_num_seqs)
+        if eval_cap + rollout_cap > max_num_seqs:
+            raise RuntimeError("L2 request_shaping eval + rollout concurrency caps exceed max_num_seqs")
+        queue_depth = require_int("admission_queue_depth_max", 0, 512)
+        kv_budget = require_int("per_request_kv_budget", max(1, max_model_len // 4), max_model_len)
+        priority = candidate.get("priority_preemption")
+        if priority not in PRIORITY_PREEMPTION_VALUES:
+            raise RuntimeError(
+                f"L2 request_shaping priority_preemption must be one of {sorted(PRIORITY_PREEMPTION_VALUES)}"
+            )
+        return {
+            "concurrency_cap_eval": eval_cap,
+            "concurrency_cap_rollout": rollout_cap,
+            "admission_queue_depth_max": queue_depth,
+            "per_request_kv_budget": kv_budget,
+            "priority_preemption": str(priority),
+        }
+
+    @staticmethod
+    def _target_concurrency_for_measurement(
+        *,
+        spec: RoundSpecRecord,
+        request_shaping: dict[str, Any] | None,
+    ) -> int:
+        if spec.active_layer.upper() == "L2" and request_shaping:
+            return int(request_shaping["concurrency_cap_eval"])
+        return int(spec.target_concurrency)
+
+    @staticmethod
+    def _request_shaping_enforcement_record(spec: RoundSpecRecord) -> dict[str, Any]:
+        if spec.active_layer.upper() != "L2":
+            return {}
+        return {
+            "mode": "substrate_measurement_only",
+            "real_proxy_enforcement": False,
+            "limitation": (
+                "The current inference proxy records loaded request_shaping bundles but does not "
+                "enforce admission caps, queue depth, KV budget, or priority preemption. "
+                "AutoResearch L2 measurements deterministically evaluate candidate policy by "
+                "driving the harness at concurrency_cap_eval while freezing the lower-layer vllm_config."
+            ),
+        }
+
+    def _apply_request_shaping_trace(
+        self,
+        trace: dict[str, Any],
+        *,
+        spec: RoundSpecRecord,
+        request_shaping: dict[str, Any],
+        target_concurrency: int,
+    ) -> None:
+        trace["request_shaping_enforcement"] = self._request_shaping_enforcement_record(spec)
+        trace["request_shaping_enforcement"]["target_concurrency_applied"] = target_concurrency
+        trace["candidate_request_shaping"] = dict(request_shaping)
+        trace.setdefault("diagnostics", {})
+        if isinstance(trace["diagnostics"], dict):
+            trace["diagnostics"]["request_shaping"] = {
+                "policy": dict(request_shaping),
+                "target_concurrency_applied": target_concurrency,
+            }
+            trace["diagnostics"]["target_concurrency"] = target_concurrency
+        if "sustained_concurrency" in trace:
+            trace["sustained_concurrency"] = min(float(trace["sustained_concurrency"]), float(target_concurrency))
+        if "eval_throughput" in trace:
+            trace["eval_throughput"] = min(float(trace["eval_throughput"]), float(target_concurrency))
 
     def _spec_with_harness(self, spec: RoundSpecRecord, harness: str | None) -> RoundSpecRecord:
         if harness is None:
@@ -2185,7 +2466,10 @@ class AutoResearchRoundManager:
         if (round_dir / "codex-home").exists():
             raise RuntimeError(f"{context}: immutable round artifact changed: codex-home")
 
-        default_candidate = load_registry(self.registry_path)[spec.model_id].vllm_config()
+        if spec.active_layer.upper() == "L2":
+            default_candidate = self._default_request_shaping(spec.frozen_vllm_config)
+        else:
+            default_candidate = load_registry(self.registry_path)[spec.model_id].vllm_config()
         for suffix in ("a", "b"):
             baseline_path = round_dir / "candidates" / f"baseline_{suffix}" / "candidate.yaml"
             if load_yaml_file(baseline_path) != default_candidate:

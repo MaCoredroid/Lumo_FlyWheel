@@ -76,6 +76,54 @@ holdout_trace_ref: holdout_trace.jsonl
     )
 
 
+def _write_l1_bundle(repo: Path, *, request_shaping: dict | None = None) -> Path:
+    bundle_dir = (
+        repo
+        / "output"
+        / "tuned_configs"
+        / "proposal-ranking-manager-judgment"
+        / "2e1b21350ce589fcaafbb3c7d7eac526a7aed582"
+    )
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    bundle_path = bundle_dir / "l1-bundle.yaml"
+    bundle_path.write_text(
+        auto_research.yaml.safe_dump(
+            {
+                "tuned_config_bundle": {
+                    "bundle_id": "l1-bundle-for-l2",
+                    "produced_at": "2026-04-24T10:18:15+00:00",
+                    "weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+                    "model_id": "qwen3.5-27b",
+                    "family_id": "proposal-ranking-manager-judgment",
+                    "workload_distribution_id": "prmj-v1-live",
+                    "vllm_config": {
+                        "max_num_seqs": 4,
+                        "max_num_batched_tokens": 12288,
+                        "enable_chunked_prefill": True,
+                        "enable_prefix_caching": False,
+                        "gpu_memory_utilization": 0.92,
+                        "max_model_len": 131072,
+                        "kv_cache_dtype": "fp8_e5m2",
+                    },
+                    "request_shaping": request_shaping or {},
+                    "kernel_selection": {"attention_backend": "flash-attn-4"},
+                    "lora_policy": {"adapter_mode": "runtime-apply"},
+                    "objective": {"metric": "eval_throughput", "value": 1.0},
+                    "measurement_trace_ref": "trace.json",
+                    "search_trace_ref": "search.json",
+                    "baseline_bundle_id": None,
+                    "regression_guard": {},
+                    "safety_rails": {},
+                    "round_provenance": {"dry_run": False, "active_layer": "L1"},
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return bundle_path
+
+
 def test_capture_seed_workload_updates_seed_and_holdout_refs(tmp_path: Path) -> None:
     workload_path = tmp_path / "serving_workload.yaml"
     _write_workload(workload_path)
@@ -433,6 +481,208 @@ def test_bootstrap_round_writes_spec_brief_templates(tmp_path: Path) -> None:
     assert "{{next_iteration}}" in iteration_brief
     assert "{{workload_file}}" in iteration_brief
     assert "R8. If a CLI call returns non-zero" in iteration_brief
+
+
+def test_l2_bootstrap_requires_and_records_lower_layer_bundle(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    bundle_path = _write_l1_bundle(repo)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="L2 bootstrap requires --baseline-bundle"):
+        manager.bootstrap_round(
+            model_id="qwen3.5-27b",
+            family_id="proposal-ranking-manager-judgment",
+            sprint="sprint-0",
+            workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+            weight_version_id=None,
+            round_root=repo / "output" / "auto_research",
+            harness_type="synthetic",
+            active_layer="L2",
+        )
+
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+        active_layer="L2",
+        baseline_bundle=bundle_path,
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
+    baseline_candidate = auto_research.load_yaml_file(round_dir / "candidates" / "baseline_a" / "candidate.yaml")
+
+    assert spec["active_layer"] == "L2"
+    assert spec["baseline_bundle_id"] == "l1-bundle-for-l2"
+    assert spec["baseline_bundle_path"] == str(bundle_path.resolve())
+    assert spec["frozen_vllm_config"]["max_num_batched_tokens"] == 12288
+    assert baseline_candidate == {
+        "concurrency_cap_eval": 4,
+        "concurrency_cap_rollout": 0,
+        "admission_queue_depth_max": 128,
+        "per_request_kv_budget": 131072,
+        "priority_preemption": "off",
+    }
+
+
+def test_l2_candidate_validation_rejects_l1_and_l3_keys(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    bundle_path = _write_l1_bundle(repo)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+        active_layer="L2",
+        baseline_bundle=bundle_path,
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+concurrency_cap_eval: 3
+concurrency_cap_rollout: 1
+admission_queue_depth_max: 64
+per_request_kv_budget: 65536
+priority_preemption: strict
+max_num_seqs: 4
+adapter_mode: runtime-apply
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="unsupported keys for L2"):
+        manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+
+
+def test_l2_measurement_composes_frozen_vllm_config_with_request_shaping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    bundle_path = _write_l1_bundle(repo)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    seen: dict[str, object] = {}
+
+    def fake_measure(self, candidate_vllm_config, **kwargs):
+        del self
+        seen["candidate_vllm_config"] = dict(candidate_vllm_config)
+        seen["kwargs"] = dict(kwargs)
+        return _real_trace(objective=3)
+
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", fake_measure)
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        active_layer="L2",
+        baseline_bundle=bundle_path,
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+concurrency_cap_eval: 3
+concurrency_cap_rollout: 1
+admission_queue_depth_max: 64
+per_request_kv_budget: 65536
+priority_preemption: strict
+""",
+        encoding="utf-8",
+    )
+
+    measured = manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    trace = json.loads((candidate_dir / "measurement_trace.json").read_text(encoding="utf-8"))
+
+    assert measured["feasible"] is True
+    assert seen["candidate_vllm_config"]["max_num_batched_tokens"] == 12288
+    assert seen["kwargs"]["target_concurrency"] == 3
+    assert trace["active_layer"] == "L2"
+    assert trace["candidate_request_shaping"]["priority_preemption"] == "strict"
+    assert trace["frozen_lower_layer"]["source_bundle_id"] == "l1-bundle-for-l2"
+    assert trace["request_shaping_enforcement"]["real_proxy_enforcement"] is False
+
+
+def test_l2_finalize_emits_bundle_with_frozen_vllm_and_request_shaping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    bundle_path = _write_l1_bundle(repo)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", lambda self, candidate_vllm_config, **kwargs: _real_trace(objective=3))
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        active_layer="L2",
+        baseline_bundle=bundle_path,
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+concurrency_cap_eval: 3
+concurrency_cap_rollout: 1
+admission_queue_depth_max: 64
+per_request_kv_budget: 65536
+priority_preemption: strict
+""",
+        encoding="utf-8",
+    )
+    measured = manager.measure(round_id=round_id, candidate_path=candidate_dir / "candidate.yaml")
+    manager.commit_candidate(round_id=round_id, iteration="001", status="keep", notes="l2 winner")
+    manager.rescreen(round_id=round_id, top_k=1)
+    holdout = manager.validate_holdout(round_id=round_id, candidate_uuid=measured["candidate_uuid"])
+    assert holdout["pass"] is True
+
+    finalized = manager.finalize_round(round_id=round_id, dry_run=False)
+    bundle = auto_research.load_yaml_file(finalized["bundle_path"])["tuned_config_bundle"]
+
+    assert bundle["vllm_config"]["max_num_batched_tokens"] == 12288
+    assert bundle["request_shaping"] == {
+        "concurrency_cap_eval": 3,
+        "concurrency_cap_rollout": 1,
+        "admission_queue_depth_max": 64,
+        "per_request_kv_budget": 65536,
+        "priority_preemption": "strict",
+    }
+    assert bundle["kernel_selection"] == {"attention_backend": "flash-attn-4"}
+    assert bundle["lora_policy"] == {"adapter_mode": "runtime-apply"}
+    assert bundle["baseline_bundle_id"] == "l1-bundle-for-l2"
+    assert bundle["round_provenance"]["active_layer"] == "L2"
+    assert bundle["round_provenance"]["request_shaping_enforcement"]["real_proxy_enforcement"] is False
 
 
 def test_commit_candidate_rejects_synthetic_measurement_trace_in_real_mode(tmp_path: Path) -> None:

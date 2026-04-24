@@ -207,6 +207,33 @@ def _run_baselines(manager: AutoResearchRoundManager, ctx: RoundContext) -> None
 
 def _run_synthetic_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
     finalized = _finalized_iterations(ctx.round_dir)
+    if str(ctx.round_spec.get("active_layer", "L1")).upper() == "L2":
+        for index, candidate in enumerate(
+            AutoResearchRoundManager._request_shaping_candidate_plan(
+                dict(ctx.round_spec.get("frozen_vllm_config") or {})
+            ),
+            start=1,
+        ):
+            if index > int(ctx.iteration_cap or ctx.round_spec.get("iteration_cap", 12)):
+                break
+            iteration = f"{index:03d}"
+            if iteration in finalized:
+                continue
+            candidate_dir = ctx.round_dir / "candidates" / iteration
+            candidate_dir.mkdir(parents=True, exist_ok=True)
+            (candidate_dir / "candidate.yaml").write_text(yaml.safe_dump(candidate, sort_keys=False), encoding="utf-8")
+            manager.measure(round_id=ctx.round_id, candidate_path=candidate_dir / "candidate.yaml", harness=ctx.harness_mode)
+            trace = json.loads((candidate_dir / "measurement_trace.json").read_text(encoding="utf-8"))
+            status = "keep" if bool(trace.get("feasible")) else ("crash" if not trace.get("no_oom_events") else "discard")
+            manager.commit_candidate(
+                round_id=ctx.round_id,
+                iteration=iteration,
+                status=status,
+                notes="synthetic run-round L2 request-shaping candidate",
+                harness=ctx.harness_mode,
+            )
+        return
+
     registry = load_registry(ctx.registry_path)
     model_config = registry[str(ctx.round_spec["model_id"])]
     workload_file = Path(str(ctx.round_spec["workload_file"]))
@@ -298,6 +325,20 @@ def _iteration_prompt(ctx: RoundContext, *, iteration: str, next_iteration: str)
         f"--proxy-port {ctx.proxy_port}"
     )
     template = template.replace("lumoserve auto-research", f"{lumoserve_cmd} auto-research")
+    active_layer = str(ctx.round_spec.get("active_layer", "L1")).upper()
+    if active_layer == "L2":
+        candidate_schema_instruction = (
+            "Schema: parent HLD §5.3.3 L2 request_shaping keys only: "
+            "concurrency_cap_eval, concurrency_cap_rollout, admission_queue_depth_max, "
+            "per_request_kv_budget, priority_preemption. No L0, no L1, no L3 keys. "
+            "No extra keys. The lower-layer vllm_config is frozen from baseline_bundle_path."
+        )
+    else:
+        candidate_schema_instruction = (
+            "Schema: parent HLD §5.3.2 L1 action space keys only. No L0, no L2, "
+            "no L3 keys. No extra keys. The baseline case (iteration=000) is "
+            "the default-config dict from the model registry."
+        )
     values = {
         "round_id": ctx.round_id,
         "iteration": iteration,
@@ -306,10 +347,11 @@ def _iteration_prompt(ctx: RoundContext, *, iteration: str, next_iteration: str)
         "lumoserve_cmd": lumoserve_cmd,
         "model_id": str(ctx.round_spec["model_id"]),
         "family_id": str(ctx.round_spec["family_id"]),
-        "active_layer": str(ctx.round_spec.get("active_layer", "L1")),
+        "active_layer": active_layer,
         "round_branch": ctx.round_branch,
         "per_candidate_wall_clock_minutes": str(int(ctx.round_spec.get("screen_profile_s", 900)) // 60),
         "workload_file": str(ctx.round_spec["workload_file"]),
+        "candidate_schema_instruction": candidate_schema_instruction,
     }
     for key, value in values.items():
         template = template.replace("{{" + key + "}}", value)
