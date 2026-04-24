@@ -1113,6 +1113,47 @@ tuned_config_bundle:
         )
 
 
+def test_bootstrap_round_rejects_incompatible_codex_cli_version_without_side_effects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    real_subprocess_run = auto_research.subprocess.run
+
+    def fake_run(*args, **kwargs):
+        cmd = args[0]
+        if cmd == ["codex", "--version"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="codex-cli 0.119.9\n", stderr="")
+        return real_subprocess_run(*args, **kwargs)
+
+    monkeypatch.setattr(auto_research.shutil, "which", lambda name: "/usr/bin/codex" if name == "codex" else None)
+    monkeypatch.setattr(auto_research.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match=r"need >= 0\.120\.0, found 0\.119\.9"):
+        manager.bootstrap_round(
+            model_id="qwen3.5-27b",
+            family_id="proposal-ranking-manager-judgment",
+            sprint="sprint-0",
+            workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+            weight_version_id=None,
+            round_root=repo / "output" / "auto_research",
+        )
+
+    assert list((repo / "output" / "auto_research").glob("*")) == []
+    branches = subprocess.run(
+        ["git", "branch", "--format=%(refname:short)"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert branches == ["main"]
+
+
 def test_real_measurement_harness_loads_candidate_and_flushes_prefix_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

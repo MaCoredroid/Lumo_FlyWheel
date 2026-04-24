@@ -26,6 +26,7 @@ from .yaml_utils import load_yaml_file
 
 MIN_LIVE_STARTUP_GPU_MEMORY_UTILIZATION = 0.30
 SIGNED_OFF_BY = "lumoserve-auto-research-cli <auto-research@lumo-flywheel>"
+MIN_CODEX_CLI_VERSION = (0, 120, 0)
 ALLOWED_VLLM_CONFIG_KEYS = {
     "max_num_seqs",
     "max_num_batched_tokens",
@@ -1795,7 +1796,7 @@ class AutoResearchRoundManager:
         if shutil.which("codex") is None:
             raise RuntimeError("bootstrap-round preflight failed: codex cli missing")
         try:
-            subprocess.run(
+            version_result = subprocess.run(
                 ["codex", "--version"],
                 check=True,
                 capture_output=True,
@@ -1803,6 +1804,7 @@ class AutoResearchRoundManager:
             )
         except (FileNotFoundError, subprocess.CalledProcessError) as exc:
             raise RuntimeError("bootstrap-round preflight failed: codex cli missing or wrong version") from exc
+        self._assert_supported_codex_cli_version(version_result.stdout)
 
         help_output = self._run_cli_probe(["auto-research", "--help"])
         for subcommand in AUTO_RESEARCH_HELP_SUBCOMMANDS:
@@ -1847,6 +1849,20 @@ class AutoResearchRoundManager:
             detail = stdout or stderr or f"exit {exc.returncode}"
             raise RuntimeError(f"bootstrap-round preflight failed: {detail}") from exc
         return completed.stdout.strip()
+
+    @staticmethod
+    def _assert_supported_codex_cli_version(version_output: str) -> None:
+        match = re.search(r"(\d+)\.(\d+)\.(\d+)", version_output)
+        if match is None:
+            raise RuntimeError("bootstrap-round preflight failed: codex cli missing or wrong version")
+        version = tuple(int(part) for part in match.groups())
+        if version < MIN_CODEX_CLI_VERSION:
+            expected = ".".join(str(part) for part in MIN_CODEX_CLI_VERSION)
+            found = ".".join(str(part) for part in version)
+            raise RuntimeError(
+                f"bootstrap-round preflight failed: codex cli missing or wrong version "
+                f"(need >= {expected}, found {found})"
+            )
 
     def _validate_measurement_trace(self, trace: dict[str, Any], *, status: str) -> None:
         candidate_uuid = trace.get("candidate_uuid")

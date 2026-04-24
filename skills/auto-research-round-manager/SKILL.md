@@ -18,12 +18,13 @@ Scope:
 
 Refuse to start unless all of these pass:
 - `python -c "from lumo_flywheel_serving.measurement_harness import RealMeasurementHarness"` succeeds.
-- `codex --version` succeeds.
+- `codex --version` reports a codex CLI version compatible with the 0.120.x `codex exec` flag surface this loop depends on.
 - `git status --short` is empty.
 - `lumoserve auto-research --help` lists `bootstrap-round`, `measure`, `commit-candidate`, `rescreen`, `validate-holdout`, `finalize-round`, `status`, and `run`.
 - For each production subcommand, `lumoserve auto-research <name> --help-only` exits 0 and prints `{"subcommand":"<name>","status":"registered"}`.
 - The workload yaml exists and its `seed_trace_ref` points at an existing jsonl file.
 - `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT` is unset.
+- A synthetic dry-run wiring check exits 0 before bootstrap. Do not start a production round when the non-agent dry-run path is already broken.
 
 Block on failure. Do not bootstrap a round when any precondition is red.
 
