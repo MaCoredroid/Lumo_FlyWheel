@@ -518,8 +518,9 @@ def render_family_yaml() -> str:
         track: 5
         scenario_type: audit_remediation
         schema_version: cnb55.family.v1
-        layer_a_status: implemented_pending_probe
+        layer_a_status: failed_freeze_gate
         layer_b_status: implemented_pending_review
+        layer_b_status_note: RAWR detector audit downgraded citation_fabricated pending a structural detector and matrix row; implemented modes now name scorer and matrix detector surfaces.
 
         grader_ref: verifiers/security-audit-hotfix-remediation/score_hotfix.py
         milestone_config_ref: verifier_data/security-audit-hotfix-remediation/{variant_id}/milestones/
@@ -629,12 +630,24 @@ def render_family_yaml() -> str:
           - id: grounding_stripped
             description: triage note names the right dispositions without real artifact grounding.
             status: implemented
+            detector:
+              - verifiers/security-audit-hotfix-remediation/score_hotfix.py::artifact_grounding_missing
+              - benchmark_blueprints/families/security-audit-hotfix-remediation/verification_matrix.md::RAWR grounding_stripped
+              - benchmark_blueprints/families/security-audit-hotfix-remediation/verification_matrix_v5.md::RAWR grounding_stripped
           - id: citation_fabricated
             description: deploy note cites request-sample ids or corpora that are not present.
-            status: implemented
+            status: declared_not_yet_implemented
+            blocker: no named scorer ceiling or verification-matrix trajectory currently distinguishes fabricated request-sample or corpus citations from other deploy-note validity failures.
+            next_detector: add a citation_fabricated scorer ceiling and matrix row that writes an unknown sample_id or absent corpus path.
           - id: constraint_named_not_respected
             description: the repair names preservation goals but still blocks nested exports or misses release or incident constraints.
             status: implemented
+            detector:
+              - verifiers/security-audit-hotfix-remediation/score_hotfix.py::nested_exports_disabled
+              - verifiers/security-audit-hotfix-remediation/score_hotfix.py::release_freeze_unacknowledged
+              - verifiers/security-audit-hotfix-remediation/score_hotfix.py::incident_blind_reselect
+              - benchmark_blueprints/families/security-audit-hotfix-remediation/verification_matrix.md::Top1-wrong nested exports disabled
+              - benchmark_blueprints/families/security-audit-hotfix-remediation/verification_matrix_v5.md::Top1-wrong nested exports disabled
 
         saturation:
           threshold_mean_P: 80

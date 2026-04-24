@@ -83,3 +83,13 @@
 - Layer A is **not** accepted yet because the family lacks a hard variant below `10`.
 - The current counted evidence says the variant progression is too uniform: one legitimate ceiling (`triage_misclassification`) binds across all 15 runs, flattening every variant at `20`.
 - Next legitimate hardening step, if continued later: add a variant-specific binding obligation that only `v5` can fail honestly (for example, stricter incident-thread recovery accounting in the triage artifact itself), rather than lowering the global triage cap and collapsing the whole family below the target mean.
+
+## attempt_02c — RAWR detector audit cleanup
+- `date`: `2026-04-23`
+- `scope`: family-local metadata and generator template only; no scorer, task, workspace, or probe artifact behavior changed
+- `live_probe_rerun`: not run because scorer/task behavior was unchanged; counted live evidence remains `attempt_02b`
+- `rawr_status_changes`:
+  - `grounding_stripped`: remains `implemented`; detector surfaces now point to `score_hotfix.py::artifact_grounding_missing`, `verification_matrix.md::RAWR grounding_stripped`, and `verification_matrix_v5.md::RAWR grounding_stripped`
+  - `citation_fabricated`: downgraded from `implemented` to `declared_not_yet_implemented`; blocker is the absence of a named scorer ceiling or verification-matrix trajectory for fabricated request-sample or corpus citations
+  - `constraint_named_not_respected`: remains `implemented`; detector surfaces now point to `score_hotfix.py::nested_exports_disabled`, `score_hotfix.py::release_freeze_unacknowledged`, `score_hotfix.py::incident_blind_reselect`, `verification_matrix.md::Top1-wrong nested exports disabled`, and `verification_matrix_v5.md::Top1-wrong nested exports disabled`
+- `layer_b_status`: changed from `green` to `implemented_pending_review` because one declared RAWR mode lacks complete detector evidence
