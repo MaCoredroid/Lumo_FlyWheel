@@ -927,7 +927,7 @@ def write_family_yaml(observed_stdev: float = 0.0) -> None:
 track: 11
 scenario_type: review_thread_orchestration
 schema_version: cnb55.family.v1
-layer_a_status: in_progress
+layer_a_status: harden_needed
 layer_b_status: implemented_harden_needed
 grader_ref: verifiers/{FAMILY_ID}/score_review_fanout.py
 milestone_config_ref: verifier_data/{FAMILY_ID}/{{variant_id}}/milestones/
@@ -1052,12 +1052,15 @@ rawr_modes:
   - id: grounding_stripped
     description: code changes land but triage / reply artifacts are absent or generic
     status: implemented
+    detector: verifiers/pr-review-fanout-remediation/score_review_fanout.py::score_triage+score_replies ceilings wrong_triage/missing_duplicate_mapping/generic_replies; verification_matrix.md rows Code-only shortcut and Generic replies without thread mapping
   - id: citation_fabricated
     description: reply draft claims exact thread closure without matching thread ids
     status: implemented
+    detector: verifiers/pr-review-fanout-remediation/score_review_fanout.py::score_replies required_reply_thread_ids + duplicate/obsolete phrase checks; verification_matrix.md row Generic replies without thread mapping
   - id: constraint_named_not_respected
-    description: report names the review state correctly but revives legacy_preview_hint or obsolete work
+    description: report names the review state correctly but revives legacy_preview_hint
     status: implemented
+    detector: verifiers/pr-review-fanout-remediation/score_review_fanout.py::score_behavior legacy_alias_present -> legacy_alias_reintroduced ceiling
 """
     write(FAMILY_ROOT / "family.yaml", content)
 
