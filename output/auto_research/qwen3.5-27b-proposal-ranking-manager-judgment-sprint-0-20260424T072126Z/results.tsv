@@ -15,3 +15,4 @@ a9306c55-f303-41fc-9a9d-6ee68f79790f		009	candidate-009	true	0.008947			1	true	t
 aea9f6cb-27c7-48b1-a56b-4497cf4cfcdf		012	candidate-012	true	0.007588			1	true	true	1.0	1.0	discard	Feasible RealMeasurementHarness trace with window_completed=true and no OOMs, but eval_throughput 0.007588 over 527.122s and tpot_p95_ms 332.188 regressed below the round-best 0.009775.
 6a53b4b3-97d6-4b84-a113-cea88e14045d	b027d1e4-f239-4108-b9d9-d391c752cbac	rescreen_01	rescreen_01	true	0.007717	0.009	0.002	2	true	true	1.0	1.0	rescreened	
 f39fbad4-6103-403f-9889-6349207c0dab	5d736dbd-272a-4277-896b-a6c4e75f6a0d	rescreen_02	rescreen_02	true	0.008143	0.008	0.001	2	true	true	1.0	1.0	rescreened	
+2624ed8a-8dcf-4a52-84a2-89ab15fc69e3	ee91ed6f-648e-4b48-8f61-78409c12c6a1	rescreen_03	rescreen_03	true	0.007592	0.008	0.000	2	true	true	1.0	1.0	rescreened	
