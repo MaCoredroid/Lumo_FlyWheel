@@ -2009,3 +2009,7 @@ def test_run_round_synthetic_completes_end_to_end(tmp_path: Path, monkeypatch: p
     assert result.live_gate == "skipped_fixture_mode"
     assert result.bundle_path is not None
     assert Path(result.bundle_path).is_file()
+    report = json.loads((ctx.round_dir / "round_result.json").read_text(encoding="utf-8"))
+    assert report["schema_version"] == "lumo.auto_research.round_result.v1"
+    assert report["outcome"] == "ROUND_BUNDLE_READY"
+    assert report["round_id"] == result.round_id

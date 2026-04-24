@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +89,14 @@ class RoundResult:
             "live_gate": self.live_gate,
             "blocker": self.blocker,
         }
+
+    def write_report(self, path: Path) -> None:
+        payload = {
+            "schema_version": "lumo.auto_research.round_result.v1",
+            "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            **self.as_dict(),
+        }
+        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def restore_worktree_head(worktree: Path, branch: str) -> None:
@@ -353,7 +362,7 @@ def _result_from_status(
     blocker: str | None = None,
 ) -> RoundResult:
     status = manager.status(round_id=ctx.round_id)
-    return RoundResult(
+    result = RoundResult(
         round_id=ctx.round_id,
         round_branch=ctx.round_branch,
         outcome=outcome,
@@ -366,6 +375,8 @@ def _result_from_status(
         live_gate=live_gate,
         blocker=blocker,
     )
+    result.write_report(ctx.round_dir / "round_result.json")
+    return result
 
 
 def _git(args: list[str], *, cwd: Path) -> str:
