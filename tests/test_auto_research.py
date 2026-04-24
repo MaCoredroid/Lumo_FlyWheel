@@ -146,6 +146,7 @@ def test_capture_seed_workload_overwrites_stale_distribution_id(tmp_path: Path) 
 def _init_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
+    (repo / ".gitignore").write_text("output/\n", encoding="utf-8")
     _write_registry(repo / "model_registry.yaml")
     _write_workload(
         repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml"
@@ -154,7 +155,7 @@ def _init_repo(tmp_path: Path) -> Path:
     fixture_dst = repo / "tests" / "fixtures" / "synthetic_measurement.py"
     fixture_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(fixture_src, fixture_dst)
-    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True, text=True)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
     subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
@@ -329,6 +330,26 @@ kv_cache_dtype: fp8_e5m2
     finalized = manager.finalize_round(round_id=round_id, dry_run=False)
     assert Path(finalized["bundle_path"]).is_file()
     assert subprocess.run(["git", "status", "--short"], cwd=repo, check=True, capture_output=True, text=True).stdout == ""
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        == "main"
+    )
+    assert (
+        subprocess.run(
+            ["git", "rev-list", "--count", f"main..{bootstrap['round_branch']}"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        != "0"
+    )
     status = manager.status(round_id=round_id)
     assert status["phase"] == "finalized"
 
@@ -359,10 +380,25 @@ def test_bootstrap_round_creates_dedicated_round_branch(tmp_path: Path) -> None:
         text=True,
     ).stdout.strip()
 
-    assert current_branch == bootstrap["round_branch"]
-    assert current_branch.startswith(
+    assert current_branch == "main"
+    assert bootstrap["round_branch"].startswith(
         "autoresearch/qwen3.5-27b/proposal-ranking-manager-judgment/sprint-0/"
     )
+    round_branch_head = subprocess.run(
+        ["git", "rev-parse", bootstrap["round_branch"]],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    main_head = subprocess.run(
+        ["git", "rev-parse", "main"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert round_branch_head == main_head
 
 
 def test_bootstrap_round_writes_spec_brief_templates(tmp_path: Path) -> None:
@@ -517,7 +553,7 @@ def test_commit_candidate_tracks_bootstrap_artifacts_and_leaves_worktree_clean(
     manager.commit_candidate(round_id=bootstrap["round_id"], iteration="001", status="keep", notes="tracks bootstrap")
 
     tracked = subprocess.run(
-        ["git", "ls-files", str(round_dir.relative_to(repo))],
+        ["git", "ls-tree", "-r", "--name-only", bootstrap["round_branch"], str(round_dir.relative_to(repo))],
         cwd=repo,
         check=True,
         capture_output=True,
@@ -606,7 +642,13 @@ kv_cache_dtype: fp8_e5m2
     manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
     results_path = round_dir / "results.tsv"
     results_path.write_text(results_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
-    subprocess.run(["git", "add", str(results_path.relative_to(repo))], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "add", "-f", str(results_path.relative_to(repo))],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
     with pytest.raises(RuntimeError, match=r"commit_refused: git index not clean: .*results.tsv"):
         manager.commit_candidate(
@@ -1053,7 +1095,7 @@ tuned_config_bundle:
 """,
         encoding="utf-8",
     )
-    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "add", "-f", "."], cwd=repo, check=True, capture_output=True, text=True)
     subprocess.run(["git", "commit", "-m", "add dry-run bundle"], cwd=repo, check=True, capture_output=True, text=True)
 
     with pytest.raises(RuntimeError, match="dry_run_bundle_exists"):
@@ -1586,7 +1628,7 @@ kv_cache_dtype: fp8_e5m2
     finalized = manager.finalize_round(round_id=round_id, dry_run=False)
 
     winner_commit = subprocess.run(
-        ["git", "log", "-1", "--format=%(trailers:key=Winner-Candidate-UUID,valueonly)"],
+        ["git", "log", bootstrap["round_branch"], "-1", "--format=%(trailers:key=Winner-Candidate-UUID,valueonly)"],
         cwd=repo,
         check=True,
         capture_output=True,

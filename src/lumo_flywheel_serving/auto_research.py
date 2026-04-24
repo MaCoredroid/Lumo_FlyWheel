@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1048,7 +1049,7 @@ class AutoResearchRoundManager:
             raise RuntimeError(f"Round directory already exists: {round_dir}")
 
         parent_head_sha = self._git(["rev-parse", "HEAD"]).stdout.strip()
-        self._git(["checkout", "-b", round_branch], capture_output=False)
+        self._create_branch_ref(round_branch=round_branch, start_point=parent_head_sha)
 
         round_dir.mkdir(parents=True)
         candidates_dir = round_dir / "candidates"
@@ -1270,6 +1271,7 @@ class AutoResearchRoundManager:
             staged_paths,
             commit_message,
             spec.harness_type == "synthetic",
+            branch=spec.round_branch,
             context="commit_refused",
         )
         return {
@@ -1375,6 +1377,7 @@ class AutoResearchRoundManager:
                 staged_paths,
                 commit_message,
                 spec.harness_type == "synthetic",
+                branch=spec.round_branch,
                 context="commit_refused",
             )
             rescreen_rows.append(
@@ -1570,6 +1573,7 @@ class AutoResearchRoundManager:
             staged_paths,
             commit_message,
             spec.harness_type == "synthetic",
+            branch=spec.round_branch,
             context="finalize-round refuses",
         )
         return {
@@ -1924,17 +1928,38 @@ class AutoResearchRoundManager:
         message_lines.append(f"Signed-off-by: {SIGNED_OFF_BY}")
         return "\n".join(message_lines) + "\n"
 
-    def _commit_paths(self, paths: list[Path], message: str, skip_git: bool, *, context: str) -> str:
+    def _commit_paths(
+        self,
+        paths: list[Path],
+        message: str,
+        skip_git: bool,
+        *,
+        branch: str,
+        context: str,
+    ) -> str:
         self._assert_only_allowed_staged_paths(paths, context=context)
         if skip_git:
             return f"synthetic-{uuid4()}"
         rel_paths = [str(path) for path in paths]
-        # Round artifacts intentionally live under output/, which is ignored
-        # for normal development but must be committed to the experiment ledger.
-        self._git(["add", "-A", "-f", "--", *rel_paths], capture_output=False)
-        self._assert_only_allowed_staged_paths(paths, context=context)
-        self._git(["commit", "-m", message], capture_output=False)
-        return self._git(["rev-parse", "HEAD"]).stdout.strip()
+        parent_commit = self._branch_head(branch)
+        branch_ref = self._branch_ref(branch)
+        with tempfile.NamedTemporaryFile(prefix="lumo-auto-research-index-", delete=False) as handle:
+            index_path = Path(handle.name)
+        env = {"GIT_INDEX_FILE": str(index_path)}
+        try:
+            self._git(["read-tree", parent_commit], env=env)
+            # Round artifacts intentionally live under output/, which is ignored
+            # for normal development but must be committed to the experiment ledger.
+            self._git(["add", "-A", "-f", "--", *rel_paths], capture_output=False, env=env)
+            tree_sha = self._git(["write-tree"], env=env).stdout.strip()
+            commit_sha = self._git(
+                ["commit-tree", tree_sha, "-p", parent_commit, "-m", message],
+                env=env,
+            ).stdout.strip()
+            self._git(["update-ref", branch_ref, commit_sha, parent_commit], capture_output=False)
+            return commit_sha
+        finally:
+            index_path.unlink(missing_ok=True)
 
     def _round_dir(self, round_id: str) -> Path:
         direct = self.repo_root / "output" / "auto_research" / round_id
@@ -1944,14 +1969,42 @@ class AutoResearchRoundManager:
             return candidate.parent
         raise FileNotFoundError(f"Unknown round_id: {round_id}")
 
-    def _git(self, args: list[str], *, capture_output: bool = True) -> subprocess.CompletedProcess[str]:
+    def _git(
+        self,
+        args: list[str],
+        *,
+        capture_output: bool = True,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        command_env = os.environ.copy()
+        if env:
+            command_env.update(env)
         return subprocess.run(
             ["git", *args],
             cwd=self.repo_root,
             capture_output=capture_output,
             text=True,
             check=True,
+            env=command_env,
         )
+
+    @staticmethod
+    def _branch_ref(branch: str) -> str:
+        return f"refs/heads/{branch}"
+
+    def _branch_head(self, branch: str) -> str:
+        return self._git(["rev-parse", self._branch_ref(branch)]).stdout.strip()
+
+    def _create_branch_ref(self, *, round_branch: str, start_point: str) -> None:
+        ref = self._branch_ref(round_branch)
+        exists = subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", ref],
+            cwd=self.repo_root,
+            check=False,
+        ).returncode == 0
+        if exists:
+            raise RuntimeError(f"Round branch already exists: {round_branch}")
+        self._git(["update-ref", ref, start_point], capture_output=False)
 
     def _git_status_short(self) -> str:
         return self._git(["status", "--short"]).stdout.strip()
