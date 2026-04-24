@@ -112,18 +112,37 @@ def run_round(ctx: RoundContext) -> RoundResult:
         else:
             _run_codex_main_loop(manager, ctx)
 
-        manager.rescreen(
-            round_id=ctx.round_id,
-            top_k=int(ctx.round_spec.get("rescreen_top_k", 3)),
-            profile="full",
-            harness=ctx.harness_mode,
-        )
-        winner_uuid = _winner_parent_uuid(ctx.round_dir)
-        holdout = manager.validate_holdout(
-            round_id=ctx.round_id,
-            candidate_uuid=winner_uuid,
-            harness=ctx.harness_mode,
-        )
+        if not (ctx.round_dir / "rescreen_trace.json").is_file():
+            manager.rescreen(
+                round_id=ctx.round_id,
+                top_k=int(ctx.round_spec.get("rescreen_top_k", 3)),
+                profile="full",
+                harness=ctx.harness_mode,
+            )
+        try:
+            winner_uuid = _winner_parent_uuid(ctx.round_dir)
+        except RuntimeError as exc:
+            if str(exc) != "no_feasible_rescreen_winner":
+                raise
+            return _result_from_status(
+                manager,
+                ctx,
+                outcome="ROUND_INFEASIBLE",
+                stopping_reason="no_feasible_rescreen_winner",
+                bundle_path=None,
+                holdout_validation="not_run",
+                live_gate="skipped_no_bundle",
+                blocker=None,
+            )
+        holdout_path = ctx.round_dir / "holdout_trace.json"
+        if holdout_path.is_file():
+            holdout = json.loads(holdout_path.read_text(encoding="utf-8"))
+        else:
+            holdout = manager.validate_holdout(
+                round_id=ctx.round_id,
+                candidate_uuid=winner_uuid,
+                harness=ctx.harness_mode,
+            )
         if not bool(holdout.get("pass")):
             return _result_from_status(
                 manager,
@@ -308,11 +327,7 @@ def _winner_parent_uuid(round_dir: Path) -> str:
             key=lambda row: (-float(row["objective_mean"]), row["iteration"], row["candidate_uuid"]),
         )
         return str(winner["parent_candidate_uuid"])
-    feasible = [row for row in rows if row.get("feasible") == "true" and row.get("eval_throughput")]
-    if not feasible:
-        raise RuntimeError("no_feasible_rescreen_winner")
-    winner = min(feasible, key=lambda row: (-float(row["eval_throughput"]), row["iteration"], row["candidate_uuid"]))
-    return str(winner["candidate_uuid"])
+    raise RuntimeError("no_feasible_rescreen_winner")
 
 
 def _read_results_dicts(path: Path) -> list[dict[str, str]]:
