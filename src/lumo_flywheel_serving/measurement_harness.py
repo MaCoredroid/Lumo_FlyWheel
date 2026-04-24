@@ -74,10 +74,16 @@ class RealMeasurementHarness:
         window_s: int,
         target_concurrency: int | None = None,
         target_concurrency_sweep: list[int] | None = None,
+        request_shaping: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if target_concurrency is None:
             target_concurrency = max(target_concurrency_sweep or [self.workload_spec.target_concurrency])
-        self._activate_candidate(candidate_vllm_config)
+        try:
+            self._activate_candidate(candidate_vllm_config, request_shaping=request_shaping)
+        except TypeError as exc:
+            if "request_shaping" not in str(exc):
+                raise
+            self._activate_candidate(candidate_vllm_config)
         started = time.time()
         window_completed = False
         before_metrics = self._metrics_snapshot()
@@ -170,7 +176,12 @@ class RealMeasurementHarness:
             ],
         }
 
-    def _activate_candidate(self, candidate_vllm_config: dict[str, Any]) -> None:
+    def _activate_candidate(
+        self,
+        candidate_vllm_config: dict[str, Any],
+        *,
+        request_shaping: dict[str, Any] | None = None,
+    ) -> None:
         self.bundle_staging_dir.mkdir(parents=True, exist_ok=True)
         bundle_path = self.bundle_staging_dir / f"candidate-{time.time_ns()}.yaml"
         bundle = make_tuned_config_bundle(
@@ -185,6 +196,7 @@ class RealMeasurementHarness:
             baseline_bundle_id=None,
             regression_guard={},
             safety_rails={},
+            request_shaping=dict(request_shaping or {}),
             round_provenance={
                 "round_id": self.round_id,
                 "dry_run": True,
@@ -267,7 +279,10 @@ class RealMeasurementHarness:
             start = time.monotonic()
             response = requests.post(
                 f"{self.endpoint}/responses",
-                headers={"Authorization": f"Bearer {os.environ.get('VLLM_API_KEY') or 'EMPTY'}"},
+                headers={
+                    "Authorization": f"Bearer {os.environ.get('VLLM_API_KEY') or 'EMPTY'}",
+                    "X-Lumo-Request-Class": str(entry.get("class") or entry.get("request_class") or "eval"),
+                },
                 json=payload,
                 timeout=max(30, output_tokens),
             )

@@ -8,7 +8,11 @@ from pathlib import Path
 import requests
 
 from lumo_flywheel_serving.inference_proxy import build_proxy_handler
-from lumo_flywheel_serving.tuned_config import make_tuned_config_bundle, persist_tuned_config_bundle
+from lumo_flywheel_serving.tuned_config import (
+    compute_workload_distribution_id,
+    make_tuned_config_bundle,
+    persist_tuned_config_bundle,
+)
 
 
 def _write_registry(path: Path) -> None:
@@ -34,11 +38,24 @@ models:
 def test_admin_endpoints_return_structured_validation_errors_and_accept_valid_payloads(tmp_path: Path) -> None:
     registry_path = tmp_path / "model_registry.yaml"
     _write_registry(registry_path)
+    workload_path = tmp_path / "workload.yaml"
+    (tmp_path / "seed.jsonl").write_text('{"prompt_tokens": 16, "output_tokens": 8}\n', encoding="utf-8")
+    (tmp_path / "holdout.jsonl").write_text('{"prompt_tokens": 16, "output_tokens": 8}\n', encoding="utf-8")
+    workload_path.write_text(
+        """
+family_id: proposal-ranking-manager-judgment
+workload_distribution_id: null
+seed_trace_ref: seed.jsonl
+holdout_trace_ref: holdout.jsonl
+""",
+        encoding="utf-8",
+    )
+    workload_distribution_id = compute_workload_distribution_id(workload_path)
     bundle = make_tuned_config_bundle(
         model_id="qwen3.5-27b",
         family_id="proposal-ranking-manager-judgment",
         weight_version_id="2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
-        workload_distribution_id="prmj-v1-live",
+        workload_distribution_id=workload_distribution_id,
         vllm_config={
             "max_num_seqs": 8,
             "max_num_batched_tokens": 12288,
@@ -54,6 +71,11 @@ def test_admin_endpoints_return_structured_validation_errors_and_accept_valid_pa
         baseline_bundle_id=None,
         regression_guard={"baseline_value": 4, "delta": 4},
         safety_rails={"regression_guard_passed": True},
+        round_provenance={
+            "confidence": "defensible",
+            "latency_above_slo": False,
+            "workload_descriptor_path": str(workload_path),
+        },
     )
     bundle_path = persist_tuned_config_bundle(bundle, tmp_path / "bundles")
 

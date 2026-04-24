@@ -505,7 +505,7 @@ Tuned third, with L0 + L1 frozen. This is a policy layer — small discrete acti
 | `concurrency_cap_rollout` | int | 0 … `max_num_seqs` | Ceiling on rollout-class streams. `eval + rollout ≤ max_num_seqs`. |
 | `admission_queue_depth_max` | int | 0 … 512 | Beyond this, requests reject-with-retry rather than queue. |
 | `per_request_kv_budget` | int (tokens) | `max_model_len / 4` … `max_model_len` | Per-request KV pre-reservation cap. Prevents one long-context request from starving N short-context requests. |
-| `priority_preemption` | enum | {off, rollout-preempts, strict} | How aggressive the admission layer is about preempting rollout-class for eval-class. |
+| `priority_preemption` | enum | {off, graceful, strict} | Advisory v0.2 metadata for future rollout/eval scheduler preemption behavior; not enforced until vLLM scheduler hooks exist. |
 
 **What L2 measures.** With kernel + vLLM config frozen, drive mixed eval-and-rollout traffic and measure: (a) eval-class p95 under contention, (b) rollout-class throughput floor, (c) queue depth stability.
 
@@ -1240,11 +1240,11 @@ A single concrete walkthrough so the implementer and verifier agents have someth
 **Layer 2 — Request shaping (L0 + L1 frozen).**
 
 - L2-it1: Default shaping — 40 eval concurrent, but rollout starved at 0.3× baseline. Rollout-floor violated.
-- L2-it2: `concurrency_cap_eval=37, concurrency_cap_rollout=3, priority_preemption=rollout-preempts` — passes.
+- L2-it2: `concurrency_cap_eval=37, concurrency_cap_rollout=3, priority_preemption=graceful` — passes.
 - L2-it3: `concurrency_cap_eval=40, concurrency_cap_rollout=2, admission_queue_depth_max=64, per_request_kv_budget=40k` — passes, rollout at 0.6×. Best so far.
 - L2-it4: Re-open trigger — proposer notes with shaping enforcing rollout floor, L1's `max_num_seqs=48` has headroom. Re-opens L1 once (§5.7 rail 2); L1 re-tunes to `max_num_seqs=52`; returns to L2.
 - L2-it5 through L2-it7: With L1 re-tune, converge at 44 eval + 3 rollout.
-- **L2 output:** `concurrency_cap_eval=44, concurrency_cap_rollout=3, admission_queue_depth_max=64, per_request_kv_budget=40k, priority_preemption=rollout-preempts`. 7 iterations.
+- **L2 output:** `concurrency_cap_eval=44, concurrency_cap_rollout=3, admission_queue_depth_max=64, per_request_kv_budget=40k, priority_preemption=graceful`. 7 iterations.
 
 **Layer 3 — LoRA (L0 + L1 + L2 frozen).**
 

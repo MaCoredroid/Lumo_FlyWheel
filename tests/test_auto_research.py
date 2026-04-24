@@ -795,7 +795,23 @@ priority_preemption: strict
     assert trace["active_layer"] == "L2"
     assert trace["candidate_request_shaping"]["priority_preemption"] == "strict"
     assert trace["frozen_lower_layer"]["source_bundle_id"] == "l1-bundle-for-l2"
-    assert trace["request_shaping_enforcement"]["real_proxy_enforcement"] is False
+    enforcement = trace["request_shaping_enforcement"]
+    assert enforcement["mode"] == "enforced_minus_advisory"
+    assert enforcement["real_proxy_enforcement"] is True
+    assert enforcement["enforced_fields"] == [
+        "concurrency_cap_eval",
+        "concurrency_cap_rollout",
+        "admission_queue_depth_max",
+    ]
+    assert enforcement["advisory_fields"] == ["per_request_kv_budget", "priority_preemption"]
+    assert enforcement["field_values"]["per_request_kv_budget"] == {
+        "value": 65536,
+        "enforcement": "advisory",
+        "reason": (
+            "v0.2 records and validates this field, but the proxy does not enforce it until "
+            "real KV accounting and scheduler preemption hooks exist."
+        ),
+    }
 
 
 def test_l2_finalize_emits_bundle_with_frozen_vllm_and_request_shaping(
@@ -854,13 +870,21 @@ priority_preemption: strict
     assert bundle["lora_policy"] == {"adapter_mode": "runtime-apply"}
     assert bundle["baseline_bundle_id"] == "l1-bundle-for-l2"
     assert bundle["round_provenance"]["active_layer"] == "L2"
-    assert bundle["round_provenance"]["request_shaping_enforcement"]["real_proxy_enforcement"] is False
-    assert bundle["round_provenance"]["l2_enforcement_coverage"] == {
-        "mode": "substrate_measurement_only",
-        "enforced_fields": [],
-        "advisory_fields": [],
-        "real_proxy_enforcement": False,
-    }
+    assert bundle["round_provenance"]["request_shaping_enforcement"]["real_proxy_enforcement"] is True
+    assert bundle["round_provenance"]["l2_enforcement_coverage"]["mode"] == "enforced_minus_advisory"
+    assert bundle["round_provenance"]["l2_enforcement_coverage"]["real_proxy_enforcement"] is True
+    assert bundle["round_provenance"]["l2_enforcement_coverage"]["enforced_fields"] == [
+        "concurrency_cap_eval",
+        "concurrency_cap_rollout",
+        "admission_queue_depth_max",
+    ]
+    assert bundle["round_provenance"]["l2_enforcement_coverage"]["advisory_fields"] == [
+        "per_request_kv_budget",
+        "priority_preemption",
+    ]
+    assert bundle["round_provenance"]["l2_enforcement_coverage"]["field_values"]["priority_preemption"][
+        "enforcement"
+    ] == "advisory"
 
 
 def test_commit_candidate_rejects_synthetic_measurement_trace_in_real_mode(tmp_path: Path) -> None:

@@ -47,7 +47,13 @@ ALLOWED_REQUEST_SHAPING_KEYS = {
     "per_request_kv_budget",
     "priority_preemption",
 }
-PRIORITY_PREEMPTION_VALUES = {"off", "rollout-preempts", "strict"}
+ENFORCED_REQUEST_SHAPING_FIELDS = [
+    "concurrency_cap_eval",
+    "concurrency_cap_rollout",
+    "admission_queue_depth_max",
+]
+ADVISORY_REQUEST_SHAPING_FIELDS = ["per_request_kv_budget", "priority_preemption"]
+PRIORITY_PREEMPTION_VALUES = {"off", "strict", "graceful"}
 BASELINE_ITERATIONS = ("baseline_a", "baseline_b", "baseline_c", "baseline_d", "baseline_e")
 BASELINE_ITERATION_SET = frozenset(BASELINE_ITERATIONS)
 HARDENED_COMPOSITE_WORKLOAD_VERSION = "v1-multi-family-v5-thinking-realistic"
@@ -1993,7 +1999,10 @@ class AutoResearchRoundManager:
                 "winner_rescreen_uuid": winner_rescreen_uuid or None,
                 "baseline_bundle_path": spec.baseline_bundle_path or None,
                 "baseline_bundle_id": spec.baseline_bundle_id or None,
-                "request_shaping_enforcement": self._request_shaping_enforcement_record(spec),
+                "request_shaping_enforcement": self._request_shaping_enforcement_record_for(
+                    spec,
+                    winner_request_shaping,
+                ),
                 "confidence": confidence_payload["confidence"],
                 "improvement_over_baseline_req_per_s": confidence_payload["improvement_over_baseline_req_per_s"],
                 "improvement_over_baseline_ci_95": confidence_payload["improvement_over_baseline_ci_95"],
@@ -2259,21 +2268,31 @@ class AutoResearchRoundManager:
         measurement_s = spec.full_measurement_s if profile == "full" else spec.screen_measurement_s
         measurable_config = {key: value for key, value in candidate_vllm_config.items() if key in ALLOWED_VLLM_CONFIG_KEYS}
         try:
-            trace = harness.measure(
-                measurable_config,
-                warmup_s=warmup_s,
-                window_s=measurement_s,
-                target_concurrency=target_concurrency,
-            )
+            measure_kwargs: dict[str, Any] = {
+                "warmup_s": warmup_s,
+                "window_s": measurement_s,
+                "target_concurrency": target_concurrency,
+            }
+            if candidate_request_shaping:
+                measure_kwargs["request_shaping"] = candidate_request_shaping
+            trace = harness.measure(measurable_config, **measure_kwargs)
         except TypeError as exc:
-            if "target_concurrency" not in str(exc):
+            if "request_shaping" in str(exc) and candidate_request_shaping:
+                trace = harness.measure(
+                    measurable_config,
+                    warmup_s=warmup_s,
+                    window_s=measurement_s,
+                    target_concurrency=target_concurrency,
+                )
+            elif "target_concurrency" not in str(exc):
                 raise
-            trace = harness.measure(
-                measurable_config,
-                warmup_s=warmup_s,
-                window_s=measurement_s,
-                target_concurrency_sweep=[target_concurrency],
-            )
+            else:
+                trace = harness.measure(
+                    measurable_config,
+                    warmup_s=warmup_s,
+                    window_s=measurement_s,
+                    target_concurrency_sweep=[target_concurrency],
+                )
         if candidate_request_shaping:
             self._apply_request_shaping_trace(
                 trace,
@@ -2349,7 +2368,7 @@ class AutoResearchRoundManager:
                 "concurrency_cap_rollout": max_num_seqs - max(1, max_num_seqs // 2),
                 "admission_queue_depth_max": 64,
                 "per_request_kv_budget": kv_half,
-                "priority_preemption": "rollout-preempts",
+                "priority_preemption": "graceful",
             },
             {
                 **baseline,
@@ -2371,7 +2390,7 @@ class AutoResearchRoundManager:
                 "concurrency_cap_rollout": min(2, max_num_seqs - max(1, max_num_seqs - 2)),
                 "admission_queue_depth_max": 256,
                 "per_request_kv_budget": kv_three_quarter,
-                "priority_preemption": "rollout-preempts",
+                "priority_preemption": "graceful",
             },
         ]
         unique: list[dict[str, Any]] = []
@@ -2432,17 +2451,46 @@ class AutoResearchRoundManager:
 
     @staticmethod
     def _request_shaping_enforcement_record(spec: RoundSpecRecord) -> dict[str, Any]:
+        return AutoResearchRoundManager._request_shaping_enforcement_record_for(spec, None)
+
+    @staticmethod
+    def _request_shaping_enforcement_record_for(
+        spec: RoundSpecRecord,
+        request_shaping: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         if spec.active_layer.upper() != "L2":
             return {}
+        enforced_values = {
+            field: {
+                "value": request_shaping[field],
+                "enforcement": "enforced",
+            }
+            for field in ENFORCED_REQUEST_SHAPING_FIELDS
+            if request_shaping and field in request_shaping
+        }
+        advisory_values = {
+            field: {
+                "value": request_shaping[field],
+                "enforcement": "advisory",
+                "reason": (
+                    "v0.2 records and validates this field, but the proxy does not enforce it until "
+                    "real KV accounting and scheduler preemption hooks exist."
+                ),
+            }
+            for field in ADVISORY_REQUEST_SHAPING_FIELDS
+            if request_shaping and field in request_shaping
+        }
         return {
-            "mode": "substrate_measurement_only",
-            "real_proxy_enforcement": False,
-            "limitation": (
-                "The current inference proxy records loaded request_shaping bundles but does not "
-                "enforce admission caps, queue depth, KV budget, or priority preemption. "
-                "AutoResearch L2 measurements deterministically evaluate candidate policy by "
-                "driving the harness at concurrency_cap_eval while freezing the lower-layer vllm_config."
-            ),
+            "mode": "enforced_minus_advisory" if advisory_values else "enforced",
+            "real_proxy_enforcement": True,
+            "enforced_fields": list(ENFORCED_REQUEST_SHAPING_FIELDS),
+            "advisory_fields": [field for field in ADVISORY_REQUEST_SHAPING_FIELDS if field in advisory_values],
+            "field_values": {**enforced_values, **advisory_values},
+            "proxy_enforcement": {
+                "concurrency_cap_eval": "class-routed admission cap",
+                "concurrency_cap_rollout": "class-routed admission cap",
+                "admission_queue_depth_max": "bounded admission queue with structured 429 queue_full rejection",
+            },
         }
 
     def _apply_request_shaping_trace(
@@ -2453,7 +2501,7 @@ class AutoResearchRoundManager:
         request_shaping: dict[str, Any],
         target_concurrency: int,
     ) -> None:
-        trace["request_shaping_enforcement"] = self._request_shaping_enforcement_record(spec)
+        trace["request_shaping_enforcement"] = self._request_shaping_enforcement_record_for(spec, request_shaping)
         trace["request_shaping_enforcement"]["target_concurrency_applied"] = target_concurrency
         trace["candidate_request_shaping"] = dict(request_shaping)
         trace.setdefault("diagnostics", {})
@@ -3108,12 +3156,13 @@ class AutoResearchRoundManager:
             record = self._trace_for_row(round_dir, row).get("request_shaping_enforcement")
             if isinstance(record, dict):
                 return {
-                    "mode": str(record.get("mode", "substrate_measurement_only")),
+                    "mode": str(record.get("mode", "enforced_minus_advisory")),
                     "enforced_fields": list(record.get("enforced_fields", [])) if isinstance(record.get("enforced_fields"), list) else [],
                     "advisory_fields": list(record.get("advisory_fields", [])) if isinstance(record.get("advisory_fields"), list) else [],
                     "real_proxy_enforcement": bool(record.get("real_proxy_enforcement", False)),
+                    "field_values": dict(record.get("field_values", {})) if isinstance(record.get("field_values"), dict) else {},
                 }
-        return {"mode": "substrate_measurement_only", "enforced_fields": [], "advisory_fields": [], "real_proxy_enforcement": False}
+        return self._request_shaping_enforcement_record_for(spec, None)
 
     def _read_results(self, path: Path) -> list[ResultsRow]:
         if not path.exists():

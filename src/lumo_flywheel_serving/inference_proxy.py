@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import requests
 
@@ -32,6 +33,33 @@ HOP_BY_HOP_HEADERS = {
 }
 INFERENCE_PATHS = {"/v1/responses", "/v1/chat/completions"}
 ADMIN_PATHS = {"/admin/load_tuned_config", "/admin/invalidate"}
+CAMPAIGN_CLASSES = {"eval", "rollout"}
+REQUEST_CLASS_HEADERS = (
+    "X-Lumo-Request-Class",
+    "X-Request-Class",
+    "X-Traffic-Class",
+)
+ENFORCED_REQUEST_SHAPING_FIELDS = (
+    "concurrency_cap_eval",
+    "concurrency_cap_rollout",
+    "admission_queue_depth_max",
+)
+ADVISORY_REQUEST_SHAPING_FIELDS = ("per_request_kv_budget", "priority_preemption")
+PRIORITY_PREEMPTION_VALUES = {"off", "strict", "graceful"}
+
+
+class RequestShapingPolicy(NamedTuple):
+    concurrency_cap_eval: int
+    concurrency_cap_rollout: int
+    admission_queue_depth_max: int
+    max_num_seqs: int
+    bundle_id: str
+    advisory_fields: dict[str, Any]
+
+
+class AdmissionTicket(NamedTuple):
+    policy: RequestShapingPolicy | None
+    request_class: str
 
 
 def is_inference_path(path: str) -> bool:
@@ -69,10 +97,22 @@ def _filtered_headers(headers: Any) -> dict[str, str]:
     return filtered
 
 
-def _write_json_error(handler: BaseHTTPRequestHandler, status: int, message: str) -> None:
-    body = json.dumps({"error": {"message": message}}).encode("utf-8")
+def _write_json_error(
+    handler: BaseHTTPRequestHandler,
+    status: int,
+    message: str,
+    *,
+    code: str | None = None,
+    headers: dict[str, str] | None = None,
+) -> None:
+    error: dict[str, Any] = {"message": message}
+    if code is not None:
+        error["code"] = code
+    body = json.dumps({"error": error}).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
+    for key, value in (headers or {}).items():
+        handler.send_header(key, value)
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -124,6 +164,164 @@ def _read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     return payload
 
 
+def _extract_request_class(payload: dict[str, Any] | None, headers: Any) -> str:
+    for header_name in REQUEST_CLASS_HEADERS:
+        value = headers.get(header_name)
+        if isinstance(value, str) and value.strip().lower() in CAMPAIGN_CLASSES:
+            return value.strip().lower()
+    if not isinstance(payload, dict):
+        return "eval"
+    candidates = [
+        payload.get("class"),
+        payload.get("request_class"),
+        payload.get("traffic_class"),
+    ]
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        candidates.extend([metadata.get("class"), metadata.get("request_class"), metadata.get("traffic_class")])
+    extra_body = payload.get("extra_body")
+    if isinstance(extra_body, dict):
+        candidates.extend([extra_body.get("class"), extra_body.get("request_class"), extra_body.get("traffic_class")])
+    for value in candidates:
+        if isinstance(value, str) and value.strip().lower() in CAMPAIGN_CLASSES:
+            return value.strip().lower()
+    return "eval"
+
+
+def _normalize_request_shaping_policy(bundle_path: str | Path, bundle: Any) -> RequestShapingPolicy | None:
+    shaping = bundle.request_shaping
+    if not shaping:
+        return None
+    issues: list[ValidationIssue] = []
+    vllm_config = bundle.vllm_config
+    max_num_seqs = int(vllm_config.get("max_num_seqs", 0) or 0)
+    if max_num_seqs < 1:
+        issues.append(
+            ValidationIssue(
+                field="tuned_config_bundle.vllm_config.max_num_seqs",
+                message="must be >= 1 when request_shaping is present",
+                value=vllm_config.get("max_num_seqs"),
+            )
+        )
+
+    def require_int(key: str, minimum: int, maximum: int) -> int:
+        value = shaping.get(key)
+        field = f"tuned_config_bundle.request_shaping.{key}"
+        if not isinstance(value, int) or isinstance(value, bool):
+            issues.append(ValidationIssue(field=field, message="must be an integer", value=value))
+            return minimum
+        if value < minimum:
+            issues.append(ValidationIssue(field=field, message=f"must be >= {minimum}", value=value))
+        if value > maximum:
+            issues.append(ValidationIssue(field=field, message=f"must be <= {maximum}", value=value))
+        return value
+
+    eval_cap = require_int("concurrency_cap_eval", 1, max(max_num_seqs, 1))
+    rollout_cap = require_int("concurrency_cap_rollout", 0, max(max_num_seqs, 1))
+    queue_depth = require_int("admission_queue_depth_max", 0, 512)
+    if max_num_seqs >= 1 and eval_cap + rollout_cap > max_num_seqs:
+        issues.append(
+            ValidationIssue(
+                field="tuned_config_bundle.request_shaping",
+                message="eval + rollout concurrency caps exceed max_num_seqs",
+                value={
+                    "concurrency_cap_eval": eval_cap,
+                    "concurrency_cap_rollout": rollout_cap,
+                    "max_num_seqs": max_num_seqs,
+                },
+            )
+        )
+    if "per_request_kv_budget" in shaping:
+        max_model_len = int(vllm_config.get("max_model_len", 0) or 0)
+        require_int("per_request_kv_budget", max(1, max_model_len // 4), max(max_model_len, 1))
+    if "priority_preemption" in shaping and shaping.get("priority_preemption") not in PRIORITY_PREEMPTION_VALUES:
+        issues.append(
+            ValidationIssue(
+                field="tuned_config_bundle.request_shaping.priority_preemption",
+                message=f"must be one of {sorted(PRIORITY_PREEMPTION_VALUES)}",
+                value=shaping.get("priority_preemption"),
+            )
+        )
+    if issues:
+        raise StructuredValidationError(
+            message="Invalid tuned-config request_shaping",
+            issues=[ValidationIssue(field="bundle_path", message="contains invalid request_shaping", value=str(bundle_path))]
+            + issues,
+        )
+    return RequestShapingPolicy(
+        concurrency_cap_eval=eval_cap,
+        concurrency_cap_rollout=rollout_cap,
+        admission_queue_depth_max=queue_depth,
+        max_num_seqs=max_num_seqs,
+        bundle_id=str(bundle.bundle_id),
+        advisory_fields={key: shaping[key] for key in ADVISORY_REQUEST_SHAPING_FIELDS if key in shaping},
+    )
+
+
+class AdmissionController:
+    def __init__(self, state_store: RuntimeStateStore) -> None:
+        self._state_store = state_store
+        self._condition = threading.Condition()
+        self._active_by_class = {"eval": 0, "rollout": 0}
+        self._queued = 0
+        self._cached_bundle_path: str | None = None
+        self._cached_policy: RequestShapingPolicy | None = None
+
+    def policy(self) -> RequestShapingPolicy | None:
+        state = self._state_store.load()
+        bundle_path = state.active_tuned_config_path
+        if not bundle_path:
+            self._cached_bundle_path = None
+            self._cached_policy = None
+            return None
+        if bundle_path == self._cached_bundle_path:
+            return self._cached_policy
+        bundle = load_tuned_config_bundle(bundle_path)
+        self._cached_policy = _normalize_request_shaping_policy(bundle_path, bundle)
+        self._cached_bundle_path = bundle_path
+        return self._cached_policy
+
+    def acquire(self, request_class: str) -> AdmissionTicket | None:
+        request_class = request_class if request_class in CAMPAIGN_CLASSES else "eval"
+        policy = self.policy()
+        if policy is None:
+            return AdmissionTicket(policy=None, request_class=request_class)
+        with self._condition:
+            if self._class_cap(policy, request_class) <= 0:
+                return None
+            if self._has_capacity(policy, request_class):
+                self._active_by_class[request_class] += 1
+                return AdmissionTicket(policy=policy, request_class=request_class)
+            if self._queued >= policy.admission_queue_depth_max:
+                return None
+            self._queued += 1
+            try:
+                while not self._has_capacity(policy, request_class):
+                    self._condition.wait()
+                self._active_by_class[request_class] += 1
+                return AdmissionTicket(policy=policy, request_class=request_class)
+            finally:
+                self._queued -= 1
+
+    def release(self, ticket: AdmissionTicket) -> None:
+        if ticket.policy is None:
+            return
+        with self._condition:
+            self._active_by_class[ticket.request_class] = max(0, self._active_by_class[ticket.request_class] - 1)
+            self._condition.notify_all()
+
+    def _has_capacity(self, policy: RequestShapingPolicy, request_class: str) -> bool:
+        class_cap = self._class_cap(policy, request_class)
+        total_active = self._active_by_class["eval"] + self._active_by_class["rollout"]
+        return self._active_by_class[request_class] < class_cap and total_active < policy.max_num_seqs
+
+    @staticmethod
+    def _class_cap(policy: RequestShapingPolicy, request_class: str) -> int:
+        if request_class == "eval":
+            return policy.concurrency_cap_eval
+        return policy.concurrency_cap_rollout
+
+
 def _validate_load_tuned_config_payload(payload: dict[str, Any]) -> str:
     bundle_path = payload.get("bundle_path")
     issues: list[ValidationIssue] = []
@@ -158,6 +356,7 @@ def build_proxy_handler(
 ) -> type[BaseHTTPRequestHandler]:
     state_store = RuntimeStateStore(state_root or Path.cwd() / "output" / "serving_state")
     registry = load_registry(registry_path) if registry_path is not None else {}
+    admission = AdmissionController(state_store)
 
     class ProxyHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -176,6 +375,7 @@ def build_proxy_handler(
             raw_body = self.rfile.read(content_length)
             payload = raw_body
             headers = _filtered_headers(self.headers)
+            request_json: dict[str, Any] | None = None
             if self.path == "/v1/responses":
                 try:
                     request_json = json.loads(raw_body.decode("utf-8"))
@@ -184,6 +384,27 @@ def build_proxy_handler(
                     return
                 payload = json.dumps(normalize_responses_request_payload(request_json)).encode("utf-8")
                 headers["Content-Type"] = "application/json"
+            elif self.path == "/v1/chat/completions":
+                try:
+                    parsed_json = json.loads(raw_body.decode("utf-8"))
+                    request_json = parsed_json if isinstance(parsed_json, dict) else None
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    request_json = None
+            request_class = _extract_request_class(request_json, self.headers)
+            try:
+                ticket = admission.acquire(request_class)
+            except StructuredValidationError as exc:
+                _write_json_payload(self, 400, exc.as_error_payload())
+                return
+            if ticket is None:
+                _write_json_error(
+                    self,
+                    429,
+                    "Admission queue is full",
+                    code="queue_full",
+                    headers={"Retry-After": "1"},
+                )
+                return
             try:
                 upstream = requests.post(
                     f"{upstream_base_url}{self.path}",
@@ -194,6 +415,7 @@ def build_proxy_handler(
                 )
             except requests.RequestException as exc:
                 _write_json_error(self, 502, f"Upstream inference request failed: {exc}")
+                admission.release(ticket)
                 return
 
             self.send_response(upstream.status_code)
@@ -208,11 +430,17 @@ def build_proxy_handler(
             self.end_headers()
 
             if response_headers.get("Transfer-Encoding") == "chunked":
-                _write_chunked_stream(self, upstream)
+                try:
+                    _write_chunked_stream(self, upstream)
+                finally:
+                    admission.release(ticket)
                 return
 
-            self.wfile.write(upstream.content)
-            self.wfile.flush()
+            try:
+                self.wfile.write(upstream.content)
+                self.wfile.flush()
+            finally:
+                admission.release(ticket)
 
         def _handle_admin_request(self) -> None:
             try:
@@ -220,6 +448,7 @@ def build_proxy_handler(
                 if self.path == "/admin/load_tuned_config":
                     bundle_path = _validate_load_tuned_config_payload(payload)
                     bundle = load_tuned_config_bundle(bundle_path)
+                    _normalize_request_shaping_policy(bundle_path, bundle)
                     policy = str(payload.get("bundle_confidence_policy") or os.environ.get("LUMO_BUNDLE_CONFIDENCE_POLICY") or "warn")
                     validate_bundle_load_policy(bundle, bundle_confidence_policy=policy)
                     if registry and bundle.model_id not in registry:
