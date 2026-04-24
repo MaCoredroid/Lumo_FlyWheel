@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -759,6 +760,16 @@ def _write_auto_research_trace(path: Path) -> None:
     )
 
 
+def _write_auto_research_thinking_probe(repo: Path) -> None:
+    capture_date = datetime.now(UTC)
+    report = repo / "reports" / f"thinking-probe-{capture_date.strftime('%Y%m%d')}.md"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(
+        f"# Serving Thinking Probe\n\n- capture_date: {capture_date.isoformat().replace('+00:00', 'Z')}\n- outcome: row-3\n",
+        encoding="utf-8",
+    )
+
+
 def _init_auto_research_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -784,6 +795,7 @@ holdout_trace_ref: holdout_trace.jsonl
 """,
         encoding="utf-8",
     )
+    _write_auto_research_thinking_probe(repo)
     fixture_src = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "synthetic_measurement.py"
     fixture_dst = repo / "tests" / "fixtures" / "synthetic_measurement.py"
     fixture_dst.parent.mkdir(parents=True, exist_ok=True)

@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -74,6 +75,25 @@ holdout_trace_ref: holdout_trace.jsonl
 """,
         encoding="utf-8",
     )
+
+
+def _write_thinking_probe(repo: Path, *, outcome: str = "row-3", captured_at: datetime | None = None) -> Path:
+    capture_date = captured_at or datetime.now(UTC)
+    report = repo / "reports" / f"thinking-probe-{capture_date.strftime('%Y%m%d')}.md"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(
+        "\n".join(
+            [
+                "# Serving Thinking Probe",
+                "",
+                f"- capture_date: {capture_date.isoformat().replace('+00:00', 'Z')}",
+                f"- outcome: {outcome}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return report
 
 
 def _write_l1_bundle(repo: Path, *, request_shaping: dict | None = None) -> Path:
@@ -201,6 +221,7 @@ def _init_repo(tmp_path: Path) -> Path:
     _write_workload(
         repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml"
     )
+    _write_thinking_probe(repo)
     fixture_src = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "synthetic_measurement.py"
     fixture_dst = repo / "tests" / "fixtures" / "synthetic_measurement.py"
     fixture_dst.parent.mkdir(parents=True, exist_ok=True)
@@ -496,6 +517,59 @@ def test_bootstrap_round_writes_spec_brief_templates(tmp_path: Path) -> None:
     assert "generator starting with \"SyntheticMeasurementFixture\"" in prompt
     assert "{{harness_mode}}" not in prompt
     assert "{{harness_generator_prefix}}" not in prompt
+
+
+def test_bootstrap_round_records_serving_thinking_probe_for_real_round(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    probe_path = next((repo / "reports").glob("thinking-probe-*.md"))
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        serving_thinking_probe=probe_path,
+    )
+
+    spec = auto_research.load_yaml_file(Path(bootstrap["round_spec_path"]))
+    assert isinstance(spec, dict)
+    assert spec["serving_thinking_probe"]["path"] == f"reports/{probe_path.name}"
+    assert spec["serving_thinking_probe"]["outcome"] == "row-3"
+    assert spec["serving_thinking_probe"]["capture_date"].endswith("Z")
+
+
+def test_bootstrap_round_rejects_blocking_serving_thinking_probe(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    probe_path = _write_thinking_probe(repo, outcome="row-2")
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="serving_thinking_probe_blocking_outcome:row-2"):
+        manager.bootstrap_round(
+            model_id="qwen3.5-27b",
+            family_id="proposal-ranking-manager-judgment",
+            sprint="sprint-0",
+            workload_file=repo
+            / "benchmark_blueprints"
+            / "families"
+            / "proposal-ranking-manager-judgment"
+            / "serving_workload.yaml",
+            weight_version_id=None,
+            round_root=repo / "output" / "auto_research",
+            serving_thinking_probe=probe_path,
+        )
+
+    assert list((repo / "output" / "auto_research").glob("*")) == []
 
 
 def test_l2_bootstrap_requires_and_records_lower_layer_bundle(tmp_path: Path) -> None:

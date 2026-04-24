@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -27,6 +28,7 @@ from .yaml_utils import load_yaml_file
 MIN_LIVE_STARTUP_GPU_MEMORY_UTILIZATION = 0.30
 SIGNED_OFF_BY = "lumoserve-auto-research-cli <auto-research@lumo-flywheel>"
 MIN_CODEX_CLI_VERSION = (0, 120, 0)
+SERVING_THINKING_PROBE_MAX_AGE = timedelta(days=7)
 REAL_MEASUREMENT_GENERATOR_PREFIX = "RealMeasurementHarness"
 SYNTHETIC_MEASUREMENT_GENERATOR_PREFIX = "SyntheticMeasurementFixture"
 ALLOWED_VLLM_CONFIG_KEYS = {
@@ -419,6 +421,78 @@ class SyntheticWorkloadDistribution:
             rollout_baseline=self.rollout_baseline,
             target_concurrency=self.target_concurrency,
         )
+
+
+def _parse_probe_report_field(text: str, field_name: str) -> str:
+    match = re.search(rf"(?im)^\s*-?\s*{re.escape(field_name)}:\s*(.+?)\s*$", text)
+    if not match:
+        raise RuntimeError(f"serving thinking probe missing {field_name}")
+    return match.group(1).strip()
+
+
+def _parse_probe_capture_date(value: str) -> datetime:
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise RuntimeError(f"serving thinking probe has invalid capture_date: {value}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _relative_to_repo(repo_root: Path, path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(repo_root.resolve()))
+    except ValueError:
+        return str(path.resolve())
+
+
+def resolve_serving_thinking_probe_report(
+    repo_root: Path,
+    requested_path: str | Path | None = None,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    reports_dir = repo_root / "reports"
+    if requested_path is None:
+        candidates = sorted(reports_dir.glob("thinking-probe-*.md"), key=lambda path: path.stat().st_mtime)
+        if not candidates:
+            raise RuntimeError("serving_thinking_probe_missing")
+        probe_path = candidates[-1]
+    else:
+        probe_path = Path(requested_path)
+        if not probe_path.is_absolute():
+            probe_path = repo_root / probe_path
+    probe_path = probe_path.resolve()
+    expected_dir = reports_dir.resolve()
+    if probe_path.parent != expected_dir or not probe_path.name.startswith("thinking-probe-") or probe_path.suffix != ".md":
+        raise RuntimeError("serving_thinking_probe_invalid_path")
+    if not probe_path.is_file():
+        raise RuntimeError(f"serving_thinking_probe_missing: {probe_path}")
+
+    text = probe_path.read_text(encoding="utf-8")
+    capture_date_raw = _parse_probe_report_field(text, "capture_date")
+    outcome = _parse_probe_report_field(text, "outcome")
+    if outcome not in {"row-1", "row-3"}:
+        raise RuntimeError(f"serving_thinking_probe_blocking_outcome:{outcome}")
+    capture_date = _parse_probe_capture_date(capture_date_raw)
+    checked_at = (now or datetime.now(UTC)).astimezone(UTC)
+    if capture_date > checked_at + timedelta(minutes=5):
+        raise RuntimeError("serving_thinking_probe_capture_date_in_future")
+    if checked_at - capture_date > SERVING_THINKING_PROBE_MAX_AGE:
+        raise RuntimeError("serving_thinking_probe_expired")
+    mtime = datetime.fromtimestamp(probe_path.stat().st_mtime, tz=UTC)
+    if checked_at - mtime > SERVING_THINKING_PROBE_MAX_AGE:
+        raise RuntimeError("serving_thinking_probe_mtime_expired")
+    return {
+        "path": _relative_to_repo(repo_root, probe_path),
+        "capture_date": capture_date.isoformat().replace("+00:00", "Z"),
+        "outcome": outcome,
+        "file_mtime": mtime.isoformat().replace("+00:00", "Z"),
+    }
 
 
 @dataclass(frozen=True)
@@ -942,9 +1016,10 @@ class RoundSpecRecord:
     baseline_bundle_path: str = ""
     baseline_bundle_id: str = ""
     frozen_vllm_config: dict[str, Any] = field(default_factory=dict)
+    serving_thinking_probe: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "round_id": self.round_id,
             "round_root": self.round_root,
             "round_dir": self.round_dir,
@@ -981,6 +1056,9 @@ class RoundSpecRecord:
             "baseline_bundle_id": self.baseline_bundle_id,
             "frozen_vllm_config": dict(self.frozen_vllm_config),
         }
+        if self.serving_thinking_probe is not None:
+            payload["serving_thinking_probe"] = dict(self.serving_thinking_probe)
+        return payload
 
     @classmethod
     def from_path(cls, path: str | Path) -> "RoundSpecRecord":
@@ -1021,6 +1099,11 @@ class RoundSpecRecord:
             baseline_bundle_path=str(payload.get("baseline_bundle_path", "")),
             baseline_bundle_id=str(payload.get("baseline_bundle_id", "")),
             frozen_vllm_config=dict(payload.get("frozen_vllm_config") or {}),
+            serving_thinking_probe=(
+                dict(payload["serving_thinking_probe"])
+                if isinstance(payload.get("serving_thinking_probe"), dict)
+                else None
+            ),
         )
 
 
@@ -1053,6 +1136,7 @@ class AutoResearchRoundManager:
         skip_preflight: bool = False,
         active_layer: str = "L1",
         baseline_bundle: str | Path | None = None,
+        serving_thinking_probe: str | Path | None = None,
     ) -> dict[str, Any]:
         workload_file = Path(workload_file).resolve()
         round_root = Path(round_root).resolve()
@@ -1088,7 +1172,12 @@ class AutoResearchRoundManager:
         seed_trace_path = workload_file.parent / workload.seed_trace_ref
         if not seed_trace_path.is_file():
             raise RuntimeError(f"Seed trace file does not exist: {seed_trace_path}")
+        serving_thinking_probe_record: dict[str, Any] | None = None
         if harness_type != "synthetic" and not skip_preflight:
+            serving_thinking_probe_record = resolve_serving_thinking_probe_report(
+                self.repo_root,
+                serving_thinking_probe,
+            )
             self._run_bootstrap_preflight(
                 model_config=model_config,
                 family_id=family_id,
@@ -1138,6 +1227,7 @@ class AutoResearchRoundManager:
             baseline_bundle_path=str(Path(baseline_bundle).resolve()) if baseline_bundle is not None else "",
             baseline_bundle_id=frozen_bundle.bundle_id if frozen_bundle is not None else "",
             frozen_vllm_config=dict(frozen_bundle.vllm_config) if frozen_bundle is not None else {},
+            serving_thinking_probe=serving_thinking_probe_record,
         )
         self._write_yaml(round_dir / "round_spec.yaml", spec.as_dict())
         (round_dir / "impl_brief.md").write_text(IMPL_BRIEF_TEMPLATE, encoding="utf-8")

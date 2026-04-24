@@ -28,6 +28,13 @@ def _resolve_ref(descriptor_path: Path, ref: str) -> Path:
     return descriptor_path.parent / path
 
 
+def _repo_relative(repo_root: Path, path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(repo_root.resolve()))
+    except ValueError:
+        return str(path.resolve())
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -381,7 +388,7 @@ def build_composite_workload(
         "min_trajectory_turns": min_trajectory_turns,
         "total_seed_rows": len(seed_rows),
         "total_holdout_rows": len(holdout_rows),
-        "thinking_probe_ref": str(thinking_probe),
+        "thinking_probe_ref": _repo_relative(repo_root, thinking_probe),
         "thinking_probe_outcome": probe_outcome,
         "seed_trace_ref": "seed_trace.jsonl",
         "holdout_trace_ref": "holdout_trace.jsonl",
