@@ -87,6 +87,15 @@ def rel_is_allowed(relpath: str, allowed_paths: list[str]) -> bool:
     return False
 
 
+def normalize_text(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def any_phrase(text: str, phrases: list[str]) -> bool:
+    hay = normalize_text(text)
+    return any(normalize_text(phrase) in hay for phrase in phrases)
+
+
 def import_from_workspace(module_name: str, relpath: str) -> Any:
     path = AGENT_WS / relpath
     spec = importlib.util.spec_from_file_location(module_name, path)
@@ -212,16 +221,24 @@ def score_triage(state: ScoreState, gold: dict[str, Any]) -> dict[str, bool]:
         return {"triage_correct": False, "duplicate_correct": False}
 
     entries = {}
+    triage_items = []
     if isinstance(triage_data, list):
-        for item in triage_data:
-            if isinstance(item, dict) and "thread_id" in item:
-                entries[item["thread_id"]] = item
+        triage_items = triage_data
+    elif isinstance(triage_data, dict):
+        maybe_threads = triage_data.get("threads")
+        if isinstance(maybe_threads, list):
+            triage_items = maybe_threads
+
+    for item in triage_items:
+        if isinstance(item, dict) and "thread_id" in item:
+            entries[item["thread_id"]] = item
 
     expected = gold.get("expected_triage", {})
     correct = 0
     for thread_id, expectation in expected.items():
         actual = entries.get(thread_id, {})
-        if actual.get("disposition") == expectation.get("disposition"):
+        actual_disposition = actual.get("disposition") or actual.get("classification")
+        if actual_disposition == expectation.get("disposition"):
             correct += 1
 
     if correct == len(expected):
@@ -232,9 +249,15 @@ def score_triage(state: ScoreState, gold: dict[str, Any]) -> dict[str, bool]:
         state.apply_ceiling("wrong_triage", 20)
 
     duplicate_entry = entries.get("T-214-02", {})
+    duplicate_target = duplicate_entry.get("duplicate_of")
+    if duplicate_target is None and any_phrase(
+        str(duplicate_entry.get("rationale", "")),
+        ["duplicate of t-214-01", "same as t-214-01", "same fix as t-214-01"],
+    ):
+        duplicate_target = "T-214-01"
     duplicate_correct = (
-        duplicate_entry.get("disposition") == "duplicate"
-        and duplicate_entry.get("duplicate_of") == "T-214-01"
+        (duplicate_entry.get("disposition") or duplicate_entry.get("classification")) == "duplicate"
+        and duplicate_target == "T-214-01"
         and len(str(duplicate_entry.get("rationale", "")).strip()) >= 12
     )
     if duplicate_correct:
@@ -337,14 +360,27 @@ def score_behavior(state: ScoreState) -> dict[str, bool]:
 
 def score_regression_test(state: ScoreState) -> bool:
     text = file_text("tests/test_preview.py")
-    passed = all(
-        marker in text
-        for marker in [
-            "test_preview_unavailable_keeps_fallback_contract",
-            "requires_human_review",
-            '"human_review_required"',
-            "preview_unavailable",
-        ]
+    text_norm = normalize_text(text)
+    passed = (
+        "requires_human_review" in text
+        and '"human_review_required"' in text
+        and "preview_unavailable" in text
+        and any(
+            marker in text_norm
+            for marker in [
+                "preview_enabled=false",
+                "preview_enabled = false",
+                "build_policy_preview(",
+            ]
+        )
+        and any(
+            marker in text_norm
+            for marker in [
+                "manual_review",
+                'approval_state="manual_review"',
+                "approval_state = \"manual_review\"",
+            ]
+        )
     )
     if passed:
         state.add("tests.preview_regression", 10)
@@ -370,7 +406,16 @@ def score_replies(state: ScoreState, gold: dict[str, Any]) -> dict[str, bool]:
         required_ids = gold.get("required_reply_thread_ids", [])
         mapping_ok = all(thread_id in reply for thread_id in required_ids)
         duplicate_ok = "duplicate of `T-214-01`" in reply or "duplicate of T-214-01" in reply
-        obsolete_ok = "Did not apply" in reply and "T-214-03" in reply
+        obsolete_ok = "T-214-03" in reply and any_phrase(
+            reply,
+            [
+                "Did not apply",
+                "did not apply",
+                "Not applied",
+                "not applied",
+                "did not revive",
+            ],
+        )
         mapping_ok = mapping_ok and duplicate_ok and obsolete_ok
         specificity_ok = all(
             token in reply
@@ -398,7 +443,16 @@ def score_report(state: ScoreState, gold: dict[str, Any]) -> dict[str, bool]:
         report = report_path.read_text()
         scope_ok = all(
             phrase in report for phrase in gold.get("report_scope_phrases", [])
-        ) and "Did not apply" in report
+        ) and any_phrase(
+            report,
+            [
+                "Did not apply",
+                "did not apply",
+                "Not applied",
+                "intentionally not applied",
+                "left unchanged as required",
+            ],
+        )
         variant_ok = all(
             phrase in report for phrase in gold.get("required_report_phrases", [])
         )
@@ -410,9 +464,9 @@ def score_report(state: ScoreState, gold: dict[str, Any]) -> dict[str, bool]:
         state.add("report.variant_awareness", 5, band="P_only")
     else:
         if VARIANT_ID == "v4-multi-corpus-objective":
-            state.apply_ceiling("objective_contract_missed", 45)
+            state.apply_ceiling("objective_contract_missed", 15)
         elif VARIANT_ID == "v5-recovery-in-thread":
-            state.apply_ceiling("incident_blind_recovery", 30)
+            state.apply_ceiling("incident_blind_recovery", 10)
     return {"scope_ok": scope_ok, "variant_ok": variant_ok}
 
 

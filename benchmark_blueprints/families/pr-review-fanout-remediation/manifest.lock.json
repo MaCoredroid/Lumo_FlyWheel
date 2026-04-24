@@ -1,14 +1,14 @@
 {
   "family_id": "pr-review-fanout-remediation",
   "grader": {
-    "score_review_fanout_py_sha256": "c3c9c0065ad914270e9e0a6e51cd90b9ba0c0c51c55f2aeed0b0f452479106b7",
+    "score_review_fanout_py_sha256": "5b97006300545e71357ceef6d692cf47d70384941012067f727a62e219211105",
     "verify_sh_sha256": "cc706b0283b74aa18f06e574c8e65175299662e5db9e4583217dd4d6049fea59"
   },
   "schema_version": "cnb55.manifest.v2",
   "variants": {
     "v1-clean-baseline": {
       "observed_empty_brief_score": 0,
-      "observed_oracle_score": 100,
+      "observed_oracle_score": 90,
       "observed_shortcut_score": 20,
       "verifier_data": {
         "gold_review_state_sha256": "9eef3a994c4b0ccc6ea14c1520e1982677efb7cb4533d3aaf347cd767cefcdc0",
@@ -29,7 +29,7 @@
     },
     "v2-noisy-distractor": {
       "observed_empty_brief_score": 0,
-      "observed_oracle_score": 100,
+      "observed_oracle_score": 95,
       "observed_shortcut_score": 20,
       "verifier_data": {
         "gold_review_state_sha256": "48d8035735cf4dd1ab688d57322ff58a5a6a38accdb28781fdefce64ea0e811d",
@@ -50,7 +50,7 @@
     },
     "v3-dirty-state": {
       "observed_empty_brief_score": 0,
-      "observed_oracle_score": 100,
+      "observed_oracle_score": 95,
       "observed_shortcut_score": 20,
       "verifier_data": {
         "gold_review_state_sha256": "753cc6e6914121ea8e933121fba95c446a3110d85b67f505539fe3e686d0d983",
@@ -71,8 +71,8 @@
     },
     "v4-multi-corpus-objective": {
       "observed_empty_brief_score": 0,
-      "observed_oracle_score": 100,
-      "observed_shortcut_score": 20,
+      "observed_oracle_score": 95,
+      "observed_shortcut_score": 15,
       "verifier_data": {
         "gold_review_state_sha256": "f3b878272694bdb5ed0dee94412ca83944cabaac79fc4670376fd28402987d97",
         "hidden_tests_tree_sha256": "a7887ba68feb60240e0069fdb55ffa2d87a07518c7e5ddddf6f301e98039cbe8",
@@ -92,8 +92,8 @@
     },
     "v5-recovery-in-thread": {
       "observed_empty_brief_score": 0,
-      "observed_oracle_score": 100,
-      "observed_shortcut_score": 20,
+      "observed_oracle_score": 95,
+      "observed_shortcut_score": 10,
       "verifier_data": {
         "gold_review_state_sha256": "57f4c473a8de7ac04490d6048c0e1182d3b76856517e0f525792bd31f7f1b0e2",
         "hidden_tests_tree_sha256": "a7887ba68feb60240e0069fdb55ffa2d87a07518c7e5ddddf6f301e98039cbe8",

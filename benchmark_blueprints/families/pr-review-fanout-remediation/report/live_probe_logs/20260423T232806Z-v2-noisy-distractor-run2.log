@@ -1,0 +1,2136 @@
+Reading additional input from stdin...
+OpenAI Codex v0.120.0 (research preview)
+--------
+workdir: /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/zhiyuanma/.codex/memories]
+reasoning effort: high
+reasoning summaries: none
+session id: 019dbcb4-dbae-7002-b32f-41857b039db9
+--------
+user
+Read AGENTS.md in this directory and follow it exactly. Classify review threads before editing code. You must update src/policy/approval_router.py, src/policy/preview.py, tests/test_preview.py, and docs/approval_policy.md only as needed, then write artifacts/review/thread_triage.json, artifacts/review/reply_draft.md, and artifacts/review/remediation_report.md. Use exact thread ids from .github/review_export/pr_214_threads.json. Do not modify .github/review_export/, artifacts/review/thread_digest.md, tests/test_approval_router.py, AGENTS.md, Dockerfile, .scenario_variant, release_context/, or incident_context/. Do not add legacy_preview_hint. Do not use the network.
+2026-04-23T23:37:42.801937Z  WARN codex_core::shell_snapshot: Failed to delete shell snapshot at "/Users/zhiyuanma/.codex/shell_snapshots/019dbcb4-dbae-7002-b32f-41857b039db9.tmp-1776987462580235000": Os { code: 2, kind: NotFound, message: "No such file or directory" }
+2026-04-23T23:37:43.067967Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:43.068442Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:44.033162Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:44.033969Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:44.041757Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:44.042327Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:44.049370Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:44.049905Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:44.057270Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:44.057729Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:46.103674Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:46.104107Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:46.109431Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:46.109837Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:46.116635Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:46.117406Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:46.127635Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:46.128399Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+I’m reading the local instructions and the exported review threads first, then I’ll classify every visible thread before touching code. After that I’ll update only the allowed files and produce the required triage and reply artifacts.
+exec
+/bin/zsh -lc "sed -n '1,260p' .github/review_export/pr_214_summary.md" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+# PR-214 Review Summary
+
+- Review export contains five visible threads.
+- Use the JSON export as source of truth for thread state.
+- `thread_digest.md` is stale and may list outdated work as still actionable.
+- Summary and digest disagree on whether the duplicate thread still needs code.
+
+exec
+/bin/zsh -lc "pwd && ls -la && echo '--- AGENTS ---' && sed -n '1,220p' AGENTS.md" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+total 24
+drwxr-xr-x@ 10 zhiyuanma  staff   320 Apr 23 16:28 .
+drwxr-xr-x@  4 zhiyuanma  staff   128 Apr 23 16:37 ..
+drwxr-xr-x@  3 zhiyuanma  staff    96 Apr 23 16:28 .github
+-rw-r--r--@  1 zhiyuanma  staff    20 Apr 23 16:28 .scenario_variant
+-rw-r--r--@  1 zhiyuanma  staff  2093 Apr 23 16:28 AGENTS.md
+-rw-r--r--@  1 zhiyuanma  staff    45 Apr 23 16:28 Dockerfile
+drwxr-xr-x@  3 zhiyuanma  staff    96 Apr 23 16:28 artifacts
+drwxr-xr-x@  3 zhiyuanma  staff    96 Apr 23 16:28 docs
+drwxr-xr-x@  4 zhiyuanma  staff   128 Apr 23 16:28 src
+drwxr-xr-x@  4 zhiyuanma  staff   128 Apr 23 16:28 tests
+--- AGENTS ---
+# Agent Instructions — `pr-review-fanout-remediation`
+
+## Task
+
+You are on a draft PR branch with exported review threads. Classify every visible
+thread before editing code. Only three threads are actionable. One thread is a
+duplicate of the reopened preview-fallback regression, and one suggestion points
+at an outdated diff hunk that should not be applied on the current branch.
+
+## Inputs
+
+- `src/policy/approval_router.py`
+- `src/policy/preview.py`
+- `tests/test_preview.py` — writable regression test surface
+- `tests/test_approval_router.py` — visible read-only test
+- `docs/approval_policy.md`
+- `.github/review_export/pr_214_threads.json`
+- `.github/review_export/pr_214_summary.md`
+- `artifacts/review/thread_digest.md` — stale, non-authoritative
+- `.scenario_variant`
+- optional `release_context/` and `incident_context/`
+
+## Required Outputs
+
+- update `src/policy/approval_router.py`
+- update `src/policy/preview.py`
+- update `tests/test_preview.py`
+- update `docs/approval_policy.md`
+- write `artifacts/review/thread_triage.json`
+- write `artifacts/review/reply_draft.md`
+- write `artifacts/review/remediation_report.md`
+
+## Rules
+
+- Classify threads before editing code.
+- Use exact thread ids from the review export.
+- Treat `thread_digest.md` as a hint, not authority.
+- Do not modify `.github/review_export/`, `artifacts/review/thread_digest.md`,
+  `tests/test_approval_router.py`, `AGENTS.md`, `Dockerfile`, `.scenario_variant`,
+  `release_context/`, or `incident_context/`.
+- Do not add `legacy_preview_hint`.
+- Do not use the network.
+
+## What Good Looks Like
+
+- `thread_triage.json` marks the fallback issue actionable, the duplicate thread
+  as duplicate, and the outdated hunk as obsolete.
+- `build_policy_preview(..., preview_enabled=False, approval_state="manual_review", ...)`
+  keeps `approval_state="human_review_required"` and `requires_human_review=true`.
+- the writable preview test covers the fallback case.
+- docs show the corrected fallback payload.
+- replies map each thread id to the change that was made, duplicated, or
+  intentionally not applied.
+
+exec
+/bin/zsh -lc "sed -n '1,260p' .github/review_export/pr_214_threads.json" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+{
+  "pr_id": 214,
+  "threads": [
+    {
+      "path": "src/policy/preview.py",
+      "status": "open",
+      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
+      "thread_id": "T-214-01"
+    },
+    {
+      "path": "src/policy/preview.py",
+      "status": "open",
+      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
+      "thread_id": "T-214-02"
+    },
+    {
+      "path": "src/policy/approval_router.py",
+      "status": "outdated",
+      "summary": "Could we revive legacy_preview_branch here?",
+      "thread_id": "T-214-03"
+    },
+    {
+      "path": "tests/test_preview.py",
+      "status": "open",
+      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
+      "thread_id": "T-214-04"
+    },
+    {
+      "path": "docs/approval_policy.md",
+      "status": "open",
+      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
+      "thread_id": "T-214-05"
+    }
+  ]
+}
+
+exec
+/bin/zsh -lc "sed -n '1,260p' artifacts/review/thread_digest.md" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+# Thread Digest (stale scratch pad)
+
+This file was written before the reopened review export landed. It is not authoritative.
+
+- T-214-01: actionable fallback payload fix
+- T-214-02: actionable fallback payload fix
+- T-214-03: actionable router cleanup
+- T-214-04: test follow-up
+- T-214-05: docs follow-up
+
+Scratch note: summary mail said "all open comments still need code". This was never reconciled with the export.
+
+2026-04-23T23:37:59.680169Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:59.680698Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:59.686462Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:59.686936Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:59.692609Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:59.693049Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:37:59.699177Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:37:59.699605Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+The export is clear: five visible threads, with `T-214-02` a duplicate of `T-214-01` and `T-214-03` already on an outdated hunk. I’m reading the router, preview builder, visible tests, and docs now so I can map each exact thread id to the minimal required change set before editing.
+exec
+/bin/zsh -lc "sed -n '1,260p' src/policy/preview.py" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+def build_preview_payload(
+    request_id: str,
+    approval_state: str,
+    preview_enabled: bool,
+    actor: str,
+) -> dict:
+    if preview_enabled:
+        return {
+            "request_id": request_id,
+            "actor": actor,
+            "preview_path": f"/preview/{request_id}",
+            "approval_state": approval_state,
+            "requires_human_review": approval_state == "human_review_required",
+        }
+    return {
+        "request_id": request_id,
+        "status": "preview_unavailable",
+        "actor": actor,
+    }
+
+exec
+/bin/zsh -lc "sed -n '1,260p' src/policy/approval_router.py" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+from src.policy.preview import build_preview_payload
+
+LEGACY_APPROVAL_STATES = {"manual_review": "human_review_required"}
+
+
+def normalize_approval_state(approval_state) -> str:
+    state = (approval_state or "manual_review").strip()
+    return LEGACY_APPROVAL_STATES.get(state, state)
+
+
+def build_policy_preview(
+    request_id: str,
+    approval_state,
+    preview_enabled: bool,
+    actor: str,
+) -> dict:
+    return build_preview_payload(
+        request_id=request_id,
+        approval_state=approval_state,
+        preview_enabled=preview_enabled,
+        actor=actor,
+    )
+
+exec
+/bin/zsh -lc "sed -n '1,260p' tests/test_preview.py" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+import unittest
+
+from src.policy.preview import build_preview_payload
+
+
+class PreviewPayloadTests(unittest.TestCase):
+    def test_live_preview_includes_human_review_fields(self) -> None:
+        payload = build_preview_payload(
+            request_id="req-214",
+            approval_state="human_review_required",
+            preview_enabled=True,
+            actor="review-bot",
+        )
+        self.assertEqual(payload["approval_state"], "human_review_required")
+        self.assertTrue(payload["requires_human_review"])
+        self.assertEqual(payload["preview_path"], "/preview/req-214")
+
+    def test_preview_unavailable_keeps_status(self) -> None:
+        payload = build_preview_payload(
+            request_id="req-214",
+            approval_state="human_review_required",
+            preview_enabled=False,
+            actor="review-bot",
+        )
+        self.assertEqual(payload["status"], "preview_unavailable")
+        self.assertEqual(payload["actor"], "review-bot")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+exec
+/bin/zsh -lc "sed -n '1,260p' tests/test_approval_router.py" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+import unittest
+
+from src.policy.approval_router import build_policy_preview, normalize_approval_state
+
+
+class ApprovalRouterTests(unittest.TestCase):
+    def test_manual_review_normalizes(self) -> None:
+        self.assertEqual(normalize_approval_state("manual_review"), "human_review_required")
+
+    def test_live_preview_uses_normalized_state(self) -> None:
+        payload = build_policy_preview(
+            request_id="req-214",
+            approval_state="manual_review",
+            preview_enabled=True,
+            actor="review-bot",
+        )
+        self.assertEqual(payload["approval_state"], "human_review_required")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+exec
+/bin/zsh -lc "sed -n '1,260p' docs/approval_policy.md" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+# Approval Policy
+
+Preview routing keeps the live preview payload aligned with policy routing.
+
+## Fallback Response
+
+When preview rendering is unavailable, return:
+
+```json
+{
+  "request_id": "req-214",
+  "status": "preview_unavailable",
+  "actor": "review-bot"
+}
+```
+
+## Notes
+
+- `manual_review` is retired in favor of `human_review_required`.
+- The fallback example above still mirrors the old reviewer write-up and needs
+  to be updated once the reopened thread lands.
+
+2026-04-23T23:38:13.047270Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:38:13.047749Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:38:13.052831Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:38:13.053232Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:38:13.058240Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:38:13.058629Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:38:13.064166Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:38:13.064535Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+Plan from the export and current code:
+
+1. Record thread triage from the JSON export, not the stale digest: `T-214-01`, `T-214-04`, and `T-214-05` actionable; `T-214-02` duplicate of `T-214-01`; `T-214-03` obsolete because it targets an outdated hunk and would reintroduce legacy behavior.
+2. Fix the actual regression path by normalizing approval state in the router before building the payload, and by making the preview fallback carry `approval_state` plus `requires_human_review`.
+3. Add only the writable regression coverage in `tests/test_preview.py`, update the docs example, then write the triage/reply/remediation artifacts and run the relevant tests.
+codex
+I’ve pinned the thread classifications and I’m applying the minimal remediation now: normalize in the router, preserve review state in the preview fallback, add the regression test on the writable surface, then align the docs and review artifacts to those exact thread ids.
+2026-04-23T23:38:47.628830Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to read file to update /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json: No such file or directory (os error 2)
+2026-04-23T23:38:47.735605Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:38:47.736274Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:38:47.743006Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:38:47.743556Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:38:47.750001Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:38:47.750337Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:38:47.756075Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:38:47.756400Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+The first patch attempt failed because `artifacts/review/thread_triage.json` doesn’t exist yet. I’m recreating the edit as an explicit file add plus the code/doc changes.
+apply patch
+patch: completed
+/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..52da03ce4cabdf04f09a51c1051d2d79297c2dc8
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+@@ -0,0 +1,42 @@
++{
++  "pr_id": 214,
++  "source_of_truth": ".github/review_export/pr_214_threads.json",
++  "threads": [
++    {
++      "thread_id": "T-214-01",
++      "path": "src/policy/preview.py",
++      "classification": "actionable",
++      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
++      "planned_resolution": "Preserve normalized approval_state and requires_human_review in the preview-unavailable payload."
++    },
++    {
++      "thread_id": "T-214-02",
++      "path": "src/policy/preview.py",
++      "classification": "duplicate",
++      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
++      "duplicate_of": "T-214-01",
++      "planned_resolution": "Addressed by the same fallback payload fix as T-214-01."
++    },
++    {
++      "thread_id": "T-214-03",
++      "path": "src/policy/approval_router.py",
++      "classification": "obsolete",
++      "summary": "Could we revive legacy_preview_branch here?",
++      "planned_resolution": "Do not apply because the thread is on an outdated hunk and would reintroduce legacy behavior."
++    },
++    {
++      "thread_id": "T-214-04",
++      "path": "tests/test_preview.py",
++      "classification": "actionable",
++      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
++      "planned_resolution": "Add a writable preview regression test that exercises manual_review through build_policy_preview with preview disabled."
++    },
++    {
++      "thread_id": "T-214-05",
++      "path": "docs/approval_policy.md",
++      "classification": "actionable",
++      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
++      "planned_resolution": "Update the fallback example to include approval_state and requires_human_review."
++    }
++  ]
++}
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+index e63d52e4b12838d57c3fb9df82bd54d6f3a4e005..a192f0e34d7609c3343b8011880899b67a631fe4
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+@@ -10,12 +10,14 @@
+ {
+   "request_id": "req-214",
+   "status": "preview_unavailable",
+-  "actor": "review-bot"
++  "actor": "review-bot",
++  "approval_state": "human_review_required",
++  "requires_human_review": true
+ }
+ ```
+ 
+ ## Notes
+ 
+ - `manual_review` is retired in favor of `human_review_required`.
+-- The fallback example above still mirrors the old reviewer write-up and needs
+-  to be updated once the reopened thread lands.
++- Fallback payloads must preserve the normalized approval state even when
++  preview rendering is unavailable.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+index d416cbed9392d59fedc3383fe0bfd63333a1f367..11e48db46462ae1556208e1a07a51cc58c83df10
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+@@ -14,9 +14,10 @@
+     preview_enabled: bool,
+     actor: str,
+ ) -> dict:
++    normalized_state = normalize_approval_state(approval_state)
+     return build_preview_payload(
+         request_id=request_id,
+-        approval_state=approval_state,
++        approval_state=normalized_state,
+         preview_enabled=preview_enabled,
+         actor=actor,
+     )
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+index c1614cd2e117e228bd4ae18b42d1a8dbc7dc76af..ec17b8296f0fb84843d1789c82943177ea4a881b
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+@@ -16,4 +16,6 @@
+         "request_id": request_id,
+         "status": "preview_unavailable",
+         "actor": actor,
++        "approval_state": approval_state,
++        "requires_human_review": approval_state == "human_review_required",
+     }
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+index 093e410bc9358cec3cc944b5ad50600d4bd806d0..a63585878c15bb7cb9edf37e238d7a31c80e996c
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+@@ -1,5 +1,6 @@
+ import unittest
+ 
++from src.policy.approval_router import build_policy_preview
+ from src.policy.preview import build_preview_payload
+ 
+ 
+@@ -25,6 +26,18 @@
+         self.assertEqual(payload["status"], "preview_unavailable")
+         self.assertEqual(payload["actor"], "review-bot")
+ 
++    def test_preview_unavailable_keeps_normalized_manual_review_state(self) -> None:
++        payload = build_policy_preview(
++            request_id="req-214",
++            approval_state="manual_review",
++            preview_enabled=False,
++            actor="review-bot",
++        )
++        self.assertEqual(payload["status"], "preview_unavailable")
++        self.assertEqual(payload["approval_state"], "human_review_required")
++        self.assertTrue(payload["requires_human_review"])
++        self.assertEqual(payload["actor"], "review-bot")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..52da03ce4cabdf04f09a51c1051d2d79297c2dc8
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+@@ -0,0 +1,42 @@
++{
++  "pr_id": 214,
++  "source_of_truth": ".github/review_export/pr_214_threads.json",
++  "threads": [
++    {
++      "thread_id": "T-214-01",
++      "path": "src/policy/preview.py",
++      "classification": "actionable",
++      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
++      "planned_resolution": "Preserve normalized approval_state and requires_human_review in the preview-unavailable payload."
++    },
++    {
++      "thread_id": "T-214-02",
++      "path": "src/policy/preview.py",
++      "classification": "duplicate",
++      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
++      "duplicate_of": "T-214-01",
++      "planned_resolution": "Addressed by the same fallback payload fix as T-214-01."
++    },
++    {
++      "thread_id": "T-214-03",
++      "path": "src/policy/approval_router.py",
++      "classification": "obsolete",
++      "summary": "Could we revive legacy_preview_branch here?",
++      "planned_resolution": "Do not apply because the thread is on an outdated hunk and would reintroduce legacy behavior."
++    },
++    {
++      "thread_id": "T-214-04",
++      "path": "tests/test_preview.py",
++      "classification": "actionable",
++      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
++      "planned_resolution": "Add a writable preview regression test that exercises manual_review through build_policy_preview with preview disabled."
++    },
++    {
++      "thread_id": "T-214-05",
++      "path": "docs/approval_policy.md",
++      "classification": "actionable",
++      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
++      "planned_resolution": "Update the fallback example to include approval_state and requires_human_review."
++    }
++  ]
++}
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+index e63d52e4b12838d57c3fb9df82bd54d6f3a4e005..a192f0e34d7609c3343b8011880899b67a631fe4
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+@@ -10,12 +10,14 @@
+ {
+   "request_id": "req-214",
+   "status": "preview_unavailable",
+-  "actor": "review-bot"
++  "actor": "review-bot",
++  "approval_state": "human_review_required",
++  "requires_human_review": true
+ }
+ ```
+ 
+ ## Notes
+ 
+ - `manual_review` is retired in favor of `human_review_required`.
+-- The fallback example above still mirrors the old reviewer write-up and needs
+-  to be updated once the reopened thread lands.
++- Fallback payloads must preserve the normalized approval state even when
++  preview rendering is unavailable.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+index d416cbed9392d59fedc3383fe0bfd63333a1f367..11e48db46462ae1556208e1a07a51cc58c83df10
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+@@ -14,9 +14,10 @@
+     preview_enabled: bool,
+     actor: str,
+ ) -> dict:
++    normalized_state = normalize_approval_state(approval_state)
+     return build_preview_payload(
+         request_id=request_id,
+-        approval_state=approval_state,
++        approval_state=normalized_state,
+         preview_enabled=preview_enabled,
+         actor=actor,
+     )
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+index c1614cd2e117e228bd4ae18b42d1a8dbc7dc76af..ec17b8296f0fb84843d1789c82943177ea4a881b
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+@@ -16,4 +16,6 @@
+         "request_id": request_id,
+         "status": "preview_unavailable",
+         "actor": actor,
++        "approval_state": approval_state,
++        "requires_human_review": approval_state == "human_review_required",
+     }
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+index 093e410bc9358cec3cc944b5ad50600d4bd806d0..a63585878c15bb7cb9edf37e238d7a31c80e996c
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+@@ -1,5 +1,6 @@
+ import unittest
+ 
++from src.policy.approval_router import build_policy_preview
+ from src.policy.preview import build_preview_payload
+ 
+ 
+@@ -25,6 +26,18 @@
+         self.assertEqual(payload["status"], "preview_unavailable")
+         self.assertEqual(payload["actor"], "review-bot")
+ 
++    def test_preview_unavailable_keeps_normalized_manual_review_state(self) -> None:
++        payload = build_policy_preview(
++            request_id="req-214",
++            approval_state="manual_review",
++            preview_enabled=False,
++            actor="review-bot",
++        )
++        self.assertEqual(payload["status"], "preview_unavailable")
++        self.assertEqual(payload["approval_state"], "human_review_required")
++        self.assertTrue(payload["requires_human_review"])
++        self.assertEqual(payload["actor"], "review-bot")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+
+2026-04-23T23:39:11.245641Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:11.246128Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:11.251519Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:11.251961Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:11.257444Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:11.257876Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:11.263761Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:11.264180Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+The core fix is in place. I’m running the targeted test files now and then I’ll write the reply draft and remediation report against the verified behavior.
+exec
+/bin/zsh -lc 'git diff -- src/policy/approval_router.py src/policy/preview.py tests/test_preview.py docs/approval_policy.md artifacts/review/thread_triage.json' in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ exited 129 in 0ms:
+warning: Not a git repository. Use --no-index to compare two paths outside a working tree
+usage: git diff --no-index [<options>] <path> <path>
+
+Diff output format options
+    -p, --patch           generate patch
+    -s, --no-patch        suppress diff output
+    -u                    generate patch
+    -U, --unified[=<n>]   generate diffs with <n> lines context
+    -W, --[no-]function-context
+                          generate diffs with <n> lines context
+    --raw                 generate the diff in raw format
+    --patch-with-raw      synonym for '-p --raw'
+    --patch-with-stat     synonym for '-p --stat'
+    --numstat             machine friendly --stat
+    --shortstat           output only the last line of --stat
+    -X, --dirstat[=<param1>,<param2>...]
+                          output the distribution of relative amount of changes for each sub-directory
+    --cumulative          synonym for --dirstat=cumulative
+    --dirstat-by-file[=<param1>,<param2>...]
+                          synonym for --dirstat=files,<param1>,<param2>...
+    --check               warn if changes introduce conflict markers or whitespace errors
+    --summary             condensed summary such as creations, renames and mode changes
+    --name-only           show only names of changed files
+    --name-status         show only names and status of changed files
+    --stat[=<width>[,<name-width>[,<count>]]]
+                          generate diffstat
+    --stat-width <width>  generate diffstat with a given width
+    --stat-name-width <width>
+                          generate diffstat with a given name width
+    --stat-graph-width <width>
+                          generate diffstat with a given graph width
+    --stat-count <count>  generate diffstat with limited lines
+    --[no-]compact-summary
+                          generate compact summary in diffstat
+    --binary              output a binary diff that can be applied
+    --[no-]full-index     show full pre- and post-image object names on the "index" lines
+    --[no-]color[=<when>] show colored diff
+    --ws-error-highlight <kind>
+                          highlight whitespace errors in the 'context', 'old' or 'new' lines in the diff
+    -z                    do not munge pathnames and use NULs as output field terminators in --raw or --numstat
+    --[no-]abbrev[=<n>]   use <n> digits to display object names
+    --src-prefix <prefix> show the given source prefix instead of "a/"
+    --dst-prefix <prefix> show the given destination prefix instead of "b/"
+    --line-prefix <prefix>
+                          prepend an additional prefix to every line of output
+    --no-prefix           do not show any source or destination prefix
+    --default-prefix      use default prefixes a/ and b/
+    --inter-hunk-context <n>
+                          show context between diff hunks up to the specified number of lines
+    --output-indicator-new <char>
+                          specify the character to indicate a new line instead of '+'
+    --output-indicator-old <char>
+                          specify the character to indicate an old line instead of '-'
+    --output-indicator-context <char>
+                          specify the character to indicate a context instead of ' '
+
+Diff rename options
+    -B, --break-rewrites[=<n>[/<m>]]
+                          break complete rewrite changes into pairs of delete and create
+    -M, --find-renames[=<n>]
+                          detect renames
+    -D, --irreversible-delete
+                          omit the preimage for deletes
+    -C, --find-copies[=<n>]
+                          detect copies
+    --[no-]find-copies-harder
+                          use unmodified files as source to find copies
+    --no-renames          disable rename detection
+    --[no-]rename-empty   use empty blobs as rename source
+    --[no-]follow         continue listing the history of a file beyond renames
+    -l <n>                prevent rename/copy detection if the number of rename/copy targets exceeds given limit
+
+Diff algorithm options
+    --minimal             produce the smallest possible diff
+    -w, --ignore-all-space
+                          ignore whitespace when comparing lines
+    -b, --ignore-space-change
+                          ignore changes in amount of whitespace
+    --ignore-space-at-eol ignore changes in whitespace at EOL
+    --ignore-cr-at-eol    ignore carrier-return at the end of line
+    --ignore-blank-lines  ignore changes whose lines are all blank
+    -I, --[no-]ignore-matching-lines <regex>
+                          ignore changes whose all lines match <regex>
+    --[no-]indent-heuristic
+                          heuristic to shift diff hunk boundaries for easy reading
+    --patience            generate diff using the "patience diff" algorithm
+    --histogram           generate diff using the "histogram diff" algorithm
+    --diff-algorithm <algorithm>
+                          choose a diff algorithm
+    --anchored <text>     generate diff using the "anchored diff" algorithm
+    --word-diff[=<mode>]  show word diff, using <mode> to delimit changed words
+    --word-diff-regex <regex>
+                          use <regex> to decide what a word is
+    --color-words[=<regex>]
+                          equivalent to --word-diff=color --word-diff-regex=<regex>
+    --[no-]color-moved[=<mode>]
+                          moved lines of code are colored differently
+    --[no-]color-moved-ws <mode>
+                          how white spaces are ignored in --color-moved
+
+Other diff options
+    --[no-]relative[=<prefix>]
+                          when run from subdir, exclude changes outside and show relative paths
+    -a, --[no-]text       treat all files as text
+    -R                    swap two inputs, reverse the diff
+    --[no-]exit-code      exit with 1 if there were differences, 0 otherwise
+    --[no-]quiet          disable all output of the program
+    --[no-]ext-diff       allow an external diff helper to be executed
+    --[no-]textconv       run external text conversion filters when comparing binary files
+    --ignore-submodules[=<when>]
+                          ignore changes to submodules in the diff generation
+    --submodule[=<format>]
+                          specify how differences in submodules are shown
+    --ita-invisible-in-index
+                          hide 'git add -N' entries from the index
+    --ita-visible-in-index
+                          treat 'git add -N' entries as real in the index
+    -S <string>           look for differences that change the number of occurrences of the specified string
+    -G <regex>            look for differences that change the number of occurrences of the specified regex
+    --pickaxe-all         show all changes in the changeset with -S or -G
+    --pickaxe-regex       treat <string> in -S as extended POSIX regular expression
+    -O <file>             control the order in which files appear in the output
+    --rotate-to <path>    show the change in the specified path first
+    --skip-to <path>      skip the output to the specified path
+    --find-object <object-id>
+                          look for differences that change the number of occurrences of the specified object
+    --diff-filter [(A|C|D|M|R|T|U|X|B)...[*]]
+                          select files by diff type
+    --output <file>       output to a specific file
+
+
+exec
+/bin/zsh -lc 'python3 -m unittest tests.test_preview tests.test_approval_router' in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.000s
+
+OK
+
+2026-04-23T23:39:18.987923Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:18.988358Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:18.992968Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:18.993349Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:18.997791Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:18.998123Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:19.002967Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:19.003308Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..52da03ce4cabdf04f09a51c1051d2d79297c2dc8
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+@@ -0,0 +1,42 @@
++{
++  "pr_id": 214,
++  "source_of_truth": ".github/review_export/pr_214_threads.json",
++  "threads": [
++    {
++      "thread_id": "T-214-01",
++      "path": "src/policy/preview.py",
++      "classification": "actionable",
++      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
++      "planned_resolution": "Preserve normalized approval_state and requires_human_review in the preview-unavailable payload."
++    },
++    {
++      "thread_id": "T-214-02",
++      "path": "src/policy/preview.py",
++      "classification": "duplicate",
++      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
++      "duplicate_of": "T-214-01",
++      "planned_resolution": "Addressed by the same fallback payload fix as T-214-01."
++    },
++    {
++      "thread_id": "T-214-03",
++      "path": "src/policy/approval_router.py",
++      "classification": "obsolete",
++      "summary": "Could we revive legacy_preview_branch here?",
++      "planned_resolution": "Do not apply because the thread is on an outdated hunk and would reintroduce legacy behavior."
++    },
++    {
++      "thread_id": "T-214-04",
++      "path": "tests/test_preview.py",
++      "classification": "actionable",
++      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
++      "planned_resolution": "Add a writable preview regression test that exercises manual_review through build_policy_preview with preview disabled."
++    },
++    {
++      "thread_id": "T-214-05",
++      "path": "docs/approval_policy.md",
++      "classification": "actionable",
++      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
++      "planned_resolution": "Update the fallback example to include approval_state and requires_human_review."
++    }
++  ]
++}
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+index e63d52e4b12838d57c3fb9df82bd54d6f3a4e005..a192f0e34d7609c3343b8011880899b67a631fe4
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+@@ -10,12 +10,14 @@
+ {
+   "request_id": "req-214",
+   "status": "preview_unavailable",
+-  "actor": "review-bot"
++  "actor": "review-bot",
++  "approval_state": "human_review_required",
++  "requires_human_review": true
+ }
+ ```
+ 
+ ## Notes
+ 
+ - `manual_review` is retired in favor of `human_review_required`.
+-- The fallback example above still mirrors the old reviewer write-up and needs
+-  to be updated once the reopened thread lands.
++- Fallback payloads must preserve the normalized approval state even when
++  preview rendering is unavailable.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+index d416cbed9392d59fedc3383fe0bfd63333a1f367..11e48db46462ae1556208e1a07a51cc58c83df10
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+@@ -14,9 +14,10 @@
+     preview_enabled: bool,
+     actor: str,
+ ) -> dict:
++    normalized_state = normalize_approval_state(approval_state)
+     return build_preview_payload(
+         request_id=request_id,
+-        approval_state=approval_state,
++        approval_state=normalized_state,
+         preview_enabled=preview_enabled,
+         actor=actor,
+     )
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+index c1614cd2e117e228bd4ae18b42d1a8dbc7dc76af..ec17b8296f0fb84843d1789c82943177ea4a881b
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+@@ -16,4 +16,6 @@
+         "request_id": request_id,
+         "status": "preview_unavailable",
+         "actor": actor,
++        "approval_state": approval_state,
++        "requires_human_review": approval_state == "human_review_required",
+     }
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+index 093e410bc9358cec3cc944b5ad50600d4bd806d0..a63585878c15bb7cb9edf37e238d7a31c80e996c
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+@@ -1,5 +1,6 @@
+ import unittest
+ 
++from src.policy.approval_router import build_policy_preview
+ from src.policy.preview import build_preview_payload
+ 
+ 
+@@ -25,6 +26,18 @@
+         self.assertEqual(payload["status"], "preview_unavailable")
+         self.assertEqual(payload["actor"], "review-bot")
+ 
++    def test_preview_unavailable_keeps_normalized_manual_review_state(self) -> None:
++        payload = build_policy_preview(
++            request_id="req-214",
++            approval_state="manual_review",
++            preview_enabled=False,
++            actor="review-bot",
++        )
++        self.assertEqual(payload["status"], "preview_unavailable")
++        self.assertEqual(payload["approval_state"], "human_review_required")
++        self.assertTrue(payload["requires_human_review"])
++        self.assertEqual(payload["actor"], "review-bot")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+
+2026-04-23T23:39:29.151696Z  WARN codex_core::codex: stream disconnected - retrying sampling request (1/5 in 182ms)...
+codex
+The test pass confirms the intended path: `manual_review` now normalizes before preview payload construction, and the fallback payload preserves the human-review fields. I’m writing the review reply draft and the remediation report now with one entry per exact thread id.
+apply patch
+patch: completed
+/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b22ee268db3b2f25238d45e2d05361d1502ec5f
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+@@ -0,0 +1,60 @@
++# PR-214 Remediation Report
++
++## Thread Triage
++
++- `T-214-01`: actionable
++- `T-214-02`: duplicate of `T-214-01`
++- `T-214-03`: obsolete
++- `T-214-04`: actionable
++- `T-214-05`: actionable
++
++## Code Changes
++
++### `src/policy/approval_router.py`
++
++- Normalized `approval_state` inside `build_policy_preview(...)` before calling
++  `build_preview_payload(...)`.
++- This ensures `manual_review` is converted to
++  `human_review_required` for both live-preview and fallback-preview paths.
++
++### `src/policy/preview.py`
++
++- Preserved `approval_state` in the fallback
++  `status="preview_unavailable"` payload.
++- Added `requires_human_review` to the same fallback payload so the review
++  state remains visible when preview rendering is disabled.
++
++### `tests/test_preview.py`
++
++- Added a regression test covering
++  `build_policy_preview(request_id="req-214", approval_state="manual_review", preview_enabled=False, actor="review-bot")`.
++- The test verifies the fallback payload retains
++  `approval_state="human_review_required"` and
++  `requires_human_review=True`.
++
++### `docs/approval_policy.md`
++
++- Updated the fallback response example to match the corrected payload.
++- Removed the stale note claiming the fallback example still needed the reopened
++  thread to land.
++
++## Verification
++
++Executed:
++
++```bash
++python3 -m unittest tests.test_preview tests.test_approval_router
++```
++
++Result:
++
++- `5` tests ran
++- all passed
++
++## Reviewer Mapping
++
++- `T-214-01`: resolved by the router normalization plus fallback payload fix
++- `T-214-02`: classified duplicate; no separate code change
++- `T-214-03`: classified obsolete; suggestion intentionally not applied
++- `T-214-04`: resolved by the new fallback regression test
++- `T-214-05`: resolved by the corrected docs example
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6412e37c1b95e05e1b4af71aa64131e154899182
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+@@ -0,0 +1,33 @@
++## Review Reply Draft
++
++### T-214-01
++
++Fixed in `src/policy/preview.py` and `src/policy/approval_router.py`.
++The fallback `preview_unavailable` payload now preserves `approval_state` and
++`requires_human_review`, and the router now normalizes `manual_review` to
++`human_review_required` before building the payload.
++
++### T-214-02
++
++No separate code change. This is a duplicate of `T-214-01`, and the same
++fallback payload fix addresses both threads.
++
++### T-214-03
++
++Not applied. The suggestion is attached to an outdated hunk in
++`src/policy/approval_router.py` and would reintroduce legacy behavior, so this
++thread is being treated as obsolete on the current branch.
++
++### T-214-04
++
++Added a regression test in `tests/test_preview.py` that exercises
++`build_policy_preview(..., preview_enabled=False, approval_state="manual_review", ...)`
++and asserts the fallback payload keeps
++`approval_state="human_review_required"` with
++`requires_human_review=True`.
++
++### T-214-05
++
++Updated `docs/approval_policy.md` so the fallback response example now includes
++`approval_state: "human_review_required"` and
++`requires_human_review: true`.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..52da03ce4cabdf04f09a51c1051d2d79297c2dc8
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+@@ -0,0 +1,42 @@
++{
++  "pr_id": 214,
++  "source_of_truth": ".github/review_export/pr_214_threads.json",
++  "threads": [
++    {
++      "thread_id": "T-214-01",
++      "path": "src/policy/preview.py",
++      "classification": "actionable",
++      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
++      "planned_resolution": "Preserve normalized approval_state and requires_human_review in the preview-unavailable payload."
++    },
++    {
++      "thread_id": "T-214-02",
++      "path": "src/policy/preview.py",
++      "classification": "duplicate",
++      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
++      "duplicate_of": "T-214-01",
++      "planned_resolution": "Addressed by the same fallback payload fix as T-214-01."
++    },
++    {
++      "thread_id": "T-214-03",
++      "path": "src/policy/approval_router.py",
++      "classification": "obsolete",
++      "summary": "Could we revive legacy_preview_branch here?",
++      "planned_resolution": "Do not apply because the thread is on an outdated hunk and would reintroduce legacy behavior."
++    },
++    {
++      "thread_id": "T-214-04",
++      "path": "tests/test_preview.py",
++      "classification": "actionable",
++      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
++      "planned_resolution": "Add a writable preview regression test that exercises manual_review through build_policy_preview with preview disabled."
++    },
++    {
++      "thread_id": "T-214-05",
++      "path": "docs/approval_policy.md",
++      "classification": "actionable",
++      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
++      "planned_resolution": "Update the fallback example to include approval_state and requires_human_review."
++    }
++  ]
++}
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+index e63d52e4b12838d57c3fb9df82bd54d6f3a4e005..a192f0e34d7609c3343b8011880899b67a631fe4
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+@@ -10,12 +10,14 @@
+ {
+   "request_id": "req-214",
+   "status": "preview_unavailable",
+-  "actor": "review-bot"
++  "actor": "review-bot",
++  "approval_state": "human_review_required",
++  "requires_human_review": true
+ }
+ ```
+ 
+ ## Notes
+ 
+ - `manual_review` is retired in favor of `human_review_required`.
+-- The fallback example above still mirrors the old reviewer write-up and needs
+-  to be updated once the reopened thread lands.
++- Fallback payloads must preserve the normalized approval state even when
++  preview rendering is unavailable.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+index d416cbed9392d59fedc3383fe0bfd63333a1f367..11e48db46462ae1556208e1a07a51cc58c83df10
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+@@ -14,9 +14,10 @@
+     preview_enabled: bool,
+     actor: str,
+ ) -> dict:
++    normalized_state = normalize_approval_state(approval_state)
+     return build_preview_payload(
+         request_id=request_id,
+-        approval_state=approval_state,
++        approval_state=normalized_state,
+         preview_enabled=preview_enabled,
+         actor=actor,
+     )
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+index c1614cd2e117e228bd4ae18b42d1a8dbc7dc76af..ec17b8296f0fb84843d1789c82943177ea4a881b
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+@@ -16,4 +16,6 @@
+         "request_id": request_id,
+         "status": "preview_unavailable",
+         "actor": actor,
++        "approval_state": approval_state,
++        "requires_human_review": approval_state == "human_review_required",
+     }
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+index 093e410bc9358cec3cc944b5ad50600d4bd806d0..a63585878c15bb7cb9edf37e238d7a31c80e996c
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+@@ -1,5 +1,6 @@
+ import unittest
+ 
++from src.policy.approval_router import build_policy_preview
+ from src.policy.preview import build_preview_payload
+ 
+ 
+@@ -25,6 +26,18 @@
+         self.assertEqual(payload["status"], "preview_unavailable")
+         self.assertEqual(payload["actor"], "review-bot")
+ 
++    def test_preview_unavailable_keeps_normalized_manual_review_state(self) -> None:
++        payload = build_policy_preview(
++            request_id="req-214",
++            approval_state="manual_review",
++            preview_enabled=False,
++            actor="review-bot",
++        )
++        self.assertEqual(payload["status"], "preview_unavailable")
++        self.assertEqual(payload["approval_state"], "human_review_required")
++        self.assertTrue(payload["requires_human_review"])
++        self.assertEqual(payload["actor"], "review-bot")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b22ee268db3b2f25238d45e2d05361d1502ec5f
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+@@ -0,0 +1,60 @@
++# PR-214 Remediation Report
++
++## Thread Triage
++
++- `T-214-01`: actionable
++- `T-214-02`: duplicate of `T-214-01`
++- `T-214-03`: obsolete
++- `T-214-04`: actionable
++- `T-214-05`: actionable
++
++## Code Changes
++
++### `src/policy/approval_router.py`
++
++- Normalized `approval_state` inside `build_policy_preview(...)` before calling
++  `build_preview_payload(...)`.
++- This ensures `manual_review` is converted to
++  `human_review_required` for both live-preview and fallback-preview paths.
++
++### `src/policy/preview.py`
++
++- Preserved `approval_state` in the fallback
++  `status="preview_unavailable"` payload.
++- Added `requires_human_review` to the same fallback payload so the review
++  state remains visible when preview rendering is disabled.
++
++### `tests/test_preview.py`
++
++- Added a regression test covering
++  `build_policy_preview(request_id="req-214", approval_state="manual_review", preview_enabled=False, actor="review-bot")`.
++- The test verifies the fallback payload retains
++  `approval_state="human_review_required"` and
++  `requires_human_review=True`.
++
++### `docs/approval_policy.md`
++
++- Updated the fallback response example to match the corrected payload.
++- Removed the stale note claiming the fallback example still needed the reopened
++  thread to land.
++
++## Verification
++
++Executed:
++
++```bash
++python3 -m unittest tests.test_preview tests.test_approval_router
++```
++
++Result:
++
++- `5` tests ran
++- all passed
++
++## Reviewer Mapping
++
++- `T-214-01`: resolved by the router normalization plus fallback payload fix
++- `T-214-02`: classified duplicate; no separate code change
++- `T-214-03`: classified obsolete; suggestion intentionally not applied
++- `T-214-04`: resolved by the new fallback regression test
++- `T-214-05`: resolved by the corrected docs example
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6412e37c1b95e05e1b4af71aa64131e154899182
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+@@ -0,0 +1,33 @@
++## Review Reply Draft
++
++### T-214-01
++
++Fixed in `src/policy/preview.py` and `src/policy/approval_router.py`.
++The fallback `preview_unavailable` payload now preserves `approval_state` and
++`requires_human_review`, and the router now normalizes `manual_review` to
++`human_review_required` before building the payload.
++
++### T-214-02
++
++No separate code change. This is a duplicate of `T-214-01`, and the same
++fallback payload fix addresses both threads.
++
++### T-214-03
++
++Not applied. The suggestion is attached to an outdated hunk in
++`src/policy/approval_router.py` and would reintroduce legacy behavior, so this
++thread is being treated as obsolete on the current branch.
++
++### T-214-04
++
++Added a regression test in `tests/test_preview.py` that exercises
++`build_policy_preview(..., preview_enabled=False, approval_state="manual_review", ...)`
++and asserts the fallback payload keeps
++`approval_state="human_review_required"` with
++`requires_human_review=True`.
++
++### T-214-05
++
++Updated `docs/approval_policy.md` so the fallback response example now includes
++`approval_state: "human_review_required"` and
++`requires_human_review: true`.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..52da03ce4cabdf04f09a51c1051d2d79297c2dc8
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+@@ -0,0 +1,42 @@
++{
++  "pr_id": 214,
++  "source_of_truth": ".github/review_export/pr_214_threads.json",
++  "threads": [
++    {
++      "thread_id": "T-214-01",
++      "path": "src/policy/preview.py",
++      "classification": "actionable",
++      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
++      "planned_resolution": "Preserve normalized approval_state and requires_human_review in the preview-unavailable payload."
++    },
++    {
++      "thread_id": "T-214-02",
++      "path": "src/policy/preview.py",
++      "classification": "duplicate",
++      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
++      "duplicate_of": "T-214-01",
++      "planned_resolution": "Addressed by the same fallback payload fix as T-214-01."
++    },
++    {
++      "thread_id": "T-214-03",
++      "path": "src/policy/approval_router.py",
++      "classification": "obsolete",
++      "summary": "Could we revive legacy_preview_branch here?",
++      "planned_resolution": "Do not apply because the thread is on an outdated hunk and would reintroduce legacy behavior."
++    },
++    {
++      "thread_id": "T-214-04",
++      "path": "tests/test_preview.py",
++      "classification": "actionable",
++      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
++      "planned_resolution": "Add a writable preview regression test that exercises manual_review through build_policy_preview with preview disabled."
++    },
++    {
++      "thread_id": "T-214-05",
++      "path": "docs/approval_policy.md",
++      "classification": "actionable",
++      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
++      "planned_resolution": "Update the fallback example to include approval_state and requires_human_review."
++    }
++  ]
++}
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+index e63d52e4b12838d57c3fb9df82bd54d6f3a4e005..a192f0e34d7609c3343b8011880899b67a631fe4
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+@@ -10,12 +10,14 @@
+ {
+   "request_id": "req-214",
+   "status": "preview_unavailable",
+-  "actor": "review-bot"
++  "actor": "review-bot",
++  "approval_state": "human_review_required",
++  "requires_human_review": true
+ }
+ ```
+ 
+ ## Notes
+ 
+ - `manual_review` is retired in favor of `human_review_required`.
+-- The fallback example above still mirrors the old reviewer write-up and needs
+-  to be updated once the reopened thread lands.
++- Fallback payloads must preserve the normalized approval state even when
++  preview rendering is unavailable.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+index d416cbed9392d59fedc3383fe0bfd63333a1f367..11e48db46462ae1556208e1a07a51cc58c83df10
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+@@ -14,9 +14,10 @@
+     preview_enabled: bool,
+     actor: str,
+ ) -> dict:
++    normalized_state = normalize_approval_state(approval_state)
+     return build_preview_payload(
+         request_id=request_id,
+-        approval_state=approval_state,
++        approval_state=normalized_state,
+         preview_enabled=preview_enabled,
+         actor=actor,
+     )
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+index c1614cd2e117e228bd4ae18b42d1a8dbc7dc76af..ec17b8296f0fb84843d1789c82943177ea4a881b
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+@@ -16,4 +16,6 @@
+         "request_id": request_id,
+         "status": "preview_unavailable",
+         "actor": actor,
++        "approval_state": approval_state,
++        "requires_human_review": approval_state == "human_review_required",
+     }
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+index 093e410bc9358cec3cc944b5ad50600d4bd806d0..a63585878c15bb7cb9edf37e238d7a31c80e996c
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+@@ -1,5 +1,6 @@
+ import unittest
+ 
++from src.policy.approval_router import build_policy_preview
+ from src.policy.preview import build_preview_payload
+ 
+ 
+@@ -25,6 +26,18 @@
+         self.assertEqual(payload["status"], "preview_unavailable")
+         self.assertEqual(payload["actor"], "review-bot")
+ 
++    def test_preview_unavailable_keeps_normalized_manual_review_state(self) -> None:
++        payload = build_policy_preview(
++            request_id="req-214",
++            approval_state="manual_review",
++            preview_enabled=False,
++            actor="review-bot",
++        )
++        self.assertEqual(payload["status"], "preview_unavailable")
++        self.assertEqual(payload["approval_state"], "human_review_required")
++        self.assertTrue(payload["requires_human_review"])
++        self.assertEqual(payload["actor"], "review-bot")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+
+2026-04-23T23:39:49.540730Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:49.541285Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:49.547105Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:49.547546Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:49.552897Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:49.553310Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:39:49.559333Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:39:49.559726Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+exec
+/bin/zsh -lc "sed -n '1,220p' src/policy/approval_router.py" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+from src.policy.preview import build_preview_payload
+
+LEGACY_APPROVAL_STATES = {"manual_review": "human_review_required"}
+
+
+def normalize_approval_state(approval_state) -> str:
+    state = (approval_state or "manual_review").strip()
+    return LEGACY_APPROVAL_STATES.get(state, state)
+
+
+def build_policy_preview(
+    request_id: str,
+    approval_state,
+    preview_enabled: bool,
+    actor: str,
+) -> dict:
+    normalized_state = normalize_approval_state(approval_state)
+    return build_preview_payload(
+        request_id=request_id,
+        approval_state=normalized_state,
+        preview_enabled=preview_enabled,
+        actor=actor,
+    )
+
+exec
+/bin/zsh -lc "sed -n '1,220p' src/policy/preview.py" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+def build_preview_payload(
+    request_id: str,
+    approval_state: str,
+    preview_enabled: bool,
+    actor: str,
+) -> dict:
+    if preview_enabled:
+        return {
+            "request_id": request_id,
+            "actor": actor,
+            "preview_path": f"/preview/{request_id}",
+            "approval_state": approval_state,
+            "requires_human_review": approval_state == "human_review_required",
+        }
+    return {
+        "request_id": request_id,
+        "status": "preview_unavailable",
+        "actor": actor,
+        "approval_state": approval_state,
+        "requires_human_review": approval_state == "human_review_required",
+    }
+
+exec
+/bin/zsh -lc "sed -n '1,260p' tests/test_preview.py" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+import unittest
+
+from src.policy.approval_router import build_policy_preview
+from src.policy.preview import build_preview_payload
+
+
+class PreviewPayloadTests(unittest.TestCase):
+    def test_live_preview_includes_human_review_fields(self) -> None:
+        payload = build_preview_payload(
+            request_id="req-214",
+            approval_state="human_review_required",
+            preview_enabled=True,
+            actor="review-bot",
+        )
+        self.assertEqual(payload["approval_state"], "human_review_required")
+        self.assertTrue(payload["requires_human_review"])
+        self.assertEqual(payload["preview_path"], "/preview/req-214")
+
+    def test_preview_unavailable_keeps_status(self) -> None:
+        payload = build_preview_payload(
+            request_id="req-214",
+            approval_state="human_review_required",
+            preview_enabled=False,
+            actor="review-bot",
+        )
+        self.assertEqual(payload["status"], "preview_unavailable")
+        self.assertEqual(payload["actor"], "review-bot")
+
+    def test_preview_unavailable_keeps_normalized_manual_review_state(self) -> None:
+        payload = build_policy_preview(
+            request_id="req-214",
+            approval_state="manual_review",
+            preview_enabled=False,
+            actor="review-bot",
+        )
+        self.assertEqual(payload["status"], "preview_unavailable")
+        self.assertEqual(payload["approval_state"], "human_review_required")
+        self.assertTrue(payload["requires_human_review"])
+        self.assertEqual(payload["actor"], "review-bot")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+exec
+/bin/zsh -lc "sed -n '1,260p' docs/approval_policy.md" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+# Approval Policy
+
+Preview routing keeps the live preview payload aligned with policy routing.
+
+## Fallback Response
+
+When preview rendering is unavailable, return:
+
+```json
+{
+  "request_id": "req-214",
+  "status": "preview_unavailable",
+  "actor": "review-bot",
+  "approval_state": "human_review_required",
+  "requires_human_review": true
+}
+```
+
+## Notes
+
+- `manual_review` is retired in favor of `human_review_required`.
+- Fallback payloads must preserve the normalized approval state even when
+  preview rendering is unavailable.
+
+exec
+/bin/zsh -lc "sed -n '1,260p' artifacts/review/thread_triage.json && printf '\\n---\\n' && sed -n '1,260p' artifacts/review/reply_draft.md && printf '\\n---\\n' && sed -n '1,320p' artifacts/review/remediation_report.md && printf '\\n---\\n' && rg -n \"legacy_preview_hint\" src tests docs artifacts/review || true" in /var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace
+ succeeded in 0ms:
+{
+  "pr_id": 214,
+  "source_of_truth": ".github/review_export/pr_214_threads.json",
+  "threads": [
+    {
+      "thread_id": "T-214-01",
+      "path": "src/policy/preview.py",
+      "classification": "actionable",
+      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
+      "planned_resolution": "Preserve normalized approval_state and requires_human_review in the preview-unavailable payload."
+    },
+    {
+      "thread_id": "T-214-02",
+      "path": "src/policy/preview.py",
+      "classification": "duplicate",
+      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
+      "duplicate_of": "T-214-01",
+      "planned_resolution": "Addressed by the same fallback payload fix as T-214-01."
+    },
+    {
+      "thread_id": "T-214-03",
+      "path": "src/policy/approval_router.py",
+      "classification": "obsolete",
+      "summary": "Could we revive legacy_preview_branch here?",
+      "planned_resolution": "Do not apply because the thread is on an outdated hunk and would reintroduce legacy behavior."
+    },
+    {
+      "thread_id": "T-214-04",
+      "path": "tests/test_preview.py",
+      "classification": "actionable",
+      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
+      "planned_resolution": "Add a writable preview regression test that exercises manual_review through build_policy_preview with preview disabled."
+    },
+    {
+      "thread_id": "T-214-05",
+      "path": "docs/approval_policy.md",
+      "classification": "actionable",
+      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
+      "planned_resolution": "Update the fallback example to include approval_state and requires_human_review."
+    }
+  ]
+}
+
+---
+## Review Reply Draft
+
+### T-214-01
+
+Fixed in `src/policy/preview.py` and `src/policy/approval_router.py`.
+The fallback `preview_unavailable` payload now preserves `approval_state` and
+`requires_human_review`, and the router now normalizes `manual_review` to
+`human_review_required` before building the payload.
+
+### T-214-02
+
+No separate code change. This is a duplicate of `T-214-01`, and the same
+fallback payload fix addresses both threads.
+
+### T-214-03
+
+Not applied. The suggestion is attached to an outdated hunk in
+`src/policy/approval_router.py` and would reintroduce legacy behavior, so this
+thread is being treated as obsolete on the current branch.
+
+### T-214-04
+
+Added a regression test in `tests/test_preview.py` that exercises
+`build_policy_preview(..., preview_enabled=False, approval_state="manual_review", ...)`
+and asserts the fallback payload keeps
+`approval_state="human_review_required"` with
+`requires_human_review=True`.
+
+### T-214-05
+
+Updated `docs/approval_policy.md` so the fallback response example now includes
+`approval_state: "human_review_required"` and
+`requires_human_review: true`.
+
+---
+# PR-214 Remediation Report
+
+## Thread Triage
+
+- `T-214-01`: actionable
+- `T-214-02`: duplicate of `T-214-01`
+- `T-214-03`: obsolete
+- `T-214-04`: actionable
+- `T-214-05`: actionable
+
+## Code Changes
+
+### `src/policy/approval_router.py`
+
+- Normalized `approval_state` inside `build_policy_preview(...)` before calling
+  `build_preview_payload(...)`.
+- This ensures `manual_review` is converted to
+  `human_review_required` for both live-preview and fallback-preview paths.
+
+### `src/policy/preview.py`
+
+- Preserved `approval_state` in the fallback
+  `status="preview_unavailable"` payload.
+- Added `requires_human_review` to the same fallback payload so the review
+  state remains visible when preview rendering is disabled.
+
+### `tests/test_preview.py`
+
+- Added a regression test covering
+  `build_policy_preview(request_id="req-214", approval_state="manual_review", preview_enabled=False, actor="review-bot")`.
+- The test verifies the fallback payload retains
+  `approval_state="human_review_required"` and
+  `requires_human_review=True`.
+
+### `docs/approval_policy.md`
+
+- Updated the fallback response example to match the corrected payload.
+- Removed the stale note claiming the fallback example still needed the reopened
+  thread to land.
+
+## Verification
+
+Executed:
+
+```bash
+python3 -m unittest tests.test_preview tests.test_approval_router
+```
+
+Result:
+
+- `5` tests ran
+- all passed
+
+## Reviewer Mapping
+
+- `T-214-01`: resolved by the router normalization plus fallback payload fix
+- `T-214-02`: classified duplicate; no separate code change
+- `T-214-03`: classified obsolete; suggestion intentionally not applied
+- `T-214-04`: resolved by the new fallback regression test
+- `T-214-05`: resolved by the corrected docs example
+
+---
+
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b22ee268db3b2f25238d45e2d05361d1502ec5f
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+@@ -0,0 +1,60 @@
++# PR-214 Remediation Report
++
++## Thread Triage
++
++- `T-214-01`: actionable
++- `T-214-02`: duplicate of `T-214-01`
++- `T-214-03`: obsolete
++- `T-214-04`: actionable
++- `T-214-05`: actionable
++
++## Code Changes
++
++### `src/policy/approval_router.py`
++
++- Normalized `approval_state` inside `build_policy_preview(...)` before calling
++  `build_preview_payload(...)`.
++- This ensures `manual_review` is converted to
++  `human_review_required` for both live-preview and fallback-preview paths.
++
++### `src/policy/preview.py`
++
++- Preserved `approval_state` in the fallback
++  `status="preview_unavailable"` payload.
++- Added `requires_human_review` to the same fallback payload so the review
++  state remains visible when preview rendering is disabled.
++
++### `tests/test_preview.py`
++
++- Added a regression test covering
++  `build_policy_preview(request_id="req-214", approval_state="manual_review", preview_enabled=False, actor="review-bot")`.
++- The test verifies the fallback payload retains
++  `approval_state="human_review_required"` and
++  `requires_human_review=True`.
++
++### `docs/approval_policy.md`
++
++- Updated the fallback response example to match the corrected payload.
++- Removed the stale note claiming the fallback example still needed the reopened
++  thread to land.
++
++## Verification
++
++Executed:
++
++```bash
++python3 -m unittest tests.test_preview tests.test_approval_router
++```
++
++Result:
++
++- `5` tests ran
++- all passed
++
++## Reviewer Mapping
++
++- `T-214-01`: resolved by the router normalization plus fallback payload fix
++- `T-214-02`: classified duplicate; no separate code change
++- `T-214-03`: classified obsolete; suggestion intentionally not applied
++- `T-214-04`: resolved by the new fallback regression test
++- `T-214-05`: resolved by the corrected docs example
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6412e37c1b95e05e1b4af71aa64131e154899182
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+@@ -0,0 +1,33 @@
++## Review Reply Draft
++
++### T-214-01
++
++Fixed in `src/policy/preview.py` and `src/policy/approval_router.py`.
++The fallback `preview_unavailable` payload now preserves `approval_state` and
++`requires_human_review`, and the router now normalizes `manual_review` to
++`human_review_required` before building the payload.
++
++### T-214-02
++
++No separate code change. This is a duplicate of `T-214-01`, and the same
++fallback payload fix addresses both threads.
++
++### T-214-03
++
++Not applied. The suggestion is attached to an outdated hunk in
++`src/policy/approval_router.py` and would reintroduce legacy behavior, so this
++thread is being treated as obsolete on the current branch.
++
++### T-214-04
++
++Added a regression test in `tests/test_preview.py` that exercises
++`build_policy_preview(..., preview_enabled=False, approval_state="manual_review", ...)`
++and asserts the fallback payload keeps
++`approval_state="human_review_required"` with
++`requires_human_review=True`.
++
++### T-214-05
++
++Updated `docs/approval_policy.md` so the fallback response example now includes
++`approval_state: "human_review_required"` and
++`requires_human_review: true`.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..52da03ce4cabdf04f09a51c1051d2d79297c2dc8
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+@@ -0,0 +1,42 @@
++{
++  "pr_id": 214,
++  "source_of_truth": ".github/review_export/pr_214_threads.json",
++  "threads": [
++    {
++      "thread_id": "T-214-01",
++      "path": "src/policy/preview.py",
++      "classification": "actionable",
++      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
++      "planned_resolution": "Preserve normalized approval_state and requires_human_review in the preview-unavailable payload."
++    },
++    {
++      "thread_id": "T-214-02",
++      "path": "src/policy/preview.py",
++      "classification": "duplicate",
++      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
++      "duplicate_of": "T-214-01",
++      "planned_resolution": "Addressed by the same fallback payload fix as T-214-01."
++    },
++    {
++      "thread_id": "T-214-03",
++      "path": "src/policy/approval_router.py",
++      "classification": "obsolete",
++      "summary": "Could we revive legacy_preview_branch here?",
++      "planned_resolution": "Do not apply because the thread is on an outdated hunk and would reintroduce legacy behavior."
++    },
++    {
++      "thread_id": "T-214-04",
++      "path": "tests/test_preview.py",
++      "classification": "actionable",
++      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
++      "planned_resolution": "Add a writable preview regression test that exercises manual_review through build_policy_preview with preview disabled."
++    },
++    {
++      "thread_id": "T-214-05",
++      "path": "docs/approval_policy.md",
++      "classification": "actionable",
++      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
++      "planned_resolution": "Update the fallback example to include approval_state and requires_human_review."
++    }
++  ]
++}
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+index e63d52e4b12838d57c3fb9df82bd54d6f3a4e005..a192f0e34d7609c3343b8011880899b67a631fe4
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+@@ -10,12 +10,14 @@
+ {
+   "request_id": "req-214",
+   "status": "preview_unavailable",
+-  "actor": "review-bot"
++  "actor": "review-bot",
++  "approval_state": "human_review_required",
++  "requires_human_review": true
+ }
+ ```
+ 
+ ## Notes
+ 
+ - `manual_review` is retired in favor of `human_review_required`.
+-- The fallback example above still mirrors the old reviewer write-up and needs
+-  to be updated once the reopened thread lands.
++- Fallback payloads must preserve the normalized approval state even when
++  preview rendering is unavailable.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+index d416cbed9392d59fedc3383fe0bfd63333a1f367..11e48db46462ae1556208e1a07a51cc58c83df10
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+@@ -14,9 +14,10 @@
+     preview_enabled: bool,
+     actor: str,
+ ) -> dict:
++    normalized_state = normalize_approval_state(approval_state)
+     return build_preview_payload(
+         request_id=request_id,
+-        approval_state=approval_state,
++        approval_state=normalized_state,
+         preview_enabled=preview_enabled,
+         actor=actor,
+     )
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+index c1614cd2e117e228bd4ae18b42d1a8dbc7dc76af..ec17b8296f0fb84843d1789c82943177ea4a881b
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+@@ -16,4 +16,6 @@
+         "request_id": request_id,
+         "status": "preview_unavailable",
+         "actor": actor,
++        "approval_state": approval_state,
++        "requires_human_review": approval_state == "human_review_required",
+     }
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+index 093e410bc9358cec3cc944b5ad50600d4bd806d0..a63585878c15bb7cb9edf37e238d7a31c80e996c
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+@@ -1,5 +1,6 @@
+ import unittest
+ 
++from src.policy.approval_router import build_policy_preview
+ from src.policy.preview import build_preview_payload
+ 
+ 
+@@ -25,6 +26,18 @@
+         self.assertEqual(payload["status"], "preview_unavailable")
+         self.assertEqual(payload["actor"], "review-bot")
+ 
++    def test_preview_unavailable_keeps_normalized_manual_review_state(self) -> None:
++        payload = build_policy_preview(
++            request_id="req-214",
++            approval_state="manual_review",
++            preview_enabled=False,
++            actor="review-bot",
++        )
++        self.assertEqual(payload["status"], "preview_unavailable")
++        self.assertEqual(payload["approval_state"], "human_review_required")
++        self.assertTrue(payload["requires_human_review"])
++        self.assertEqual(payload["actor"], "review-bot")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+
+2026-04-23T23:40:07.136950Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:40:07.137402Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:40:07.142572Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:40:07.143008Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:40:07.148341Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:40:07.148746Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+2026-04-23T23:40:07.154485Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: prompt must be at most 128 characters path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/build-ios-apps/.codex-plugin/plugin.json
+2026-04-23T23:40:07.154872Z  WARN codex_core::plugins::manifest: ignoring interface.defaultPrompt: maximum of 3 prompts is supported path=/Users/zhiyuanma/.codex/.tmp/plugins/plugins/plugin-eval/.codex-plugin/plugin.json
+codex
+Classified all five exported threads from `.github/review_export/pr_214_threads.json` before editing and recorded that in [thread_triage.json](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json>). The actionable set is `T-214-01`, `T-214-04`, and `T-214-05`; `T-214-02` is marked duplicate of `T-214-01`; `T-214-03` is marked obsolete.
+
+The code change is minimal: [approval_router.py](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py:10>) now normalizes `approval_state` before building the preview payload, and [preview.py](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py:13>) now keeps `approval_state` plus `requires_human_review` in the `preview_unavailable` fallback. I added the writable regression in [test_preview.py](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py:26>) and corrected the fallback example in [approval_policy.md](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md:8>).
+
+I also wrote [reply_draft.md](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md>) and [remediation_report.md](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md>) with one entry per exact thread id.
+
+Verification: `python3 -m unittest tests.test_preview tests.test_approval_router` passed with 5 tests.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b22ee268db3b2f25238d45e2d05361d1502ec5f
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md
+@@ -0,0 +1,60 @@
++# PR-214 Remediation Report
++
++## Thread Triage
++
++- `T-214-01`: actionable
++- `T-214-02`: duplicate of `T-214-01`
++- `T-214-03`: obsolete
++- `T-214-04`: actionable
++- `T-214-05`: actionable
++
++## Code Changes
++
++### `src/policy/approval_router.py`
++
++- Normalized `approval_state` inside `build_policy_preview(...)` before calling
++  `build_preview_payload(...)`.
++- This ensures `manual_review` is converted to
++  `human_review_required` for both live-preview and fallback-preview paths.
++
++### `src/policy/preview.py`
++
++- Preserved `approval_state` in the fallback
++  `status="preview_unavailable"` payload.
++- Added `requires_human_review` to the same fallback payload so the review
++  state remains visible when preview rendering is disabled.
++
++### `tests/test_preview.py`
++
++- Added a regression test covering
++  `build_policy_preview(request_id="req-214", approval_state="manual_review", preview_enabled=False, actor="review-bot")`.
++- The test verifies the fallback payload retains
++  `approval_state="human_review_required"` and
++  `requires_human_review=True`.
++
++### `docs/approval_policy.md`
++
++- Updated the fallback response example to match the corrected payload.
++- Removed the stale note claiming the fallback example still needed the reopened
++  thread to land.
++
++## Verification
++
++Executed:
++
++```bash
++python3 -m unittest tests.test_preview tests.test_approval_router
++```
++
++Result:
++
++- `5` tests ran
++- all passed
++
++## Reviewer Mapping
++
++- `T-214-01`: resolved by the router normalization plus fallback payload fix
++- `T-214-02`: classified duplicate; no separate code change
++- `T-214-03`: classified obsolete; suggestion intentionally not applied
++- `T-214-04`: resolved by the new fallback regression test
++- `T-214-05`: resolved by the corrected docs example
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6412e37c1b95e05e1b4af71aa64131e154899182
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md
+@@ -0,0 +1,33 @@
++## Review Reply Draft
++
++### T-214-01
++
++Fixed in `src/policy/preview.py` and `src/policy/approval_router.py`.
++The fallback `preview_unavailable` payload now preserves `approval_state` and
++`requires_human_review`, and the router now normalizes `manual_review` to
++`human_review_required` before building the payload.
++
++### T-214-02
++
++No separate code change. This is a duplicate of `T-214-01`, and the same
++fallback payload fix addresses both threads.
++
++### T-214-03
++
++Not applied. The suggestion is attached to an outdated hunk in
++`src/policy/approval_router.py` and would reintroduce legacy behavior, so this
++thread is being treated as obsolete on the current branch.
++
++### T-214-04
++
++Added a regression test in `tests/test_preview.py` that exercises
++`build_policy_preview(..., preview_enabled=False, approval_state="manual_review", ...)`
++and asserts the fallback payload keeps
++`approval_state="human_review_required"` with
++`requires_human_review=True`.
++
++### T-214-05
++
++Updated `docs/approval_policy.md` so the fallback response example now includes
++`approval_state: "human_review_required"` and
++`requires_human_review: true`.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..52da03ce4cabdf04f09a51c1051d2d79297c2dc8
+--- /dev/null
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json
+@@ -0,0 +1,42 @@
++{
++  "pr_id": 214,
++  "source_of_truth": ".github/review_export/pr_214_threads.json",
++  "threads": [
++    {
++      "thread_id": "T-214-01",
++      "path": "src/policy/preview.py",
++      "classification": "actionable",
++      "summary": "Fallback preview payload still drops approval_state and requires_human_review after the reopen.",
++      "planned_resolution": "Preserve normalized approval_state and requires_human_review in the preview-unavailable payload."
++    },
++    {
++      "thread_id": "T-214-02",
++      "path": "src/policy/preview.py",
++      "classification": "duplicate",
++      "summary": "Still seeing the same fallback preview issue in the review capture. This looks duplicated from the reopened payload thread.",
++      "duplicate_of": "T-214-01",
++      "planned_resolution": "Addressed by the same fallback payload fix as T-214-01."
++    },
++    {
++      "thread_id": "T-214-03",
++      "path": "src/policy/approval_router.py",
++      "classification": "obsolete",
++      "summary": "Could we revive legacy_preview_branch here?",
++      "planned_resolution": "Do not apply because the thread is on an outdated hunk and would reintroduce legacy behavior."
++    },
++    {
++      "thread_id": "T-214-04",
++      "path": "tests/test_preview.py",
++      "classification": "actionable",
++      "summary": "Please add a regression test for preview_enabled=False plus manual_review normalization.",
++      "planned_resolution": "Add a writable preview regression test that exercises manual_review through build_policy_preview with preview disabled."
++    },
++    {
++      "thread_id": "T-214-05",
++      "path": "docs/approval_policy.md",
++      "classification": "actionable",
++      "summary": "Docs example still shows the old fallback payload and misses human_review_required.",
++      "planned_resolution": "Update the fallback example to include approval_state and requires_human_review."
++    }
++  ]
++}
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+index e63d52e4b12838d57c3fb9df82bd54d6f3a4e005..a192f0e34d7609c3343b8011880899b67a631fe4
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md
+@@ -10,12 +10,14 @@
+ {
+   "request_id": "req-214",
+   "status": "preview_unavailable",
+-  "actor": "review-bot"
++  "actor": "review-bot",
++  "approval_state": "human_review_required",
++  "requires_human_review": true
+ }
+ ```
+ 
+ ## Notes
+ 
+ - `manual_review` is retired in favor of `human_review_required`.
+-- The fallback example above still mirrors the old reviewer write-up and needs
+-  to be updated once the reopened thread lands.
++- Fallback payloads must preserve the normalized approval state even when
++  preview rendering is unavailable.
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+index d416cbed9392d59fedc3383fe0bfd63333a1f367..11e48db46462ae1556208e1a07a51cc58c83df10
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py
+@@ -14,9 +14,10 @@
+     preview_enabled: bool,
+     actor: str,
+ ) -> dict:
++    normalized_state = normalize_approval_state(approval_state)
+     return build_preview_payload(
+         request_id=request_id,
+-        approval_state=approval_state,
++        approval_state=normalized_state,
+         preview_enabled=preview_enabled,
+         actor=actor,
+     )
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+index c1614cd2e117e228bd4ae18b42d1a8dbc7dc76af..ec17b8296f0fb84843d1789c82943177ea4a881b
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py
+@@ -16,4 +16,6 @@
+         "request_id": request_id,
+         "status": "preview_unavailable",
+         "actor": actor,
++        "approval_state": approval_state,
++        "requires_human_review": approval_state == "human_review_required",
+     }
+diff --git a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+index 093e410bc9358cec3cc944b5ad50600d4bd806d0..a63585878c15bb7cb9edf37e238d7a31c80e996c
+--- a//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
++++ b//var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py
+@@ -1,5 +1,6 @@
+ import unittest
+ 
++from src.policy.approval_router import build_policy_preview
+ from src.policy.preview import build_preview_payload
+ 
+ 
+@@ -25,6 +26,18 @@
+         self.assertEqual(payload["status"], "preview_unavailable")
+         self.assertEqual(payload["actor"], "review-bot")
+ 
++    def test_preview_unavailable_keeps_normalized_manual_review_state(self) -> None:
++        payload = build_policy_preview(
++            request_id="req-214",
++            approval_state="manual_review",
++            preview_enabled=False,
++            actor="review-bot",
++        )
++        self.assertEqual(payload["status"], "preview_unavailable")
++        self.assertEqual(payload["approval_state"], "human_review_required")
++        self.assertTrue(payload["requires_human_review"])
++        self.assertEqual(payload["actor"], "review-bot")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+
+2026-04-23T23:40:22.757989Z  WARN codex_core::codex: after_agent hook failed; continuing turn_id=019dbcb4-dbba-71e1-bb7d-c3dc6beae2d8 hook_name=legacy_notify error=No such file or directory (os error 2)
+2026-04-23T23:40:22.763613Z  WARN codex_core::shell_snapshot: Failed to delete shell snapshot at "/Users/zhiyuanma/.codex/shell_snapshots/019dbcb4-dbae-7002-b32f-41857b039db9.1776987462580235000.sh": Os { code: 2, kind: NotFound, message: "No such file or directory" }
+tokens used
+73,588
+Classified all five exported threads from `.github/review_export/pr_214_threads.json` before editing and recorded that in [thread_triage.json](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/thread_triage.json>). The actionable set is `T-214-01`, `T-214-04`, and `T-214-05`; `T-214-02` is marked duplicate of `T-214-01`; `T-214-03` is marked obsolete.
+
+The code change is minimal: [approval_router.py](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/approval_router.py:10>) now normalizes `approval_state` before building the preview payload, and [preview.py](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/src/policy/preview.py:13>) now keeps `approval_state` plus `requires_human_review` in the `preview_unavailable` fallback. I added the writable regression in [test_preview.py](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/tests/test_preview.py:26>) and corrected the fallback example in [approval_policy.md](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/docs/approval_policy.md:8>).
+
+I also wrote [reply_draft.md](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/reply_draft.md>) and [remediation_report.md](</var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/pr-review-fanout-remediation_20260423T232806Z_z7rdi_pj/20260423T232806Z-v2-noisy-distractor-run2/workspace/artifacts/review/remediation_report.md>) with one entry per exact thread id.
+
+Verification: `python3 -m unittest tests.test_preview tests.test_approval_router` passed with 5 tests.

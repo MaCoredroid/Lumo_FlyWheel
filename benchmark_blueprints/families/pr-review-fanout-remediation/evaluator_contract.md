@@ -87,9 +87,9 @@ Immutable slices are:
   - reply bundle does not map exact thread ids or dispositions
 - `legacy_alias_reintroduced` cap `20`
   - runtime fix revives `legacy_preview_hint`
-- `objective_contract_missed` cap `45`
+- `objective_contract_missed` cap `15`
   - V4 report ignores the downstream consumer contract
-- `incident_blind_recovery` cap `30`
+- `incident_blind_recovery` cap `10`
   - V5 report ignores `INC-214` / no-alias recovery
 - `missing_report_scope` cap `80`
   - remediation report missing or does not distinguish acted-on from skipped work
@@ -106,11 +106,14 @@ Immutable slices are:
 
 ## Baseline Results From This Pass
 
-All five variants now satisfy the required baselines:
+All five variants satisfy the required baselines (`oracle >= 90`, `empty = 0`,
+`shortcut <= 30`):
 
-- oracle overlay: `100`
-- empty submission: `0`
-- code-only shortcut: `20`
+- `v1-clean-baseline`: oracle `90`, empty `0`, code-only shortcut `20`
+- `v2-noisy-distractor`: oracle `95`, empty `0`, code-only shortcut `20`
+- `v3-dirty-state`: oracle `95`, empty `0`, code-only shortcut `20`
+- `v4-multi-corpus-objective`: oracle `95`, empty `0`, code-only shortcut `15`
+- `v5-recovery-in-thread`: oracle `95`, empty `0`, code-only shortcut `10`
 
 Verification-matrix spot checks:
 

@@ -1,0 +1,21 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=20260423T232806Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   25.00    0.00    25    25  [25,25,25]  missing_duplicate_mappingx3,missing_report_scopex1
+v2-noisy-distractor                3   25.00    0.00    25    25  [25,25,25]  generic_repliesx2,missing_duplicate_mappingx3,missing_report_scopex2
+v3-dirty-state                     3   16.67   14.43     0    25  [25,25,0]  generic_repliesx1,missing_duplicate_mappingx3,missing_report_scopex2
+v4-multi-corpus-objective          3   20.00   18.03     0    35  [0,25,35]  generic_repliesx1,missing_duplicate_mappingx2,missing_report_scopex3,objective_contract_missedx3
+v5-recovery-in-thread              3   25.00    0.00    25    25  [25,25,25]  incident_blind_recoveryx3,missing_duplicate_mappingx3,missing_report_scopex3
+
+family_mean = 22.33   (window 15.0-25.0)
+max_variant_mean = 25.00   (cap 40.0)
+min_variant_mean = 16.67   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [PASS] family_mean in window: 22.33
+  [PASS] max variant <= cap: 25.00
+  [FAIL] at least one variant <= hard floor: min variant mean = 16.67
+  [FAIL] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: v3-dirty-state (16.7) < v4-multi-corpus-objective (20.0) beyond +/-3.0; v4-multi-corpus-objective (20.0) < v5-recovery-in-thread (25.0) beyond +/-3.0
+
+overall: HARDEN NEEDED
