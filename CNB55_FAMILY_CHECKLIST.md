@@ -28,11 +28,11 @@ Repo-level checklist for the canonical 55 CNB-55 families.
 
 ## Track 04 Review Remediation
 
-- [ ] `pr-intent-regression-review`
-- [ ] `pr-review-fanout-remediation`
-- [ ] `pr-thread-contract-remediation`
-- [ ] `review-thread-ui-hardening`
-- [ ] `security-audit-hotfix-remediation`
+- [x] ~~`pr-intent-regression-review`~~
+- [x] ~~`pr-review-fanout-remediation`~~
+- [x] ~~`pr-thread-contract-remediation`~~
+- [x] ~~`review-thread-ui-hardening`~~
+- [x] ~~`security-audit-hotfix-remediation`~~
 
 ## Track 05 Frontend Multimodal Build
 
