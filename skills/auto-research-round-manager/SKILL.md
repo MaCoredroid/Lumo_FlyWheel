@@ -60,8 +60,8 @@ Read the returned `round_id` and `round_dir`. From this point on:
    - otherwise read the new `results.tsv` row and update stop criteria
 4. After the main loop exits:
    - `lumoserve auto-research rescreen --round-id <id> --top-k 3 --profile full`
-   - choose the winner by `objective_mean`
-   - `lumoserve auto-research validate-holdout --round-id <id> --candidate-uuid <winner_uuid>`
+   - choose the winner by `objective_mean`, then resolve that rescreen row to its parent main-loop `candidate_uuid`
+   - `lumoserve auto-research validate-holdout --round-id <id> --candidate-uuid <winner_parent_uuid>`
 5. Finalize exactly once:
    - `lumoserve auto-research finalize-round --round-id <id>`
 

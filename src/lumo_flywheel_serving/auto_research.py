@@ -1013,6 +1013,7 @@ class AutoResearchRoundManager:
         weight_version_id: str | None,
         round_root: str | Path,
         harness_type: str = "real",
+        skip_preflight: bool = False,
     ) -> dict[str, Any]:
         workload_file = Path(workload_file).resolve()
         round_root = Path(round_root).resolve()
@@ -1026,7 +1027,7 @@ class AutoResearchRoundManager:
         seed_trace_path = workload_file.parent / workload.seed_trace_ref
         if not seed_trace_path.is_file():
             raise RuntimeError(f"Seed trace file does not exist: {seed_trace_path}")
-        if harness_type != "synthetic":
+        if harness_type != "synthetic" and not skip_preflight:
             self._run_bootstrap_preflight(
                 model_config=model_config,
                 family_id=family_id,
@@ -1123,10 +1124,15 @@ class AutoResearchRoundManager:
         candidate = load_yaml_file(candidate_path)
         if not isinstance(candidate, dict):
             raise RuntimeError(f"Candidate yaml must be a mapping: {candidate_path}")
-        unknown_keys = sorted(set(candidate) - ALLOWED_VLLM_CONFIG_KEYS - {"harness_overrides"})
+        allowed_extra_keys = {"harness_overrides"} if spec.harness_type == "synthetic" else set()
+        unknown_keys = sorted(set(candidate) - ALLOWED_VLLM_CONFIG_KEYS - allowed_extra_keys)
         if unknown_keys:
             raise RuntimeError(f"Candidate contains unsupported keys: {unknown_keys}")
-        vllm_config = {key: candidate[key] for key in candidate if key in ALLOWED_VLLM_CONFIG_KEYS or key == "harness_overrides"}
+        vllm_config = {
+            key: candidate[key]
+            for key in candidate
+            if key in ALLOWED_VLLM_CONFIG_KEYS or key in allowed_extra_keys
+        }
         candidate_uuid = str(uuid4())
         candidate_label = f"candidate-{iteration_id}" if iteration_id.isdigit() else iteration_id
 
@@ -1307,6 +1313,10 @@ class AutoResearchRoundManager:
                 parent_candidate_uuid=parent.candidate_uuid,
             )
             trace = json.loads((rescreen_dir / "measurement_trace.json").read_text(encoding="utf-8"))
+            self._validate_measurement_trace(trace, status="rescreened")
+            generator = str(trace.get("generator", ""))
+            if not generator.startswith("RealMeasurementHarness") and spec.harness_type != "synthetic":
+                raise RuntimeError(f"commit_refused: generator {generator!r} is not a production trace")
             objective_parent = float(parent.objective_value)
             objective_rescreen = float(trace["sustained_concurrency"])
             objective_mean = (objective_parent + objective_rescreen) / 2.0
@@ -1398,7 +1408,14 @@ class AutoResearchRoundManager:
         row = next((entry for entry in rows if entry.candidate_uuid == candidate_uuid), None)
         if row is None:
             raise RuntimeError(f"Unknown candidate_uuid: {candidate_uuid}")
-        candidate_yaml = round_dir / "candidates" / row.iteration / "candidate.yaml"
+        target_row = row
+        if row.parent_candidate_uuid:
+            target_row = next((entry for entry in rows if entry.candidate_uuid == row.parent_candidate_uuid), None)
+            if target_row is None:
+                raise RuntimeError(
+                    f"Unknown parent candidate_uuid for holdout validation: {row.parent_candidate_uuid}"
+                )
+        candidate_yaml = round_dir / "candidates" / target_row.iteration / "candidate.yaml"
         trace = self._run_harness(
             spec=spec,
             workload=workload,
@@ -1410,7 +1427,7 @@ class AutoResearchRoundManager:
         payload = {
             "pass": passed,
             "reasons_failed": [] if passed else list(trace.get("feasibility_failures", ["holdout_failed"])),
-            "candidate_uuid": candidate_uuid,
+            "candidate_uuid": target_row.candidate_uuid,
             "trace": trace,
         }
         holdout_path = round_dir / "holdout_trace.json"
@@ -1624,6 +1641,7 @@ class AutoResearchRoundManager:
             weight_version_id=weight_version_id,
             round_root=round_root,
             harness_type=harness_type,
+            skip_preflight=True,
         )
         round_id = str(bootstrap["round_id"])
         round_dir = Path(bootstrap["round_dir"])

@@ -1236,9 +1236,56 @@ def test_run_non_agent_threads_harness_type_to_bootstrap_round(
         "weight_version_id": None,
         "round_root": repo / "output" / "auto_research",
         "harness_type": "synthetic",
+        "skip_preflight": True,
     }
     assert captured["finalize"] == {"round_id": "round-123", "dry_run": True}
     assert result["bundle_path"] == str(repo / "output" / "tuned_configs" / "bundle.yaml")
+
+
+def test_run_non_agent_real_harness_skips_production_bootstrap_preflight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    monkeypatch.setenv("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT", "1")
+    monkeypatch.setattr(
+        auto_research.AutoResearchRoundManager,
+        "_run_bootstrap_preflight",
+        lambda self, **kwargs: (_ for _ in ()).throw(AssertionError("production preflight should be skipped")),
+    )
+    monkeypatch.setattr(auto_research.AutoResearchRoundManager, "measure", lambda self, **kwargs: {"candidate_uuid": "uuid"})
+    monkeypatch.setattr(
+        auto_research.AutoResearchRoundManager,
+        "commit_candidate",
+        lambda self, **kwargs: {"iteration": kwargs["iteration"], "candidate_uuid": "uuid", "status": kwargs["status"]},
+    )
+    monkeypatch.setattr(
+        auto_research.AutoResearchRoundManager,
+        "finalize_round",
+        lambda self, *, round_id, dry_run=False: {
+            "round_id": round_id,
+            "bundle_path": str(repo / "output" / "tuned_configs" / "bundle.yaml"),
+            "finalize_commit_sha": "synthetic-sha",
+        },
+    )
+    monkeypatch.setattr(auto_research.OfflineAutoResearchRunner, "_candidate_plan", lambda self: [])
+
+    result = manager.run_non_agent(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        baseline_bundle=None,
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        iteration_cap=1,
+        harness_type="real",
+    )
+
+    assert result["round_id"].startswith("qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-")
 
 
 def test_finalize_round_refuses_without_rescreen_trace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1338,6 +1385,54 @@ def test_rescreen_and_finalize_allow_baseline_winner(tmp_path: Path, monkeypatch
 
     assert finalized["winner_iteration"] == "baseline_a"
     assert finalized["winner_candidate_uuid"] == baseline_uuids["a"]
+
+
+def test_validate_holdout_accepts_rescreen_uuid_and_canonicalizes_to_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    measurements = iter([_real_trace(objective=9), _real_trace(objective=9), _real_trace(objective=9)])
+    monkeypatch.setattr(
+        auto_research.RealMeasurementHarness,
+        "measure",
+        lambda self, candidate_vllm_config, **kwargs: next(measurements),
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        (round_dir / "candidates" / "baseline_a" / "candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    measured = manager.measure(round_id=round_id, candidate_path=candidate_dir / "candidate.yaml")
+    manager.commit_candidate(round_id=round_id, iteration="001", status="keep", notes="winner")
+    rescreen = manager.rescreen(round_id=round_id, top_k=1)
+
+    holdout = manager.validate_holdout(
+        round_id=round_id,
+        candidate_uuid=rescreen["rescreened"][0]["candidate_uuid"],
+    )
+
+    assert holdout["pass"] is True
+    assert holdout["candidate_uuid"] == measured["candidate_uuid"]
+
+    finalized = manager.finalize_round(round_id=round_id, dry_run=False)
+    assert finalized["winner_candidate_uuid"] == measured["candidate_uuid"]
 
 
 def test_finalize_round_refuses_when_holdout_uuid_does_not_match_winner(
@@ -1501,6 +1596,94 @@ kv_cache_dtype: fp8_e5m2
     assert finalized["winner_iteration"] == "002"
     assert finalized["winner_candidate_uuid"] == second_parent_uuid
     assert winner_commit == second_parent_uuid
+
+
+def test_rescreen_refuses_non_production_trace_on_real_harness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    measurements = iter(
+        [
+            _real_trace(objective=9),
+            _real_trace(objective=9, generator="SyntheticMeasurementFixture v0.1.0"),
+        ]
+    )
+    monkeypatch.setattr(
+        auto_research.RealMeasurementHarness,
+        "measure",
+        lambda self, candidate_vllm_config, **kwargs: next(measurements),
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        (round_dir / "candidates" / "baseline_a" / "candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    manager.commit_candidate(round_id=bootstrap["round_id"], iteration="001", status="keep", notes="winner")
+
+    with pytest.raises(RuntimeError, match="production trace"):
+        manager.rescreen(round_id=bootstrap["round_id"], top_k=1)
+
+
+def test_measure_rejects_harness_overrides_on_real_harness(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+max_num_seqs: 4
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.90
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+harness_overrides:
+  force_oom: true
+""",
+        encoding="utf-8",
+    )
+    round_spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    round_spec["harness_type"] = "real"
+    (round_dir / "round_spec.yaml").write_text(
+        auto_research.yaml.safe_dump(round_spec, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="unsupported keys: \\['harness_overrides'\\]"):
+        manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
 
 
 def test_finalize_round_refuses_when_unexpected_paths_are_staged(tmp_path: Path) -> None:
