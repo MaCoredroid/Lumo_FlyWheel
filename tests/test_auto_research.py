@@ -646,6 +646,29 @@ def test_l2_bootstrap_requires_and_records_lower_layer_bundle(tmp_path: Path) ->
     }
 
 
+def test_l2_candidate_plan_varies_only_enforced_fields() -> None:
+    frozen_vllm_config = {
+        "max_num_seqs": 4,
+        "max_model_len": 131072,
+    }
+
+    candidates = auto_research.AutoResearchRoundManager._request_shaping_candidate_plan(frozen_vllm_config)
+
+    assert candidates
+    assert {candidate["per_request_kv_budget"] for candidate in candidates} == {131072}
+    assert {candidate["priority_preemption"] for candidate in candidates} == {"off"}
+    assert len(
+        {
+            (
+                candidate["concurrency_cap_eval"],
+                candidate["concurrency_cap_rollout"],
+                candidate["admission_queue_depth_max"],
+            )
+            for candidate in candidates
+        }
+    ) == len(candidates)
+
+
 def test_bootstrap_prefers_composite_descriptor_and_enforces_version_pin(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     workload_path = _write_composite_workload(repo)
@@ -885,6 +908,61 @@ priority_preemption: strict
     assert bundle["round_provenance"]["l2_enforcement_coverage"]["field_values"]["priority_preemption"][
         "enforcement"
     ] == "advisory"
+
+
+def test_l2_finalize_rejects_stale_trace_enforcement_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    bundle_path = _write_l1_bundle(repo)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    monkeypatch.setattr(auto_research.RealMeasurementHarness, "measure", lambda self, candidate_vllm_config, **kwargs: _real_trace(objective=3))
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        active_layer="L2",
+        baseline_bundle=bundle_path,
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        """
+concurrency_cap_eval: 3
+concurrency_cap_rollout: 1
+admission_queue_depth_max: 64
+per_request_kv_budget: 65536
+priority_preemption: strict
+""",
+        encoding="utf-8",
+    )
+    measured = manager.measure(round_id=round_id, candidate_path=candidate_dir / "candidate.yaml")
+    manager.commit_candidate(round_id=round_id, iteration="001", status="keep", notes="l2 winner")
+    manager.rescreen(round_id=round_id, top_k=1)
+    holdout = manager.validate_holdout(round_id=round_id, candidate_uuid=measured["candidate_uuid"])
+    assert holdout["pass"] is True
+
+    trace_path = round_dir / "candidates" / "rescreen_01_screen_1" / "measurement_trace.json"
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    trace["request_shaping_enforcement"] = {
+        "mode": "substrate_measurement_only",
+        "real_proxy_enforcement": False,
+        "enforced_fields": ["concurrency_cap_eval"],
+        "advisory_fields": [],
+    }
+    trace_path.write_text(json.dumps(trace, indent=2), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="AR\\.28 L2 enforcement coverage"):
+        manager.finalize_round(round_id=round_id, dry_run=False)
 
 
 def test_commit_candidate_rejects_synthetic_measurement_trace_in_real_mode(tmp_path: Path) -> None:
@@ -2783,6 +2861,76 @@ def test_run_round_synthetic_completes_end_to_end(tmp_path: Path, monkeypatch: p
     }
     assert commit_trailers
     assert all(value == "true" for value in commit_trailers.values())
+
+
+def test_run_round_synthetic_l2_records_ar28_enforcement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    bundle_path = _write_l1_bundle(repo)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    monkeypatch.setenv("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT", "1")
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+        skip_preflight=True,
+        active_layer="L2",
+        baseline_bundle=bundle_path,
+    )
+    ctx = RoundContext.from_bootstrap_json(
+        bootstrap,
+        harness_mode="synthetic",
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+        iteration_cap=2,
+    )
+
+    result = run_round(ctx)
+
+    assert result.outcome == "ROUND_BUNDLE_READY"
+    assert result.bundle_path is not None
+    traces = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(ctx.round_dir.glob("candidates/*/measurement_trace.json"))
+    ]
+    assert traces
+    for trace in traces:
+        enforcement = trace["request_shaping_enforcement"]
+        assert enforcement["mode"] == "enforced_minus_advisory"
+        assert enforcement["real_proxy_enforcement"] is True
+        assert enforcement["enforced_fields"] == [
+            "concurrency_cap_eval",
+            "concurrency_cap_rollout",
+            "admission_queue_depth_max",
+        ]
+        assert set(enforcement["advisory_fields"]).issubset({"per_request_kv_budget", "priority_preemption"})
+        assert enforcement["field_values"]["per_request_kv_budget"]["enforcement"] == "advisory"
+        assert enforcement["field_values"]["priority_preemption"]["enforcement"] == "advisory"
+    generated_candidates = [
+        auto_research.load_yaml_file(path)
+        for path in sorted(ctx.round_dir.glob("candidates/[0-9][0-9][0-9]/candidate.yaml"))
+    ]
+    assert {candidate["per_request_kv_budget"] for candidate in generated_candidates} == {131072}
+    assert {candidate["priority_preemption"] for candidate in generated_candidates} == {"off"}
+    bundle = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
+    coverage = bundle["round_provenance"]["l2_enforcement_coverage"]
+    assert coverage["mode"] == "enforced_minus_advisory"
+    assert coverage["real_proxy_enforcement"] is True
+    assert coverage["enforced_fields"] == [
+        "concurrency_cap_eval",
+        "concurrency_cap_rollout",
+        "admission_queue_depth_max",
+    ]
+    assert coverage["advisory_fields"] == ["per_request_kv_budget", "priority_preemption"]
 
 
 def test_run_round_exit_code_distinguishes_honest_terminal_outcomes() -> None:

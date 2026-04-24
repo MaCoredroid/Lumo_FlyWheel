@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -268,6 +269,60 @@ def test_proxy_routes_eval_and_rollout_to_separate_caps(tmp_path: Path) -> None:
         rollout_thread.join(timeout=5)
 
         assert sorted(response.status_code for response in responses) == [200, 200]
+    finally:
+        proxy.shutdown()
+        upstream.shutdown()
+        proxy_thread.join(timeout=5)
+        upstream_thread.join(timeout=5)
+        proxy.server_close()
+        upstream.server_close()
+
+
+def test_proxy_records_advisory_fields_without_enforcing_output_cap_or_preemption(tmp_path: Path) -> None:
+    captured_payloads: list[dict[str, object]] = []
+
+    class _UpstreamHandler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_POST(self) -> None:  # noqa: N802
+            payload = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8"))
+            captured_payloads.append(payload)
+            body = b'{"ok": true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            return
+
+    state_root = tmp_path / "state"
+    _activate_request_shaping_bundle(
+        state_root=state_root,
+        bundle_root=tmp_path / "bundles",
+        request_shaping={
+            "concurrency_cap_eval": 1,
+            "concurrency_cap_rollout": 1,
+            "admission_queue_depth_max": 0,
+            "per_request_kv_budget": 32768,
+            "priority_preemption": "strict",
+        },
+    )
+    upstream, upstream_thread, upstream_url = _start_server(_UpstreamHandler)
+    proxy, proxy_thread, proxy_url = _start_server(
+        build_proxy_handler(upstream_url, state_root=state_root)
+    )
+    try:
+        response = requests.post(
+            f"{proxy_url}/v1/responses",
+            headers={"X-Lumo-Request-Class": "rollout"},
+            json={"model": "qwen3.5-27b", "input": "rollout", "max_output_tokens": 40000},
+            timeout=10,
+        )
+
+        assert response.status_code == 200
+        assert captured_payloads == [{"model": "qwen3.5-27b", "input": "rollout", "max_output_tokens": 40000}]
     finally:
         proxy.shutdown()
         upstream.shutdown()

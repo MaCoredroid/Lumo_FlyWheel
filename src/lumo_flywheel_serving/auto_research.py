@@ -2351,46 +2351,34 @@ class AutoResearchRoundManager:
     def _request_shaping_candidate_plan(frozen_vllm_config: dict[str, Any]) -> list[dict[str, Any]]:
         baseline = AutoResearchRoundManager._default_request_shaping(frozen_vllm_config)
         max_num_seqs = int(frozen_vllm_config["max_num_seqs"])
-        max_model_len = int(frozen_vllm_config["max_model_len"])
-        kv_half = max(max_model_len // 2, max_model_len // 4)
-        kv_three_quarter = max((max_model_len * 3) // 4, max_model_len // 4)
         raw_candidates = [
             baseline,
             {
                 **baseline,
                 "concurrency_cap_eval": max(1, max_num_seqs - 1),
                 "concurrency_cap_rollout": min(1, max_num_seqs - max(1, max_num_seqs - 1)),
-                "priority_preemption": "strict",
             },
             {
                 **baseline,
                 "concurrency_cap_eval": max(1, max_num_seqs // 2),
                 "concurrency_cap_rollout": max_num_seqs - max(1, max_num_seqs // 2),
                 "admission_queue_depth_max": 64,
-                "per_request_kv_budget": kv_half,
-                "priority_preemption": "graceful",
             },
             {
                 **baseline,
                 "admission_queue_depth_max": 0,
-                "per_request_kv_budget": kv_three_quarter,
-                "priority_preemption": "strict",
             },
             {
                 **baseline,
                 "concurrency_cap_eval": max_num_seqs,
                 "concurrency_cap_rollout": 0,
                 "admission_queue_depth_max": 512,
-                "per_request_kv_budget": kv_half,
-                "priority_preemption": "off",
             },
             {
                 **baseline,
                 "concurrency_cap_eval": max(1, max_num_seqs - 2),
                 "concurrency_cap_rollout": min(2, max_num_seqs - max(1, max_num_seqs - 2)),
                 "admission_queue_depth_max": 256,
-                "per_request_kv_budget": kv_three_quarter,
-                "priority_preemption": "graceful",
             },
         ]
         unique: list[dict[str, Any]] = []
@@ -2492,6 +2480,37 @@ class AutoResearchRoundManager:
                 "admission_queue_depth_max": "bounded admission queue with structured 429 queue_full rejection",
             },
         }
+
+    @staticmethod
+    def _validate_l2_enforcement_record(record: Any, *, context: str) -> dict[str, Any]:
+        if not isinstance(record, dict):
+            raise RuntimeError(f"{context}: missing request_shaping_enforcement")
+        mode = record.get("mode")
+        if mode not in {"enforced", "enforced_minus_advisory"}:
+            raise RuntimeError(f"{context}: invalid request_shaping_enforcement.mode")
+        if record.get("real_proxy_enforcement") is not True:
+            raise RuntimeError(f"{context}: request_shaping_enforcement.real_proxy_enforcement must be true")
+        enforced_fields = record.get("enforced_fields")
+        if enforced_fields != ENFORCED_REQUEST_SHAPING_FIELDS:
+            raise RuntimeError(f"{context}: request_shaping_enforcement.enforced_fields mismatch")
+        advisory_fields = record.get("advisory_fields", [])
+        if not isinstance(advisory_fields, list):
+            raise RuntimeError(f"{context}: request_shaping_enforcement.advisory_fields must be a list")
+        unsupported_advisory = sorted(set(advisory_fields) - set(ADVISORY_REQUEST_SHAPING_FIELDS))
+        if unsupported_advisory:
+            raise RuntimeError(f"{context}: unsupported advisory request_shaping fields: {unsupported_advisory}")
+        field_values = record.get("field_values")
+        if not isinstance(field_values, dict):
+            raise RuntimeError(f"{context}: request_shaping_enforcement.field_values must be a mapping")
+        for field in advisory_fields:
+            payload = field_values.get(field)
+            if not isinstance(payload, dict) or payload.get("enforcement") != "advisory" or "value" not in payload:
+                raise RuntimeError(f"{context}: advisory field {field} is not marked advisory")
+        for field in ENFORCED_REQUEST_SHAPING_FIELDS:
+            payload = field_values.get(field)
+            if not isinstance(payload, dict) or payload.get("enforcement") != "enforced" or "value" not in payload:
+                raise RuntimeError(f"{context}: enforced field {field} is not marked enforced")
+        return record
 
     def _apply_request_shaping_trace(
         self,
@@ -3147,22 +3166,31 @@ class AutoResearchRoundManager:
     ) -> dict[str, Any]:
         if spec.active_layer.upper() != "L2":
             return {"mode": "not_l2", "enforced_fields": [], "advisory_fields": []}
-        winner_rows = [
-            row for row in rows if row.parent_candidate_uuid == winner_parent_uuid and row.status in {"rescreened", "rescreened_full"}
+        records_by_row = [
+            (
+                row,
+                self._validate_l2_enforcement_record(
+                    self._trace_for_row(round_dir, row).get("request_shaping_enforcement"),
+                    context=f"AR.28 L2 enforcement coverage for {row.iteration}",
+                ),
+            )
+            for row in rows
         ]
-        if not winner_rows:
-            winner_rows = [row for row in rows if row.candidate_uuid == winner_parent_uuid]
-        for row in winner_rows:
-            record = self._trace_for_row(round_dir, row).get("request_shaping_enforcement")
-            if isinstance(record, dict):
-                return {
-                    "mode": str(record.get("mode", "enforced_minus_advisory")),
-                    "enforced_fields": list(record.get("enforced_fields", [])) if isinstance(record.get("enforced_fields"), list) else [],
-                    "advisory_fields": list(record.get("advisory_fields", [])) if isinstance(record.get("advisory_fields"), list) else [],
-                    "real_proxy_enforcement": bool(record.get("real_proxy_enforcement", False)),
-                    "field_values": dict(record.get("field_values", {})) if isinstance(record.get("field_values"), dict) else {},
-                }
-        return self._request_shaping_enforcement_record_for(spec, None)
+        winner_records = [
+            record
+            for row, record in records_by_row
+            if row.parent_candidate_uuid == winner_parent_uuid and row.status in {"rescreened", "rescreened_full"}
+        ]
+        if not winner_records:
+            winner_records = [record for row, record in records_by_row if row.candidate_uuid == winner_parent_uuid]
+        coverage_record = winner_records[0] if winner_records else records_by_row[0][1]
+        return {
+            "mode": str(coverage_record.get("mode", "enforced_minus_advisory")),
+            "enforced_fields": list(ENFORCED_REQUEST_SHAPING_FIELDS),
+            "advisory_fields": list(coverage_record.get("advisory_fields", [])),
+            "real_proxy_enforcement": True,
+            "field_values": dict(coverage_record.get("field_values", {})),
+        }
 
     def _read_results(self, path: Path) -> list[ResultsRow]:
         if not path.exists():
