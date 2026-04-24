@@ -1,0 +1,144 @@
+{
+  "acceptance": {
+    "at_least_one_variant_le_10": true,
+    "family_mean_window": true,
+    "max_variant_le_40": false,
+    "monotonic_breaks": [],
+    "monotonic_with_tolerance_3": true
+  },
+  "current_observed_stdev_M_training": 0.1912,
+  "family_mean": 22.33,
+  "family_mean_M_training": 0.2481,
+  "max_variant_mean": 41.67,
+  "min_variant_mean": 10.0,
+  "rows": [
+    {
+      "ceilings": [
+        "clipping_fix",
+        "missing_runtime_or_config_fix"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.9444,
+        0.2222,
+        0.2222
+      ],
+      "max": 85,
+      "mean": 41.67,
+      "mean_M_training": 0.4629,
+      "min": 20,
+      "n": 3,
+      "scores": [
+        85,
+        20,
+        20
+      ],
+      "stdev": 30.64,
+      "stdev_M_training": 0.3404,
+      "variant": "v1-clean-baseline"
+    },
+    {
+      "ceilings": [
+        "clipping_fix",
+        "missing_runtime_or_config_fix"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.2222,
+        0.2222,
+        0.2222
+      ],
+      "max": 20,
+      "mean": 20.0,
+      "mean_M_training": 0.2222,
+      "min": 20,
+      "n": 3,
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v2-noisy-distractor"
+    },
+    {
+      "ceilings": [
+        "missing_runtime_or_config_fix",
+        "wrong_viewport_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.2222,
+        0.2222,
+        0.2222
+      ],
+      "max": 20,
+      "mean": 20.0,
+      "mean_M_training": 0.2222,
+      "min": 20,
+      "n": 3,
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v3-dirty-state"
+    },
+    {
+      "ceilings": [
+        "clipping_fix",
+        "missing_runtime_or_config_fix",
+        "wrong_viewport_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.2222,
+        0.2222,
+        0.2222
+      ],
+      "max": 20,
+      "mean": 20.0,
+      "mean_M_training": 0.2222,
+      "min": 20,
+      "n": 3,
+      "scores": [
+        20,
+        20,
+        20
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v4-multi-corpus-objective"
+    },
+    {
+      "ceilings": [
+        "clipping_fix",
+        "missing_runtime_or_config_fix",
+        "rollback_recovery_scope_miss",
+        "wrong_viewport_mapping"
+      ],
+      "integrity_hits": 0,
+      "m_scores": [
+        0.1111,
+        0.1111,
+        0.1111
+      ],
+      "max": 10,
+      "mean": 10.0,
+      "mean_M_training": 0.1111,
+      "min": 10,
+      "n": 3,
+      "scores": [
+        10,
+        10,
+        10
+      ],
+      "stdev": 0.0,
+      "stdev_M_training": 0.0,
+      "variant": "v5-recovery-in-thread"
+    }
+  ]
+}

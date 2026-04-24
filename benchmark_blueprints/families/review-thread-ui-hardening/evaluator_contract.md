@@ -39,6 +39,10 @@ P-only band (`10 pts` total, probe-visible and training-quarantined):
 - `wrong_viewport_mapping = 30`
   - Trigger: the config adds a plausible but wrong viewport or route.
   - Rationale: the reopen is tied to one exact viewport.
+- `rollback_recovery_scope_miss = 10`
+  - Variant: V5 only.
+  - Trigger: the recovery attempt after rollback does not restore the exact recovered viewport mapping.
+  - Rationale: after a rollback, missing the exact recovered viewport is a hard recovery failure, not partial credit work.
 - `sunk_cost_wrong_path = 30`
   - Variants: V3-V5.
   - Trigger: the solver follows the abandoned previous-session path rather than the active reviewed surface.
@@ -61,6 +65,7 @@ P-only band (`10 pts` total, probe-visible and training-quarantined):
 
 ## Hidden Checks
 - Exact reviewed control gets the accessible name.
+- The adjacent non-target icon control stays unchanged.
 - Protected controls retain baseline markup.
 - Exact viewport id and route mapping match the variant gold.
 - Reply file mentions actionable thread ids only.

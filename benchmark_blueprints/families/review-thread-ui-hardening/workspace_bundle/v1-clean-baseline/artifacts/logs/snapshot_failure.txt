@@ -1,1 +1,2 @@
-snapshot route=/pull/241/review-thread viewport=ios-review-reopened clipped title under action button
+snapshot route=/pull/241/review-thread viewport=ios-review-reopened clipped title under trailing action cluster
+reference route=/pull/241/archived-thread viewport=legacy-resolved-reference no reopen

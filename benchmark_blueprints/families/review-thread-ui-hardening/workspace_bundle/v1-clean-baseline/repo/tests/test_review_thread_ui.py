@@ -12,14 +12,14 @@ CONFIG = ROOT / "repo" / "config" / "snapshot-viewports.json"
 
 def main() -> int:
     component = COMPONENT.read_text()
-    style = STYLE.read_text()
     config = json.loads(CONFIG.read_text())
 
     assert 'data-control="reply-thread-menu"' in component
-    assert 'aria-label="' in component
-    assert "flex-wrap: wrap" in style
-    assert "overflow: hidden" not in style
-    assert any(item["route"].startswith("/pull/241/") for item in config["scenarios"])
+    assert 'data-control="pin-thread-menu"' in component
+    assert "renderReviewThreadCards" in component
+    assert isinstance(config["viewports"], list)
+    assert isinstance(config["scenarios"], list)
+    assert len({item["id"] for item in config["viewports"]}) == len(config["viewports"])
     return 0
 
 

@@ -12,7 +12,13 @@
   text-overflow: ellipsis;
 }
 
-.review-thread-card__menu-button {
+.review-thread-card__actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.review-thread-card__icon-button {
   flex: 0 0 auto;
 }
 

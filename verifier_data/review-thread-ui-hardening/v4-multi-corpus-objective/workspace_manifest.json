@@ -1,22 +1,22 @@
 {
   "file_sha256": {
     ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
-    "AGENTS.md": "f52676090c0cca0bbfe37567d3d2f671f05f6d6ca6fb34e1a7c9523df061df27",
+    "AGENTS.md": "f6288a03917ee19f7b89aaca61da4d9901bee5eebc7a18c55e94eab70288e038",
     "Dockerfile": "0141626ee60ad2d9d90697b8522882a778c0f9e8c361f9f9eaf714b6c77e7894",
     "artifacts/logs/lint_warning.txt": "8b762572a2827d6770f9cf2a2b772dfe5f8c627ce8bfde4b867f778f366609a9",
     "artifacts/logs/snapshot_failure.txt": "f3a55ba89b0addf5453d9ddf262e3b26391775e7dc924d540cf05b143bcfa0e3",
-    "artifacts/review/export.md": "90a0d15e07179162657737fd51f55982c3825556288866800995c37f50d91ced",
-    "artifacts/review/threads.json": "3cd23b077c0bd49dc98c55eb6afce604f54ddc3dd010416d95e8c729801fcdcc",
+    "artifacts/review/export.md": "783f0d794cdf03bb47a2a44a2a6815bc44770928ba493e7771b18e457a2552a6",
+    "artifacts/review/threads.json": "5e0046e1d80cd67d7143dbae1e0662c3b5a79606d460b4e3adf6babcea899bc6",
     "artifacts/screenshots/active_mobile_reopen.md": "cc116aa5226b75fa07489d5f8260550206947bfaf3da82d175497e12f7c75743",
-    "artifacts/screenshots/release_scope_mobile.md": "fbb536e27d66ae46dd8dd0d4ef9495bc8f81b8e66e6c4c0dda827329379a84e6",
-    "artifacts/screenshots/resolved_reference.md": "a8035cfcd26d387e996124d61a019309f87813685245661bdb5607fe0e9b6857",
+    "artifacts/screenshots/release_scope_mobile.md": "c608e44a7484f3aeb392e95cb03fd07d4d219340dcc32979c63ef3b79e55039c",
+    "artifacts/screenshots/resolved_reference.md": "37e891f514160d342693e6bbcd6bd9aaf85f266ad87be52e3d4c6b5a4718de50",
     "bin/review-thread-task": "12e8bbc03d337ae0cbe30998513b267aaea1ef26551ebe7f804d576bf0f03f65",
     "evidence/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "release_context/release_hotfix_scope.md": "a2daeca370ba89a429828dc26622b74261bada1bb07bb3322f9aab6ec5894f28",
     "repo/config/snapshot-viewports.json": "abceb453bd440021b87345981cbe32f35aea12f20ff9fba2ce49ebedd6e551eb",
-    "repo/src/components/ReviewThreadCard.tsx": "12ded17879a2ab74dea301e835dd7ac539ee5c9258a1e1966cedba07b51bd6ac",
-    "repo/src/styles/review-thread.css": "d5a1086248376f474a6788826277407cacd632e21a5d9acf6286a7ad59d39294",
-    "repo/tests/test_review_thread_ui.py": "917b02d432759ae2d8b443595b942399f5b85cb1b619703687380bc42baa14f6",
+    "repo/src/components/ReviewThreadCard.tsx": "576199fec0ab7042fe071101fc85214532fff77528e3e52566aca28b48ccc7e0",
+    "repo/src/styles/review-thread.css": "9f2fcdff7d97ccb937f97e4e62d277bfcb2364f3088f1ce6abb5c84f28f27b46",
+    "repo/tests/test_review_thread_ui.py": "540685553381ef9e42aa05528473a9e7c69e2dd1c2da1f17c5f754718368ae0e",
     "review_reply/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
   },
   "files": [
@@ -41,12 +41,12 @@
   ],
   "readonly_tree_hashes": {
     ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
-    "AGENTS.md": "78effabfaaaf8b561ed0bcd611aaf9709fc6ae0fe84b43265ca4b907a020d8ca",
+    "AGENTS.md": "41b37894f38b663263352b08175febc7248eb186588b044a74ef548ad617b0fb",
     "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
-    "artifacts": "f8649077ba19466f890c0fda8186c554719e77af7b3cf95cd41a422573aa5c09",
+    "artifacts": "4d2256f66bb28a8c01dc4918c421b251bfb149e3c6cee6180c36db94415662ab",
     "bin": "ebceb35ee2640666395f1c25936505b7a4ad131644d5108f9c9bbdc74487a759",
     "release_context": "0b341483871cb6b08ed5c7166c3f04139fbe7b20848c6b9d69e95b06a7bc958c",
-    "repo/tests": "8cf3853d345c1a5a156eef1a1167912a44d50b059e7facf2447e72f1d2bac981"
+    "repo/tests": "97b2e078b2726e9d794aabcb252fbca6887d0287400a93386ca5d621a79f773b"
   },
   "variant_id": "v4-multi-corpus-objective"
 }

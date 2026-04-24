@@ -271,6 +271,8 @@ def score_family(state: ScorerState, gold: dict[str, Any], hidden: dict[str, boo
         state.apply_ceiling("blanket_accessibility_labeling", 30)
     if not hidden.get("exact_viewport") or not hidden.get("exact_route_mapping"):
         state.apply_ceiling("wrong_viewport_mapping", 30)
+        if VARIANT_ID == "v5-recovery-in-thread":
+            state.apply_ceiling("rollback_recovery_scope_miss", 10)
     if gold.get("stale_path_marker") and gold["stale_path_marker"] in state.changed_files:
         state.apply_ceiling("sunk_cost_wrong_path", 30)
     if gold.get("objective_drift_thread_ids"):

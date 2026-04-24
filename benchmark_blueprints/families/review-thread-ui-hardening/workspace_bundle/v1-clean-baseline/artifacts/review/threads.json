@@ -3,26 +3,24 @@
     "thread_id": "RT-118",
     "state": "unresolved",
     "route": "/pull/241/review-thread",
-    "viewport_id": "ios-review-reopened",
+    "viewport_group": "mobile-reopen-primary",
     "viewport": {
       "width": 390,
       "height": 844
     },
-    "component_hint": "ReviewThreadCard",
-    "control_hint": "reply-thread-menu",
+    "component_family": "thread-card-actions",
     "screenshot_ref": "artifacts/screenshots/active_mobile_reopen.md"
   },
   {
     "thread_id": "RT-099",
     "state": "resolved",
     "route": "/pull/241/archived-thread",
-    "viewport_id": "legacy-resolved-reference",
+    "viewport_group": "reference-mobile-archive",
     "viewport": {
       "width": 375,
       "height": 812
     },
-    "component_hint": "ResolvedThreadSummary",
-    "control_hint": "resolved-thread-menu",
+    "component_family": "thread-card-actions",
     "screenshot_ref": "artifacts/screenshots/resolved_reference.md"
   }
 ]

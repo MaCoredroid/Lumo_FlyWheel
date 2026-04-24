@@ -1,0 +1,89 @@
+{
+  "M_training": 0.1111,
+  "P_benchmark": 10,
+  "breakdown": {
+    "__bands": {
+      "accessibility.no_protected_churn": "M",
+      "accessibility.target_control_named": "M",
+      "evidence.clarity": "P_only",
+      "evidence.viewport_route": "M",
+      "hygiene.allowed_edits_only": "M",
+      "hygiene.target_files_changed": "M",
+      "phase2.summary_exists": "M",
+      "phase2.variant_match": "M",
+      "reply.thread_mapping": "M",
+      "runtime.wrap_fix": "M",
+      "triage.unresolved_only": "M"
+    },
+    "accessibility.no_protected_churn": 6,
+    "accessibility.target_control_named": 10,
+    "evidence.clarity": 5,
+    "evidence.viewport_route": 5,
+    "hygiene.allowed_edits_only": 5,
+    "hygiene.target_files_changed": 5,
+    "phase2.summary_exists": 3,
+    "phase2.variant_match": 3,
+    "reply.thread_mapping": 5,
+    "runtime.wrap_fix": 10,
+    "triage.unresolved_only": 14
+  },
+  "ceilings_applied": [
+    "clipping_fix",
+    "missing_runtime_or_config_fix",
+    "rollback_recovery_scope_miss",
+    "wrong_viewport_mapping"
+  ],
+  "changed_files": [
+    "repo/config/snapshot-viewports.json",
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css"
+  ],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.5,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": false,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": false,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 66,
+  "raw_score_pre_ceiling": 71,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 10,
+  "shortcut_detected": false,
+  "variant_id": "v5-recovery-in-thread",
+  "wall_clock_seconds": 0
+}

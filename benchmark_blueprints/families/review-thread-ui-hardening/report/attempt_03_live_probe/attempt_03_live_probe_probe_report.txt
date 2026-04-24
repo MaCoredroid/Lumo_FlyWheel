@@ -1,0 +1,32 @@
+# Probe Report - attempt_03_live_probe
+
+Model: `codex exec --model gpt-5.4 -c 'model_reasoning_effort="high"'`
+Runs per variant: `3`
+Variants: `v1-clean-baseline, v2-noisy-distractor, v3-dirty-state, v4-multi-corpus-objective, v5-recovery-in-thread`
+
+| Variant | n | mean P | stdev P | mean M | stdev M | min | max | scores | ceilings |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| v1-clean-baseline | 3 | 41.67 | 30.64 | 0.4629 | 0.3404 | 20 | 85 | [85, 20, 20] | clipping_fix, missing_runtime_or_config_fix |
+| v2-noisy-distractor | 3 | 20.00 | 0.00 | 0.2222 | 0.0000 | 20 | 20 | [20, 20, 20] | clipping_fix, missing_runtime_or_config_fix |
+| v3-dirty-state | 3 | 20.00 | 0.00 | 0.2222 | 0.0000 | 20 | 20 | [20, 20, 20] | missing_runtime_or_config_fix, wrong_viewport_mapping |
+| v4-multi-corpus-objective | 3 | 20.00 | 0.00 | 0.2222 | 0.0000 | 20 | 20 | [20, 20, 20] | clipping_fix, missing_runtime_or_config_fix, wrong_viewport_mapping |
+| v5-recovery-in-thread | 3 | 10.00 | 0.00 | 0.1111 | 0.0000 | 10 | 10 | [10, 10, 10] | clipping_fix, missing_runtime_or_config_fix, rollback_recovery_scope_miss, wrong_viewport_mapping |
+
+## Layer A Checks
+
+- family_mean in [15, 25]: `22.33` -> `PASS`
+- max variant mean <= 40: `41.67` -> `FAIL`
+- at least one variant mean <= 10: `10.00` -> `PASS`
+- monotonic V1>=V2>=V3>=V4>=V5 within +/-3: `PASS`
+
+## Layer B Probe Metadata
+
+- family mean M_training: `0.2481`
+- current observed stdev M_training: `0.1912`
+
+## Artifacts
+
+- Runs JSONL: `benchmark_blueprints/families/review-thread-ui-hardening/report/attempt_03_live_probe/probe_runs.jsonl`
+- Summary JSON: `benchmark_blueprints/families/review-thread-ui-hardening/report/attempt_03_live_probe/summary.json`
+- Logs: `benchmark_blueprints/families/review-thread-ui-hardening/report/attempt_03_live_probe/logs`
+- Saved artifacts: `benchmark_blueprints/families/review-thread-ui-hardening/report/attempt_03_live_probe/artifacts`

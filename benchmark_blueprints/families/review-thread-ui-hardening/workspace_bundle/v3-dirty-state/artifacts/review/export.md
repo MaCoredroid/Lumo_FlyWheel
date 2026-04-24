@@ -3,14 +3,12 @@
 ## RT-118
 - State: unresolved
 - Route: `/pull/241/review-thread`
-- Viewport: `390x844` (`ios-review-reopened`)
-- Reviewer note: "On the reopened mobile case the metadata row still clips under the icon button, and the icon-only reply menu has no accessible name."
+- Reviewer note: "The reopened mobile case still collapses the trailing action cluster into the title row, and the actionable control in that cluster is still unnamed in accessibility output."
 
 ## Previous session note
-- Ignore any abandoned WIP fix that targeted the archived summary control. The live reopen is still the reply-thread menu on the unresolved card.
+- Ignore any abandoned WIP fix that targeted the archived or pinned control path. The live reopen still belongs to the active trailing action on the unresolved card.
 
 ## RT-099
 - State: resolved
 - Route: `/pull/241/archived-thread`
-- Viewport: `375x812` (`legacy-resolved-reference`)
 - Reviewer note: "Archived thread reference only. Do not rework."

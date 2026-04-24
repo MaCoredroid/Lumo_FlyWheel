@@ -1,0 +1,22 @@
+{
+  "edited_files": [
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css",
+    "repo/config/snapshot-viewports.json"
+  ],
+  "evidence_file": "evidence/post_fix.md",
+  "reply_file": "review_reply/replies.md",
+  "route": "/pull/241/review-thread",
+  "schema_version": "cnb55.review_fix.v1",
+  "target_control": "reply-thread-menu",
+  "tests_run": [
+    "python3 repo/tests/test_review_thread_ui.py",
+    "./bin/review-thread-task validate submission_input.json",
+    "./bin/review-thread-task submit submission_input.json"
+  ],
+  "thread_ids_addressed": [
+    "RT-118"
+  ],
+  "variant_id": "v3-dirty-state",
+  "viewport": "mobile-reopen-primary (390x844)"
+}

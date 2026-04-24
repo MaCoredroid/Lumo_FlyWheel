@@ -1,0 +1,88 @@
+{
+  "M_training": 0.2222,
+  "P_benchmark": 20,
+  "breakdown": {
+    "__bands": {
+      "accessibility.no_protected_churn": "M",
+      "accessibility.target_control_named": "M",
+      "config.route_mapping": "M",
+      "config.viewport_object": "M",
+      "evidence.clarity": "P_only",
+      "hygiene.allowed_edits_only": "M",
+      "hygiene.target_files_changed": "M",
+      "phase2.summary_exists": "M",
+      "phase2.variant_match": "M",
+      "reply.thread_mapping": "M",
+      "runtime.no_clip": "M",
+      "triage.unresolved_only": "M"
+    },
+    "accessibility.no_protected_churn": 6,
+    "accessibility.target_control_named": 10,
+    "config.route_mapping": 6,
+    "config.viewport_object": 10,
+    "evidence.clarity": 5,
+    "hygiene.allowed_edits_only": 5,
+    "hygiene.target_files_changed": 5,
+    "phase2.summary_exists": 3,
+    "phase2.variant_match": 3,
+    "reply.thread_mapping": 5,
+    "runtime.no_clip": 8,
+    "triage.unresolved_only": 14
+  },
+  "ceilings_applied": [
+    "missing_runtime_or_config_fix"
+  ],
+  "changed_files": [
+    "repo/config/snapshot-viewports.json",
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css"
+  ],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.8,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": false,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": true,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": true
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 75,
+  "raw_score_pre_ceiling": 80,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 20,
+  "shortcut_detected": false,
+  "variant_id": "v2-noisy-distractor",
+  "wall_clock_seconds": 0
+}

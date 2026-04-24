@@ -12,16 +12,17 @@
   ],
   "pass_bar": 40,
   "protected_controls": [
-    "resolved-thread-menu"
+    "resolved-thread-menu",
+    "pin-thread-menu"
   ],
   "readonly_tree_hashes": {
     ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
-    "AGENTS.md": "78effabfaaaf8b561ed0bcd611aaf9709fc6ae0fe84b43265ca4b907a020d8ca",
+    "AGENTS.md": "41b37894f38b663263352b08175febc7248eb186588b044a74ef548ad617b0fb",
     "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
-    "artifacts": "f8649077ba19466f890c0fda8186c554719e77af7b3cf95cd41a422573aa5c09",
+    "artifacts": "4d2256f66bb28a8c01dc4918c421b251bfb149e3c6cee6180c36db94415662ab",
     "bin": "ebceb35ee2640666395f1c25936505b7a4ad131644d5108f9c9bbdc74487a759",
     "release_context": "0b341483871cb6b08ed5c7166c3f04139fbe7b20848c6b9d69e95b06a7bc958c",
-    "repo/tests": "8cf3853d345c1a5a156eef1a1167912a44d50b059e7facf2447e72f1d2bac981"
+    "repo/tests": "97b2e078b2726e9d794aabcb252fbca6887d0287400a93386ca5d621a79f773b"
   },
   "reply_file": "review_reply/replies.md",
   "required_acknowledgement": "",
@@ -49,5 +50,5 @@
   },
   "viewport_human": "412x915",
   "visible_test_file": "repo/tests/test_review_thread_ui.py",
-  "visible_test_sha256": "917b02d432759ae2d8b443595b942399f5b85cb1b619703687380bc42baa14f6"
+  "visible_test_sha256": "540685553381ef9e42aa05528473a9e7c69e2dd1c2da1f17c5f754718368ae0e"
 }

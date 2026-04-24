@@ -1,0 +1,35 @@
+{
+  "attempt": "attempt_03_live_probe",
+  "codex_command": [
+    "timeout",
+    "1800",
+    "codex",
+    "exec",
+    "--cd",
+    "<workspace>",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "workspace-write",
+    "--color",
+    "never",
+    "--ephemeral",
+    "--model",
+    "gpt-5.4",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "Read AGENTS.md in this directory and follow it exactly. Inspect the review exports, screenshot notes, repo sources, config, and tests before writing. Fix only the actionable unresolved review thread for this variant. Run python3 repo/tests/test_review_thread_ui.py. Write submission_input.json, run ./bin/review-thread-task validate submission_input.json, then run ./bin/review-thread-task submit submission_input.json. Do not modify any immutable review artifacts or tests."
+  ],
+  "created_at_epoch": 1776987123,
+  "model": "gpt-5.4",
+  "n": 3,
+  "prompt": "Read AGENTS.md in this directory and follow it exactly. Inspect the review exports, screenshot notes, repo sources, config, and tests before writing. Fix only the actionable unresolved review thread for this variant. Run python3 repo/tests/test_review_thread_ui.py. Write submission_input.json, run ./bin/review-thread-task validate submission_input.json, then run ./bin/review-thread-task submit submission_input.json. Do not modify any immutable review artifacts or tests.",
+  "reasoning_effort": "high",
+  "timeout_seconds": 1800,
+  "variants": [
+    "v1-clean-baseline",
+    "v2-noisy-distractor",
+    "v3-dirty-state",
+    "v4-multi-corpus-objective",
+    "v5-recovery-in-thread"
+  ]
+}

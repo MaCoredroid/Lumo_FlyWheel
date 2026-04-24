@@ -2,4 +2,4 @@
 
 - File label: `review-thread-mobile-jan.png`
 - Historical reference only.
-- Shows the older `375x812` viewport that was resolved before the current reopen.
+- Shows the smaller handset reference and the same two-icon action cluster, but this one was resolved before the current reopen.

@@ -13,7 +13,7 @@ You are on a front-end feature branch with exported PR review threads. The bundl
   - `threads.json`: exported review state, thread ids, state metadata, route/viewport metadata, and screenshot refs.
   - `export.md`: reviewer prose copied from the PR export.
 - `artifacts/screenshots/`
-  - Reviewer screenshot notes for the active mobile break plus visually similar stale or resolved references.
+  - Reviewer screenshot notes for the active mobile break plus visually similar stale or resolved references. Action clusters may contain more than one icon-like control.
 - `artifacts/logs/`
   - CI snapshot output and one irrelevant lint warning.
 - `review_reply/`
@@ -63,7 +63,7 @@ The CLI validates:
 ## Required Surfaces
 - Review-thread triage across unresolved and resolved exports.
 - Screenshot-note interpretation.
-- Runtime repo patching for mobile wrapping and icon-button accessibility.
+- Runtime repo patching for mobile wrapping and icon-button accessibility without broad label churn across adjacent controls.
 - Exact viewport/config update.
 - Concise review-reply drafting tied to actionable thread ids.
 - Fresh evidence tied to the reopened viewport.
@@ -76,6 +76,7 @@ The CLI validates:
 - Exact unresolved thread ids are handled; resolved ids are not churned.
 - The target icon-only control gets an accessible name.
 - Protected controls do not receive copy-pasted label churn.
+- The solver must distinguish the actionable control from other icon-like controls in the same action cluster.
 - Mobile layout wraps instead of clipping, truncating, or hiding overflow.
 - The exact reopened viewport and route are added to snapshot config.
 - Evidence and replies match the live reopen, not a stale screenshot or prior thread.
