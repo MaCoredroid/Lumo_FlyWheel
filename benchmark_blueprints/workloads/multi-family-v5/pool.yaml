@@ -1,0 +1,55 @@
+schema_version: multi-family-v5.pool.v1
+source: deterministic scan of benchmark_blueprints/families on main
+eligibility:
+- verification_matrix_v5*.md exists
+- codex/config.toml contains reasoning-effort and wire_api settings
+- family.yaml rawr_status=flywheel_ready or manifest.lock.json exists
+pool_families:
+- codex-provider-rollover
+- codex-skill-runtime-v2-split
+- esm-plugin-loader-modernization
+- nightly-regression-watch
+- objective-driven-repo-improvement
+- policy-aware-request-resolution
+- release-manifest-v2-modernization
+- responses-sdk-adapter-cutover
+- sqlalchemy-2-session-modernization
+pool_excluded_families:
+- family_id: candidate-worktree-shootout
+  reason: wire_api_missing
+- family_id: codex-surface-workflow-mapping
+  reason: wire_api_missing
+- family_id: dead-flag-reachability-audit
+  reason: wire_api_missing
+- family_id: delegation-merge-salvage
+  reason: wire_api_missing
+- family_id: fanout-fullstack-release-blocker
+  reason: wire_api_missing
+- family_id: incident-retro-runbook-closure
+  reason: wire_api_missing
+- family_id: parallel-explorer-root-cause-map
+  reason: wire_api_missing
+- family_id: pr-intent-regression-review
+  reason: wire_api_missing
+- family_id: pr-review-fanout-remediation
+  reason: wire_api_missing
+- family_id: pr-thread-contract-remediation
+  reason: wire_api_missing
+- family_id: release-note-to-plan-translation
+  reason: wire_api_missing
+- family_id: request-path-evidence-brief
+  reason: wire_api_missing
+- family_id: responses-tool-schema-cutover
+  reason: wire_api_missing
+- family_id: review-thread-ui-hardening
+  reason: wire_api_missing
+- family_id: runbook-code-reconciliation
+  reason: wire_api_missing
+- family_id: sandbox-policy-ci-drift
+  reason: wire_api_missing
+- family_id: security-audit-hotfix-remediation
+  reason: wire_api_missing
+- family_id: transcript-merge-regression
+  reason: wire_api_missing
+- family_id: workspace-approval-state-threading
+  reason: wire_api_missing
