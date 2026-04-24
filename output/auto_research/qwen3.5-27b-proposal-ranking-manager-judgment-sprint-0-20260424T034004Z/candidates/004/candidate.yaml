@@ -1,0 +1,7 @@
+max_num_seqs: 16
+max_num_batched_tokens: 4096
+enable_chunked_prefill: false
+enable_prefix_caching: true
+gpu_memory_utilization: 0.92
+max_model_len: 16384
+kv_cache_dtype: fp8_e5m2
