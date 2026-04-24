@@ -82,6 +82,50 @@ def test_probe_serving_thinking_classifies_case_matrix() -> None:
     assert module.classify_outcome(10, 0)[0] == "bug"
 
 
+def test_probe_serving_thinking_counts_vllm_reasoning_output_fallback() -> None:
+    module = _load_script("probe_serving_thinking.py")
+
+    usage = module._normalize_usage(
+        {
+            "usage": {
+                "input_tokens": 24,
+                "output_tokens": 128,
+                "output_tokens_details": {"reasoning_tokens": 0},
+                "total_tokens": 152,
+            },
+            "output": [
+                {
+                    "type": "reasoning",
+                    "content": [{"type": "reasoning_text", "text": "scratchpad"}],
+                }
+            ],
+        }
+    )
+
+    assert usage["reasoning_tokens"] == 128
+
+
+def test_capture_seed_workload_counts_vllm_reasoning_output_fallback() -> None:
+    module = _load_script("capture_seed_workload.py")
+
+    reasoning_tokens = module._reasoning_tokens_from_response(
+        {
+            "usage": {
+                "output_tokens": 64,
+                "output_tokens_details": {"reasoning_tokens": 0},
+            },
+            "output": [
+                {
+                    "content": [{"type": "reasoning_text", "text": "scratchpad"}],
+                }
+            ],
+        },
+        64,
+    )
+
+    assert reasoning_tokens == 64
+
+
 def test_capture_seed_workload_family_v5_defaults_to_per_family_trace(tmp_path: Path) -> None:
     script = REPO_ROOT / "scripts" / "capture_seed_workload.py"
     family_dir = tmp_path / "benchmark_blueprints" / "families" / "family-a"

@@ -12,6 +12,50 @@ import requests
 import yaml
 
 
+def _int_usage(usage: dict, key: str, default: int = 0) -> int:
+    try:
+        return int(usage.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _has_reasoning_output(payload: dict) -> bool:
+    output = payload.get("output")
+    if not isinstance(output, list):
+        return False
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "reasoning":
+            return True
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if str(part.get("type", "")).startswith("reasoning") and (part.get("text") or part.get("reasoning_text")):
+                return True
+    return False
+
+
+def _reasoning_tokens_from_response(payload: dict, output_tokens: int) -> int:
+    usage = payload.get("usage", {})
+    if not isinstance(usage, dict):
+        return 0
+    top_level = _int_usage(usage, "reasoning_tokens")
+    if top_level > 0:
+        return top_level
+    details = usage.get("output_tokens_details", {})
+    if isinstance(details, dict):
+        nested = _int_usage(details, "reasoning_tokens")
+        if nested > 0:
+            return nested
+    if output_tokens > 0 and _has_reasoning_output(payload):
+        return output_tokens
+    return 0
+
+
 def _default_entries(
     avg_prompt_tokens: int,
     avg_output_tokens: int,
@@ -57,11 +101,12 @@ def _capture_live(
         response.raise_for_status()
         payload = response.json()
         usage = payload.get("usage", {}) if isinstance(payload, dict) else {}
+        output_tokens = _int_usage(usage, "output_tokens", 64)
         entry: dict[str, int | str] = {
             "turn_index": index,
-            "prompt_tokens": int(usage.get("input_tokens", len(prompt.split()))),
-            "output_tokens": int(usage.get("output_tokens", 64)),
-            "thinking_tokens": int(usage.get("reasoning_tokens", 0)),
+            "prompt_tokens": _int_usage(usage, "input_tokens", len(prompt.split())),
+            "output_tokens": output_tokens,
+            "thinking_tokens": _reasoning_tokens_from_response(payload, output_tokens) if isinstance(payload, dict) else 0,
         }
         if family_id:
             entry["family_id"] = family_id

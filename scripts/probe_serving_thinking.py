@@ -45,14 +45,49 @@ def _int_usage(usage: dict[str, Any], key: str) -> int:
         return 0
 
 
+def _int_nested_usage(usage: dict[str, Any], parent_key: str, key: str) -> int:
+    nested = usage.get(parent_key, {})
+    if not isinstance(nested, dict):
+        return 0
+    return _int_usage(nested, key)
+
+
+def _has_reasoning_output(payload: dict[str, Any]) -> bool:
+    output = payload.get("output")
+    if not isinstance(output, list):
+        return False
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "reasoning":
+            return True
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if str(part.get("type", "")).startswith("reasoning") and (part.get("text") or part.get("reasoning_text")):
+                return True
+    return False
+
+
 def _normalize_usage(payload: dict[str, Any]) -> dict[str, int]:
     usage = payload.get("usage", {})
     if not isinstance(usage, dict):
         usage = {}
+    output_tokens = _int_usage(usage, "output_tokens")
+    reasoning_tokens = _int_usage(usage, "reasoning_tokens") or _int_nested_usage(
+        usage,
+        "output_tokens_details",
+        "reasoning_tokens",
+    )
+    if reasoning_tokens <= 0 and output_tokens > 0 and _has_reasoning_output(payload):
+        reasoning_tokens = output_tokens
     return {
         "input_tokens": _int_usage(usage, "input_tokens"),
-        "output_tokens": _int_usage(usage, "output_tokens"),
-        "reasoning_tokens": _int_usage(usage, "reasoning_tokens"),
+        "output_tokens": output_tokens,
+        "reasoning_tokens": reasoning_tokens,
         "total_tokens": _int_usage(usage, "total_tokens"),
     }
 
