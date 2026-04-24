@@ -1536,10 +1536,13 @@ def test_real_measurement_harness_throughput_uses_elapsed_replay_time(
     assert full["windows"]["measurement_s"] == 1500
     assert screen["windows"]["measurement_elapsed_s"] == 4.0
     assert full["windows"]["measurement_elapsed_s"] == 4.0
+    # eval_throughput is completed requests/s; rollout_throughput is response tokens/s.
     assert screen["eval_throughput"] == 1.0
     assert full["eval_throughput"] == 1.0
     assert screen["rollout_throughput"] == 100.0
     assert full["rollout_throughput"] == 100.0
+    assert screen["diagnostics"]["rollout_throughput"] == 100.0
+    assert full["diagnostics"]["rollout_throughput"] == 100.0
 
 
 def test_measure_uses_round_target_concurrency_not_candidate_max_num_seqs(

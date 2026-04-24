@@ -95,6 +95,7 @@ class RealMeasurementHarness:
         tpot_values = [float(entry["tpot_ms"]) for entry in per_request_latencies]
         turn_values = [float(entry["turn_latency_ms"]) for entry in per_request_latencies]
         measurement_elapsed_s = max(ended - started, 1e-9)
+        # Primary objective is eval request throughput; rollout throughput remains token-rate telemetry.
         eval_throughput = len(per_request_latencies) / measurement_elapsed_s
         rollout_throughput = (
             sum(float(entry["response_tokens"]) for entry in per_request_latencies) / measurement_elapsed_s
