@@ -161,8 +161,11 @@ def run_round(ctx: RoundContext) -> RoundResult:
 
 
 def _run_baselines(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
+    finalized = _finalized_iterations(ctx.round_dir)
     for suffix in ("a", "b"):
         iteration = f"baseline_{suffix}"
+        if iteration in finalized:
+            continue
         candidate_path = ctx.round_dir / "candidates" / iteration / "candidate.yaml"
         manager.measure(round_id=ctx.round_id, candidate_path=candidate_path, harness=ctx.harness_mode)
         manager.commit_candidate(
@@ -175,6 +178,7 @@ def _run_baselines(manager: AutoResearchRoundManager, ctx: RoundContext) -> None
 
 
 def _run_synthetic_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
+    finalized = _finalized_iterations(ctx.round_dir)
     registry = load_registry(ctx.registry_path)
     model_config = registry[str(ctx.round_spec["model_id"])]
     workload_file = Path(str(ctx.round_spec["workload_file"]))
@@ -198,6 +202,8 @@ def _run_synthetic_main_loop(manager: AutoResearchRoundManager, ctx: RoundContex
         if index > int(ctx.iteration_cap or ctx.round_spec.get("iteration_cap", 12)):
             break
         iteration = f"{index:03d}"
+        if iteration in finalized:
+            continue
         candidate_dir = ctx.round_dir / "candidates" / iteration
         candidate_dir.mkdir(parents=True, exist_ok=True)
         (candidate_dir / "candidate.yaml").write_text(yaml.safe_dump(candidate, sort_keys=False), encoding="utf-8")
@@ -216,6 +222,8 @@ def _run_synthetic_main_loop(manager: AutoResearchRoundManager, ctx: RoundContex
 def _run_codex_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
     for index in range(1, int(ctx.iteration_cap or ctx.round_spec.get("iteration_cap", 12)) + 1):
         iteration = f"{index:03d}"
+        if iteration in _finalized_iterations(ctx.round_dir):
+            continue
         iteration_dir = ctx.round_dir / "candidates" / iteration
         iteration_dir.mkdir(parents=True, exist_ok=True)
         prompt = _iteration_prompt(ctx, iteration=iteration, next_iteration=f"{index + 1:03d}")
@@ -254,11 +262,20 @@ def _run_codex_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -
 
 def _iteration_prompt(ctx: RoundContext, *, iteration: str, next_iteration: str) -> str:
     template = (ctx.round_dir / "iteration_brief.md").read_text(encoding="utf-8")
+    repo_root = Path(_git(["rev-parse", "--show-toplevel"], cwd=ctx.worktree).strip())
+    lumoserve_cmd = (
+        f"{repo_root / '.venv' / 'bin' / 'lumoserve'} "
+        f"--registry {ctx.registry_path} "
+        f"--port {ctx.port} "
+        f"--proxy-port {ctx.proxy_port}"
+    )
+    template = template.replace("lumoserve auto-research", f"{lumoserve_cmd} auto-research")
     values = {
         "round_id": ctx.round_id,
         "iteration": iteration,
         "next_iteration": next_iteration,
         "round_dir": str(ctx.worktree),
+        "lumoserve_cmd": lumoserve_cmd,
         "model_id": str(ctx.round_spec["model_id"]),
         "family_id": str(ctx.round_spec["family_id"]),
         "active_layer": str(ctx.round_spec.get("active_layer", "L1")),
@@ -269,6 +286,17 @@ def _iteration_prompt(ctx: RoundContext, *, iteration: str, next_iteration: str)
     for key, value in values.items():
         template = template.replace("{{" + key + "}}", value)
     return template
+
+
+def _finalized_iterations(round_dir: Path) -> set[str]:
+    results_path = round_dir / "results.tsv"
+    if not results_path.is_file():
+        return set()
+    return {
+        row["iteration"]
+        for row in _read_results_dicts(results_path)
+        if row.get("iteration") and row.get("status")
+    }
 
 
 def _winner_parent_uuid(round_dir: Path) -> str:
