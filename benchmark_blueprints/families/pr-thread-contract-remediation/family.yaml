@@ -2,20 +2,31 @@ family_id: pr-thread-contract-remediation
 track: 4
 scenario_type: review_comment_implementation
 schema_version: cnb55.family.v1
-layer_a_status: pending_live_probe
+layer_a_status: failed_freeze_gate
 layer_b_status: implemented_pending_acceptance
 grader_ref: verifiers/pr-thread-contract-remediation/score_pr_thread_contract.py
 milestone_config_ref: verifier_data/pr-thread-contract-remediation/{variant_id}/milestones/
 
 layer_a_review:
-  latest_probe_attempt: none_yet
-  verdict: live_probe_pending
+  latest_probe_attempt: attempt_03_live_probe
+  verdict: frontier_easy_widening_candidate
   attestation: |
-    This family was upgraded from a contract-only skeleton to a runnable
-    five-variant benchmark with deterministic scorer, hidden tests, oracle
-    overlays, manifest, and verification matrix on 2026-04-23. A whole-family
-    live `codex exec` probe has not yet been run after that implementation
-    pass, so §10.1 freeze-gate status is still pending.
+    The first whole-family live probe (`attempt_02_live_probe`) was superseded
+    because `missing_release_note_contract` was falsely capping valid release
+    notes via an exact-phrase scorer bug. After the family-local scorer fix,
+    `attempt_03_live_probe` became the counted run and failed the §10.1 freeze
+    gate with:
+
+    - family_mean = 62.27
+    - max_variant_mean = 72.00
+    - min_variant_mean = 40.67
+    - monotonic = pass
+
+    Honest read from the live workspaces: V1-V3 are flat at 72 and currently
+    frontier-easy; V4 and V5 only separate intermittently (`generic_replies`
+    once on V4, `objective_drift` twice on V5). This family now reads as a
+    widening-candidate signal rather than a calibrated low-20 freeze-gate
+    family.
 
 milestones:
   M1_localization:
@@ -116,8 +127,8 @@ seeds:
     stdev_threshold_to_4: 0.10
     stdev_threshold_to_8: 0.20
     flag_high_variance: 0.15
-  current_observed_stdev_M_training: 0.0
-  escalation_currently_active: false
+  current_observed_stdev_M_training: 0.3002
+  escalation_currently_active: true
 
 initial_state:
   type: manifest_locked

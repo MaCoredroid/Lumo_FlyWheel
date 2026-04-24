@@ -1,0 +1,89 @@
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 62.266666666666666,
+    "family_mean_ok": false,
+    "hard_variant_ok": false,
+    "max_variant_mean": 72,
+    "max_variant_ok": false,
+    "min_variant_mean": 40.666666666666664,
+    "monotonic_breaks": [],
+    "monotonic_ok": true
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {},
+      "max": 72,
+      "mean": 72,
+      "min": 72,
+      "n": 3,
+      "scores": [
+        72,
+        72,
+        72
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {},
+      "max": 72,
+      "mean": 72,
+      "min": 72,
+      "n": 3,
+      "scores": [
+        72,
+        72,
+        72
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {},
+      "max": 72,
+      "mean": 72,
+      "min": 72,
+      "n": 3,
+      "scores": [
+        72,
+        72,
+        72
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "generic_replies": 1
+      },
+      "max": 72,
+      "mean": 54.666666666666664,
+      "min": 20,
+      "n": 3,
+      "scores": [
+        20,
+        72,
+        72
+      ],
+      "shortcut_runs": 0,
+      "stdev": 30.02221399786054
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "objective_drift": 2
+      },
+      "max": 72,
+      "mean": 40.666666666666664,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        72,
+        25,
+        25
+      ],
+      "shortcut_runs": 0,
+      "stdev": 27.135462651912412
+    }
+  }
+}

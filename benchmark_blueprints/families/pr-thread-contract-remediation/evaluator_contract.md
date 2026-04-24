@@ -40,7 +40,7 @@ These checks are implemented in
 
 | Check | Points |
 | --- | ---: |
-| release note documents omit-not-null response contract and request-side stability | 10 |
+| release note documents the omit-not-null response contract and request-side stability via deterministic concept checks | 10 |
 | `review/reviewer_replies.json` matches schema | 5 |
 | replies target actionable ids only | 5 |
 | reply bodies cite concrete evidence files or changed files | 10 |

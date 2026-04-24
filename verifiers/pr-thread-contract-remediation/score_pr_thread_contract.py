@@ -79,6 +79,36 @@ def is_transient_runtime_file(relpath: str) -> bool:
     )
 
 
+def contains_any(text: str, needles: list[str]) -> bool:
+    return any(needle in text for needle in needles)
+
+
+def has_release_contract_note(text: str) -> bool:
+    omit_owner = (
+        contains_any(text, ["omit", "omits", "omitted", "omitting"])
+        and "owner" in text
+        and contains_any(text, ["null", "owner: null"])
+    )
+    request_semantics = (
+        contains_any(text, ["request-side", "filter", "owner=null", "owner = null"])
+        and contains_any(text, ["unchanged", "still", "remain"])
+        and contains_any(text, ["no filter", "unowned rows", "unowned"])
+    )
+    return omit_owner and request_semantics
+
+
+def has_variant_objective_note(text: str) -> bool:
+    if VARIANT_ID not in {"v4-multi-corpus-objective", "v5-recovery-in-thread"}:
+        return True
+    return contains_any(text, ["mobile", "ios", "client contract", "compatibility"])
+
+
+def has_variant_incident_note(text: str) -> bool:
+    if VARIANT_ID != "v5-recovery-in-thread":
+        return True
+    return contains_any(text, ["inc-742", "rollback"])
+
+
 @dataclass
 class ScoreState:
     breakdown: dict[str, int] = field(default_factory=dict)
@@ -286,17 +316,15 @@ def score_release_note(state: ScoreState, gold: dict[str, Any]) -> bool:
         state.apply_ceiling("missing_release_note_contract", 25)
         return False
     text = path.read_text().lower()
-    missing = [phrase for phrase in gold["required_release_note_phrases"] if phrase.lower() not in text]
-    if missing:
+    if not has_release_contract_note(text):
         state.apply_ceiling("missing_release_note_contract", 25)
-        if VARIANT_ID in {"v4-multi-corpus-objective", "v5-recovery-in-thread"}:
-            state.apply_ceiling("objective_drift", 25)
         return False
-    if VARIANT_ID == "v5-recovery-in-thread":
-        incident_phrase = gold["required_incident_phrase"].lower()
-        if incident_phrase not in text and "rollback" not in text:
-            state.apply_ceiling("incident_blind_reselect", 30)
-            return False
+    if not has_variant_objective_note(text):
+        state.apply_ceiling("objective_drift", 25)
+        return False
+    if not has_variant_incident_note(text):
+        state.apply_ceiling("incident_blind_reselect", 30)
+        return False
     state.add("docs.release_note_contract", 10)
     return True
 
