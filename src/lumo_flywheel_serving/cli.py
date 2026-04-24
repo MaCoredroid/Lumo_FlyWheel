@@ -523,7 +523,7 @@ def cmd_annotate_log(args: argparse.Namespace) -> int:
 
 def cmd_load_tuned_config(args: argparse.Namespace) -> int:
     server = _server(args)
-    bundle = server.load_tuned_config(args.bundle_path)
+    bundle = server.load_tuned_config(args.bundle_path, bundle_confidence_policy=args.bundle_confidence_policy)
     print(
         json.dumps(
             {
@@ -583,7 +583,7 @@ def _require_auto_research_args(args: argparse.Namespace, *names: str) -> None:
 def cmd_auto_research_bootstrap_round(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
-    _require_auto_research_args(args, "model_id", "family_id", "sprint", "workload_file")
+    _require_auto_research_args(args, "model_id", "family_id", "sprint")
     manager = _auto_research_manager(args)
     payload = manager.bootstrap_round(
         model_id=args.model_id,
@@ -595,6 +595,7 @@ def cmd_auto_research_bootstrap_round(args: argparse.Namespace) -> int:
         active_layer=args.active_layer,
         baseline_bundle=args.baseline_bundle,
         serving_thinking_probe=args.serving_thinking_probe,
+        allow_legacy_workload=args.allow_legacy_workload,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -631,7 +632,14 @@ def cmd_auto_research_rescreen(args: argparse.Namespace) -> int:
         return code
     _require_auto_research_args(args, "round_id")
     manager = _auto_research_manager(args)
-    payload = manager.rescreen(round_id=args.round_id, top_k=args.top_k, profile=args.profile, harness=args.harness)
+    payload = manager.rescreen(
+        round_id=args.round_id,
+        top_k=args.top_k,
+        profile=args.profile,
+        harness=args.harness,
+        measurements_per_candidate_screen=args.measurements_per_candidate_screen,
+        measurements_per_candidate_full=args.measurements_per_candidate_full,
+    )
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -692,7 +700,7 @@ def cmd_auto_research_run(args: argparse.Namespace) -> int:
 def cmd_auto_research_run_round(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
-    _require_auto_research_args(args, "model_id", "family_id", "workload_file")
+    _require_auto_research_args(args, "model_id", "family_id")
     manager = _auto_research_manager(args)
     bootstrap = manager.bootstrap_round(
         model_id=args.model_id,
@@ -706,6 +714,7 @@ def cmd_auto_research_run_round(args: argparse.Namespace) -> int:
         active_layer=args.active_layer,
         baseline_bundle=args.baseline_bundle,
         serving_thinking_probe=args.serving_thinking_probe,
+        allow_legacy_workload=args.allow_legacy_workload,
     )
     ctx = RoundContext.from_bootstrap_json(
         bootstrap,
@@ -786,6 +795,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     load_tuned = subparsers.add_parser("load-tuned-config")
     load_tuned.add_argument("bundle_path")
+    load_tuned.add_argument("--bundle-confidence-policy", choices=["strict", "warn", "passthrough"], default="warn")
     load_tuned.set_defaults(func=cmd_load_tuned_config)
 
     auto_research = subparsers.add_parser("auto-research")
@@ -800,6 +810,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_bootstrap.add_argument("--active-layer", choices=["L1", "L2"], default="L1")
     auto_bootstrap.add_argument("--baseline-bundle")
     auto_bootstrap.add_argument("--serving-thinking-probe")
+    auto_bootstrap.add_argument("--allow-legacy-workload", action="store_true")
     auto_bootstrap.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_bootstrap.set_defaults(func=cmd_auto_research_bootstrap_round)
 
@@ -823,7 +834,9 @@ def build_parser() -> argparse.ArgumentParser:
     auto_rescreen.add_argument("--help-only", action="store_true")
     auto_rescreen.add_argument("--round-id")
     auto_rescreen.add_argument("--top-k", type=int, default=3)
-    auto_rescreen.add_argument("--profile", default="full")
+    auto_rescreen.add_argument("--profile", default="screen")
+    auto_rescreen.add_argument("--measurements-per-candidate-screen", type=int, default=3)
+    auto_rescreen.add_argument("--measurements-per-candidate-full", type=int, default=1)
     auto_rescreen.add_argument("--harness", choices=["real", "synthetic"], default=None)
     auto_rescreen.set_defaults(func=cmd_auto_research_rescreen)
 
@@ -856,6 +869,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_run_round.add_argument("--active-layer", choices=["L1", "L2"], default="L1")
     auto_run_round.add_argument("--baseline-bundle")
     auto_run_round.add_argument("--serving-thinking-probe")
+    auto_run_round.add_argument("--allow-legacy-workload", action="store_true")
     auto_run_round.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_run_round.add_argument("--iteration-cap", type=int, default=12)
     auto_run_round.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))

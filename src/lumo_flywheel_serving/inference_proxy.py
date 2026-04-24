@@ -10,7 +10,13 @@ from typing import Any
 import requests
 
 from .registry import load_registry
-from .tuned_config import RuntimeStateStore, StructuredValidationError, ValidationIssue, load_tuned_config_bundle
+from .tuned_config import (
+    RuntimeStateStore,
+    StructuredValidationError,
+    ValidationIssue,
+    load_tuned_config_bundle,
+    validate_bundle_load_policy,
+)
 
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -214,6 +220,8 @@ def build_proxy_handler(
                 if self.path == "/admin/load_tuned_config":
                     bundle_path = _validate_load_tuned_config_payload(payload)
                     bundle = load_tuned_config_bundle(bundle_path)
+                    policy = str(payload.get("bundle_confidence_policy") or os.environ.get("LUMO_BUNDLE_CONFIDENCE_POLICY") or "warn")
+                    validate_bundle_load_policy(bundle, bundle_confidence_policy=policy)
                     if registry and bundle.model_id not in registry:
                         raise StructuredValidationError(
                             message="Invalid load_tuned_config payload",

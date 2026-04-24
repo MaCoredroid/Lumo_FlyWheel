@@ -829,6 +829,14 @@ def test_auto_research_measure_requires_arguments_after_help_only_check() -> Non
         args.func(args)
 
 
+def test_auto_research_rescreen_defaults_to_hardened_screen_full_split() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(["auto-research", "rescreen", "--round-id", "round-1"])
+    assert args.measurements_per_candidate_screen == 3
+    assert args.measurements_per_candidate_full == 1
+    assert args.profile == "screen"
+
+
 def test_auto_research_status_reports_missing_round(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     repo = _init_auto_research_repo(tmp_path)
     monkeypatch.setattr(cli, "REPO_ROOT", repo)

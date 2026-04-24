@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from .auto_research import AutoResearchRoundManager, OfflineAutoResearchRunner, load_baseline_bundle
+from .auto_research import AutoResearchRoundManager, BASELINE_ITERATIONS, OfflineAutoResearchRunner, load_baseline_bundle
 from .registry import load_registry
 
 ROUND_PASSED = "ROUND_PASSED"
@@ -142,7 +142,8 @@ def run_round(ctx: RoundContext) -> RoundResult:
             manager.rescreen(
                 round_id=ctx.round_id,
                 top_k=int(ctx.round_spec.get("rescreen_top_k", 3)),
-                profile="full",
+                measurements_per_candidate_screen=int(ctx.round_spec.get("measurements_per_candidate_screen", 3)),
+                measurements_per_candidate_full=int(ctx.round_spec.get("measurements_per_candidate_full", 1)),
                 harness=ctx.harness_mode,
             )
         try:
@@ -207,8 +208,7 @@ def run_round(ctx: RoundContext) -> RoundResult:
 
 def _run_baselines(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
     finalized = _finalized_iterations(ctx.round_dir)
-    for suffix in ("a", "b"):
-        iteration = f"baseline_{suffix}"
+    for iteration in BASELINE_ITERATIONS:
         if iteration in finalized:
             continue
         candidate_path = ctx.round_dir / "candidates" / iteration / "candidate.yaml"
@@ -217,7 +217,7 @@ def _run_baselines(manager: AutoResearchRoundManager, ctx: RoundContext) -> None
             round_id=ctx.round_id,
             iteration=iteration,
             status="baseline",
-            notes=f"default-config baseline replay {suffix}",
+            notes=f"default-config baseline replay {iteration.rsplit('_', 1)[1]}",
             harness=ctx.harness_mode,
         )
 

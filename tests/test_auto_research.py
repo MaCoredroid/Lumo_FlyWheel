@@ -59,8 +59,12 @@ def _write_workload(path: Path) -> None:
     path.write_text(
         """
 family_id: proposal-ranking-manager-judgment
-workload_distribution_id: prmj-v1-live
+workload_distribution_id: null
+workload_distribution_id_hardening_version: v1-thinking-realistic
 latency_ceiling_ms: 35000
+nominal_ttft_ms: 2000
+nominal_tpot_ms: 80
+nominal_turn_ms: 30000
 tpot_ceiling_ms: 80
 turn_latency_ceiling_ms: 35000
 p99_context_tokens: 24576
@@ -75,6 +79,10 @@ holdout_trace_ref: holdout_trace.jsonl
 """,
         encoding="utf-8",
     )
+    workload = auto_research.load_yaml_file(path)
+    assert isinstance(workload, dict)
+    workload["workload_distribution_id"] = auto_research.compute_workload_distribution_id(path)
+    path.write_text(auto_research.yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
 
 
 def _write_thinking_probe(repo: Path, *, outcome: str = "row-3", captured_at: datetime | None = None) -> Path:
@@ -179,7 +187,9 @@ def test_capture_seed_workload_updates_seed_and_holdout_refs(tmp_path: Path) -> 
     assert len(payload["workload_distribution_id"]) == 64
     assert workload["seed_trace_ref"] == "seed_trace.jsonl"
     assert workload["holdout_trace_ref"] == "holdout_trace.jsonl"
-    assert workload["workload_distribution_id"] == payload["seed_sha256"] == payload["workload_distribution_id"]
+    assert workload["workload_distribution_id"] == payload["workload_distribution_id"]
+    assert workload["workload_distribution_id"] != payload["seed_sha256"]
+    assert workload["workload_distribution_id"] == auto_research.compute_workload_distribution_id(workload_path)
 
 
 def test_capture_seed_workload_overwrites_stale_distribution_id(tmp_path: Path) -> None:
@@ -1399,6 +1409,9 @@ def test_baseline_commits_persist_noise_floor_into_round_spec(
         [
             _real_trace(objective=9, ttft=1400.0, tpot=12.0, turn=4000.0),
             _real_trace(objective=11, ttft=1500.0, tpot=12.5, turn=4200.0),
+            _real_trace(objective=10, ttft=1450.0, tpot=12.0, turn=4100.0),
+            _real_trace(objective=10, ttft=1460.0, tpot=12.0, turn=4100.0),
+            _real_trace(objective=10, ttft=1470.0, tpot=12.0, turn=4100.0),
         ]
     )
     monkeypatch.setattr(
@@ -1428,18 +1441,21 @@ def test_baseline_commits_persist_noise_floor_into_round_spec(
     assert isinstance(round_spec, dict)
     assert round_spec["noise_floor"] == 0.0
 
-    manager.measure(round_id=round_id, candidate_path=round_dir / "candidates" / "baseline_b" / "candidate.yaml")
-    manager.commit_candidate(
-        round_id=round_id,
-        iteration="baseline_b",
-        status="baseline",
-        notes="default baseline replay b",
-    )
+    for iteration in ("baseline_b", "baseline_c", "baseline_d", "baseline_e"):
+        manager.measure(round_id=round_id, candidate_path=round_dir / "candidates" / iteration / "candidate.yaml")
+        manager.commit_candidate(
+            round_id=round_id,
+            iteration=iteration,
+            status="baseline",
+            notes=f"default baseline replay {iteration}",
+        )
 
     updated_round_spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
     assert isinstance(updated_round_spec, dict)
-    assert updated_round_spec["noise_floor"] == pytest.approx(4.0)
-    assert manager.status(round_id=round_id)["noise_floor"] == pytest.approx(4.0)
+    assert updated_round_spec["baseline_mean_screen"] == pytest.approx(10.0)
+    assert updated_round_spec["baseline_stddev_screen"] == pytest.approx(0.70710678)
+    assert updated_round_spec["noise_floor"] == pytest.approx(1.41421356)
+    assert manager.status(round_id=round_id)["noise_floor"] == pytest.approx(1.41421356)
 
 
 def test_bootstrap_round_rejects_dry_run_bundle(tmp_path: Path) -> None:
@@ -1492,6 +1508,115 @@ tuned_config_bundle:
             weight_version_id=None,
             round_root=repo / "output" / "auto_research",
         )
+
+
+def test_bootstrap_round_verifies_descriptor_id_without_minting(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    workload_path = repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml"
+    workload = auto_research.load_yaml_file(workload_path)
+    assert isinstance(workload, dict)
+    original_id = workload["workload_distribution_id"]
+
+    missing = dict(workload)
+    missing.pop("workload_distribution_id")
+    workload_path.write_text(auto_research.yaml.safe_dump(missing, sort_keys=False), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="descriptor_missing_workload_distribution_id"):
+        manager.bootstrap_round(
+            model_id="qwen3.5-27b",
+            family_id="proposal-ranking-manager-judgment",
+            sprint="sprint-0",
+            workload_file=workload_path,
+            weight_version_id=None,
+            round_root=repo / "output" / "auto_research",
+            harness_type="synthetic",
+        )
+    assert "workload_distribution_id" not in auto_research.load_yaml_file(workload_path)
+
+    stale = dict(workload)
+    stale["workload_distribution_id"] = original_id
+    workload_path.write_text(auto_research.yaml.safe_dump(stale, sort_keys=False), encoding="utf-8")
+    (workload_path.parent / "seed_trace.jsonl").write_text('{"turn_index": 999, "prompt_tokens": 1, "output_tokens": 1}\n', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="descriptor_workload_distribution_id_mismatch"):
+        manager.bootstrap_round(
+            model_id="qwen3.5-27b",
+            family_id="proposal-ranking-manager-judgment",
+            sprint="sprint-0",
+            workload_file=workload_path,
+            weight_version_id=None,
+            round_root=repo / "output" / "auto_research",
+            harness_type="synthetic",
+        )
+
+
+def test_finalize_round_populates_hardened_honesty_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    measurements = iter(
+        [
+            *[_real_trace(objective=10, ttft=1500.0, turn=4000.0) for _ in range(5)],
+            _real_trace(objective=14, ttft=1500.0, turn=4000.0),
+            _real_trace(objective=14, ttft=2500.0, turn=4000.0),
+            _real_trace(objective=14, ttft=1500.0, turn=4000.0),
+            _real_trace(objective=14, ttft=1500.0, turn=4000.0),
+            _real_trace(objective=5, ttft=1500.0, turn=4000.0),
+        ]
+    )
+    monkeypatch.setattr(
+        auto_research.RealMeasurementHarness,
+        "measure",
+        lambda self, candidate_vllm_config, **kwargs: next(measurements),
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+    for iteration in auto_research.BASELINE_ITERATIONS:
+        manager.measure(round_id=round_id, candidate_path=round_dir / "candidates" / iteration / "candidate.yaml")
+        manager.commit_candidate(round_id=round_id, iteration=iteration, status="baseline", notes=iteration)
+    candidate_dir = round_dir / "candidates" / "001"
+    candidate_dir.mkdir()
+    candidate_dir.joinpath("candidate.yaml").write_text(
+        (round_dir / "candidates" / "baseline_a" / "candidate.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    measured = manager.measure(round_id=round_id, candidate_path=candidate_dir / "candidate.yaml")
+    manager.commit_candidate(round_id=round_id, iteration="001", status="keep", notes="winner")
+    manager.rescreen(round_id=round_id, top_k=1)
+    (round_dir / "holdout_trace.json").write_text(
+        json.dumps({"pass": True, "candidate_uuid": measured["candidate_uuid"]}, indent=2),
+        encoding="utf-8",
+    )
+
+    finalized = manager.finalize_round(round_id=round_id, dry_run=False)
+    bundle_payload = auto_research.load_yaml_file(finalized["bundle_path"])
+    assert isinstance(bundle_payload, dict)
+    provenance = bundle_payload["tuned_config_bundle"]["round_provenance"]
+    assert provenance["confidence"] == "defensible"
+    assert provenance["improvement_over_baseline_req_per_s"] == pytest.approx(4.0)
+    assert provenance["improvement_over_baseline_ci_95"] == [4.0, 4.0]
+    assert provenance["latency_above_slo"] is True
+    assert provenance["screen_full_consistency"] == "divergent"
+    assert provenance["l2_enforcement_coverage"]["mode"] == "not_l2"
+    assert provenance["workload_descriptor_path"] == str(
+        repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml"
+    )
+    run_log = json.loads((round_dir / "run_log.json").read_text(encoding="utf-8"))
+    assert "screen_full_divergence_note" in run_log["diagnostics"]
 
 
 def test_bootstrap_round_rejects_incompatible_codex_cli_version_without_side_effects(
@@ -1928,6 +2053,9 @@ def test_rescreen_and_finalize_allow_baseline_winner(tmp_path: Path, monkeypatch
             _real_trace(objective=9, ttft=1600.0, tpot=12.5, turn=4300.0),
             _real_trace(objective=9, ttft=1450.0, tpot=11.5, turn=4050.0),
             _real_trace(objective=9, ttft=1425.0, tpot=11.0, turn=3950.0),
+            _real_trace(objective=9, ttft=1435.0, tpot=11.0, turn=3975.0),
+            _real_trace(objective=9, ttft=1445.0, tpot=11.0, turn=3985.0),
+            _real_trace(objective=9, ttft=1460.0, tpot=11.0, turn=3990.0),
         ]
     )
 
@@ -1962,8 +2090,10 @@ def test_rescreen_and_finalize_allow_baseline_winner(tmp_path: Path, monkeypatch
         )
 
     rescreen = manager.rescreen(round_id=round_id, top_k=1)
-    assert len(rescreen["rescreened"]) == 1
+    assert len(rescreen["rescreened"]) == 4
     assert rescreen["rescreened"][0]["parent_candidate_uuid"] == baseline_uuids["a"]
+    assert sum(1 for row in rescreen["rescreened"] if row["profile"] == "screen") == 3
+    assert sum(1 for row in rescreen["rescreened"] if row["profile"] == "full") == 1
 
     holdout = manager.validate_holdout(round_id=round_id, candidate_uuid=baseline_uuids["a"])
     assert holdout["pass"] is True
@@ -1983,7 +2113,7 @@ def test_validate_holdout_accepts_rescreen_uuid_and_canonicalizes_to_parent(
         repo_root=repo,
         tuned_config_root=repo / "output" / "tuned_configs",
     )
-    measurements = iter([_real_trace(objective=9), _real_trace(objective=9), _real_trace(objective=9)])
+    measurements = iter([_real_trace(objective=9) for _ in range(6)])
     monkeypatch.setattr(
         auto_research.RealMeasurementHarness,
         "measure",
@@ -2071,12 +2201,18 @@ def test_finalize_round_breaks_rescreen_ties_with_latency(tmp_path: Path, monkey
     )
     measurements = iter(
         [
-            {"objective": 9, "ttft": 1900.0, "tpot": 12.0, "turn": 4200.0},
-            {"objective": 10, "ttft": 1800.0, "tpot": 11.0, "turn": 4100.0},
-            {"objective": 11, "ttft": 2600.0, "tpot": 14.0, "turn": 4700.0},
-            {"objective": 10, "ttft": 1200.0, "tpot": 10.0, "turn": 3900.0},
-        ]
-    )
+                {"objective": 9, "ttft": 1900.0, "tpot": 12.0, "turn": 4200.0},
+                {"objective": 10, "ttft": 1800.0, "tpot": 11.0, "turn": 4100.0},
+                {"objective": 10, "ttft": 2600.0, "tpot": 14.0, "turn": 4700.0},
+                {"objective": 10, "ttft": 1200.0, "tpot": 10.0, "turn": 3900.0},
+                {"objective": 10, "ttft": 1250.0, "tpot": 10.0, "turn": 3950.0},
+                {"objective": 10, "ttft": 1300.0, "tpot": 10.0, "turn": 4000.0},
+                {"objective": 9, "ttft": 1500.0, "tpot": 10.0, "turn": 4100.0},
+                {"objective": 9, "ttft": 1500.0, "tpot": 10.0, "turn": 4100.0},
+                {"objective": 9, "ttft": 1500.0, "tpot": 10.0, "turn": 4100.0},
+                {"objective": 9, "ttft": 1500.0, "tpot": 10.0, "turn": 4100.0},
+            ]
+        )
 
     def fake_measure(self, candidate_vllm_config, *, warmup_s, window_s, target_concurrency_sweep):
         del self, candidate_vllm_config, warmup_s, window_s, target_concurrency_sweep
@@ -2162,7 +2298,7 @@ kv_cache_dtype: fp8_e5m2
     )
 
     rescreen = manager.rescreen(round_id=round_id, top_k=2)
-    assert len(rescreen["rescreened"]) == 2
+    assert len(rescreen["rescreened"]) == 8
     second_parent_uuid = manager._read_results(round_dir / "results.tsv")[1].candidate_uuid
 
     (round_dir / "holdout_trace.json").write_text(

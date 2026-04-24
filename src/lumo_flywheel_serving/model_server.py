@@ -24,6 +24,7 @@ from .tuned_config import (
     apply_tuned_vllm_config,
     default_weight_version_id,
     load_tuned_config_bundle,
+    validate_bundle_load_policy,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -224,12 +225,13 @@ class ModelServer:
             return config, None, None
         return apply_tuned_vllm_config(config, bundle), bundle_path, bundle
 
-    def load_tuned_config(self, bundle_path: str | Path) -> TunedConfigBundle:
+    def load_tuned_config(self, bundle_path: str | Path, *, bundle_confidence_policy: str = "warn") -> TunedConfigBundle:
         bundle = load_tuned_config_bundle(bundle_path)
         if bundle.model_id not in self.registry:
             raise RuntimeError(
                 f"Tuned-config bundle model_id {bundle.model_id!r} is not present in registry {self.registry_path}"
             )
+        validate_bundle_load_policy(bundle, bundle_confidence_policy=bundle_confidence_policy)
         self.state_store.activate_bundle(bundle_path, bundle)
         return bundle
 

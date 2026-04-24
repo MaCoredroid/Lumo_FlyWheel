@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from .yaml_utils import load_yaml_file
 
 _STATE_FILENAME = "serving_runtime_state.json"
 _ALLOWED_KV_CACHE_DTYPES = {"fp8_e5m2", "auto"}
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -330,6 +332,82 @@ def load_tuned_config_bundle(path: str | Path) -> TunedConfigBundle:
             issues=[ValidationIssue(field="bundle_path", message="file does not exist", value=str(bundle_path))],
         )
     return TunedConfigBundle.from_mapping(load_yaml_file(bundle_path))
+
+
+def _resolve_descriptor_ref(descriptor_path: Path, ref: str) -> Path:
+    path = Path(ref)
+    if path.is_absolute():
+        return path
+    return descriptor_path.parent / path
+
+
+def compute_workload_distribution_id(descriptor_path: str | Path) -> str:
+    descriptor = Path(descriptor_path)
+    payload = load_yaml_file(descriptor)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Workload descriptor must be a mapping: {descriptor}")
+    seed_ref = payload.get("seed_trace_ref")
+    holdout_ref = payload.get("holdout_trace_ref")
+    if not isinstance(seed_ref, str) or not seed_ref.strip():
+        raise ValueError("descriptor_missing_seed_trace_ref")
+    if not isinstance(holdout_ref, str) or not holdout_ref.strip():
+        raise ValueError("descriptor_missing_holdout_trace_ref")
+    seed_hash = hashlib.sha256(_resolve_descriptor_ref(descriptor, seed_ref).read_bytes()).hexdigest()
+    holdout_hash = hashlib.sha256(_resolve_descriptor_ref(descriptor, holdout_ref).read_bytes()).hexdigest()
+    canonical_payload = dict(payload)
+    canonical_payload["workload_distribution_id"] = None
+    yaml_hash = hashlib.sha256(
+        yaml.safe_dump(canonical_payload, sort_keys=True, default_flow_style=False).encode("utf-8")
+    ).hexdigest()
+    return hashlib.sha256((seed_hash + holdout_hash + yaml_hash).encode("ascii")).hexdigest()
+
+
+def validate_bundle_load_policy(
+    bundle: TunedConfigBundle,
+    *,
+    bundle_confidence_policy: str = "warn",
+) -> list[dict[str, Any]]:
+    if bundle_confidence_policy not in {"strict", "warn", "passthrough"}:
+        raise ValueError("bundle_confidence_policy must be strict, warn, or passthrough")
+    provenance = bundle.round_provenance
+    warnings: list[dict[str, Any]] = []
+    confidence = provenance.get("confidence", "unknown")
+    latency_above_slo = bool(provenance.get("latency_above_slo", False))
+    if confidence != "defensible":
+        warnings.append({"code": "bundle_confidence_not_defensible", "confidence": confidence})
+    if latency_above_slo:
+        warnings.append({"code": "bundle_latency_above_slo"})
+    descriptor_path = provenance.get("workload_descriptor_path")
+    if isinstance(descriptor_path, str) and descriptor_path.strip() and Path(descriptor_path).is_file():
+        canonical_id = compute_workload_distribution_id(descriptor_path)
+        if bundle.workload_distribution_id != canonical_id:
+            raise StructuredValidationError(
+                message="bundle-validity: refused",
+                issues=[
+                    ValidationIssue(
+                        field="workload_distribution_id",
+                        message="mismatching_field: workload_distribution_id",
+                        value=bundle.workload_distribution_id,
+                    )
+                ],
+            )
+    if bundle_confidence_policy == "strict" and confidence != "defensible":
+        raise StructuredValidationError(
+            message="bundle-validity: refused",
+            issues=[
+                ValidationIssue(
+                    field="round_provenance.confidence",
+                    message="bundle confidence policy strict rejected non-defensible bundle",
+                    value=confidence,
+                )
+            ],
+        )
+    if bundle_confidence_policy == "warn" and warnings:
+        _LOGGER.warning(
+            "non_defensible_tuned_config_bundle",
+            extra={"bundle_id": bundle.bundle_id, "warnings": warnings},
+        )
+    return warnings
 
 
 def persist_tuned_config_bundle(bundle: TunedConfigBundle, root: str | Path) -> Path:

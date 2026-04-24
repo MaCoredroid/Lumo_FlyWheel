@@ -48,6 +48,10 @@ ALLOWED_REQUEST_SHAPING_KEYS = {
     "priority_preemption",
 }
 PRIORITY_PREEMPTION_VALUES = {"off", "rollout-preempts", "strict"}
+BASELINE_ITERATIONS = ("baseline_a", "baseline_b", "baseline_c", "baseline_d", "baseline_e")
+BASELINE_ITERATION_SET = frozenset(BASELINE_ITERATIONS)
+HARDENED_COMPOSITE_WORKLOAD_VERSION = "v1-multi-family-v5-thinking-realistic"
+HARDENED_LEGACY_WORKLOAD_VERSION = "v1-thinking-realistic"
 PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "bootstrap-round",
     "measure",
@@ -63,6 +67,7 @@ RESULTS_COLUMNS = [
     "candidate_uuid",
     "parent_candidate_uuid",
     "iteration",
+    "profile",
     "candidate_label",
     "feasible",
     "eval_throughput",
@@ -76,7 +81,7 @@ RESULTS_COLUMNS = [
     "status",
     "notes",
 ]
-ITERATION_ID_RE = re.compile(r"^(\d{3}|baseline_[ab]|rescreen_\d{2})$")
+ITERATION_ID_RE = re.compile(r"^(\d{3}|baseline_[a-e]|rescreen_\d{2}(?:_screen_[1-9]\d*|_full_[1-9]\d*)?)$")
 
 IMPL_BRIEF_TEMPLATE = """# IMPL Brief — Auto-Research Substrate (LLD-SB-06)
 
@@ -322,6 +327,9 @@ class SyntheticWorkloadDistribution:
     holdout_trace_ref: str | None = None
     tpot_ceiling_ms: int = 80
     turn_latency_ceiling_ms: int = 35000
+    nominal_ttft_ms: int = 2000
+    nominal_tpot_ms: int = 80
+    nominal_turn_ms: int = 30000
 
     @classmethod
     def default_for(cls, *, model_config: ModelConfig, family_id: str) -> "SyntheticWorkloadDistribution":
@@ -335,6 +343,9 @@ class SyntheticWorkloadDistribution:
             "target_concurrency": 4,
             "tpot_ceiling_ms": 80,
             "turn_latency_ceiling_ms": 20000,
+            "nominal_ttft_ms": 2000,
+            "nominal_tpot_ms": 80,
+            "nominal_turn_ms": 30000,
         }
         digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:12]
         return cls(
@@ -348,6 +359,9 @@ class SyntheticWorkloadDistribution:
             target_concurrency=payload["target_concurrency"],
             tpot_ceiling_ms=payload["tpot_ceiling_ms"],
             turn_latency_ceiling_ms=payload["turn_latency_ceiling_ms"],
+            nominal_ttft_ms=payload["nominal_ttft_ms"],
+            nominal_tpot_ms=payload["nominal_tpot_ms"],
+            nominal_turn_ms=payload["nominal_turn_ms"],
         )
 
     @classmethod
@@ -367,10 +381,13 @@ class SyntheticWorkloadDistribution:
         payload.setdefault("avg_prompt_tokens", min(model_config.max_model_len // 16, 4096))
         payload.setdefault("avg_output_tokens", 768)
         payload.setdefault("latency_ceiling_ms", 650)
+        payload.setdefault("nominal_ttft_ms", payload["latency_ceiling_ms"])
         payload.setdefault("rollout_baseline", 14.0)
         payload.setdefault("target_concurrency", 4)
         payload.setdefault("tpot_ceiling_ms", 80)
         payload.setdefault("turn_latency_ceiling_ms", int(payload["latency_ceiling_ms"]))
+        payload.setdefault("nominal_tpot_ms", payload["tpot_ceiling_ms"])
+        payload.setdefault("nominal_turn_ms", payload["turn_latency_ceiling_ms"])
         payload.setdefault(
             "workload_distribution_id",
             hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:12],
@@ -398,6 +415,9 @@ class SyntheticWorkloadDistribution:
             ),
             tpot_ceiling_ms=int(payload.get("tpot_ceiling_ms", 80)),
             turn_latency_ceiling_ms=int(payload.get("turn_latency_ceiling_ms", payload["latency_ceiling_ms"])),
+            nominal_ttft_ms=int(payload.get("nominal_ttft_ms", payload["latency_ceiling_ms"])),
+            nominal_tpot_ms=int(payload.get("nominal_tpot_ms", payload.get("tpot_ceiling_ms", 80))),
+            nominal_turn_ms=int(payload.get("nominal_turn_ms", payload.get("turn_latency_ceiling_ms", payload["latency_ceiling_ms"]))),
         )
 
     def to_workload_spec(self, *, base_dir: Path) -> WorkloadSpec:
@@ -448,6 +468,75 @@ def _relative_to_repo(repo_root: Path, path: Path) -> str:
         return str(path.resolve().relative_to(repo_root.resolve()))
     except ValueError:
         return str(path.resolve())
+
+
+def _resolve_descriptor_ref(descriptor_path: Path, ref: str) -> Path:
+    path = Path(ref)
+    if path.is_absolute():
+        return path
+    return descriptor_path.parent / path
+
+
+def compute_workload_distribution_id(descriptor_path: str | Path) -> str:
+    descriptor = Path(descriptor_path)
+    payload = load_yaml_file(descriptor)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Workload descriptor must be a mapping: {descriptor}")
+    seed_ref = payload.get("seed_trace_ref")
+    holdout_ref = payload.get("holdout_trace_ref")
+    if not isinstance(seed_ref, str) or not seed_ref.strip():
+        raise ValueError("descriptor_missing_seed_trace_ref")
+    if not isinstance(holdout_ref, str) or not holdout_ref.strip():
+        raise ValueError("descriptor_missing_holdout_trace_ref")
+    seed_hash = hashlib.sha256(_resolve_descriptor_ref(descriptor, seed_ref).read_bytes()).hexdigest()
+    holdout_hash = hashlib.sha256(_resolve_descriptor_ref(descriptor, holdout_ref).read_bytes()).hexdigest()
+    canonical_payload = dict(payload)
+    canonical_payload["workload_distribution_id"] = None
+    yaml_hash = hashlib.sha256(
+        yaml.safe_dump(canonical_payload, sort_keys=True, default_flow_style=False).encode("utf-8")
+    ).hexdigest()
+    return hashlib.sha256((seed_hash + holdout_hash + yaml_hash).encode("ascii")).hexdigest()
+
+
+def resolve_workload_descriptor(repo_root: str | Path, family_id: str, workload_file: str | Path | None = None) -> Path:
+    if workload_file is not None:
+        return Path(workload_file).resolve()
+    root = Path(repo_root).resolve()
+    composite = root / "benchmark_blueprints" / "workloads" / family_id / "workload.yaml"
+    if composite.is_file():
+        return composite.resolve()
+    legacy = root / "benchmark_blueprints" / "families" / family_id / "serving_workload.yaml"
+    if legacy.is_file():
+        return legacy.resolve()
+    raise RuntimeError(f"workload_descriptor_missing:{family_id}")
+
+
+def verify_workload_descriptor_preconditions(
+    descriptor_path: str | Path,
+    *,
+    composite: bool,
+    allow_legacy_workload: bool = False,
+) -> dict[str, Any]:
+    descriptor = Path(descriptor_path)
+    payload = load_yaml_file(descriptor)
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Invalid workload descriptor: {descriptor}")
+    descriptor_id = payload.get("workload_distribution_id")
+    if not isinstance(descriptor_id, str) or not descriptor_id.strip():
+        raise RuntimeError("descriptor_missing_workload_distribution_id")
+    canonical_id = compute_workload_distribution_id(descriptor)
+    if descriptor_id != canonical_id:
+        raise RuntimeError("descriptor_workload_distribution_id_mismatch")
+    expected_version = HARDENED_COMPOSITE_WORKLOAD_VERSION if composite else HARDENED_LEGACY_WORKLOAD_VERSION
+    hardening_version = str(payload.get("workload_distribution_id_hardening_version", ""))
+    if hardening_version != expected_version and not allow_legacy_workload:
+        raise RuntimeError("descriptor_stale_workload_distribution_id_hardening_version")
+    return {
+        "workload_distribution_id": descriptor_id,
+        "workload_distribution_id_hardening_version": hardening_version,
+        "expected_workload_distribution_id_hardening_version": expected_version,
+        "canonical_workload_distribution_id": canonical_id,
+    }
 
 
 def resolve_serving_thinking_probe_report(
@@ -924,6 +1013,7 @@ class ResultsRow:
     candidate_uuid: str
     parent_candidate_uuid: str
     iteration: str
+    profile: str
     candidate_label: str
     feasible: bool
     eval_throughput: str
@@ -946,6 +1036,7 @@ class ResultsRow:
             "candidate_uuid": self.candidate_uuid,
             "parent_candidate_uuid": self.parent_candidate_uuid,
             "iteration": self.iteration,
+            "profile": self.profile,
             "candidate_label": self.candidate_label,
             "feasible": "true" if self.feasible else "false",
             "eval_throughput": self.eval_throughput,
@@ -966,6 +1057,7 @@ class ResultsRow:
             candidate_uuid=payload.get("candidate_uuid", ""),
             parent_candidate_uuid=payload.get("parent_candidate_uuid", ""),
             iteration=payload.get("iteration", ""),
+            profile=payload.get("profile", ""),
             candidate_label=payload.get("candidate_label", ""),
             feasible=payload.get("feasible", "").lower() == "true",
             eval_throughput=payload.get("eval_throughput", payload.get("objective_value", "")),
@@ -993,7 +1085,9 @@ class RoundSpecRecord:
     sprint: str
     weight_version_id: str
     workload_file: str
+    workload_descriptor_path: str
     workload_distribution_id: str
+    workload_distribution_id_hardening_version: str
     latency_ceiling_ms: int
     tpot_ceiling_ms: int
     turn_latency_ceiling_ms: int
@@ -1001,7 +1095,7 @@ class RoundSpecRecord:
     target_concurrency: int = 4
     iteration_cap: int = 12
     rescreen_top_k: int = 3
-    round_wall_clock_s: int = 8 * 60 * 60
+    round_wall_clock_s: int = 12 * 60 * 60
     screen_warmup_s: int = 120
     screen_measurement_s: int = 600
     full_warmup_s: int = 300
@@ -1009,6 +1103,10 @@ class RoundSpecRecord:
     per_iteration_codex_wall_clock_s: int = 45 * 60
     diminishing_returns_window_k: int = 4
     noise_floor: float = 0.0
+    baseline_mean_screen: float = 0.0
+    baseline_stddev_screen: float = 0.0
+    measurements_per_candidate_screen: int = 3
+    measurements_per_candidate_full: int = 1
     parent_head_sha: str = ""
     harness_type: str = "real"
     round_started_at: float = 0.0
@@ -1030,7 +1128,9 @@ class RoundSpecRecord:
             "sprint": self.sprint,
             "weight_version_id": self.weight_version_id,
             "workload_file": self.workload_file,
+            "workload_descriptor_path": self.workload_descriptor_path,
             "workload_distribution_id": self.workload_distribution_id,
+            "workload_distribution_id_hardening_version": self.workload_distribution_id_hardening_version,
             "latency_ceiling_ms": self.latency_ceiling_ms,
             "tpot_ceiling_ms": self.tpot_ceiling_ms,
             "turn_latency_ceiling_ms": self.turn_latency_ceiling_ms,
@@ -1048,6 +1148,10 @@ class RoundSpecRecord:
             "per_iteration_codex_wall_clock_s": self.per_iteration_codex_wall_clock_s,
             "diminishing_returns_window_k": self.diminishing_returns_window_k,
             "noise_floor": self.noise_floor,
+            "baseline_mean_screen": self.baseline_mean_screen,
+            "baseline_stddev_screen": self.baseline_stddev_screen,
+            "measurements_per_candidate_screen": self.measurements_per_candidate_screen,
+            "measurements_per_candidate_full": self.measurements_per_candidate_full,
             "parent_head_sha": self.parent_head_sha,
             "harness_type": self.harness_type,
             "round_started_at": self.round_started_at,
@@ -1076,7 +1180,11 @@ class RoundSpecRecord:
             sprint=str(payload["sprint"]),
             weight_version_id=str(payload["weight_version_id"]),
             workload_file=str(payload["workload_file"]),
+            workload_descriptor_path=str(payload.get("workload_descriptor_path", payload["workload_file"])),
             workload_distribution_id=str(payload["workload_distribution_id"]),
+            workload_distribution_id_hardening_version=str(
+                payload.get("workload_distribution_id_hardening_version", "")
+            ),
             latency_ceiling_ms=int(payload["latency_ceiling_ms"]),
             tpot_ceiling_ms=int(payload["tpot_ceiling_ms"]),
             turn_latency_ceiling_ms=int(payload["turn_latency_ceiling_ms"]),
@@ -1084,7 +1192,7 @@ class RoundSpecRecord:
             target_concurrency=int(payload.get("target_concurrency", 4)),
             iteration_cap=int(payload.get("iteration_cap", 12)),
             rescreen_top_k=int(payload.get("rescreen_top_k", 3)),
-            round_wall_clock_s=int(payload.get("round_wall_clock_s", 8 * 60 * 60)),
+            round_wall_clock_s=int(payload.get("round_wall_clock_s", 12 * 60 * 60)),
             screen_warmup_s=int(payload.get("screen_warmup_s", 120)),
             screen_measurement_s=int(payload.get("screen_measurement_s", 600)),
             full_warmup_s=int(payload.get("full_warmup_s", 300)),
@@ -1092,6 +1200,10 @@ class RoundSpecRecord:
             per_iteration_codex_wall_clock_s=int(payload.get("per_iteration_codex_wall_clock_s", 45 * 60)),
             diminishing_returns_window_k=int(payload.get("diminishing_returns_window_k", 4)),
             noise_floor=float(payload.get("noise_floor", 0.0)),
+            baseline_mean_screen=float(payload.get("baseline_mean_screen", 0.0)),
+            baseline_stddev_screen=float(payload.get("baseline_stddev_screen", 0.0)),
+            measurements_per_candidate_screen=int(payload.get("measurements_per_candidate_screen", 3)),
+            measurements_per_candidate_full=int(payload.get("measurements_per_candidate_full", 1)),
             parent_head_sha=str(payload.get("parent_head_sha", "")),
             harness_type=str(payload.get("harness_type", "real")),
             round_started_at=float(payload.get("round_started_at", 0.0)),
@@ -1129,7 +1241,7 @@ class AutoResearchRoundManager:
         model_id: str,
         family_id: str,
         sprint: str,
-        workload_file: str | Path,
+        workload_file: str | Path | None,
         weight_version_id: str | None,
         round_root: str | Path,
         harness_type: str = "real",
@@ -1137,9 +1249,19 @@ class AutoResearchRoundManager:
         active_layer: str = "L1",
         baseline_bundle: str | Path | None = None,
         serving_thinking_probe: str | Path | None = None,
+        allow_legacy_workload: bool = False,
     ) -> dict[str, Any]:
-        workload_file = Path(workload_file).resolve()
+        workload_file = resolve_workload_descriptor(self.repo_root, family_id, workload_file)
         round_root = Path(round_root).resolve()
+        composite_descriptor = (
+            workload_file
+            == (self.repo_root / "benchmark_blueprints" / "workloads" / family_id / "workload.yaml").resolve()
+        )
+        workload_precondition = verify_workload_descriptor_preconditions(
+            workload_file,
+            composite=composite_descriptor,
+            allow_legacy_workload=allow_legacy_workload,
+        )
         active_layer = active_layer.upper()
         if active_layer not in {"L1", "L2"}:
             raise RuntimeError(f"Unsupported active_layer: {active_layer}")
@@ -1215,7 +1337,11 @@ class AutoResearchRoundManager:
             sprint=sprint,
             weight_version_id=weight_version_id or default_weight_version_id(model_config),
             workload_file=str(workload_file),
+            workload_descriptor_path=str(workload_file),
             workload_distribution_id=workload.workload_distribution_id,
+            workload_distribution_id_hardening_version=str(
+                workload_precondition["workload_distribution_id_hardening_version"]
+            ),
             latency_ceiling_ms=workload.latency_ceiling_ms,
             tpot_ceiling_ms=workload.tpot_ceiling_ms,
             turn_latency_ceiling_ms=workload.turn_latency_ceiling_ms,
@@ -1240,8 +1366,8 @@ class AutoResearchRoundManager:
             if active_layer == "L2" and frozen_bundle is not None
             else model_config.vllm_config()
         )
-        for suffix in ("a", "b"):
-            baseline_dir = candidates_dir / f"baseline_{suffix}"
+        for baseline_iteration in BASELINE_ITERATIONS:
+            baseline_dir = candidates_dir / baseline_iteration
             baseline_dir.mkdir()
             self._write_yaml(baseline_dir / "candidate.yaml", default_candidate)
 
@@ -1288,7 +1414,7 @@ class AutoResearchRoundManager:
             raise RuntimeError("Candidate must live under the round directory")
         iteration_id = candidate_path.parent.name
         self._validate_iteration_id(iteration_id)
-        selected_profile = profile or ("full" if iteration_id.startswith("rescreen_") else "screen")
+        selected_profile = profile or self._default_profile_for_iteration(iteration_id)
         self._validate_measure_request(
             spec=spec,
             iteration_id=iteration_id,
@@ -1472,10 +1598,26 @@ class AutoResearchRoundManager:
             "status": status,
         }
 
-    def rescreen(self, *, round_id: str, top_k: int, profile: str = "full", harness: str | None = None) -> dict[str, Any]:
+    def rescreen(
+        self,
+        *,
+        round_id: str,
+        top_k: int,
+        profile: str = "screen",
+        harness: str | None = None,
+        measurements_per_candidate_screen: int | None = None,
+        measurements_per_candidate_full: int | None = None,
+    ) -> dict[str, Any]:
         round_dir = self._round_dir(round_id)
         spec = RoundSpecRecord.from_path(round_dir / "round_spec.yaml")
         spec = self._spec_with_harness(spec, harness)
+        del profile
+        screen_count = measurements_per_candidate_screen or spec.measurements_per_candidate_screen
+        full_count = measurements_per_candidate_full or spec.measurements_per_candidate_full
+        if screen_count < 1:
+            raise RuntimeError("rescreen requires at least one Screen measurement per candidate")
+        if full_count < 0:
+            raise RuntimeError("rescreen Full measurement count must be >= 0")
         rows = self._read_results(round_dir / "results.tsv")
         feasible_rows = [
             row
@@ -1492,104 +1634,187 @@ class AutoResearchRoundManager:
         selected = feasible_rows[:top_k]
         rescreen_rows: list[dict[str, Any]] = []
         for index, parent in enumerate(selected, start=1):
-            iteration = f"rescreen_{index:02d}"
-            rescreen_dir = round_dir / "candidates" / iteration
-            staged_paths = [
-                path.relative_to(self.repo_root)
-                for path in [*self._bootstrap_round_artifact_paths(round_dir), rescreen_dir, round_dir / "results.tsv"]
-            ]
-            self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
-            self._assert_git_index_clean(context="commit_refused")
-            self._assert_immutable_round_artifacts(round_dir, spec=spec, context="commit_refused")
-            self._assert_dirty_paths_match_expected(
-                mutable_paths=[rescreen_dir, round_dir / "results.tsv", round_dir / "round_spec.yaml"],
-                bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
-                context="commit_refused",
-            )
-            rescreen_dir.mkdir(parents=True, exist_ok=False)
             parent_candidate_dir = round_dir / "candidates" / parent.iteration
-            shutil.copy2(parent_candidate_dir / "candidate.yaml", rescreen_dir / "candidate.yaml")
-            measure_result = self.measure(
-                round_id=round_id,
-                candidate_path=rescreen_dir / "candidate.yaml",
-                profile=profile,
-                parent_candidate_uuid=parent.candidate_uuid,
-                harness=spec.harness_type,
-            )
-            trace = json.loads((rescreen_dir / "measurement_trace.json").read_text(encoding="utf-8"))
-            self._validate_measurement_trace(trace, status="rescreened")
-            generator = str(trace.get("generator", ""))
-            self._validate_measurement_generator(
-                generator,
-                harness_type=spec.harness_type,
-                context="commit_refused",
-            )
-            objective_parent = float(parent.eval_throughput)
-            objective_rescreen = float(trace["eval_throughput"])
-            objective_mean = (objective_parent + objective_rescreen) / 2.0
-            objective_ci_95 = self._ci95([objective_parent, objective_rescreen])
-            notes = ""
-            if abs(objective_rescreen - objective_parent) > float(spec.noise_floor):
-                notes = "inconsistent_rescreen"
-            rows = self._read_results(round_dir / "results.tsv")
-            updated_rows: list[ResultsRow] = []
-            for row in rows:
-                if row.iteration == iteration and row.candidate_uuid == measure_result["candidate_uuid"]:
-                    updated_rows.append(
-                        ResultsRow(
-                            candidate_uuid=row.candidate_uuid,
-                            parent_candidate_uuid=parent.candidate_uuid,
-                            iteration=row.iteration,
-                            candidate_label=row.candidate_label,
-                            feasible=row.feasible,
-                            eval_throughput=row.eval_throughput,
-                            objective_mean=f"{objective_mean:.3f}",
-                            objective_ci_95=f"{objective_ci_95:.3f}",
-                            measurement_count=2,
-                            window_completed=row.window_completed,
-                            no_oom_events=row.no_oom_events,
-                            reasoning_content_purity=row.reasoning_content_purity,
-                            determinism_pass_rate=row.determinism_pass_rate,
-                            status="rescreened",
-                            notes=notes,
-                        )
+            measured_screen: list[tuple[str, str, float, Path]] = []
+            for screen_index in range(1, screen_count + 1):
+                iteration = f"rescreen_{index:02d}_screen_{screen_index}"
+                rescreen_dir = round_dir / "candidates" / iteration
+                rescreen_dir.mkdir(parents=True, exist_ok=False)
+                shutil.copy2(parent_candidate_dir / "candidate.yaml", rescreen_dir / "candidate.yaml")
+                measure_result = self.measure(
+                    round_id=round_id,
+                    candidate_path=rescreen_dir / "candidate.yaml",
+                    profile="screen",
+                    parent_candidate_uuid=parent.candidate_uuid,
+                    harness=spec.harness_type,
+                )
+                trace = json.loads((rescreen_dir / "measurement_trace.json").read_text(encoding="utf-8"))
+                self._validate_measurement_trace(trace, status="rescreened")
+                self._validate_measurement_generator(
+                    str(trace.get("generator", "")),
+                    harness_type=spec.harness_type,
+                    context="commit_refused",
+                )
+                measured_screen.append(
+                    (
+                        str(measure_result["candidate_uuid"]),
+                        iteration,
+                        float(trace["eval_throughput"]),
+                        rescreen_dir,
                     )
-                else:
-                    updated_rows.append(row)
-            self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
-            self._assert_git_index_clean(context="commit_refused")
-            self._assert_immutable_round_artifacts(round_dir, spec=spec, context="commit_refused")
-            self._assert_dirty_paths_match_expected(
-                mutable_paths=[rescreen_dir, round_dir / "results.tsv", round_dir / "round_spec.yaml"],
-                bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
-                context="commit_refused",
-            )
-            self._write_results(round_dir / "results.tsv", updated_rows)
-            commit_message = self._candidate_commit_message(
-                round_id=round_id,
-                iteration=iteration,
-                row=next(row for row in updated_rows if row.iteration == iteration),
-                trace_path=(rescreen_dir / "measurement_trace.json").relative_to(self.repo_root),
-                extra_trailers=[
-                    f"Rescreen-Of-UUID: {parent.candidate_uuid}",
-                    *(["Fixture-Mode: true"] if spec.harness_type == "synthetic" else []),
-                ],
-            )
-            commit_sha = self._commit_paths(
-                staged_paths,
-                commit_message,
-                False,
-                branch=spec.round_branch,
-                context="commit_refused",
-            )
-            rescreen_rows.append(
-                {
-                    "iteration": iteration,
-                    "candidate_uuid": measure_result["candidate_uuid"],
-                    "parent_candidate_uuid": parent.candidate_uuid,
-                    "commit_sha": commit_sha,
-                }
-            )
+                )
+
+            screen_measurements = [float(parent.eval_throughput), *(value for _uuid, _iteration, value, _dir in measured_screen)]
+            objective_mean = sum(screen_measurements) / len(screen_measurements)
+            objective_ci_95 = 2.78 * self._sample_stddev(screen_measurements) / math.sqrt(len(screen_measurements))
+            notes = ""
+            if max(screen_measurements) - min(screen_measurements) > float(spec.noise_floor) * 2.0:
+                notes = "inconsistent_rescreen"
+            for candidate_uuid, iteration, objective_value, rescreen_dir in measured_screen:
+                rows = self._read_results(round_dir / "results.tsv")
+                updated_rows: list[ResultsRow] = []
+                for row in rows:
+                    if row.iteration == iteration and row.candidate_uuid == candidate_uuid:
+                        updated_rows.append(
+                            ResultsRow(
+                                candidate_uuid=row.candidate_uuid,
+                                parent_candidate_uuid=parent.candidate_uuid,
+                                iteration=row.iteration,
+                                profile=row.profile,
+                                candidate_label=row.candidate_label,
+                                feasible=row.feasible,
+                                eval_throughput=row.eval_throughput,
+                                objective_mean=f"{objective_mean:.6f}",
+                                objective_ci_95=f"{objective_ci_95:.6f}",
+                                measurement_count=len(screen_measurements),
+                                window_completed=row.window_completed,
+                                no_oom_events=row.no_oom_events,
+                                reasoning_content_purity=row.reasoning_content_purity,
+                                determinism_pass_rate=row.determinism_pass_rate,
+                                status="rescreened",
+                                notes=notes,
+                            )
+                        )
+                    else:
+                        updated_rows.append(row)
+                self._write_results(round_dir / "results.tsv", updated_rows)
+                staged_paths = [
+                    path.relative_to(self.repo_root)
+                    for path in [*self._bootstrap_round_artifact_paths(round_dir), rescreen_dir, round_dir / "results.tsv"]
+                ]
+                commit_message = self._candidate_commit_message(
+                    round_id=round_id,
+                    iteration=iteration,
+                    row=next(row for row in updated_rows if row.iteration == iteration),
+                    trace_path=(rescreen_dir / "measurement_trace.json").relative_to(self.repo_root),
+                    extra_trailers=[
+                        f"Rescreen-Of-UUID: {parent.candidate_uuid}",
+                        *(["Fixture-Mode: true"] if spec.harness_type == "synthetic" else []),
+                    ],
+                )
+                commit_sha = self._commit_paths(
+                    staged_paths,
+                    commit_message,
+                    False,
+                    branch=spec.round_branch,
+                    context="commit_refused",
+                )
+                rescreen_rows.append(
+                    {
+                        "iteration": iteration,
+                        "profile": "screen",
+                        "candidate_uuid": candidate_uuid,
+                        "parent_candidate_uuid": parent.candidate_uuid,
+                        "eval_throughput": objective_value,
+                        "objective_mean_screen": objective_mean,
+                        "objective_ci_95_screen": objective_ci_95,
+                        "commit_sha": commit_sha,
+                    }
+                )
+
+            for full_index in range(1, full_count + 1):
+                iteration = f"rescreen_{index:02d}_full_{full_index}"
+                rescreen_dir = round_dir / "candidates" / iteration
+                rescreen_dir.mkdir(parents=True, exist_ok=False)
+                shutil.copy2(parent_candidate_dir / "candidate.yaml", rescreen_dir / "candidate.yaml")
+                measure_result = self.measure(
+                    round_id=round_id,
+                    candidate_path=rescreen_dir / "candidate.yaml",
+                    profile="full",
+                    parent_candidate_uuid=parent.candidate_uuid,
+                    harness=spec.harness_type,
+                )
+                trace = json.loads((rescreen_dir / "measurement_trace.json").read_text(encoding="utf-8"))
+                self._validate_measurement_trace(trace, status="rescreened_full")
+                self._validate_measurement_generator(
+                    str(trace.get("generator", "")),
+                    harness_type=spec.harness_type,
+                    context="commit_refused",
+                )
+                full_value = float(trace["eval_throughput"])
+                screen_stddev = self._sample_stddev(screen_measurements)
+                full_notes = ""
+                if full_value < objective_mean - (3.0 * screen_stddev) or full_value > objective_mean + (3.0 * screen_stddev):
+                    full_notes = "screen_full_divergence"
+                rows = self._read_results(round_dir / "results.tsv")
+                updated_rows = []
+                for row in rows:
+                    if row.iteration == iteration and row.candidate_uuid == str(measure_result["candidate_uuid"]):
+                        updated_rows.append(
+                            ResultsRow(
+                                candidate_uuid=row.candidate_uuid,
+                                parent_candidate_uuid=parent.candidate_uuid,
+                                iteration=row.iteration,
+                                profile=row.profile,
+                                candidate_label=row.candidate_label,
+                                feasible=row.feasible,
+                                eval_throughput=row.eval_throughput,
+                                objective_mean="",
+                                objective_ci_95="",
+                                measurement_count=1,
+                                window_completed=row.window_completed,
+                                no_oom_events=row.no_oom_events,
+                                reasoning_content_purity=row.reasoning_content_purity,
+                                determinism_pass_rate=row.determinism_pass_rate,
+                                status="rescreened_full",
+                                notes=full_notes,
+                            )
+                        )
+                    else:
+                        updated_rows.append(row)
+                self._write_results(round_dir / "results.tsv", updated_rows)
+                staged_paths = [
+                    path.relative_to(self.repo_root)
+                    for path in [*self._bootstrap_round_artifact_paths(round_dir), rescreen_dir, round_dir / "results.tsv"]
+                ]
+                commit_message = self._candidate_commit_message(
+                    round_id=round_id,
+                    iteration=iteration,
+                    row=next(row for row in updated_rows if row.iteration == iteration),
+                    trace_path=(rescreen_dir / "measurement_trace.json").relative_to(self.repo_root),
+                    extra_trailers=[
+                        f"Rescreen-Of-UUID: {parent.candidate_uuid}",
+                        *(["Fixture-Mode: true"] if spec.harness_type == "synthetic" else []),
+                    ],
+                )
+                commit_sha = self._commit_paths(
+                    staged_paths,
+                    commit_message,
+                    False,
+                    branch=spec.round_branch,
+                    context="commit_refused",
+                )
+                rescreen_rows.append(
+                    {
+                        "iteration": iteration,
+                        "profile": "full",
+                        "candidate_uuid": str(measure_result["candidate_uuid"]),
+                        "parent_candidate_uuid": parent.candidate_uuid,
+                        "eval_throughput": full_value,
+                        "screen_full_divergence": bool(full_notes),
+                        "commit_sha": commit_sha,
+                    }
+                )
 
         trace_path = round_dir / "rescreen_trace.json"
         trace_path.write_text(json.dumps(rescreen_rows, indent=2), encoding="utf-8")
@@ -1722,6 +1947,17 @@ class AutoResearchRoundManager:
             candidate=winner_candidate,
         )
         lower_layer_bundle = load_baseline_bundle(spec.baseline_bundle_path or None)
+        baseline_screen_measurements = self._baseline_screen_measurements(rows)
+        winner_screen_measurements = self._candidate_screen_measurements(rows, winner_parent_uuid)
+        confidence_payload = self._derive_confidence_payload(
+            baseline_screen_measurements=baseline_screen_measurements,
+            winner_screen_measurements=winner_screen_measurements,
+            noise_floor=spec.noise_floor,
+            winner_row=winner_row,
+        )
+        screen_full_consistency = self._screen_full_consistency(rows, winner_parent_uuid)
+        latency_above_slo = self._latency_above_slo(round_dir=round_dir, rows=rows, winner_parent_uuid=winner_parent_uuid, spec=spec)
+        l2_enforcement_coverage = self._l2_enforcement_coverage(round_dir=round_dir, rows=rows, winner_parent_uuid=winner_parent_uuid, spec=spec)
 
         measurement_trace_ref = round_dir / "measurement_trace_combined.json"
         search_trace_ref = round_dir / "search_trace.json"
@@ -1740,7 +1976,7 @@ class AutoResearchRoundManager:
             lora_policy=dict(lower_layer_bundle.lora_policy) if lower_layer_bundle is not None else None,
             objective={
                 "metric": "eval_throughput",
-                "value": float(winner_row.objective_mean or winner_row.eval_throughput or "0"),
+                "value": float(confidence_payload["objective_mean_screen"] or winner_row.objective_mean or winner_row.eval_throughput or "0"),
             },
             measurement_trace_ref=str(measurement_trace_ref.relative_to(self.repo_root)),
             search_trace_ref=str(search_trace_ref.relative_to(self.repo_root)),
@@ -1758,6 +1994,13 @@ class AutoResearchRoundManager:
                 "baseline_bundle_path": spec.baseline_bundle_path or None,
                 "baseline_bundle_id": spec.baseline_bundle_id or None,
                 "request_shaping_enforcement": self._request_shaping_enforcement_record(spec),
+                "confidence": confidence_payload["confidence"],
+                "improvement_over_baseline_req_per_s": confidence_payload["improvement_over_baseline_req_per_s"],
+                "improvement_over_baseline_ci_95": confidence_payload["improvement_over_baseline_ci_95"],
+                "latency_above_slo": latency_above_slo,
+                "screen_full_consistency": screen_full_consistency,
+                "l2_enforcement_coverage": l2_enforcement_coverage,
+                "workload_descriptor_path": spec.workload_descriptor_path,
                 "sub_spec_version": spec.sub_spec_version,
                 "agent_session_dir_ref": str((round_dir / "candidates").relative_to(self.repo_root)),
                 "agent_model_pin": {"model": "gpt-5.4", "reasoning_effort": "high"},
@@ -1777,7 +2020,16 @@ class AutoResearchRoundManager:
             "iterations_total": len(rows),
             "rescreened_count": sum(1 for row in rows if row.status == "rescreened"),
             "holdout_validation": "skipped" if dry_run else "pass",
+            "diagnostics": {
+                "confidence": confidence_payload,
+                "latency_above_slo": latency_above_slo,
+                "screen_full_consistency": screen_full_consistency,
+            },
         }
+        if screen_full_consistency == "divergent":
+            run_log["diagnostics"]["screen_full_divergence_note"] = (
+                "winner Full-profile rescreen fell outside objective_mean_screen +/- 3 * stddev_screen"
+            )
 
         commit_message = (
             f"AR({round_id}) FINALIZE: {winner_row.candidate_label} - eval_throughput={winner_row.objective_mean or winner_row.eval_throughput}\n\n"
@@ -1853,7 +2105,7 @@ class AutoResearchRoundManager:
             phase = "holdout"
         elif any(row.status == "rescreened" for row in rows):
             phase = "rescreen"
-        elif any(row.iteration not in {"baseline_a", "baseline_b"} for row in rows):
+        elif any(row.iteration not in BASELINE_ITERATION_SET for row in rows):
             phase = "main_loop"
         elif rows:
             phase = "baseline"
@@ -1901,14 +2153,14 @@ class AutoResearchRoundManager:
         round_id = str(bootstrap["round_id"])
         round_dir = Path(bootstrap["round_dir"])
         rows_created = []
-        for suffix in ("a", "b"):
-            self.measure(round_id=round_id, candidate_path=round_dir / "candidates" / f"baseline_{suffix}" / "candidate.yaml")
+        for baseline_iteration in BASELINE_ITERATIONS:
+            self.measure(round_id=round_id, candidate_path=round_dir / "candidates" / baseline_iteration / "candidate.yaml")
             rows_created.append(
                 self.commit_candidate(
                     round_id=round_id,
-                    iteration=f"baseline_{suffix}",
+                    iteration=baseline_iteration,
                     status="baseline",
-                    notes=f"default-config baseline replay {suffix}",
+                    notes=f"default-config baseline replay {baseline_iteration.rsplit('_', 1)[1]}",
                     allow_synthetic=harness_type == "synthetic",
                 )
             )
@@ -2424,6 +2676,7 @@ class AutoResearchRoundManager:
             candidate_uuid=str(trace["candidate_uuid"]),
             parent_candidate_uuid=str(trace.get("parent_candidate_uuid") or ""),
             iteration=str(trace["iteration"]),
+            profile=str(trace.get("profile") or ""),
             candidate_label=str(trace["candidate_label"]),
             feasible=bool(trace["feasible"]),
             eval_throughput=eval_throughput,
@@ -2595,11 +2848,11 @@ class AutoResearchRoundManager:
             default_candidate = self._default_request_shaping(spec.frozen_vllm_config)
         else:
             default_candidate = load_registry(self.registry_path)[spec.model_id].vllm_config()
-        for suffix in ("a", "b"):
-            baseline_path = round_dir / "candidates" / f"baseline_{suffix}" / "candidate.yaml"
+        for baseline_iteration in BASELINE_ITERATIONS:
+            baseline_path = round_dir / "candidates" / baseline_iteration / "candidate.yaml"
             if load_yaml_file(baseline_path) != default_candidate:
                 raise RuntimeError(
-                    f"{context}: immutable round artifact changed: candidates/baseline_{suffix}/candidate.yaml"
+                    f"{context}: immutable round artifact changed: candidates/{baseline_iteration}/candidate.yaml"
                 )
 
     def _bootstrap_round_artifact_paths(self, round_dir: Path) -> list[Path]:
@@ -2608,8 +2861,7 @@ class AutoResearchRoundManager:
             round_dir / "impl_brief.md",
             round_dir / "iteration_brief.md",
             round_dir / ".round.lock",
-            round_dir / "candidates" / "baseline_a",
-            round_dir / "candidates" / "baseline_b",
+            *(round_dir / "candidates" / baseline_iteration for baseline_iteration in BASELINE_ITERATIONS),
         ]
         return [path for path in paths if path.exists()]
 
@@ -2648,13 +2900,20 @@ class AutoResearchRoundManager:
                 f"measure_refused: iteration {iteration_id} exceeds iteration_cap {spec.iteration_cap}"
             )
         if iteration_id.startswith("rescreen_"):
-            rescreen_index = int(iteration_id.split("_", 1)[1])
+            rescreen_index = int(iteration_id.split("_", 2)[1])
             if rescreen_index > spec.rescreen_top_k:
                 raise RuntimeError(
                     f"measure_refused: iteration {iteration_id} exceeds rescreen_top_k {spec.rescreen_top_k}"
                 )
-            if profile != "full":
-                raise RuntimeError("measure_refused: rescreen iterations require the full profile")
+            expected_profile = self._default_profile_for_iteration(iteration_id)
+            if profile != expected_profile:
+                raise RuntimeError(f"measure_refused: {iteration_id} requires the {expected_profile} profile")
+
+    @staticmethod
+    def _default_profile_for_iteration(iteration_id: str) -> str:
+        if "_full_" in iteration_id:
+            return "full"
+        return "screen"
 
     @staticmethod
     def _metric_tie_break_value(value: str) -> float:
@@ -2697,6 +2956,165 @@ class AutoResearchRoundManager:
             ),
         )
 
+    def _baseline_screen_measurements(self, rows: list[ResultsRow]) -> list[float]:
+        measurements: list[float] = []
+        for row in sorted(rows, key=lambda item: item.iteration):
+            if row.iteration in BASELINE_ITERATION_SET and row.status == "baseline" and row.profile == "screen":
+                try:
+                    measurements.append(float(row.eval_throughput))
+                except (TypeError, ValueError):
+                    continue
+        return measurements
+
+    def _candidate_screen_measurements(self, rows: list[ResultsRow], parent_uuid: str) -> list[float]:
+        parent = next((row for row in rows if row.candidate_uuid == parent_uuid and not row.parent_candidate_uuid), None)
+        measurements: list[float] = []
+        if parent is not None and parent.profile == "screen":
+            try:
+                measurements.append(float(parent.eval_throughput))
+            except (TypeError, ValueError):
+                pass
+        rescreens = sorted(
+            (
+                row
+                for row in rows
+                if row.parent_candidate_uuid == parent_uuid and row.status == "rescreened" and row.profile == "screen"
+            ),
+            key=lambda row: row.iteration,
+        )
+        for row in rescreens:
+            try:
+                measurements.append(float(row.eval_throughput))
+            except (TypeError, ValueError):
+                continue
+        return measurements
+
+    def _derive_confidence_payload(
+        self,
+        *,
+        baseline_screen_measurements: list[float],
+        winner_screen_measurements: list[float],
+        noise_floor: float,
+        winner_row: ResultsRow,
+    ) -> dict[str, Any]:
+        baseline_mean = sum(baseline_screen_measurements) / len(baseline_screen_measurements) if baseline_screen_measurements else 0.0
+        winner_mean = sum(winner_screen_measurements) / len(winner_screen_measurements) if winner_screen_measurements else 0.0
+        delta = winner_mean - baseline_mean
+        ci_low, ci_high = self._improvement_ci_95_welch(baseline_screen_measurements, winner_screen_measurements)
+        confidence = "unknown"
+        if len(baseline_screen_measurements) >= 5 and len(winner_screen_measurements) >= 4:
+            note_tokens = {token.strip() for token in winner_row.notes.split(",") if token.strip()}
+            if note_tokens & {"inconsistent_rescreen", "high_variance_rescreen"}:
+                confidence = "exploratory"
+            elif ci_low > noise_floor:
+                confidence = "defensible"
+            elif delta > 0 and ci_low > 0:
+                confidence = "within_noise_floor"
+            else:
+                confidence = "exploratory"
+        return {
+            "confidence": confidence,
+            "baseline_mean_screen": baseline_mean,
+            "objective_mean_screen": winner_mean,
+            "improvement_over_baseline_req_per_s": delta,
+            "improvement_over_baseline_ci_95": [ci_low, ci_high],
+            "baseline_measurement_count": len(baseline_screen_measurements),
+            "winner_screen_measurement_count": len(winner_screen_measurements),
+            "noise_floor": noise_floor,
+        }
+
+    def _screen_full_consistency(self, rows: list[ResultsRow], parent_uuid: str) -> str:
+        screen = self._candidate_screen_measurements(rows, parent_uuid)
+        full_rows = sorted(
+            (
+                row
+                for row in rows
+                if row.parent_candidate_uuid == parent_uuid and row.status == "rescreened_full" and row.profile == "full"
+            ),
+            key=lambda row: row.iteration,
+        )
+        if len(screen) < 2 or not full_rows:
+            return "consistent"
+        screen_mean = sum(screen) / len(screen)
+        screen_stddev = self._sample_stddev(screen)
+        low = screen_mean - (3.0 * screen_stddev)
+        high = screen_mean + (3.0 * screen_stddev)
+        for row in full_rows:
+            try:
+                value = float(row.eval_throughput)
+            except (TypeError, ValueError):
+                continue
+            if value < low or value > high:
+                return "divergent"
+        return "consistent"
+
+    def _trace_for_row(self, round_dir: Path, row: ResultsRow) -> dict[str, Any]:
+        path = round_dir / "candidates" / row.iteration / "measurement_trace.json"
+        if not path.is_file():
+            return {}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _trace_driver_ms(trace: dict[str, Any], key: str) -> float:
+        value = trace.get(key)
+        if isinstance(value, dict):
+            value = value.get("driver", value.get("promql"))
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _latency_above_slo(
+        self,
+        *,
+        round_dir: Path,
+        rows: list[ResultsRow],
+        winner_parent_uuid: str,
+        spec: RoundSpecRecord,
+    ) -> bool:
+        descriptor = load_yaml_file(spec.workload_descriptor_path or spec.workload_file)
+        nominal_ttft = float(descriptor.get("nominal_ttft_ms", spec.latency_ceiling_ms)) if isinstance(descriptor, dict) else float(spec.latency_ceiling_ms)
+        nominal_turn = float(descriptor.get("nominal_turn_ms", spec.turn_latency_ceiling_ms)) if isinstance(descriptor, dict) else float(spec.turn_latency_ceiling_ms)
+        candidate_rows = [
+            row
+            for row in rows
+            if row.parent_candidate_uuid == winner_parent_uuid and row.status in {"rescreened", "rescreened_full"}
+        ]
+        max_ttft = 0.0
+        max_turn = 0.0
+        for row in candidate_rows:
+            trace = self._trace_for_row(round_dir, row)
+            max_ttft = max(max_ttft, self._trace_driver_ms(trace, "ttft_p95_ms"))
+            max_turn = max(max_turn, self._trace_driver_ms(trace, "turn_latency_p95_ms"))
+        return max_ttft > nominal_ttft or max_turn > nominal_turn
+
+    def _l2_enforcement_coverage(
+        self,
+        *,
+        round_dir: Path,
+        rows: list[ResultsRow],
+        winner_parent_uuid: str,
+        spec: RoundSpecRecord,
+    ) -> dict[str, Any]:
+        if spec.active_layer.upper() != "L2":
+            return {"mode": "not_l2", "enforced_fields": [], "advisory_fields": []}
+        winner_rows = [
+            row for row in rows if row.parent_candidate_uuid == winner_parent_uuid and row.status in {"rescreened", "rescreened_full"}
+        ]
+        if not winner_rows:
+            winner_rows = [row for row in rows if row.candidate_uuid == winner_parent_uuid]
+        for row in winner_rows:
+            record = self._trace_for_row(round_dir, row).get("request_shaping_enforcement")
+            if isinstance(record, dict):
+                return {
+                    "mode": str(record.get("mode", "substrate_measurement_only")),
+                    "enforced_fields": list(record.get("enforced_fields", [])) if isinstance(record.get("enforced_fields"), list) else [],
+                    "advisory_fields": list(record.get("advisory_fields", [])) if isinstance(record.get("advisory_fields"), list) else [],
+                    "real_proxy_enforcement": bool(record.get("real_proxy_enforcement", False)),
+                }
+        return {"mode": "substrate_measurement_only", "enforced_fields": [], "advisory_fields": [], "real_proxy_enforcement": False}
+
     def _read_results(self, path: Path) -> list[ResultsRow]:
         if not path.exists():
             return []
@@ -2732,33 +3150,103 @@ class AutoResearchRoundManager:
             (
                 row
                 for row in rows
-                if row.iteration in {"baseline_a", "baseline_b"} and row.status == "baseline"
+                if row.iteration in BASELINE_ITERATION_SET and row.status == "baseline" and row.profile == "screen"
             ),
             key=lambda row: row.iteration,
         )
-        if len(baseline_rows) != 2:
+        if len(baseline_rows) != len(BASELINE_ITERATIONS):
             return spec
         try:
             objectives = [float(row.eval_throughput) for row in baseline_rows]
         except (TypeError, ValueError):
             return spec
-        noise_floor = 2.0 * abs(objectives[0] - objectives[1])
-        if math.isclose(spec.noise_floor, noise_floor, rel_tol=0.0, abs_tol=1e-9):
+        baseline_mean = sum(objectives) / len(objectives)
+        baseline_stddev = self._sample_stddev(objectives)
+        noise_floor = 2.0 * baseline_stddev
+        if (
+            math.isclose(spec.noise_floor, noise_floor, rel_tol=0.0, abs_tol=1e-9)
+            and math.isclose(spec.baseline_mean_screen, baseline_mean, rel_tol=0.0, abs_tol=1e-9)
+            and math.isclose(spec.baseline_stddev_screen, baseline_stddev, rel_tol=0.0, abs_tol=1e-9)
+        ):
             return spec
         return RoundSpecRecord(
             **{
                 **spec.__dict__,
                 "noise_floor": noise_floor,
+                "baseline_mean_screen": baseline_mean,
+                "baseline_stddev_screen": baseline_stddev,
             }
         )
+
+    @staticmethod
+    def _sample_stddev(values: list[float]) -> float:
+        if len(values) < 2:
+            return 0.0
+        mean = sum(values) / len(values)
+        variance = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+        return math.sqrt(variance)
 
     @staticmethod
     def _ci95(values: list[float]) -> float:
         if len(values) < 2:
             return 0.0
-        mean = sum(values) / len(values)
-        variance = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
-        return 1.96 * math.sqrt(variance) / math.sqrt(len(values))
+        return 1.96 * AutoResearchRoundManager._sample_stddev(values) / math.sqrt(len(values))
+
+    @staticmethod
+    def _t_critical_95_two_sided(degrees_of_freedom: float) -> float:
+        table = [
+            (1, 12.706),
+            (2, 4.303),
+            (3, 3.182),
+            (4, 2.776),
+            (5, 2.571),
+            (6, 2.447),
+            (7, 2.365),
+            (8, 2.306),
+            (9, 2.262),
+            (10, 2.228),
+            (12, 2.179),
+            (15, 2.131),
+            (20, 2.086),
+            (30, 2.042),
+            (60, 2.000),
+            (120, 1.980),
+        ]
+        if not math.isfinite(degrees_of_freedom) or degrees_of_freedom <= 0:
+            return table[0][1]
+        for df, critical in table:
+            if degrees_of_freedom <= df:
+                return critical
+        return 1.96
+
+    @staticmethod
+    def _improvement_ci_95_welch(baseline: list[float], candidate: list[float]) -> tuple[float, float]:
+        if len(baseline) < 2 or len(candidate) < 2:
+            delta = (
+                (sum(candidate) / len(candidate) if candidate else 0.0)
+                - (sum(baseline) / len(baseline) if baseline else 0.0)
+            )
+            return (delta, delta)
+        baseline_mean = sum(baseline) / len(baseline)
+        candidate_mean = sum(candidate) / len(candidate)
+        baseline_var = AutoResearchRoundManager._sample_stddev(baseline) ** 2
+        candidate_var = AutoResearchRoundManager._sample_stddev(candidate) ** 2
+        baseline_term = baseline_var / len(baseline)
+        candidate_term = candidate_var / len(candidate)
+        standard_error = math.sqrt(baseline_term + candidate_term)
+        if standard_error == 0.0:
+            delta = candidate_mean - baseline_mean
+            return (delta, delta)
+        numerator = (baseline_term + candidate_term) ** 2
+        denominator = 0.0
+        if len(baseline) > 1:
+            denominator += (baseline_term**2) / (len(baseline) - 1)
+        if len(candidate) > 1:
+            denominator += (candidate_term**2) / (len(candidate) - 1)
+        degrees = numerator / denominator if denominator else float("inf")
+        margin = AutoResearchRoundManager._t_critical_95_two_sided(degrees) * standard_error
+        delta = candidate_mean - baseline_mean
+        return (delta - margin, delta + margin)
 
     def _bundle_output_path(self, bundle: TunedConfigBundle) -> Path:
         return self.tuned_config_root / bundle.family_id / bundle.weight_version_id / f"{bundle.run_slug}.yaml"

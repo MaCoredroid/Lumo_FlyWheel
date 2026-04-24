@@ -1,6 +1,10 @@
 family_id: proposal-ranking-manager-judgment
-workload_distribution_id: prmj-v1-live
+workload_distribution_id: 594173ff1909e702fc6a76b118913372e345e206107c9b1e606450fb8df16497
+workload_distribution_id_hardening_version: v1-thinking-realistic
 latency_ceiling_ms: 35000
+nominal_ttft_ms: 2000
+nominal_tpot_ms: 80
+nominal_turn_ms: 30000
 p99_context_tokens: 24576
 avg_prompt_tokens: 4096
 avg_output_tokens: 1200

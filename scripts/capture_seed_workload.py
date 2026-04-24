@@ -98,6 +98,26 @@ def _write_jsonl(path: Path, entries: list[dict[str, int | str]]) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _resolve_ref(descriptor_path: Path, ref: str) -> Path:
+    path = Path(ref)
+    if path.is_absolute():
+        return path
+    return descriptor_path.parent / path
+
+
+def compute_workload_distribution_id(descriptor_path: Path) -> str:
+    payload = yaml.safe_load(descriptor_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Workload descriptor must be a mapping: {descriptor_path}")
+    seed_hash = hashlib.sha256(_resolve_ref(descriptor_path, str(payload["seed_trace_ref"])).read_bytes()).hexdigest()
+    holdout_hash = hashlib.sha256(_resolve_ref(descriptor_path, str(payload["holdout_trace_ref"])).read_bytes()).hexdigest()
+    payload["workload_distribution_id"] = None
+    yaml_hash = hashlib.sha256(
+        yaml.safe_dump(payload, sort_keys=True, default_flow_style=False).encode("utf-8")
+    ).hexdigest()
+    return hashlib.sha256((seed_hash + holdout_hash + yaml_hash).encode("ascii")).hexdigest()
+
+
 def _family_dir(repo_root: Path, family_id: str) -> Path:
     return repo_root / "benchmark_blueprints" / "families" / family_id
 
@@ -188,8 +208,15 @@ def main() -> int:
             if holdout_output_path.parent == workload_file.parent
             else str(holdout_output_path)
         )
-        workload["workload_distribution_id"] = seed_digest
+        workload.setdefault("workload_distribution_id_hardening_version", "v1-thinking-realistic")
+        workload.setdefault("nominal_ttft_ms", workload.get("latency_ceiling_ms", 35000))
+        workload.setdefault("nominal_tpot_ms", workload.get("tpot_ceiling_ms", 80))
+        workload.setdefault("nominal_turn_ms", workload.get("turn_latency_ceiling_ms", workload.get("latency_ceiling_ms", 35000)))
+        workload["workload_distribution_id"] = None
         workload_file.write_text(yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
+        workload["workload_distribution_id"] = compute_workload_distribution_id(workload_file)
+        workload_file.write_text(yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
+    workload_distribution_id = compute_workload_distribution_id(workload_file) if workload_file and workload_file.exists() else seed_digest
 
     print(
         json.dumps(
@@ -201,7 +228,7 @@ def main() -> int:
                 "holdout_count": len(holdout_entries),
                 "holdout_sha256": holdout_digest,
                 "count": len(entries),
-                "workload_distribution_id": seed_digest,
+                "workload_distribution_id": workload_distribution_id,
                 "family_id": args.family_id,
                 "variant": args.variant,
                 "holdout_ratio": holdout_ratio,
