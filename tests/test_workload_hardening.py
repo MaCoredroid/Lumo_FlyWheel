@@ -258,9 +258,64 @@ def test_multi_family_validation_reports_ar26_failures(tmp_path: Path) -> None:
     assert "holdout_family_coverage_mismatch" in validation["errors"]
     assert "seed_family_count_below_minimum:family-b" in validation["errors"]
     assert "pool_excluded_overlap" in validation["errors"]
-    assert "thinking_positive_ratio_below_minimum" in validation["errors"]
-    assert "thinking_gt_response_ratio_below_minimum" in validation["errors"]
-    assert "large_thinking_row_missing" in validation["errors"]
+    assert "seed_thinking_positive_ratio_below_minimum" in validation["errors"]
+    assert "seed_thinking_gt_response_ratio_below_minimum" in validation["errors"]
+    assert "seed_large_thinking_row_missing" in validation["errors"]
+    assert "holdout_thinking_positive_ratio_below_minimum" in validation["errors"]
+    assert "holdout_thinking_gt_response_ratio_below_minimum" in validation["errors"]
+    assert "holdout_large_thinking_row_missing" in validation["errors"]
+
+
+def test_multi_family_validation_enforces_thinking_distribution_per_file(tmp_path: Path) -> None:
+    module = _load_script("capture_multi_family_v5_workload.py")
+    workload_dir = tmp_path / "benchmark_blueprints" / "workloads" / "multi-family-v5"
+    workload_dir.mkdir(parents=True)
+    seed_rows = [
+        {"family_id": "family-a", "turn_index": 0, "output_tokens": 100, "thinking_tokens": 5000},
+        {"family_id": "family-a", "turn_index": 1, "output_tokens": 100, "thinking_tokens": 6000},
+        {"family_id": "family-a", "turn_index": 2, "output_tokens": 100, "thinking_tokens": 7000},
+    ]
+    holdout_rows = [
+        {"family_id": "family-a", "turn_index": 3, "output_tokens": 100, "thinking_tokens": 0},
+    ]
+    (workload_dir / "seed_trace.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in seed_rows) + "\n",
+        encoding="utf-8",
+    )
+    (workload_dir / "holdout_trace.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in holdout_rows) + "\n",
+        encoding="utf-8",
+    )
+    descriptor_path = workload_dir / "workload.yaml"
+    descriptor_path.write_text(
+        yaml.safe_dump(
+            {
+                "family_id": "multi-family-v5",
+                "workload_distribution_id": "placeholder",
+                "pool_families": ["family-a"],
+                "pool_excluded_families": [],
+                "split_per_family": {"seed_rows": 3, "holdout_rows": 1},
+                "seed_trace_ref": "seed_trace.jsonl",
+                "holdout_trace_ref": "holdout_trace.jsonl",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    validation = module.validate_composite_workload(
+        descriptor_path,
+        min_seed_rows=3,
+        min_holdout_rows=1,
+    )
+
+    assert validation["pass"] is False
+    assert "seed_thinking_positive_ratio_below_minimum" not in validation["errors"]
+    assert "seed_thinking_gt_response_ratio_below_minimum" not in validation["errors"]
+    assert "seed_large_thinking_row_missing" not in validation["errors"]
+    assert "holdout_thinking_positive_ratio_below_minimum" in validation["errors"]
+    assert "holdout_thinking_gt_response_ratio_below_minimum" in validation["errors"]
+    assert "holdout_large_thinking_row_missing" in validation["errors"]
 
 
 def test_multi_family_probe_parser_rejects_bug_outcome(tmp_path: Path) -> None:

@@ -210,6 +210,35 @@ def _excluded_ids(excluded: list[dict[str, str]]) -> set[str]:
     return {item["family_id"] for item in excluded if "family_id" in item}
 
 
+def _append_trace_distribution_errors(
+    *,
+    errors: list[str],
+    label: str,
+    rows: list[dict[str, Any]],
+    min_thinking_ratio: float,
+    min_thinking_gt_response_ratio: float,
+    min_large_thinking_tokens: int,
+) -> dict[str, int]:
+    row_count = len(rows)
+    thinking_positive = sum(1 for row in rows if _thinking_tokens(row) > 0)
+    thinking_gt_response = sum(1 for row in rows if _thinking_tokens(row) > _response_tokens(row))
+    large_thinking_rows = sum(1 for row in rows if _thinking_tokens(row) >= min_large_thinking_tokens)
+    if row_count == 0:
+        errors.append(f"{label}_trace_empty")
+    else:
+        if thinking_positive / row_count < min_thinking_ratio:
+            errors.append(f"{label}_thinking_positive_ratio_below_minimum")
+        if thinking_gt_response / row_count < min_thinking_gt_response_ratio:
+            errors.append(f"{label}_thinking_gt_response_ratio_below_minimum")
+        if large_thinking_rows == 0:
+            errors.append(f"{label}_large_thinking_row_missing")
+    return {
+        "thinking_positive_rows": thinking_positive,
+        "thinking_gt_response_rows": thinking_gt_response,
+        "large_thinking_rows": large_thinking_rows,
+    }
+
+
 def validate_composite_workload(
     descriptor_path: Path,
     *,
@@ -233,10 +262,6 @@ def validate_composite_workload(
     split = descriptor.get("split_per_family") or {}
     seed_per_family = int(split.get("seed_rows", 3))
     holdout_per_family = int(split.get("holdout_rows", 1))
-    all_rows = seed_rows + holdout_rows
-    total_rows = len(all_rows)
-    thinking_positive = sum(1 for row in all_rows if _thinking_tokens(row) > 0)
-    thinking_gt_response = sum(1 for row in all_rows if _thinking_tokens(row) > _response_tokens(row))
     errors: list[str] = []
     if len(seed_rows) < min_seed_rows:
         errors.append(f"seed_row_count_below_minimum:{len(seed_rows)}<{min_seed_rows}")
@@ -253,15 +278,22 @@ def validate_composite_workload(
             errors.append(f"holdout_family_count_below_minimum:{family_id}")
     if pool & excluded:
         errors.append("pool_excluded_overlap")
-    if total_rows == 0:
-        errors.append("composite_trace_empty")
-    else:
-        if thinking_positive / total_rows < min_thinking_ratio:
-            errors.append("thinking_positive_ratio_below_minimum")
-        if thinking_gt_response / total_rows < min_thinking_gt_response_ratio:
-            errors.append("thinking_gt_response_ratio_below_minimum")
-        if not any(_thinking_tokens(row) >= min_large_thinking_tokens for row in all_rows):
-            errors.append("large_thinking_row_missing")
+    seed_distribution = _append_trace_distribution_errors(
+        errors=errors,
+        label="seed",
+        rows=seed_rows,
+        min_thinking_ratio=min_thinking_ratio,
+        min_thinking_gt_response_ratio=min_thinking_gt_response_ratio,
+        min_large_thinking_tokens=min_large_thinking_tokens,
+    )
+    holdout_distribution = _append_trace_distribution_errors(
+        errors=errors,
+        label="holdout",
+        rows=holdout_rows,
+        min_thinking_ratio=min_thinking_ratio,
+        min_thinking_gt_response_ratio=min_thinking_gt_response_ratio,
+        min_large_thinking_tokens=min_large_thinking_tokens,
+    )
     return {
         "pass": not errors,
         "errors": errors,
@@ -270,8 +302,12 @@ def validate_composite_workload(
         "pool_size": len(pool),
         "seed_family_counts": dict(sorted(seed_family_counts.items())),
         "holdout_family_counts": dict(sorted(holdout_family_counts.items())),
-        "thinking_positive_rows": thinking_positive,
-        "thinking_gt_response_rows": thinking_gt_response,
+        "seed_thinking_positive_rows": seed_distribution["thinking_positive_rows"],
+        "seed_thinking_gt_response_rows": seed_distribution["thinking_gt_response_rows"],
+        "seed_large_thinking_rows": seed_distribution["large_thinking_rows"],
+        "holdout_thinking_positive_rows": holdout_distribution["thinking_positive_rows"],
+        "holdout_thinking_gt_response_rows": holdout_distribution["thinking_gt_response_rows"],
+        "holdout_large_thinking_rows": holdout_distribution["large_thinking_rows"],
         "excluded_families": sorted(excluded),
     }
 
