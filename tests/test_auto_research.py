@@ -1819,3 +1819,115 @@ kv_cache_dtype: fp8_e5m2
 
     with pytest.raises(RuntimeError, match=r"finalize-round refuses: immutable round artifact changed: iteration_brief.md"):
         manager.finalize_round(round_id=bootstrap["round_id"], dry_run=True)
+
+
+def test_finalize_round_dry_run_refuses_mixed_measurement_generators(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+
+    candidate_payload = """
+max_num_seqs: 4
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.90
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+"""
+    for iteration in ("001", "002"):
+        candidate_dir = round_dir / "candidates" / iteration
+        candidate_dir.mkdir()
+        candidate_dir.joinpath("candidate.yaml").write_text(candidate_payload, encoding="utf-8")
+        manager.measure(round_id=round_id, candidate_path=candidate_dir / "candidate.yaml")
+        manager.commit_candidate(
+            round_id=round_id,
+            iteration=iteration,
+            status="keep",
+            notes=f"synthetic candidate {iteration}",
+            allow_synthetic=True,
+        )
+
+    second_trace_path = round_dir / "candidates" / "002" / "measurement_trace.json"
+    second_trace = json.loads(second_trace_path.read_text(encoding="utf-8"))
+    second_trace["generator"] = "RealMeasurementHarness v0.1.0"
+    second_trace_path.write_text(json.dumps(second_trace, indent=2), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="measurement generator changed mid-round"):
+        manager.finalize_round(round_id=round_id, dry_run=True)
+
+
+def test_finalize_round_dry_run_refuses_terminal_harness_fault_row(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_id = bootstrap["round_id"]
+    round_dir = Path(bootstrap["round_dir"])
+
+    candidate_payload = """
+max_num_seqs: 4
+max_num_batched_tokens: 8192
+enable_chunked_prefill: true
+enable_prefix_caching: true
+gpu_memory_utilization: 0.90
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+"""
+    first_candidate_dir = round_dir / "candidates" / "001"
+    first_candidate_dir.mkdir()
+    first_candidate_dir.joinpath("candidate.yaml").write_text(candidate_payload, encoding="utf-8")
+    manager.measure(round_id=round_id, candidate_path=first_candidate_dir / "candidate.yaml")
+    manager.commit_candidate(
+        round_id=round_id,
+        iteration="001",
+        status="keep",
+        notes="first synthetic candidate",
+        allow_synthetic=True,
+    )
+
+    second_candidate_dir = round_dir / "candidates" / "002"
+    second_candidate_dir.mkdir()
+    second_candidate_dir.joinpath("candidate.yaml").write_text(candidate_payload, encoding="utf-8")
+    manager.measure(round_id=round_id, candidate_path=second_candidate_dir / "candidate.yaml")
+    second_trace_path = second_candidate_dir / "measurement_trace.json"
+    second_trace = json.loads(second_trace_path.read_text(encoding="utf-8"))
+    second_trace["ttft_p95_ms"]["delta_pct"] = 12.5
+    second_trace["feasible"] = False
+    second_trace["feasibility_failures"] = ["promql_mismatch"]
+    second_trace_path.write_text(json.dumps(second_trace, indent=2), encoding="utf-8")
+    manager.commit_candidate(
+        round_id=round_id,
+        iteration="002",
+        status="harness_fault",
+        notes="promql_mismatch",
+        allow_synthetic=True,
+    )
+
+    with pytest.raises(RuntimeError, match="harness_fault row has no successor feasible run"):
+        manager.finalize_round(round_id=round_id, dry_run=True)

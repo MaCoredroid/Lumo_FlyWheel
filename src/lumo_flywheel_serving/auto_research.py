@@ -1443,6 +1443,8 @@ class AutoResearchRoundManager:
         rows = self._read_results(round_dir / "results.tsv")
         if not rows:
             raise RuntimeError("Cannot finalize an empty round")
+        self._validate_finalize_generator_consistency(round_dir)
+        self._validate_finalize_harness_fault_rows(rows)
 
         winner_row: ResultsRow | None = None
         winner_parent_uuid = ""
@@ -1456,8 +1458,6 @@ class AutoResearchRoundManager:
         else:
             if not (round_dir / "rescreen_trace.json").is_file():
                 raise RuntimeError("finalize-round refuses without rescreen_trace.json")
-            self._validate_finalize_generator_consistency(round_dir)
-            self._validate_finalize_harness_fault_rows(rows)
             rescreen_rows = [
                 row
                 for row in rows
