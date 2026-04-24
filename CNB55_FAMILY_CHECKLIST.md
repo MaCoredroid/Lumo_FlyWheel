@@ -20,11 +20,11 @@ Repo-level checklist for the canonical 55 CNB-55 families.
 
 ## Track 03 Refactor Modernization
 
-- [ ] `codex-provider-rollover`
-- [ ] `codex-skill-runtime-v2-split`
-- [ ] `esm-plugin-loader-modernization`
-- [ ] `release-manifest-v2-modernization`
-- [ ] `sqlalchemy-2-session-modernization`
+- [x] ~~`codex-provider-rollover`~~
+- [x] ~~`codex-skill-runtime-v2-split`~~
+- [x] ~~`esm-plugin-loader-modernization`~~
+- [x] ~~`release-manifest-v2-modernization`~~
+- [x] ~~`sqlalchemy-2-session-modernization`~~
 
 ## Track 04 Review Remediation
 

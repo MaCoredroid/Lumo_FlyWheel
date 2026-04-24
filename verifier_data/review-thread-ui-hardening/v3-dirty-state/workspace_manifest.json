@@ -1,0 +1,51 @@
+{
+  "file_sha256": {
+    ".scenario_variant": "fdc62f17d056667cff21d79f952b69698e909ea4d276ac5b4fff4947912b2301",
+    "AGENTS.md": "f6288a03917ee19f7b89aaca61da4d9901bee5eebc7a18c55e94eab70288e038",
+    "Dockerfile": "0141626ee60ad2d9d90697b8522882a778c0f9e8c361f9f9eaf714b6c77e7894",
+    "artifacts/logs/lint_warning.txt": "8b762572a2827d6770f9cf2a2b772dfe5f8c627ce8bfde4b867f778f366609a9",
+    "artifacts/logs/snapshot_failure.txt": "85ac3f615ed108cf2631dbab13a2efe556772872f6e82d34bfa4b951286cebd7",
+    "artifacts/review/export.md": "c725f67e87ffac9955123830700f5a63e98b050cb69970446c220e1d89f1048c",
+    "artifacts/review/threads.json": "e6c0290b565f2f4dd6806b585e054ee1f2688c34301761e0b9ddc5c2810a388c",
+    "artifacts/screenshots/active_mobile_reopen.md": "7afbba9c11aa4c4918860940ed2916a88128a927c2618ce8069de8f8f40b3702",
+    "artifacts/screenshots/resolved_reference.md": "37e891f514160d342693e6bbcd6bd9aaf85f266ad87be52e3d4c6b5a4718de50",
+    "bin/review-thread-task": "12e8bbc03d337ae0cbe30998513b267aaea1ef26551ebe7f804d576bf0f03f65",
+    "evidence/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "repo/config/snapshot-viewports.json": "abceb453bd440021b87345981cbe32f35aea12f20ff9fba2ce49ebedd6e551eb",
+    "repo/src/components/ReviewThreadCard.tsx": "576199fec0ab7042fe071101fc85214532fff77528e3e52566aca28b48ccc7e0",
+    "repo/src/components/__wip__/previous_session_fix.md": "b9830af5d890cece4ed39f96b0a9c1dfa7492fe444aa040c556ff9741fbe0e51",
+    "repo/src/styles/review-thread.css": "9f2fcdff7d97ccb937f97e4e62d277bfcb2364f3088f1ce6abb5c84f28f27b46",
+    "repo/tests/test_review_thread_ui.py": "540685553381ef9e42aa05528473a9e7c69e2dd1c2da1f17c5f754718368ae0e",
+    "review_reply/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "review_reply/previous_session_reply.md": "4127efb6a13d4b51693b739bd8bf81b6bddc2f8c7b64e1b1af0d986dd5b02e1a"
+  },
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/logs/lint_warning.txt",
+    "artifacts/logs/snapshot_failure.txt",
+    "artifacts/review/export.md",
+    "artifacts/review/threads.json",
+    "artifacts/screenshots/active_mobile_reopen.md",
+    "artifacts/screenshots/resolved_reference.md",
+    "bin/review-thread-task",
+    "evidence/.gitkeep",
+    "repo/config/snapshot-viewports.json",
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/components/__wip__/previous_session_fix.md",
+    "repo/src/styles/review-thread.css",
+    "repo/tests/test_review_thread_ui.py",
+    "review_reply/.gitkeep",
+    "review_reply/previous_session_reply.md"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+    "AGENTS.md": "41b37894f38b663263352b08175febc7248eb186588b044a74ef548ad617b0fb",
+    "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
+    "artifacts": "9adc757426c2a8617f09cca307a5806c8a812589fd1ca0544df42ff1c9031921",
+    "bin": "ebceb35ee2640666395f1c25936505b7a4ad131644d5108f9c9bbdc74487a759",
+    "repo/tests": "97b2e078b2726e9d794aabcb252fbca6887d0287400a93386ca5d621a79f773b"
+  },
+  "variant_id": "v3-dirty-state"
+}

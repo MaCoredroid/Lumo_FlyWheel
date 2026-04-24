@@ -1,0 +1,7 @@
+default run:
+# Release Readiness
+
+- ready: True
+- services: api, worker
+json run:
+"# Release Readiness\n\n- ready: True\n- services: api, worker"

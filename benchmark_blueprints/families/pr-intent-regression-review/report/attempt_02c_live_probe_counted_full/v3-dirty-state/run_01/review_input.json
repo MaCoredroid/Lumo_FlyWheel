@@ -1,0 +1,42 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v3-dirty-state",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR adds markdown rendering, but it breaks both documented JSON contracts: the no-flag CLI path no longer defaults to JSON, and explicit `--output json` no longer returns the object-shaped payload automation expects.",
+  "findings": [
+    {
+      "title": "Changing the CLI default to markdown breaks no-flag automation consumers",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 13,
+        "end": 16
+      },
+      "linked_surface": "repo/docs/export_contract.md",
+      "impact": "The unchanged export contract says downstream jobs shell out without flags and rely on JSON by default. After this change, the CLI prints markdown for `release-readiness <input>`, so those callers stop receiving a machine-readable payload with top-level fields like `version`.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/docs/export_contract.md",
+        "artifacts/runtime_checks.md"
+      ]
+    },
+    {
+      "title": "The json renderer now returns markdown, so `--output json` loses the documented payload shape",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/tests/test_json_contract_notes.md",
+      "impact": "The unchanged contract notes require explicit `--output json` to stay dictionary-like. With `json` now mapped to `render_markdown`, `export_report(..., output='json')` returns a string, and the CLI wraps that string in `json.dumps(...)`, yielding a JSON string literal instead of the expected object payload.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/tests/test_json_contract_notes.md",
+        "artifacts/runtime_checks.md"
+      ]
+    }
+  ]
+}

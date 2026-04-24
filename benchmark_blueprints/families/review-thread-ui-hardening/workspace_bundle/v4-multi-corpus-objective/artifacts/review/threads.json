@@ -1,0 +1,38 @@
+[
+  {
+    "thread_id": "RT-118",
+    "state": "resolved",
+    "route": "/pull/241/review-thread",
+    "viewport_group": "reference-mobile-reopen",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "component_family": "thread-card-actions",
+    "screenshot_ref": "artifacts/screenshots/active_mobile_reopen.md"
+  },
+  {
+    "thread_id": "RT-204",
+    "state": "unresolved",
+    "route": "/pull/241/review-thread/hotfix",
+    "viewport_group": "release-mobile-blocker",
+    "viewport": {
+      "width": 412,
+      "height": 915
+    },
+    "component_family": "thread-card-actions",
+    "screenshot_ref": "artifacts/screenshots/release_scope_mobile.md"
+  },
+  {
+    "thread_id": "RT-099",
+    "state": "resolved",
+    "route": "/pull/241/archived-thread",
+    "viewport_group": "reference-mobile-archive",
+    "viewport": {
+      "width": 375,
+      "height": 812
+    },
+    "component_family": "thread-card-actions",
+    "screenshot_ref": "artifacts/screenshots/resolved_reference.md"
+  }
+]

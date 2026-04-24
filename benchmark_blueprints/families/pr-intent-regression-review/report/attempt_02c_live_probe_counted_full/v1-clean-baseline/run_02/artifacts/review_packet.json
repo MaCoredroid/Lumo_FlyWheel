@@ -1,0 +1,44 @@
+{
+  "findings": [
+    {
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "end": 16,
+        "start": 13
+      },
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/docs/export_contract.md",
+        "review/ci_snapshot.md"
+      ],
+      "impact": "The unchanged export contract says nightly automation shells out without flags and expects a machine-readable JSON object with a top-level version field. Switching the parser default to markdown means the existing no-flag invocation now emits human-readable Markdown instead of JSON, so downstream parsers will break immediately.",
+      "linked_surface": "repo/docs/export_contract.md",
+      "severity": "high",
+      "test_gap": "Visible CI only exercised the markdown test file while the JSON contract suite remained skipped, so there is no coverage on the no-flag CLI path.",
+      "title": "Changing the CLI default to markdown breaks no-flag automation callers"
+    },
+    {
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "end": 8,
+        "start": 6
+      },
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/src/release_readiness/renderers/json_renderer.py",
+        "repo/tests/test_json_contract_notes.md"
+      ],
+      "impact": "The unchanged json renderer still defines the automation-facing payload shape, but the registry now maps the json key to render_markdown. As a result, export_report(..., output=\"json\") and the CLI's --output json path return a Markdown string instead of the expected dictionary-like object, which changes the explicit JSON contract the PR said would stay intact.",
+      "linked_surface": "repo/src/release_readiness/renderers/json_renderer.py",
+      "severity": "high",
+      "test_gap": "The stack did not run a json-contract test, so this regression is not covered by the visible CI that only passed on the markdown path.",
+      "title": "The json renderer registry now routes explicit json exports to Markdown"
+    }
+  ],
+  "intent_verdict": "does_not_match_intent",
+  "schema_version": "cnb55.pr_review.v1",
+  "summary": "The PR claims to add Markdown support without changing JSON behavior, but it breaks both automation-facing JSON entrypoints: the no-flag CLI path now defaults to Markdown, and the explicit json renderer path now returns Markdown instead of the contract object.",
+  "variant_id": "v1-clean-baseline"
+}

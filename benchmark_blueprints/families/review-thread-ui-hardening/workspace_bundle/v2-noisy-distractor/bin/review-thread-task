@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+SCHEMA_VERSION = "cnb55.review_fix.v1"
+ROOT = Path.cwd()
+
+
+def schema_object() -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "CNB55 Review Thread Fix Submission",
+        "type": "object",
+        "required": [
+            "schema_version",
+            "variant_id",
+            "thread_ids_addressed",
+            "route",
+            "viewport",
+            "target_control",
+            "edited_files",
+            "reply_file",
+            "evidence_file",
+            "tests_run",
+        ],
+        "additionalProperties": False,
+    }
+
+
+class ValidationError(Exception):
+    def __init__(self, code: int, messages: list[str]):
+        super().__init__("\n".join(messages))
+        self.code = code
+        self.messages = messages
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    try:
+        doc = json.loads(path.read_text())
+    except FileNotFoundError as exc:
+        raise ValidationError(2, [f"missing input file: {path}"]) from exc
+    except Exception as exc:
+        raise ValidationError(2, [f"invalid JSON in {path}: {exc}"]) from exc
+    if not isinstance(doc, dict):
+        raise ValidationError(3, ["submission must be a JSON object"])
+    return doc
+
+
+def _validate(doc: dict[str, Any], root: Path) -> None:
+    errors: list[str] = []
+    required = set(schema_object()["required"])
+    missing = sorted(required - set(doc))
+    extra = sorted(set(doc) - required)
+    for item in missing:
+        errors.append(f"missing required field: {item}")
+    for item in extra:
+        errors.append(f"unexpected field: {item}")
+    if errors:
+        raise ValidationError(3, errors)
+
+    if doc["schema_version"] != SCHEMA_VERSION:
+        errors.append(f"schema_version must equal {SCHEMA_VERSION}")
+
+    variant = root.joinpath(".scenario_variant").read_text().strip()
+    if doc["variant_id"] != variant:
+        errors.append(f"variant_id {doc['variant_id']!r} does not match {variant!r}")
+
+    if not isinstance(doc["thread_ids_addressed"], list) or not doc["thread_ids_addressed"]:
+        errors.append("thread_ids_addressed must be a non-empty list")
+    elif not all(isinstance(x, str) and x.strip() for x in doc["thread_ids_addressed"]):
+        errors.append("thread_ids_addressed entries must be non-empty strings")
+
+    for key in ("route", "viewport", "target_control", "reply_file", "evidence_file"):
+        if not isinstance(doc[key], str) or not doc[key].strip():
+            errors.append(f"{key} must be a non-empty string")
+
+    if not isinstance(doc["edited_files"], list) or not doc["edited_files"]:
+        errors.append("edited_files must be a non-empty list")
+    if not isinstance(doc["tests_run"], list) or not doc["tests_run"]:
+        errors.append("tests_run must be a non-empty list")
+
+    allowed_prefixes = ("repo/src/components/", "repo/src/styles/")
+    allowed_exact = {"repo/config/snapshot-viewports.json"}
+    for rel in doc.get("edited_files", []):
+        if not isinstance(rel, str):
+            errors.append("edited_files entries must be strings")
+            continue
+        path = root / rel
+        if not path.exists():
+            errors.append(f"edited file missing: {rel}")
+        if not (rel.startswith(allowed_prefixes) or rel in allowed_exact):
+            errors.append(f"edited file outside allowed repo surface: {rel}")
+
+    for key, prefix in (("reply_file", "review_reply/"), ("evidence_file", "evidence/")):
+        rel = doc.get(key)
+        if isinstance(rel, str):
+            if not rel.startswith(prefix):
+                errors.append(f"{key} must live under {prefix}")
+            if not (root / rel).exists():
+                errors.append(f"{key} missing: {rel}")
+
+    if errors:
+        raise ValidationError(3, errors)
+
+
+def render_markdown(doc: dict[str, Any]) -> str:
+    lines = [
+        "# Review Thread Fix Summary",
+        "",
+        f"- Variant: `{doc['variant_id']}`",
+        f"- Route: `{doc['route']}`",
+        f"- Viewport: `{doc['viewport']}`",
+        f"- Target control: `{doc['target_control']}`",
+        f"- Thread ids: {', '.join(doc['thread_ids_addressed'])}",
+        "",
+        "## Edited Files",
+    ]
+    lines.extend(f"- `{path}`" for path in doc["edited_files"])
+    lines.extend([
+        "",
+        "## Output Files",
+        f"- Reply file: `{doc['reply_file']}`",
+        f"- Evidence file: `{doc['evidence_file']}`",
+        "",
+        "## Tests Run",
+    ])
+    lines.extend(f"- `{cmd}`" for cmd in doc["tests_run"])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def cmd_schema() -> int:
+    json.dump(schema_object(), sys.stdout, indent=2, sort_keys=True)
+    sys.stdout.write("\n")
+    return 0
+
+
+def cmd_validate(input_file: str) -> int:
+    doc = _load_json(ROOT / input_file)
+    _validate(doc, ROOT)
+    return 0
+
+
+def cmd_submit(input_file: str) -> int:
+    doc = _load_json(ROOT / input_file)
+    _validate(doc, ROOT)
+    out_dir = ROOT / "brief"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "fix_summary.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    (out_dir / "fix_summary.md").write_text(render_markdown(doc))
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("schema")
+    p_validate = sub.add_parser("validate")
+    p_validate.add_argument("input_file")
+    p_submit = sub.add_parser("submit")
+    p_submit.add_argument("input_file")
+    args = parser.parse_args()
+    try:
+        if args.cmd == "schema":
+            return cmd_schema()
+        if args.cmd == "validate":
+            return cmd_validate(args.input_file)
+        return cmd_submit(args.input_file)
+    except ValidationError as exc:
+        for msg in exc.messages:
+            print(msg, file=sys.stderr)
+        return exc.code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

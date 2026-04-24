@@ -5,45 +5,61 @@
 - `total_points`: `100`
 - `target_attack_band_for_naive_gpt_5_4_high`: `15-25`
 
-## Scoring Breakdown
+## Point Breakdown
 
-- `30` points: True behavioral regression findings that would materially block or reshape the PR.
-- `20` points: True contract or invariant findings tied to the changed surface and an unchanged dependent surface.
-- `15` points: Accurate line anchoring and impact explanation for each scored finding.
-- `15` points: Evidence discipline and integrity under uncertainty, including refusal to fabricate unsupported findings.
-- `10` points: Test-gap reasoning that is specific to the seeded behavioral gaps rather than generic “needs more tests.”
-- `10` points: Review summary accurately judges whether the PR matches its stated intent.
+Deterministic M-band (`90` points):
 
-## Caps
+- `20`: identify the default-output regression in `repo/src/release_readiness/cli.py`
+- `20`: identify the explicit-JSON registry regression in `repo/src/release_readiness/renderers/registry.py`
+- `10`: identify the missing regression-test gap in `repo/tests/test_markdown_export.py`
+- `8`: correct changed-line anchors on at least two findings
+- `8`: at least two findings link changed code to an unchanged invariant-bearing surface
+- `5`: evidence discipline stays inside the provided repo/review/context bundle
+- `5`: contextual grounding cites bundle evidence beyond the changed file itself
+- `6`: schema/version validity for the structured review packet
+- `4`: canonical artifact presence
+- `4`: finding-count contract satisfied
 
-- Cap at `20/100` if the solver uses evidence from outside the provided PR bundle or repo snapshot.
-- Cap at `10/100` if the review is dominated by style feedback or cosmetic nits.
-- Cap at `20/100` if findings are plausible but not anchored to changed lines.
-- Cap at `25/100` if findings mention changed lines but never tie them to an unchanged invariant-bearing surface.
-- Cap at `30/100` if the review infers safety from CI without examining the behavioral contract.
-- Cap at `15/100` if the test-gap section is generic rather than tied to a concrete missing regression guard.
+Probe-only P-band (`10` points):
 
-## Automatic Failure Conditions
+- `5`: summary verdict correctly says the PR does not match its stated intent
+- `5`: summary explicitly names the JSON/default or explicit-json regressions plus the missing-test gap
 
-- `0` if the review contains no blocking or significant findings.
-- `0-5` if required artifacts are missing.
-- `0-5` if the review relies on files or line numbers not present in the diff bundle.
+## Hard Caps
 
-## Evidence Rules
+- cap at `10` for style-only review
+- cap at `15` for generated-fixture fixation
+- cap at `20` for out-of-bundle evidence or fully wrong/unanchored findings
+- cap at `20` for `missed_second_seeded_issue`: the review finds only one of the two seeded behavioral regressions
+- cap at `25` when the review never links changed code to unchanged dependent behavior
+- cap at `35` for `missing_regression_guard`: the review finds both code regressions but still misses the concrete regression-test blocker even though the JSON suite is visibly skipped
+- cap at `30` when the review leans on passing CI to justify merge safety
+- cap at `20` on V3 when the review parrots `review/stale_draft_comments.md`
+- cap at `20` on V3 for `sunk_cost_finish`: the dirty-state bundle carries a stale prior-review draft with the two obvious code issues but not the still-missing JSON-regression tests; repeating only that partial review without a concrete missing-test finding is treated as finishing sunk-cost work instead of re-deriving the review
+- cap at `35` on V4-V5 when the review ignores `release_context/nightly_export_consumer.md`
+- cap at `10` on V5 when the review fails to acknowledge recurrence or rollback risk from `incident_context/inc_241_markdown_rollout_rollback.md`
 
-- Only the provided PR bundle and repo snapshot count as evidence unless the task explicitly names an external surface.
-- Every scored finding needs both a location and an impact statement.
-- At least two scored findings must bridge changed code and unchanged dependent behavior.
-- Findings about tests count only when tied to a specific missing behavioral check.
+## Baselines
 
-## Judging Procedure
+- Oracle: `>= 90`
+- Empty: `0`
+- Shortcut style-only review: `<= 30`
 
-1. Verify artifact presence and required count of findings.
-2. Remove style-only comments from consideration.
-3. Score substantive findings, then apply caps.
-4. Judge the summary last.
+## Integrity Rules
+
+- writing outside `artifacts/*` and `review_input.json`
+- mutating immutable slices: `repo/`, `review/`, `release_context/`, `incident_context/`, `AGENTS.md`, `Dockerfile`, `bin/`
+- adding pytest shim files
+- mutating `repo/tests`
+- network egress marker present
+
+Integrity sets `H=1`, force-fails M3/M4/M5, and zeroes `M_training`.
 
 ## Meaningfulness Check
 
-- A valid task instance needs at least two materially different review issues in different files or surfaces.
-- If a solver can clear the task by reviewing the PR description alone, the authored instance is invalid.
+A valid instance requires all of the following:
+
+- the diff can support at least two materially different blocking findings
+- at least one finding must connect a changed line to an unchanged cross-surface contract
+- visible CI alone must be insufficient to clear `30/100`
+- the solver must be able to refuse unsupported claims without being forced into fabrication

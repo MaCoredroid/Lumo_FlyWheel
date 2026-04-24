@@ -1,0 +1,51 @@
+{
+  "family_id": "pr-thread-contract-remediation",
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "gold_solution_sha256": "1f40a16917aeccada52519b0bcae317d87af7da74bb0716191bdb8e022d6256d",
+      "hidden_tests_tree_sha256": "293e4153467917f50a583d368b2f69b6cc11ff42e7370d26e279b3c162b9a11a",
+      "observed_empty_score": 0,
+      "observed_oracle_score": 95,
+      "observed_shortcut_score": 12,
+      "oracle_tree_sha256": "56b64f2063b48ef101ba527e97825504828928903842230723f61ab9561ce758",
+      "workspace_manifest_sha256": "09e0450cefe8fe8a7f5bc2eb447a614891c4cb46528bb52f74afeb82cb885b5b"
+    },
+    "v2-noisy-distractor": {
+      "gold_solution_sha256": "a005bc93a13c4fe53779e088e72a6ea6b5c55323547eb7c0e79934ba2f52792f",
+      "hidden_tests_tree_sha256": "293e4153467917f50a583d368b2f69b6cc11ff42e7370d26e279b3c162b9a11a",
+      "observed_empty_score": 0,
+      "observed_oracle_score": 95,
+      "observed_shortcut_score": 12,
+      "oracle_tree_sha256": "56b64f2063b48ef101ba527e97825504828928903842230723f61ab9561ce758",
+      "workspace_manifest_sha256": "1580c09e67e23a89dcec6a57f83d743f2ff11722958bacf369ebee183adcec80"
+    },
+    "v3-dirty-state": {
+      "gold_solution_sha256": "cc3e20e1896ade870aa9e813e3e229f7bfe8bae2f7649b8fb796dcdd43004f17",
+      "hidden_tests_tree_sha256": "293e4153467917f50a583d368b2f69b6cc11ff42e7370d26e279b3c162b9a11a",
+      "observed_empty_score": 0,
+      "observed_oracle_score": 95,
+      "observed_shortcut_score": 12,
+      "oracle_tree_sha256": "56b64f2063b48ef101ba527e97825504828928903842230723f61ab9561ce758",
+      "workspace_manifest_sha256": "6f276db8a7051b81839a3314c6e1c0b6eaac84bd6e94f4a1242259b785eeb9b5"
+    },
+    "v4-multi-corpus-objective": {
+      "gold_solution_sha256": "bdadb10b2741ff541869ad652464a347be6bdb79725c91e18889e7c703a14b54",
+      "hidden_tests_tree_sha256": "293e4153467917f50a583d368b2f69b6cc11ff42e7370d26e279b3c162b9a11a",
+      "observed_empty_score": 0,
+      "observed_oracle_score": 95,
+      "observed_shortcut_score": 12,
+      "oracle_tree_sha256": "5d6a291e07c3f6b50c83d4f098a7365ce2d0580aaeacb87f8d07145a9a819d36",
+      "workspace_manifest_sha256": "0ee0735d679d4b7efe09315741e7a9052164ba2b76cf2ca42e43af07410ef9be"
+    },
+    "v5-recovery-in-thread": {
+      "gold_solution_sha256": "9c4ba210023fd07eb32ddf5085784f16c53b3df6f675a157b5dd666bf55a87d4",
+      "hidden_tests_tree_sha256": "293e4153467917f50a583d368b2f69b6cc11ff42e7370d26e279b3c162b9a11a",
+      "observed_empty_score": 0,
+      "observed_oracle_score": 95,
+      "observed_shortcut_score": 12,
+      "oracle_tree_sha256": "514ba69b09cacd1f37717b423090fcacf50932708a572717fe45ca9078c9af6e",
+      "workspace_manifest_sha256": "8d1398f18682347c0bba6a1294cfdaa481d9c90a6ceb3452fcea69ae2e26e730"
+    }
+  }
+}

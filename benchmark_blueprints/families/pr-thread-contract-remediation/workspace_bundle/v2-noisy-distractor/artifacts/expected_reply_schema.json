@@ -1,0 +1,25 @@
+{
+  "items": {
+    "properties": {
+      "body": {
+        "type": "string"
+      },
+      "evidence": {
+        "type": "array"
+      },
+      "status": {
+        "type": "string"
+      },
+      "thread_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "thread_id",
+      "status",
+      "body",
+      "evidence"
+    ]
+  },
+  "type": "array"
+}

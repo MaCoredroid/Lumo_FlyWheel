@@ -1,0 +1,42 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v2-noisy-distractor",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR adds markdown coverage, but it regresses both parts of the existing JSON contract: unflagged CLI calls no longer default to JSON, and explicit `--output json` no longer returns the JSON payload shape automation consumers expect.",
+  "findings": [
+    {
+      "title": "Changing the parser default to markdown breaks the no-flag JSON contract",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 13,
+        "end": 16
+      },
+      "linked_surface": "repo/docs/export_contract.md",
+      "impact": "The unchanged export contract says nightly automation shells out without flags and depends on JSON output, so flipping the default to `markdown` changes the observable behavior of `release-readiness <input>` for existing callers instead of keeping markdown opt-in.",
+      "evidence_paths": [
+        "review/patch.diff",
+        "repo/src/release_readiness/cli.py",
+        "repo/docs/export_contract.md",
+        "review/ci_snapshot.md"
+      ]
+    },
+    {
+      "title": "The json renderer registry entry now returns markdown for explicit json exports",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/src/release_readiness/renderers/json_renderer.py",
+      "impact": "The unchanged `render_json()` path still defines the machine-readable payload shape, but the registry now routes `output=\"json\"` to `render_markdown()`, so explicit JSON exports return a string and the CLI serializes quoted markdown instead of the contract-preserving object.",
+      "evidence_paths": [
+        "review/patch.diff",
+        "repo/src/release_readiness/renderers/registry.py",
+        "repo/src/release_readiness/renderers/json_renderer.py",
+        "repo/tests/test_json_contract_notes.md"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "family_id": "security-audit-hotfix-remediation",
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_hotfix_sha256": "aa3d48cc24a6494bd4b1ee99c76618a55d280026f79687458328fb3bfd6a7c56",
+        "hidden_tests_tree_sha256": "73e323d3ae8c9aa66f2f35a5f9cbea4093a0a4116e4f5f6b9fcac962f8d898fa",
+        "oracle_deploy_note_sha256": "0a8ffa2fd5aa1cb1ff783272ca28528c76c1c701700a762e9d230780765a4990",
+        "oracle_storage_sha256": "88f85578d18f2b389f2c26cd94d705a0cf6501f65c77926805836d3e4d9bc06e",
+        "oracle_triage_note_sha256": "821748f521e3514d23330386ceb948d01eb70a503f9abab21a63381bb7d324e3",
+        "workspace_manifest_sha256": "1da29373b69f7a49f7ff373a1660204e0001cf96cf2fd37968e2c8908a92c7f5"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "eec2fad5134cc547b8caa48c7367b4e15bb439b65de7a46120ae9c8c0e69adeb",
+        "AGENTS.md": "f019502020d93555def805207f250e132d6c4d7af9153210742af29d6980b219",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "Makefile": "6f6c8a12c717ea5e8bbda5c4f7bd85cc87c42ae2f1cef54ffbe58e6cfc6451e4",
+        "artifacts": "ace0ce49e74d5175293283bfff7cd100097d153956c95b7b78c0d0c3fddf145d",
+        "audit/appsec_review.md": "0e4c33ff9fac86179e2939f2e60162332c7756d4b39e031f2a2dc8053c9f8218",
+        "audit/audit.sarif": "facd7b4297c44e2a654b3868f0e6eb759608067ccd9ce20e1a692fb4d39aa8fd",
+        "audit/triage_matrix.csv": "1f2d37d5fc88d7722b358501a9d1d7329eac79467f7b0fa358dba2cc68c21b8c",
+        "bin": "a87219f47f572ed0a5912b97a4af39422778489db4176b4378b93009b3045e46",
+        "repo/archive": "64f1b02fc37639d3eba572ee91db0d985bc53f2e8f8e7cf852f3f18a0dc13770",
+        "repo/export_api/auth.py": "1064fda90d77574822f852401168b8756356ee86a1607020660094864660ea8f",
+        "repo/tests/test_routes.py": "4853ab03d125d82a4f7575731f131b2dcf284db47553788768fbffd4854fd7af",
+        "repo/tests/test_storage.py": "ecff1104aaa67ebc12e7220d42994246158359f2741fdcc3ac855d9f0438e440"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_hotfix_sha256": "1b5abdc63a56b3cb45c33cb68a722e17d26ee55ff808a9b80f3e841650b5e0e7",
+        "hidden_tests_tree_sha256": "73e323d3ae8c9aa66f2f35a5f9cbea4093a0a4116e4f5f6b9fcac962f8d898fa",
+        "oracle_deploy_note_sha256": "564a11828347b61968a8302b9e6c2b9803b3acfe1376365cbe75c8639c9b255d",
+        "oracle_storage_sha256": "88f85578d18f2b389f2c26cd94d705a0cf6501f65c77926805836d3e4d9bc06e",
+        "oracle_triage_note_sha256": "e4c893eae36b30e402106d03dc79da58e7216c843b27d8e2c7fb8966f471bb28",
+        "workspace_manifest_sha256": "ef4f113463876ff89161689252fbe1256da3fa85b0aea5848c26ed84c9c4e593"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+        "AGENTS.md": "f019502020d93555def805207f250e132d6c4d7af9153210742af29d6980b219",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "Makefile": "6f6c8a12c717ea5e8bbda5c4f7bd85cc87c42ae2f1cef54ffbe58e6cfc6451e4",
+        "artifacts": "ace0ce49e74d5175293283bfff7cd100097d153956c95b7b78c0d0c3fddf145d",
+        "audit/appsec_review.md": "5d46ce796ff6c9306155669fdac21ef8f3e56f04487fb112f7500dc98f584806",
+        "audit/audit.sarif": "d092a4b556c34f0b4d133154587cb80c86a39cdcb866e95ec5fe8b2e16c88ad0",
+        "audit/triage_matrix.csv": "fb67d9871591dc07b5daff4f014a225a4b9013c9ede9ea659a0fd902943f486e",
+        "bin": "a87219f47f572ed0a5912b97a4af39422778489db4176b4378b93009b3045e46",
+        "repo/archive": "64f1b02fc37639d3eba572ee91db0d985bc53f2e8f8e7cf852f3f18a0dc13770",
+        "repo/export_api/auth.py": "1064fda90d77574822f852401168b8756356ee86a1607020660094864660ea8f",
+        "repo/tests/test_routes.py": "4853ab03d125d82a4f7575731f131b2dcf284db47553788768fbffd4854fd7af",
+        "repo/tests/test_storage.py": "ecff1104aaa67ebc12e7220d42994246158359f2741fdcc3ac855d9f0438e440",
+        "repo_evidence": "5aa8c253c5096e4c97a960666d7188cab156dfa60e675c8fd32aaf8bb05c2270"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_hotfix_sha256": "159b1c8df03af6d2426549de4f0f1b1ec700b4bc65ad9780878346d176c4df35",
+        "hidden_tests_tree_sha256": "73e323d3ae8c9aa66f2f35a5f9cbea4093a0a4116e4f5f6b9fcac962f8d898fa",
+        "oracle_deploy_note_sha256": "5906266cefc034cd9623d05b9a77c6bb4e49d95a8e410b7d19a5489052beff94",
+        "oracle_storage_sha256": "88f85578d18f2b389f2c26cd94d705a0cf6501f65c77926805836d3e4d9bc06e",
+        "oracle_triage_note_sha256": "077e3ebb85fd94e2b2fb86f13e2976d0885f884547a2b3a30a708ad605db8347",
+        "workspace_manifest_sha256": "9dbc62e59155e321cbe26972292149b76033b4e24888394cfb20dcbc9b2b7597"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "2efbd0d6b25f248967650b08640d82cc2e3ea7f2a9bd22ef55706b0e35f59e27",
+        "AGENTS.md": "f019502020d93555def805207f250e132d6c4d7af9153210742af29d6980b219",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "Makefile": "6f6c8a12c717ea5e8bbda5c4f7bd85cc87c42ae2f1cef54ffbe58e6cfc6451e4",
+        "artifacts": "ace0ce49e74d5175293283bfff7cd100097d153956c95b7b78c0d0c3fddf145d",
+        "audit/appsec_review.md": "5d46ce796ff6c9306155669fdac21ef8f3e56f04487fb112f7500dc98f584806",
+        "audit/audit.sarif": "d092a4b556c34f0b4d133154587cb80c86a39cdcb866e95ec5fe8b2e16c88ad0",
+        "audit/triage_matrix.csv": "fb67d9871591dc07b5daff4f014a225a4b9013c9ede9ea659a0fd902943f486e",
+        "bin": "a87219f47f572ed0a5912b97a4af39422778489db4176b4378b93009b3045e46",
+        "repo/archive": "64f1b02fc37639d3eba572ee91db0d985bc53f2e8f8e7cf852f3f18a0dc13770",
+        "repo/export_api/auth.py": "1064fda90d77574822f852401168b8756356ee86a1607020660094864660ea8f",
+        "repo/tests/test_routes.py": "4853ab03d125d82a4f7575731f131b2dcf284db47553788768fbffd4854fd7af",
+        "repo/tests/test_storage.py": "ecff1104aaa67ebc12e7220d42994246158359f2741fdcc3ac855d9f0438e440",
+        "repo_evidence": "2a9cc27dc0534659f3d2e781f8c718f2ac92b8a270fb04cb6bd48c57e608b113"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_hotfix_sha256": "412d0e0f9b50c8bcd2a43113dce71a34aa69306d07c61415ac4bbf0b0e68ac69",
+        "hidden_tests_tree_sha256": "73e323d3ae8c9aa66f2f35a5f9cbea4093a0a4116e4f5f6b9fcac962f8d898fa",
+        "oracle_deploy_note_sha256": "82e1b6fc0507812aa387a2d093c904e05a5590d69b540c28a8956140826c1813",
+        "oracle_storage_sha256": "88f85578d18f2b389f2c26cd94d705a0cf6501f65c77926805836d3e4d9bc06e",
+        "oracle_triage_note_sha256": "d87b03b5ec2c981b6dfc5a1e2edd95b8e5ba94637dc417d114ed2ca01bab902d",
+        "workspace_manifest_sha256": "e367b0be7dd0df8260b84e90fecea245683f02675f845063033e1d1f55f3011e"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "b4480b36f0f7770d49e619b36d55e935f0b2d0bf8d3f66dac7abbcf40617979b",
+        "AGENTS.md": "f019502020d93555def805207f250e132d6c4d7af9153210742af29d6980b219",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "Makefile": "6f6c8a12c717ea5e8bbda5c4f7bd85cc87c42ae2f1cef54ffbe58e6cfc6451e4",
+        "artifacts": "ace0ce49e74d5175293283bfff7cd100097d153956c95b7b78c0d0c3fddf145d",
+        "audit/appsec_review.md": "5d46ce796ff6c9306155669fdac21ef8f3e56f04487fb112f7500dc98f584806",
+        "audit/audit.sarif": "d092a4b556c34f0b4d133154587cb80c86a39cdcb866e95ec5fe8b2e16c88ad0",
+        "audit/triage_matrix.csv": "fb67d9871591dc07b5daff4f014a225a4b9013c9ede9ea659a0fd902943f486e",
+        "bin": "a87219f47f572ed0a5912b97a4af39422778489db4176b4378b93009b3045e46",
+        "release_context": "1f02e519e401a3ddac18d2610ae237a5e5b24f444081f021fe40ecb2f98bd665",
+        "repo/archive": "64f1b02fc37639d3eba572ee91db0d985bc53f2e8f8e7cf852f3f18a0dc13770",
+        "repo/export_api/auth.py": "1064fda90d77574822f852401168b8756356ee86a1607020660094864660ea8f",
+        "repo/tests/test_routes.py": "4853ab03d125d82a4f7575731f131b2dcf284db47553788768fbffd4854fd7af",
+        "repo/tests/test_storage.py": "ecff1104aaa67ebc12e7220d42994246158359f2741fdcc3ac855d9f0438e440",
+        "repo_evidence": "2a9cc27dc0534659f3d2e781f8c718f2ac92b8a270fb04cb6bd48c57e608b113"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_hotfix_sha256": "40ff8dca5990c4a4c9adf933acd2f08dabd5af30489c61b919b2b0041fee8c00",
+        "hidden_tests_tree_sha256": "73e323d3ae8c9aa66f2f35a5f9cbea4093a0a4116e4f5f6b9fcac962f8d898fa",
+        "oracle_deploy_note_sha256": "4de65402f473e8e4bf558fbff964e55b86643bde33db06a354d136f51c9aac01",
+        "oracle_storage_sha256": "88f85578d18f2b389f2c26cd94d705a0cf6501f65c77926805836d3e4d9bc06e",
+        "oracle_triage_note_sha256": "f1bf8848a9201ae12b652bc903c91b9c3767bc6c50c8350834086305de98a3e2",
+        "workspace_manifest_sha256": "fddd99d6fdaefd0c38fb86133bf7357868fa6d3f1c9af7922139232ba9ca056a"
+      },
+      "workspace_trees": {
+        ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+        "AGENTS.md": "f019502020d93555def805207f250e132d6c4d7af9153210742af29d6980b219",
+        "Dockerfile": "b79db38f4be488bbda029bea66833d6ff2e1540ef3df7358b1dbadcc9ddc870b",
+        "Makefile": "6f6c8a12c717ea5e8bbda5c4f7bd85cc87c42ae2f1cef54ffbe58e6cfc6451e4",
+        "artifacts": "ace0ce49e74d5175293283bfff7cd100097d153956c95b7b78c0d0c3fddf145d",
+        "audit/appsec_review.md": "5d46ce796ff6c9306155669fdac21ef8f3e56f04487fb112f7500dc98f584806",
+        "audit/audit.sarif": "d092a4b556c34f0b4d133154587cb80c86a39cdcb866e95ec5fe8b2e16c88ad0",
+        "audit/triage_matrix.csv": "fb67d9871591dc07b5daff4f014a225a4b9013c9ede9ea659a0fd902943f486e",
+        "bin": "a87219f47f572ed0a5912b97a4af39422778489db4176b4378b93009b3045e46",
+        "incident_context": "36057a0b29d5956d82598874295ef2bcd142edf138a2819e2c5fbd644178349e",
+        "release_context": "1f02e519e401a3ddac18d2610ae237a5e5b24f444081f021fe40ecb2f98bd665",
+        "repo/archive": "64f1b02fc37639d3eba572ee91db0d985bc53f2e8f8e7cf852f3f18a0dc13770",
+        "repo/export_api/auth.py": "1064fda90d77574822f852401168b8756356ee86a1607020660094864660ea8f",
+        "repo/tests/test_routes.py": "4853ab03d125d82a4f7575731f131b2dcf284db47553788768fbffd4854fd7af",
+        "repo/tests/test_storage.py": "ecff1104aaa67ebc12e7220d42994246158359f2741fdcc3ac855d9f0438e440",
+        "repo_evidence": "2a9cc27dc0534659f3d2e781f8c718f2ac92b8a270fb04cb6bd48c57e608b113"
+      }
+    }
+  }
+}

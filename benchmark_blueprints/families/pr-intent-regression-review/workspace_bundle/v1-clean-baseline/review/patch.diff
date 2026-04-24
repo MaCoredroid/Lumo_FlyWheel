@@ -1,0 +1,50 @@
+--- a/repo/src/release_readiness/cli.py
++++ b/repo/src/release_readiness/cli.py
+@@ -12,8 +12,8 @@
+     parser.add_argument(
+         "--output",
+         choices=("json", "markdown"),
+-        default="json",
+-        help="export format; historical default is json for automation consumers",
++        default="markdown",
++        help="export format; default keeps the new markdown view front-and-center",
+     )
+     return parser
+ 
+--- a/repo/src/release_readiness/renderers/registry.py
++++ b/repo/src/release_readiness/renderers/registry.py
+@@ -4,7 +4,7 @@
+ from release_readiness.renderers.markdown_renderer import render_markdown
+ 
+ _RENDERERS = {
+-    "json": render_json,
++    "json": render_markdown,
+     "markdown": render_markdown,
+ }
+ 
+--- a/repo/tests/test_markdown_export.py
++++ b/repo/tests/test_markdown_export.py
+@@ -1,7 +1,14 @@
+ from release_readiness.export import export_report
+ 
+ 
+-def test_markdown_export_is_opt_in() -> None:
++def test_markdown_export_uses_snapshot() -> None:
+     report = {"version": 1, "ready": True, "services": ["api", "worker"]}
+     rendered = export_report(report, output="markdown")
+     assert rendered.startswith("# Release Readiness")
++
++
++def test_markdown_snapshot_stays_stable() -> None:
++    fixture = open("repo/tests/fixtures/release_readiness.md").read().strip()
++    report = {"version": 1, "ready": True, "services": ["api", "worker"]}
++    rendered = export_report(report, output="markdown")
++    assert rendered.strip() == fixture
+--- a/repo/docs/markdown_export.md
++++ b/repo/docs/markdown_export.md
+@@ -1,3 +1,4 @@
+ # Markdown Export
+ 
+-The markdown export is optional and should not change the existing JSON path.
++Markdown export is now the default local view so reviewers can read release
++status without piping JSON through jq.

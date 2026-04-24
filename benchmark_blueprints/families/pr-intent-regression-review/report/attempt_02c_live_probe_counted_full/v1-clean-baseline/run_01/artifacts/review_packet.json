@@ -1,0 +1,43 @@
+{
+  "findings": [
+    {
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "end": 16,
+        "start": 13
+      },
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/src/release_readiness/cli.py",
+        "repo/docs/export_contract.md"
+      ],
+      "impact": "The unchanged export contract says nightly automation shells out without flags and relies on JSON being the default. After this change, `release-readiness input.json` takes the markdown branch and prints a human-readable document instead of a machine-readable payload with a top-level `version`, so existing no-flag consumers will fail even though the PR description says existing JSON behavior should stay intact.",
+      "linked_surface": "repo/docs/export_contract.md",
+      "severity": "high",
+      "title": "Changing the CLI default to markdown breaks no-flag automation callers"
+    },
+    {
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "end": 8,
+        "start": 6
+      },
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/src/release_readiness/cli.py",
+        "repo/src/release_readiness/renderers/registry.py",
+        "repo/tests/test_json_contract_notes.md"
+      ],
+      "impact": "The unchanged JSON contract notes say explicit `--output json` must keep returning a dictionary-like payload. Routing the `json` key to `render_markdown` makes `export_report(..., output=\"json\")` return a string, and the unchanged CLI then `json.dumps(...)` that string into a quoted markdown blob. Downstream callers asking for JSON lose the structured object and its `version` field entirely.",
+      "linked_surface": "repo/tests/test_json_contract_notes.md",
+      "severity": "high",
+      "title": "The json renderer registry entry now returns markdown for explicit `--output json`"
+    }
+  ],
+  "intent_verdict": "does_not_match_intent",
+  "schema_version": "cnb55.pr_review.v1",
+  "summary": "The patch adds markdown support, but it also breaks both parts of the existing JSON contract: the no-flag CLI path no longer emits JSON, and explicit `--output json` no longer returns the machine-readable object automation consumers expect.",
+  "variant_id": "v1-clean-baseline"
+}

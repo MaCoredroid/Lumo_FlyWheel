@@ -1,0 +1,13 @@
+{
+  "required_fields": [
+    "schema_version",
+    "variant_id",
+    "rollback_trigger",
+    "impact_scope",
+    "operator_verification_steps",
+    "behavior_preservation_claims",
+    "release_freeze_ack",
+    "incident_reference"
+  ],
+  "schema_version": "cnb55.deploy_hotfix.schema.v1"
+}

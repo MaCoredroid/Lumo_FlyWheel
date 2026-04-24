@@ -1,0 +1,42 @@
+{
+  "schema_version": "cnb55.pr_review.v1",
+  "variant_id": "v2-noisy-distractor",
+  "intent_verdict": "does_not_match_intent",
+  "summary": "The PR adds markdown coverage, but it also breaks the existing automation-facing JSON contract in two places: the CLI no longer defaults to JSON and the json renderer registry entry now returns markdown instead of the historical object payload.",
+  "findings": [
+    {
+      "title": "Changing the CLI default to markdown breaks no-flag automation callers",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "start": 13,
+        "end": 16
+      },
+      "linked_surface": "repo/docs/export_contract.md",
+      "impact": "The unchanged export contract says downstream automation shells out without flags and expects JSON by default. After this change, `release-readiness <input>` emits the human markdown view instead, so existing no-flag jobs stop receiving a machine-readable object with a top-level `version` field.",
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "repo/docs/export_contract.md",
+        "artifacts/runtime_checks.md"
+      ]
+    },
+    {
+      "title": "The json registry entry now routes explicit JSON exports through the markdown renderer",
+      "severity": "high",
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "start": 6,
+        "end": 8
+      },
+      "linked_surface": "repo/src/release_readiness/export.py",
+      "impact": "The unchanged `export_report(..., output=\"json\")` API depends on the registry to preserve the historical dict payload. With `json` mapped to `render_markdown`, explicit JSON requests now return a markdown string, and the CLI wraps that string in JSON quotes instead of emitting the existing object shape that automation consumers parse.",
+      "evidence_paths": [
+        "review/patch.diff",
+        "repo/src/release_readiness/export.py",
+        "repo/tests/test_json_contract_notes.md",
+        "artifacts/runtime_checks.md"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "file_sha256": {
+    ".scenario_variant": "f1fb40a47c903162d580ada97b07c0c73f4b7607bda5d4d078c09f1642f354dd",
+    "AGENTS.md": "f6288a03917ee19f7b89aaca61da4d9901bee5eebc7a18c55e94eab70288e038",
+    "Dockerfile": "0141626ee60ad2d9d90697b8522882a778c0f9e8c361f9f9eaf714b6c77e7894",
+    "artifacts/logs/lint_warning.txt": "8b762572a2827d6770f9cf2a2b772dfe5f8c627ce8bfde4b867f778f366609a9",
+    "artifacts/logs/snapshot_failure.txt": "7495af6820c355b1e328de1e0fea0c034ab85d4e5bcb78b3c6a35547e1439f27",
+    "artifacts/review/export.md": "291bcd797e6168b0647bdde1694390cd626e019ebe10a6246dbfde38353704f2",
+    "artifacts/review/threads.json": "d704d18a02c208cb69bbeacf0379566c14a0fde4bff301d747d4b86ddbf35c62",
+    "artifacts/screenshots/active_mobile_reopen.md": "7afbba9c11aa4c4918860940ed2916a88128a927c2618ce8069de8f8f40b3702",
+    "artifacts/screenshots/resolved_reference.md": "37e891f514160d342693e6bbcd6bd9aaf85f266ad87be52e3d4c6b5a4718de50",
+    "artifacts/screenshots/stale_mobile_reference.md": "eaf1f7d0e26fbee09a54ec46bcb8de7f593806e7a865062486d798227dde4572",
+    "bin/review-thread-task": "12e8bbc03d337ae0cbe30998513b267aaea1ef26551ebe7f804d576bf0f03f65",
+    "evidence/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "repo/config/snapshot-viewports.json": "abceb453bd440021b87345981cbe32f35aea12f20ff9fba2ce49ebedd6e551eb",
+    "repo/src/components/ReviewThreadCard.tsx": "576199fec0ab7042fe071101fc85214532fff77528e3e52566aca28b48ccc7e0",
+    "repo/src/styles/review-thread.css": "9f2fcdff7d97ccb937f97e4e62d277bfcb2364f3088f1ce6abb5c84f28f27b46",
+    "repo/tests/test_review_thread_ui.py": "540685553381ef9e42aa05528473a9e7c69e2dd1c2da1f17c5f754718368ae0e",
+    "review_reply/.gitkeep": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "artifacts/logs/lint_warning.txt",
+    "artifacts/logs/snapshot_failure.txt",
+    "artifacts/review/export.md",
+    "artifacts/review/threads.json",
+    "artifacts/screenshots/active_mobile_reopen.md",
+    "artifacts/screenshots/resolved_reference.md",
+    "artifacts/screenshots/stale_mobile_reference.md",
+    "bin/review-thread-task",
+    "evidence/.gitkeep",
+    "repo/config/snapshot-viewports.json",
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css",
+    "repo/tests/test_review_thread_ui.py",
+    "review_reply/.gitkeep"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "3808b07bb2ecc884d7cb20e6a526ebdcdd326f3864dc2a1939cda70b535a416c",
+    "AGENTS.md": "41b37894f38b663263352b08175febc7248eb186588b044a74ef548ad617b0fb",
+    "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
+    "artifacts": "0d0ea6c090d0efd7599141a816df9d65c33d6a365038f19c6100e2d055b0fed8",
+    "bin": "ebceb35ee2640666395f1c25936505b7a4ad131644d5108f9c9bbdc74487a759",
+    "repo/tests": "97b2e078b2726e9d794aabcb252fbca6887d0287400a93386ca5d621a79f773b"
+  },
+  "variant_id": "v2-noisy-distractor"
+}

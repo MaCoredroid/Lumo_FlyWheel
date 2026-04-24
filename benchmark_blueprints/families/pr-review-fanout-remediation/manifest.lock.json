@@ -1,0 +1,115 @@
+{
+  "family_id": "pr-review-fanout-remediation",
+  "grader": {
+    "score_review_fanout_py_sha256": "c3c9c0065ad914270e9e0a6e51cd90b9ba0c0c51c55f2aeed0b0f452479106b7",
+    "verify_sh_sha256": "cc706b0283b74aa18f06e574c8e65175299662e5db9e4583217dd4d6049fea59"
+  },
+  "schema_version": "cnb55.manifest.v2",
+  "variants": {
+    "v1-clean-baseline": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_review_state_sha256": "9eef3a994c4b0ccc6ea14c1520e1982677efb7cb4533d3aaf347cd767cefcdc0",
+        "hidden_tests_tree_sha256": "a7887ba68feb60240e0069fdb55ffa2d87a07518c7e5ddddf6f301e98039cbe8",
+        "oracle_tree_sha256": "21b795a603dc817caf3a5fa8a1b9deff43a326cee2619382a92d9f89ded16900",
+        "workspace_manifest_sha256": "85b571c960dd08a5fb3b901368e650f21af2839ce9a77f3b3f6b9710aaec5d2d"
+      },
+      "workspace_trees": {
+        ".github/review_export": "ca5c44de4ca9ef935e4c6e36f2863d426fa9db5412002fcff8d6b76eac8388ad",
+        ".scenario_variant": "862d289ccc8f205cc1fcd6605334a45a0fc6292424b98eeb9b227c4a2f8fa4ee",
+        "AGENTS.md": "2e43df5b53c5b84c48002d8a2005ea65fc56a7d9f2134810b807ffbb362c6b55",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts/review/thread_digest.md": "015edb56de4d7cd19e886ed6fdb3c2d0a6f5ea43807d5744a6aafb1e663f70f3",
+        "incident_context": "MISSING",
+        "release_context": "MISSING",
+        "tests/test_approval_router.py": "54ff74b980c358910c502d6b5d765173e995c25a4ad79ca5cdb9cc29fd57c1b8"
+      }
+    },
+    "v2-noisy-distractor": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_review_state_sha256": "48d8035735cf4dd1ab688d57322ff58a5a6a38accdb28781fdefce64ea0e811d",
+        "hidden_tests_tree_sha256": "a7887ba68feb60240e0069fdb55ffa2d87a07518c7e5ddddf6f301e98039cbe8",
+        "oracle_tree_sha256": "7ddcc32b303be539e1d3ddfc1dd049b40a3736aea4487bf82b12e6b4604af58f",
+        "workspace_manifest_sha256": "1de175bc515b6bfc8e3a1aa5f2448987f8aecaba208714e6feadf1b5a43086cd"
+      },
+      "workspace_trees": {
+        ".github/review_export": "8ed6abd88e3fd2504b700dafe30aac4e132fdf9fc8df38e3547703cd75b41768",
+        ".scenario_variant": "f1fb40a47c903162d580ada97b07c0c73f4b7607bda5d4d078c09f1642f354dd",
+        "AGENTS.md": "2e43df5b53c5b84c48002d8a2005ea65fc56a7d9f2134810b807ffbb362c6b55",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts/review/thread_digest.md": "0cfe7a707097127d95f05fd9a51d02b6ce31ab9343d8ec246f2c6345ba291925",
+        "incident_context": "MISSING",
+        "release_context": "MISSING",
+        "tests/test_approval_router.py": "54ff74b980c358910c502d6b5d765173e995c25a4ad79ca5cdb9cc29fd57c1b8"
+      }
+    },
+    "v3-dirty-state": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_review_state_sha256": "753cc6e6914121ea8e933121fba95c446a3110d85b67f505539fe3e686d0d983",
+        "hidden_tests_tree_sha256": "a7887ba68feb60240e0069fdb55ffa2d87a07518c7e5ddddf6f301e98039cbe8",
+        "oracle_tree_sha256": "515232d5755e28de640eeea1f8af8a303fd563d2f6fbbbb5d2d6259e70cbce18",
+        "workspace_manifest_sha256": "be84db7fb3a2f14635ae5a7c51cf9a9f122e3519dc1ac4eea65323cf4c59a6e4"
+      },
+      "workspace_trees": {
+        ".github/review_export": "3d97ce4549320ea6f971fe49f1ceae19d6ecfab467b6a495074b809d6808792b",
+        ".scenario_variant": "fdc62f17d056667cff21d79f952b69698e909ea4d276ac5b4fff4947912b2301",
+        "AGENTS.md": "2e43df5b53c5b84c48002d8a2005ea65fc56a7d9f2134810b807ffbb362c6b55",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts/review/thread_digest.md": "a3189a8037ff26ad22081f6581d7765683b41dd2c085f553e58114216507483e",
+        "incident_context": "MISSING",
+        "release_context": "MISSING",
+        "tests/test_approval_router.py": "54ff74b980c358910c502d6b5d765173e995c25a4ad79ca5cdb9cc29fd57c1b8"
+      }
+    },
+    "v4-multi-corpus-objective": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_review_state_sha256": "f3b878272694bdb5ed0dee94412ca83944cabaac79fc4670376fd28402987d97",
+        "hidden_tests_tree_sha256": "a7887ba68feb60240e0069fdb55ffa2d87a07518c7e5ddddf6f301e98039cbe8",
+        "oracle_tree_sha256": "7a58f10a3f2a9ef32bfdf3f33aee622a43b8ef96df7039774f6b440dbddaab86",
+        "workspace_manifest_sha256": "741cc0b4851585592f1ab1e2608b2e6976f8f7e5298408384b6eae9f7d0db19a"
+      },
+      "workspace_trees": {
+        ".github/review_export": "991b761bd8a9a16e5b84849fd740fb3905bff78bf698f3701c0007b78e54084e",
+        ".scenario_variant": "b52f48303480eb0158b833965ec94027469564a3d7cdb87c6d65ac49e2531c06",
+        "AGENTS.md": "2e43df5b53c5b84c48002d8a2005ea65fc56a7d9f2134810b807ffbb362c6b55",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts/review/thread_digest.md": "730685f091a6cb555635295dd687e0f626c723b35bf87dfaace05d13c04bde7c",
+        "incident_context": "MISSING",
+        "release_context": "79079a4253b38b10ce512507eea33f0a4e54a53735340bd69a956d83ec5c2ccf",
+        "tests/test_approval_router.py": "54ff74b980c358910c502d6b5d765173e995c25a4ad79ca5cdb9cc29fd57c1b8"
+      }
+    },
+    "v5-recovery-in-thread": {
+      "observed_empty_brief_score": 0,
+      "observed_oracle_score": 100,
+      "observed_shortcut_score": 20,
+      "verifier_data": {
+        "gold_review_state_sha256": "57f4c473a8de7ac04490d6048c0e1182d3b76856517e0f525792bd31f7f1b0e2",
+        "hidden_tests_tree_sha256": "a7887ba68feb60240e0069fdb55ffa2d87a07518c7e5ddddf6f301e98039cbe8",
+        "oracle_tree_sha256": "79630f9957eabec802b313744aa0c4167076095d59e4ea5f957e674820dac4cb",
+        "workspace_manifest_sha256": "ed0c29b0ba3ef4dd67de9141f7d4b271498be2fba1736588eced68efdbae4b97"
+      },
+      "workspace_trees": {
+        ".github/review_export": "c80d24e2c6cb7490811eef7c104e5dd93757ed8cd50e5a73a2c5ef3ffef68fef",
+        ".scenario_variant": "70a3036db5cf0f2425d92374e1b0dc371307eeed97c32e83e431f3174068d7a9",
+        "AGENTS.md": "2e43df5b53c5b84c48002d8a2005ea65fc56a7d9f2134810b807ffbb362c6b55",
+        "Dockerfile": "dbaef7bcd27ec501bb2d257dd4b8c45afcef8e601634e5563d1c11f153b1c9a8",
+        "artifacts/review/thread_digest.md": "3b1ff786b17e5d8ec8bfbba15f2a44be682ea8aeabbdcd3247af91db3d2f3bc4",
+        "incident_context": "233bbe11a1008441b2306e27ed5adf84256eadc829c1b4418b50d201f670b304",
+        "release_context": "01b8d892f0eb6d7a8bc1c074ede14b68edeacc2be027aa5996c01fe5e0e42cde",
+        "tests/test_approval_router.py": "54ff74b980c358910c502d6b5d765173e995c25a4ad79ca5cdb9cc29fd57c1b8"
+      }
+    }
+  }
+}

@@ -1,82 +1,113 @@
 # PR Intent Regression Review
 
-- `task_id`: `t2_pr_review_markdown_registry_regressions`
 - `family_id`: `pr-intent-regression-review`
+- `task_id`: `t2_pr_review_markdown_registry_regressions`
 - `scenario_type`: `contextual_code_review`
 
 ## Task Prompt
 
-Review a feature PR that claims to add Markdown export support for a release-readiness CLI without changing existing JSON behavior. You are given the repo, the PR diff, the author’s summary, and a CI snapshot. Do not fix the code. Leave high-signal review findings only.
+Review a feature PR that claims to add Markdown export support for a release-readiness CLI without changing existing JSON behavior. You are given the repo snapshot after the PR, the PR description, the unified diff, a flattened diff view, and a CI snapshot. Do not fix code. Produce only high-signal review findings.
 
-Produce:
+Use the family-local structured-output CLI:
 
-- `artifacts/review_findings.md`: 2-4 findings ordered by severity, each tied to exact files and lines in the diff.
-- `artifacts/review_summary.md`: a short summary of whether the PR matches its stated intent and what tests or follow-ups are missing.
+- `bin/cnb55-pr-review schema`
+- `bin/cnb55-pr-review validate review_input.json`
+- `bin/cnb55-pr-review submit review_input.json`
 
-The bar is behavioral review. Style notes, naming preferences, and broad refactor suggestions should not appear unless they directly affect correctness.
+`submit` writes the canonical deliverables:
 
-## Workspace Bundle
+- `artifacts/review_packet.json`
+- `artifacts/review_findings.md`
+- `artifacts/review_summary.md`
 
-- Medium Python repo with `src/`, `tests/`, `docs/`, and plugin-style renderer registration.
-- PR bundle containing `pr_description.md`, `patch.diff`, and a flattened comment-free diff view.
-- CI snapshot showing one passing visible suite and one skipped integration suite.
-- Generated fixture churn and one docs update mixed into the same PR.
+## Structured Output Contract
 
-## Seeded Ambiguity
+`review_input.json` must use schema version `cnb55.pr_review.v1` and contain:
 
-Authoring note: these are construction notes for the benchmark pack. The solver-visible PR bundle should contain the evidence, but not these explicit answer-shape hints.
+- `schema_version`
+- `variant_id`
+- `intent_verdict`
+  Allowed values: `matches_intent`, `partial_match`, `does_not_match_intent`, `insufficient_evidence`
+- `summary`
+- `findings`
+  2-4 findings only. Each finding must include:
+  - `title`
+  - `severity`
+  - `changed_file`
+  - `changed_lines.start`
+  - `changed_lines.end`
+  - `linked_surface`
+  - `impact`
+  - `evidence_paths`
+  - optional `test_gap`
 
-- The PR narrative overstates how isolated the change is.
-- One changed path preserves the happy path but breaks a shared or cross-surface invariant.
-- Diff noise is large enough to reward superficial review behavior unless the grader is strict.
-- Test coverage is part of the intended review signal, but only if it is tied to a concrete behavioral gap.
+The grader reads only `artifacts/review_packet.json`. Markdown files are human-readable mirrors.
+
+## Workspace Layout
+
+Each variant ships:
+
+- `.scenario_variant`
+- `AGENTS.md`
+- `Dockerfile`
+- `bin/cnb55-pr-review`
+- `repo/`
+  - `src/release_readiness/...`
+  - `docs/...`
+  - `tests/...`
+- `review/`
+  - `pr_description.md`
+  - `patch.diff`
+  - `flattened_diff.md`
+  - `ci_snapshot.md`
+- `artifacts/`
+
+Variant-specific additions:
+
+- `v2-noisy-distractor`: generated fixture churn and docs churn in the review bundle
+- `v3-dirty-state`: `review/stale_draft_comments.md`
+- `v4-multi-corpus-objective`: `release_context/nightly_export_consumer.md`
+- `v5-recovery-in-thread`: release context plus `incident_context/inc_241_markdown_rollout_rollback.md`
+
+## Variant Progression
+
+- `v1-clean-baseline`
+  Clean diff. The two real regressions and the missing-test gap are all present with minimal distraction.
+- `v2-noisy-distractor`
+  Same core regressions, but diff noise is larger because markdown fixture churn and docs edits are mixed in.
+- `v3-dirty-state`
+  Same core regressions plus a stale prior review draft that covers only the two obvious code issues. A strong review must not simply complete that partial draft; it still needs the concrete missing-test blocker.
+- `v4-multi-corpus-objective`
+  Same code changes, but release context shows a downstream nightly consumer that shells out without `--output`.
+- `v5-recovery-in-thread`
+  Same code changes, plus an incident note showing the default-output regression already caused a rollback once. A review that re-identifies the code bug but misses the recurrence/rollback framing should score as a hard-floor miss.
 
 ## Required Surfaces
 
-- Diff inspection and review-comment style output.
-- Repo search and base-code reading for invariant checking.
-- Optional shell for targeted test or grep inspection.
-- Evidence must come from the provided PR bundle and repo snapshot only. No sibling repos or unrelated workspace files may be used to fabricate line-anchored findings.
-- No code editing.
+- `review/patch.diff`
+- `review/pr_description.md`
+- `review/ci_snapshot.md`
+- impacted files under `repo/`
+- `release_context/` for V4-V5
+- `incident_context/` for V5
 
-## Expected Deliverables
+No code edits are allowed. The writable surface is the review deliverable only.
 
-- Findings with concrete file and line references.
-- Each finding must explain impact, not just describe a diff.
-- A short review summary that states whether the PR matches its stated intent.
+## Solver Guidance
 
-## Grader Contract
+- Start from changed lines, then prove impact against an unchanged dependent surface.
+- Treat visible CI as a weak signal, not proof of safety.
+- Missing tests count only when tied to a concrete behavioral regression path.
+- If the bundle does not support a claimed finding, do not fabricate it.
 
-- Full credit requires:
-- At least one true behavioral regression finding.
-- At least one true contract or invariance finding tied to the registry or CLI integration path.
-- At least one missing-test observation if the seeded gap exists.
-- Findings must target the actual changed lines or the immediate invariant they violate.
-- At least two findings must cite both a changed line and one unchanged dependent surface whose invariant is affected.
-- The review summary must correctly judge the PR’s stated intent against real behavior.
-- Partial credit if one major regression is found but the review misses the second seeded issue or over-focuses on style.
-- Low credit if the review is generic, unanchored, or dominated by nits.
+## Saturation And Renewal
 
-## Red-Team Traps
+This family saturates when mean `P_benchmark > 80` for two consecutive probe rounds on the default probe tier. Renewal queue:
 
-- Spend the review budget on formatting churn or generated fixtures.
-- Infer correctness from passing visible CI.
-- Praise the happy path and miss the unchanged-JSON claim regression.
-- File comments against untouched legacy code instead of the PR’s changed surface.
-- Suggest a rewrite instead of articulating a concrete blocking finding.
+1. add a new variant where a second downstream consumer depends on explicit `--output json`
+2. rotate the dirty-state artifact so stale-draft parroting cannot be hardcoded
 
-## Quality Gate
+## Current Status
 
-- Hardening applied after adversarial probe:
-- The runtime prompt and solver-visible setup should not list the seeded regression categories.
-- The grader should reject review bundles that contain only style feedback.
-- Hidden checks should require one finding about stated-intent drift and one about cross-surface contract drift.
-- The seeded regressions should live in different files so “one lucky grep hit” does not clear the task.
-- At least two scored findings must connect a changed line to an unchanged invariant-bearing surface, which makes diff-header bluffing much harder.
-- The bundle boundary is now explicit, and honest refusal to fabricate unsupported line findings is scoreable but capped.
-- Hardening target: a naive GPT-5.4/high solver should not clear 30/100 by posting plausible but unverified review nits.
-- Probe record:
-- Initial adversarial probe judged the spec too easy at roughly 35-55/100 because the public spec named the review buckets too directly.
-- Hardening moved those buckets into hidden grading and raised the evidence bar for findings.
-- A later live GPT-5.4/high family-bundle run refused to invent missing diff evidence; the evaluator now reserves limited points for evidence discipline rather than forcing fabricated findings.
-- Current expectation after hardening: under 30/100 for a naive GPT-5.4/high solver if the grader enforces changed-line plus unchanged-surface linkage.
+- Layer A probe acceptance: pending live probe
+- Layer B assetization: family-local scorer, manifests, milestones, and verification matrix are expected to exist after regeneration

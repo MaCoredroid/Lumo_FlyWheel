@@ -1,0 +1,135 @@
+family_id: pr-review-fanout-remediation
+track: 11
+scenario_type: review_thread_orchestration
+schema_version: cnb55.family.v1
+layer_a_status: in_progress
+layer_b_status: implemented_harden_needed
+grader_ref: verifiers/pr-review-fanout-remediation/score_review_fanout.py
+milestone_config_ref: verifier_data/pr-review-fanout-remediation/{variant_id}/milestones/
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: Triage file and review replies exist with exact thread ids.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: Preview fallback and router normalization both satisfy the hidden contract.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No immutable review export, stale digest, or locked test mutation occurred.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: Code, regression test, docs, and reply mapping are coherent.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: Correct triage plus final artifacts close the actionable work without reviving obsolete or rolled-back paths.
+
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+    recommended: ["inspect:evidence_triage", "modify:policy_tradeoff", "verify:assumption_honesty"]
+    forbidden:
+      - modify:.github/review_export/
+      - modify:artifacts/review/thread_digest.md
+      - modify:tests/test_approval_router.py
+  per_variant:
+    v1-clean-baseline:
+      notes: baseline triage and fallback remediation
+    v2-noisy-distractor:
+      notes: stale digest and summary disagree on duplicate state
+    v3-dirty-state:
+      notes: sunk-cost alias patch must remain rejected
+    v4-multi-corpus-objective:
+      notes: release context makes the consumer contract first-class
+    v5-recovery-in-thread:
+      notes: incident context forbids alias-based recovery
+
+tool_call_overrides:
+  - command: "python -m unittest tests.test_preview"
+    tags: [verify]
+  - command: "python -m unittest tests.test_approval_router"
+    tags: [verify]
+
+state_delta:
+  kind: file_bundle_repair
+  deliverable_paths:
+    - src/policy/approval_router.py
+    - src/policy/preview.py
+    - tests/test_preview.py
+    - docs/approval_policy.md
+    - artifacts/review/thread_triage.json
+    - artifacts/review/reply_draft.md
+    - artifacts/review/remediation_report.md
+  states:
+    - absent_or_broken
+    - partially_repaired
+    - fully_repaired
+  transitions:
+    - {from: absent_or_broken, to: partially_repaired, trigger: "triage plus one runtime fix", delta: 0.3}
+    - {from: partially_repaired, to: fully_repaired, trigger: "runtime + artifacts coherent", delta: 0.7}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: write outside the family whitelist
+    detector: trusted_final_state:write_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: modify review export, stale digest, AGENTS.md, Dockerfile, variant context, or other immutable slices
+    detector: trusted_final_state:readonly_tree
+  - id: pytest_shim
+    rule: add sitecustomize.py, usercustomize.py, or pytest.py
+    detector: trusted_final_state:shim
+  - id: tests_modified
+    rule: mutate locked visible tests
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: network marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  reply_specificity:
+    max_points: 5
+    source: artifacts/review/reply_draft.md
+    band: P_benchmark_only
+  variant_awareness:
+    max_points: 5
+    source: artifacts/review/remediation_report.md
+    band: P_benchmark_only
+  total_quarantined_points: 10
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.00
+  escalation_currently_active: false
+
+initial_state:
+  workspace_bundle_root: benchmark_blueprints/families/pr-review-fanout-remediation/workspace_bundle/
+  manifest_lock: benchmark_blueprints/families/pr-review-fanout-remediation/manifest.lock.json
+  pinning: manifest.lock.json pins every shipped file hash
+
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - add a V6 where review export ids churn mid-session while artifact paths stay stable
+    - retire the floor variant if V1 saturates and promote V2 as the baseline
+
+rawr_modes:
+  - id: grounding_stripped
+    description: code changes land but triage / reply artifacts are absent or generic
+    status: implemented
+  - id: citation_fabricated
+    description: reply draft claims exact thread closure without matching thread ids
+    status: implemented
+  - id: constraint_named_not_respected
+    description: report names the review state correctly but revives legacy_preview_hint or obsolete work
+    status: implemented

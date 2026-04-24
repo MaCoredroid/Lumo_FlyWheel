@@ -1,0 +1,1 @@
+RT-118: Fixed the active mobile reopen on `/pull/241/review-thread`. The unresolved card now keeps the trailing action cluster in its own column so the reviewer summary wraps instead of clipping under it at the `390x844` reopen viewport, and only the actionable `reply-thread-menu` control now has an explicit accessible name.

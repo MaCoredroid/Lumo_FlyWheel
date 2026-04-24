@@ -1,0 +1,61 @@
+{
+  "findings": [
+    {
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "end": 15,
+        "start": 15
+      },
+      "evidence_paths": [
+        "repo/src/release_readiness/cli.py",
+        "repo/docs/export_contract.md",
+        "review/pr_description.md",
+        "review/ci_snapshot.md",
+        "release_context/nightly_export_consumer.md"
+      ],
+      "impact": "The PR description says existing JSON behavior stays intact, but the changed default flips no-flag invocations from machine-readable JSON to markdown output.",
+      "linked_surface": "release_context/nightly_export_consumer.md",
+      "severity": "high",
+      "test_gap": "There is no regression coverage for the default no-flag path even though automation relies on the historical JSON default.",
+      "title": "Changing the CLI default to markdown violates the stated JSON-compat contract"
+    },
+    {
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "end": 7,
+        "start": 7
+      },
+      "evidence_paths": [
+        "repo/src/release_readiness/renderers/registry.py",
+        "repo/src/release_readiness/export.py",
+        "review/pr_description.md"
+      ],
+      "impact": "Even callers that pass --output json will get a markdown string back because the registry binds the json key to render_markdown.",
+      "linked_surface": "repo/src/release_readiness/export.py",
+      "severity": "high",
+      "test_gap": "The new tests only exercise markdown snapshots, so the explicit JSON path is no longer protected.",
+      "title": "The renderer registry now routes explicit json requests to markdown"
+    },
+    {
+      "changed_file": "repo/tests/test_markdown_export.py",
+      "changed_lines": {
+        "end": 4,
+        "start": 4
+      },
+      "evidence_paths": [
+        "repo/tests/test_markdown_export.py",
+        "repo/docs/export_contract.md",
+        "review/ci_snapshot.md"
+      ],
+      "impact": "The test delta locks in the new markdown happy path but never checks either the no-flag default or explicit json behavior that the PR claims to preserve.",
+      "linked_surface": "repo/docs/export_contract.md",
+      "severity": "medium",
+      "test_gap": "Add one test for the default invocation and one for explicit --output json so the contract drift is caught.",
+      "title": "The added coverage only snapshots markdown and misses the two JSON regression paths"
+    }
+  ],
+  "intent_verdict": "does_not_match_intent",
+  "schema_version": "cnb55.pr_review.v1",
+  "summary": "The PR does not match its stated intent: it changes the default output away from JSON, breaks explicit json rendering via the registry, and only adds markdown-path coverage. The release context makes the default-path change more severe because the nightly consumer shells out without flags.",
+  "variant_id": "v4-multi-corpus-objective"
+}

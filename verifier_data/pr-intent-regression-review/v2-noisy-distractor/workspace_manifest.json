@@ -1,0 +1,34 @@
+{
+  "files": [
+    ".scenario_variant",
+    "AGENTS.md",
+    "Dockerfile",
+    "bin/cnb55-pr-review",
+    "repo/docs/export_contract.md",
+    "repo/docs/markdown_export.md",
+    "repo/pyproject.toml",
+    "repo/src/release_readiness/cli.py",
+    "repo/src/release_readiness/export.py",
+    "repo/src/release_readiness/renderers/json_renderer.py",
+    "repo/src/release_readiness/renderers/markdown_renderer.py",
+    "repo/src/release_readiness/renderers/registry.py",
+    "repo/tests/fixtures/release_readiness.md",
+    "repo/tests/test_json_contract_notes.md",
+    "repo/tests/test_markdown_export.py",
+    "review/ci_snapshot.md",
+    "review/flattened_diff.md",
+    "review/generated_fixture_churn.md",
+    "review/patch.diff",
+    "review/pr_description.md"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "8ba588edb5e31992c7ec290b83eaa647c32d9c7e6a8c5bde314155844295d478",
+    "AGENTS.md": "afb1d654f4bb22dc1e3878ddd007cdc69188b7e1143d1481f1edaf3ea8c8dcec",
+    "Dockerfile": "1663db6720ef99476ccc05d179bb9c97276c52904bba9786b1112e17fa9d9273",
+    "bin": "b9190588c28515490c86017ebf9bb0641e09756566abe8cf64640843b257acef",
+    "repo": "161af57ea899b57524d1e5032ce29916a5693f285ecc5689f042a245f91421ac",
+    "repo/tests": "155905f767007e13c85d7a66262c2881e36478438496d79f7a9f4f07072071f7",
+    "review": "1994bece8a7d4d1b0dd83b3e12402929369c68ad0776d7cc1993318ca3131c42"
+  },
+  "variant_id": "v2-noisy-distractor"
+}

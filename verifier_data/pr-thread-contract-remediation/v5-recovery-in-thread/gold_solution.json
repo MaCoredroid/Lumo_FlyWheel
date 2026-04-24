@@ -1,0 +1,55 @@
+{
+  "actionable_thread_ids": [
+    "RTR-101",
+    "RTR-102",
+    "RTR-103"
+  ],
+  "allowed_write_paths": [
+    "queue_api/handlers.py",
+    "queue_api/serializers.py",
+    "queue_api/service.py",
+    "tests/test_handlers.py",
+    "tests/test_service.py",
+    "docs/release_notes.md",
+    "CHANGELOG.md",
+    "review/reviewer_replies.json",
+    "review/verification_note.md"
+  ],
+  "ignored_thread_ids": [
+    "RTR-104",
+    "RTR-105"
+  ],
+  "pass_bar": 80,
+  "required_incident_phrase": "INC-742",
+  "required_regression_test_names": [
+    "test_export_mode_omits_owner_key_for_unowned_bucket",
+    "test_equal_count_owner_buckets_keep_insertion_order"
+  ],
+  "required_release_note_phrases": [
+    "omit `owner` instead of serializing `null`",
+    "request-side owner filter semantics remain unchanged",
+    "mobile compatibility depends on keeping the omit-not-null response contract"
+  ],
+  "required_reply_evidence": {
+    "RTR-101": [
+      "queue_api/serializers.py",
+      "tests/test_handlers.py"
+    ],
+    "RTR-102": [
+      "queue_api/service.py",
+      "tests/test_service.py"
+    ],
+    "RTR-103": [
+      "docs/release_notes.md",
+      "release_context/mobile_client_contract.md",
+      "incident_context/inc_742_owner_null_rollback.md"
+    ]
+  },
+  "required_reply_phrases": {
+    "RTR-103": [
+      "INC-742",
+      "rollback"
+    ]
+  },
+  "variant_id": "v5-recovery-in-thread"
+}

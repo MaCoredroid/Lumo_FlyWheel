@@ -1,0 +1,1 @@
+RT-118: Fixed the unresolved `/pull/241/review-thread` mobile reopen by letting the title wrap instead of clipping against the trailing action cluster, and by adding an explicit accessible name to the live `reply-thread-menu` control. I also added the matching `ios-review-reopened` 390x844 mobile coverage entry for this route.

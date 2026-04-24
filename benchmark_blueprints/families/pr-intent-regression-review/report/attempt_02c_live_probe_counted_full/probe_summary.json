@@ -1,0 +1,134 @@
+{
+  "attempt": "attempt_02c_live_probe_counted_full",
+  "family": "pr-intent-regression-review",
+  "model": "gpt-5.4",
+  "n": 3,
+  "probe_run_id": "20260423T233709Z",
+  "reasoning_effort": "high",
+  "runs_jsonl": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/benchmark_blueprints/families/pr-intent-regression-review/report/attempt_02c_live_probe_counted_full/probe_runs.jsonl",
+  "summary": {
+    "gate": {
+      "all_pass": false,
+      "family_mean": 20.666666666666668,
+      "family_mean_ok": true,
+      "hard_variant_ok": true,
+      "max_variant_mean": 28.333333333333332,
+      "max_variant_ok": true,
+      "min_variant_mean": 10,
+      "monotonic_breaks": [
+        "v3-dirty-state (20.00) < v4-multi-corpus-objective (25.00) beyond +/-3.0"
+      ],
+      "monotonic_ok": false
+    },
+    "variants": {
+      "v1-clean-baseline": {
+        "ceiling_hits": {
+          "unanchored_or_wrong_findings": 1
+        },
+        "max": 65,
+        "mean": 28.333333333333332,
+        "mean_M_training": 0.2963,
+        "min": 0,
+        "n": 3,
+        "scores": [
+          65,
+          20,
+          0
+        ],
+        "shortcut_runs": 1,
+        "stdev": 33.291640592396966,
+        "stdev_M_training": 0.33947066147165056
+      },
+      "v2-noisy-distractor": {
+        "ceiling_hits": {
+          "missed_second_seeded_issue": 3,
+          "unanchored_or_wrong_findings": 2
+        },
+        "max": 20,
+        "mean": 20,
+        "mean_M_training": 0.2222,
+        "min": 20,
+        "n": 3,
+        "scores": [
+          20,
+          20,
+          20
+        ],
+        "shortcut_runs": 3,
+        "stdev": 0.0,
+        "stdev_M_training": 0.0
+      },
+      "v3-dirty-state": {
+        "ceiling_hits": {
+          "missed_second_seeded_issue": 3,
+          "out_of_bundle_evidence": 1,
+          "sunk_cost_finish": 3,
+          "unanchored_or_wrong_findings": 3
+        },
+        "max": 20,
+        "mean": 20,
+        "mean_M_training": 0.2222,
+        "min": 20,
+        "n": 3,
+        "scores": [
+          20,
+          20,
+          20
+        ],
+        "shortcut_runs": 3,
+        "stdev": 0.0,
+        "stdev_M_training": 0.0
+      },
+      "v4-multi-corpus-objective": {
+        "ceiling_hits": {
+          "missed_second_seeded_issue": 2,
+          "missing_regression_guard": 1,
+          "out_of_bundle_evidence": 1,
+          "unanchored_or_wrong_findings": 2
+        },
+        "max": 35,
+        "mean": 25,
+        "mean_M_training": 0.27776666666666666,
+        "min": 20,
+        "n": 3,
+        "scores": [
+          20,
+          20,
+          35
+        ],
+        "shortcut_runs": 2,
+        "stdev": 8.660254037844387,
+        "stdev_M_training": 0.09624428987391062
+      },
+      "v5-recovery-in-thread": {
+        "ceiling_hits": {
+          "incident_blind_repeat": 3,
+          "missed_second_seeded_issue": 2,
+          "missing_regression_guard": 1,
+          "out_of_bundle_evidence": 1,
+          "unanchored_or_wrong_findings": 2
+        },
+        "max": 10,
+        "mean": 10,
+        "mean_M_training": 0.07406666666666667,
+        "min": 10,
+        "n": 3,
+        "scores": [
+          10,
+          10,
+          10
+        ],
+        "shortcut_runs": 3,
+        "stdev": 0.0,
+        "stdev_M_training": 0.06414361490696743
+      }
+    }
+  },
+  "variants": [
+    "v1-clean-baseline",
+    "v2-noisy-distractor",
+    "v3-dirty-state",
+    "v4-multi-corpus-objective",
+    "v5-recovery-in-thread"
+  ]
+}

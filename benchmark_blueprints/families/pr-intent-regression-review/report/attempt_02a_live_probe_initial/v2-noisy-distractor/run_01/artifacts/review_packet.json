@@ -1,0 +1,44 @@
+{
+  "findings": [
+    {
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "end": 16,
+        "start": 12
+      },
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/flattened_diff.md",
+        "repo/docs/export_contract.md",
+        "review/ci_snapshot.md"
+      ],
+      "impact": "Changing `--output` to default to `markdown` means callers that shell out without flags stop receiving the machine-readable object with a top-level `version` field that the unchanged export contract still promises for nightly automation consumers.",
+      "linked_surface": "repo/docs/export_contract.md",
+      "severity": "high",
+      "test_gap": "The only exercised tests are markdown-only, and the skipped JSON contract suite leaves the default-output regression uncovered.",
+      "title": "Default CLI output no longer preserves the documented JSON contract"
+    },
+    {
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "end": 8,
+        "start": 6
+      },
+      "evidence_paths": [
+        "review/patch.diff",
+        "repo/src/release_readiness/renderers/json_renderer.py",
+        "repo/tests/test_json_contract_notes.md",
+        "review/ci_snapshot.md"
+      ],
+      "impact": "The `json` registry entry now points at `render_markdown`, so `export_report(..., output=\"json\")` returns a markdown string instead of the dictionary payload that explicit JSON consumers rely on. In the CLI this gets `json.dumps`-encoded into a quoted string, which drops the top-level `version` object shape entirely.",
+      "linked_surface": "repo/src/release_readiness/renderers/json_renderer.py",
+      "severity": "high",
+      "test_gap": "There is no active test in this stack that exercises `output=\"json\"`, so the renderer swap can pass the visible suite unnoticed.",
+      "title": "Explicit `--output json` now returns markdown text wrapped as JSON"
+    }
+  ],
+  "intent_verdict": "does_not_match_intent",
+  "schema_version": "cnb55.pr_review.v1",
+  "summary": "The PR breaks both sides of the existing JSON contract: the default CLI output flips to markdown, and explicit `--output json` no longer uses the JSON renderer.",
+  "variant_id": "v2-noisy-distractor"
+}

@@ -1,0 +1,73 @@
+{
+  "runs": [
+    {
+      "results": [
+        {
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "repo/export_api/storage.py"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "py/export-path-traversal"
+          },
+          "ruleId": "SARIF-PY-TRAVERSAL-001"
+        },
+        {
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "repo/export_api/auth.py"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "py/jwt-key-rotation"
+          },
+          "ruleId": "SARIF-PY-AUTH-014"
+        },
+        {
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "repo/archive/legacy_export.py"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "py/archived-scan-noise"
+          },
+          "ruleId": "SARIF-PY-ARCHIVE-019"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "name": "audit-bundle",
+          "rules": [
+            {
+              "id": "SARIF-PY-TRAVERSAL-001",
+              "name": "py/export-path-traversal"
+            },
+            {
+              "id": "SARIF-PY-AUTH-014",
+              "name": "py/jwt-key-rotation"
+            },
+            {
+              "id": "SARIF-PY-ARCHIVE-019",
+              "name": "py/archived-scan-noise"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

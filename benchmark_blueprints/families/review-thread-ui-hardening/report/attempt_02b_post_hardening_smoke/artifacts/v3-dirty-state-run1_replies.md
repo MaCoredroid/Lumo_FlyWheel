@@ -1,0 +1,1 @@
+RT-118: Fixed the unresolved `/pull/241/review-thread` mobile reopen only. The reply action now has an accessible name, and the unresolved card title wraps within the available mobile width instead of clipping under the trailing action cluster at `ios-review-reopened` (`390x844`).

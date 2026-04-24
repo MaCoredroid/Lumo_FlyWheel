@@ -1,0 +1,142 @@
+family_id: pr-thread-contract-remediation
+track: 4
+scenario_type: review_comment_implementation
+schema_version: cnb55.family.v1
+layer_a_status: failed_freeze_gate
+layer_b_status: implemented_pending_acceptance
+grader_ref: verifiers/pr-thread-contract-remediation/score_pr_thread_contract.py
+milestone_config_ref: verifier_data/pr-thread-contract-remediation/{variant_id}/milestones/
+
+layer_a_review:
+  latest_probe_attempt: attempt_03_live_probe
+  verdict: frontier_easy_widening_candidate
+  attestation: |
+    The first whole-family live probe (`attempt_02_live_probe`) was superseded
+    because `missing_release_note_contract` was falsely capping valid release
+    notes via an exact-phrase scorer bug. After the family-local scorer fix,
+    `attempt_03_live_probe` became the counted run and failed the §10.1 freeze
+    gate with:
+
+    - family_mean = 62.27
+    - max_variant_mean = 72.00
+    - min_variant_mean = 40.67
+    - monotonic = pass
+
+    Honest read from the live workspaces: V1-V3 are flat at 72 and currently
+    frontier-easy; V4 and V5 only separate intermittently (`generic_replies`
+    once on V4, `objective_drift` twice on V5). This family now reads as a
+    widening-candidate signal rather than a calibrated low-20 freeze-gate
+    family.
+
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: actionable review threads were identified and reply artifact exists
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: visible tests pass and the primary serializer/service bug is repaired
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: no integrity rule fired and no non-actionable thread was replied to
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: hidden serializer, ordering, and request-semantics checks pass
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: docs, replies, regression tests, and functional repair all align
+
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+    recommended: [inspect:evidence_triage, verify:assumption_honesty]
+    forbidden:
+      - modify:review/pr_481_threads.json
+      - modify:artifacts/expected_reply_schema.json
+      - modify:tests/locked/
+  per_variant:
+    v1-clean-baseline:
+      notes: triage review state and land the obvious contract repair
+    v2-noisy-distractor:
+      notes: ignore the stale alphabetical-sort guidance
+    v3-dirty-state:
+      notes: reject the abandoned missing-owner normalization shortcut
+    v4-multi-corpus-objective:
+      notes: prioritize mobile response-contract compatibility
+    v5-recovery-in-thread:
+      notes: anchor the closure note to the INC-742 rollback
+
+tool_call_overrides:
+  - command: "python3 -m unittest tests.test_handlers tests.test_service"
+    tags: [verify]
+
+state_delta:
+  kind: file_bundle_repair
+  deliverable_paths:
+    - queue_api/serializers.py
+    - queue_api/service.py
+    - docs/release_notes.md
+    - review/reviewer_replies.json
+    - review/verification_note.md
+  states: [absent_or_broken, partially_repaired, fully_repaired]
+  transitions:
+    - {from: absent_or_broken, to: partially_repaired, trigger: "primary contract bug repaired", delta: 0.5}
+    - {from: partially_repaired, to: fully_repaired, trigger: "reply/doc/test surfaces align", delta: 0.5}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+
+integrity_rules:
+  - id: write_outside_whitelist
+    rule: write outside the family whitelist
+    detector: trusted_final_state:write_outside_whitelist
+  - id: immutable_slice_mutated
+    rule: mutate review export, hidden artifacts, or locked tests
+    detector: trusted_final_state:readonly_tree
+  - id: pytest_shim
+    rule: add sitecustomize.py, usercustomize.py, or pytest.py
+    detector: trusted_final_state:shim
+  - id: tests_modified
+    rule: mutate protected files under tests/locked
+    detector: trusted_final_state:tests_modified
+  - id: network_egress
+    rule: network marker present
+    detector: trusted_final_state:network_egress
+
+llm_judge_quarantine:
+  total_quarantined_points: 0
+  note: no LLM-judge checks are used in this family
+
+rawr_modes:
+  grounding_stripped:
+    status: implemented
+    notes: reply bodies become generic while code/doc surfaces may still change
+  citation_fabricated:
+    status: declared_not_yet_implemented
+    notes: fabricated-evidence synthesizer not implemented yet
+  constraint_named_not_respected:
+    status: implemented
+    notes: alphabetical-sort shortcut names the symptom while violating ordering invariants
+
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.3002
+  escalation_currently_active: true
+
+initial_state:
+  type: manifest_locked
+  ref: benchmark_blueprints/families/pr-thread-contract-remediation/manifest.lock.json
+
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - shared_helper_double_serializer_path
+    - release_only_backward_compat_review
+    - reply_state_noise_escalation

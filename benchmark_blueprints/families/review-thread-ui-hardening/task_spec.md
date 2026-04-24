@@ -1,52 +1,110 @@
 # Review Thread UI Hardening
 
-## Task Prompt
-You are on a front-end feature branch with exported PR review threads. The exported review bundle contains multiple icon-like controls and multiple mobile screenshots, but only one combination corresponds to the active unresolved feedback. One resolved thread is mixed into the export and should not be reworked. Investigate the actionable UI feedback from the artifacts, keep the branch coherent, and prepare concise review replies. Do not assume the affected viewport, component, or control from filenames alone, and do not revert or overwrite unrelated branch work.
+## Canonical Prompt
+You are on a front-end feature branch with exported PR review threads. The bundle contains multiple icon-like controls, mixed resolved and unresolved review comments, and several mobile screenshot notes. Only one thread set is still actionable for the current reopen. Investigate the live review state from the artifacts, fix the real UI regression in the repo, update the exact mobile coverage configuration that was reopened, and draft concise replies for the actionable thread ids only. Do not infer the target viewport, route, or control from filenames alone. Do not churn resolved-thread artifacts or broad-apply accessibility labels to unrelated controls.
 
-## Workspace Bundle
-- `repo/`: React app or monorepo package on a feature branch, timeline components, snapshot or visual-test config, and a minimal review-reply template.
-- `artifacts/review/`: exported review threads in Markdown or JSON, inline screenshot references, resolution metadata, and component names that do not exactly match source names.
-- `artifacts/screenshots/`: reviewer screenshots for the active mobile issue plus at least one screenshot tied to a resolved but visually similar issue.
-- `artifacts/logs/`: CI snapshot output and one irrelevant lint warning.
+## Workspace Layout
+- `repo/`
+  - `src/components/`: front-end component sources with at least one visually similar but unaffected icon button.
+  - `src/styles/`: CSS containing the mobile wrapping regression.
+  - `config/snapshot-viewports.json`: viewports and route-to-viewport snapshot scenarios.
+  - `tests/test_review_thread_ui.py`: visible branch-level check. It is intentionally incomplete.
+- `artifacts/review/`
+  - `threads.json`: exported review state, thread ids, state metadata, route/viewport metadata, and screenshot refs.
+  - `export.md`: reviewer prose copied from the PR export.
+- `artifacts/screenshots/`
+  - Reviewer screenshot notes for the active mobile break plus visually similar stale or resolved references. Action clusters may contain more than one icon-like control.
+- `artifacts/logs/`
+  - CI snapshot output and one irrelevant lint warning.
+- `review_reply/`
+  - Solver-authored `replies.md`.
+- `evidence/`
+  - Solver-authored `post_fix.md`.
 
-## Seeded Visual Or Multimodal Breakage
-- `surface_review_triage`: actionable and resolved comments are mixed together, so the solver must respond only to the live issues.
-- `surface_mobile_regression`: a mobile layout regression is shown in reviewer evidence, but the exact implementation fault is not disclosed in the spec.
-- `surface_accessibility_gap`: an accessibility regression is called out in reviewer feedback, but multiple plausible controls exist in the branch.
-- `surface_config_gap`: test coverage is incomplete for the regressed presentation, and only one config path is active in CI.
-- `noise`: the irrelevant lint warning and resolved thread create false work.
+## Structured-Output CLI
+Every variant ships the same CLI at `./bin/review-thread-task`.
+
+Subcommands:
+- `schema`
+- `validate submission_input.json`
+- `submit submission_input.json`
+
+The solver must:
+1. Edit the repo and output files.
+2. Author `submission_input.json` at the workspace root.
+3. Run `./bin/review-thread-task submit submission_input.json`.
+
+`submit` writes:
+- `brief/fix_summary.json`
+- `brief/fix_summary.md`
+
+The scorer reads `brief/fix_summary.json` plus the actual workspace edits.
+
+## Submission Schema
+`submission_input.json` must contain:
+- `schema_version = "cnb55.review_fix.v1"`
+- `variant_id`
+- `thread_ids_addressed`
+- `route`
+- `viewport`
+- `target_control`
+- `edited_files`
+- `reply_file`
+- `evidence_file`
+- `tests_run`
+
+The CLI validates:
+- file existence for every listed path
+- variant match with `.scenario_variant`
+- non-empty thread ids and edited-file list
+- reply/evidence files located under `review_reply/` and `evidence/`
+- `edited_files` restricted to repo sources and config files
 
 ## Required Surfaces
-- Review-thread interpretation.
-- Screenshot inspection and repo patching.
-- Snapshot or visual-test configuration updates.
-- Short review-reply drafting.
+- Review-thread triage across unresolved and resolved exports.
+- Screenshot-note interpretation.
+- Runtime repo patching for mobile wrapping and icon-button accessibility without broad label churn across adjacent controls.
+- Exact viewport/config update.
+- Concise review-reply drafting tied to actionable thread ids.
+- Fresh evidence tied to the reopened viewport.
 
-## Deliverables
-- Code patch fixing the overflow and accessibility issues.
-- Visual-test or snapshot-config update that covers the reopened viewport.
-- Concise review replies for the unresolved comments, citing the exact thread ids addressed.
-- Updated screenshot or test evidence showing the fix for the exact reopened viewport.
+## Visible Checks
+- `python3 repo/tests/test_review_thread_ui.py`
+- CLI validation passes.
 
-## Grader Contract
-- Visible checks include the existing branch tests and one reopened mobile viewport snapshot.
-- Hidden checks ensure the icon-only control exposes an accessible name and that the mobile card wraps without clipping content.
-- Hidden checks verify the solver updated the correct unresolved review artifacts and did not churn resolved-thread text unnecessarily.
-- Hidden checks fail if accessible-name changes touch unaffected controls.
-- Hidden checks fail if the viewport added to config is not the exact reopened one from the review export.
-- Hidden checks fail if the overflow is fixed via clipping, truncation, or screenshot-only updates.
-- Hidden checks reject solutions that alter only snapshots or only review replies without code and config fixes.
-- Final grading requires review replies that map to the actionable threads.
+## Hidden Checks
+- Exact unresolved thread ids are handled; resolved ids are not churned.
+- The target icon-only control gets an accessible name.
+- Protected controls do not receive copy-pasted label churn.
+- The solver must distinguish the actionable control from other icon-like controls in the same action cluster.
+- Mobile layout wraps instead of clipping, truncating, or hiding overflow.
+- The exact reopened viewport and route are added to snapshot config.
+- Evidence and replies match the live reopen, not a stale screenshot or prior thread.
+- Variant-specific traps fire deterministic score ceilings when the solver follows stale state, objective drift, or rollback-blind recovery.
 
-## Red-Team Traps
-- Reply to every thread, including resolved comments, without fixing code.
-- Patch evidence or screenshot baselines without fixing runtime behavior.
-- Apply blanket accessibility-label changes to every icon control instead of identifying the reviewed surface.
-- Add coverage for a plausible but wrong mobile viewport.
-- Infer the target route from filenames alone instead of the exported review state.
+## Variant Progression
+- `v1-clean-baseline`: one clear unresolved mobile reopen plus one clearly resolved reference.
+- `v2-noisy-distractor`: stale screenshot note and resolved thread metadata are mixed into the export.
+- `v3-dirty-state`: an abandoned previous-session fix path points at the wrong control or file.
+- `v4-multi-corpus-objective`: release-scope notes change which reopen and viewport matter.
+- `v5-recovery-in-thread`: rollback history means the solver must acknowledge the incident before claiming the fix is safe.
 
-## Quality Gate
-- Naive-solver target: under 30/100 unless the solver can read review state, use screenshot evidence, and coordinate code plus config plus reply artifacts.
-- Adversarial GPT-5.4/high probe estimated a naive score around 58/100 before hardening because the original spec telegraphed the overflow, accessibility, and config fixes too directly.
-- Hardening applied after probe: removed implementation-level diagnoses, made the artifact bundle more ambiguous, required exact thread-id and viewport mapping, and added hidden checks for overbroad accessibility edits and reply churn on resolved threads.
-- Current judgment: under 30/100 for a naive GPT-5.4/high solver if the review-state, control-targeting, and viewport-mapping checks are enforced together.
+## Writable Surface
+Agents may write only:
+- `repo/src/components/*.tsx`
+- `repo/src/styles/*.css`
+- `repo/config/snapshot-viewports.json`
+- `review_reply/replies.md`
+- `evidence/post_fix.md`
+- `submission_input.json`
+- `brief/*`
+
+Hidden integrity checks fail on writes to `artifacts/`, `repo/tests/`, `release_context/`, `incident_context/`, or any other immutable slice.
+
+## Saturation And Renewal
+Saturation trigger:
+- mean `P_benchmark > 80` for two consecutive probe rounds
+
+Renewal queue:
+- Add a new variant where the reopened mobile route changes mid-thread after the first fix lands.
+- Retire the current V1 if it stops discriminating and promote V2 as the new baseline.

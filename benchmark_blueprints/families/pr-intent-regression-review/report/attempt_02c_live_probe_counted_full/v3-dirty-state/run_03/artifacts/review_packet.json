@@ -1,0 +1,46 @@
+{
+  "findings": [
+    {
+      "changed_file": "repo/src/release_readiness/cli.py",
+      "changed_lines": {
+        "end": 16,
+        "start": 13
+      },
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "review/ci_snapshot.md",
+        "repo/docs/export_contract.md",
+        "repo/tests/test_json_contract_notes.md"
+      ],
+      "impact": "The unchanged export contract says nightly automation shells out without flags and depends on the default output being a machine-readable JSON object with a top-level `version` field. Flipping the parser default to `markdown` means those callers now receive human-readable markdown instead of the historical JSON payload, which is the opposite of the PR description's promise to keep existing JSON behavior intact for automation consumers.",
+      "linked_surface": "repo/docs/export_contract.md",
+      "severity": "high",
+      "test_gap": "The only visible test coverage exercised here is markdown-only, and the downstream JSON-shellout suite is explicitly skipped.",
+      "title": "Changing the CLI default to markdown breaks no-flag automation consumers"
+    },
+    {
+      "changed_file": "repo/src/release_readiness/renderers/registry.py",
+      "changed_lines": {
+        "end": 8,
+        "start": 6
+      },
+      "evidence_paths": [
+        "review/pr_description.md",
+        "review/patch.diff",
+        "review/ci_snapshot.md",
+        "repo/tests/test_json_contract_notes.md",
+        "repo/src/release_readiness/renderers/json_renderer.py"
+      ],
+      "impact": "The unchanged JSON contract notes say explicit `--output json` must continue returning a dictionary-like payload rather than a rendered string. After this mapping change, `export_report(..., output=\"json\")` returns markdown text, so the CLI's unchanged `json.dumps(rendered, sort_keys=True)` path serializes that markdown as a quoted JSON string instead of an object. That removes the top-level fields automation consumers expect even when they explicitly pass `--output json`.",
+      "linked_surface": "repo/tests/test_json_contract_notes.md",
+      "severity": "high",
+      "test_gap": "No exercised test in this stack covers `output=\"json\"`, and the integration suite that would catch the regression is skipped.",
+      "title": "The renderer registry now sends explicit json requests through the markdown renderer"
+    }
+  ],
+  "intent_verdict": "does_not_match_intent",
+  "schema_version": "cnb55.pr_review.v1",
+  "summary": "The PR does not match its stated intent because it breaks both no-flag and explicit `--output json` consumers while the downstream JSON contract suite remains skipped in this stack.",
+  "variant_id": "v3-dirty-state"
+}

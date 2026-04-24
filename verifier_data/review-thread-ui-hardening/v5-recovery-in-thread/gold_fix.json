@@ -1,0 +1,55 @@
+{
+  "allowed_edit_files": [
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css",
+    "repo/config/snapshot-viewports.json"
+  ],
+  "component_file": "repo/src/components/ReviewThreadCard.tsx",
+  "config_file": "repo/config/snapshot-viewports.json",
+  "evidence_file": "evidence/post_fix.md",
+  "objective_drift_thread_ids": [
+    "RT-204"
+  ],
+  "pass_bar": 40,
+  "protected_controls": [
+    "resolved-thread-menu",
+    "pin-thread-menu"
+  ],
+  "readonly_tree_hashes": {
+    ".scenario_variant": "698b58e67cd99d48b8997515f0f683c5ea7d38d552178b45b6c921fb38cc2273",
+    "AGENTS.md": "41b37894f38b663263352b08175febc7248eb186588b044a74ef548ad617b0fb",
+    "Dockerfile": "bf74cd6b60ff975dfa49d835b8332dd28584d508de317f8e8f24118a6efa0dcb",
+    "artifacts": "196c0bba02f710f745338713f7696502287695838077fd7803e34918ab076788",
+    "bin": "ebceb35ee2640666395f1c25936505b7a4ad131644d5108f9c9bbdc74487a759",
+    "incident_context": "e96f217c08adb6c1231607dd00d19f90fadb560cbdf25d2d5d4c4ae331cc369a",
+    "release_context": "418e57010d7c250f21d8d544b59acdfcf7f22bc9f3b37a005154e089778d497f",
+    "repo/tests": "97b2e078b2726e9d794aabcb252fbca6887d0287400a93386ca5d621a79f773b"
+  },
+  "reply_file": "review_reply/replies.md",
+  "required_acknowledgement": "INC-4481",
+  "required_changed_files": [
+    "repo/src/components/ReviewThreadCard.tsx",
+    "repo/src/styles/review-thread.css",
+    "repo/config/snapshot-viewports.json"
+  ],
+  "resolved_thread_ids": [
+    "RT-099",
+    "RT-204"
+  ],
+  "route": "/pull/241/review-thread/hotfix",
+  "stale_path_marker": "",
+  "style_file": "repo/src/styles/review-thread.css",
+  "target_control": "reply-thread-menu",
+  "unresolved_thread_ids": [
+    "RT-311"
+  ],
+  "variant_id": "v5-recovery-in-thread",
+  "viewport": {
+    "height": 915,
+    "id": "release-blocker-plus",
+    "width": 412
+  },
+  "viewport_human": "412x915",
+  "visible_test_file": "repo/tests/test_review_thread_ui.py",
+  "visible_test_sha256": "540685553381ef9e42aa05528473a9e7c69e2dd1c2da1f17c5f754718368ae0e"
+}

@@ -1,0 +1,1 @@
+RT-118: Fixed the live reopen on `/pull/241/review-thread`. The unresolved card title now wraps instead of clipping beneath the trailing action cluster, the active trailing reply control now exposes the accessible name `Reply to thread`, and the reopened mobile coverage now includes the `390x844` case for this route.

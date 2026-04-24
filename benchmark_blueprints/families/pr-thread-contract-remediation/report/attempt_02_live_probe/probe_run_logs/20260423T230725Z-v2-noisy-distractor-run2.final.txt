@@ -1,0 +1,7 @@
+Applied the narrow review-thread fix set only.
+
+`queue_api/serializers.py` now omits `owner` for unowned buckets in both normal and export payloads while keeping `owner_label` for export [queue_api/serializers.py](/tmp/pr_thread_contract_probe/20260423T230725Z-v2-noisy-distractor-run2/workspace/queue_api/serializers.py:8). `queue_api/service.py` now preserves existing owner encounter order and only appends the unowned bucket last when `include_unowned=true` [queue_api/service.py](/tmp/pr_thread_contract_probe/20260423T230725Z-v2-noisy-distractor-run2/workspace/queue_api/service.py:6). I added targeted coverage for both contract points in [tests/test_handlers.py](/tmp/pr_thread_contract_probe/20260423T230725Z-v2-noisy-distractor-run2/workspace/tests/test_handlers.py:14) and [tests/test_service.py](/tmp/pr_thread_contract_probe/20260423T230725Z-v2-noisy-distractor-run2/workspace/tests/test_service.py:6).
+
+I updated the release note contract wording in [docs/release_notes.md](/tmp/pr_thread_contract_probe/20260423T230725Z-v2-noisy-distractor-run2/workspace/docs/release_notes.md:3), wrote actionable-thread replies only to [review/reviewer_replies.json](/tmp/pr_thread_contract_probe/20260423T230725Z-v2-noisy-distractor-run2/workspace/review/reviewer_replies.json:1), and recorded verification in [review/verification_note.md](/tmp/pr_thread_contract_probe/20260423T230725Z-v2-noisy-distractor-run2/workspace/review/verification_note.md:1).
+
+Verification: `python3 -m unittest tests.test_handlers tests.test_service` passed.

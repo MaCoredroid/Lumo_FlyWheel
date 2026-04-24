@@ -7,7 +7,12 @@ scenario_type = "contextual_code_review"
 model = "gpt-5.4"
 reasoning_effort = "high"
 workspace_root = "."
-must_read = ["task_spec.md", "evaluator_contract.md", "skills/pr-regression-review/SKILL.md"]
+must_read = [
+  "task_spec.md",
+  "evaluator_contract.md",
+  "family.yaml",
+  "skills/pr-regression-review/SKILL.md"
+]
 preferred_output_dir = "artifacts"
 evidence_required = true
 assumption_budget = "low"
@@ -17,6 +22,7 @@ require_changed_line_anchors = true
 require_unchanged_invariant_linkage = true
 forbid_style_only_review = true
 forbid_out_of_bundle_evidence = true
+forbid_code_edits = true
 
 [grading]
 target_attack_band = "15-25"

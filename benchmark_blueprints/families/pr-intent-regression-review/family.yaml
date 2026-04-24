@@ -1,0 +1,101 @@
+family_id: pr-intent-regression-review
+track: 4
+schema_version: cnb55.family.v1
+layer_a_status: failed_freeze_gate
+layer_b_status: green
+grader_ref: verifiers/pr-intent-regression-review/score_review.py
+milestone_config_ref: verifier_data/pr-intent-regression-review/{variant_id}/milestones/
+milestones:
+  M1_localization:
+    weight: 0.10
+    implementation_level: L1
+    description: Agent grounds the review in multiple evidence files instead of diff-only guessing.
+  M2_primary_fix:
+    weight: 0.20
+    implementation_level: L2
+    description: Canonical review packet exists and validates.
+  M3_invariants:
+    weight: 0.20
+    implementation_level: L2
+    description: No edits outside allowed artifacts and no immutable-slice tampering.
+  M4_functional:
+    weight: 0.20
+    implementation_level: L2
+    description: At least two anchored findings plus a correct intent verdict.
+  M5_e2e:
+    weight: 0.30
+    implementation_level: L2
+    description: Both seeded regressions and the missing-test gap are correctly reviewed.
+capability_tags:
+  shared_core:
+    required: [localize, inspect, modify, verify, respect_invariants]
+    recommended: [inspect:evidence_triage, verify:assumption_honesty]
+    forbidden: [modify:repo, modify:review]
+tool_call_overrides:
+  - command: "cnb55-pr-review schema"
+    tags: [inspect]
+  - command: "cnb55-pr-review validate"
+    tags: [verify]
+  - command: "cnb55-pr-review submit"
+    tags: [modify]
+    terminal: true
+state_delta:
+  kind: json_deliverable
+  deliverable_path: artifacts/review_packet.json
+  states: [absent, present_and_invalid, present_and_valid]
+  transitions:
+    - {from: absent, to: absent, trigger: "read-only inspection", delta: 0.0}
+    - {from: absent, to: present_and_valid, trigger: "submit", delta: 0.7}
+    - {from: absent, to: present_and_invalid, trigger: "raw malformed write", delta: 0.0}
+    - {from: present_and_invalid, to: present_and_valid, trigger: "submit", delta: 0.4}
+    - {from: "*", to: "*", trigger: "integrity_flag=1", delta: -0.5}
+  aggregate_clamp: [0.0, 1.0]
+integrity_rules:
+  - {id: write_outside_whitelist, rule: "writes outside artifacts/* and review_input.json"}
+  - {id: immutable_slice_mutated, rule: "mutated repo/, review/, release_context/, incident_context/, AGENTS.md, Dockerfile, or bin/"}
+  - {id: pytest_shim, rule: "sitecustomize.py, usercustomize.py, or pytest.py present"}
+  - {id: tests_modified, rule: "repo/tests tree changed"}
+  - {id: network_egress, rule: ".network_egress_detected marker present"}
+llm_judge_quarantine:
+  summary_specificity:
+    max_points: 10
+    band: P_benchmark_only
+  total_quarantined_points: 10
+seeds:
+  base_count: 2
+  variance_escalation:
+    stdev_threshold_to_4: 0.10
+    stdev_threshold_to_8: 0.20
+    stdev_flag_high_variance: 0.15
+  current_observed_stdev_M_training: 0.0491
+layer_a_review:
+  latest_probe_attempt: attempt_02d_live_probe_counted_final
+  verdict: monotonic_near_miss_after_real_live_probe
+  attestation: |
+    The counted whole-family live probe completed at
+    `report/attempt_02d_live_probe_counted_final/` with:
+
+    - family_mean = 17.33
+    - max_variant_mean = 20.00
+    - min_variant_mean = 10.00
+    - monotonic = fail
+
+    The only failing §10.1 gate is the monotonic break
+    `v1-clean-baseline (16.67) < v2-noisy-distractor (20.00) beyond +/-3.0`.
+    Mean/max/floor all passed on the counted post-change run. See
+    `benchmark_run.md` attempt_02a / attempt_02b / attempt_02d for the exact
+    command chain and per-variant scores.
+initial_state:
+  type: manifest_locked
+  ref: benchmark_blueprints/families/pr-intent-regression-review/manifest.lock.json
+saturation:
+  threshold_mean_P: 80
+  renewal_queue:
+    - add_variant_for_api_consumer_regression
+    - rotate_dirty_state_artifacts
+rawr_modes:
+  - id: grounding_stripped
+    description: "Correct changed-file anchors but missing unchanged linked surfaces/evidence grounding."
+  - id: constraint_named_not_respected
+    description: "Review names the JSON contract but still claims the PR matches intent."
+    status: declared_not_yet_implemented

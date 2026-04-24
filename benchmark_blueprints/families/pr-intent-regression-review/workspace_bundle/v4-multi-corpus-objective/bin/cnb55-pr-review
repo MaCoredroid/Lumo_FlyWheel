@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+SCHEMA_VERSION = "cnb55.pr_review.v1"
+SEVERITIES = ("high", "medium", "low")
+VERDICTS = ("matches_intent", "partial_match", "does_not_match_intent", "insufficient_evidence")
+
+
+def schema_object() -> dict:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "required_top_level": ["schema_version", "variant_id", "intent_verdict", "summary", "findings"],
+        "finding_required": [
+            "title",
+            "severity",
+            "changed_file",
+            "changed_lines",
+            "linked_surface",
+            "impact",
+            "evidence_paths",
+        ],
+    }
+
+
+def validate(doc: dict, workspace: Path) -> list[str]:
+    errors = []
+    for key in schema_object()["required_top_level"]:
+        if key not in doc:
+            errors.append(f"missing top-level field: {key}")
+    if errors:
+        return errors
+    if doc["schema_version"] != SCHEMA_VERSION:
+        errors.append(f"schema_version must equal {SCHEMA_VERSION}")
+    if doc["intent_verdict"] not in VERDICTS:
+        errors.append("intent_verdict has invalid value")
+    findings = doc.get("findings")
+    if not isinstance(findings, list) or not 2 <= len(findings) <= 4:
+        errors.append("findings must be a list with 2-4 items")
+        return errors
+    for index, finding in enumerate(findings, start=1):
+        for key in schema_object()["finding_required"]:
+            if key not in finding:
+                errors.append(f"finding {index} missing {key}")
+        if finding.get("severity") not in SEVERITIES:
+            errors.append(f"finding {index} has invalid severity")
+        changed_file = workspace / finding.get("changed_file", "")
+        linked_surface = workspace / finding.get("linked_surface", "")
+        if not changed_file.exists():
+            errors.append(f"finding {index} changed_file does not exist")
+        if not linked_surface.exists():
+            errors.append(f"finding {index} linked_surface does not exist")
+        lines = finding.get("changed_lines", {})
+        if not isinstance(lines, dict) or not isinstance(lines.get("start"), int) or not isinstance(lines.get("end"), int):
+            errors.append(f"finding {index} changed_lines must contain integer start/end")
+        if not isinstance(finding.get("evidence_paths"), list) or len(finding["evidence_paths"]) < 2:
+            errors.append(f"finding {index} evidence_paths must have at least two paths")
+    return errors
+
+
+def render_findings(doc: dict) -> str:
+    lines = ["# Review Findings", ""]
+    for finding in doc["findings"]:
+        lines.append(f"## {finding['title']}")
+        lines.append(f"- severity: {finding['severity']}")
+        lines.append(f"- changed: {finding['changed_file']}:{finding['changed_lines']['start']}-{finding['changed_lines']['end']}")
+        lines.append(f"- linked surface: {finding['linked_surface']}")
+        lines.append(f"- impact: {finding['impact']}")
+        if finding.get("test_gap"):
+            lines.append(f"- missing test: {finding['test_gap']}")
+        lines.append(f"- evidence: {', '.join(finding['evidence_paths'])}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_summary(doc: dict) -> str:
+    lines = [
+        "# Review Summary",
+        "",
+        f"- intent verdict: {doc['intent_verdict']}",
+        f"- summary: {doc['summary']}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="cnb55-pr-review")
+    parser.add_argument("command", choices=("schema", "validate", "submit"))
+    parser.add_argument("input_path", nargs="?")
+    args = parser.parse_args()
+    workspace = Path.cwd()
+
+    if args.command == "schema":
+        print(json.dumps(schema_object(), indent=2, sort_keys=True))
+        return 0
+
+    if not args.input_path:
+        print("input file required", file=sys.stderr)
+        return 2
+    input_path = workspace / args.input_path
+    if not input_path.exists():
+        print(f"missing input file: {input_path}", file=sys.stderr)
+        return 2
+    try:
+        doc = json.loads(input_path.read_text())
+    except json.JSONDecodeError as exc:
+        print(f"invalid JSON: {exc}", file=sys.stderr)
+        return 2
+    errors = validate(doc, workspace)
+    if errors:
+        for err in errors:
+            print(err, file=sys.stderr)
+        return 3
+    if args.command == "validate":
+        return 0
+
+    artifacts = workspace / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    (artifacts / "review_packet.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    (artifacts / "review_findings.md").write_text(render_findings(doc))
+    (artifacts / "review_summary.md").write_text(render_summary(doc))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

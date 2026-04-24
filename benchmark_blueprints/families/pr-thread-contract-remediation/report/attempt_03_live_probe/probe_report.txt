@@ -1,0 +1,112 @@
+CNB-55 Track 10 probe report — 15 runs probe_run_id=20260423T233616Z
+
+variant                            n    mean   stdev   min   max  scores  ceilings
+----------------------------------------------------------------------------------
+v1-clean-baseline                  3   72.00    0.00    72    72  [72,72,72]  -
+v2-noisy-distractor                3   72.00    0.00    72    72  [72,72,72]  -
+v3-dirty-state                     3   72.00    0.00    72    72  [72,72,72]  -
+v4-multi-corpus-objective          3   54.67   30.02    20    72  [20,72,72]  generic_repliesx1
+v5-recovery-in-thread              3   40.67   27.14    25    72  [72,25,25]  objective_driftx2
+
+family_mean = 62.27   (window 15.0-25.0)
+max_variant_mean = 72.00   (cap 40.0)
+min_variant_mean = 40.67   (must have at least one <= 10.0)
+
+Acceptance checks:
+  [FAIL] family_mean in window: 62.27
+  [FAIL] max variant <= cap: 72.00
+  [FAIL] at least one variant <= hard floor: min variant mean = 40.67
+  [PASS] monotonic V1>=V2>=V3>=V4>=V5 +/-tolerance: ok
+
+overall: HARDEN NEEDED
+
+JSON_SUMMARY:
+{
+  "assessment": {
+    "all_pass": false,
+    "family_mean": 62.266666666666666,
+    "family_mean_ok": false,
+    "hard_variant_ok": false,
+    "max_variant_mean": 72,
+    "max_variant_ok": false,
+    "min_variant_mean": 40.666666666666664,
+    "monotonic_breaks": [],
+    "monotonic_ok": true
+  },
+  "summary": {
+    "v1-clean-baseline": {
+      "ceiling_hits": {},
+      "max": 72,
+      "mean": 72,
+      "min": 72,
+      "n": 3,
+      "scores": [
+        72,
+        72,
+        72
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v2-noisy-distractor": {
+      "ceiling_hits": {},
+      "max": 72,
+      "mean": 72,
+      "min": 72,
+      "n": 3,
+      "scores": [
+        72,
+        72,
+        72
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v3-dirty-state": {
+      "ceiling_hits": {},
+      "max": 72,
+      "mean": 72,
+      "min": 72,
+      "n": 3,
+      "scores": [
+        72,
+        72,
+        72
+      ],
+      "shortcut_runs": 0,
+      "stdev": 0.0
+    },
+    "v4-multi-corpus-objective": {
+      "ceiling_hits": {
+        "generic_replies": 1
+      },
+      "max": 72,
+      "mean": 54.666666666666664,
+      "min": 20,
+      "n": 3,
+      "scores": [
+        20,
+        72,
+        72
+      ],
+      "shortcut_runs": 0,
+      "stdev": 30.02221399786054
+    },
+    "v5-recovery-in-thread": {
+      "ceiling_hits": {
+        "objective_drift": 2
+      },
+      "max": 72,
+      "mean": 40.666666666666664,
+      "min": 25,
+      "n": 3,
+      "scores": [
+        72,
+        25,
+        25
+      ],
+      "shortcut_runs": 0,
+      "stdev": 27.135462651912412
+    }
+  }
+}
