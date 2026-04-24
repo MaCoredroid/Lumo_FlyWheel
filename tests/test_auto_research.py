@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from lumo_flywheel_serving import auto_research, measurement_harness
+from lumo_flywheel_serving import auto_research, measurement_harness, round_driver
 from lumo_flywheel_serving.round_driver import RoundContext, RoundResult, run_round, run_round_exit_code
 
 
@@ -480,7 +480,22 @@ def test_bootstrap_round_writes_spec_brief_templates(tmp_path: Path) -> None:
     assert "{{per_candidate_wall_clock_minutes}}" in iteration_brief
     assert "{{next_iteration}}" in iteration_brief
     assert "{{workload_file}}" in iteration_brief
+    assert "--harness {{harness_mode}}" in iteration_brief
+    assert 'generator starting with "{{harness_generator_prefix}}"' in iteration_brief
+    assert "synthetic fixture commits also carry `Fixture-Mode: true`" in iteration_brief
     assert "R8. If a CLI call returns non-zero" in iteration_brief
+
+    ctx = RoundContext.from_bootstrap_json(
+        bootstrap,
+        harness_mode="synthetic",
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    prompt = round_driver._iteration_prompt(ctx, iteration="001", next_iteration="002")
+    assert "--harness synthetic" in prompt
+    assert "generator starting with \"SyntheticMeasurementFixture\"" in prompt
+    assert "{{harness_mode}}" not in prompt
+    assert "{{harness_generator_prefix}}" not in prompt
 
 
 def test_l2_bootstrap_requires_and_records_lower_layer_bundle(tmp_path: Path) -> None:

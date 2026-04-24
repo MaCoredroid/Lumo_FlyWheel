@@ -12,7 +12,7 @@ This sub-spec separates **Phase A (IMPL)** from **Phase B (auto-research loop)**
   2. **`scripts/capture_seed_workload.py`** — runs the family's eval set through a default-config serving stack once and persists the per-request seed trace.
   3. **`lumoserve auto-research …` CLI subcommands** — **eight production subcommands** plus the backward-compat `run`: `bootstrap-round` (§8.1), `measure` (§8.2), `commit-candidate` (§8.3), `rescreen` (§8.4), `validate-holdout` (§8.5), `finalize-round` (§8.6), `status` (§8.7), `run-round` (§8.8, v0.1.8 addition — the Python outer loop packaged as one command), plus `run` (§8.9, env-gated CI-only smoke wrapper). The full list must be registered in `lumoserve auto-research --help` for Phase A to be considered complete — §11.1 precondition probes all eight.
   4. **`skills/auto-research-round-manager/SKILL.md`** — rewritten as the Python outer loop per §11. The skill *is* the loop; it spawns one codex exec per iteration and aggregates results through the CLI.
-  5. **`tests/fixtures/synthetic_measurement.py`** — the renamed `SyntheticMeasurementFixture` (moved out of `src/`), used only for Phase A unit tests; refused by `commit-candidate` at Phase B time (§6.3).
+  5. **`tests/fixtures/synthetic_measurement.py`** — the renamed `SyntheticMeasurementFixture` (moved out of `src/`), used only for explicit `--harness synthetic` fixture rounds; refused by `commit-candidate` in `--harness real` rounds (§6.3, §9.3.AR.13).
   6. **Unit + dry-run integration tests** — covering each CLI subcommand, each skill watchdog path, and a dry-run round against the synthetic fixture (tests only; the production round uses the real harness).
   7. **Pre-flight checks** — the §11.1 precondition bundle: imports cleanly, codex is reachable, git is clean, seed trace exists.
   8. **The two codex-facing briefs** (§5): `impl_brief.md` (consumed by Phase A itself, optional) and `iteration_brief.md` (consumed by every Phase B codex exec).
@@ -556,11 +556,12 @@ successor when you exit cleanly.
 4. Invoke:
      lumoserve auto-research measure \
        --round-id {{round_id}} \
+       --harness {{harness_mode}} \
        --candidate {{iteration_dir}}/candidate.yaml
    The CLI will:
      - /admin/load_tuned_config with your candidate's vllm_config
      - wait for /health
-     - drive RealMeasurementHarness for warmup + measurement window
+     - drive {{harness_generator_prefix}} for warmup + measurement window
      - write measurement_trace.json next to candidate.yaml
      - append one row to results.tsv with a stable candidate_uuid
        populated (no commit_sha column — see §7.2)
@@ -572,10 +573,12 @@ successor when you exit cleanly.
    {keep, discard, crash, baseline}. Then invoke:
      lumoserve auto-research commit-candidate \
        --round-id {{round_id}} \
+       --harness {{harness_mode}} \
        --iteration {{iteration}} \
        --status <status> \
        --notes "<one-line rationale grounded in the trace>"
-   The CLI will create one git commit with message format §7.3.
+   The CLI will create one git commit with message format §7.3. In
+   synthetic fixture mode, the commit also carries `Fixture-Mode: true`.
 
 6. Exit with code 0.
 
@@ -602,12 +605,13 @@ R8. If a CLI call returns non-zero, read the error. Retry at most
 
 - {{iteration_dir}}/candidate.yaml exists and is valid
 - {{iteration_dir}}/measurement_trace.json exists with
-  generator starting with "RealMeasurementHarness"
+  generator starting with "{{harness_generator_prefix}}"
 - One new row in results.tsv with a candidate_uuid column
   populated
 - One new commit on {{round_branch}} whose message carries both
   a `Candidate-UUID: <uuid>` trailer (matching the results.tsv
-  row) and a `Signed-off-by: lumoserve-auto-research-cli` trailer
+  row) and a `Signed-off-by: lumoserve-auto-research-cli` trailer;
+  synthetic fixture commits also carry `Fixture-Mode: true`
 - You have exited with code 0
 
 ## Out-of-scope for this iteration (Python handles)
@@ -651,7 +655,7 @@ No file under `src/`, `docs/`, `benchmark_blueprints/`, `scripts/`, `pyproject.t
 
 ### 6.3 Measurement-only-via-CLI rule (R4, R5)
 
-Every `results.tsv` row must correspond 1:1 to a `measurement_trace.json` produced by the harness in the same iteration directory. The agent never computes objective values. The agent never estimates latency from a prior run. `auto-research commit-candidate` refuses to commit an iteration whose `measurement_trace.json` is missing or whose `generator: …` field is not `RealMeasurementHarness v<n>`. Specifically — traces with `generator: SyntheticMeasurementHarness` or `synthetic: true` fields are rejected with a structured error, which exists *specifically* to prevent the 2026-04-23 failure mode from recurring.
+Every `results.tsv` row must correspond 1:1 to a `measurement_trace.json` produced by the selected harness in the same iteration directory. The agent never computes objective values. The agent never estimates latency from a prior run. `auto-research commit-candidate` refuses to commit an iteration whose `measurement_trace.json` is missing or whose `generator: …` field does not match the round mode: `RealMeasurementHarness v<n>` for `--harness real`, `SyntheticMeasurementFixture v<n>` for `--harness synthetic`. Real-mode rejection of fixture traces is what prevents the 2026-04-23 failure mode from recurring; synthetic-mode acceptance is env-gated and every fixture commit carries `Fixture-Mode: true`.
 
 ### 6.4 Commit-via-CLI rule (R5, R7)
 
@@ -863,7 +867,7 @@ Effects: (1) read `results.tsv`, pick the top-K feasible main-loop rows by `eval
 
 **`--harness` flag (v0.1.11).** Consistent with §8.2 `measure` and §8.3 `commit-candidate`. In `--harness real` mode, rescreen refuses if any of the top-K parent rows' traces emit `generator: SyntheticMeasurementFixture` (cross-check: you can't rescreen a synthetic parent under real). In `--harness synthetic` mode, rescreen accepts synthetic parents, requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`, and propagates `Fixture-Mode: true` to every commit it creates.
 
-**Rescreen directory convention — load-bearing detail.** The parent's original `candidates/<NNN>/` directory is **never overwritten or mutated**. Every rescreen attempt gets its own `candidates/rescreen_<PP>/` sibling directory. This means §9.3.AR.2 (every `measurement_trace.json` real-measured) and §9.3.AR.3 (every row maps to a commit) remain 1-to-1-replayable: the original main-loop trace stays on disk exactly as it was written, and the rescreen's trace lives under a path whose name encodes that it's a rescreen artifact. The parent directory and the rescreen directory are joined by the `parent_candidate_uuid` field in the rescreen row (§7.2) and the `Rescreen-Of-UUID` trailer on the rescreen commit (§7.3).
+**Rescreen directory convention — load-bearing detail.** The parent's original `candidates/<NNN>/` directory is **never overwritten or mutated**. Every rescreen attempt gets its own `candidates/rescreen_<PP>/` sibling directory. This means §9.3.AR.2/AR.2b (every `measurement_trace.json` uses the selected harness) and §9.3.AR.3 (every row maps to a commit) remain 1-to-1-replayable: the original main-loop trace stays on disk exactly as it was written, and the rescreen's trace lives under a path whose name encodes that it's a rescreen artifact. The parent directory and the rescreen directory are joined by the `parent_candidate_uuid` field in the rescreen row (§7.2) and the `Rescreen-Of-UUID` trailer on the rescreen commit (§7.3).
 
 Example layout after a 3-candidate rescreen phase of a 5-iteration round:
 

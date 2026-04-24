@@ -361,6 +361,10 @@ def _iteration_prompt(ctx: RoundContext, *, iteration: str, next_iteration: str)
         "iteration": iteration,
         "next_iteration": next_iteration,
         "round_dir": str(ctx.worktree),
+        "harness_mode": ctx.harness_mode,
+        "harness_generator_prefix": (
+            "SyntheticMeasurementFixture" if ctx.harness_mode == "synthetic" else "RealMeasurementHarness"
+        ),
         "lumoserve_cmd": lumoserve_cmd,
         "model_id": str(ctx.round_spec["model_id"]),
         "family_id": str(ctx.round_spec["family_id"]),

@@ -228,11 +228,12 @@ successor when you exit cleanly.
 4. Invoke:
      lumoserve auto-research measure \
        --round-id {{round_id}} \
+       --harness {{harness_mode}} \
        --candidate {{iteration_dir}}/candidate.yaml
    The CLI will:
      - compose the active-layer candidate with frozen lower-layer config
      - wait for /health
-     - drive RealMeasurementHarness for warmup + measurement window
+     - drive {{harness_generator_prefix}} for warmup + measurement window
      - write measurement_trace.json next to candidate.yaml
      - append one row to results.tsv with a stable candidate_uuid
        populated (no commit_sha column — see §7.2)
@@ -244,10 +245,12 @@ successor when you exit cleanly.
    {keep, discard, crash, baseline, harness_fault}. Then invoke:
      lumoserve auto-research commit-candidate \
        --round-id {{round_id}} \
+       --harness {{harness_mode}} \
        --iteration {{iteration}} \
        --status <status> \
        --notes "<one-line rationale grounded in the trace>"
-   The CLI will create one git commit with message format §7.3.
+   The CLI will create one git commit with message format §7.3. In
+   synthetic fixture mode, the commit also carries `Fixture-Mode: true`.
 
 6. Exit with code 0.
 
@@ -274,12 +277,13 @@ R8. If a CLI call returns non-zero, read the error. Retry at most
 
 - {{iteration_dir}}/candidate.yaml exists and is valid
 - {{iteration_dir}}/measurement_trace.json exists with
-  generator starting with "RealMeasurementHarness"
+  generator starting with "{{harness_generator_prefix}}"
 - One new row in results.tsv with a candidate_uuid column
   populated
 - One new commit on {{round_branch}} whose message carries both
   a `Candidate-UUID: <uuid>` trailer (matching the results.tsv
-  row) and a `Signed-off-by: lumoserve-auto-research-cli` trailer
+  row) and a `Signed-off-by: lumoserve-auto-research-cli` trailer;
+  synthetic fixture commits also carry `Fixture-Mode: true`
 - You have exited with code 0
 
 ## Out-of-scope for this iteration (Python handles)
