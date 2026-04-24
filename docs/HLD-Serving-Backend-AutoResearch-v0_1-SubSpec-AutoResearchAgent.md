@@ -8,16 +8,17 @@ This sub-spec separates **Phase A (IMPL)** from **Phase B (auto-research loop)**
 
 **Phase A — IMPL agent builds the substrate, once.** One long-running codex session (the *IMPL agent*) — or equivalently a human PR, or a Claude-driven refactor — delivers the pieces Phase B depends on. This is done **once**, ahead of any auto-research round, and committed to `main` as ordinary code. The IMPL work is tracked by **LLD-SB-06** in the parent HLD §8; this sub-spec does not re-specify the IMPL work itself, but pins the **contract surface** Phase B binds to. Phase A deliverables (what "xxxx" is):
 
-  1. **`src/lumo_flywheel_serving/measurement_harness.py`** — the `RealMeasurementHarness` class per §9 interface. Replay-driven against a real vLLM endpoint, three-dim-SLO-aware, PromQL-cross-checked.
+  1. **`src/lumo_flywheel_serving/measurement_harness.py`** — the `RealMeasurementHarness` class per §9 interface. Replay-driven against a real vLLM endpoint, emits `eval_throughput` (primary), stability gates (OOM / determinism / purity / window-completed), and TTFT/TPOT/turn-latency as diagnostic fields. PromQL cross-check recorded as a harness-health warning, not a feasibility gate (§4.3).
   2. **`scripts/capture_seed_workload.py`** — runs the family's eval set through a default-config serving stack once and persists the per-request seed trace.
-  3. **`lumoserve auto-research …` CLI subcommands** — **seven production subcommands** plus the backward-compat `run`: `bootstrap-round` (§8.1), `measure` (§8.2), `commit-candidate` (§8.3), `rescreen` (§8.4), `validate-holdout` (§8.5), `finalize-round` (§8.6), `status` (§8.7), plus `run` (§8.8, env-gated CI-only). The full list must be registered in `lumoserve auto-research --help` for Phase A to be considered complete — §11.1 precondition greps for all seven.
+  3. **`lumoserve auto-research …` CLI subcommands** — **eight production subcommands** plus the backward-compat `run`: `bootstrap-round` (§8.1), `measure` (§8.2), `commit-candidate` (§8.3), `rescreen` (§8.4), `validate-holdout` (§8.5), `finalize-round` (§8.6), `status` (§8.7), `run-round` (§8.8, v0.1.8 addition — the Python outer loop packaged as one command), plus `run` (§8.9, env-gated CI-only smoke wrapper). The full list must be registered in `lumoserve auto-research --help` for Phase A to be considered complete — §11.1 precondition probes all eight.
   4. **`skills/auto-research-round-manager/SKILL.md`** — rewritten as the Python outer loop per §11. The skill *is* the loop; it spawns one codex exec per iteration and aggregates results through the CLI.
   5. **`tests/fixtures/synthetic_measurement.py`** — the renamed `SyntheticMeasurementFixture` (moved out of `src/`), used only for Phase A unit tests; refused by `commit-candidate` at Phase B time (§6.3).
   6. **Unit + dry-run integration tests** — covering each CLI subcommand, each skill watchdog path, and a dry-run round against the synthetic fixture (tests only; the production round uses the real harness).
   7. **Pre-flight checks** — the §11.1 precondition bundle: imports cleanly, codex is reachable, git is clean, seed trace exists.
   8. **The two codex-facing briefs** (§5): `impl_brief.md` (consumed by Phase A itself, optional) and `iteration_brief.md` (consumed by every Phase B codex exec).
+  9. **`src/lumo_flywheel_serving/round_driver.py` (v0.1.8 addition)** — `run_round(ctx: RoundContext) -> RoundResult` as runnable Python (v0.1.10 signature), implementing the §11.3 pseudocode end-to-end (baseline → main loop → rescreen → holdout → finalize → live-gate). `RoundContext` is a dataclass with fields `round_id`, `round_dir`, `round_branch`, `worktree` (Path), `round_spec_path`, `round_spec` (dict), `harness_mode` ∈ `{real, synthetic}` — §11.2 constructs it from the `bootstrap-round` JSON return so the §11.3 body has a single source of truth for every filesystem/branch/harness attribute. Exposed via `lumoserve auto-research run-round` (§8.8). Phase A is not complete until the dry-run `run-round --harness synthetic` completes against the synthetic fixture.
 
-Phase A's "done" is when items 1–8 all land on `main`, Phase A's own verification items pass (§12 extends this), and the Phase B precondition check (§11.1) returns green. **Until Phase A is done, Phase B is not allowed to run** — `bootstrap-round` refuses.
+Phase A's "done" is when items 1–9 all land on `main`, Phase A's own verification items pass (§12 extends this), and the Phase B precondition check (§11.1) returns green. **Until Phase A is done, Phase B is not allowed to run** — `bootstrap-round` refuses.
 
 **Phase B — auto-research loop, per iteration.** Once Phase A's substrate is in place, the v0.1 auto-research round runs. The round tunes **exactly one `(model, family)` pair** **once**, on **one layer**, pre-campaign, offline. The v0.1 target tuple is hard-pinned:
 
@@ -36,7 +37,16 @@ The output of Phase B is **one frozen tuned-config bundle** (parent §5.9) that 
 
 This sub-spec describes, for Phase B: the per-iteration codex-exec pattern (§2), the file interface the per-iteration codex sees (§3), the budget / metric contract per iteration (§4), the `iteration_brief.md` template (§5), the hard rules a per-iteration codex must honor (§6), the git branch + `results.tsv` ledger (§7), the CLI surface Phase B calls (§8), the `RealMeasurementHarness` interface Phase B binds to (§9), the bundle emission hand-off (§10), the Python-outer-loop skill contract (§11), the verification items Phase B adds to the parent §9.3 checklist (§12), and v0.2 open questions (§13).
 
-**What this sub-spec deliberately does not cover.** The IMPL implementation itself (that is Phase A / LLD-SB-06 per parent §8; this sub-spec pins the *contract surface* Phase B binds to, not the internals). The tuned-config bundle schema (parent §5.9). The bundle-validity rule and its weight-rotation nuance (parent §6.4). The L0 per-family parity fixtures and rail-9 gate (parent §5.6, §5.7; L0 is out of scope for the first codex-driven round per Sprint 0, and this sub-spec's Phase B is L1-only at v0.1). The three-dim latency SLO itself (parent §4.1). Generalization to other `(model, family)` pairs — see v0.2 open questions (§13). None of those get re-stated here; cross-references only.
+**What this sub-spec deliberately does not cover.** The IMPL implementation itself (that is Phase A / LLD-SB-06 per parent §8; this sub-spec pins the *contract surface* Phase B binds to, not the internals). The tuned-config bundle schema (parent §5.9). The bundle-validity rule and its weight-rotation nuance (parent §6.4). The L0 per-family parity fixtures and rail-9 gate (parent §5.6, §5.7; L0 is out of scope for the first codex-driven round per Sprint 0, and this sub-spec's Phase B is L1-only at v0.1). Generalization to other `(model, family)` pairs — see v0.2 open questions (§13). None of those get re-stated here; cross-references only.
+
+**Deliberate divergence from parent §4.1 / §5.4 — throughput primary, no three-dim latency SLO.** The 2026-04-23 round exposed that the parent HLD's three-dim SLO (TTFT_p95 ≤ 2 s, TPOT_p95 ≤ 80 ms, TurnLatency_p95 ≤ 30 s) is unachievable by any L1-action-space candidate on the current GB10 + Qwen 3.5 27B FP8 + proposal-ranking-manager-judgment combination — the *baseline default config* fails TTFT by 1.5× and turn-latency by 4×. Closing a 4× turn-latency gap requires L0 kernel work that is v0.2 scope. Running Sprint 0 with SLO gates therefore produces `ROUND_INFEASIBLE` for every feasible candidate, which is a vacuous result. The v0.1 sub-spec therefore **drops the three-dim SLO entirely** and reframes the objective around **eval throughput** — "as long as vLLM eval can run and finish in batch and is generally stable, we only care about test throughput." Concretely (details in §4):
+
+- **Feasibility** becomes a stability check, not a latency gate: the measurement window completes, no OOM events, `determinism_pass_rate ≥ 0.999`, `reasoning_content_purity = 1.0`.
+- **Primary objective** becomes `eval_throughput` — completed eval requests per second during the steady-state window. Higher wins.
+- **TTFT / TPOT / TurnLatency p95** remain as **diagnostic** fields in `measurement_trace.json` (the harness captures them anyway — no cost) but are **not feasibility gates** and **not tie-breakers**. They are recorded so a future v0.2 revision can re-introduce SLO constraints without re-instrumenting.
+- The `serving_workload.yaml` fields `L_ttft_ms`, `L_tpot_ms`, `L_turn_ms` are **removed** from v0.1 — their presence in an older yaml is tolerated (ignored with a warning) but new yaml files for v0.1 rounds do not set them.
+
+This is a deliberate sub-spec-level simplification. On conflict with parent §4.1 / §5.4 at the sub-spec layer, the throughput-first v0.1 objective wins; when parent §5.4 is revised to match (or when v0.2 adds L0 scope), this divergence note can be retired.
 
 **Why a sub-spec at all.** The 2026-04-23 Sprint-0 round produced a bundle via a pure-Python `SyntheticMeasurementHarness` — no vLLM ever hit the measurement loop, the objective was a polynomial of candidate fields, and the live family gate ran only *after* the bundle had been chosen. The parent HLD's §5.5 and §5.6 already call this out as wrong, but the parent does not prescribe the agent-side control flow — who proposes candidates, how they are scored, how stopping is decided, how the run is auditable. This sub-spec fills that gap for the codex-driven case, with an explicit Phase A / Phase B split so the IMPL deliverables and the auto-research loop contract are never conflated again, drawing on two external references we have looked at directly (§1.1, §1.2).
 
@@ -74,7 +84,7 @@ Source: `https://github.com/karpathy/autoresearch` (MIT). The repo runs an LLM a
 
 **Fixed wall-clock per experiment.** Karpathy fixes training to a 5-minute wall-clock budget per experiment so experiments remain comparable across architectural changes. We fix **per-candidate wall-clock to `measurement_window_minutes + warmup_minutes`** from `serving_workload.yaml`, defaulting to 30 min + 5 min, for the same reason. A candidate that wants more time is rejected by the CLI; a candidate that crashes or OOMs before the window completes is logged as infeasible and counted against the per-sub-level §5.7 three-in-a-row rail.
 
-**One metric, measured identically for every candidate.** Karpathy uses `val_bpb` because it is vocab-size-independent and therefore fair across arch changes. We use the scalar **`sustained_concurrent_eval_threads`** from parent §5.4, gated by the three-dim SLO conjunction (TTFT_p95 / TPOT_p95 / TurnLatency_p95) plus the purity / determinism / OOM / rollout-floor rails. One number. Measured by the same harness, the same driver, the same seed workload trace for every candidate in a round.
+**One metric, measured identically for every candidate.** Karpathy uses `val_bpb` because it is vocab-size-independent and therefore fair across arch changes. We use the scalar **`eval_throughput`** (completed eval requests per second during the steady-state measurement window), gated by a narrow stability check — window completed, no OOM, determinism ≥ 99.9%, purity = 1.0 (§4.2). One number. Measured by the same harness, the same driver, the same seed workload trace for every candidate in a round. The parent HLD's three-dim latency SLO is deliberately **not** a v0.1 gate — see §0 divergence note and §4.2.
 
 **Git as the experiment ledger.** Karpathy uses `git checkout -b autoresearch/<tag>`, commits per experiment, keeps commit on improvement, resets on regression, logs each attempt in `results.tsv`. We adopt this almost verbatim — §6 details the commit-message format, the branch naming, and the `results.tsv` column set. One deviation from Karpathy: we do not `git reset --hard` on discard; we commit every candidate (including infeasible ones) with an explicit `status: discard` row in `results.tsv`. The reason is that the parent HLD §9.3 verifier needs a replayable per-candidate trace, and `git log` is our transcript of record.
 
@@ -130,25 +140,32 @@ When stop criteria fire, Python calls `finalize-round` (not codex — Python cal
 The Python outer loop runs, for iteration `<NNN>`, against the codex-cli 0.120.x surface (verified against `codex exec --help` on the operator's machine — see §13.4 for the pin-stability caveat). The real flag surface is narrow — no `--var`, no `--input-file`, no `--config-dir`, no `--workdir` — so Python does template substitution itself and passes the prompt on stdin:
 
 ```python
+# v0.1.9: `worktree` is bound once from bootstrap-round's JSON return
+# (see §11.2). At v0.1 worktree == round_dir; we use `worktree` uniformly
+# so §11.3 has one consistent filesystem-root name and a v0.2 split of the
+# round-dir from the worktree remains a sub-spec-level change only.
+
 # Python substitutes {{…}} placeholders before piping to codex.
 iteration_prompt = substitute_placeholders(
-    template=read_file(f"{round_dir}/iteration_brief.md"),
+    template=read_file(f"{worktree}/iteration_brief.md"),
     values={
-        "round_id":   round_id,
-        "iteration":  f"{iteration:03d}",
-        "round_dir":  str(round_dir),
-        "iteration_dir": f"{round_dir}/candidates/{iteration:03d}",
+        "round_id":      round_id,
+        "iteration":     f"{iteration:03d}",
+        "round_dir":     str(worktree),
+        "iteration_dir": f"{worktree}/candidates/{iteration:03d}",
         "next_iteration": f"{iteration + 1:03d}",
         ...  # see §5.2 placeholder list
     },
 )
 
-env = {
-    **os.environ,
-    "CODEX_HOME": f"{round_dir}/codex-home",   # codex reads config.toml here
-}
+env = os.environ.copy()
+# v0.1.8: NO per-round CODEX_HOME override — auth lives in the user's
+# ~/.codex/auth.json where codex-cli expects it. Model + reasoning_effort
+# are passed via -c global flags (below). Setting CODEX_HOME to a fresh
+# per-round directory isolates config AND credentials; the credential
+# isolation is what caused the 2026-04-23 auth 401.
 
-iter_dir = f"{round_dir}/candidates/{iteration:03d}"
+iter_dir = f"{worktree}/candidates/{iteration:03d}"
 with open(f"{iter_dir}/agent_session.jsonl", "wb") as transcript:
     result = subprocess.run(
         [
@@ -157,10 +174,10 @@ with open(f"{iter_dir}/agent_session.jsonl", "wb") as transcript:
             "-c", 'model="gpt-5.4"',
             "-c", 'model_reasoning_effort="high"',
             "exec",
-            "--cd", str(round_dir),                      # working dir override
+            "--cd", str(worktree),                       # v0.1.9: worktree path
             "--json",                                    # emit JSONL events to stdout
             "--output-last-message", f"{iter_dir}/agent_last_message.txt",
-            "--skip-git-repo-check",                     # round_dir is inside repo; fine
+            "--skip-git-repo-check",                     # the worktree is inside repo
             "-",                                         # read prompt from stdin
         ],
         input=iteration_prompt.encode(),
@@ -190,7 +207,7 @@ The `iteration_brief.md` template is defined in §5. Its entire job is: "here's 
 
 ### 2.4 Codex model pin and config
 
-`model = "gpt-5.4"`, `model_reasoning_effort = "high"`, written into `<round_dir>/codex-home/.codex/config.toml` on bootstrap. The precondition in §11.1 refuses to start a round whose codex config doesn't match. Swapping models mid-round is a §13.4 open question.
+`model = "gpt-5.4"`, `model_reasoning_effort = "high"`, passed as **`-c` global flags** on every `codex exec` invocation (§2.3 Python snippet). v0.1.8 removes the previous per-round `codex-home/.codex/config.toml` approach because it forced `CODEX_HOME` isolation and broke auth (2026-04-23 report). Codex reads auth from the user's normal `$HOME/.codex/auth.json`; the per-invocation `-c` flags are sufficient to pin the model. Swapping models mid-round is a §13.4 open question.
 
 ### 2.5 Concurrency within a round
 
@@ -212,11 +229,11 @@ Under the per-iteration codex-exec pattern (§2) there are *two* tiers of files:
 |---|---|---|---|
 | Per-iteration brief template | `iteration_brief.md` | `bootstrap-round` (§8.1) | The §5.2 template. The Python outer loop substitutes per-iteration variables at spawn time. Never modified during the round. |
 | IMPL reference | `impl_brief.md` | `bootstrap-round` | Copy of the §5.1 IMPL brief, for traceability. Not consumed by the Phase B loop — just recorded so the round directory is self-documenting. |
-| Round spec | `round_spec.yaml` | `bootstrap-round` | Machine-readable round identity. Pins model_id, family_id, sprint, weight_version_id, workload_distribution_id, SLO ceilings, budget caps, parent HEAD SHA. Used by the CLI for precondition checks (§8), by Python for stop criteria (§11.3), and by every iteration's codex exec (read-only). |
+| Round spec | `round_spec.yaml` | `bootstrap-round` | Machine-readable round identity. Pins model_id, family_id, sprint, weight_version_id, workload_distribution_id, budget caps, iteration_cap, noise_floor (after phase a), parent HEAD SHA, round_branch, worktree path. Used by the CLI for precondition checks (§8), by Python for stop criteria (§11.3), and by every iteration's codex exec (read-only). |
 | Ledger | `results.tsv` | `commit-candidate` (§8.3) — appended one row per iteration | Karpathy-style tab-separated experiment ledger. Columns in §7.2. The CLI enforces one row per iteration; Python reads it between iterations for stop criteria; every codex exec reads it as prior-iteration context. |
 | Round lock | `.round.lock` | `bootstrap-round` | Held by Python for the whole round lifetime; released by `finalize-round` or on crash. |
 | Finalization artifacts | `run_log.json`, `search_trace.json`, `measurement_trace_combined.json` | `finalize-round` (§8.4) | Emitted at round termination. These become the parent-§5.9 bundle's `trace_ref` targets. |
-| Codex home | `codex-home/.codex/config.toml` | `bootstrap-round` | Model pin (`gpt-5.4`, `high`) consumed by every codex exec invocation. |
+| Round git worktree | the round directory itself is a git worktree created by `bootstrap-round` via `git worktree add` (v0.1.8) | `bootstrap-round` | Pins the round's filesystem state to `round_branch`; codex exec runs with `--cd <this worktree>`. §11.6 post-iteration HEAD-pin check confirms the worktree's HEAD didn't drift off `round_branch`. (Replaces v0.1.7's `codex-home/.codex/config.toml` — codex model pin is now on `-c` flags; no per-round codex home exists.) |
 
 **Iteration-scoped** — exists once per iteration, under `output/auto_research/<round_id>/candidates/<NNN>/`:
 
@@ -264,50 +281,62 @@ A candidate that exceeds its profile's wall-clock at the measurement-window stag
 
 The CLI refuses to call `measure` for an iteration whose index exceeds `iteration_cap + rescreen_cap`; Python's outer loop (§11.3) stops proposing main-loop candidates once `iteration_cap` is hit and transitions to rescreen (§11.3a). Both Python and the CLI read these caps from `round_spec.yaml`, which the skill writes at bootstrap.
 
-**Why not shorten the measurement profile further.** A 5-min measurement window is too noisy to distinguish candidate configurations on a 30-turn serving workload — TTFT variance alone can swamp a 5% candidate improvement. 10 min of steady-state is the empirical floor where the PromQL cross-check (§4.3) holds and the three-dim p95 numbers stabilize. A future v0.2 could add an even shorter "triage" window for aggressive early pruning, tracked in §13.
+**Why not shorten the measurement profile further.** A 5-min measurement window is too noisy to distinguish candidate configurations on a 30-turn serving workload — request-timing variance alone can swamp a 5% throughput difference. 10 min of steady-state is the empirical floor where throughput stabilizes. A future v0.2 could add an even shorter "triage" window for aggressive early pruning, tracked in §13.
 
-### 4.2 Metric — the one number per row
+### 4.2 Metric — throughput is primary, stability is the feasibility gate
 
-The per-row objective is parent §5.4's `sustained_concurrent_eval_threads` under the three-dim SLO conjunction. The harness reports **seven raw numbers** per candidate plus a feasibility verdict; the ledger collapses them into one row:
+v0.1 optimizes **eval throughput** subject to a narrow stability gate. The three-dim latency SLO from parent §4.1 / §5.4 does not gate feasibility in this sub-spec (see §0 divergence note). The harness reports these numbers per candidate:
 
-| Raw field | Constraint for feasibility | Used as tie-breaker? |
+| Raw field | Role at v0.1 | Used as tie-breaker? |
 |---|---|---|
-| `ttft_p95_ms` | ≤ `L_ttft` (default 2000) | **primary TB**: lower wins |
-| `tpot_p95_ms` | ≤ `L_tpot` (default 80) | **secondary TB**: lower wins |
-| `turn_latency_p95_ms` | ≤ `L_turn` (default 30000) | used via `turn_latency_p99` as **tertiary TB** |
-| `rollout_throughput` | ≥ 0.5 × `rollout_baseline` | not a tie-breaker |
-| `reasoning_content_purity` | = 1.0 (parent §5.4 constraint 8) | not a tie-breaker (hard gate) |
-| `determinism_pass_rate` | ≥ 0.999 | not a tie-breaker (hard gate) |
-| `no_oom_events` | true | not a tie-breaker (hard gate) |
-| **`sustained_concurrency`** | the scalar objective | **primary objective**: higher wins |
+| **`eval_throughput`** (completed eval requests/sec during steady-state) | **primary objective**: higher wins | primary — higher wins |
+| `no_oom_events` | hard feasibility gate | — |
+| `determinism_pass_rate` ≥ 0.999 | hard feasibility gate | — |
+| `reasoning_content_purity` = 1.0 (parent §5.4 constraint 8) | hard feasibility gate | — |
+| `window_completed` (the measurement window ran to its configured duration without driver crash) | hard feasibility gate | — |
+| `ttft_p95_ms` | **diagnostic only** — recorded in trace, not a gate | not a tie-breaker |
+| `tpot_p95_ms` | **diagnostic only** — recorded in trace, not a gate | not a tie-breaker |
+| `turn_latency_p95_ms` | **diagnostic only** — recorded in trace, not a gate | not a tie-breaker |
+| `rollout_throughput` (legacy from parent §5.4 constraint 5) | **diagnostic only** at v0.1 — recorded in trace, not a gate | not a tie-breaker |
 
-A row is `feasible: true` only if every constraint holds. An infeasible row still gets appended to `results.tsv` with `objective_value` empty and `status: discard`; the `notes` column captures which constraint tripped (matching parent §5.4's feasibility semantics). The agent may propose follow-up candidates informed by infeasibility reasons (e.g., "candidate-04 was OOM; halve `max_num_seqs` on candidate-05") — this is a valid research step, not a failure of the round.
+**Feasibility definition (v0.1 simplified).** A row is `feasible: true` iff:
 
-**What the agent does not do.** The agent never computes `sustained_concurrency` from a formula. The agent never infers `p95` from a point measurement. The agent never uses a prior candidate's measurement to score the current candidate. Every number in `results.tsv` comes from a `measurement_trace.json` written by the harness for that candidate's own measurement window. The `auto-research measure` CLI enforces this by writing the row itself after the harness returns; the agent is not permitted to append a row without a corresponding trace file (§5 hard rule M3).
+1. `window_completed = true` — the measurement window ran to its configured duration. If the driver crashed or the vLLM endpoint went unreachable mid-window, the window is not considered complete and the row is `feasible: false, notes: window_not_completed`.
+2. `no_oom_events = true` — vLLM did not OOM during warmup or measurement.
+3. `determinism_pass_rate ≥ 0.999` — determinism probes agreed.
+4. `reasoning_content_purity = 1.0` — every thinking token landed in `reasoning_content` and no thinking token leaked into `content`.
 
-### 4.3 PromQL cross-check
+Latency p95 dimensions are NOT checked. A candidate with 50 s TTFT p95 but stable, deterministic, high-throughput execution is feasible in v0.1. This is the Sprint-0 simplification called out in §0.
 
-Per parent §9.1.2 the harness's driver-computed p95 must match a `histogram_quantile()`-derived p95 from vLLM's native histograms within sampling noise. The harness writes both numbers into `measurement_trace.json`:
+**Tie-breakers.** Among feasible candidates with equal `eval_throughput`: higher `rollout_throughput` diagnostic (if present), then lower `turn_latency_p95_ms` (diagnostic), then earliest iteration (stability preference). The rescreen phase's `objective_mean` over throughput is the primary; ties there fall through to these diagnostics.
+
+An infeasible row still gets appended to `results.tsv` with `eval_throughput` empty and `status: discard`; the `notes` column captures which gate tripped (`oom`, `determinism`, `purity`, `window_not_completed`). The agent may propose follow-up candidates informed by infeasibility reasons — a legitimate research step, not a failure of the round.
+
+**What the agent does not do.** The agent never computes `eval_throughput` from a formula. The agent never estimates throughput from a prior candidate's measurement. Every number in `results.tsv` comes from a `measurement_trace.json` written by the harness for that candidate's own measurement window. The `auto-research measure` CLI enforces this by writing the row itself after the harness returns; the agent is not permitted to append a row without a corresponding trace file (§5 hard rule R4).
+
+### 4.3 PromQL cross-check — harness health, not a feasibility gate
+
+The harness still records both the driver-computed p95 and the `histogram_quantile()`-derived p95 from vLLM's native histograms for each of TTFT / TPOT / TurnLatency (free diagnostic signal). These are written into `measurement_trace.json`:
 
 ```json
 "ttft_p95_ms": { "driver": 1870, "promql": 1903, "delta_pct": 1.73 }
 ```
 
-The CLI refuses to append the row to `results.tsv` if `delta_pct > 10` on any of the three latency dimensions — this is a harness-health check, not a candidate-rejection. The agent sees `status: harness_fault, notes: promql_mismatch` and is instructed (via `iteration_brief.md` R8) to halt and emit a BLOCKED note rather than propose another candidate. Python reads the BLOCKED note and marks the round `ROUND_BLOCKED: harness_fault` (§11.6).
+At v0.1, `delta_pct > 10` is a **soft** harness-health warning logged to `run_log.json`, not a commit-refusal and not a round-abort. The harness may still have a genuine fault (e.g. Prometheus scrape interval misconfigured), but since latency is no longer a feasibility dimension, a latency-instrumentation disagreement doesn't invalidate a candidate's *throughput* measurement. `status: harness_fault` remains reserved for cases where the *driver itself* reports an inconsistent state — e.g., window reports complete but `per_request_latencies` is empty, or `eval_throughput` is negative/NaN. In those cases the row is `feasible: false` and Python's `consecutive_harness_fault` counter ticks as in §11.3.
 
 ### 4.4 Evaluation validity — noise floor, rescreen, holdout validation
 
 Review feedback (P1-6) flagged that the v0.1 loop as originally written optimizes one captured seed trace with a single measurement per candidate, then validates only at the live-family-gate after bundle selection. That invites measurement-noise wins and workload-overfit bundles. The mitigation is three mechanisms that together make the winner selection defensible on a single-GPU / single-seed-trace / v0.1 budget.
 
-**(a) Noise floor from double baseline.** At bootstrap (iteration 000), `measure` is called twice against the default-config baseline — same vLLM config, same seed trace, same SLO, different `candidate_uuid`. The two measurements produce baseline point estimates `M₁` and `M₂` of `sustained_concurrency`. The per-round **noise floor** is set to `noise_floor = 2 × |M₁ - M₂|` (factor 2 so it conservatively approximates a 95%-CI width under a normal assumption with n=2). `noise_floor` is persisted in `round_spec.yaml` at bootstrap-end and read by every subsequent stop-criteria check. A candidate whose main-loop objective improves over the running best by **less than `noise_floor`** does not advance the best-so-far — it is recorded as feasible but not promoted, and the §11.3 diminishing-returns counter treats that iteration as "no improvement."
+**(a) Noise floor from double baseline.** At bootstrap, `measure` is called twice against the default-config baseline — same vLLM config, same seed trace, different `candidate_uuid`. The two measurements produce baseline point estimates `T₁` and `T₂` of `eval_throughput`. The per-round **noise floor** is set to `noise_floor = 2 × |T₁ - T₂|` (factor 2 conservatively approximates a 95%-CI width under a normal assumption with n=2). `noise_floor` is persisted in `round_spec.yaml` at bootstrap-end and read by every subsequent stop-criteria check. A candidate whose main-loop throughput improves over the running best by **less than `noise_floor`** does not advance the best-so-far — it is recorded as feasible but not promoted, and the §11.3 diminishing-returns counter treats that iteration as "no improvement."
 
-**(b) Top-K rescreen with repeated measurements.** After the main search loop exits (any §11.3 stop reason), Python transitions into the **rescreen phase**. Let `K_rescreen = 3` at v0.1. The top 3 feasible candidates by `objective_value` are re-measured **once more each**, this time at the Full profile (§4.1, 33 min per candidate). Each candidate now has `measurement_count = 2` rows in `results.tsv` (the original screen + the rescreen). `objective_mean` and `objective_ci_95` are computed from the n=2 measurements per candidate and written into the `status: rescreened` row. The winner is picked by `objective_mean` (not single-shot `objective_value`), and the tie-breakers from §4.2 are applied to the rescreen's latency p95s, not the main-loop values. A candidate whose rescreen-phase measurement falls *outside* `[objective_value ± noise_floor]` is flagged with `status: rescreened, notes: inconsistent_rescreen` and removed from winner contention — the premise is that a candidate whose two measurements disagree beyond the noise floor is not reliably identifiable as the winner.
+**(b) Top-K rescreen with repeated measurements.** After the main search loop exits (any §11.3 stop reason), Python transitions into the **rescreen phase**. Let `K_rescreen = 3` at v0.1. The top 3 feasible candidates by `eval_throughput` are re-measured **once more each**, this time at the Full profile (§4.1, 33 min per candidate). Each candidate now has `measurement_count = 2` rows in `results.tsv` (the original screen + the rescreen). `objective_mean` and `objective_ci_95` are computed over the n=2 throughput measurements per candidate and written into the `status: rescreened` row. The winner is picked by `objective_mean` throughput (not single-shot `eval_throughput`). A candidate whose rescreen-phase throughput falls *outside* `[eval_throughput ± noise_floor]` is flagged with `status: rescreened, notes: inconsistent_rescreen` and removed from winner contention — the premise is that a candidate whose two measurements disagree beyond the noise floor is not reliably identifiable as the winner.
 
-**(c) Holdout-trace validation.** At the start of Phase A (`scripts/capture_seed_workload.py`), two seed traces are captured from the family eval set: a **main trace** and a **holdout trace**, via a 90/10 split of the family eval set with the seed pinned. The main trace is used for the entire search loop + rescreen phase. The **holdout trace is used only once per round**, after the winner is selected but before `finalize-round` writes the bundle. Python invokes `lumoserve auto-research validate-holdout --round-id <id> --candidate-uuid <winner-uuid>` which replays the holdout trace through the winner's config at the Full profile and checks that the winner remains feasible (all three SLO ceilings, purity, determinism) on the holdout. If the winner fails holdout, the round outcome is `ROUND_BUNDLE_REJECTED: holdout_failed` — no bundle is promoted, serving falls back to the default. If the winner passes holdout, `finalize-round` proceeds and the bundle records `holdout_validation: pass` in the FINALIZE commit trailer and `run_log.json`.
+**(c) Holdout-trace validation.** At the start of Phase A (`scripts/capture_seed_workload.py`), two seed traces are captured from the family eval set: a **main trace** and a **holdout trace**, via a 90/10 split of the family eval set with the seed pinned. The main trace is used for the entire search loop + rescreen phase. The **holdout trace is used only once per round**, after the winner is selected but before `finalize-round` writes the bundle. Python invokes `lumoserve auto-research validate-holdout --round-id <id> --candidate-uuid <winner-uuid>` which replays the holdout trace through the winner's config at the Full profile and checks that the winner remains **feasible per §4.2** (window completed, no OOM, determinism ≥ 99.9%, purity = 1.0) on the holdout. The holdout check also records the holdout `eval_throughput` but does not require it to match main-trace throughput — holdout guards against stability regression on a held-out workload, not against a throughput delta. If the winner fails the holdout feasibility gate, the round outcome is **`ROUND_INFEASIBLE` with `stopping_reason: holdout_rejected`** — `finalize-round` is **not** called, so no bundle is written to disk (§11.4). Serving falls back to the default. If the winner passes, `finalize-round` proceeds and the bundle records `holdout_validation: pass` plus the holdout's throughput in `run_log.json`. (v0.1.9 fix: holdout rejection is pre-finalize and produces *no bundle*; the v0.1.8 draft conflated this with post-finalize `live_gate_failed`, which *does* leave a bundle on disk.)
 
-**Why these three and not more.** v0.1 is single-GPU, single-seed-trace per family, and wall-clock-bound to 8 hours including rescreen and holdout. A more rigorous design (n≥5 repeated measurements per candidate, k-fold seed rotation, full paired-significance testing) would blow the Sprint-0 budget by 5–10×. The three mechanisms above give: noise floor catches measurement-variance wins cheaply (n=2 baseline, cost ~30 min added); rescreen catches the top-K from a single noisy ranking (cost: 3 × ~33 min); holdout catches workload-overfit (cost: 1 × ~33 min). Total validity overhead is ~3 h added to the round budget, which fits inside the 8 h cap alongside 12 main-loop screen iterations (~3 h) with headroom.
+**Why these three and not more.** v0.1 is single-GPU, single-seed-trace per family, and wall-clock-bound to 8 hours including rescreen and holdout. A more rigorous design (n≥5 repeated measurements per candidate, k-fold seed rotation, full paired-significance testing) would blow the Sprint-0 budget by 5–10×. The three mechanisms above give: noise floor catches measurement-variance wins cheaply (n=2 baseline, cost ~30 min added); rescreen catches the top-K from a single noisy ranking (cost: 3 × ~33 min); holdout catches stability regression on held-out workload (cost: 1 × ~33 min). Total validity overhead is ~3 h added to the round budget, which fits inside the 8 h cap alongside 12 main-loop screen iterations (~3 h) with headroom.
 
-**What this costs in the time budget.** ~3 h main loop (12 × 15 min) + ~30 min double-baseline + ~1.6 h rescreen (3 × 33 min) + ~33 min holdout + overhead ≈ 6 h of active harness time per round. 2 h of budget headroom remains for bootstrap, finalize, and the post-round live family gate (§11.5). The live family gate is a *correctness* check (unchanged from v0.1.1) — it is **not** redundant with holdout validation; holdout measures SLO-feasibility on a held-out replay of the same family's eval, while the live gate measures end-to-end correctness on a codex-driven family task.
+**What this costs in the time budget.** ~3 h main loop (12 × 15 min) + ~30 min double-baseline + ~1.6 h rescreen (3 × 33 min) + ~33 min holdout + overhead ≈ 6 h of active harness time per round. 2 h of budget headroom remains for bootstrap, finalize, and the post-round live family gate (§11.5). The live family gate is a *correctness* check (unchanged) — it measures end-to-end correctness on a codex-driven family task, distinct from holdout's stability replay.
 
 ### 4.5 Per-candidate cache isolation
 
@@ -365,61 +394,87 @@ implementation task, not a research loop.
      thinking_tokens, turn_index
    - emits workload_distribution_id = sha256 of the persisted file
 
-3. CLI subcommands under `lumoserve auto-research …` — all 7 required
+3. CLI subcommands under `lumoserve auto-research …` — all 8 required
    for Phase A completion, plus the backward-compat `run`:
    - bootstrap-round   (sub-spec §8.1)
-   - measure           (sub-spec §8.2)
-   - commit-candidate  (sub-spec §8.3)
-   - rescreen          (sub-spec §8.4 — required by finalize-round)
-   - validate-holdout  (sub-spec §8.5 — required by finalize-round)
+   - measure           (sub-spec §8.2 — --harness real|synthetic)
+   - commit-candidate  (sub-spec §8.3 — --harness real|synthetic; real mode
+                        refuses Synthetic generator, synthetic mode accepts
+                        it and stamps Fixture-Mode: true trailer)
+   - rescreen          (sub-spec §8.4 — --harness real|synthetic; required
+                        by finalize-round)
+   - validate-holdout  (sub-spec §8.5 — --harness real|synthetic; required
+                        by finalize-round)
    - finalize-round    (sub-spec §8.6 — refuses without rescreen + holdout
-                         unless --dry-run is passed, §8.6a)
-   - status            (sub-spec §8.7 — read-only round state for Python)
-   Existing `run` subcommand stays but is env-guarded per §8.8.
+                        in production mode; --dry-run §8.6a for fixture/CI)
+   - status            (sub-spec §8.7 — read-only round state, branch-aware)
+   - run-round         (sub-spec §8.8 — the Python outer loop packaged as
+                        one command; --harness real|synthetic)
+   Existing `run` subcommand (sub-spec §8.9) stays but is env-guarded.
 
 4. skills/auto-research-round-manager/SKILL.md — full rewrite
-   - Python outer loop per sub-spec §11
-   - spawns `codex exec` per iteration (sub-spec §2.3)
-   - owns stop criteria (sub-spec §11.3)
-   - calls bootstrap-round, loop-of-codex-exec, finalize-round,
-     live family gate in that order
+   - a thin caller of `lumoserve auto-research run-round` (§8.8), NOT
+     a prose script whose steps are hand-translated at runtime
+   - preconditions per §11.1 (production vs fixture split)
+   - post-round live family gate in production mode only
 
 5. tests/fixtures/synthetic_measurement.py
    - move SyntheticMeasurementHarness here, rename to
      SyntheticMeasurementFixture, emit generator =
      "SyntheticMeasurementFixture v<n>"
-   - commit-candidate must REFUSE this generator per sub-spec §6.3
+   - commit-candidate REFUSES this generator in --harness real mode
+     (sub-spec §6.3) and ACCEPTS it in --harness synthetic mode
+     (stamping Fixture-Mode: true trailer, §8.3)
 
 6. Unit + integration tests:
-   - unit: each CLI subcommand
-   - unit: skill watchdog paths (silence, out-of-scope write,
-           unsigned commit)
-   - integration: dry-run round against SyntheticMeasurementFixture
-                  (allowed only under LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1)
-   - integration: precondition refuses when harness module absent
+   - unit: each CLI subcommand (all 8 + run)
+   - unit: skill watchdog paths (per-iteration wall-clock, worktree HEAD
+           pin + restore_worktree_head helper, out-of-scope write,
+           trailer signatures for all 4 commit kinds)
+   - integration: `run-round --harness synthetic` end-to-end against the
+                  fixture (LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1 required;
+                  backs sub-spec §9.3.AR.24)
+   - integration: production precondition refuses when harness module
+                  absent; fixture precondition refuses when env-var unset
 
-7. Pre-flight checks for the skill (sub-spec §11.1):
-   - RealMeasurementHarness imports cleanly
-   - codex --version returns expected version
-   - git status clean
-   - workload yaml has seed_trace_ref pointing at existing jsonl
-   - LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT unset
+7. Pre-flight checks for the skill (sub-spec §11.1 — two sets):
+   Shared (items 1–6): harness module imports, round_driver imports,
+                        codex cli version, git clean, all 8 subcommands
+                        registered, worktree HEAD pin.
+   Production-only (7a–9a): no dry_run bundle at target path, workload
+                            seed_trace_ref exists,
+                            LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT UNset.
+   Fixture-only (7b–9b): LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT SET; workload
+                         seed_trace_ref optional (fixture supplies synthetic
+                         trace if absent); dry_run bundles tolerated.
 
 8. Codex-facing brief templates (strings in the skill):
    - impl_brief.md   (this file — you may update if you discover
                        the spec is wrong; note the update in §14)
    - iteration_brief.md (sub-spec §5.2 template — ship verbatim)
 
+9. src/lumo_flywheel_serving/round_driver.py  (v0.1.8 addition):
+   - dataclass RoundContext with round_id, round_dir, round_branch,
+     worktree, round_spec_path, round_spec, harness_mode
+   - RoundContext.from_bootstrap_json(stdout, harness_mode) classmethod
+   - function run_round(ctx: RoundContext) -> RoundResult implementing
+     sub-spec §11.3 phases (a)–(e) end-to-end
+   - helper restore_worktree_head(worktree, branch) per sub-spec §11.6
+
 ## Done when
 
-- All 8 items above land on main
+- All 9 items above land on main
 - All unit + integration tests pass
-- A dry-run round against SyntheticMeasurementFixture completes
-  successfully end-to-end (demonstrates the wiring is correct,
-  does not prove the real harness works)
+- `lumoserve auto-research run-round --harness synthetic ...` with
+  LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1 completes end-to-end against
+  SyntheticMeasurementFixture (demonstrates the Python outer loop is
+  wired; does NOT prove the real harness works)
 - `python -c "from lumo_flywheel_serving.measurement_harness \
    import RealMeasurementHarness"` succeeds
-- sub-spec §9.3.AR.7 and §9.3.AR.12 verification items pass
+- `python -c "from lumo_flywheel_serving.round_driver import \
+   run_round, RoundContext"` succeeds
+- sub-spec §9.3.AR.7, §9.3.AR.12, §9.3.AR.15, §9.3.AR.23,
+  §9.3.AR.24, §9.3.AR.25 verification items pass
 
 ## You may
 
@@ -476,19 +531,27 @@ successor when you exit cleanly.
 
 ## Your job (exactly four steps — do them in this order)
 
-1. Read {{round_dir}}/round_spec.yaml to understand the SLO ceilings,
-   iteration_cap, and active_layer for this round.
+1. Read {{round_dir}}/round_spec.yaml to understand iteration_cap,
+   active_layer, target_concurrency, and noise_floor for this round.
+   There are NO latency SLO ceilings at v0.1 — feasibility is
+   stability only (window completed, no OOM, determinism >= 99.9%,
+   purity = 1.0); the optimization objective is eval_throughput
+   (higher wins). See §4.2.
 
 2. Read {{round_dir}}/results.tsv. Look at every prior row. Study the
-   pattern of feasible vs infeasible candidates, the constraint each
-   infeasible candidate tripped, the TTFT/TPOT/TurnLatency numbers of
-   the feasible ones, and the objective value trend.
+   pattern of feasible vs infeasible candidates, the stability gate
+   each infeasible candidate tripped, and the eval_throughput trend.
+   TTFT/TPOT/TurnLatency p95 are recorded as diagnostic fields in
+   each measurement_trace.json but are NOT feasibility gates — you
+   may inspect them to understand the workload but do not let them
+   constrain your proposal.
 
 3. Propose ONE candidate for this iteration. Write it to:
      {{iteration_dir}}/candidate.yaml
    Schema: parent HLD §5.3.2 L1 action space keys only. No L0, no L2,
-   no L3 keys. No extra keys. The baseline case (iteration=000) is
-   the default-config dict from the model registry.
+   no L3 keys. No extra keys. The baselines are pre-materialized by
+   bootstrap (baseline_a, baseline_b); your iteration is always one
+   of the main-loop indices (001 onward).
 
 4. Invoke:
      lumoserve auto-research measure \
@@ -620,15 +683,16 @@ Git is the round's transcript of record. Every candidate is a commit; every comm
 Tab-separated, one header row, one data row per `measure` call. Columns:
 
 ```
-candidate_uuid  parent_candidate_uuid  iteration  candidate_label  feasible  objective_value  objective_mean  objective_ci_95  measurement_count  ttft_p95_ms  tpot_p95_ms  turn_latency_p95_ms  rollout_throughput  reasoning_content_purity  determinism_pass_rate  status  notes
+candidate_uuid  parent_candidate_uuid  iteration  candidate_label  feasible  eval_throughput  objective_mean  objective_ci_95  measurement_count  window_completed  no_oom_events  reasoning_content_purity  determinism_pass_rate  status  notes
 ```
 
 - **`candidate_uuid`** is the stable identity for this iteration — a UUIDv4 emitted by `measure` and written into the `results.tsv` row at the same time as all the other columns. It is chosen deterministically so that the row can be written atomically once and never rewritten. The commit created by `commit-candidate` carries a `Candidate-UUID: <uuid>` trailer in its message (§7.3); the row ↔ commit linkage is derived by matching `candidate_uuid` in the row against the trailer in `git log`. There is **no `commit_sha` column** — storing a commit's own SHA inside a file that is part of that commit's tree is impossible without a second fixup commit, and the uuid-based linkage sidesteps the issue entirely. `finalize-round` and §12 verification both resolve uuid → commit by parsing commit trailers (§11.6).
-- **`parent_candidate_uuid`** is the explicit lineage column. For main-loop rows (`status ∈ {baseline, keep, discard, crash, harness_fault}`) it is **empty**. For rescreen rows (`status: rescreened`) it is the `candidate_uuid` of the main-loop row being re-measured; the corresponding commit carries a `Rescreen-Of-UUID: <parent_uuid>` trailer so the row↔lineage is verifiable from `git log` alone. This replaces the v0.1.3 draft's "join rescreen rows to main-loop rows by objective/top-K behavior" which was brittle under ties and duplicate configs (P2-E review finding). `finalize-round` uses `parent_candidate_uuid` to pair each rescreen row's `objective_value` with its parent's for computing `objective_mean` and `objective_ci_95`.
-- `objective_value` is the single-measurement objective for this iteration (the one the iteration's `measure` call reported). `objective_mean` and `objective_ci_95` are populated only after the rescreen phase (§4.4) — they are empty for rows that have only been measured once. `measurement_count` defaults to 1; rescreen phase increments it.
-- `status` ∈ `{baseline, keep, discard, crash, harness_fault, rescreened}` — matching the Karpathy set plus three additions (`baseline` for phase-(a) double-baseline rows, `harness_fault` for the §4.3 PromQL-mismatch case, `rescreened` for rows whose objective was re-measured in the §4.4 rescreen phase).
+- **`parent_candidate_uuid`** is the explicit lineage column. For main-loop rows (`status ∈ {baseline, keep, discard, crash, harness_fault}`) it is **empty**. For rescreen rows (`status: rescreened`) it is the `candidate_uuid` of the main-loop row being re-measured; the corresponding commit carries a `Rescreen-Of-UUID: <parent_uuid>` trailer so the row↔lineage is verifiable from `git log` alone. `finalize-round` uses `parent_candidate_uuid` to pair each rescreen row's `eval_throughput` with its parent's for computing `objective_mean` and `objective_ci_95`.
+- `eval_throughput` is the primary objective at v0.1 — completed eval requests per second during the steady-state measurement window. Higher wins. `objective_mean` and `objective_ci_95` are computed over n=2 paired (main-loop + rescreen) measurements of throughput; populated only after the rescreen phase (§4.4), empty for rows measured only once. `measurement_count` defaults to 1; rescreen phase increments it.
+- `window_completed` (bool), `no_oom_events` (bool), `reasoning_content_purity` (1.0 when passing, <1.0 otherwise), `determinism_pass_rate` (≥0.999 when passing) together form the **feasibility gate** per §4.2. Latency p95 values are recorded only in `measurement_trace.json` as diagnostic fields — no corresponding `results.tsv` column at v0.1.
+- `status` ∈ `{baseline, keep, discard, crash, harness_fault, rescreened}` — `baseline` for phase-(a) double-baseline rows, `harness_fault` for hard harness faults (window completed but trace internally inconsistent — §4.3), `rescreened` for rows whose throughput was re-measured in the §4.4 rescreen phase.
 - **`iteration`** is a string drawn from the formal **iteration-id grammar** — not a plain integer. The grammar is `^(\d{3}|baseline_[ab]|rescreen_\d{2})$`, which admits three disjoint forms: (a) three-digit zero-padded main-loop indices `001`–`999`, (b) baseline replays `baseline_a` and `baseline_b`, (c) rescreen-phase entries `rescreen_01`–`rescreen_99`. Every `iteration_id` maps 1-to-1 onto a candidate directory `candidates/<iteration_id>/`. `commit-candidate --iteration` and every `results.tsv` row honor this grammar; validators that assume purely-numeric iteration ids are incorrect.
-- Infeasible rows have `objective_value` empty (not zero) — zero is a legitimate objective for a feasible-but-useless candidate and we want to distinguish.
+- Infeasible rows have `eval_throughput` empty (not zero) — zero is a legitimate throughput value for a feasible-but-starved candidate and we want to distinguish.
 - `notes` is free-form single-line text, typically the one-line rationale the agent gave `commit-candidate`.
 
 **Why no `commit_sha` column — P0-2 fix.** A commit cannot contain its own final SHA because the SHA is a hash of the commit's tree (which includes `results.tsv`) plus metadata; putting the SHA in the row before committing would make the SHA depend on itself. The previous draft said `commit-candidate` "stages, commits, then amend-fills the sha" under the cover of "one atomic commit, commit_sha backfilled" — which is not atomic (amending rewrites the commit to a new SHA, and the amended commit also has that problem if it tries to include its own SHA). The uuid-plus-trailer pattern makes the linkage one-way (row carries stable uuid; commit message carries the same uuid as a trailer; finalize resolves row→commit by trailer grep) and keeps `commit-candidate` a single atomic commit.
@@ -638,17 +702,50 @@ candidate_uuid  parent_candidate_uuid  iteration  candidate_label  feasible  obj
 One commit per iteration, message format:
 
 ```
-AR(<round_id>) C<NNN>: <one-line rationale>
+AR(<round_id>) C<iteration_id>: <one-line rationale>
 
-status=<status> objective=<value|infeasible:<reason>> feasible=<true|false>
-ttft=<int>ms tpot=<int>ms turn=<int>ms purity=<float> determinism=<float>
-trace_ref=output/auto_research/<round_id>/candidates/<NNN>/measurement_trace.json
+status=<status> eval_throughput=<float|infeasible:<reason>> feasible=<true|false>
+window_completed=<true|false> no_oom=<true|false> purity=<float> determinism=<float>
+ttft_p95_diag=<int>ms tpot_p95_diag=<int>ms turn_p95_diag=<int>ms   # diagnostic only — not gated
+trace_ref=output/auto_research/<round_id>/candidates/<iteration_id>/measurement_trace.json
 
 Candidate-UUID: <uuid>
+Fixture-Mode: true                    # ONLY present on --harness synthetic commits (v0.1.10)
 Signed-off-by: lumoserve-auto-research-cli <auto-research@lumo-flywheel>
 ```
 
 Both `Candidate-UUID` and `Signed-off-by` are structured git *trailers*. `commit-candidate` writes them via `git commit -m "$MSG"` where `$MSG` ends with a blank line + the trailers; `finalize-round` and §11.6 parse them via `git log --format='%(trailers:key=Candidate-UUID,valueonly)'` and `--format='%(trailers:key=Signed-off-by,valueonly)'` respectively. Neither is a GPG signature — `Signed-off-by` is a DCO-style attribution trailer; no real cryptographic signing is required at v0.1. §11.6 elaborates.
+
+### 7.3a BOOTSTRAP commit format (v0.1.10)
+
+`bootstrap-round` (§8.1) creates the round's initial commit on `round_branch` containing `round_spec.yaml`, `impl_brief.md`, `iteration_brief.md`, the two pre-written baseline candidate directories, and an empty-header `results.tsv`. That first commit has no candidate row and no `Candidate-UUID`, so it cannot satisfy the §11.6 / §9.3.AR.3 per-candidate trailer contract. It is a distinct commit kind with its own format:
+
+```
+AR(<round_id>) BOOTSTRAP: round substrate materialized
+
+model_id=<model> family_id=<family> sprint=<sprint>
+weight_version_id=<sha> round_branch=<branch_name>
+workload_file=<path> seed_trace_ref=<path>
+iteration_cap=<int> target_concurrency=<int>
+rescreen_top_k=<int> round_wall_clock_s=<int>
+harness_mode=<real|synthetic>
+
+Bootstrap: true
+Signed-off-by: lumoserve-auto-research-cli <auto-research@lumo-flywheel>
+```
+
+**Trailer contract extension.** The §11.6 watchdog and §9.3.AR.3 verifier distinguish three commit kinds by their trailer signature on `round_branch`:
+
+| Commit kind | Required trailers | Forbidden trailers | Exempt from `Candidate-UUID` check? |
+|---|---|---|---|
+| BOOTSTRAP | `Bootstrap: true`, `Signed-off-by` | `Candidate-UUID`, `Rescreen-Of-UUID`, `Winner-Candidate-UUID` | **yes** — exactly one such commit per branch, always the first |
+| Candidate (main-loop, baseline) | `Candidate-UUID`, `Signed-off-by` | `Bootstrap`, `Winner-Candidate-UUID` | no |
+| Rescreen | `Candidate-UUID`, `Rescreen-Of-UUID`, `Signed-off-by` | `Bootstrap`, `Winner-Candidate-UUID` | no |
+| FINALIZE | `Winner-Candidate-UUID`, `Signed-off-by` | `Bootstrap`, `Candidate-UUID` (on this commit itself), `Rescreen-Of-UUID` | **yes** — exactly one per round, always the last |
+
+The watchdog's rule becomes: every commit must match exactly one kind via this trailer signature; mismatch → `ROUND_BLOCKED: trailer_kind_mismatch`. §9.3.AR.3 is updated in §12 accordingly.
+
+`Fixture-Mode: true` may be attached *in addition* to any of the above trailer signatures in `--harness synthetic` rounds — it doesn't change the commit kind, it just marks the commit as fixture-produced.
 
 ### 7.4 Finalize commit
 
@@ -660,7 +757,7 @@ AR(<round_id>) FINALIZE: <winning candidate label> — obj=<value>
 winner_iteration=<NNN> winner_candidate_uuid=<parent_uuid> winner_rescreen_uuid=<rescreen_uuid> bundle=output/tuned_configs/<family_id>/<wvid>/<ts>_<hash>.yaml
 round_wall_clock_minutes=<int> total_iterations=<int> feasible_count=<int>
 rescreened_count=<int> holdout_validation=<pass|fail|skipped>
-stopping_reason=<iteration_cap|wall_clock_cap|diminishing_returns|hard_infeasibility_oom|hard_infeasibility_determinism|harness_fault|holdout_rejected>
+stopping_reason=<iteration_cap|wall_clock_cap|diminishing_returns|hard_infeasibility_oom|hard_infeasibility_determinism|harness_fault|holdout_rejected|live_gate_failed>
 
 Winner-Candidate-UUID: <parent_uuid>
 Signed-off-by: lumoserve-auto-research-cli <auto-research@lumo-flywheel>
@@ -680,7 +777,7 @@ The finalize commit contains `run_log.json`, `search_trace.json`, `measurement_t
 
 ## 8. CLI surface — `lumoserve auto-research …`
 
-v0.1 splits the current single `auto-research run` subcommand into **seven production subcommands** (`bootstrap-round` §8.1, `measure` §8.2, `commit-candidate` §8.3, `rescreen` §8.4, `validate-holdout` §8.5, `finalize-round` §8.6, `status` §8.7) plus the preserved env-gated `run` (§8.8) for CI smoke-test use. Each is spec'd below; implementation is tracked under LLD-SB-06 (parent §8).
+v0.1 splits the current single `auto-research run` subcommand into **eight production subcommands** (`bootstrap-round` §8.1, `measure` §8.2, `commit-candidate` §8.3, `rescreen` §8.4, `validate-holdout` §8.5, `finalize-round` §8.6, `status` §8.7, **`run-round` §8.8 — the Python outer loop packaged as a single command, v0.1.8 addition**) plus the preserved env-gated `run` (§8.9) for CI smoke-test use. Each is spec'd below; implementation is tracked under LLD-SB-06 (parent §8).
 
 ### 8.1 `bootstrap-round`
 
@@ -694,7 +791,22 @@ lumoserve auto-research bootstrap-round \
   --round-root <output_path>
 ```
 
-Effects: creates `output/auto_research/<round_id>/` with `impl_brief.md` (reference copy of §5.1), `iteration_brief.md` (the §5.2 template — variables substituted per-iteration by Python at spawn time), `round_spec.yaml`, `candidates/` populated with the two **pre-written baseline candidate directories** (see below), `results.tsv` (header-only), `codex-home/.codex/config.toml` (pinning `gpt-5.4 high`). Opens the round git branch. Captures the parent SHA into `round_spec.yaml`. Acquires the round lock. Runs a consistency check: `impl_brief.md` / `iteration_brief.md` / `round_spec.yaml` must all agree on the round identity (model_id, family_id, sprint, weight_version_id, SLO ceilings).
+Effects: creates the **round git worktree** at `output/auto_research/<round_id>/` via `git worktree add <round_dir> <round_branch>`, creating `round_branch` from the current `main` HEAD. The entire round's filesystem state — `impl_brief.md`, `iteration_brief.md`, `round_spec.yaml`, `candidates/` (with the two pre-written baseline directories), `results.tsv` — is committed inside the worktree on `round_branch`. No files land on `main`; no state exists outside the worktree. Captures the parent `main` SHA and the `round_branch` name into `round_spec.yaml`. Acquires the round lock at `<round_dir>/.round.lock`. Runs a consistency check: `impl_brief.md` / `iteration_brief.md` / `round_spec.yaml` must all agree on the round identity (model_id, family_id, sprint, weight_version_id, iteration_cap, target_concurrency). `bootstrap-round` does **not** write `codex-home/.codex/config.toml` (v0.1.8) — codex reads user auth from `$HOME/.codex/auth.json`, and the model pin (`gpt-5.4` / `model_reasoning_effort=high`) is passed via `-c` global flags at each `codex exec` invocation (§2.3).
+
+**Return value — one JSON object on stdout (v0.1.9 contract).** On success, `bootstrap-round` prints one JSON object to stdout with these fields:
+
+```json
+{
+  "round_id":         "<string>",
+  "round_dir":        "<absolute path to the round directory>",
+  "round_branch":     "autoresearch/<model>/<family>/<sprint>/<yyyymmddThhmmssZ>",
+  "worktree_path":    "<absolute path to the round's git worktree>",
+  "round_spec_path":  "<absolute path to round_spec.yaml>",
+  "started_at":       "<ISO-8601>"
+}
+```
+
+At v0.1 `worktree_path == round_dir`; they are returned as separate fields so the Python outer loop can bind one name (`worktree`) consistently throughout §11.3 and a v0.2 revision that splits worktree from round-dir (e.g., multi-worktree per round) becomes a sub-spec-level change only. Callers should prefer `worktree_path` over `round_dir` when passing a filesystem root to any CLI subcommand or helper.
 
 **Baseline candidate files — written by bootstrap, consumed by §11.3 phase (a).** `bootstrap-round` writes two candidate directories before returning:
 
@@ -710,10 +822,13 @@ Preconditions checked: `RealMeasurementHarness` imports cleanly, `workload-file`
 ```
 lumoserve auto-research measure \
   --round-id <id> \
-  --candidate <path_to_candidate.yaml>
+  --candidate <path_to_candidate.yaml> \
+  [--harness real|synthetic]         # default: real
 ```
 
 Effects, in order: (1) validate candidate schema, (2) generate a fresh `candidate_uuid` (UUIDv4), (3) `/admin/load_tuned_config` with the candidate's `vllm_config`, (4) reset vLLM's prefix cache and set a per-candidate `cache_salt = candidate_uuid` (§4.5 cache isolation), (5) wait on `/health`, (6) run the harness for `warmup_s + measurement_window_s` (non-interactively — the CLI blocks), (7) write `measurement_trace.json` next to the candidate.yaml with the uuid embedded, (8) append one row to `results.tsv` with the uuid populated, (9) print one JSON object to stdout including `candidate_uuid` and feasibility verdict, (10) return 0 on success, non-zero with structured error on harness fault / OOM / unreachable endpoint.
+
+**`--harness` flag (v0.1.10).** `real` (default) binds `RealMeasurementHarness`; trace emits `generator: RealMeasurementHarness v<n>`. `synthetic` binds `SyntheticMeasurementFixture` from `tests/fixtures/`; trace emits `generator: SyntheticMeasurementFixture v<n>`; **requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`** — the CLI refuses `--harness synthetic` without the env var. Used by `run-round --harness synthetic` (§8.8) for CI and by AR.24 fixture test.
 
 This is the load-bearing subcommand — every measurement-driven artifact in the round flows through here. If this returns successfully, the agent knows the harness ran, the trace is real, and the row is appended. If this errors, the agent reads the error and either retries (up to R8's 2 retries) or emits BLOCKED.
 
@@ -724,12 +839,15 @@ lumoserve auto-research commit-candidate \
   --round-id <id> \
   --iteration <iteration_id> \   # grammar: ^(\d{3}|baseline_[ab]|rescreen_\d{2})$ — see §7.2
   --status <baseline|keep|discard|crash|harness_fault> \
-  --notes <one_line>
+  --notes <one_line> \
+  [--harness real|synthetic]     # default: real
 ```
 
-Effects: (1) validate that iteration `<NNN>`'s candidate.yaml + measurement_trace.json both exist, are well-formed, and carry the same `candidate_uuid` as the pending `results.tsv` row, (2) stage the candidate directory + updated `results.tsv`, (3) create **one atomic commit** with the §7.3 message format (including the `Candidate-UUID: <uuid>` and `Signed-off-by:` trailers), (4) emit one JSON object on stdout with `{iteration, candidate_uuid, commit_sha, status}` — the `commit_sha` in this JSON payload is the SHA *returned by git commit*, it is **not** persisted back into `results.tsv` (see §7.2 on why).
+Effects: (1) validate that iteration `<NNN>`'s candidate.yaml + measurement_trace.json both exist, are well-formed, and carry the same `candidate_uuid` as the pending `results.tsv` row, (2) stage the candidate directory + updated `results.tsv`, (3) create **one atomic commit** with the §7.3 message format (including the `Candidate-UUID: <uuid>` and `Signed-off-by:` trailers; in `--harness synthetic` mode, an additional `Fixture-Mode: true` trailer), (4) emit one JSON object on stdout with `{iteration, candidate_uuid, commit_sha, status, harness}` — the `commit_sha` in this JSON payload is the SHA *returned by git commit*, it is **not** persisted back into `results.tsv` (see §7.2 on why).
 
-Refuses to commit if: (a) `generator` in the trace is not `RealMeasurementHarness v<n>`, (b) any field outside the round allow-list (§6.2) is staged, (c) the commit would overwrite an existing iteration's files, (d) the `candidate_uuid` embedded in `measurement_trace.json` does not match the uuid in the pending `results.tsv` row (guards against a stale trace file surviving from a prior retry).
+**`--harness` flag (v0.1.10).** `real` (default): refuses to commit if the trace's `generator` is not `RealMeasurementHarness v<n>` — the v0.1.2 guard against synthetic bundles reaching production. `synthetic`: accepts a trace whose `generator` is `SyntheticMeasurementFixture v<n>`, adds a `Fixture-Mode: true` trailer on the commit, and **requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`**. In synthetic mode, every commit on the round branch (baseline_a/b, main-loop, rescreen) carries the `Fixture-Mode` trailer and the resulting bundle is forced `round_provenance.dry_run: true` at finalize-round. This closes the v0.1.9 loop where `run-round --harness synthetic` could not actually commit a baseline because `commit-candidate` refused the fixture's trace.
+
+Refuses to commit if: (a) in `--harness real` mode, `generator` is not `RealMeasurementHarness v<n>`; (b) any field outside the round allow-list (§6.2) is staged; (c) the commit would overwrite an existing iteration's files; (d) the `candidate_uuid` embedded in `measurement_trace.json` does not match the uuid in the pending `results.tsv` row (guards against a stale trace file surviving from a prior retry); (e) in `--harness synthetic` mode, `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT` is unset.
 
 ### 8.4 `rescreen` — top-K repeated measurements at Full profile (§4.4)
 
@@ -737,10 +855,13 @@ Refuses to commit if: (a) `generator` in the trace is not `RealMeasurementHarnes
 lumoserve auto-research rescreen \
   --round-id <id> \
   --top-k 3 \
-  --profile full
+  --profile full \
+  [--harness real|synthetic]   # default: real
 ```
 
-Effects: (1) read `results.tsv`, pick the top-K feasible main-loop rows by `objective_value`, (2) for each parent, allocate a new **rescreen artifact directory** `candidates/rescreen_<PP>/` where `<PP>` is a zero-padded two-digit index within the rescreen phase (`rescreen_01`, `rescreen_02`, `rescreen_03`, …), (3) copy the parent's `candidate.yaml` into the new directory **verbatim** (same vLLM config — the whole point is measurement repetition, not reconfiguration), (4) re-measure via the harness at the Full profile (§4.1 — 33 min per candidate); the harness writes `candidates/rescreen_<PP>/measurement_trace.json` with a fresh `candidate_uuid`, `parent_candidate_uuid` set to the parent row's uuid, `profile: full`, (5) append one `status: rescreened` row per re-measurement to `results.tsv` with `measurement_count: 2`, populating `objective_mean` and `objective_ci_95` from the paired measurements, (6) create one commit per rescreen row — staging the new `candidates/rescreen_<PP>/` directory and the updated `results.tsv` — with **both** a `Candidate-UUID: <fresh_uuid>` trailer *and* a `Rescreen-Of-UUID: <parent_uuid>` trailer, signed-off as `lumoserve-auto-research-cli`, (7) flag rescreens whose absolute delta from the parent's `objective_value` exceeds `noise_floor` as `status: rescreened, notes: inconsistent_rescreen` (these candidates are removed from winner contention per §4.4). Called only by Python's outer loop (§11.3 phase c); never by a per-iteration codex exec.
+Effects: (1) read `results.tsv`, pick the top-K feasible main-loop rows by `eval_throughput` (primary objective at v0.1.8+ — the v0.1.7 `objective_value` column was renamed), (2) for each parent, allocate a new **rescreen artifact directory** `candidates/rescreen_<PP>/` where `<PP>` is a zero-padded two-digit index within the rescreen phase (`rescreen_01`, `rescreen_02`, `rescreen_03`, …), (3) copy the parent's `candidate.yaml` into the new directory **verbatim** (same vLLM config — the whole point is measurement repetition, not reconfiguration), (4) re-measure via the harness at the Full profile (§4.1 — 33 min per candidate); the harness binding matches `--harness`: `real` binds `RealMeasurementHarness`, `synthetic` binds `SyntheticMeasurementFixture` (requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`). The harness writes `candidates/rescreen_<PP>/measurement_trace.json` with a fresh `candidate_uuid`, `parent_candidate_uuid` set to the parent row's uuid, `profile: full`. (5) append one `status: rescreened` row per re-measurement to `results.tsv` with `measurement_count: 2`, populating `objective_mean` and `objective_ci_95` from the paired `eval_throughput` measurements, (6) create one commit per rescreen row — staging the new `candidates/rescreen_<PP>/` directory and the updated `results.tsv` — with **both** a `Candidate-UUID: <fresh_uuid>` trailer *and* a `Rescreen-Of-UUID: <parent_uuid>` trailer, signed-off as `lumoserve-auto-research-cli`, plus a `Fixture-Mode: true` trailer when `--harness synthetic`. (7) flag rescreens whose absolute delta from the parent's `eval_throughput` exceeds `noise_floor` as `status: rescreened, notes: inconsistent_rescreen` (these candidates are removed from winner contention per §4.4). Called only by Python's outer loop (§11.3 phase c); never by a per-iteration codex exec.
+
+**`--harness` flag (v0.1.11).** Consistent with §8.2 `measure` and §8.3 `commit-candidate`. In `--harness real` mode, rescreen refuses if any of the top-K parent rows' traces emit `generator: SyntheticMeasurementFixture` (cross-check: you can't rescreen a synthetic parent under real). In `--harness synthetic` mode, rescreen accepts synthetic parents, requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`, and propagates `Fixture-Mode: true` to every commit it creates.
 
 **Rescreen directory convention — load-bearing detail.** The parent's original `candidates/<NNN>/` directory is **never overwritten or mutated**. Every rescreen attempt gets its own `candidates/rescreen_<PP>/` sibling directory. This means §9.3.AR.2 (every `measurement_trace.json` real-measured) and §9.3.AR.3 (every row maps to a commit) remain 1-to-1-replayable: the original main-loop trace stays on disk exactly as it was written, and the rescreen's trace lives under a path whose name encodes that it's a rescreen artifact. The parent directory and the rescreen directory are joined by the `parent_candidate_uuid` field in the rescreen row (§7.2) and the `Rescreen-Of-UUID` trailer on the rescreen commit (§7.3).
 
@@ -767,10 +888,13 @@ Note the absence of `agent_session.jsonl` / `agent_last_message.txt` under `resc
 ```
 lumoserve auto-research validate-holdout \
   --round-id <id> \
-  --candidate-uuid <winner-uuid>
+  --candidate-uuid <winner-uuid> \
+  [--harness real|synthetic]   # default: real
 ```
 
-Effects: (1) load the winner's vllm_config via `/admin/load_tuned_config`, (2) replay the round's **holdout trace** (not the main trace used throughout the round) at the Full profile, (3) write `holdout_trace.json` under the round dir, (4) report `{pass: bool, reasons_failed: [..]}`. Called exactly once per round, by Python, after rescreen and before finalize. A failing holdout blocks finalize.
+Effects: (1) load the winner's vllm_config via `/admin/load_tuned_config`, (2) replay the round's **holdout trace** (not the main trace used throughout the round) at the Full profile under the selected harness — `real` binds `RealMeasurementHarness`, `synthetic` binds `SyntheticMeasurementFixture` (requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`); the holdout-trace file itself may be absent in `--harness synthetic` mode (the fixture supplies a synthetic holdout). (3) write `holdout_trace.json` under the round dir, (4) report `{pass: bool, reasons_failed: [..], harness: <real|synthetic>}`. Called exactly once per round, by Python, after rescreen and before finalize. A failing holdout blocks finalize (→ `ROUND_INFEASIBLE`, per §11.3 phase (d), §11.4, §11.7 — **not** `ROUND_BUNDLE_REJECTED`).
+
+**`--harness` flag (v0.1.11).** Consistent with §8.2–§8.4. In `--harness real` mode, `validate-holdout` refuses if the winner's rescreen trace (identified by `--candidate-uuid`) was emitted by `SyntheticMeasurementFixture`. In `--harness synthetic` mode, the fixture supplies both the holdout trace and the measurement; `holdout_trace.json` records `harness: synthetic`.
 
 ### 8.6 `finalize-round`
 
@@ -784,23 +908,66 @@ Production mode refuses to finalize if: (a) fewer than one feasible candidate ro
 
 ### 8.6a `finalize-round --dry-run` — CI smoke path only
 
-**Dry-run mode (`--dry-run` flag passed).** Effects mirror production mode with three differences: (A) the rescreen and holdout preconditions are *relaxed* — the command succeeds even if `rescreen_trace.json` / `holdout_trace.json` are absent, (B) the winner is picked by single-shot `objective_value` over all feasible rows (since the rescreen phase was skipped), (C) the persisted bundle is tagged `round_provenance.dry_run: true` in `run_log.json` and in the bundle yaml. Production-mode `bootstrap-round` refuses to proceed if a `dry_run: true` bundle already exists at the target path (§11.1), so dry-run bundles cannot leak into production campaign bootstrap.
+**Dry-run mode (`--dry-run` flag passed).** Effects mirror production mode with three differences: (A) the rescreen and holdout preconditions are *relaxed* — the command succeeds even if `rescreen_trace.json` / `holdout_trace.json` are absent, (B) winner selection is **conditional on what's on disk** — see below — so the fixture-mode path through `run-round --harness synthetic` (which *does* run rescreen + holdout) gets the same winner-selection contract as production, while the legacy `auto-research run` smoke path (which *doesn't*) falls back to single-shot, (C) the persisted bundle is tagged `round_provenance.dry_run: true` in `run_log.json` and in the bundle yaml. Production-mode `bootstrap-round` refuses to proceed if a `dry_run: true` bundle already exists at the target path (§11.1), so dry-run bundles cannot leak into production campaign bootstrap.
 
-Only `auto-research run` (§8.8 — the CI backward-compat wrapper) calls `finalize-round --dry-run`. The production skill (§11) never passes the flag.
+**Dry-run winner selection — three-branch rule (v0.1.11).**
 
-### 8.7 `status` — read-only round state (§11 uses this)
+1. If `rescreen_trace.json` is present AND contains ≥ 1 `status: rescreened` row that is not `inconsistent_rescreen`: pick the winner by `objective_mean` over rescreen rows, resolve via `parent_candidate_uuid` to the parent main-loop row (§8.6 production-mode rule), emit `Winner-Candidate-UUID: <parent_uuid>` trailer. Whether `holdout_trace.json` is present or passing is *not* required in dry-run but is recorded in `run_log.json` for diagnostics.
+2. Else if `rescreen_trace.json` is absent but `results.tsv` has ≥ 1 feasible main-loop row: pick the winner by single-shot `eval_throughput` over feasible rows (this is the `auto-research run` legacy-smoke path, §8.9), emit `Winner-Candidate-UUID: <main_loop_uuid>` trailer. Used by `auto-research run` only — `run-round --harness synthetic` always produces a `rescreen_trace.json` and falls into branch (1).
+3. Else (no rescreen, no feasible main-loop row): refuse to finalize with `no_feasible_row_for_dry_run`.
+
+This means **`run-round --harness synthetic` exercises the same `objective_mean`-based winner-selection logic as the production path**, satisfying AR.24's claim that the fixture proof path validates end-to-end production wiring (not just a weaker smoke wiring).
+
+Two callers invoke `finalize-round --dry-run`: the CI backward-compat wrapper `auto-research run` (§8.9, which hits branch 2), and the fixture-mode `run-round --harness synthetic` (§8.8, which hits branch 1). The production skill (§11) in `--harness real` mode never passes the flag.
+
+### 8.7 `status` — read-only round state (§11 uses this; branch-aware per v0.1.8)
 
 ```
 lumoserve auto-research status --round-id <id> [--json]
 ```
 
-Effects: reads `round_spec.yaml` and `results.tsv`, emits a structured state blob with: `phase` (∈ `{bootstrapped, baseline, main_loop, rescreen, holdout, finalized, blocked}`), `iterations_total`, `feasible_count`, `best_objective_value`, `noise_floor`, `round_wall_clock_elapsed_s`, `round_wall_clock_remaining_s`, `blocker` (if any). Pure read — no writes to `results.tsv`, no git state changes, no CLI-level side effects. Used by the Python outer loop in §11.3 to make between-phase decisions and by §9.3.AR.22 verification. Also useful for a human operator to poll round progress without attaching to the terminal.
+**v0.1.8 branch-aware read.** `status` resolves `round_branch` from the round directory (it's a git worktree since v0.1.8 §8.1) and reads the ledger state **from the round branch** via `git show <round_branch>:results.tsv` and `git show <round_branch>:round_spec.yaml` — NOT from whatever branch the invoker happens to be on. This closes the 2026-04-23 branch-drift hole where `status` invoked from `main` returned `phase: bootstrapped` even though the round branch had three committed rows.
 
-### 8.8 `run` — backward-compat wrapper (and non-agent CI use)
+Resolution order:
+
+1. If `<round_dir>` is a git worktree AND the worktree's HEAD is on `round_branch`, read the worktree's working-tree files directly (fastest path).
+2. Else if `<round_dir>` exists and contains `round_spec.yaml` naming a `round_branch`, use `git -C <main_repo> show <round_branch>:<path>` to read ledger state. Skip the working tree entirely.
+3. Else if `<round_dir>` doesn't exist, exit with `phase: missing, round_id_not_found` and non-zero.
+4. If the `round_branch` named in `round_spec.yaml` doesn't exist, exit with `phase: unresolvable_round_branch` and non-zero.
+
+Effects: emits a structured state blob with: `phase` (∈ `{bootstrapped, baseline, main_loop, rescreen, holdout, finalized, blocked, missing, unresolvable_round_branch}`), `iterations_total`, `feasible_count`, `rescreened_count`, `best_eval_throughput`, `noise_floor`, `round_wall_clock_elapsed_s`, `round_wall_clock_remaining_s`, `round_branch`, `resolved_via` (∈ `{worktree, branch_show, working_tree_fallback}`), `blocker` (if any). Pure read — no writes to `results.tsv`, no git state changes, no CLI-level side effects. Used by the Python outer loop in §11.3 to make between-phase decisions and by §9.3.AR.22 verification. Also useful for a human operator to poll round progress without attaching to the round branch.
+
+### 8.8 `run-round` — Python outer loop packaged as one command
+
+```
+lumoserve auto-research run-round \
+  --model-id <id> \
+  --family-id <id> \
+  --sprint <sprint> \
+  --workload-file <path> \
+  --weight-version-id <sha> \
+  --round-root <output_path> \
+  [--harness real|synthetic]         # default: real (production)
+```
+
+**The v0.1.8 fix for the "Python outer loop doesn't actually exist as runnable code" problem** surfaced by the 2026-04-23 report. The skill's §11.3 pseudocode is now a real Python function `run_round()` in `src/lumo_flywheel_serving/round_driver.py` (Phase A deliverable item 9), and `lumoserve auto-research run-round` is the CLI wrapper that invokes it end-to-end.
+
+**Two harness modes (v0.1.9 contract).** The `--harness` flag selects which precondition set (§11.1) applies and which harness implementation is invoked for `measure` / `rescreen` / `validate-holdout`:
+
+- **`--harness real`** (default, production) — §11.1 production preconditions (items 7a–9a) apply; `RealMeasurementHarness` drives the loop; `finalize-round` runs in production mode (not `--dry-run`); resulting bundle has `round_provenance.dry_run: false`. Refuses to start if `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`.
+- **`--harness synthetic`** (CI / fixture) — §11.1 fixture preconditions (items 7b–9b) apply; `SyntheticMeasurementFixture` drives the loop (much faster, no real vLLM required); `finalize-round --dry-run` is invoked internally so no production bundle appears on disk; resulting bundle has `round_provenance.dry_run: true`. **Requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`** — the inverse of production mode; this is what makes the §9.3.AR.24 fixture test runnable.
+
+Effects, in order (both modes): (1) call `bootstrap-round` internally, (2) execute §11.3 phases (a) baseline → (b) main loop with per-iteration `codex exec` → (c) rescreen → (d) holdout → (e) finalize, (3) run the §11.5 live family gate (**real mode only**; fixture mode skips this step and emits `live_gate: "skipped_fixture_mode"` in the report), (4) emit the §11.7 report shape on stdout as JSON. Returns 0 on `ROUND_PASSED`, non-zero with the `outcome` field populated on any other terminal state.
+
+This is what the manager skill (§11) calls — **one CLI invocation**, not a sequence of hand-translated pseudocode lines. A round launched via `run-round` is the supported production path. `run-round` refuses to start if the §11.1 preconditions fail; on failure it exits non-zero before making any filesystem changes.
+
+Verbose mode (`--verbose` or `-v`) streams phase-boundary events to stdout as JSONL so a human operator can follow progress. Quiet mode (default) prints only the final §11.7 JSON.
+
+### 8.9 `run` — backward-compat wrapper (and non-agent CI use)
 
 The existing `auto-research run` subcommand stays, rewired to: (1) call `bootstrap-round`, (2) call an internal non-agent "sweep" that proposes candidates from a fixed plan (the current `_candidate_plan` logic, but gated so it cannot run unless `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1` is set), (3) call `measure` + `commit-candidate` per candidate, (4) call `finalize-round --dry-run`. The dry-run finalize is essential here — the `run` path does not execute rescreen/holdout, so production finalize would refuse. Every bundle produced by `run` therefore carries `round_provenance.dry_run: true`, and production skill preconditions (§11.1) reject it. This path is useful for CI smoke tests against a mock harness but MUST NOT be how production rounds are driven.
 
-### 8.9 Backward-compat: what happens to the current `OfflineAutoResearchRunner`
+### 8.10 Backward-compat: what happens to the current `OfflineAutoResearchRunner`
 
 The current `OfflineAutoResearchRunner` in `src/lumo_flywheel_serving/auto_research.py` stays as the implementation target of `auto-research run`, but `SyntheticMeasurementHarness` is renamed `SyntheticMeasurementFixture` and moved to `tests/fixtures/synthetic_measurement.py`. `auto_research.py` no longer imports it. The CLI path `auto-research run` now takes a `--harness` argument (default `real`, override `synthetic` only valid under the env-guard above). This shuts the 2026-04-23 failure mode cleanly: it is not *possible* to produce a bundle via the synthetic harness without opting in by env var, and the bundle produced under that opt-in is written with `generator: SyntheticMeasurementFixture` and `round_provenance.dry_run: true`, both of which the skill's precondition rejects.
 
@@ -819,9 +986,8 @@ class RealMeasurementHarness:
     def __init__(
         self,
         *,
-        workload_spec: WorkloadSpec,          # parsed serving_workload.yaml
+        workload_spec: WorkloadSpec,          # parsed serving_workload.yaml (no SLO fields at v0.1)
         seed_trace_path: Path,                # per-request jsonl from the seed run
-        slo: SLO,                             # L_ttft_ms, L_tpot_ms, L_turn_ms
         endpoint: str,                        # http://127.0.0.1:<port>/v1
         metrics_scrape_url: str,              # http://127.0.0.1:<port>/metrics
         admin_url: str,                       # for /admin/load_tuned_config
@@ -833,9 +999,11 @@ class RealMeasurementHarness:
         *,
         warmup_s: int,
         window_s: int,
-        target_concurrency_sweep: list[int],  # e.g. [1, 2, 4, 8, 16, 32]
+        target_concurrency: int,              # fixed per-candidate at v0.1; single value, not a sweep
     ) -> MeasuredTrace: ...
 ```
+
+At v0.1 the harness runs the driver at a **fixed target concurrency** pulled from `round_spec.yaml.target_concurrency` (default `4`). The old parent-§5.4 "sweep concurrency until SLO violation" path is removed — without SLO ceilings there is no natural sweep terminator, and fixing concurrency makes the per-iteration measurement comparable across candidates (same offered load, measure completed-throughput at that load). `target_concurrency` is recorded in `round_spec.yaml` at bootstrap and can be bumped via a v0.2 sub-spec revision if needed.
 
 ### 9.2 `MeasuredTrace` shape (persisted as `measurement_trace.json`)
 
@@ -871,20 +1039,28 @@ class RealMeasurementHarness:
      "thinking_tokens": 620, "response_tokens": 1100, "concurrency_when_dispatched": 4},
     ...
   ],
-  "ttft_p95_ms": { "driver": 1870, "promql": 1903, "delta_pct": 1.73 },
-  "tpot_p95_ms": { "driver": 78, "promql": 80, "delta_pct": 2.56 },
-  "turn_latency_p95_ms": { "driver": 21400, "promql": 21650, "delta_pct": 1.17 },
-  "sustained_concurrency": 8,
-  "rollout_throughput": 12.1,
+  "eval_throughput": 2.17,
+  "window_completed": true,
+  "no_oom_events": true,
   "reasoning_content_purity": 1.0,
   "determinism_pass_rate": 0.9997,
-  "no_oom_events": true,
   "feasible": true,
   "feasibility_failures": [],
+  "diagnostics": {
+    "ttft_p95_ms": { "driver": 1870, "promql": 1903, "delta_pct": 1.73 },
+    "tpot_p95_ms": { "driver": 78, "promql": 80, "delta_pct": 2.56 },
+    "turn_latency_p95_ms": { "driver": 21400, "promql": 21650, "delta_pct": 1.17 },
+    "rollout_throughput": 12.1,
+    "target_concurrency": 4,
+    "completed_requests": 326,
+    "harness_health_warnings": []
+  },
   "vllm_metrics_snapshot_ref": "candidates/037/vllm_metrics.prom",
   "seed_trace_replay_ref": "candidates/037/replay.jsonl"
 }
 ```
+
+`eval_throughput` is the primary objective (§4.2). Everything under `diagnostics` is recorded for audit and for a future v0.2 revision that may re-introduce latency gating, but nothing in `diagnostics` is consumed by feasibility decisions at v0.1.
 
 **Required audit fields and the downstream checks that consume them.** Each of these fields is not decorative — it backs a specific CLI enforcement or §12 verification item. The harness emits them; downstream consumers reject the trace if any are missing or malformed.
 
@@ -894,17 +1070,18 @@ class RealMeasurementHarness:
 | `candidate_uuid` | `commit-candidate` (§8.3); §9.3.AR.3 | Must match the pending `results.tsv` row's uuid; trailer written on commit. Guards against a stale trace file surviving a retry. |
 | `parent_candidate_uuid` | `rescreen` (§8.4); §9.3.AR.17 | Empty for main-loop rows; set to the main-loop parent's uuid for rescreen rows. Used for explicit lineage (P2-E fix). |
 | `profile` ∈ `{screen, full}` | §4.1 / §8.4 | Rescreen rows must carry `profile: full`; main-loop rows at Sprint 0 carry `profile: screen`. |
-| `cache_isolation.cache_salt == candidate_uuid` | §4.5 / §9.3.AR.21 | Per-candidate cache isolation (P2-7). |
-| `cache_isolation.first_10_req_prefix_cache_hit_rate <= 0.10` | §4.5 / §9.3.AR.21 | Cold-cache start per candidate (P2-7). |
-| `*_p95_ms.delta_pct <= 10` on all three latency dimensions | §4.3 / §9.3.AR.4 | PromQL ↔ driver cross-check. |
-| `reasoning_content_purity == 1.0` | §4.2 / parent §5.4 constraint 8 | Thinking-content purity hard gate. |
+| `eval_throughput` | `commit-candidate` (§8.3); §4.2 primary objective | Must be a non-negative number for feasible rows; empty/null for infeasible rows. |
+| `window_completed`, `no_oom_events`, `reasoning_content_purity`, `determinism_pass_rate` | §4.2 feasibility gate | All four must pass for `feasible: true`. Exactly the v0.1 gate set. |
+| `cache_isolation.cache_salt == candidate_uuid` | §4.5 / §9.3.AR.21 | Per-candidate cache isolation. |
+| `cache_isolation.first_10_req_prefix_cache_hit_rate <= 0.10` | §4.5 / §9.3.AR.21 | Cold-cache start per candidate. |
+| `diagnostics.ttft_p95_ms.delta_pct`, `tpot_p95_ms.delta_pct`, `turn_latency_p95_ms.delta_pct` | §4.3 harness-health warning (soft) | Logged to `run_log.json` if > 10; does not refuse commit or block the round at v0.1. |
 
-A trace that lacks any required field is rejected by `commit-candidate` with `commit_refused: malformed_trace` (§8.3 refusal case (a) extended).
+A trace that lacks any of the **feasibility-gate** fields is rejected by `commit-candidate` with `commit_refused: malformed_trace` (§8.3 refusal case (a) extended). A trace with a missing `diagnostics.*` subfield is *not* rejected — diagnostic fields are free recording, not contract surface.
 
 Per parent §5.6 — listed here only for the interface contract, not re-specified:
 
 1. `/admin/load_tuned_config` with the candidate config, wait on `/health`.
-2. Replay `seed_trace_path` entries through `/v1/responses` at a target concurrency sweep (the harness sweeps upward until SLO violation, which determines `sustained_concurrency`). Every request carries the family's `thinking_token_budget`; the admission layer rejects `chat_template_kwargs.enable_thinking` overrides per parent §4.1.
+2. Replay `seed_trace_path` entries through `/v1/responses` at the fixed `target_concurrency` pinned in `round_spec.yaml`. Every request carries the family's `thinking_token_budget`; the admission layer rejects `chat_template_kwargs.enable_thinking` overrides per parent §4.1. Throughput is measured as `completed_requests / measurement_window_s` in the steady-state window.
 3. Record per-request TTFT, TPOT, end-to-end turn latency from the driver's own timings (not from /metrics).
 4. Scrape `/metrics` at warmup-end and window-end; compute `histogram_quantile(0.95, …)` p95 for the three native histograms.
 5. Sample ≥ 200 responses' `reasoning_content` vs `content` to confirm purity = 1.0.
@@ -932,7 +1109,7 @@ round_provenance:                          # NEW in this sub-spec
   finalize_commit_sha:     <sha>
   agent_session_dir_ref:   output/auto_research/<id>/candidates/   # one agent_session.jsonl per iteration under candidates/<NNN>/
   agent_model_pin:         { model: gpt-5.4, reasoning_effort: high }
-  sub_spec_version:        v0.1.7
+  sub_spec_version:        v0.1.11
   dry_run:                 false   # true only for finalize-round --dry-run bundles (§8.6a); production bundles must be false
 layer_traces:
   l1:
@@ -954,24 +1131,38 @@ This section replaces `skills/auto-research-round-manager/SKILL.md` with a new s
 
 The skill's job decomposes into: preconditions (§11.1), bootstrap (§11.2), the iteration loop (§11.3), finalize (§11.4), post-round live gate (§11.5), and reporting (§11.6). Everything Python-side is deterministic control flow; the only LLM work is inside each `codex exec` call.
 
-### 11.1 Preconditions (run once, before bootstrap)
+### 11.1 Preconditions
 
-The skill refuses to start a round unless all of the following hold. Preconditions exist specifically to prevent the Phase A / Phase B confusion — if Phase A hasn't landed, the round cannot run.
+Two precondition sets — **production** and **fixture**. They share a common Phase-A-substrate check (items 1–6); they differ on items 7–9 that reflect whether the round is a production run (real harness, real vLLM, production bundle written) or a CI/fixture run (synthetic harness, dry-run bundle, env-var opt-in required). The v0.1.9 split closes the v0.1.8 contradiction where §9.3.AR.24's `run-round` fixture test was blocked by §11.1's production-mode env-var check.
 
-- `python -c "from lumo_flywheel_serving.measurement_harness import RealMeasurementHarness"` succeeds. Blocker: `harness module missing` (Phase A item 1 not landed).
-- `codex --version` prints the expected codex CLI version. Blocker: `codex cli missing or wrong version`.
-- `git status` in repo root is clean. Blocker: `repo dirty`.
-- All seven production CLI subcommands — `bootstrap-round`, `measure`, `commit-candidate`, `rescreen`, `validate-holdout`, `finalize-round`, `status` — are registered in `lumoserve auto-research --help`. For each, a lightweight existence probe `lumoserve auto-research <name> --help-only` returns **exit 0** and prints a machine-readable line `{"subcommand":"<name>","status":"registered"}` on stdout; a missing or unregistered subcommand returns **non-zero** with `{"subcommand":"<name>","status":"missing"}`. The precondition fails with `cli subcommand missing: <name>` if any probe returns non-zero. This semantics matches §9.3.AR.15, which also relies on `--help-only` returning 0 for existing commands.
-- No existing `auto-research` bundle at the target path under `output/tuned_configs/<family_id>/<weight_version_id>/` has `round_provenance.dry_run: true`. A dry-run bundle left over from a CI smoke run of `auto-research run` (§8.8) is not a valid production artifact, and finalize-round production mode refuses to overwrite it anyway. Blocker: `dry_run_bundle_exists` — operator must delete it before a production round.
-- The target workload yaml exists and has a non-empty `seed_trace_ref` pointing at an existing jsonl file. If `seed_trace_ref` is empty, the skill auto-runs `scripts/capture_seed_workload.py` (Phase A item 2) unless `--no-seed-capture` is set. Blocker: `seed trace missing`.
-- `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT` is unset. Blocker: `non-agent mode enabled — this is CI-only, refuse production round`.
-- A dry-run integration test against `SyntheticMeasurementFixture` exits 0 within 5 minutes (tests the CLI wiring end-to-end without doing real measurement). Blocker: `dry-run wiring check failed`.
+**Common to both modes (items 1–6) — Phase A substrate must be present.**
 
-Any blocker → skill emits `ROUND_BLOCKED` with the specific reason; no filesystem changes are made.
+1. `python -c "from lumo_flywheel_serving.measurement_harness import RealMeasurementHarness"` succeeds. Blocker: `harness module missing` (Phase A item 1 not landed).
+2. `python -c "from lumo_flywheel_serving.round_driver import run_round"` succeeds. Blocker: `round_driver module missing` (Phase A item 9 not landed).
+3. `codex --version` prints the expected codex CLI version. Blocker: `codex cli missing or wrong version`.
+4. `git status` in repo root is clean. Blocker: `repo dirty`.
+5. All **eight** production CLI subcommands — `bootstrap-round`, `measure`, `commit-candidate`, `rescreen`, `validate-holdout`, `finalize-round`, `status`, `run-round` — are registered in `lumoserve auto-research --help`. For each, a lightweight existence probe `lumoserve auto-research <name> --help-only` returns **exit 0** and prints a machine-readable line `{"subcommand":"<name>","status":"registered"}` on stdout; a missing or unregistered subcommand returns **non-zero** with `{"subcommand":"<name>","status":"missing"}`. The precondition fails with `cli subcommand missing: <name>` if any probe returns non-zero.
+6. `git worktree list` contains an entry whose HEAD matches the `round_branch` named in `round_spec.yaml`, OR the round is freshly bootstrapped (no round yet). Blocker: `worktree drift detected — expected <branch>, found <other>`.
+
+**Production mode (`run-round` with `--harness real` or no `--harness` flag) additionally requires 7a–9a.**
+
+7a. No existing `auto-research` bundle at the target path under `output/tuned_configs/<family_id>/<weight_version_id>/` has `round_provenance.dry_run: true`. Blocker: `dry_run_bundle_exists` — operator must delete it before a production round.
+8a. The target workload yaml exists and has a non-empty `seed_trace_ref` pointing at an existing jsonl file. If `seed_trace_ref` is empty, the skill auto-runs `scripts/capture_seed_workload.py` unless `--no-seed-capture` is set. Blocker: `seed trace missing`.
+9a. `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT` is **unset**. Blocker: `non-agent mode enabled — this is CI-only, refuse production round`.
+
+**Fixture mode (`run-round --harness synthetic`, used by §9.3.AR.24 and CI smoke tests) additionally requires 7b–9b.**
+
+7b. `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT` is **set** to `1`. Blocker: `fixture mode requires explicit env-var opt-in`. This is the structural inverse of 9a and is the only way `run-round --harness synthetic` starts — the symmetry ensures production mode can never accidentally proceed with the synthetic harness, and fixture mode can never accidentally run against real vLLM.
+8b. The workload yaml may or may not have a `seed_trace_ref`; if present, it is tolerated; if absent, the fixture supplies a synthetic trace from `tests/fixtures/synthetic_measurement.py`. Blocker: none on this item in fixture mode.
+9b. A dry-run bundle at the target path is **tolerated** (it will be overwritten by the new fixture round). Blocker: none on this item in fixture mode.
+
+Any blocker → skill emits `ROUND_BLOCKED` with the specific reason; no filesystem changes are made. The selection between production and fixture mode is surface-level: `run-round` reads its own `--harness` flag (default `real`) and applies the matching precondition set; there is no sub-spec-level ambiguity. `§8.8` `run-round` honors the flag end-to-end (also passing `--harness` through to internal `measure` calls and arranging `finalize-round --dry-run` when `--harness synthetic`).
 
 ### 11.2 Bootstrap (runs once)
 
 ```python
+from lumo_flywheel_serving.round_driver import RoundContext, run_round
+
 out = sh("lumoserve auto-research bootstrap-round "
         "--model-id qwen3.5-27b "
         "--family-id proposal-ranking-manager-judgment "
@@ -979,11 +1170,26 @@ out = sh("lumoserve auto-research bootstrap-round "
         "--workload-file benchmark_blueprints/families/proposal-ranking-manager-judgment/serving_workload.yaml "
         "--weight-version-id $(python -c 'from lumo_flywheel_serving.tuned_config import default_weight_version_id; ...') "
         "--round-root output/auto_research")
-round_id = json.loads(out)["round_id"]
-round_dir = f"output/auto_research/{round_id}"
+
+ctx = RoundContext.from_bootstrap_json(out, harness_mode="real")
+# RoundContext dataclass (v0.1.10):
+#   ctx.round_id         : str
+#   ctx.round_dir        : Path
+#   ctx.round_branch     : str
+#   ctx.worktree         : Path            # equals round_dir at v0.1; separate field for v0.2
+#   ctx.round_spec_path  : Path
+#   ctx.round_spec       : dict            # parsed from round_spec_path
+#   ctx.harness_mode     : Literal["real", "synthetic"]
+# .from_bootstrap_json() parses the bootstrap-round stdout JSON, reads
+# round_spec_path, and returns a fully-populated RoundContext. The §11.3
+# run_round() function accepts exactly this object — no hidden globals.
+
+result = run_round(ctx)   # the rest of §11.3's body operates on `ctx`
 ```
 
-`bootstrap-round` effects (per §8.1): creates `<round_dir>/` with `round_spec.yaml`, `impl_brief.md` (for reference — IMPL is already done by this point), `iteration_brief.md` (template, variables not yet substituted), `candidates/` (empty), `results.tsv` (header-only), `codex-home/.codex/config.toml` pinning `gpt-5.4 high`. Opens the round git branch from current `main` HEAD. Captures parent SHA into `round_spec.yaml`. Acquires the round lock.
+**`bootstrap-round` JSON return (v0.1.9 contract).** `bootstrap-round` prints one JSON object on stdout with these fields: `round_id` (string), `round_dir` (absolute path to the round directory), `round_branch` (the round's git branch name), `worktree_path` (absolute path to the round's git worktree — at v0.1 this equals `round_dir`, but the field is returned explicitly so the skill's outer loop can bind one name and §11.3 doesn't need to derive it), `round_spec_path` (the round_spec.yaml path), `started_at` (ISO-8601). Every downstream call in §11.3 — `measure`, `commit-candidate`, `rescreen`, `validate-holdout`, `finalize-round`, `status` — receives `worktree` as the filesystem root, never a derived path, so there is exactly one source of truth for where the round lives.
+
+`bootstrap-round` effects (per §8.1): creates `<round_dir>/` as a git worktree on `round_branch` (cut from `main` HEAD) containing `round_spec.yaml`, `impl_brief.md` (for reference — IMPL is already done by this point), `iteration_brief.md` (template, variables not yet substituted), `candidates/baseline_a/candidate.yaml` + `candidates/baseline_b/candidate.yaml` (default-config, pre-written), `results.tsv` (header-only). v0.1.8 note: no `codex-home/` subdirectory — model pin is `-c` flags only, auth lives in `~/.codex`. Captures parent `main` SHA and `round_branch` name into `round_spec.yaml`. Acquires the round lock.
 
 ### 11.3 Iteration loop (the core of the skill)
 
@@ -1003,7 +1209,16 @@ Expected phase durations (§4.1 Sprint 0 defaults, used by the preflight check):
 With ~6 h of active harness time and ~2 h of bootstrap/teardown/live-gate headroom, the 8 h cap fits all four phases in the normal case. If phase (b) runs long (a single candidate takes 60 min instead of 15 min of real work due to vLLM misbehavior), the main loop exits early with fewer candidates but phases (c)/(d) still run on whatever feasible rows exist.
 
 ```python
-def run_round(round_id: str, round_spec: dict) -> RoundResult:
+def run_round(ctx: RoundContext) -> RoundResult:
+    """v0.1.10 signature — ctx is produced by RoundContext.from_bootstrap_json
+    in §11.2. All filesystem/branch/harness state is read from ctx; no hidden
+    globals, no module-level state."""
+    round_id      = ctx.round_id
+    round_branch  = ctx.round_branch
+    worktree      = ctx.worktree
+    round_spec    = ctx.round_spec
+    harness_flag  = f"--harness {ctx.harness_mode}"
+
     round_started = time.monotonic()
     cap_s = round_spec["round_wall_clock_s"]  # 28800 at v0.1 Sprint 0
 
@@ -1023,47 +1238,57 @@ def run_round(round_id: str, round_spec: dict) -> RoundResult:
     # rows satisfy the §7 Candidate-UUID-trailer contract — an uncommitted row
     # would fail §9.3.AR.3 at verify time.
     for sfx in ("a", "b"):
-        sh(f"lumoserve auto-research measure --round-id {round_id} "
-           f"--candidate {round_dir}/candidates/baseline_{sfx}/candidate.yaml")
-        sh(f"lumoserve auto-research commit-candidate --round-id {round_id} "
+        sh(f"lumoserve auto-research measure --round-id {round_id} {harness_flag} "
+           f"--candidate {worktree}/candidates/baseline_{sfx}/candidate.yaml")
+        sh(f"lumoserve auto-research commit-candidate --round-id {round_id} {harness_flag} "
            f"--iteration baseline_{sfx} --status baseline "
            f"--notes 'default-config baseline replay {sfx} for noise floor'")
-    m1, m2 = read_baseline_rows_from_results_tsv(f"{round_dir}/results.tsv")
-    noise_floor = 2.0 * abs(m1.objective_value - m2.objective_value)
+    m1, m2 = read_baseline_rows_from_results_tsv(f"{worktree}/results.tsv")
+    # v0.1.8: objective is eval_throughput, not sustained_concurrency (§4.2).
+    noise_floor = 2.0 * abs(m1.eval_throughput - m2.eval_throughput)
     set_round_spec_field(round_spec, "noise_floor", noise_floor)
-    best_so_far = max(m1.objective_value, m2.objective_value)
+    best_so_far = max(m1.eval_throughput, m2.eval_throughput)
 
     # === Phase (b): main search loop — iterations 001..(iteration_cap-1) ===
     consecutive_oom = 0
     consecutive_determinism_fail = 0
+    consecutive_harness_fault = 0
     best_history = []
 
     # Reserve budget for phases (c) and (d) so the main loop cannot consume it all.
     reserved_for_cd = (round_spec["rescreen_top_k"] + 1) * round_spec["full_profile_s"]
 
-    for iteration in range(1, round_spec["iteration_cap"]):  # 001..011 at v0.1 Sprint 0
+    # v0.1.9 fix (P1-V): iteration_cap is the inclusive last index — `iteration_cap=12`
+    # means 12 main-loop candidates {001, ..., 012}. The range needs `+ 1`.
+    for iteration in range(1, round_spec["iteration_cap"] + 1):  # 001..012 at v0.1 Sprint 0
         # Exit main loop early if advancing would consume the budget reserved for (c)+(d).
         if remaining_s() < reserved_for_cd + round_spec["screen_profile_s"]:
             break  # leave time for rescreen + holdout; do not return — go to phase (c)
 
-        iter_dir = f"{round_dir}/candidates/{iteration:03d}"
+        iter_dir = f"{worktree}/candidates/{iteration:03d}"
         os.makedirs(iter_dir, exist_ok=True)
 
         # Substitute {{...}} placeholders in-memory — codex-cli has no --var
         # (see §2.3). The on-disk iteration_brief.md keeps its placeholders
         # for human readability and §12 verification.
         iteration_prompt = substitute_placeholders(
-            template=read_file(f"{round_dir}/iteration_brief.md"),
+            template=read_file(f"{worktree}/iteration_brief.md"),
             values={"round_id": round_id,
                     "iteration": f"{iteration:03d}",
-                    "round_dir": str(round_dir),
+                    "round_dir": str(worktree),       # v0.1.8: worktree, not round_dir
                     "iteration_dir": iter_dir,
                     ...},
         )
 
-        env = {**os.environ, "CODEX_HOME": f"{round_dir}/codex-home"}
+        # v0.1.8: NO CODEX_HOME override. Auth lives in the user's ~/.codex.
+        # Model + reasoning_effort are passed via -c global flags below (§2.3).
+        env = os.environ.copy()
 
         # === the ONE codex call per iteration (see §2.3 for flag rationale) ===
+        # v0.1.8: --cd points at the git worktree, not the round directory.
+        # The worktree's HEAD is pinned to round_branch (§8.1); a stray
+        # `git checkout main` by codex is contained to the worktree and
+        # caught by §11.6 watchdog's post-iteration HEAD pin check.
         with open(f"{iter_dir}/agent_session.jsonl", "wb") as transcript:
             codex_result = subprocess.run(
                 [
@@ -1071,7 +1296,7 @@ def run_round(round_id: str, round_spec: dict) -> RoundResult:
                     "-c", 'model="gpt-5.4"',
                     "-c", 'model_reasoning_effort="high"',
                     "exec",
-                    "--cd", str(round_dir),
+                    "--cd", str(worktree),         # v0.1.8: worktree path, not round_dir
                     "--json",
                     "--output-last-message", f"{iter_dir}/agent_last_message.txt",
                     "--skip-git-repo-check",
@@ -1094,10 +1319,29 @@ def run_round(round_id: str, round_spec: dict) -> RoundResult:
             # Python retries up to max_iteration_retries; on exhaustion, ROUND_BLOCKED
             ...
 
+        # === Watchdog: post-iteration worktree HEAD pin check (§11.6) ===
+        # The worktree's HEAD must still be on round_branch. A `git checkout main`
+        # inside the worktree during codex exec would show up here.
+        # Helper semantics:
+        #   def worktree_head_is_round_branch(worktree: str, expected_branch: str) -> bool:
+        #       # `git -C <worktree> symbolic-ref HEAD` returns "refs/heads/<branch>"
+        #       head = sh(f"git -C {worktree} symbolic-ref HEAD").strip()
+        #       return head == f"refs/heads/{expected_branch}"
+        if not worktree_head_is_round_branch(worktree, round_branch):
+            # P2-BB (v0.1.10): on drift, force-restore the worktree to round_branch
+            # BEFORE returning so the operator never inherits a drifted worktree.
+            # Any uncommitted codex-written state on main is discarded; committed
+            # state on main is left on main (it's a §6.2 out-of-scope write and
+            # can be post-mortem'd separately).
+            restore_worktree_head(worktree, round_branch)
+            return RoundResult(stopping_reason="worktree_drift", iteration=iteration)
+
         # === read the new row, update running state ===
-        row = read_last_row("results.tsv")
+        row = read_last_row(f"{worktree}/results.tsv")
         assert row["iteration"] == f"{iteration:03d}"
 
+        # v0.1.8: §4.2 feasibility gate is stability only — no latency SLO.
+        # OOM handling stays.
         if row["status"] == "crash" and row["notes"].startswith("oom"):
             consecutive_oom += 1
             if consecutive_oom >= 3:
@@ -1105,6 +1349,7 @@ def run_round(round_id: str, round_spec: dict) -> RoundResult:
         else:
             consecutive_oom = 0
 
+        # Determinism gate stays.
         if row["feasible"] and float(row["determinism_pass_rate"]) < 0.999:
             consecutive_determinism_fail += 1
             if consecutive_determinism_fail >= 3:
@@ -1112,9 +1357,17 @@ def run_round(round_id: str, round_spec: dict) -> RoundResult:
         else:
             consecutive_determinism_fail = 0
 
+        # Harness-fault gate (trace internally inconsistent — §4.3).
+        if row["status"] == "harness_fault":
+            consecutive_harness_fault += 1
+            if consecutive_harness_fault >= 3:
+                return RoundResult(stopping_reason="harness_fault", iteration=iteration)
+        else:
+            consecutive_harness_fault = 0
+
         if row["feasible"]:
-            # Only advance best_so_far if the improvement clears the noise floor (§4.4).
-            obj = float(row["objective_value"])
+            # Only advance best_so_far if the throughput improvement clears the noise floor (§4.4).
+            obj = float(row["eval_throughput"])
             if obj > best_so_far + noise_floor:
                 best_so_far = obj
                 best_history.append((iteration, obj))
@@ -1132,30 +1385,31 @@ def run_round(round_id: str, round_spec: dict) -> RoundResult:
     # === Phase (c): rescreen top-K at Full profile (§4.4) ===
     top_k = round_spec["rescreen_top_k"]
     if (r := must_have_for("rescreen", top_k * round_spec["full_profile_s"])): return r
-    sh(f"lumoserve auto-research rescreen --round-id {round_id} "
+    sh(f"lumoserve auto-research rescreen --round-id {round_id} {harness_flag} "
        f"--top-k {top_k} --profile full")
     # `rescreen` writes its own `status: rescreened` rows *and* commits them with
     # both `Candidate-UUID` and `Rescreen-Of-UUID` trailers (§8.4); no separate
     # commit-candidate call is needed here.
 
-    # Pick winner by objective_mean over rescreened rows, not single-shot objective_value.
-    winner = pick_winner_by_mean(results_tsv=f"{round_dir}/results.tsv")
+    # Pick winner by objective_mean over rescreened rows, not single-shot eval_throughput.
+    winner = pick_winner_by_mean(results_tsv=f"{worktree}/results.tsv")
     if winner is None:
         return RoundResult(stopping_reason="no_feasible_rescreen_winner")
 
     # === Phase (d): holdout validation (§4.4) ===
     if (r := must_have_for("holdout", round_spec["full_profile_s"])): return r
-    holdout = sh(f"lumoserve auto-research validate-holdout --round-id {round_id} "
+    holdout = sh(f"lumoserve auto-research validate-holdout --round-id {round_id} {harness_flag} "
                  f"--candidate-uuid {winner.candidate_uuid}")
     if not holdout.pass_:
         return RoundResult(stopping_reason="holdout_rejected",
                            bundle_rejected_reason=holdout.reasons_failed)
 
     # === Phase (e): finalize-round creates the bundle and FINALIZE commit ===
-    # Production mode (no --dry-run) — refuses to finalize without rescreen+holdout (§8.6).
-    # This is the single call to finalize-round in the round lifecycle; §11.4 is a
-    # prose cross-reference, not an additional invocation.
-    sh(f"lumoserve auto-research finalize-round --round-id {round_id}")
+    # Production (--harness real): no --dry-run; refuses to finalize without
+    # rescreen+holdout (§8.6). Fixture (--harness synthetic): --dry-run path
+    # (§8.6a) stamps round_provenance.dry_run: true.
+    dry_run_flag = "--dry-run" if ctx.harness_mode == "synthetic" else ""
+    sh(f"lumoserve auto-research finalize-round --round-id {round_id} {dry_run_flag}".strip())
     return RoundResult(stopping_reason="ok", winner=winner,
                        round_wall_clock_s=int(time.monotonic() - round_started))
 ```
@@ -1176,7 +1430,7 @@ What happens at phase (e) under the normal path: `finalize-round` writes the bun
 What happens at phase (e) under degenerate paths:
 
 - **Zero feasible rows.** If the main loop + rescreen phase together produce zero feasible rows, phase (e) is not reached — `run_round` returns earlier with `stopping_reason = no_feasible_rescreen_winner` or the equivalent phase-specific code. `finalize-round` is not called. The skill reports `ROUND_INFEASIBLE`, consistent with parent §5.7 rail 3.
-- **Holdout rejection.** If phase (d) holdout fails, `run_round` returns with `stopping_reason = holdout_rejected`. `finalize-round` is not called. The skill reports `ROUND_BUNDLE_REJECTED`.
+- **Holdout rejection.** If phase (d) holdout fails, `run_round` returns with `stopping_reason = holdout_rejected` **before** phase (e) finalize — so `finalize-round` is not called, **no bundle is written**, and the outcome is `ROUND_INFEASIBLE` (v0.1.9 correction — previously misclassified as `ROUND_BUNDLE_REJECTED`, which is reserved for post-finalize failures where a bundle exists on disk).
 - **Wall-clock cap in phase (c)/(d)/(e).** The preflight checks in §11.3 prevent entering a phase whose required wall-clock is unavailable; in all such cases `run_round` returns `wall_clock_cap_preflight_<phase>` and `finalize-round` is never called. No bundle is emitted. The skill reports `ROUND_BLOCKED`.
 
 Explicit anti-pattern forbidden: the skill **must not** call `finalize-round` from outside `run_round`. A second invocation either produces a duplicate FINALIZE commit (if the first already ran) or runs against an already-finalized round (whose lock is released, whose `run_log.json` is written) and corrupts the round state. The lifecycle contract is: one `run_round` call per round, one `finalize-round` call inside it.
@@ -1185,14 +1439,26 @@ Explicit anti-pattern forbidden: the skill **must not** call `finalize-round` fr
 
 After a successful finalize, run the live family gate (`scripts/run_live_proposal_family.py`) against a freshly-booted vLLM instance loading the just-written bundle. The round is `ROUND_PASSED` only if the gate returns `pass: true, score >= 80, returncode == 0`. If the bundle produces but the live gate fails, the outcome is `ROUND_BUNDLE_REJECTED` — the bundle is not promoted and the serving stack falls back to the default-config baseline.
 
-### 11.6 Watchdog — simplified under the per-iteration spawn model
+### 11.6 Watchdog — Python-side, post-iteration
 
-The previous spec's watchdog had to guess whether a long-running codex agent had stalled. Under the per-iteration spawn model the watchdog collapses to three checks, all Python-side:
+The previous spec's watchdog had to guess whether a long-running codex agent had stalled. Under the per-iteration spawn model the watchdog collapses to four checks, all Python-side, all run immediately after each `subprocess.run` returns:
 
 - **Per-iteration wall-clock.** Enforced by `subprocess.run(..., timeout=...)`. A codex exec exceeding `per_iteration_codex_wall_clock_s` is killed, the iteration is retried or marked blocked. No separate silence timeout needed — codex either exits or gets killed by the timeout.
-- **Between-iteration write scope.** After each iteration, `git diff main..HEAD --name-only` on the round branch. Any path outside the allow-list (§6.2) → `ROUND_BLOCKED: out_of_scope_write`.
-- **Between-iteration `Signed-off-by` trailer.** `git log --format='%(trailers:key=Signed-off-by,valueonly)' main..HEAD` on the round branch. Every new commit must emit exactly one `lumoserve-auto-research-cli <auto-research@lumo-flywheel>` line; a commit with no matching trailer, or a commit whose trailer value is anything else, triggers `ROUND_BLOCKED: missing_or_mismatched_trailer`. This is a **structured-trailer** check, not a cryptographic signature check. `%GS` (the GPG signer name) is explicitly *not* used — codex-cli does not GPG-sign commits by default, and requiring GPG signing at v0.1 is out of scope. The `Signed-off-by` naming follows DCO convention (a machine-parseable attribution trailer); §13.9 tracks whether to upgrade to real commit signing in v0.2.
-- **Between-iteration `Candidate-UUID` trailer presence.** Every non-FINALIZE commit must carry exactly one `Candidate-UUID: <uuid>` trailer whose value matches the `candidate_uuid` of the `results.tsv` row staged in that commit. Mismatch or absence → `ROUND_BLOCKED: trailer_mismatch`. This closes the P0-2 loop — the row ↔ commit linkage is verified at commit time *and* re-verified by the watchdog between iterations.
+- **Worktree HEAD pin (v0.1.8; v0.1.10 cleanup).** After each iteration, check that the round's git worktree HEAD is still on `round_branch`. If codex ran `git checkout main` inside the worktree during its exec, HEAD will have drifted. A drift triggers `ROUND_BLOCKED: worktree_drift` and — **before `run_round` returns** — the helper `restore_worktree_head(worktree, round_branch)` force-restores HEAD to `round_branch` so the operator never inherits a drifted worktree. The helper is part of the §11 contract, not an implementation detail:
+  ```python
+  def restore_worktree_head(worktree: Path, branch: str) -> None:
+      """Force the round worktree back onto `branch`, discarding any
+      uncommitted state. Committed state that codex pushed onto a
+      different branch (e.g., main) is LEFT THERE — it is an out-of-
+      scope write (§6.2) and gets post-mortem'd separately; this
+      helper restores only the worktree's HEAD."""
+      sh(f"git -C {worktree} checkout --force {branch}")
+      sh(f"git -C {worktree} reset --hard refs/heads/{branch}")
+  ```
+  Called from §11.3 phase (b) immediately before the `return RoundResult(stopping_reason="worktree_drift", ...)`. This is what *actually* contains the 2026-04-23 "Codex switched to main" failure mode; the `git diff` and trailer checks below would *detect* the violation after the fact but only the worktree isolation + explicit restore *prevents* the operator from being left with a drifted worktree.
+- **Between-iteration write scope.** After each iteration, `git diff <round-branch-base>..<worktree-HEAD> --name-only` on the worktree. Any path outside the allow-list (§6.2) → `ROUND_BLOCKED: out_of_scope_write`.
+- **Between-iteration `Signed-off-by` trailer.** `git log --format='%(trailers:key=Signed-off-by,valueonly)' <base>..HEAD` on the worktree. Every new commit must emit exactly one `lumoserve-auto-research-cli <auto-research@lumo-flywheel>` line; a commit with no matching trailer, or a commit whose trailer value is anything else, triggers `ROUND_BLOCKED: missing_or_mismatched_trailer`. This is a **structured-trailer** check, not a cryptographic signature check. `%GS` (the GPG signer name) is explicitly *not* used — codex-cli does not GPG-sign commits by default, and requiring GPG signing at v0.1 is out of scope. The `Signed-off-by` naming follows DCO convention (a machine-parseable attribution trailer); §13.9 tracks whether to upgrade to real commit signing in v0.2.
+- **Between-iteration `Candidate-UUID` trailer presence.** Every commit on the round branch must match exactly one of the four commit kinds in §7.3a — BOOTSTRAP / Candidate / Rescreen / FINALIZE — identified by trailer signature. Candidate and Rescreen commits must carry exactly one `Candidate-UUID: <uuid>` trailer whose value matches the `candidate_uuid` of the `results.tsv` row staged in that commit. BOOTSTRAP and FINALIZE are **exempt** from the `Candidate-UUID` check (BOOTSTRAP is the first commit and has no candidate row; FINALIZE uses the `Winner-Candidate-UUID` trailer instead). A commit whose trailer signature does not match any kind, or whose `Candidate-UUID` on a Candidate/Rescreen commit doesn't match the staged row → `ROUND_BLOCKED: trailer_kind_mismatch`. This closes the v0.1.9 bootstrap-commit contract hole — the row ↔ commit linkage is verified at commit time *and* re-verified by the watchdog between iterations.
 
 No "agent silence" timeout is needed at v0.1 — a stalled codex exec is caught by the per-iteration wall-clock, and the round's long silences (during the 30-minute measurement window) are expected and not a stall.
 
@@ -1229,16 +1495,17 @@ No "agent silence" timeout is needed at v0.1 — a stalled codex exec is caught 
 | `hard_infeasibility_determinism` | main loop aborted after 3 determinism failures | `ROUND_BLOCKED` | null |
 | `iteration_blocked` | any iteration's codex wrote `<iter_dir>/BLOCKED.md` (R8 retry-exhaustion) | `ROUND_BLOCKED` | null |
 | `cli_retry_exhausted` | codex exec kept returning non-zero past `max_iteration_retries` | `ROUND_BLOCKED` | null |
-| `harness_fault` | any row with `status: harness_fault` (PromQL cross-check out of bounds) | `ROUND_BLOCKED` | null |
+| `harness_fault` | 3 rows in a row with `status: harness_fault` (trace internally inconsistent — §4.3) | `ROUND_BLOCKED` | null |
+| `worktree_drift` | §11.6 watchdog detected the round's git worktree HEAD is no longer on `round_branch` after a codex exec returned | `ROUND_BLOCKED` | null |
 | `wall_clock_cap_preflight_baseline` | phase (a) preflight failed | `ROUND_BLOCKED` | null |
 | `wall_clock_cap_preflight_rescreen` | phase (c) preflight failed | `ROUND_BLOCKED` | null — no rescreen means no valid production finalize |
 | `wall_clock_cap_preflight_holdout` | phase (d) preflight failed | `ROUND_BLOCKED` | null — no holdout means finalize refuses |
 | `no_feasible_rescreen_winner` | phase (c) ran but produced zero eligible winners (all `inconsistent_rescreen` or all infeasible) | `ROUND_INFEASIBLE` | null |
-| `holdout_rejected` | phase (d) validated the winner and it failed the holdout | `ROUND_BUNDLE_REJECTED` | null |
+| `holdout_rejected` | phase (d) validated the winner and it failed the holdout; finalize-round is NOT called | `ROUND_INFEASIBLE` | null |
 | `live_gate_failed` | finalize succeeded, post-round live family gate (§11.5) returned non-pass | `ROUND_BUNDLE_REJECTED` | non-null but bundle not promoted |
 | `wall_clock_cap` | legacy umbrella — not emitted at v0.1; reserved for future non-preflight budget misses | — | — |
 
-`ROUND_BUNDLE_REJECTED` is distinct from `ROUND_BLOCKED` specifically because in the `holdout_rejected` and `live_gate_failed` cases the round *did* produce a bundle on disk (at finalize time), but that bundle is not promoted to the campaign-bootstrap-visible path. The caller can inspect it for post-mortem analysis; it just doesn't feed production.
+`ROUND_BUNDLE_REJECTED` is distinct from `ROUND_BLOCKED` and `ROUND_INFEASIBLE` specifically because in the `live_gate_failed` case the round *did* produce a bundle on disk (finalize-round ran successfully, then the post-round live gate rejected it). The caller can inspect that bundle for post-mortem analysis; it just doesn't feed production. **`holdout_rejected` is `ROUND_INFEASIBLE`, not `ROUND_BUNDLE_REJECTED`**, because the holdout check runs *before* finalize (phase d of §11.3) — when the holdout rejects the winner, finalize-round is never called and no bundle is written. This is the v0.1.9 correction to the v0.1.8 draft, which inconsistently placed both reasons in the same outcome bucket.
 
 ### 11.8 Explicit non-goals for the skill
 
@@ -1256,10 +1523,10 @@ These are *additive* to the parent HLD's §9 checklist; each one has a new item 
 
 - **9.3.AR.1 Per-iteration transcripts captured (codex-proposed rows only).** Every iteration directory `candidates/<NNN>/` for a **codex-proposed main-loop iteration** contains a non-empty `agent_session.jsonl` (one per codex exec invocation). The count of `agent_session.jsonl` files equals the count of `results.tsv` rows whose `status` is one of `{keep, discard, crash, harness_fault}` — these are the main-loop rows produced by a codex exec. Rows with `status: baseline` (Phase (a) double-baseline — Python drives `measure` + `commit-candidate` directly, no codex session) and rows with `status: rescreened` (Phase (c) — the `rescreen` CLI is called by Python, no codex session) are **excluded** from the count. Artifact: file-count comparison with the status filter applied.
 - **9.3.AR.2 Every row is real-measured.** Every `measurement_trace.json` in the round directory has `generator` starting with `RealMeasurementHarness`. No trace has `synthetic: true`. Artifact: `grep -l synthetic output/auto_research/<round_id>/candidates/*/measurement_trace.json` returns empty.
-- **9.3.AR.3 Every row maps to a commit via trailer.** For every non-header row in `results.tsv`, `git log --format='%H %(trailers:key=Candidate-UUID,valueonly)' main..HEAD` on the round branch yields exactly one commit whose trailer equals the row's `candidate_uuid`, and that commit's `Signed-off-by` trailer equals `lumoserve-auto-research-cli <auto-research@lumo-flywheel>`. Artifact: `git log` extraction + `results.tsv` join-by-uuid — join must be 1-to-1 with no unmatched rows in either direction. This replaces the prior `commit_sha` column (which was impossible to populate atomically — P0-2).
-- **9.3.AR.4 PromQL cross-check held.** For every feasible row, each of `ttft_p95_ms.delta_pct`, `tpot_p95_ms.delta_pct`, `turn_latency_p95_ms.delta_pct` is ≤ 10. Artifact: a `jq` extraction over all traces showing every delta_pct in range.
-- **9.3.AR.5 Brief consistency.** `impl_brief.md` / `iteration_brief.md` / `round_spec.yaml` on disk at the round directory all agree on round identity (model_id, family_id, sprint, weight_version_id, SLO ceilings, iteration_cap). Artifact: the consistency-check run by `bootstrap-round` §8.1, re-executed at verify time against the on-disk files — must pass.
-- **9.3.AR.6 Winner is Pareto-consistent.** The winning iteration's row in `results.tsv` ties or beats every other feasible row per parent §5.4 tie-breakers. Artifact: a synthetic re-run of the tie-breaker over `results.tsv` returns the same iteration as the `finalize-round` commit's `winner_iteration`.
+- **9.3.AR.3 Every row maps to a commit via trailer; bootstrap + finalize exempt.** For every non-header row in `results.tsv`, `git log --format='%H %(trailers:key=Candidate-UUID,valueonly)' main..HEAD` on the round branch yields exactly one commit whose trailer equals the row's `candidate_uuid`, and that commit's `Signed-off-by` trailer equals `lumoserve-auto-research-cli <auto-research@lumo-flywheel>`. The `main..HEAD` range on the round branch additionally contains exactly one **BOOTSTRAP** commit (first commit, `Bootstrap: true` trailer) and exactly one **FINALIZE** commit (last commit, `Winner-Candidate-UUID` trailer) — both exempt from the row-to-commit join per §7.3a. Artifact: `git log` extraction + `results.tsv` join-by-uuid + BOOTSTRAP/FINALIZE trailer presence check. The join must be 1-to-1 for Candidate/Rescreen commits with no unmatched rows in either direction; exactly one BOOTSTRAP and exactly one FINALIZE must exist.
+- **9.3.AR.4 Throughput is measured, diagnostics are recorded.** Every `measurement_trace.json` has a numeric `eval_throughput` (≥ 0 for feasible rows, null/empty for infeasible rows) and a `diagnostics` block containing `ttft_p95_ms`, `tpot_p95_ms`, `turn_latency_p95_ms` (each with `driver` and `promql` keys), `rollout_throughput`, `target_concurrency`, and `completed_requests`. PromQL `delta_pct` > 10 on any latency diagnostic is a logged warning in `run_log.json.harness_health_warnings`, not a round abort at v0.1 — §4.3 soft-warning semantics. Artifact: `jq` extraction confirms `eval_throughput` present on every row + at least one `diagnostics.*` field populated per trace.
+- **9.3.AR.5 Brief consistency.** `impl_brief.md` / `iteration_brief.md` / `round_spec.yaml` on disk at the round directory all agree on round identity (model_id, family_id, sprint, weight_version_id, iteration_cap, target_concurrency, round_branch). No SLO-ceiling fields appear in any of the three (they were removed at v0.1.8 per §0 divergence note). Artifact: the consistency-check run by `bootstrap-round` §8.1, re-executed at verify time against the on-disk files — must pass.
+- **9.3.AR.6 Winner selection — see AR.18 (v0.1.9).** The v0.1.3+ winner-selection logic ranks **rescreen rows** by `objective_mean` and removes single-shot top candidates whose rescreen fell outside the noise floor (`status: rescreened, notes: inconsistent_rescreen`); a valid rescreen winner can fail a naïve all-feasible-rows Pareto check that ignores rescreen lineage. AR.18 is the load-bearing verifier for winner selection at v0.1. This AR.6 entry is retained as a numbering anchor — do **not** run a separate Pareto check over `results.tsv` that conflicts with the rescreen selection. Artifact: none required here; AR.18's artifact is the source of truth.
 - **9.3.AR.7 Precondition check fires.** A synthetic test that removes `measurement_harness.py`, runs the skill, and confirms the skill refuses to launch with `BLOCKED: harness module missing`. Artifact: test log.
 - **9.3.AR.8 No codex exec tried to finalize.** For every iteration's `agent_session.jsonl`, no invocation of `lumoserve auto-research finalize-round` appears. (That is Python's job — R7.) Artifact: transcript grep.
 - **9.3.AR.9 No codex exec emitted round-level stop decisions.** For every iteration's `agent_session.jsonl`, there is no message matching `/should (we|I|the round) (continue|stop)|call it a day|stopping the round/i`. Codex is allowed to decide *this* iteration is done; it is not allowed to decide the *round* is done. Artifact: transcript grep.
@@ -1268,14 +1535,17 @@ These are *additive* to the parent HLD's §9 checklist; each one has a new item 
 - **9.3.AR.12 Out-of-scope write kill path works.** A synthetic test that injects a disallowed file write into a codex exec (e.g., writes `src/foo.py`) and confirms Python's between-iteration watchdog terminates the round with `ROUND_BLOCKED: out_of_scope_write`. Artifact: test log.
 - **9.3.AR.13 Synthetic-fixture rejection.** A trace with `generator: SyntheticMeasurementFixture` is rejected by `commit-candidate` with structured error `commit_refused: non_real_generator`. Artifact: test log.
 - **9.3.AR.14 Fresh context per iteration.** `agent_session.jsonl` for iteration `<NNN>` does not contain any message from iteration `<NNN-1>` or earlier. (Each codex exec is freshly spawned per §2.3.) Artifact: cross-transcript check.
-- **9.3.AR.15 Phase A substrate is present on `main`.** At round launch time, `main` contains all 8 Phase A deliverables from §5.1: measurement_harness.py, capture_seed_workload.py, the **seven production CLI subcommands** (`bootstrap-round`, `measure`, `commit-candidate`, `rescreen`, `validate-holdout`, `finalize-round`, `status`) plus the env-gated `run`, the rewritten skill, the test fixture under `tests/fixtures/`, passing unit + integration tests, the pre-flight checks, and the two brief templates (`impl_brief.md`, `iteration_brief.md`). Artifact: a one-shot `verify_phase_a.sh` that probes each CLI subcommand via `lumoserve auto-research <name> --help-only` returning zero, checks module imports, runs the unit + integration test suites, and grep-checks the brief templates.
-- **9.3.AR.16 Double-baseline noise floor computed.** `round_spec.yaml` has `noise_floor` populated before the main search loop begins, and its value equals `2 × |m1.objective_value - m2.objective_value|` for the two baseline rows in `results.tsv` with `status: baseline`. Artifact: values read from `round_spec.yaml` and from the two baseline rows agree.
+- **9.3.AR.15 Phase A substrate is present on `main`.** At round launch time, `main` contains all 9 Phase A deliverables from §5.1: measurement_harness.py, capture_seed_workload.py, the **eight production CLI subcommands** (`bootstrap-round`, `measure`, `commit-candidate`, `rescreen`, `validate-holdout`, `finalize-round`, `status`, `run-round`) plus the env-gated `run`, the rewritten skill, the test fixture under `tests/fixtures/`, passing unit + integration tests, the pre-flight checks, the two brief templates (`impl_brief.md`, `iteration_brief.md`), and **`src/lumo_flywheel_serving/round_driver.py`** exposing `run_round()`. Artifact: a one-shot `verify_phase_a.sh` that (a) probes each of the eight production CLI subcommands + `run` via `lumoserve auto-research <name> --help-only` returning zero, (b) checks `from lumo_flywheel_serving.measurement_harness import RealMeasurementHarness` and `from lumo_flywheel_serving.round_driver import run_round` both succeed, (c) runs the unit + integration test suites, and (d) grep-checks the brief templates.
+- **9.3.AR.16 Double-baseline noise floor computed.** `round_spec.yaml` has `noise_floor` populated before the main search loop begins, and its value equals `2 × |m1.eval_throughput - m2.eval_throughput|` for the two baseline rows in `results.tsv` with `status: baseline`. Artifact: values read from `round_spec.yaml` and from the two baseline rows agree.
 - **9.3.AR.17 Rescreen phase executed with explicit lineage.** After the main search loop exits, `results.tsv` contains exactly `min(K_rescreen, feasible_candidate_count)` additional rows with `status: rescreened`, each carrying `measurement_count: 2`, `objective_mean`, `objective_ci_95`, and a **non-empty `parent_candidate_uuid`** matching a main-loop feasible row's `candidate_uuid`. The corresponding commit on the round branch carries a `Rescreen-Of-UUID: <parent_uuid>` trailer equal to the row's `parent_candidate_uuid`. Artifact: row-level join over `results.tsv` by `parent_candidate_uuid` + `git log --format='%(trailers:key=Rescreen-Of-UUID,valueonly)'` cross-check. The join must be 1-to-1 and stable — no main-loop row can be rescreened twice, and no rescreen row can lack a parent.
 - **9.3.AR.18 Winner picked by rescreen mean.** The finalize commit's `Winner-Candidate-UUID` trailer matches a main-loop row (not a rescreen row) whose rescreen mean `objective_mean` is highest among rescreened candidates, tie-broken by §4.2's latency p95s applied to the rescreen measurement. Resolution: take the FINALIZE trailer's uuid `U`, find the rescreen row whose `parent_candidate_uuid = U`, confirm its `objective_mean` is the max over all rescreen rows (with `notes != inconsistent_rescreen`). The winner is **not** the single-shot main-loop best — if the main-loop top-1 has a rescreen measurement that falls outside the noise floor, it is eliminated from contention via the `inconsistent_rescreen` flag. Artifact: a synthetic re-run of the tie-breaker over the rescreen rows returns the same parent uuid.
 - **9.3.AR.19 Holdout validation ran and passed.** `holdout_trace.json` exists under the round directory, records `pass: true`, and references the winner's `candidate_uuid`. The holdout trace is a different file-hash from the main `seed_trace_ref`. Artifact: existence + hash comparison.
-- **9.3.AR.20 Holdout rejection path works.** Synthetic test: an injected failing holdout (e.g., force a TTFT p95 regression on the holdout replay) causes `finalize-round` to refuse with `refusal_reason: holdout_failed` and the skill to report `ROUND_BUNDLE_REJECTED`. No bundle is written. Artifact: test log.
+- **9.3.AR.20 Holdout rejection path works.** Synthetic test: an injected failing holdout (e.g., force an OOM or a determinism-pass-rate drop on the holdout replay) causes `run_round` to exit in phase (d) with `stopping_reason: holdout_rejected` **before finalize-round is called**, and the skill reports `ROUND_INFEASIBLE` (v0.1.9 — not `ROUND_BUNDLE_REJECTED`, which is reserved for the post-finalize `live_gate_failed` case). No bundle is written to disk. Artifact: test log + confirmation that no file appears under `output/tuned_configs/<family_id>/<weight_version_id>/` from the test run.
 - **9.3.AR.21 Per-candidate cache isolation.** Every `measurement_trace.json` in the round records `cache_salt` equal to that candidate's `candidate_uuid`, and the first 10 requests' prefix-cache hit rate is ≤ 10%. Artifact: `jq` extraction over all traces.
-- **9.3.AR.22 `status` subcommand reports consistent state.** At finalize time, `lumoserve auto-research status --round-id <id> --json` emits a state blob whose `phase` is `finalized`, whose `iterations_total` equals the count of non-header rows in `results.tsv`, whose `feasible_count` equals the count of rows with `feasible: true`, whose `rescreened_count` equals the count of `status: rescreened` rows, and whose `round_wall_clock_elapsed_s` is ≤ `round_spec.yaml.round_wall_clock_s`. Calling `status` during each phase of §11.3 returns the matching phase name; a call made while no active round matches `--round-id` returns `phase: missing` with a non-zero exit code. Artifact: `status --json` output captured at phase boundaries + cross-check against `results.tsv`.
+- **9.3.AR.22 `status` subcommand reports consistent state (branch-aware per v0.1.8).** At finalize time, `lumoserve auto-research status --round-id <id> --json` — invoked from **any** branch of the main repo (including `main`, not just the round branch) — emits a state blob whose `phase` is `finalized`, whose `iterations_total` equals the count of non-header rows in `results.tsv` on the round branch, whose `feasible_count` equals the count of rows with `feasible: true`, whose `rescreened_count` equals the count of `status: rescreened` rows, whose `best_eval_throughput` matches the winning rescreen row's `objective_mean`, whose `round_wall_clock_elapsed_s` is ≤ `round_spec.yaml.round_wall_clock_s`, and whose `resolved_via` field is one of `{worktree, branch_show}` (never `working_tree_fallback` at finalize). Calling `status` during each phase of §11.3 returns the matching phase name. A call against an unknown round_id returns `phase: missing` with non-zero exit; a call whose `round_spec.yaml.round_branch` does not exist in the repo returns `phase: unresolvable_round_branch` with non-zero exit. Artifact: `status --json` captured from both `main` and the round branch — the two outputs must agree on `phase`, counts, and `best_eval_throughput`.
+- **9.3.AR.23 Worktree HEAD pin holds (v0.1.8 addition).** For every main-loop iteration, `git -C <round_dir> rev-parse HEAD` equals the expected HEAD on `round_branch` immediately after each codex exec returns — the §11.6 watchdog's worktree-drift check never fires during a passing round. A synthetic test that forces a `git checkout main` inside the worktree during a codex stub's execution confirms the watchdog terminates the round with `stopping_reason: worktree_drift`. Artifact: per-iteration HEAD log from the round + one synthetic test log.
+- **9.3.AR.24 `run-round` completes end-to-end against fixture (v0.1.8; v0.1.9 uses `--harness synthetic`).** A CI test invokes `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1 lumoserve auto-research run-round --harness synthetic --model-id qwen3.5-27b --family-id proposal-ranking-manager-judgment --sprint sprint-0 --workload-file benchmark_blueprints/families/proposal-ranking-manager-judgment/serving_workload.yaml --weight-version-id <fixture-sha> --round-root /tmp/dryrun-round`. Under `--harness synthetic` the §11.1 fixture-mode preconditions apply (items 7b–9b); `SyntheticMeasurementFixture` drives the loop; `finalize-round --dry-run` is invoked internally. Exit 0 with a `ROUND_PASSED` or `ROUND_INFEASIBLE` outcome inside a test-local wall-clock budget (default 10 min). This proves the Python outer loop (Phase A item 9) is wired end-to-end — baseline + main loop + rescreen + holdout + finalize all run — without requiring a live vLLM and without tripping the production-mode env-var guard. Artifact: test log including the §11.7 JSON report (`live_gate` will read `"skipped_fixture_mode"`).
+- **9.3.AR.25 No `CODEX_HOME` override during codex exec (v0.1.8 addition).** `agent_session.jsonl` for every main-loop iteration lacks any indication the codex session read config from `<round_dir>/codex-home` — specifically, the sub-spec forbids the `CODEX_HOME=<round_dir>/codex-home` env override that was in v0.1.6 (cause of the 2026-04-23 auth 401). Artifact: `subprocess.run` invocation captured in test fixture inspection — `env` argument does not set or override `CODEX_HOME`.
 
 ---
 
@@ -1337,7 +1607,20 @@ v0.1 uses a `Signed-off-by` DCO-style **structured trailer** to attribute round-
 - **v0.1.5 (2026-04-23)** — Third consistency pass resolving five lifecycle/artifact findings from the v0.1.4 review. **P1-F (bare `auto-research` instead of `lumoserve auto-research`)**: every `sh(...)` invocation in the §11.3 pseudocode — measure, commit-candidate, rescreen, validate-holdout, finalize-round — now carries the `lumoserve` prefix. Previously the pseudocode mixed bare `auto-research` (which would fail to resolve on the PATH) with the correctly-prefixed form in §5.2's `iteration_brief.md` template. **P1-G (baseline rows never committed)**: phase (a) pseudocode now explicitly loops `measure` → `commit-candidate` for both baseline replays so the two `status: baseline` rows satisfy the §7 Candidate-UUID-trailer contract. Previously only `measure` was called, leaving two ledger rows with no matching commit — a §9.3.AR.3 violation at verify time. **P1-H (duplicate `finalize-round` invocation)**: §11.4 now explicitly states `finalize-round` is called **exactly once per round**, inside `run_round()` phase (e); §11.4 is a cross-reference, not a second invocation. Previously §11.3's phase (e) and §11.4's separate code block both called `finalize-round`, risking duplicate FINALIZE commits or refusal-on-already-finalized. §11.4 now enumerates the three degenerate paths (no-feasible, holdout rejection, wall-clock cap) where `finalize-round` is not called at all. **P1-I (MeasuredTrace audit fields)**: §9.2 schema extended with `candidate_uuid`, `parent_candidate_uuid`, `profile`, `cache_isolation.{cache_salt,prefix_cache_reset_at_bootstrap,first_10_req_prefix_cache_hit_rate,last_10_req_prefix_cache_hit_rate}`. New "Required audit fields" table enumerates which fields back which downstream check (commit-candidate refusal, PromQL cross-check, cache isolation verification, lineage join, purity gate). A trace missing any required field is rejected by `commit-candidate` with `commit_refused: malformed_trace`. Previously implementers could satisfy the skeleton schema while failing the commit + §12 verification. **P2-J (transcript-count check scope)**: §9.3.AR.1 now filters to rows with `status ∈ {keep, discard, crash, harness_fault}` — the codex-proposed main-loop rows — and explicitly excludes `status: baseline` (Python-driven Phase a) and `status: rescreened` (Python-driven Phase c). Previously the check required one `agent_session.jsonl` per non-header row, which would always fail once baseline and rescreen rows existed. Sub_spec_version in `round_provenance` bumped to `v0.1.5`.
 - **v0.1.6 (2026-04-23)** — Fourth consistency pass resolving four contract-level findings from the v0.1.5 review. **P1-K (`--help-only` semantic inversion)**: §11.1 precondition previously said an existing subcommand "returns non-zero with a structured 'missing' message" on `--help-only`, contradicting §9.3.AR.15 which expects exit 0 for existing commands. Inverted: existing commands return 0 with `{"status":"registered"}`, missing commands return non-zero with `{"status":"missing"}`. Phase A gate is now unambiguous. **P1-L (baseline candidate files unwritten)**: phase (a) pseudocode called `measure` on `candidates/baseline_a/candidate.yaml` but no component wrote those files — `bootstrap-round` created an empty `candidates/` directory. §8.1 now explicitly has `bootstrap-round` write **both** baseline candidate directories with default-config yaml copied from `model_registry.yaml[model_id].vllm_config()`, unmodified and identical between `_a` and `_b`. §11.3 phase (a) finds them on disk when it invokes `measure`. **P1-M (rescreen artifact directory unspecified)**: §8.4 previously said `rescreen` "appends rows with fresh uuids and commits them" but did not specify where per-rescreen `measurement_trace.json` or `candidate.yaml` copies live — reusing the parent's directory would overwrite the original trace, and inventing hidden paths would break replayability. Added the `candidates/rescreen_<PP>/` directory convention (`PP` is a zero-padded two-digit rescreen-phase index — `rescreen_01`, `rescreen_02`, `rescreen_03`). Each rescreen directory holds a verbatim copy of the parent's `candidate.yaml` plus its own `measurement_trace.json`; parent directories are never mutated. Sample layout published in §8.4. **P2-N (`Winner-Candidate-UUID` ambiguity)**: §8.6 previously said finalize picks winner by `objective_mean` over rescreened top-K and §9.3.AR.18 expected the trailer to carry the parent main-loop uuid, but the spec didn't reconcile which uuid the trailer actually carries. Now explicit in both §7.4 and §8.6: `Winner-Candidate-UUID` is the **parent main-loop row's** `candidate_uuid` (the one whose `candidate.yaml.vllm_config` becomes the bundle). The fresh rescreen row's uuid is recorded as `winner_rescreen_uuid` in the FINALIZE commit body for lineage replay but is *not* a trailer. Rationale: the winner is the *configuration* that wins; rescreen rows are additional *measurements* of that same configuration. Sub_spec_version in `round_provenance` bumped to `v0.1.6`.
 - **v0.1.7 (2026-04-23)** — Fifth consistency pass resolving three contract-level findings from the v0.1.6 review. **P1-O (iteration-id grammar)**: `commit-candidate --iteration` was specified around numeric `<NNN>` but the manager loop called it with `000_baseline_a` / `000_baseline_b`, creating a silent grammar mismatch that would break validators, commit-message parsers, and ledger joins assuming numeric iterations. §7.2 now defines the formal iteration-id grammar `^(\d{3}|baseline_[ab]|rescreen_\d{2})$` as the single source of truth, admitting three disjoint forms (main-loop `001`–`999`, baseline `baseline_a` / `baseline_b`, rescreen `rescreen_01`–`rescreen_99`). §8.3 `commit-candidate --iteration <iteration_id>` flag now points at the grammar. Baseline directories renamed globally from `candidates/000_baseline_{a,b}/` to `candidates/baseline_{a,b}/` — the `000_` prefix was cosmetic and conflicting with the three-digit-numeric sub-grammar. §11.3 phase (a) pseudocode and §8.1 `bootstrap-round` effects updated accordingly. **P1-P (report stopping_reason enum)**: §11.7 report shape previously listed only seven stopping reasons that predated v0.1.3–v0.1.6's additions, so callers couldn't distinguish `holdout_rejected` (a legitimate no-finalize path that produces a bundle-on-disk-but-not-promoted outcome) from a generic `ROUND_BLOCKED`. Rewrote the enum as a 15-row table mapping every terminal state in §11.3 + §11.5 to a specific `stopping_reason` value and outcome pairing — including `no_feasible_rescreen_winner`, `holdout_rejected`, `wall_clock_cap_preflight_baseline`, `wall_clock_cap_preflight_rescreen`, `wall_clock_cap_preflight_holdout`, `live_gate_failed`. Added `rescreened_count` and `holdout_validation` to the report shape. **P2-Q (stale cross-references)**: three specific renumbering regressions from v0.1.4–v0.1.6 fixed — (i) §8 intro said "five agent-facing subcommands" → now correctly "seven production subcommands"; (ii) §8.6a's `run`-wrapper pointer said `§8.7` → corrected to `§8.8` (§8.7 is `status` since the v0.1.4 renumbering); (iii) `status` subcommand cited `§12.9.3.AR.22` which did not exist → fixed the reference format to `§9.3.AR.22` and added the missing verification item (AR.22 checks status-subcommand state consistency at finalize time). Sub_spec_version in `round_provenance` bumped to `v0.1.7`. §12 verification items now 22 total (was 21).
+- **v0.1.8 (2026-04-23)** — Major rewrite driven by the 2026-04-23 auto-research-status report. Five specific findings + one user-directed scope change, all landed together because they touch the same substrate (§0 / §4 / §5 / §8 / §9 / §11 / §12). **Scope change — throughput-primary, drop three-dim SLO (user directive).** "As long as vLLM eval can run and finish in batch and is generally stable, we only care about test throughput" (user verbatim). §0 adds an explicit divergence note against parent §4.1 / §5.4; §4.2 redefines feasibility as stability-only (window completed, no OOM, determinism ≥ 99.9%, purity = 1.0) and the primary objective as **`eval_throughput`** (completed eval requests per second in the steady-state window); §7.2 `results.tsv` schema drops the `ttft_p95_ms` / `tpot_p95_ms` / `turn_latency_p95_ms` / `rollout_throughput` columns and replaces them with `eval_throughput` / `window_completed` / `no_oom_events`; §9.2 `MeasuredTrace` moves latency p95 fields into a `diagnostics` block (still captured but no longer gates); §9.1 harness interface replaces `target_concurrency_sweep: list[int]` with `target_concurrency: int` (fixed per round, since there's no SLO-violation terminator for the sweep). Rationale: the 2026-04-23 round showed even the default-config baseline fails parent SLOs (TTFT ~51 s vs 35 s ceiling, turn ~145 s vs 35 s); closing a 4× turn-latency gap requires L0 kernel work which is v0.2 scope, so gating v0.1 on SLOs produces vacuous `ROUND_INFEASIBLE` outcomes. **(a) Drop per-round `CODEX_HOME`.** §2.3 Python invocation no longer sets `CODEX_HOME=<round_dir>/codex-home`; §8.1 `bootstrap-round` no longer writes `codex-home/.codex/config.toml`. Auth lives in the user's `~/.codex/auth.json` where codex-cli expects it; model pin (`gpt-5.4` / `reasoning_effort=high`) is passed via `-c` global flags at each `codex exec`. Fixes the 2026-04-23 auth 401 from the report. New §9.3.AR.25 verifies no CODEX_HOME override. **(b) Run round in a git worktree.** §8.1 `bootstrap-round` now creates `<round_dir>` via `git worktree add <round_dir> <round_branch>`. §2.3 codex exec invocation passes `--cd <worktree>`. §11.6 watchdog gains a post-iteration worktree-HEAD-pin check: if codex ran `git checkout main` inside the worktree, HEAD will have drifted, and the round exits with `stopping_reason: worktree_drift`. The worktree is what *prevents* the "codex switched to main" failure mode from the 2026-04-23 report; the existing `git diff` and trailer checks only *detect* such violations after the fact. New §9.3.AR.23 verifies the pin holds. **(c) Add `src/lumo_flywheel_serving/round_driver.py` + `lumoserve auto-research run-round` as Phase A deliverable 9.** §5.1 IMPL brief lists it as item 9; §8.8 specs the new CLI subcommand; §11.1 precondition probes for `run_round` import. The 2026-04-23 round stalled after iteration 001 because the §11.3 pseudocode was prose, not runnable code — a human hand-translated the phases and stopped iterating after the first rogue codex session. Packaging §11.3 as one callable function + one CLI invocation closes that gap. New §9.3.AR.24 verifies `run-round` completes end-to-end against the synthetic fixture. **(d) `status` reads from the round branch.** §8.7 rewritten with a 4-step resolution order (worktree fastest path → `git show <round_branch>:<path>` → missing → unresolvable). Previously `status` from `main` read an empty working-tree `results.tsv` and returned `phase: bootstrapped` even when the round branch had three committed rows. §9.3.AR.22 updated to require `status` agree across branches. New `resolved_via` field in the state blob distinguishes which resolution path was taken. **Secondary changes to the Python loop.** §11.3 pseudocode updated throughout to (i) use the worktree path (`worktree`, not `round_dir`) as the filesystem root, (ii) reference `eval_throughput` instead of `objective_value` for noise-floor computation and best-so-far tracking, (iii) add a `consecutive_harness_fault` counter with the same 3-in-a-row semantics as OOM and determinism, (iv) call the post-iteration worktree-HEAD-pin check. §11.7 stopping_reason enum gains `worktree_drift`. §11.6 watchdog gains the worktree-HEAD check as item 2 of the 4-check list. §12 verification items now 25 total (was 22) — new AR.23 (worktree pin), AR.24 (`run-round` end-to-end), AR.25 (no CODEX_HOME override). Sub_spec_version in `round_provenance` bumped to `v0.1.8`.
 
 ---
 
-*End of sub-spec v0.1.7. For reviewers: the critical diff against the 2026-04-23 round is §6.3 + §8.2 + §8.6 + §11.1 — in combination, these make it structurally impossible to produce a bundle via the synthetic harness without setting an explicit env-var opt-in, and even then the bundle is tagged with a generator string and `round_provenance.dry_run: true` that the skill's precondition rejects. The round that was run on 2026-04-23 would fail §9.3.AR.2, §9.3.AR.15, §9.3.AR.19, and §11.1 under this sub-spec.*
+- **v0.1.9 (2026-04-23)** — Seven-item v0.1.8-integration-fallout pass. **P1-R (worktree undefined)**: `bootstrap-round`'s JSON return now explicitly includes a `worktree_path` field (equals `round_dir` at v0.1; split is v0.2 material). §11.2 binds `worktree = bootstrap["worktree_path"]` explicitly; §11.3 uses the `worktree` name consistently. The `worktree_head_is_round_branch(worktree, branch)` helper is now documented inline with `git symbolic-ref HEAD` semantics so implementers aren't inventing it. **P1-S (fixture-mode precondition contradiction)**: §11.1 split into shared substrate checks (items 1–6) + production-mode-only checks (7a–9a, including `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT` UNset) + fixture-mode-only checks (7b–9b, including `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT` SET). §8.8 `run-round` gained `--harness real|synthetic` (default real); fixture mode routes through `finalize-round --dry-run` and skips the live family gate. §9.3.AR.24 updated to invoke `run-round --harness synthetic` and expect `live_gate: "skipped_fixture_mode"` in the report. Closes the "production precondition blocks the required CI proof" contradiction. **P1-T (AR.15 / §0 missed `run-round`)**: §0 deliverable item 3 now reads "eight production subcommands" and lists `run-round` explicitly; §9.3.AR.15 now probes all 8 production subcommands plus `run` and checks for both `measurement_harness` and `round_driver` module imports. §0 "done" criterion updated to "items 1–9." **P1-U (rescreen still used `objective_value`)**: §8.4 `rescreen` effects rewritten to rank top-K by `eval_throughput` and flag `inconsistent_rescreen` against the parent's `eval_throughput` ± `noise_floor`. §8.6a `finalize-round --dry-run` single-shot winner pick also uses `eval_throughput`. **P1-V (iteration_cap off-by-one)**: §11.3 main loop changed from `range(1, iteration_cap)` (yields 001..011) to `range(1, iteration_cap + 1)` (yields 001..012), matching the §4.1 budget table which states "12 search iterations" for `iteration_cap = 12`. Inclusive-upper-bound semantics documented at the range. **P1-W (holdout_rejected outcome conflict)**: holdout rejection happens in §11.3 phase (d), **before** finalize-round is called, so no bundle is written. §11.7 stopping_reason table row for `holdout_rejected` now maps to `ROUND_INFEASIBLE` (not `ROUND_BUNDLE_REJECTED`); the prose below the table clarifies that `ROUND_BUNDLE_REJECTED` is reserved for `live_gate_failed` (post-finalize, bundle-on-disk-but-not-promoted). §4.4(c), §11.4, §9.3.AR.20 all updated to match. **P1-X (AR.6 vs rescreen-based winner)**: AR.6 rewritten as a pointer to AR.18, which is the load-bearing rescreen-based winner-selection check. AR.6 retains its numbering anchor but no longer asserts a conflicting all-feasible-rows Pareto re-run. Sub_spec_version in `round_provenance` bumped to `v0.1.9`.
+
+---
+
+- **v0.1.10 (2026-04-23)** — Fourth consistency pass on v0.1.8/v0.1.9 integration. **P1-Y (fixture-mode blocked at `commit-candidate`)**: v0.1.9 required `run-round --harness synthetic` for AR.24, but `commit-candidate` only accepted `RealMeasurementHarness` traces — so the fixture path crashed at the first baseline commit. Added `--harness real|synthetic` flag to both `measure` (§8.2) and `commit-candidate` (§8.3). Synthetic mode requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`, accepts `SyntheticMeasurementFixture` generators, and stamps every commit with a `Fixture-Mode: true` trailer. §11.3 pseudocode threads `harness_flag` through all `measure`/`commit-candidate`/`rescreen`/`validate-holdout` calls and routes to `finalize-round --dry-run` when synthetic. Closes the contradiction between AR.24's required CI path and the existing commit refusal. **P1-Z (`run_round` signature missing ctx)**: `run_round(round_id, round_spec)` referenced `worktree` and `round_branch` without accepting them. Changed to `run_round(ctx: RoundContext) -> RoundResult` where `RoundContext` is a dataclass with `round_id`, `round_dir`, `round_branch`, `worktree`, `round_spec_path`, `round_spec`, `harness_mode`. `RoundContext.from_bootstrap_json(...)` constructs it from `bootstrap-round`'s JSON return. §0 item 9 + §11.2 + §11.3 function header all updated. No hidden globals; the public function can now be called as advertised. **P1-AA (BOOTSTRAP commit violated trailer contract)**: `bootstrap-round`'s initial commit has no candidate row, so §11.6's "every non-FINALIZE commit carries `Candidate-UUID`" rule would flag it and the first watchdog pass on a fresh round would fail. Added **§7.3a BOOTSTRAP commit format** with a dedicated `Bootstrap: true` trailer and a new four-kind commit-signature table (BOOTSTRAP, Candidate, Rescreen, FINALIZE). §11.6 watchdog rule and §9.3.AR.3 verifier updated to distinguish kinds by trailer signature and exempt BOOTSTRAP + FINALIZE from the `Candidate-UUID` check (each appears exactly once per branch). **P2-BB (drift recovery unspecified)**: §11.6 prose promised the watchdog force-restores the worktree HEAD on drift, but §11.3 pseudocode just returned `worktree_drift`. Added explicit `restore_worktree_head(worktree, branch)` helper documented in §11.6 (with its `git checkout --force + git reset --hard` semantics) and called from §11.3's drift path before the return. Operators never inherit a drifted worktree. Sub_spec_version in `round_provenance` bumped to `v0.1.10`.
+
+---
+
+- **v0.1.11 (2026-04-23)** — Fourth v0.1.10 integration-fallout pass, three real findings + one no-op. **P1-CC (impl_brief still described the old substrate)**: §5.1 Phase A impl_brief template rewritten — item 3 now enumerates all eight subcommands with v0.1.10's `--harness` flag notes; item 5 says `commit-candidate` refuses Synthetic in real mode and accepts it in synthetic mode (not a flat refusal); items 6–7 updated for v0.1.10's production-vs-fixture precondition split; new item 9 enumerates `round_driver.py` + `RoundContext` + `restore_worktree_head`. "Done when" criteria updated to include the new verification items. **P1-DD (duplicated codex token)**: reviewer's snapshot had `"codex"` appearing twice in the argv; current sub-spec state on disk at v0.1.10/11 has exactly one per subprocess.run (both §2.3 and §11.3 verified by `grep -n '"codex",'` — two total occurrences across the document, one per snippet). Marked as no-op; the file is already clean. **P1-EE (`rescreen` + `validate-holdout` didn't accept `--harness`)**: both §8.4 and §8.5 signatures extended with `--harness real|synthetic`. Real mode refuses when the parent rescreen-trace is synthetic (consistency gate); synthetic mode accepts synthetic parents, requires `LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1`, and stamps `Fixture-Mode: true` on commits / records it in `holdout_trace.json`. §11.3 pseudocode's `harness_flag` threading now matches the CLI signatures. **P1-FF (dry-run finalize bypassed rescreen winner path)**: §8.6a rewritten with a **three-branch winner-selection rule**. Branch 1 (fixture mode via `run-round --harness synthetic`, which *does* run rescreen+holdout) picks the winner by rescreen `objective_mean` resolving to the parent main-loop uuid — same logic as production `finalize-round`. Branch 2 (legacy `auto-research run` smoke path) picks single-shot `eval_throughput`. Branch 3 (no rescreen and no feasible main-loop row) refuses with `no_feasible_row_for_dry_run`. This closes AR.24's claim that the fixture path validates production-grade wiring: `run-round --harness synthetic` now exercises the same `objective_mean`-based selection that a real round does. Sub_spec_version in `round_provenance` bumped to `v0.1.11`.
+
+---
+
+*End of sub-spec v0.1.11. For reviewers: v0.1.11 is a sweep over the v0.1.10 CLI-surface and brief-template changes that left a few inconsistencies between `impl_brief.md` (stale), `rescreen`/`validate-holdout` signatures (missing `--harness`), and `finalize-round --dry-run` (didn't honor rescreen artifacts when they existed). The fixture path is now internally consistent end-to-end: `run-round --harness synthetic` → baseline measure+commit with Fixture-Mode trailer → main-loop iterations with Fixture-Mode trailers → rescreen with Fixture-Mode trailers → validate-holdout recording `harness: synthetic` → `finalize-round --dry-run` taking winner from rescreen `objective_mean` (branch 1, same as production) → bundle with `round_provenance.dry_run: true`. Production path (`--harness real`) is structurally identical but without the env-var opt-in and without the dry-run tag.*
