@@ -14,3 +14,4 @@ f101a83c-e86c-4707-994e-0a6e82dc1cd0		010	candidate-010	true	0.006667			1	true	t
 1576c730-d159-484f-a8ac-34ffbcbb571e		011	candidate-011	true	0.006667			1	true	true	1.0	1.0	discard	Feasible and stable at sustained_concurrency 32, but eval_throughput stayed at 0.006667 and TTFT_p95/turn_latency_p95 regressed to 50771 ms/145059 ms in measurement_trace.json.
 edbacc25-71f3-4290-acf7-061057488c0b		012	candidate-012	true	0.006667			1	true	true	1.0	1.0	discard	Feasible and stable, but eval_throughput stayed at 0.006667 and max_model_len=16384 still trailed candidate-001 on TTFT_p95/turn_latency_p95 at 47133 ms/134667 ms.
 5e5d2e8f-845d-4a40-baea-20590b8dbed5	92c6559a-55ac-49e9-925f-3b1f52de3666	rescreen_01	rescreen_01	true	0.002667	0.005	0.004	2	true	true	1.0	1.0	rescreened	inconsistent_rescreen
+f20d92e3-f9ac-4fee-afc5-b2df74e174d7	b262c644-9274-45e3-991b-4d4ea6bd99d3	rescreen_02	rescreen_02	true	0.002667	0.005	0.004	2	true	true	1.0	1.0	rescreened	inconsistent_rescreen
