@@ -1,0 +1,120 @@
+{
+  "cache_isolation": {
+    "cache_salt": "3de60d70-2fe3-4491-9945-7a16228b76fb",
+    "first_10_req_prefix_cache_hit_rate": 0.0,
+    "last_10_req_prefix_cache_hit_rate": 0.0,
+    "prefix_cache_reset_at_bootstrap": true
+  },
+  "candidate_label": "candidate-001",
+  "candidate_uuid": "3de60d70-2fe3-4491-9945-7a16228b76fb",
+  "candidate_vllm_config": {
+    "enable_chunked_prefill": true,
+    "enable_prefix_caching": true,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "fp8_e5m2",
+    "max_model_len": 32768,
+    "max_num_batched_tokens": 8192,
+    "max_num_seqs": 8
+  },
+  "determinism_pass_rate": 1.0,
+  "diagnostics": {
+    "rollout_throughput": 7.586,
+    "target_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 207.101,
+      "promql": 207.101
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 133818.874,
+      "promql": 133818.874
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 382339.639,
+      "promql": 382339.639
+    }
+  },
+  "eval_throughput": 0.007586,
+  "feasibility_failures": [],
+  "feasible": true,
+  "generator": "RealMeasurementHarness v0.1.0",
+  "harness_health_warnings": [],
+  "iteration": "001",
+  "no_oom_events": true,
+  "parent_candidate_uuid": null,
+  "per_request_latencies": [
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0001",
+      "response_tokens": 1200,
+      "thinking_tokens": 0,
+      "tpot_ms": 207.101,
+      "ttft_ms": 133818.874,
+      "turn_latency_ms": 382339.639
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0002",
+      "response_tokens": 1100,
+      "thinking_tokens": 0,
+      "tpot_ms": 311.574,
+      "ttft_ms": 184547.9,
+      "turn_latency_ms": 527279.716
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0003",
+      "response_tokens": 900,
+      "thinking_tokens": 0,
+      "tpot_ms": 85.624,
+      "ttft_ms": 41494.528,
+      "turn_latency_ms": 118555.795
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0004",
+      "response_tokens": 800,
+      "thinking_tokens": 0,
+      "tpot_ms": 181.544,
+      "ttft_ms": 78203.454,
+      "turn_latency_ms": 223438.441
+    }
+  ],
+  "profile": "screen",
+  "reasoning_content_purity": 1.0,
+  "resolved": {
+    "attention_backend": "unknown",
+    "deltanet_kernel": "unknown",
+    "torch_compile_mode": "default"
+  },
+  "rollout_throughput": 7.586,
+  "round_id": "qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T072126Z",
+  "seed_trace_replay_ref": "candidates/001/replay.jsonl",
+  "sustained_concurrency": 4,
+  "tpot_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 207.101,
+    "promql": 207.101
+  },
+  "ttft_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 133818.874,
+    "promql": 133818.874
+  },
+  "turn_latency_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 382339.639,
+    "promql": 382339.639
+  },
+  "vllm_metrics_snapshot_ref": "candidates/001/vllm_metrics.prom",
+  "window_completed": true,
+  "windows": {
+    "measurement_elapsed_s": 527.292,
+    "measurement_end_wallclock": "2026-04-24T07:48:14Z",
+    "measurement_s": 600,
+    "measurement_start_wallclock": "2026-04-24T07:39:27Z",
+    "warmup_s": 120
+  }
+}
