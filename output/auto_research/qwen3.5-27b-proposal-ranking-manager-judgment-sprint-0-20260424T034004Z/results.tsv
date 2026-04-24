@@ -3,3 +3,4 @@ candidate_uuid	parent_candidate_uuid	iteration	candidate_label	feasible	eval_thr
 b262c644-9274-45e3-991b-4d4ea6bd99d3		baseline_b	baseline_b	true	0.006667			1	true	true	1.0	1.0	baseline	default-config baseline replay b
 618e2036-1219-46df-a805-cc8ea059ba84		001	candidate-001	true	0.006667			1	true	true	1.0	1.0	discard	feasible and stable, but eval_throughput stayed at 0.006667 despite sustained_concurrency 16, so there was no gain over baseline
 0f06010a-a0b0-4e96-909a-e2b1288f8c71		002	candidate-002	true	0.006667			1	true	true	1.0	1.0	discard	Feasible and stable, but eval_throughput stayed at 0.006667 and disabling prefix caching regressed TTFT_p95 to 50789 ms with prefix-cache hit rate still 0.0.
+60745b03-a4ff-463c-88f1-8de477eb5ce7		003	candidate-003	true	0.006667			1	true	true	1.0	1.0	discard	Feasible and stable, but eval_throughput stayed at 0.006667 and TTFT_p95/turn_latency_p95 regressed to 50781 ms/145089 ms versus candidate-001.
