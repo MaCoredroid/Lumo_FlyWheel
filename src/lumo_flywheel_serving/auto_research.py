@@ -1134,6 +1134,9 @@ class AutoResearchRoundManager:
             for key in candidate
             if key in ALLOWED_VLLM_CONFIG_KEYS or key in allowed_extra_keys
         }
+        rows = self._read_results(round_dir / "results.tsv")
+        if any(row.iteration == iteration_id for row in rows):
+            raise RuntimeError(f"measure_refused: results row already exists for iteration {iteration_id}")
         candidate_uuid = str(uuid4())
         candidate_label = f"candidate-{iteration_id}" if iteration_id.isdigit() else iteration_id
 
@@ -1183,9 +1186,6 @@ class AutoResearchRoundManager:
         trace_path = candidate_dir / "measurement_trace.json"
         trace_path.write_text(json.dumps(trace, indent=2, sort_keys=True), encoding="utf-8")
 
-        rows = self._read_results(round_dir / "results.tsv")
-        if any(row.iteration == iteration_id for row in rows):
-            raise RuntimeError(f"measure_refused: results row already exists for iteration {iteration_id}")
         rows.append(self._trace_to_pending_row(trace))
         self._write_results(round_dir / "results.tsv", rows)
         return {
@@ -1252,14 +1252,16 @@ class AutoResearchRoundManager:
         ]
         self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
         self._assert_git_index_clean(context="commit_refused")
-        self._maybe_persist_noise_floor(round_dir=round_dir, spec=spec, rows=updated_rows)
-        self._write_results(round_dir / "results.tsv", updated_rows)
         self._assert_immutable_round_artifacts(round_dir, spec=spec, context="commit_refused")
         self._assert_dirty_paths_match_expected(
             mutable_paths=[candidate_dir, round_dir / "results.tsv", round_dir / "round_spec.yaml"],
             bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
             context="commit_refused",
         )
+        updated_spec = self._updated_spec_with_noise_floor(spec=spec, rows=updated_rows)
+        if updated_spec != spec:
+            self._write_yaml(round_dir / "round_spec.yaml", updated_spec.as_dict())
+        self._write_results(round_dir / "results.tsv", updated_rows)
 
         commit_message = self._candidate_commit_message(
             round_id=round_id,
@@ -1305,6 +1307,18 @@ class AutoResearchRoundManager:
         for index, parent in enumerate(selected, start=1):
             iteration = f"rescreen_{index:02d}"
             rescreen_dir = round_dir / "candidates" / iteration
+            staged_paths = [
+                path.relative_to(self.repo_root)
+                for path in [*self._bootstrap_round_artifact_paths(round_dir), rescreen_dir, round_dir / "results.tsv"]
+            ]
+            self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
+            self._assert_git_index_clean(context="commit_refused")
+            self._assert_immutable_round_artifacts(round_dir, spec=spec, context="commit_refused")
+            self._assert_dirty_paths_match_expected(
+                mutable_paths=[rescreen_dir, round_dir / "results.tsv", round_dir / "round_spec.yaml"],
+                bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
+                context="commit_refused",
+            )
             rescreen_dir.mkdir(parents=True, exist_ok=False)
             parent_candidate_dir = round_dir / "candidates" / parent.iteration
             shutil.copy2(parent_candidate_dir / "candidate.yaml", rescreen_dir / "candidate.yaml")
@@ -1353,19 +1367,15 @@ class AutoResearchRoundManager:
                     )
                 else:
                     updated_rows.append(row)
-            staged_paths = [
-                path.relative_to(self.repo_root)
-                for path in [*self._bootstrap_round_artifact_paths(round_dir), rescreen_dir, round_dir / "results.tsv"]
-            ]
             self._assert_only_allowed_staged_paths(staged_paths, context="commit_refused")
             self._assert_git_index_clean(context="commit_refused")
-            self._write_results(round_dir / "results.tsv", updated_rows)
             self._assert_immutable_round_artifacts(round_dir, spec=spec, context="commit_refused")
             self._assert_dirty_paths_match_expected(
                 mutable_paths=[rescreen_dir, round_dir / "results.tsv", round_dir / "round_spec.yaml"],
                 bootstrap_paths=self._bootstrap_round_artifact_paths(round_dir),
                 context="commit_refused",
             )
+            self._write_results(round_dir / "results.tsv", updated_rows)
             commit_message = self._candidate_commit_message(
                 round_id=round_id,
                 iteration=iteration,
@@ -1488,14 +1498,7 @@ class AutoResearchRoundManager:
         measurement_trace_combined = []
         for trace_path in sorted((round_dir / "candidates").glob("*/measurement_trace.json")):
             measurement_trace_combined.append(json.loads(trace_path.read_text(encoding="utf-8")))
-        measurement_trace_ref.write_text(
-            json.dumps(measurement_trace_combined, indent=2),
-            encoding="utf-8",
-        )
-        search_trace_ref.write_text(
-            json.dumps([row.as_dict() for row in rows], indent=2),
-            encoding="utf-8",
-        )
+        search_trace_payload = [row.as_dict() for row in rows]
         bundle = make_tuned_config_bundle(
             model_id=spec.model_id,
             family_id=spec.family_id,
@@ -1525,7 +1528,7 @@ class AutoResearchRoundManager:
                 "holdout_validation": "skipped" if dry_run else "pass",
             },
         )
-        bundle_path = persist_tuned_config_bundle(bundle, self.tuned_config_root)
+        bundle_path = self._bundle_output_path(bundle)
         run_log = {
             "round_id": round_id,
             "winner_iteration": winner_row.iteration,
@@ -1538,10 +1541,6 @@ class AutoResearchRoundManager:
             "rescreened_count": sum(1 for row in rows if row.status == "rescreened"),
             "holdout_validation": "skipped" if dry_run else "pass",
         }
-        (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
-        lock_path = round_dir / ".round.lock"
-        if lock_path.exists():
-            lock_path.unlink()
 
         commit_message = (
             f"AR({round_id}) FINALIZE: {winner_row.candidate_label} - obj={winner_row.objective_mean or winner_row.objective_value}\n\n"
@@ -1563,12 +1562,26 @@ class AutoResearchRoundManager:
             staged_paths.append((round_dir / "rescreen_trace.json").relative_to(self.repo_root))
         if (round_dir / "holdout_trace.json").exists():
             staged_paths.append((round_dir / "holdout_trace.json").relative_to(self.repo_root))
+        self._assert_only_allowed_staged_paths(staged_paths, context="finalize-round refuses")
         self._assert_immutable_round_artifacts(round_dir, spec=spec, context="finalize-round refuses")
         if spec.harness_type != "synthetic":
             self._assert_dirty_paths_match_expected(
                 mutable_paths=[self.repo_root / path for path in staged_paths] + [round_dir / "round_spec.yaml"],
                 context="finalize-round refuses",
             )
+        measurement_trace_ref.write_text(
+            json.dumps(measurement_trace_combined, indent=2),
+            encoding="utf-8",
+        )
+        search_trace_ref.write_text(
+            json.dumps(search_trace_payload, indent=2),
+            encoding="utf-8",
+        )
+        bundle_path = persist_tuned_config_bundle(bundle, self.tuned_config_root)
+        (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+        lock_path = round_dir / ".round.lock"
+        if lock_path.exists():
+            lock_path.unlink()
         finalize_commit_sha = self._commit_paths(
             staged_paths,
             commit_message,
@@ -2185,13 +2198,12 @@ class AutoResearchRoundManager:
     def _write_yaml(self, path: Path, payload: Any) -> None:
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
-    def _maybe_persist_noise_floor(
+    def _updated_spec_with_noise_floor(
         self,
         *,
-        round_dir: Path,
         spec: RoundSpecRecord,
         rows: list[ResultsRow],
-    ) -> None:
+    ) -> RoundSpecRecord:
         baseline_rows = sorted(
             (
                 row
@@ -2201,21 +2213,20 @@ class AutoResearchRoundManager:
             key=lambda row: row.iteration,
         )
         if len(baseline_rows) != 2:
-            return
+            return spec
         try:
             objectives = [float(row.objective_value) for row in baseline_rows]
         except (TypeError, ValueError):
-            return
+            return spec
         noise_floor = 2.0 * abs(objectives[0] - objectives[1])
         if math.isclose(spec.noise_floor, noise_floor, rel_tol=0.0, abs_tol=1e-9):
-            return
-        updated_spec = RoundSpecRecord(
+            return spec
+        return RoundSpecRecord(
             **{
                 **spec.__dict__,
                 "noise_floor": noise_floor,
             }
         )
-        self._write_yaml(round_dir / "round_spec.yaml", updated_spec.as_dict())
 
     @staticmethod
     def _ci95(values: list[float]) -> float:
@@ -2224,3 +2235,6 @@ class AutoResearchRoundManager:
         mean = sum(values) / len(values)
         variance = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
         return 1.96 * math.sqrt(variance) / math.sqrt(len(values))
+
+    def _bundle_output_path(self, bundle: TunedConfigBundle) -> Path:
+        return self.tuned_config_root / bundle.family_id / bundle.weight_version_id / f"{bundle.run_slug}.yaml"

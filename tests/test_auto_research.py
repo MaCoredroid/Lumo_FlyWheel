@@ -688,6 +688,8 @@ def test_commit_candidate_refuses_when_bootstrap_artifact_is_dirty(
     )
 
     manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
+    results_before = (round_dir / "results.tsv").read_text(encoding="utf-8")
+    round_spec_before = (round_dir / "round_spec.yaml").read_text(encoding="utf-8")
     (round_dir / "impl_brief.md").write_text("corrupted brief\n", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match=r"commit_refused: immutable round artifact changed: impl_brief.md"):
@@ -697,6 +699,8 @@ def test_commit_candidate_refuses_when_bootstrap_artifact_is_dirty(
             status="keep",
             notes="should refuse dirty bootstrap artifact",
         )
+    assert (round_dir / "results.tsv").read_text(encoding="utf-8") == results_before
+    assert (round_dir / "round_spec.yaml").read_text(encoding="utf-8") == round_spec_before
 
 
 def test_measure_rejects_duplicate_iteration_row(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1773,6 +1777,11 @@ kv_cache_dtype: fp8_e5m2
 
     with pytest.raises(RuntimeError, match=r"finalize-round refuses: staged paths outside allow-list: README.md"):
         manager.finalize_round(round_id=bootstrap["round_id"], dry_run=True)
+    assert not (round_dir / "run_log.json").exists()
+    assert not (round_dir / "search_trace.json").exists()
+    assert not (round_dir / "measurement_trace_combined.json").exists()
+    assert (round_dir / ".round.lock").exists()
+    assert list((repo / "output" / "tuned_configs").glob("**/*.yaml")) == []
 
 
 def test_finalize_round_refuses_when_round_artifact_is_dirty(tmp_path: Path) -> None:
