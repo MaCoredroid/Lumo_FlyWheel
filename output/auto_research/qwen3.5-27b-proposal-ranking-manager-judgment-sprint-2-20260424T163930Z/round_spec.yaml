@@ -25,7 +25,7 @@ screen_profile_s: 900
 full_profile_s: 1980
 per_iteration_codex_wall_clock_s: 2700
 diminishing_returns_window_k: 4
-noise_floor: 0.0
+noise_floor: 0.007980000000000001
 parent_head_sha: 200b729d912eda0256b8c8d5c39110693f934ddd
 harness_type: real
 round_started_at: 1777048770.7878077
