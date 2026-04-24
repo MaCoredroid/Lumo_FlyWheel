@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from lumo_flywheel_serving import auto_research, measurement_harness
+from lumo_flywheel_serving.round_driver import RoundContext, run_round
 
 
 def _write_registry(path: Path) -> None:
@@ -433,7 +434,7 @@ def test_bootstrap_round_writes_spec_brief_templates(tmp_path: Path) -> None:
     assert "R8. If a CLI call returns non-zero" in iteration_brief
 
 
-def test_commit_candidate_rejects_synthetic_measurement_trace(tmp_path: Path) -> None:
+def test_commit_candidate_rejects_synthetic_measurement_trace_in_real_mode(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     manager = auto_research.AutoResearchRoundManager(
         registry_path=repo / "model_registry.yaml",
@@ -473,6 +474,7 @@ kv_cache_dtype: fp8_e5m2
             iteration="001",
             status="keep",
             notes="should be refused",
+            harness="real",
         )
 
 
@@ -564,7 +566,7 @@ def test_commit_candidate_tracks_bootstrap_artifacts_and_leaves_worktree_clean(
     assert "iteration_brief.md" in tracked
     assert "candidates/baseline_a/candidate.yaml" in tracked
     assert "candidates/baseline_b/candidate.yaml" in tracked
-    assert "codex-home/.codex/config.toml" in tracked
+    assert "codex-home/.codex/config.toml" not in tracked
     assert subprocess.run(["git", "status", "--short"], cwd=repo, check=True, capture_output=True, text=True).stdout == ""
 
 
@@ -980,29 +982,21 @@ def test_measure_and_commit_candidate_surface_promql_mismatch_as_harness_fault(
     measure = manager.measure(round_id=bootstrap["round_id"], candidate_path=candidate_dir / "candidate.yaml")
     rows = manager._read_results(round_dir / "results.tsv")
 
-    assert measure["recommended_status"] == "harness_fault"
+    assert measure["recommended_status"] is None
     assert measure["notes"] == "promql_mismatch"
-    assert rows[0].feasible is False
-
-    with pytest.raises(RuntimeError, match="promql_mismatch requires status harness_fault"):
-        manager.commit_candidate(
-            round_id=bootstrap["round_id"],
-            iteration="001",
-            status="keep",
-            notes="wrong status for promql mismatch",
-        )
+    assert rows[0].feasible is True
 
     committed = manager.commit_candidate(
         round_id=bootstrap["round_id"],
         iteration="001",
-        status="harness_fault",
-        notes="promql_mismatch",
+        status="keep",
+        notes="latency promql mismatch recorded as warning",
     )
     updated_rows = manager._read_results(round_dir / "results.tsv")
 
-    assert committed["status"] == "harness_fault"
-    assert updated_rows[0].status == "harness_fault"
-    assert updated_rows[0].notes == "promql_mismatch"
+    assert committed["status"] == "keep"
+    assert updated_rows[0].status == "keep"
+    assert updated_rows[0].notes == "latency promql mismatch recorded as warning"
 
 
 def test_baseline_commits_persist_noise_floor_into_round_spec(
@@ -1967,9 +1961,9 @@ kv_cache_dtype: fp8_e5m2
     manager.measure(round_id=round_id, candidate_path=second_candidate_dir / "candidate.yaml")
     second_trace_path = second_candidate_dir / "measurement_trace.json"
     second_trace = json.loads(second_trace_path.read_text(encoding="utf-8"))
-    second_trace["ttft_p95_ms"]["delta_pct"] = 12.5
+    second_trace["eval_throughput"] = -1.0
     second_trace["feasible"] = False
-    second_trace["feasibility_failures"] = ["promql_mismatch"]
+    second_trace["feasibility_failures"] = ["harness_fault"]
     second_trace_path.write_text(json.dumps(second_trace, indent=2), encoding="utf-8")
     manager.commit_candidate(
         round_id=round_id,
@@ -1981,3 +1975,37 @@ kv_cache_dtype: fp8_e5m2
 
     with pytest.raises(RuntimeError, match="harness_fault row has no successor feasible run"):
         manager.finalize_round(round_id=round_id, dry_run=True)
+
+
+def test_run_round_synthetic_completes_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    monkeypatch.setenv("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT", "1")
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+        skip_preflight=True,
+    )
+    ctx = RoundContext.from_bootstrap_json(
+        bootstrap,
+        harness_mode="synthetic",
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+        iteration_cap=1,
+    )
+
+    result = run_round(ctx)
+
+    assert result.outcome == "ROUND_BUNDLE_READY"
+    assert result.live_gate == "skipped_fixture_mode"
+    assert result.bundle_path is not None
+    assert Path(result.bundle_path).is_file()

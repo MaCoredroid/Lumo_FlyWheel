@@ -1,0 +1,329 @@
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from .auto_research import AutoResearchRoundManager, OfflineAutoResearchRunner, load_baseline_bundle
+from .registry import load_registry
+
+
+@dataclass(frozen=True)
+class RoundContext:
+    round_id: str
+    round_dir: Path
+    round_branch: str
+    worktree: Path
+    round_spec_path: Path
+    round_spec: dict[str, Any]
+    harness_mode: str
+    registry_path: Path
+    tuned_config_root: Path
+    port: int = 8000
+    proxy_port: int = 8001
+    iteration_cap: int | None = None
+
+    @classmethod
+    def from_bootstrap_json(
+        cls,
+        payload: dict[str, Any],
+        *,
+        harness_mode: str,
+        registry_path: Path,
+        tuned_config_root: Path,
+        port: int = 8000,
+        proxy_port: int = 8001,
+        iteration_cap: int | None = None,
+    ) -> "RoundContext":
+        round_spec_path = Path(str(payload["round_spec_path"])).resolve()
+        raw = yaml.safe_load(round_spec_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise RuntimeError(f"Invalid round spec: {round_spec_path}")
+        return cls(
+            round_id=str(payload["round_id"]),
+            round_dir=Path(str(payload["round_dir"])).resolve(),
+            round_branch=str(payload["round_branch"]),
+            worktree=Path(str(payload.get("worktree_path", payload["round_dir"]))).resolve(),
+            round_spec_path=round_spec_path,
+            round_spec=raw,
+            harness_mode=harness_mode,
+            registry_path=Path(registry_path).resolve(),
+            tuned_config_root=Path(tuned_config_root).resolve(),
+            port=port,
+            proxy_port=proxy_port,
+            iteration_cap=iteration_cap,
+        )
+
+
+@dataclass(frozen=True)
+class RoundResult:
+    round_id: str
+    round_branch: str
+    outcome: str
+    stopping_reason: str
+    bundle_path: str | None
+    iterations_total: int
+    feasible_count: int
+    rescreened_count: int
+    holdout_validation: str
+    live_gate: str
+    blocker: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "round_id": self.round_id,
+            "round_branch": self.round_branch,
+            "outcome": self.outcome,
+            "stopping_reason": self.stopping_reason,
+            "bundle_path": self.bundle_path,
+            "iterations_total": self.iterations_total,
+            "feasible_count": self.feasible_count,
+            "rescreened_count": self.rescreened_count,
+            "holdout_validation": self.holdout_validation,
+            "live_gate": self.live_gate,
+            "blocker": self.blocker,
+        }
+
+
+def restore_worktree_head(worktree: Path, branch: str) -> None:
+    subprocess.run(["git", "checkout", "--force", branch], cwd=worktree, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "reset", "--hard", branch], cwd=worktree, check=True, capture_output=True, text=True)
+
+
+def run_round(ctx: RoundContext) -> RoundResult:
+    repo_root = _git(["rev-parse", "--show-toplevel"], cwd=ctx.worktree).strip()
+    manager = AutoResearchRoundManager(
+        registry_path=ctx.registry_path,
+        repo_root=repo_root,
+        tuned_config_root=ctx.tuned_config_root,
+        port=ctx.port,
+        proxy_port=ctx.proxy_port,
+    )
+
+    try:
+        _run_baselines(manager, ctx)
+        if ctx.harness_mode == "synthetic":
+            _run_synthetic_main_loop(manager, ctx)
+        else:
+            _run_codex_main_loop(manager, ctx)
+
+        manager.rescreen(
+            round_id=ctx.round_id,
+            top_k=int(ctx.round_spec.get("rescreen_top_k", 3)),
+            profile="full",
+            harness=ctx.harness_mode,
+        )
+        winner_uuid = _winner_parent_uuid(ctx.round_dir)
+        holdout = manager.validate_holdout(
+            round_id=ctx.round_id,
+            candidate_uuid=winner_uuid,
+            harness=ctx.harness_mode,
+        )
+        if not bool(holdout.get("pass")):
+            return _result_from_status(
+                manager,
+                ctx,
+                outcome="ROUND_INFEASIBLE",
+                stopping_reason="holdout_rejected",
+                bundle_path=None,
+                holdout_validation="fail",
+                live_gate="skipped_no_bundle",
+                blocker=",".join(str(reason) for reason in holdout.get("reasons_failed", [])),
+            )
+
+        finalized = manager.finalize_round(round_id=ctx.round_id, dry_run=ctx.harness_mode == "synthetic")
+        live_gate = "skipped_fixture_mode" if ctx.harness_mode == "synthetic" else "not_run"
+        return _result_from_status(
+            manager,
+            ctx,
+            outcome="ROUND_BUNDLE_READY",
+            stopping_reason="ok",
+            bundle_path=str(finalized["bundle_path"]),
+            holdout_validation="pass",
+            live_gate=live_gate,
+        )
+    except Exception as exc:
+        return _result_from_status(
+            manager,
+            ctx,
+            outcome="ROUND_BLOCKED",
+            stopping_reason="exception",
+            bundle_path=None,
+            holdout_validation="not_run",
+            live_gate="skipped_no_bundle",
+            blocker=str(exc),
+        )
+
+
+def _run_baselines(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
+    for suffix in ("a", "b"):
+        iteration = f"baseline_{suffix}"
+        candidate_path = ctx.round_dir / "candidates" / iteration / "candidate.yaml"
+        manager.measure(round_id=ctx.round_id, candidate_path=candidate_path, harness=ctx.harness_mode)
+        manager.commit_candidate(
+            round_id=ctx.round_id,
+            iteration=iteration,
+            status="baseline",
+            notes=f"default-config baseline replay {suffix}",
+            harness=ctx.harness_mode,
+        )
+
+
+def _run_synthetic_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
+    registry = load_registry(ctx.registry_path)
+    model_config = registry[str(ctx.round_spec["model_id"])]
+    workload_file = Path(str(ctx.round_spec["workload_file"]))
+    from .auto_research import SyntheticWorkloadDistribution
+
+    workload_distribution = SyntheticWorkloadDistribution.from_file(
+        workload_file,
+        model_config=model_config,
+        family_id=str(ctx.round_spec["family_id"]),
+    )
+    runner = OfflineAutoResearchRunner(
+        model_config=model_config,
+        family_id=str(ctx.round_spec["family_id"]),
+        output_root=ctx.round_dir / "_synthetic_plan",
+        workload=workload_distribution,
+        baseline_bundle=load_baseline_bundle(None),
+        weight_version_id=str(ctx.round_spec["weight_version_id"]),
+        iteration_cap=int(ctx.iteration_cap or ctx.round_spec.get("iteration_cap", 12)),
+    )
+    for index, candidate in enumerate(runner._candidate_plan(), start=1):
+        if index > int(ctx.iteration_cap or ctx.round_spec.get("iteration_cap", 12)):
+            break
+        iteration = f"{index:03d}"
+        candidate_dir = ctx.round_dir / "candidates" / iteration
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+        (candidate_dir / "candidate.yaml").write_text(yaml.safe_dump(candidate, sort_keys=False), encoding="utf-8")
+        manager.measure(round_id=ctx.round_id, candidate_path=candidate_dir / "candidate.yaml", harness=ctx.harness_mode)
+        trace = json.loads((candidate_dir / "measurement_trace.json").read_text(encoding="utf-8"))
+        status = "keep" if bool(trace.get("feasible")) else ("crash" if not trace.get("no_oom_events") else "discard")
+        manager.commit_candidate(
+            round_id=ctx.round_id,
+            iteration=iteration,
+            status=status,
+            notes="synthetic run-round candidate",
+            harness=ctx.harness_mode,
+        )
+
+
+def _run_codex_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
+    for index in range(1, int(ctx.iteration_cap or ctx.round_spec.get("iteration_cap", 12)) + 1):
+        iteration = f"{index:03d}"
+        iteration_dir = ctx.round_dir / "candidates" / iteration
+        iteration_dir.mkdir(parents=True, exist_ok=True)
+        prompt = _iteration_prompt(ctx, iteration=iteration, next_iteration=f"{index + 1:03d}")
+        transcript = iteration_dir / "agent_session.jsonl"
+        with transcript.open("wb") as transcript_handle:
+            result = subprocess.run(
+                [
+                    "codex",
+                    "-c",
+                    'model="gpt-5.4"',
+                    "-c",
+                    'model_reasoning_effort="high"',
+                    "exec",
+                    "--cd",
+                    str(ctx.worktree),
+                    "--json",
+                    "--output-last-message",
+                    str(iteration_dir / "agent_last_message.txt"),
+                    "--skip-git-repo-check",
+                    "-",
+                ],
+                input=prompt.encode(),
+                stdout=transcript_handle,
+                stderr=subprocess.PIPE,
+                env=os.environ.copy(),
+                timeout=int(ctx.round_spec.get("per_iteration_codex_wall_clock_s", 45 * 60)),
+            )
+        if result.returncode == 2:
+            raise RuntimeError(f"iteration {iteration} blocked")
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip() or f"codex exited {result.returncode}")
+        status = manager.status(round_id=ctx.round_id)
+        if status["iterations_total"] >= index + 2:
+            continue
+
+
+def _iteration_prompt(ctx: RoundContext, *, iteration: str, next_iteration: str) -> str:
+    template = (ctx.round_dir / "iteration_brief.md").read_text(encoding="utf-8")
+    values = {
+        "round_id": ctx.round_id,
+        "iteration": iteration,
+        "next_iteration": next_iteration,
+        "round_dir": str(ctx.worktree),
+        "model_id": str(ctx.round_spec["model_id"]),
+        "family_id": str(ctx.round_spec["family_id"]),
+        "active_layer": str(ctx.round_spec.get("active_layer", "L1")),
+        "round_branch": ctx.round_branch,
+        "per_candidate_wall_clock_minutes": str(int(ctx.round_spec.get("screen_profile_s", 900)) // 60),
+        "workload_file": str(ctx.round_spec["workload_file"]),
+    }
+    for key, value in values.items():
+        template = template.replace("{{" + key + "}}", value)
+    return template
+
+
+def _winner_parent_uuid(round_dir: Path) -> str:
+    rows = _read_results_dicts(round_dir / "results.tsv")
+    rescreened = [row for row in rows if row.get("status") == "rescreened" and row.get("objective_mean") and row.get("notes") != "inconsistent_rescreen"]
+    if rescreened:
+        winner = min(
+            rescreened,
+            key=lambda row: (-float(row["objective_mean"]), row["iteration"], row["candidate_uuid"]),
+        )
+        return str(winner["parent_candidate_uuid"])
+    feasible = [row for row in rows if row.get("feasible") == "true" and row.get("eval_throughput")]
+    if not feasible:
+        raise RuntimeError("no_feasible_rescreen_winner")
+    winner = min(feasible, key=lambda row: (-float(row["eval_throughput"]), row["iteration"], row["candidate_uuid"]))
+    return str(winner["candidate_uuid"])
+
+
+def _read_results_dicts(path: Path) -> list[dict[str, str]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        return []
+    header = lines[0].split("\t")
+    return [
+        {key: values[index] if index < len(values) else "" for index, key in enumerate(header)}
+        for values in (line.split("\t") for line in lines[1:] if line.strip())
+    ]
+
+
+def _result_from_status(
+    manager: AutoResearchRoundManager,
+    ctx: RoundContext,
+    *,
+    outcome: str,
+    stopping_reason: str,
+    bundle_path: str | None,
+    holdout_validation: str,
+    live_gate: str,
+    blocker: str | None = None,
+) -> RoundResult:
+    status = manager.status(round_id=ctx.round_id)
+    return RoundResult(
+        round_id=ctx.round_id,
+        round_branch=ctx.round_branch,
+        outcome=outcome,
+        stopping_reason=stopping_reason,
+        bundle_path=bundle_path,
+        iterations_total=int(status.get("iterations_total", 0)),
+        feasible_count=int(status.get("feasible_count", 0)),
+        rescreened_count=int(status.get("rescreened_count", 0)),
+        holdout_validation=holdout_validation,
+        live_gate=live_gate,
+        blocker=blocker,
+    )
+
+
+def _git(args: list[str], *, cwd: Path) -> str:
+    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()

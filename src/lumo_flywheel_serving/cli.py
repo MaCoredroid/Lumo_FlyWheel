@@ -15,6 +15,7 @@ from .auto_research import AutoResearchRoundManager, OfflineAutoResearchRunner, 
 from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .registry import load_registry
+from .round_driver import RoundContext, run_round
 
 
 def _prefix_cache_probe_messages(prior_reply: str | None = None) -> list[dict[str, str]]:
@@ -601,7 +602,7 @@ def cmd_auto_research_measure(args: argparse.Namespace) -> int:
         return code
     _require_auto_research_args(args, "round_id", "candidate")
     manager = _auto_research_manager(args)
-    payload = manager.measure(round_id=args.round_id, candidate_path=args.candidate)
+    payload = manager.measure(round_id=args.round_id, candidate_path=args.candidate, harness=args.harness)
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -616,6 +617,7 @@ def cmd_auto_research_commit_candidate(args: argparse.Namespace) -> int:
         iteration=args.iteration,
         status=args.status,
         notes=args.notes,
+        harness=args.harness,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -626,7 +628,7 @@ def cmd_auto_research_rescreen(args: argparse.Namespace) -> int:
         return code
     _require_auto_research_args(args, "round_id")
     manager = _auto_research_manager(args)
-    payload = manager.rescreen(round_id=args.round_id, top_k=args.top_k, profile=args.profile)
+    payload = manager.rescreen(round_id=args.round_id, top_k=args.top_k, profile=args.profile, harness=args.harness)
     print(json.dumps(payload, indent=2))
     return 0
 
@@ -636,7 +638,7 @@ def cmd_auto_research_validate_holdout(args: argparse.Namespace) -> int:
         return code
     _require_auto_research_args(args, "round_id", "candidate_uuid")
     manager = _auto_research_manager(args)
-    payload = manager.validate_holdout(round_id=args.round_id, candidate_uuid=args.candidate_uuid)
+    payload = manager.validate_holdout(round_id=args.round_id, candidate_uuid=args.candidate_uuid, harness=args.harness)
     print(json.dumps(payload, indent=2))
     return 0 if payload.get("pass") else 1
 
@@ -682,6 +684,35 @@ def cmd_auto_research_run(args: argparse.Namespace) -> int:
     )
     print(json.dumps(payload, indent=2))
     return 0
+
+
+def cmd_auto_research_run_round(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "model_id", "family_id", "workload_file")
+    manager = _auto_research_manager(args)
+    bootstrap = manager.bootstrap_round(
+        model_id=args.model_id,
+        family_id=args.family_id,
+        sprint=args.sprint,
+        workload_file=args.workload_file,
+        weight_version_id=args.weight_version_id,
+        round_root=args.round_root,
+        harness_type=args.harness,
+        skip_preflight=args.harness == "synthetic",
+    )
+    ctx = RoundContext.from_bootstrap_json(
+        bootstrap,
+        harness_mode=args.harness,
+        registry_path=Path(args.registry),
+        tuned_config_root=Path(args.tuned_config_root),
+        port=args.port,
+        proxy_port=args.proxy_port,
+        iteration_cap=args.iteration_cap,
+    )
+    result = run_round(ctx)
+    print(json.dumps(result.as_dict(), indent=2))
+    return 0 if result.outcome in {"ROUND_BUNDLE_READY", "ROUND_BASELINE_RETAINED"} else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -767,6 +798,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_measure.add_argument("--help-only", action="store_true")
     auto_measure.add_argument("--round-id")
     auto_measure.add_argument("--candidate")
+    auto_measure.add_argument("--harness", choices=["real", "synthetic"], default=None)
     auto_measure.set_defaults(func=cmd_auto_research_measure)
 
     auto_commit = auto_research_subparsers.add_parser("commit-candidate")
@@ -775,6 +807,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_commit.add_argument("--iteration")
     auto_commit.add_argument("--status", choices=["baseline", "keep", "discard", "crash", "harness_fault"])
     auto_commit.add_argument("--notes")
+    auto_commit.add_argument("--harness", choices=["real", "synthetic"], default=None)
     auto_commit.set_defaults(func=cmd_auto_research_commit_candidate)
 
     auto_rescreen = auto_research_subparsers.add_parser("rescreen")
@@ -782,12 +815,14 @@ def build_parser() -> argparse.ArgumentParser:
     auto_rescreen.add_argument("--round-id")
     auto_rescreen.add_argument("--top-k", type=int, default=3)
     auto_rescreen.add_argument("--profile", default="full")
+    auto_rescreen.add_argument("--harness", choices=["real", "synthetic"], default=None)
     auto_rescreen.set_defaults(func=cmd_auto_research_rescreen)
 
     auto_holdout = auto_research_subparsers.add_parser("validate-holdout")
     auto_holdout.add_argument("--help-only", action="store_true")
     auto_holdout.add_argument("--round-id")
     auto_holdout.add_argument("--candidate-uuid")
+    auto_holdout.add_argument("--harness", choices=["real", "synthetic"], default=None)
     auto_holdout.set_defaults(func=cmd_auto_research_validate_holdout)
 
     auto_finalize = auto_research_subparsers.add_parser("finalize-round")
@@ -801,6 +836,18 @@ def build_parser() -> argparse.ArgumentParser:
     auto_status.add_argument("--round-id")
     auto_status.add_argument("--json", action="store_true")
     auto_status.set_defaults(func=cmd_auto_research_status)
+
+    auto_run_round = auto_research_subparsers.add_parser("run-round")
+    auto_run_round.add_argument("--help-only", action="store_true")
+    auto_run_round.add_argument("--model-id")
+    auto_run_round.add_argument("--family-id")
+    auto_run_round.add_argument("--sprint", default="sprint-0")
+    auto_run_round.add_argument("--workload-file")
+    auto_run_round.add_argument("--weight-version-id")
+    auto_run_round.add_argument("--harness", choices=["real", "synthetic"], default="real")
+    auto_run_round.add_argument("--iteration-cap", type=int, default=12)
+    auto_run_round.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
+    auto_run_round.set_defaults(func=cmd_auto_research_run_round)
 
     auto_research_run = auto_research_subparsers.add_parser("run")
     auto_research_run.add_argument("--help-only", action="store_true")
