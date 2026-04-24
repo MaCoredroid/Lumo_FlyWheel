@@ -73,6 +73,15 @@ def test_probe_serving_thinking_writes_report_with_fake_transport(tmp_path: Path
     assert seen[1]["headers"]["Authorization"] == "Bearer test-key"
 
 
+def test_probe_serving_thinking_classifies_case_matrix() -> None:
+    module = _load_script("probe_serving_thinking.py")
+
+    assert module.classify_outcome(0, 10)[0] == "row-1"
+    assert module.classify_outcome(0, 0)[0] == "row-2"
+    assert module.classify_outcome(10, 20)[0] == "row-3"
+    assert module.classify_outcome(10, 0)[0] == "bug"
+
+
 def test_capture_seed_workload_family_v5_defaults_to_per_family_trace(tmp_path: Path) -> None:
     script = REPO_ROOT / "scripts" / "capture_seed_workload.py"
     family_dir = tmp_path / "benchmark_blueprints" / "families" / "family-a"
@@ -199,6 +208,73 @@ def test_multi_family_builder_splits_hashes_and_validates(tmp_path: Path) -> Non
     strict_validation = module.validate_composite_workload(descriptor_path)
     assert "seed_row_count_below_minimum:6<84" in strict_validation["errors"]
     assert "holdout_row_count_below_minimum:2<28" in strict_validation["errors"]
+
+
+def test_multi_family_validation_reports_ar26_failures(tmp_path: Path) -> None:
+    module = _load_script("capture_multi_family_v5_workload.py")
+    workload_dir = tmp_path / "benchmark_blueprints" / "workloads" / "multi-family-v5"
+    workload_dir.mkdir(parents=True)
+    seed_rows = [
+        {"family_id": "family-a", "turn_index": 0, "output_tokens": 100, "thinking_tokens": 0},
+        {"family_id": "family-a", "turn_index": 1, "output_tokens": 100, "thinking_tokens": 0},
+        {"family_id": "family-a", "turn_index": 2, "output_tokens": 100, "thinking_tokens": 0},
+    ]
+    holdout_rows = [
+        {"family_id": "family-b", "turn_index": 0, "output_tokens": 100, "thinking_tokens": 0},
+    ]
+    (workload_dir / "seed_trace.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in seed_rows) + "\n",
+        encoding="utf-8",
+    )
+    (workload_dir / "holdout_trace.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in holdout_rows) + "\n",
+        encoding="utf-8",
+    )
+    descriptor_path = workload_dir / "workload.yaml"
+    descriptor_path.write_text(
+        yaml.safe_dump(
+            {
+                "family_id": "multi-family-v5",
+                "workload_distribution_id": "placeholder",
+                "pool_families": ["family-a", "family-b"],
+                "pool_excluded_families": [{"family_id": "family-b", "reason": "bad-fixture"}],
+                "split_per_family": {"seed_rows": 3, "holdout_rows": 1},
+                "seed_trace_ref": "seed_trace.jsonl",
+                "holdout_trace_ref": "holdout_trace.jsonl",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    validation = module.validate_composite_workload(
+        descriptor_path,
+        min_seed_rows=3,
+        min_holdout_rows=1,
+    )
+
+    assert validation["pass"] is False
+    assert "seed_family_coverage_mismatch" in validation["errors"]
+    assert "holdout_family_coverage_mismatch" in validation["errors"]
+    assert "seed_family_count_below_minimum:family-b" in validation["errors"]
+    assert "pool_excluded_overlap" in validation["errors"]
+    assert "thinking_positive_ratio_below_minimum" in validation["errors"]
+    assert "thinking_gt_response_ratio_below_minimum" in validation["errors"]
+    assert "large_thinking_row_missing" in validation["errors"]
+
+
+def test_multi_family_probe_parser_rejects_bug_outcome(tmp_path: Path) -> None:
+    module = _load_script("capture_multi_family_v5_workload.py")
+    probe_path = tmp_path / "reports" / "thinking-probe-20260424.md"
+    probe_path.parent.mkdir()
+    probe_path.write_text("- capture_date: 2026-04-24T12:00:00Z\n- outcome: bug\n", encoding="utf-8")
+
+    try:
+        module.parse_thinking_probe_report(probe_path)
+    except ValueError as exc:
+        assert "blocks composite capture" in str(exc)
+    else:
+        raise AssertionError("bug outcome should block composite capture")
 
 
 def test_discover_v5_pool_records_exclusions(tmp_path: Path) -> None:

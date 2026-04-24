@@ -182,7 +182,7 @@ def load_pool(pool_file: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 def parse_thinking_probe_report(path: Path) -> str:
     text = path.read_text(encoding="utf-8")
-    match = re.search(r"(?im)^\s*-?\s*outcome:\s*(row-[1-4])\s*$", text)
+    match = re.search(r"(?im)^\s*-?\s*outcome:\s*(row-[1-3]|bug)\s*$", text)
     if not match:
         raise ValueError(f"Unable to parse thinking probe outcome from {path}")
     outcome = match.group(1)

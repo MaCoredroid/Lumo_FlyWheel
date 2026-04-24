@@ -76,7 +76,7 @@ def classify_outcome(case_a_reasoning_tokens: int, case_b_reasoning_tokens: int)
             "Thinking fires by default and with explicit override.",
         )
     return (
-        "row-4",
+        "bug",
         "Unexpected: explicit thinking override produced fewer reasoning tokens than the default call.",
     )
 
