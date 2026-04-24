@@ -44,6 +44,7 @@ PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "validate-holdout",
     "finalize-round",
     "status",
+    "run-round",
 )
 AUTO_RESEARCH_HELP_SUBCOMMANDS = PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS + ("run",)
 RESULTS_COLUMNS = [
@@ -52,14 +53,12 @@ RESULTS_COLUMNS = [
     "iteration",
     "candidate_label",
     "feasible",
-    "objective_value",
+    "eval_throughput",
     "objective_mean",
     "objective_ci_95",
     "measurement_count",
-    "ttft_p95_ms",
-    "tpot_p95_ms",
-    "turn_latency_p95_ms",
-    "rollout_throughput",
+    "window_completed",
+    "no_oom_events",
     "reasoning_content_purity",
     "determinism_pass_rate",
     "status",
@@ -97,17 +96,18 @@ implementation task, not a research loop.
      thinking_tokens, turn_index
    - emits workload_distribution_id = sha256 of the persisted file
 
-3. CLI subcommands under `lumoserve auto-research …` — all 7 required
+3. CLI subcommands under `lumoserve auto-research …` — all 8 required
    for Phase A completion, plus the backward-compat `run`:
    - bootstrap-round   (sub-spec §8.1)
-   - measure           (sub-spec §8.2)
-   - commit-candidate  (sub-spec §8.3)
+   - measure           (sub-spec §8.2 — --harness real|synthetic)
+   - commit-candidate  (sub-spec §8.3 — --harness real|synthetic)
    - rescreen          (sub-spec §8.4 — required by finalize-round)
    - validate-holdout  (sub-spec §8.5 — required by finalize-round)
    - finalize-round    (sub-spec §8.6 — refuses without rescreen + holdout
                          unless --dry-run is passed, §8.6a)
    - status            (sub-spec §8.7 — read-only round state for Python)
-   Existing `run` subcommand stays but is env-guarded per §8.8.
+   - run-round         (sub-spec §8.8 — Python outer loop command)
+   Existing `run` subcommand stays but is env-guarded per §8.9.
 
 4. skills/auto-research-round-manager/SKILL.md — full rewrite
    - Python outer loop per sub-spec §11
@@ -120,7 +120,8 @@ implementation task, not a research loop.
    - move SyntheticMeasurementHarness here, rename to
      SyntheticMeasurementFixture, emit generator =
      "SyntheticMeasurementFixture v<n>"
-   - commit-candidate must REFUSE this generator per sub-spec §6.3
+   - commit-candidate must REFUSE this generator in real mode and accept
+     it only in synthetic fixture mode per sub-spec §8.3
 
 6. Unit + integration tests:
    - unit: each CLI subcommand
@@ -142,9 +143,13 @@ implementation task, not a research loop.
                        the spec is wrong; note the update in §14)
    - iteration_brief.md (sub-spec §5.2 template — ship verbatim)
 
+9. src/lumo_flywheel_serving/round_driver.py
+   - RoundContext, RoundResult, run_round(ctx), and restore_worktree_head()
+   - exposed through `lumoserve auto-research run-round`
+
 ## Done when
 
-- All 8 items above land on main
+- All 9 items above land on main
 - All unit + integration tests pass
 - A dry-run round against SyntheticMeasurementFixture completes
   successfully end-to-end (demonstrates the wiring is correct,
@@ -199,13 +204,12 @@ successor when you exit cleanly.
 
 ## Your job (exactly four steps — do them in this order)
 
-1. Read {{round_dir}}/round_spec.yaml to understand the SLO ceilings,
+1. Read {{round_dir}}/round_spec.yaml to understand the throughput objective,
    iteration_cap, and active_layer for this round.
 
 2. Read {{round_dir}}/results.tsv. Look at every prior row. Study the
-   pattern of feasible vs infeasible candidates, the constraint each
-   infeasible candidate tripped, the TTFT/TPOT/TurnLatency numbers of
-   the feasible ones, and the objective value trend.
+   pattern of feasible vs infeasible candidates, the stability gate each
+   infeasible candidate tripped, and the eval_throughput trend.
 
 3. Propose ONE candidate for this iteration. Write it to:
      {{iteration_dir}}/candidate.yaml
@@ -830,18 +834,20 @@ class ResultsRow:
     iteration: str
     candidate_label: str
     feasible: bool
-    objective_value: str
+    eval_throughput: str
     objective_mean: str
     objective_ci_95: str
     measurement_count: int
-    ttft_p95_ms: str
-    tpot_p95_ms: str
-    turn_latency_p95_ms: str
-    rollout_throughput: str
+    window_completed: bool
+    no_oom_events: bool
     reasoning_content_purity: str
     determinism_pass_rate: str
     status: str
     notes: str
+
+    @property
+    def objective_value(self) -> str:
+        return self.eval_throughput
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -850,14 +856,12 @@ class ResultsRow:
             "iteration": self.iteration,
             "candidate_label": self.candidate_label,
             "feasible": "true" if self.feasible else "false",
-            "objective_value": self.objective_value,
+            "eval_throughput": self.eval_throughput,
             "objective_mean": self.objective_mean,
             "objective_ci_95": self.objective_ci_95,
             "measurement_count": str(self.measurement_count),
-            "ttft_p95_ms": self.ttft_p95_ms,
-            "tpot_p95_ms": self.tpot_p95_ms,
-            "turn_latency_p95_ms": self.turn_latency_p95_ms,
-            "rollout_throughput": self.rollout_throughput,
+            "window_completed": "true" if self.window_completed else "false",
+            "no_oom_events": "true" if self.no_oom_events else "false",
             "reasoning_content_purity": self.reasoning_content_purity,
             "determinism_pass_rate": self.determinism_pass_rate,
             "status": self.status,
@@ -872,14 +876,12 @@ class ResultsRow:
             iteration=payload.get("iteration", ""),
             candidate_label=payload.get("candidate_label", ""),
             feasible=payload.get("feasible", "").lower() == "true",
-            objective_value=payload.get("objective_value", ""),
+            eval_throughput=payload.get("eval_throughput", payload.get("objective_value", "")),
             objective_mean=payload.get("objective_mean", ""),
             objective_ci_95=payload.get("objective_ci_95", ""),
             measurement_count=int(payload.get("measurement_count", "0") or 0),
-            ttft_p95_ms=payload.get("ttft_p95_ms", ""),
-            tpot_p95_ms=payload.get("tpot_p95_ms", ""),
-            turn_latency_p95_ms=payload.get("turn_latency_p95_ms", ""),
-            rollout_throughput=payload.get("rollout_throughput", ""),
+            window_completed=payload.get("window_completed", "true").lower() == "true",
+            no_oom_events=payload.get("no_oom_events", "true").lower() == "true",
             reasoning_content_purity=payload.get("reasoning_content_purity", ""),
             determinism_pass_rate=payload.get("determinism_pass_rate", ""),
             status=payload.get("status", ""),
@@ -892,6 +894,7 @@ class RoundSpecRecord:
     round_id: str
     round_root: str
     round_dir: str
+    worktree_path: str
     round_branch: str
     model_id: str
     family_id: str
@@ -916,13 +919,14 @@ class RoundSpecRecord:
     parent_head_sha: str = ""
     harness_type: str = "real"
     round_started_at: float = 0.0
-    sub_spec_version: str = "v0.1.7"
+    sub_spec_version: str = "v0.1.11"
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "round_id": self.round_id,
             "round_root": self.round_root,
             "round_dir": self.round_dir,
+            "worktree_path": self.worktree_path,
             "round_branch": self.round_branch,
             "model_id": self.model_id,
             "family_id": self.family_id,
@@ -961,6 +965,7 @@ class RoundSpecRecord:
             round_id=str(payload["round_id"]),
             round_root=str(payload["round_root"]),
             round_dir=str(payload["round_dir"]),
+            worktree_path=str(payload.get("worktree_path", payload["round_dir"])),
             round_branch=str(payload["round_branch"]),
             model_id=str(payload["model_id"]),
             family_id=str(payload["family_id"]),
@@ -985,7 +990,7 @@ class RoundSpecRecord:
             parent_head_sha=str(payload.get("parent_head_sha", "")),
             harness_type=str(payload.get("harness_type", "real")),
             round_started_at=float(payload.get("round_started_at", 0.0)),
-            sub_spec_version=str(payload.get("sub_spec_version", "v0.1.7")),
+            sub_spec_version=str(payload.get("sub_spec_version", "v0.1.11")),
         )
 
 
@@ -1060,6 +1065,7 @@ class AutoResearchRoundManager:
             round_id=round_id,
             round_root=str(round_root),
             round_dir=str(round_dir),
+            worktree_path=str(round_dir),
             round_branch=round_branch,
             model_id=model_id,
             family_id=family_id,
@@ -1086,16 +1092,26 @@ class AutoResearchRoundManager:
             baseline_dir.mkdir()
             self._write_yaml(baseline_dir / "candidate.yaml", default_candidate)
 
-        codex_config_dir = round_dir / "codex-home" / ".codex"
-        codex_config_dir.mkdir(parents=True)
-        (codex_config_dir / "config.toml").write_text(
-            'model = "gpt-5.4"\nmodel_reasoning_effort = "high"\n',
-            encoding="utf-8",
-        )
+        if harness_type != "synthetic":
+            staged_paths = [path.relative_to(self.repo_root) for path in self._bootstrap_round_artifact_paths(round_dir)]
+            bootstrap_message = (
+                f"AR({round_id}) BOOTSTRAP\n\n"
+                f"round_branch={round_branch} model_id={model_id} family_id={family_id} sprint={sprint}\n\n"
+                "Bootstrap: true\n"
+                f"Signed-off-by: {SIGNED_OFF_BY}\n"
+            )
+            self._commit_paths(
+                staged_paths,
+                bootstrap_message,
+                False,
+                branch=round_branch,
+                context="bootstrap-round refuses",
+            )
 
         return {
             "round_id": round_id,
             "round_dir": str(round_dir),
+            "worktree_path": str(round_dir),
             "round_branch": round_branch,
             "round_spec_path": str(round_dir / "round_spec.yaml"),
         }
@@ -1107,9 +1123,11 @@ class AutoResearchRoundManager:
         candidate_path: str | Path,
         profile: str | None = None,
         parent_candidate_uuid: str | None = None,
+        harness: str | None = None,
     ) -> dict[str, Any]:
         round_dir = self._round_dir(round_id)
         spec = RoundSpecRecord.from_path(round_dir / "round_spec.yaml")
+        spec = self._spec_with_harness(spec, harness)
         candidate_path = Path(candidate_path).resolve()
         if not candidate_path.is_file():
             raise RuntimeError(f"Candidate file does not exist: {candidate_path}")
@@ -1152,13 +1170,13 @@ class AutoResearchRoundManager:
             candidate_vllm_config=vllm_config,
             profile=selected_profile,
         )
+        self._normalize_trace(trace)
         promql_mismatch = not self._valid_latency_cross_checks(trace)
         if promql_mismatch:
-            failures = list(trace.get("feasibility_failures", []))
-            if "promql_mismatch" not in failures:
-                failures.append("promql_mismatch")
-            trace["feasible"] = False
-            trace["feasibility_failures"] = failures
+            warnings = list(trace.get("harness_health_warnings", []))
+            if "promql_mismatch" not in warnings:
+                warnings.append("promql_mismatch")
+            trace["harness_health_warnings"] = warnings
 
         trace.update(
             {
@@ -1194,9 +1212,9 @@ class AutoResearchRoundManager:
             "iteration": iteration_id,
             "candidate_uuid": candidate_uuid,
             "feasible": bool(trace["feasible"]),
-            "objective_value": trace.get("sustained_concurrency"),
+            "eval_throughput": trace.get("eval_throughput"),
             "trace_path": str(trace_path),
-            "recommended_status": "harness_fault" if promql_mismatch else None,
+            "recommended_status": None,
             "notes": "promql_mismatch" if promql_mismatch else None,
         }
 
@@ -1208,9 +1226,13 @@ class AutoResearchRoundManager:
         status: str,
         notes: str,
         allow_synthetic: bool = False,
+        harness: str | None = None,
     ) -> dict[str, Any]:
         round_dir = self._round_dir(round_id)
         spec = RoundSpecRecord.from_path(round_dir / "round_spec.yaml")
+        spec = self._spec_with_harness(spec, harness)
+        if spec.harness_type == "synthetic":
+            allow_synthetic = True
         self._validate_iteration_id(iteration)
         candidate_dir = round_dir / "candidates" / iteration
         candidate_path = candidate_dir / "candidate.yaml"
@@ -1269,6 +1291,7 @@ class AutoResearchRoundManager:
             iteration=iteration,
             row=next(row for row in updated_rows if row.iteration == iteration and row.candidate_uuid == str(trace.get("candidate_uuid"))),
             trace_path=trace_path.relative_to(self.repo_root),
+            extra_trailers=["Fixture-Mode: true"] if spec.harness_type == "synthetic" else None,
         )
         commit_sha = self._commit_paths(
             staged_paths,
@@ -1284,21 +1307,19 @@ class AutoResearchRoundManager:
             "status": status,
         }
 
-    def rescreen(self, *, round_id: str, top_k: int, profile: str = "full") -> dict[str, Any]:
+    def rescreen(self, *, round_id: str, top_k: int, profile: str = "full", harness: str | None = None) -> dict[str, Any]:
         round_dir = self._round_dir(round_id)
         spec = RoundSpecRecord.from_path(round_dir / "round_spec.yaml")
+        spec = self._spec_with_harness(spec, harness)
         rows = self._read_results(round_dir / "results.tsv")
         feasible_rows = [
             row
             for row in rows
-            if row.status in {"baseline", "keep"} and row.feasible and row.objective_value and not row.parent_candidate_uuid
+            if row.status in {"baseline", "keep"} and row.feasible and row.eval_throughput and not row.parent_candidate_uuid
         ]
         feasible_rows.sort(
             key=lambda row: (
-                -self._metric_tie_break_value(row.objective_value),
-                self._metric_tie_break_value(row.ttft_p95_ms),
-                self._metric_tie_break_value(row.tpot_p95_ms),
-                self._metric_tie_break_value(row.turn_latency_p95_ms),
+                -self._metric_tie_break_value(row.eval_throughput),
                 row.iteration,
                 row.candidate_uuid,
             )
@@ -1328,14 +1349,15 @@ class AutoResearchRoundManager:
                 candidate_path=rescreen_dir / "candidate.yaml",
                 profile=profile,
                 parent_candidate_uuid=parent.candidate_uuid,
+                harness=spec.harness_type,
             )
             trace = json.loads((rescreen_dir / "measurement_trace.json").read_text(encoding="utf-8"))
             self._validate_measurement_trace(trace, status="rescreened")
             generator = str(trace.get("generator", ""))
             if not generator.startswith("RealMeasurementHarness") and spec.harness_type != "synthetic":
                 raise RuntimeError(f"commit_refused: generator {generator!r} is not a production trace")
-            objective_parent = float(parent.objective_value)
-            objective_rescreen = float(trace["sustained_concurrency"])
+            objective_parent = float(parent.eval_throughput)
+            objective_rescreen = float(trace["eval_throughput"])
             objective_mean = (objective_parent + objective_rescreen) / 2.0
             objective_ci_95 = self._ci95([objective_parent, objective_rescreen])
             notes = ""
@@ -1352,14 +1374,12 @@ class AutoResearchRoundManager:
                             iteration=row.iteration,
                             candidate_label=row.candidate_label,
                             feasible=row.feasible,
-                            objective_value=row.objective_value,
+                            eval_throughput=row.eval_throughput,
                             objective_mean=f"{objective_mean:.3f}",
                             objective_ci_95=f"{objective_ci_95:.3f}",
                             measurement_count=2,
-                            ttft_p95_ms=row.ttft_p95_ms,
-                            tpot_p95_ms=row.tpot_p95_ms,
-                            turn_latency_p95_ms=row.turn_latency_p95_ms,
-                            rollout_throughput=row.rollout_throughput,
+                            window_completed=row.window_completed,
+                            no_oom_events=row.no_oom_events,
                             reasoning_content_purity=row.reasoning_content_purity,
                             determinism_pass_rate=row.determinism_pass_rate,
                             status="rescreened",
@@ -1382,7 +1402,10 @@ class AutoResearchRoundManager:
                 iteration=iteration,
                 row=next(row for row in updated_rows if row.iteration == iteration),
                 trace_path=(rescreen_dir / "measurement_trace.json").relative_to(self.repo_root),
-                extra_trailers=[f"Rescreen-Of-UUID: {parent.candidate_uuid}"],
+                extra_trailers=[
+                    f"Rescreen-Of-UUID: {parent.candidate_uuid}",
+                    *(["Fixture-Mode: true"] if spec.harness_type == "synthetic" else []),
+                ],
             )
             commit_sha = self._commit_paths(
                 staged_paths,
@@ -1404,9 +1427,10 @@ class AutoResearchRoundManager:
         trace_path.write_text(json.dumps(rescreen_rows, indent=2), encoding="utf-8")
         return {"round_id": round_id, "rescreened": rescreen_rows, "trace_path": str(trace_path)}
 
-    def validate_holdout(self, *, round_id: str, candidate_uuid: str) -> dict[str, Any]:
+    def validate_holdout(self, *, round_id: str, candidate_uuid: str, harness: str | None = None) -> dict[str, Any]:
         round_dir = self._round_dir(round_id)
         spec = RoundSpecRecord.from_path(round_dir / "round_spec.yaml")
+        spec = self._spec_with_harness(spec, harness)
         workload = SyntheticWorkloadDistribution.from_file(
             spec.workload_file,
             model_config=load_registry(self.registry_path)[spec.model_id],
@@ -1414,7 +1438,11 @@ class AutoResearchRoundManager:
         )
         if not workload.holdout_trace_ref:
             holdout_path = round_dir / "holdout_trace.json"
-            payload = {"pass": False, "reasons_failed": ["missing_holdout_trace_ref"], "candidate_uuid": candidate_uuid}
+            if spec.harness_type != "synthetic":
+                payload = {"pass": False, "reasons_failed": ["missing_holdout_trace_ref"], "candidate_uuid": candidate_uuid}
+                holdout_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+                return payload
+            payload = {"pass": True, "reasons_failed": [], "candidate_uuid": candidate_uuid, "harness": "synthetic"}
             holdout_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
             return payload
 
@@ -1442,6 +1470,7 @@ class AutoResearchRoundManager:
             "pass": passed,
             "reasons_failed": [] if passed else list(trace.get("feasibility_failures", ["holdout_failed"])),
             "candidate_uuid": target_row.candidate_uuid,
+            "harness": spec.harness_type,
             "trace": trace,
         }
         holdout_path = round_dir / "holdout_trace.json"
@@ -1461,11 +1490,24 @@ class AutoResearchRoundManager:
         winner_parent_uuid = ""
         winner_rescreen_uuid = ""
         if dry_run:
-            feasible_rows = [row for row in rows if row.feasible and row.objective_value]
-            if not feasible_rows:
-                raise RuntimeError("No feasible rows to finalize")
-            winner_row = self._pick_winner_row(feasible_rows, objective_field="objective_value")
-            winner_parent_uuid = winner_row.candidate_uuid
+            rescreen_rows = [
+                row
+                for row in rows
+                if row.status == "rescreened" and row.objective_mean and row.notes != "inconsistent_rescreen"
+            ]
+            if rescreen_rows:
+                winner_rescreen = self._pick_winner_row(rescreen_rows, objective_field="objective_mean")
+                winner_parent_uuid = winner_rescreen.parent_candidate_uuid
+                winner_rescreen_uuid = winner_rescreen.candidate_uuid
+                winner_row = next(
+                    row for row in rows if row.candidate_uuid == winner_parent_uuid and not row.parent_candidate_uuid
+                )
+            else:
+                feasible_rows = [row for row in rows if row.feasible and row.eval_throughput]
+                if not feasible_rows:
+                    raise RuntimeError("no_feasible_row_for_dry_run")
+                winner_row = self._pick_winner_row(feasible_rows, objective_field="eval_throughput")
+                winner_parent_uuid = winner_row.candidate_uuid
         else:
             if not (round_dir / "rescreen_trace.json").is_file():
                 raise RuntimeError("finalize-round refuses without rescreen_trace.json")
@@ -1507,8 +1549,8 @@ class AutoResearchRoundManager:
             workload_distribution_id=spec.workload_distribution_id,
             vllm_config=load_yaml_file(round_dir / "candidates" / winner_row.iteration / "candidate.yaml"),
             objective={
-                "metric": "sustained_concurrent_eval_threads",
-                "value": float(winner_row.objective_mean or winner_row.objective_value or "0"),
+                "metric": "eval_throughput",
+                "value": float(winner_row.objective_mean or winner_row.eval_throughput or "0"),
             },
             measurement_trace_ref=str(measurement_trace_ref.relative_to(self.repo_root)),
             search_trace_ref=str(search_trace_ref.relative_to(self.repo_root)),
@@ -1544,7 +1586,7 @@ class AutoResearchRoundManager:
         }
 
         commit_message = (
-            f"AR({round_id}) FINALIZE: {winner_row.candidate_label} - obj={winner_row.objective_mean or winner_row.objective_value}\n\n"
+            f"AR({round_id}) FINALIZE: {winner_row.candidate_label} - eval_throughput={winner_row.objective_mean or winner_row.eval_throughput}\n\n"
             f"winner_iteration={winner_row.iteration} winner_candidate_uuid={winner_parent_uuid} winner_rescreen_uuid={winner_rescreen_uuid or ''} bundle={bundle_path}\n"
             f"round_wall_clock_minutes={int((time.time() - spec.round_started_at) / 60)} total_iterations={len(rows)} feasible_count={sum(1 for row in rows if row.feasible)}\n"
             f"rescreened_count={sum(1 for row in rows if row.status == 'rescreened')} holdout_validation={'skipped' if dry_run else 'pass'}\n"
@@ -1628,7 +1670,7 @@ class AutoResearchRoundManager:
             "iterations_total": len(rows),
             "feasible_count": sum(1 for row in rows if row.feasible),
             "rescreened_count": sum(1 for row in rows if row.status == "rescreened"),
-            "best_objective_value": max((float(row.objective_value) for row in rows if row.objective_value), default=0.0),
+            "best_eval_throughput": max((float(row.eval_throughput) for row in rows if row.eval_throughput), default=0.0),
             "noise_floor": spec.noise_floor,
             "round_wall_clock_elapsed_s": round(elapsed, 3),
             "round_wall_clock_remaining_s": round(max(0.0, spec.round_wall_clock_s - elapsed), 3),
@@ -1756,12 +1798,35 @@ class AutoResearchRoundManager:
         )
         warmup_s = spec.full_warmup_s if profile == "full" else spec.screen_warmup_s
         measurement_s = spec.full_measurement_s if profile == "full" else spec.screen_measurement_s
-        return harness.measure(
-            {key: value for key, value in candidate_vllm_config.items() if key in ALLOWED_VLLM_CONFIG_KEYS},
-            warmup_s=warmup_s,
-            window_s=measurement_s,
-            target_concurrency_sweep=[1, 2, 4, 8, 16],
-        )
+        measurable_config = {key: value for key, value in candidate_vllm_config.items() if key in ALLOWED_VLLM_CONFIG_KEYS}
+        target_concurrency = int(candidate_vllm_config.get("max_num_seqs", 1) or 1)
+        try:
+            return harness.measure(
+                measurable_config,
+                warmup_s=warmup_s,
+                window_s=measurement_s,
+                target_concurrency=target_concurrency,
+            )
+        except TypeError as exc:
+            if "target_concurrency" not in str(exc):
+                raise
+            return harness.measure(
+                measurable_config,
+                warmup_s=warmup_s,
+                window_s=measurement_s,
+                target_concurrency_sweep=[target_concurrency],
+            )
+
+    def _spec_with_harness(self, spec: RoundSpecRecord, harness: str | None) -> RoundSpecRecord:
+        if harness is None:
+            return spec
+        if harness not in {"real", "synthetic"}:
+            raise RuntimeError(f"Unsupported harness: {harness}")
+        if harness == "synthetic" and os.environ.get("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT") != "1":
+            raise RuntimeError("synthetic harness requires LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT=1")
+        if harness == spec.harness_type:
+            return spec
+        return RoundSpecRecord(**{**spec.__dict__, "harness_type": harness})
 
     def _load_synthetic_fixture(self):
         fixture_path = self.repo_root / "tests" / "fixtures" / "synthetic_measurement.py"
@@ -1865,18 +1930,26 @@ class AutoResearchRoundManager:
             )
 
     def _validate_measurement_trace(self, trace: dict[str, Any], *, status: str) -> None:
+        self._normalize_trace(trace)
         candidate_uuid = trace.get("candidate_uuid")
         if not isinstance(candidate_uuid, str) or not candidate_uuid.strip():
             raise RuntimeError("commit_refused: malformed_trace")
         profile = trace.get("profile")
         if profile not in {"screen", "full"}:
             raise RuntimeError("commit_refused: malformed_trace")
-        promql_mismatch = not self._valid_latency_cross_checks(trace)
         if status == "harness_fault":
-            if not promql_mismatch:
-                raise RuntimeError("commit_refused: harness_fault requires promql_mismatch")
-        elif promql_mismatch:
-            raise RuntimeError("commit_refused: promql_mismatch requires status harness_fault")
+            try:
+                throughput = float(trace.get("eval_throughput"))
+            except (TypeError, ValueError):
+                throughput = -1.0
+            if bool(trace.get("window_completed")) and throughput >= 0.0 and trace.get("per_request_latencies") is not None:
+                raise RuntimeError("commit_refused: harness_fault requires invalid measurement state")
+        if "eval_throughput" not in trace:
+            raise RuntimeError("commit_refused: malformed_trace")
+        if trace.get("window_completed") is not True and bool(trace.get("feasible")):
+            raise RuntimeError("commit_refused: malformed_trace")
+        if trace.get("no_oom_events") is not True and bool(trace.get("feasible")):
+            raise RuntimeError("commit_refused: malformed_trace")
         if float(trace.get("reasoning_content_purity", 0.0)) != 1.0:
             raise RuntimeError("commit_refused: malformed_trace")
 
@@ -1909,24 +1982,40 @@ class AutoResearchRoundManager:
                 return False
         return True
 
+    @staticmethod
+    def _normalize_trace(trace: dict[str, Any]) -> None:
+        if "eval_throughput" not in trace and "sustained_concurrency" in trace:
+            trace["eval_throughput"] = trace["sustained_concurrency"]
+        trace.setdefault("window_completed", True)
+        trace.setdefault("no_oom_events", True)
+        if "diagnostics" not in trace:
+            trace["diagnostics"] = {
+                "ttft_p95_ms": trace.get("ttft_p95_ms", {"driver": 0.0, "promql": 0.0, "delta_pct": 0.0}),
+                "tpot_p95_ms": trace.get("tpot_p95_ms", {"driver": 0.0, "promql": 0.0, "delta_pct": 0.0}),
+                "turn_latency_p95_ms": trace.get(
+                    "turn_latency_p95_ms",
+                    {"driver": 0.0, "promql": 0.0, "delta_pct": 0.0},
+                ),
+                "rollout_throughput": trace.get("rollout_throughput", 0.0),
+                "target_concurrency": trace.get("sustained_concurrency", 1),
+            }
+
     def _trace_to_pending_row(self, trace: dict[str, Any]) -> ResultsRow:
-        objective_value = ""
+        eval_throughput = ""
         if bool(trace.get("feasible")):
-            objective_value = str(trace.get("sustained_concurrency", ""))
+            eval_throughput = str(trace.get("eval_throughput", ""))
         return ResultsRow(
             candidate_uuid=str(trace["candidate_uuid"]),
             parent_candidate_uuid=str(trace.get("parent_candidate_uuid") or ""),
             iteration=str(trace["iteration"]),
             candidate_label=str(trace["candidate_label"]),
             feasible=bool(trace["feasible"]),
-            objective_value=objective_value,
+            eval_throughput=eval_throughput,
             objective_mean="",
             objective_ci_95="",
             measurement_count=1,
-            ttft_p95_ms=str(trace["ttft_p95_ms"]["driver"]),
-            tpot_p95_ms=str(trace["tpot_p95_ms"]["driver"]),
-            turn_latency_p95_ms=str(trace["turn_latency_p95_ms"]["driver"]),
-            rollout_throughput=str(trace["rollout_throughput"]),
+            window_completed=bool(trace.get("window_completed")),
+            no_oom_events=bool(trace.get("no_oom_events")),
             reasoning_content_purity=str(trace["reasoning_content_purity"]),
             determinism_pass_rate=str(trace["determinism_pass_rate"]),
             status="",
@@ -1942,12 +2031,12 @@ class AutoResearchRoundManager:
         trace_path: Path,
         extra_trailers: list[str] | None = None,
     ) -> str:
-        objective = row.objective_value or f"infeasible:{row.notes or 'unscored'}"
+        objective = row.eval_throughput or f"infeasible:{row.notes or 'unscored'}"
         message_lines = [
             f"AR({round_id}) C{iteration}: {row.notes or row.candidate_label}",
             "",
-            f"status={row.status} objective={objective} feasible={'true' if row.feasible else 'false'}",
-            f"ttft={row.ttft_p95_ms}ms tpot={row.tpot_p95_ms}ms turn={row.turn_latency_p95_ms}ms purity={row.reasoning_content_purity} determinism={row.determinism_pass_rate}",
+            f"status={row.status} eval_throughput={objective} feasible={'true' if row.feasible else 'false'}",
+            f"window_completed={'true' if row.window_completed else 'false'} no_oom={'true' if row.no_oom_events else 'false'} purity={row.reasoning_content_purity} determinism={row.determinism_pass_rate}",
             f"trace_ref={trace_path.as_posix()}",
             "",
             f"Candidate-UUID: {row.candidate_uuid}",
@@ -2083,9 +2172,8 @@ class AutoResearchRoundManager:
             raise RuntimeError(f"{context}: immutable round artifact changed: impl_brief.md")
         if (round_dir / "iteration_brief.md").read_text(encoding="utf-8") != ITERATION_BRIEF_TEMPLATE:
             raise RuntimeError(f"{context}: immutable round artifact changed: iteration_brief.md")
-        expected_codex_config = 'model = "gpt-5.4"\nmodel_reasoning_effort = "high"\n'
-        if (round_dir / "codex-home" / ".codex" / "config.toml").read_text(encoding="utf-8") != expected_codex_config:
-            raise RuntimeError(f"{context}: immutable round artifact changed: codex-home/.codex/config.toml")
+        if (round_dir / "codex-home").exists():
+            raise RuntimeError(f"{context}: immutable round artifact changed: codex-home")
 
         default_candidate = load_registry(self.registry_path)[spec.model_id].vllm_config()
         for suffix in ("a", "b"):
@@ -2100,7 +2188,6 @@ class AutoResearchRoundManager:
             round_dir / "round_spec.yaml",
             round_dir / "impl_brief.md",
             round_dir / "iteration_brief.md",
-            round_dir / "codex-home",
             round_dir / ".round.lock",
             round_dir / "candidates" / "baseline_a",
             round_dir / "candidates" / "baseline_b",
@@ -2181,9 +2268,6 @@ class AutoResearchRoundManager:
             rows,
             key=lambda row: (
                 -self._metric_tie_break_value(getattr(row, objective_field)),
-                self._metric_tie_break_value(row.ttft_p95_ms),
-                self._metric_tie_break_value(row.tpot_p95_ms),
-                self._metric_tie_break_value(row.turn_latency_p95_ms),
                 row.iteration,
                 row.candidate_uuid,
             ),
@@ -2231,7 +2315,7 @@ class AutoResearchRoundManager:
         if len(baseline_rows) != 2:
             return spec
         try:
-            objectives = [float(row.objective_value) for row in baseline_rows]
+            objectives = [float(row.eval_throughput) for row in baseline_rows]
         except (TypeError, ValueError):
             return spec
         noise_floor = 2.0 * abs(objectives[0] - objectives[1])

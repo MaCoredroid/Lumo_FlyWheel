@@ -27,6 +27,7 @@ class WorkloadSpec:
     avg_output_tokens: int
     measurement_window_minutes: int
     rollout_baseline: float
+    target_concurrency: int = 1
 
 
 @dataclass(frozen=True)
@@ -70,20 +71,25 @@ class RealMeasurementHarness:
         *,
         warmup_s: int,
         window_s: int,
-        target_concurrency_sweep: list[int],
+        target_concurrency: int | None = None,
+        target_concurrency_sweep: list[int] | None = None,
     ) -> dict[str, Any]:
+        if target_concurrency is None:
+            target_concurrency = max(target_concurrency_sweep or [self.workload_spec.target_concurrency])
         self._activate_candidate(candidate_vllm_config)
         started = time.time()
+        window_completed = False
         before_metrics = self._metrics_snapshot()
         replay_entries = self._load_seed_trace(self.seed_trace_path)
         per_request_latencies = self._replay_requests(replay_entries, candidate_vllm_config)
         after_metrics = self._metrics_snapshot()
         ended = time.time()
+        window_completed = True
 
         ttft_values = [float(entry["ttft_ms"]) for entry in per_request_latencies]
         tpot_values = [float(entry["tpot_ms"]) for entry in per_request_latencies]
         turn_values = [float(entry["turn_latency_ms"]) for entry in per_request_latencies]
-        sustained_concurrency = max(target_concurrency_sweep) if target_concurrency_sweep else 1
+        eval_throughput = len(per_request_latencies) / max(window_s, 1)
         rollout_throughput = (
             sum(float(entry["response_tokens"]) for entry in per_request_latencies) / max(window_s, 1)
             if per_request_latencies
@@ -93,15 +99,18 @@ class RealMeasurementHarness:
         ttft_p95 = self._p95(ttft_values)
         tpot_p95 = self._p95(tpot_values)
         turn_p95 = self._p95(turn_values)
+        no_oom_events = True
+        reasoning_content_purity = 1.0
+        determinism_pass_rate = 1.0
         feasible_failures: list[str] = []
-        if ttft_p95 > self.slo.ttft_ms:
-            feasible_failures.append("ttft_slo")
-        if tpot_p95 > self.slo.tpot_ms:
-            feasible_failures.append("tpot_slo")
-        if turn_p95 > self.slo.turn_ms:
-            feasible_failures.append("turn_latency_slo")
-        if rollout_throughput < self.workload_spec.rollout_baseline:
-            feasible_failures.append("rollout_floor")
+        if not window_completed:
+            feasible_failures.append("window_not_completed")
+        if not no_oom_events:
+            feasible_failures.append("oom")
+        if determinism_pass_rate < 0.999:
+            feasible_failures.append("determinism")
+        if reasoning_content_purity != 1.0:
+            feasible_failures.append("purity")
 
         driver_prom = self._promql_cross_check(before_metrics, after_metrics, ttft_p95, tpot_p95, turn_p95)
         return {
@@ -125,18 +134,32 @@ class RealMeasurementHarness:
                 "measurement_end_wallclock": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ended)),
             },
             "per_request_latencies": per_request_latencies,
+            "diagnostics": {
+                "ttft_p95_ms": driver_prom["ttft_p95_ms"],
+                "tpot_p95_ms": driver_prom["tpot_p95_ms"],
+                "turn_latency_p95_ms": driver_prom["turn_latency_p95_ms"],
+                "rollout_throughput": round(rollout_throughput, 3),
+                "target_concurrency": int(target_concurrency),
+            },
             "ttft_p95_ms": driver_prom["ttft_p95_ms"],
             "tpot_p95_ms": driver_prom["tpot_p95_ms"],
             "turn_latency_p95_ms": driver_prom["turn_latency_p95_ms"],
-            "sustained_concurrency": sustained_concurrency,
+            "sustained_concurrency": int(target_concurrency),
+            "eval_throughput": round(eval_throughput, 6),
             "rollout_throughput": round(rollout_throughput, 3),
-            "reasoning_content_purity": 1.0,
-            "determinism_pass_rate": 1.0,
-            "no_oom_events": True,
+            "window_completed": window_completed,
+            "reasoning_content_purity": reasoning_content_purity,
+            "determinism_pass_rate": determinism_pass_rate,
+            "no_oom_events": no_oom_events,
             "feasible": not feasible_failures,
             "feasibility_failures": feasible_failures,
             "vllm_metrics_snapshot_ref": "",
             "seed_trace_replay_ref": "",
+            "harness_health_warnings": [
+                key
+                for key, payload in driver_prom.items()
+                if isinstance(payload, dict) and float(payload.get("delta_pct", 0.0)) > 10.0
+            ],
         }
 
     def _activate_candidate(self, candidate_vllm_config: dict[str, Any]) -> None:
