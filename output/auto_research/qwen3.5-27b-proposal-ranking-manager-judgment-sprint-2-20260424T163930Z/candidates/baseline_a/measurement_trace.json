@@ -1,0 +1,157 @@
+{
+  "active_layer": "L2",
+  "cache_isolation": {
+    "cache_salt": "9a8c976f-f600-4d2c-afe4-2d1dd4750195",
+    "first_10_req_prefix_cache_hit_rate": 0.0,
+    "last_10_req_prefix_cache_hit_rate": 0.0,
+    "prefix_cache_reset_at_bootstrap": true
+  },
+  "candidate_label": "baseline_a",
+  "candidate_request_shaping": {
+    "admission_queue_depth_max": 128,
+    "concurrency_cap_eval": 4,
+    "concurrency_cap_rollout": 0,
+    "per_request_kv_budget": 131072,
+    "priority_preemption": "off"
+  },
+  "candidate_uuid": "9a8c976f-f600-4d2c-afe4-2d1dd4750195",
+  "candidate_vllm_config": {
+    "enable_chunked_prefill": true,
+    "enable_prefix_caching": false,
+    "gpu_memory_utilization": 0.92,
+    "kv_cache_dtype": "fp8_e5m2",
+    "max_model_len": 131072,
+    "max_num_batched_tokens": 12288,
+    "max_num_seqs": 4
+  },
+  "determinism_pass_rate": 1.0,
+  "diagnostics": {
+    "request_shaping": {
+      "policy": {
+        "admission_queue_depth_max": 128,
+        "concurrency_cap_eval": 4,
+        "concurrency_cap_rollout": 0,
+        "per_request_kv_budget": 131072,
+        "priority_preemption": "off"
+      },
+      "target_concurrency_applied": 4
+    },
+    "rollout_throughput": 20.64,
+    "target_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 111.542,
+      "promql": 111.542
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 63280.99,
+      "promql": 63280.99
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 180802.83,
+      "promql": 180802.83
+    }
+  },
+  "eval_throughput": 0.02064,
+  "feasibility_failures": [],
+  "feasible": true,
+  "frozen_lower_layer": {
+    "source_bundle_id": "4578f36a-b3e9-47da-876d-4ac31cfcc5ad",
+    "source_bundle_path": "/home/mark/shared/lumoFlyWheel/output/tuned_configs/proposal-ranking-manager-judgment/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260424T1018150000_4578f36a.yaml",
+    "vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.92,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 12288,
+      "max_num_seqs": 4
+    }
+  },
+  "generator": "RealMeasurementHarness v0.1.0",
+  "harness_health_warnings": [],
+  "iteration": "baseline_a",
+  "no_oom_events": true,
+  "parent_candidate_uuid": null,
+  "per_request_latencies": [
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0001",
+      "response_tokens": 1200,
+      "thinking_tokens": 0,
+      "tpot_ms": 104.968,
+      "ttft_ms": 67825.382,
+      "turn_latency_ms": 193786.805
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0002",
+      "response_tokens": 1100,
+      "thinking_tokens": 0,
+      "tpot_ms": 106.838,
+      "ttft_ms": 63280.99,
+      "turn_latency_ms": 180802.83
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0003",
+      "response_tokens": 900,
+      "thinking_tokens": 0,
+      "tpot_ms": 111.542,
+      "ttft_ms": 54055.154,
+      "turn_latency_ms": 154443.297
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0004",
+      "response_tokens": 800,
+      "thinking_tokens": 0,
+      "tpot_ms": 114.677,
+      "ttft_ms": 49399.443,
+      "turn_latency_ms": 141141.264
+    }
+  ],
+  "profile": "screen",
+  "reasoning_content_purity": 1.0,
+  "request_shaping_enforcement": {
+    "limitation": "The current inference proxy records loaded request_shaping bundles but does not enforce admission caps, queue depth, KV budget, or priority preemption. AutoResearch L2 measurements deterministically evaluate candidate policy by driving the harness at concurrency_cap_eval while freezing the lower-layer vllm_config.",
+    "mode": "substrate_measurement_only",
+    "real_proxy_enforcement": false,
+    "target_concurrency_applied": 4
+  },
+  "resolved": {
+    "attention_backend": "unknown",
+    "deltanet_kernel": "unknown",
+    "torch_compile_mode": "default"
+  },
+  "rollout_throughput": 20.64,
+  "round_id": "qwen3.5-27b-proposal-ranking-manager-judgment-sprint-2-20260424T163930Z",
+  "seed_trace_replay_ref": "candidates/baseline_a/replay.jsonl",
+  "sustained_concurrency": 4.0,
+  "tpot_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 111.542,
+    "promql": 111.542
+  },
+  "ttft_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 63280.99,
+    "promql": 63280.99
+  },
+  "turn_latency_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 180802.83,
+    "promql": 180802.83
+  },
+  "vllm_metrics_snapshot_ref": "candidates/baseline_a/vllm_metrics.prom",
+  "window_completed": true,
+  "windows": {
+    "measurement_elapsed_s": 193.795,
+    "measurement_end_wallclock": "2026-04-24T16:42:44Z",
+    "measurement_s": 600,
+    "measurement_start_wallclock": "2026-04-24T16:39:30Z",
+    "warmup_s": 120
+  }
+}
