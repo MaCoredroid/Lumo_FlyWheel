@@ -152,6 +152,21 @@ def _write_l1_bundle(repo: Path, *, request_shaping: dict | None = None) -> Path
     return bundle_path
 
 
+def _write_composite_workload(repo: Path, family_id: str = "multi-family-v5") -> Path:
+    workload_dir = repo / "benchmark_blueprints" / "workloads" / family_id
+    workload_path = workload_dir / "workload.yaml"
+    _write_workload(workload_path)
+    workload = auto_research.load_yaml_file(workload_path)
+    assert isinstance(workload, dict)
+    workload["family_id"] = family_id
+    workload["workload_distribution_id_hardening_version"] = auto_research.HARDENED_COMPOSITE_WORKLOAD_VERSION
+    workload["workload_distribution_id"] = None
+    workload_path.write_text(auto_research.yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
+    workload["workload_distribution_id"] = auto_research.compute_workload_distribution_id(workload_path)
+    workload_path.write_text(auto_research.yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
+    return workload_path
+
+
 def test_capture_seed_workload_updates_seed_and_holdout_refs(tmp_path: Path) -> None:
     workload_path = tmp_path / "serving_workload.yaml"
     _write_workload(workload_path)
@@ -631,6 +646,64 @@ def test_l2_bootstrap_requires_and_records_lower_layer_bundle(tmp_path: Path) ->
     }
 
 
+def test_bootstrap_prefers_composite_descriptor_and_enforces_version_pin(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    workload_path = _write_composite_workload(repo)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "add composite workload"], cwd=repo, check=True, capture_output=True, text=True)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="multi-family-v5",
+        sprint="sprint-0",
+        workload_file=None,
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_spec = auto_research.load_yaml_file(Path(bootstrap["round_spec_path"]))
+
+    assert round_spec["workload_descriptor_path"] == str(workload_path.resolve())
+    assert round_spec["workload_distribution_id_hardening_version"] == auto_research.HARDENED_COMPOSITE_WORKLOAD_VERSION
+    assert round_spec["workload_distribution_id"] == auto_research.compute_workload_distribution_id(workload_path)
+
+    workload = auto_research.load_yaml_file(workload_path)
+    assert isinstance(workload, dict)
+    workload["workload_distribution_id_hardening_version"] = "legacy-version"
+    workload_path.write_text(auto_research.yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
+    workload["workload_distribution_id"] = auto_research.compute_workload_distribution_id(workload_path)
+    workload_path.write_text(auto_research.yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="descriptor_stale_workload_distribution_id_hardening_version"):
+        manager.bootstrap_round(
+            model_id="qwen3.5-27b",
+            family_id="multi-family-v5",
+            sprint="sprint-1",
+            workload_file=None,
+            weight_version_id=None,
+            round_root=repo / "output" / "auto_research",
+            harness_type="synthetic",
+        )
+
+    legacy_bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="multi-family-v5",
+        sprint="sprint-legacy",
+        workload_file=None,
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+        allow_legacy_workload=True,
+    )
+    legacy_round_spec = auto_research.load_yaml_file(Path(legacy_bootstrap["round_spec_path"]))
+    assert legacy_round_spec["workload_distribution_id_hardening_version"] == "legacy-version"
+
+
 def test_l2_candidate_validation_rejects_l1_and_l3_keys(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     bundle_path = _write_l1_bundle(repo)
@@ -782,6 +855,12 @@ priority_preemption: strict
     assert bundle["baseline_bundle_id"] == "l1-bundle-for-l2"
     assert bundle["round_provenance"]["active_layer"] == "L2"
     assert bundle["round_provenance"]["request_shaping_enforcement"]["real_proxy_enforcement"] is False
+    assert bundle["round_provenance"]["l2_enforcement_coverage"] == {
+        "mode": "substrate_measurement_only",
+        "enforced_fields": [],
+        "advisory_fields": [],
+        "real_proxy_enforcement": False,
+    }
 
 
 def test_commit_candidate_rejects_synthetic_measurement_trace_in_real_mode(tmp_path: Path) -> None:

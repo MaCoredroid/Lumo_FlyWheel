@@ -210,3 +210,39 @@ def test_bundle_confidence_policy_warns_strict_rejects_and_pins_workload_id(tmp_
     )
     with pytest.raises(StructuredValidationError, match="bundle-validity: refused"):
         validate_bundle_load_policy(mismatched, bundle_confidence_policy="passthrough")
+
+    missing_descriptor = make_tuned_config_bundle(
+        model_id=bundle.model_id,
+        family_id=bundle.family_id,
+        weight_version_id=bundle.weight_version_id,
+        workload_distribution_id=workload_id,
+        vllm_config=bundle.vllm_config,
+        objective=bundle.objective,
+        measurement_trace_ref=bundle.measurement_trace_ref,
+        search_trace_ref=bundle.search_trace_ref,
+        baseline_bundle_id=None,
+        regression_guard={},
+        safety_rails={},
+        round_provenance={"confidence": "defensible"},
+    )
+    with pytest.raises(StructuredValidationError) as missing_error:
+        validate_bundle_load_policy(missing_descriptor, bundle_confidence_policy="passthrough")
+    assert missing_error.value.issues[0].message == "missing_field: workload_descriptor_path"
+
+    nonexistent_descriptor = make_tuned_config_bundle(
+        model_id=bundle.model_id,
+        family_id=bundle.family_id,
+        weight_version_id=bundle.weight_version_id,
+        workload_distribution_id=workload_id,
+        vllm_config=bundle.vllm_config,
+        objective=bundle.objective,
+        measurement_trace_ref=bundle.measurement_trace_ref,
+        search_trace_ref=bundle.search_trace_ref,
+        baseline_bundle_id=None,
+        regression_guard={},
+        safety_rails={},
+        round_provenance={"confidence": "defensible", "workload_descriptor_path": str(tmp_path / "missing.yaml")},
+    )
+    with pytest.raises(StructuredValidationError) as nonexistent_error:
+        validate_bundle_load_policy(nonexistent_descriptor, bundle_confidence_policy="passthrough")
+    assert nonexistent_error.value.issues[0].message == "descriptor_path_not_found"

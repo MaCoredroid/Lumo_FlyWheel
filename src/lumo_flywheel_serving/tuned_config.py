@@ -378,19 +378,41 @@ def validate_bundle_load_policy(
     if latency_above_slo:
         warnings.append({"code": "bundle_latency_above_slo"})
     descriptor_path = provenance.get("workload_descriptor_path")
-    if isinstance(descriptor_path, str) and descriptor_path.strip() and Path(descriptor_path).is_file():
-        canonical_id = compute_workload_distribution_id(descriptor_path)
-        if bundle.workload_distribution_id != canonical_id:
-            raise StructuredValidationError(
-                message="bundle-validity: refused",
-                issues=[
-                    ValidationIssue(
-                        field="workload_distribution_id",
-                        message="mismatching_field: workload_distribution_id",
-                        value=bundle.workload_distribution_id,
-                    )
-                ],
-            )
+    if not isinstance(descriptor_path, str) or not descriptor_path.strip():
+        raise StructuredValidationError(
+            message="bundle-validity: refused",
+            issues=[
+                ValidationIssue(
+                    field="round_provenance.workload_descriptor_path",
+                    message="missing_field: workload_descriptor_path",
+                    value=descriptor_path,
+                )
+            ],
+        )
+    descriptor = Path(descriptor_path)
+    if not descriptor.is_file():
+        raise StructuredValidationError(
+            message="bundle-validity: refused",
+            issues=[
+                ValidationIssue(
+                    field="round_provenance.workload_descriptor_path",
+                    message="descriptor_path_not_found",
+                    value=descriptor_path,
+                )
+            ],
+        )
+    canonical_id = compute_workload_distribution_id(descriptor)
+    if bundle.workload_distribution_id != canonical_id:
+        raise StructuredValidationError(
+            message="bundle-validity: refused",
+            issues=[
+                ValidationIssue(
+                    field="workload_distribution_id",
+                    message="mismatching_field: workload_distribution_id",
+                    value=bundle.workload_distribution_id,
+                )
+            ],
+        )
     if bundle_confidence_policy == "strict" and confidence != "defensible":
         raise StructuredValidationError(
             message="bundle-validity: refused",
