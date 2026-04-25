@@ -5,3 +5,6 @@ d59a19e0-c8ef-43b9-b9bc-b46b449ea065		baseline_c	screen	baseline_c	true	0.06158	
 e07295ca-8921-44ad-9989-cb7083d11105		baseline_d	screen	baseline_d	true	0.06216			1	true	true	1.0	1.0	baseline	default-config baseline replay d
 85ff7643-cdab-42eb-8374-8ebf65188039		baseline_e	screen	baseline_e	true	0.06278			1	true	true	1.0	1.0	baseline	default-config baseline replay e
 ee33f94e-9fda-4c03-89ed-8d4146676a4e		import_001	screen	import_001	true	0.046516			1	true	true	1.0	1.0	keep	imported candidate replay
+c8a21c55-6f99-47f4-ac5c-00d0283c4936	ee33f94e-9fda-4c03-89ed-8d4146676a4e	rescreen_01_screen_1	screen	rescreen_01_screen_1	true	0.058905	0.055748	0.009243	4	true	true	1.0	1.0	rescreened	
+b4c9d2e6-138c-4e44-a235-6f1cec0e1a9d	ee33f94e-9fda-4c03-89ed-8d4146676a4e	rescreen_01_screen_2	screen	rescreen_01_screen_2	true	0.061867			1	true	true	1.0	1.0		
+510d6477-1571-43b8-8559-b553ba1a8a6f	ee33f94e-9fda-4c03-89ed-8d4146676a4e	rescreen_01_screen_3	screen	rescreen_01_screen_3	true	0.055705			1	true	true	1.0	1.0		
