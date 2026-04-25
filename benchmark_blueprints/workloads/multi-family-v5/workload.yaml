@@ -1,0 +1,70 @@
+family_id: multi-family-v5
+workload_distribution_id: 8d3e9038afd0c6f6be23c57e47d3a2ee8d619433d3c2e7c4127376a10ad456e8
+workload_distribution_id_hardening_version: v1-multi-family-v5-thinking-realistic
+capture_date: '2026-04-25T08:43:50.038335Z'
+pool_size: 9
+pool_families:
+- codex-provider-rollover
+- codex-skill-runtime-v2-split
+- esm-plugin-loader-modernization
+- nightly-regression-watch
+- objective-driven-repo-improvement
+- policy-aware-request-resolution
+- release-manifest-v2-modernization
+- responses-sdk-adapter-cutover
+- sqlalchemy-2-session-modernization
+pool_excluded_families:
+- family_id: candidate-worktree-shootout
+  reason: wire_api_missing
+- family_id: codex-surface-workflow-mapping
+  reason: wire_api_missing
+- family_id: dead-flag-reachability-audit
+  reason: wire_api_missing
+- family_id: delegation-merge-salvage
+  reason: wire_api_missing
+- family_id: fanout-fullstack-release-blocker
+  reason: wire_api_missing
+- family_id: incident-retro-runbook-closure
+  reason: wire_api_missing
+- family_id: parallel-explorer-root-cause-map
+  reason: wire_api_missing
+- family_id: pr-intent-regression-review
+  reason: wire_api_missing
+- family_id: pr-review-fanout-remediation
+  reason: wire_api_missing
+- family_id: pr-thread-contract-remediation
+  reason: wire_api_missing
+- family_id: release-note-to-plan-translation
+  reason: wire_api_missing
+- family_id: request-path-evidence-brief
+  reason: wire_api_missing
+- family_id: responses-tool-schema-cutover
+  reason: wire_api_missing
+- family_id: review-thread-ui-hardening
+  reason: wire_api_missing
+- family_id: runbook-code-reconciliation
+  reason: wire_api_missing
+- family_id: sandbox-policy-ci-drift
+  reason: wire_api_missing
+- family_id: security-audit-hotfix-remediation
+  reason: wire_api_missing
+- family_id: transcript-merge-regression
+  reason: wire_api_missing
+- family_id: workspace-approval-state-threading
+  reason: wire_api_missing
+samples_per_family: 4
+split_per_family:
+  seed_rows: 3
+  holdout_rows: 1
+split_seed: 2026042401
+min_trajectory_turns: 4
+total_seed_rows: 27
+total_holdout_rows: 9
+thinking_probe_ref: reports/thinking-probe-20260424.md
+thinking_probe_outcome: row-3
+seed_trace_ref: seed_trace.jsonl
+holdout_trace_ref: holdout_trace.jsonl
+nominal_ttft_ms: 2000
+nominal_tpot_ms: 80
+nominal_turn_ms: 30000
+target_concurrency: 4

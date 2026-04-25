@@ -6,10 +6,108 @@ import hashlib
 import json
 import os
 import random
+import re
 from pathlib import Path
 
 import requests
 import yaml
+
+
+V5_REASONING_MAX_OUTPUT_TOKENS = 4096
+V5_SHORT_MAX_OUTPUT_TOKENS = 512
+
+
+def _read_excerpt(path: Path, *, max_chars: int) -> str:
+    if not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace").strip()
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars].rsplit("\n", 1)[0]
+
+
+def _family_context(repo_root: Path, family_id: str) -> str:
+    family_dir = repo_root / "benchmark_blueprints" / "families" / family_id
+    parts: list[str] = []
+    for relative, max_chars in (
+        ("family.yaml", 800),
+        ("task_spec.md", 2200),
+        ("verification_matrix_v5.md", 1800),
+    ):
+        excerpt = _read_excerpt(family_dir / relative, max_chars=max_chars)
+        if excerpt:
+            parts.append(f"## {relative}\n{excerpt}")
+    v5_matrices = sorted(family_dir.glob("verification_matrix_v5*.md"))
+    if not any(part.startswith("## verification_matrix_v5.md") for part in parts) and v5_matrices:
+        excerpt = _read_excerpt(v5_matrices[0], max_chars=1800)
+        if excerpt:
+            parts.append(f"## {v5_matrices[0].name}\n{excerpt}")
+    if not parts:
+        parts.append(f"## family_id\n{family_id}")
+    return "\n\n".join(parts)
+
+
+def _variant_label(repo_root: Path, family_id: str) -> str:
+    family_dir = repo_root / "benchmark_blueprints" / "families" / family_id
+    variants = sorted(path.name for path in (family_dir / "workspace_bundle").glob("v5-*"))
+    if variants:
+        return variants[0]
+    matrices = sorted(family_dir.glob("verification_matrix_v5*.md"))
+    if matrices:
+        match = re.search(r"verification_matrix_(v5[^.]*)", matrices[0].name)
+        if match:
+            return match.group(1).replace("_", "-")
+    return "v5"
+
+
+def _live_prompt_for_turn(
+    *,
+    index: int,
+    repo_root: Path,
+    family_id: str | None,
+    variant: str | None,
+    requested_max_output_tokens: int | None,
+) -> tuple[str, int, str]:
+    if family_id and variant == "v5" and requested_max_output_tokens is None:
+        context = _family_context(repo_root, family_id)
+        variant_label = _variant_label(repo_root, family_id)
+        prompt_templates = [
+            (
+                "v5_deep_failure_analysis",
+                V5_REASONING_MAX_OUTPUT_TOKENS,
+                "Think carefully about this benchmark family before giving a one-sentence final answer. "
+                "Consider hidden constraints, likely false fixes, and verification risks in depth.\n\n"
+                f"Family: {family_id}\nVariant: {variant_label}",
+            ),
+            (
+                "v5_acceptance_summary",
+                V5_SHORT_MAX_OUTPUT_TOKENS,
+                "From the benchmark family artifacts below, summarize the v5 acceptance criteria, the expected work "
+                "surface, and the most important regression checks. Keep the final answer concise.\n\n"
+                f"Family: {family_id}\nVariant: {variant_label}\n\n{context}",
+            ),
+            (
+                "v5_implementation_plan",
+                V5_SHORT_MAX_OUTPUT_TOKENS,
+                "Read the benchmark family artifacts below and draft a concise implementation plan that would avoid "
+                "shortcuts and preserve unrelated work. Include only concrete steps and verification commands.\n\n"
+                f"Family: {family_id}\nVariant: {variant_label}\n\n{context}",
+            ),
+            (
+                "v5_holdout_deep_review",
+                V5_REASONING_MAX_OUTPUT_TOKENS,
+                "Think carefully about this benchmark family before giving a one-sentence final answer. "
+                "Consider hidden constraints, likely false fixes, and verification risks in depth.\n\n"
+                f"Family: {family_id}\nVariant: {variant_label}",
+            ),
+        ]
+        return prompt_templates[index % len(prompt_templates)]
+    max_output_tokens = requested_max_output_tokens or 128
+    return (
+        "generic_seed_capture",
+        max_output_tokens,
+        f"Seed capture turn {index}. Reply with a short summary.",
+    )
 
 
 def _int_usage(usage: dict, key: str, default: int = 0) -> int:
@@ -84,29 +182,43 @@ def _capture_live(
     *,
     api_key: str | None = None,
     family_id: str | None = None,
+    variant: str | None = None,
+    repo_root: Path = Path.cwd(),
     enable_thinking_override: bool = False,
+    max_output_tokens: int | None = None,
 ) -> list[dict[str, int | str]]:
     entries: list[dict[str, int | str]] = []
     for index in range(count):
-        prompt = f"Seed capture turn {index}. Reply with a short summary."
-        payload: dict[str, object] = {"model": model, "input": prompt, "max_output_tokens": 128}
+        prompt_label, request_max_output_tokens, prompt = _live_prompt_for_turn(
+            index=index,
+            repo_root=repo_root,
+            family_id=family_id,
+            variant=variant,
+            requested_max_output_tokens=max_output_tokens,
+        )
+        payload: dict[str, object] = {"model": model, "input": prompt, "max_output_tokens": request_max_output_tokens}
         if enable_thinking_override:
             payload["extra_body"] = {"chat_template_kwargs": {"enable_thinking": True}}
         response = requests.post(
             f"{base_url.rstrip('/')}/responses",
             headers={"Authorization": f"Bearer {api_key or os.environ.get('VLLM_API_KEY') or 'EMPTY'}"},
             json=payload,
-            timeout=60,
+            timeout=max(60, min(900, request_max_output_tokens)),
         )
         response.raise_for_status()
         payload = response.json()
         usage = payload.get("usage", {}) if isinstance(payload, dict) else {}
         output_tokens = _int_usage(usage, "output_tokens", 64)
+        thinking_tokens = _reasoning_tokens_from_response(payload, output_tokens) if isinstance(payload, dict) else 0
+        response_tokens = max(output_tokens - thinking_tokens, 0)
         entry: dict[str, int | str] = {
             "turn_index": index,
             "prompt_tokens": _int_usage(usage, "input_tokens", len(prompt.split())),
             "output_tokens": output_tokens,
-            "thinking_tokens": _reasoning_tokens_from_response(payload, output_tokens) if isinstance(payload, dict) else 0,
+            "response_tokens": response_tokens,
+            "thinking_tokens": thinking_tokens,
+            "capture_prompt_label": prompt_label,
+            "request_max_output_tokens": request_max_output_tokens,
         }
         if family_id:
             entry["family_id"] = family_id
@@ -183,6 +295,7 @@ def main() -> int:
     parser.add_argument("--split-seed", type=int, default=0)
     parser.add_argument("--thinking-probe-outcome", choices=["row-1", "row-3"])
     parser.add_argument("--enable-thinking-override", action="store_true")
+    parser.add_argument("--max-output-tokens", type=int)
     parser.add_argument("--update-workload", action="store_true")
     args = parser.parse_args()
 
@@ -224,7 +337,10 @@ def main() -> int:
             args.count,
             api_key=args.api_key,
             family_id=args.family_id,
+            variant=args.variant,
+            repo_root=args.repo_root,
             enable_thinking_override=enable_thinking_override,
+            max_output_tokens=args.max_output_tokens,
         )
     else:
         entries = _default_entries(

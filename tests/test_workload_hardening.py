@@ -7,6 +7,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -158,6 +159,57 @@ def test_capture_seed_workload_family_v5_defaults_to_per_family_trace(tmp_path: 
     assert payload["family_id"] == "family-a"
     assert payload["variant"] == "v5"
     assert {row["family_id"] for row in rows} == {"family-a"}
+
+
+def test_capture_seed_workload_live_v5_uses_family_prompts_and_response_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load_script("capture_seed_workload.py")
+    family_dir = tmp_path / "benchmark_blueprints" / "families" / "family-a"
+    (family_dir / "workspace_bundle" / "v5-recovery-in-thread").mkdir(parents=True)
+    (family_dir / "family.yaml").write_text("id: family-a\nrawr_status: flywheel_ready\n", encoding="utf-8")
+    (family_dir / "task_spec.md").write_text("# Task\nFix the v5 recovery path.\n", encoding="utf-8")
+    (family_dir / "verification_matrix_v5.md").write_text("# Matrix\n- hidden check\n", encoding="utf-8")
+    seen: list[dict] = []
+
+    def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _FakeResponse:
+        seen.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return _FakeResponse(
+            {
+                "usage": {
+                    "input_tokens": 123,
+                    "output_tokens": 4096,
+                    "output_tokens_details": {"reasoning_tokens": 4096},
+                }
+            }
+        )
+
+    monkeypatch.setattr(module.requests, "post", fake_post)
+
+    rows = module._capture_live(
+        "http://127.0.0.1:8100/v1",
+        "qwen3.5-27b",
+        4,
+        api_key="test-key",
+        family_id="family-a",
+        variant="v5",
+        repo_root=tmp_path,
+        enable_thinking_override=True,
+    )
+
+    assert [row["capture_prompt_label"] for row in rows] == [
+        "v5_deep_failure_analysis",
+        "v5_acceptance_summary",
+        "v5_implementation_plan",
+        "v5_holdout_deep_review",
+    ]
+    assert seen[0]["json"]["max_output_tokens"] == 4096
+    assert seen[1]["json"]["max_output_tokens"] == 512
+    assert seen[0]["json"]["extra_body"]["chat_template_kwargs"]["enable_thinking"] is True
+    assert "Fix the v5 recovery path" in seen[1]["json"]["input"]
+    assert rows[0]["output_tokens"] == 4096
+    assert rows[0]["thinking_tokens"] == 4096
+    assert rows[0]["response_tokens"] == 0
 
 
 def _write_trace(path: Path, family_id: str, thinking_values: list[int]) -> None:

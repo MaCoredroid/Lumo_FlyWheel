@@ -1,0 +1,4 @@
+{"turn_index": 0, "prompt_tokens": 58, "output_tokens": 4096, "response_tokens": 0, "thinking_tokens": 4096, "capture_prompt_label": "v5_deep_failure_analysis", "request_max_output_tokens": 4096, "family_id": "responses-sdk-adapter-cutover"}
+{"turn_index": 1, "prompt_tokens": 1245, "output_tokens": 512, "response_tokens": 0, "thinking_tokens": 512, "capture_prompt_label": "v5_acceptance_summary", "request_max_output_tokens": 512, "family_id": "responses-sdk-adapter-cutover"}
+{"turn_index": 2, "prompt_tokens": 1242, "output_tokens": 512, "response_tokens": 0, "thinking_tokens": 512, "capture_prompt_label": "v5_implementation_plan", "request_max_output_tokens": 512, "family_id": "responses-sdk-adapter-cutover"}
+{"turn_index": 3, "prompt_tokens": 58, "output_tokens": 4096, "response_tokens": 0, "thinking_tokens": 4096, "capture_prompt_label": "v5_holdout_deep_review", "request_max_output_tokens": 4096, "family_id": "responses-sdk-adapter-cutover"}
