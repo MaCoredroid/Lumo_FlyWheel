@@ -1,0 +1,19 @@
+family_id: responses-sdk-adapter-cutover-heavy
+workload_distribution_id: 7ded76c7da429927f6d5312a9555723b2cfa0dedc696932f8ae253634ccefc6d
+workload_distribution_id_hardening_version: v2-l0-kernel-heavy
+capture_date: '2026-04-25T22:44:14.034516Z'
+source_family: responses-sdk-adapter-cutover
+trajectory_source: benchmark_blueprints/families/responses-sdk-adapter-cutover/seed_trace_v5.jsonl
+trajectory_turns: 4
+samples_per_measurement: 1
+seed_trace_ref: seed_trace.jsonl
+holdout_trace_ref: holdout_trace.jsonl
+nominal_ttft_ms: 2000
+nominal_tpot_ms: 80
+nominal_turn_ms: 30000
+target_concurrency: 4
+thinking_probe_ref: reports/thinking-probe-20260424.md
+thinking_probe_outcome: row-3
+parity_fixture_refs:
+  deltanet: parity_fixture/deltanet_v1.yaml
+  gatedattn: parity_fixture/gatedattn_v1.yaml
