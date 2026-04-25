@@ -16,6 +16,7 @@ from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .registry import load_registry
 from .round_driver import RoundContext, run_replay_round, run_round, run_round_exit_code
+from .workload_p1 import heavy_workload_descriptor_path, validate_p1_workload
 
 
 def _prefix_cache_probe_messages(prior_reply: str | None = None) -> list[dict[str, str]]:
@@ -654,6 +655,21 @@ def cmd_auto_research_validate_holdout(args: argparse.Namespace) -> int:
     return 0 if payload.get("pass") else 1
 
 
+def cmd_auto_research_validate_p1_workload(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    workload_file = Path(args.workload_file) if args.workload_file else heavy_workload_descriptor_path(REPO_ROOT)
+    if not workload_file.is_absolute():
+        workload_file = REPO_ROOT / workload_file
+    payload = validate_p1_workload(
+        repo_root=REPO_ROOT,
+        descriptor_path=workload_file,
+        expected_weight_version_id=args.expected_weight_version_id,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if payload.get("pass") else 1
+
+
 def cmd_auto_research_finalize_round(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
@@ -871,6 +887,12 @@ def build_parser() -> argparse.ArgumentParser:
     auto_holdout.add_argument("--candidate-uuid")
     auto_holdout.add_argument("--harness", choices=["real", "synthetic"], default=None)
     auto_holdout.set_defaults(func=cmd_auto_research_validate_holdout)
+
+    auto_validate_p1 = auto_research_subparsers.add_parser("validate-p1-workload")
+    auto_validate_p1.add_argument("--help-only", action="store_true")
+    auto_validate_p1.add_argument("--workload-file")
+    auto_validate_p1.add_argument("--expected-weight-version-id")
+    auto_validate_p1.set_defaults(func=cmd_auto_research_validate_p1_workload)
 
     auto_finalize = auto_research_subparsers.add_parser("finalize-round")
     auto_finalize.add_argument("--help-only", action="store_true")

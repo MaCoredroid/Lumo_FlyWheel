@@ -11,6 +11,7 @@ import pytest
 
 from lumo_flywheel_serving import auto_research, measurement_harness, round_driver
 from lumo_flywheel_serving.round_driver import RoundContext, RoundResult, run_round, run_round_exit_code
+from lumo_flywheel_serving.workload_p1 import write_heavy_workload_descriptor
 
 
 def _write_registry(path: Path) -> None:
@@ -165,6 +166,34 @@ def _write_composite_workload(repo: Path, family_id: str = "multi-family-v5") ->
     workload["workload_distribution_id"] = auto_research.compute_workload_distribution_id(workload_path)
     workload_path.write_text(auto_research.yaml.safe_dump(workload, sort_keys=False), encoding="utf-8")
     return workload_path
+
+
+def _write_l0_heavy_workload(repo: Path) -> Path:
+    source_family = "responses-sdk-adapter-cutover"
+    family_dir = repo / "benchmark_blueprints" / "families" / source_family
+    _write_trace(family_dir / "seed_trace_v5.jsonl", prompt_tokens=4096, output_tokens=1200)
+    workload_dir = repo / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy"
+    _write_trace(workload_dir / "seed_trace.jsonl", prompt_tokens=4096, output_tokens=1200)
+    _write_trace(workload_dir / "holdout_trace.jsonl", prompt_tokens=3072, output_tokens=900)
+    for trace_path in (workload_dir / "seed_trace.jsonl", workload_dir / "holdout_trace.jsonl"):
+        rows = [json.loads(line) for line in trace_path.read_text(encoding="utf-8").splitlines()]
+        for row in rows:
+            row["family_id"] = source_family
+            row["thinking_tokens"] = max(1, int(row.get("output_tokens", 1)))
+        trace_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    source_rows = [json.loads(line) for line in (family_dir / "seed_trace_v5.jsonl").read_text(encoding="utf-8").splitlines()]
+    for row in source_rows:
+        row["family_id"] = source_family
+        row["thinking_tokens"] = max(1, int(row.get("output_tokens", 1)))
+    (family_dir / "seed_trace_v5.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in source_rows) + "\n",
+        encoding="utf-8",
+    )
+    return write_heavy_workload_descriptor(
+        repo_root=repo,
+        capture_date="2026-04-25T00:00:00Z",
+        thinking_probe_ref="reports/thinking-probe-20260424.md",
+    )
 
 
 def test_capture_seed_workload_updates_seed_and_holdout_refs(tmp_path: Path) -> None:
@@ -790,6 +819,33 @@ def test_bootstrap_prefers_composite_descriptor_and_enforces_version_pin(tmp_pat
     )
     legacy_round_spec = auto_research.load_yaml_file(Path(legacy_bootstrap["round_spec_path"]))
     assert legacy_round_spec["workload_distribution_id_hardening_version"] == "legacy-version"
+
+
+def test_bootstrap_accepts_l0_heavy_workload_descriptor_version(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    workload_path = _write_l0_heavy_workload(repo)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "add l0 heavy workload"], cwd=repo, check=True, capture_output=True, text=True)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="responses-sdk-adapter-cutover-heavy",
+        sprint="sprint-0",
+        workload_file=None,
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+    )
+    round_spec = auto_research.load_yaml_file(Path(bootstrap["round_spec_path"]))
+
+    assert round_spec["workload_descriptor_path"] == str(workload_path.resolve())
+    assert round_spec["workload_distribution_id_hardening_version"] == "v2-l0-kernel-heavy"
+    assert round_spec["workload_distribution_id"] == auto_research.compute_workload_distribution_id(workload_path)
 
 
 def test_l2_candidate_validation_rejects_l1_and_l3_keys(tmp_path: Path) -> None:

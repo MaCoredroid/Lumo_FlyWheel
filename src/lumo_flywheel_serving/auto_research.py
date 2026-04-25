@@ -23,6 +23,7 @@ import yaml
 from .measurement_harness import RealMeasurementHarness, SLO, WorkloadSpec
 from .registry import ModelConfig, load_registry
 from .tuned_config import TunedConfigBundle, default_weight_version_id, make_tuned_config_bundle, persist_tuned_config_bundle
+from .workload_p1 import HARDENED_L0_HEAVY_WORKLOAD_VERSION, L0_HEAVY_WORKLOAD_FAMILY_ID
 from .yaml_utils import load_yaml_file
 
 MIN_LIVE_STARTUP_GPU_MEMORY_UTILIZATION = 0.30
@@ -536,7 +537,11 @@ def verify_workload_descriptor_preconditions(
     canonical_id = compute_workload_distribution_id(descriptor)
     if descriptor_id != canonical_id:
         raise RuntimeError("descriptor_workload_distribution_id_mismatch")
-    expected_version = HARDENED_COMPOSITE_WORKLOAD_VERSION if composite else HARDENED_LEGACY_WORKLOAD_VERSION
+    descriptor_family_id = str(payload.get("family_id", ""))
+    if descriptor_family_id == L0_HEAVY_WORKLOAD_FAMILY_ID:
+        expected_version = HARDENED_L0_HEAVY_WORKLOAD_VERSION
+    else:
+        expected_version = HARDENED_COMPOSITE_WORKLOAD_VERSION if composite else HARDENED_LEGACY_WORKLOAD_VERSION
     hardening_version = str(payload.get("workload_distribution_id_hardening_version", ""))
     if hardening_version != expected_version and not allow_legacy_workload:
         raise RuntimeError("descriptor_stale_workload_distribution_id_hardening_version")

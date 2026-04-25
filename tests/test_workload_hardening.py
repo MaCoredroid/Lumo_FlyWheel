@@ -10,6 +10,14 @@ from pathlib import Path
 import pytest
 import yaml
 
+from lumo_flywheel_serving.tuned_config import compute_workload_distribution_id
+from lumo_flywheel_serving.workload_p1 import (
+    SIBLING_HOLDOUT_FAMILIES,
+    annotate_capture_rows,
+    validate_p1_workload,
+    write_heavy_workload_descriptor,
+)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -226,6 +234,93 @@ def _write_trace(path: Path, family_id: str, thinking_values: list[int]) -> None
             }
         )
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+
+def test_l0_p1_heavy_descriptor_hash_and_sibling_holdout_validation(tmp_path: Path) -> None:
+    source_family = "responses-sdk-adapter-cutover"
+    _write_trace(
+        tmp_path / "benchmark_blueprints" / "families" / source_family / "seed_trace_v5.jsonl",
+        source_family,
+        [5000, 500, 500, 4096],
+    )
+    workload_dir = tmp_path / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy"
+    _write_trace(workload_dir / "seed_trace.jsonl", source_family, [4096, 512, 512, 4096])
+    _write_trace(workload_dir / "holdout_trace.jsonl", source_family, [4096, 512, 512, 4096])
+    descriptor_path = write_heavy_workload_descriptor(
+        repo_root=tmp_path,
+        capture_date="2026-04-25T00:00:00Z",
+        thinking_probe_ref="reports/thinking-probe-20260424.md",
+    )
+    for sibling in SIBLING_HOLDOUT_FAMILIES:
+        rows = [
+            {
+                "family_id": sibling,
+                "turn_index": 0,
+                "prompt_tokens": 1000,
+                "output_tokens": 4096,
+                "thinking_tokens": 4096,
+            }
+        ]
+        rows = annotate_capture_rows(
+            rows,
+            capture_role="sibling_holdout_v5",
+            baseline="vllm-default",
+            weight_version_id="weight-1",
+            capture_date="2026-04-25T00:00:00Z",
+        )
+        (tmp_path / "benchmark_blueprints" / "families" / sibling / "holdout_trace_v5.jsonl").parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        (tmp_path / "benchmark_blueprints" / "families" / sibling / "holdout_trace_v5.jsonl").write_text(
+            "\n".join(json.dumps(row, sort_keys=True) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
+    descriptor = yaml.safe_load(descriptor_path.read_text(encoding="utf-8"))
+    assert descriptor["workload_distribution_id"] == compute_workload_distribution_id(descriptor_path)
+    assert descriptor["workload_distribution_id_hardening_version"] == "v2-l0-kernel-heavy"
+    assert descriptor["parity_fixture_refs"] == {
+        "deltanet": "parity_fixture/deltanet_v1.yaml",
+        "gatedattn": "parity_fixture/gatedattn_v1.yaml",
+    }
+
+    validation = validate_p1_workload(
+        repo_root=tmp_path,
+        descriptor_path=descriptor_path,
+        expected_weight_version_id="weight-1",
+    )
+
+    assert validation["pass"] is True
+    assert validation["halt_reason"] is None
+    assert validation["canonical_workload_distribution_id"] == descriptor["workload_distribution_id"]
+    assert validation["missing_sibling_holdouts"] == []
+    assert validation["heavy_seed_trace"]["reasoning_positive_rows"] == 4
+    assert validation["heavy_holdout_trace"]["reasoning_positive_rows"] == 4
+
+
+def test_l0_p1_validation_reports_missing_sibling_holdouts_with_halt_reason(tmp_path: Path) -> None:
+    source_family = "responses-sdk-adapter-cutover"
+    _write_trace(
+        tmp_path / "benchmark_blueprints" / "families" / source_family / "seed_trace_v5.jsonl",
+        source_family,
+        [5000, 500, 500, 4096],
+    )
+    workload_dir = tmp_path / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy"
+    _write_trace(workload_dir / "seed_trace.jsonl", source_family, [4096, 512, 512, 4096])
+    _write_trace(workload_dir / "holdout_trace.jsonl", source_family, [4096, 512, 512, 4096])
+    descriptor_path = write_heavy_workload_descriptor(
+        repo_root=tmp_path,
+        capture_date="2026-04-25T00:00:00Z",
+        thinking_probe_ref="reports/thinking-probe-20260424.md",
+    )
+
+    validation = validate_p1_workload(repo_root=tmp_path, descriptor_path=descriptor_path)
+
+    assert validation["pass"] is False
+    assert validation["halt_reason"] == "sibling_holdout_capture_failed"
+    assert validation["missing_sibling_holdouts"] == list(SIBLING_HOLDOUT_FAMILIES)
+    assert "sibling_holdout_missing:codex-provider-rollover" in validation["errors"]
 
 
 def test_multi_family_builder_splits_hashes_and_validates(tmp_path: Path) -> None:
