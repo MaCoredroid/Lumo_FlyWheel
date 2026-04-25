@@ -1,0 +1,61 @@
+tuned_config_bundle:
+  bundle_id: 08792ff0-e7ec-4c67-9c47-b002d880b53a
+  produced_at: '2026-04-25T10:20:52+00:00'
+  weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+  model_id: qwen3.5-27b
+  family_id: multi-family-v5
+  workload_distribution_id: 8d3e9038afd0c6f6be23c57e47d3a2ee8d619433d3c2e7c4127376a10ad456e8
+  vllm_config:
+    max_num_seqs: 4
+    max_num_batched_tokens: 12288
+    enable_chunked_prefill: true
+    enable_prefix_caching: false
+    gpu_memory_utilization: 0.92
+    max_model_len: 131072
+    kv_cache_dtype: fp8_e5m2
+  request_shaping: {}
+  kernel_selection: {}
+  lora_policy: {}
+  objective:
+    metric: eval_throughput
+    value: 0.05574825
+  measurement_trace_ref: output/auto_research/qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z/measurement_trace_combined.json
+  search_trace_ref: output/auto_research/qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z/search_trace.json
+  baseline_bundle_id: null
+  regression_guard:
+    noise_floor: 0.015228949799641473
+  safety_rails:
+    regression_guard_passed: true
+  round_provenance:
+    dry_run: false
+    round_id: qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z
+    round_branch: autoresearch/qwen3.5-27b/multi-family-v5/sprint-0/20260425T085916Z
+    active_layer: L1
+    winner_iteration: import_001
+    winner_candidate_uuid: ee33f94e-9fda-4c03-89ed-8d4146676a4e
+    winner_rescreen_uuid: c8a21c55-6f99-47f4-ac5c-00d0283c4936
+    baseline_bundle_path: null
+    baseline_bundle_id: null
+    request_shaping_enforcement: {}
+    confidence: exploratory
+    improvement_over_baseline_req_per_s: -0.0030177499999999996
+    improvement_over_baseline_ci_95:
+    - -0.014273117497117722
+    - 0.008237617497117723
+    latency_above_slo: true
+    screen_full_consistency: consistent
+    l2_enforcement_coverage:
+      mode: not_l2
+      enforced_fields: []
+      advisory_fields: []
+    workload_descriptor_path: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/multi-family-v5/workload.yaml
+    sub_spec_version: v0.1.12
+    agent_session_dir_ref: output/auto_research/qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z/candidates
+    agent_model_pin:
+      model: gpt-5.4
+      reasoning_effort: high
+    results_tsv_ref: output/auto_research/qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z/results.tsv
+    holdout_validation: pass
+    round_type: replay
+    imported_from_candidate: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-proposal-ranking-manager-judgment-sprint-0-20260424T072126Z/candidates/003/candidate.yaml
+    imported_from_commit: 92833800c4106f1a86ddd98922344d0c42e2b984

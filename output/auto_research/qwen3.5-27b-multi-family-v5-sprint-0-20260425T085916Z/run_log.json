@@ -1,0 +1,29 @@
+{
+  "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+  "winner_iteration": "import_001",
+  "winner_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+  "winner_rescreen_uuid": "c8a21c55-6f99-47f4-ac5c-00d0283c4936",
+  "bundle_path": "/home/mark/shared/lumoFlyWheel/output/tuned_configs/multi-family-v5/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260425T1020520000_08792ff0.yaml",
+  "dry_run": false,
+  "feasible_count": 10,
+  "iterations_total": 10,
+  "rescreened_count": 3,
+  "holdout_validation": "pass",
+  "diagnostics": {
+    "confidence": {
+      "confidence": "exploratory",
+      "baseline_mean_screen": 0.058766,
+      "objective_mean_screen": 0.05574825,
+      "improvement_over_baseline_req_per_s": -0.0030177499999999996,
+      "improvement_over_baseline_ci_95": [
+        -0.014273117497117722,
+        0.008237617497117723
+      ],
+      "baseline_measurement_count": 5,
+      "winner_screen_measurement_count": 4,
+      "noise_floor": 0.015228949799641473
+    },
+    "latency_above_slo": true,
+    "screen_full_consistency": "consistent"
+  }
+}

@@ -1,0 +1,3282 @@
+[
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "ed7f01ec-a2c9-4e52-b699-3b2843f1a3c7",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "baseline_a",
+    "candidate_uuid": "ed7f01ec-a2c9-4e52-b699-3b2843f1a3c7",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": true,
+      "gpu_memory_utilization": 0.9,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 8192,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 100.184,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.477,
+        "promql": 44.477
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24523.763,
+        "promql": 24523.763
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 70067.893,
+        "promql": 70067.893
+      }
+    },
+    "eval_throughput": 0.062144,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "baseline_a",
+    "no_oom_events": true,
+    "parent_candidate_uuid": null,
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.927,
+        "ttft_ms": 24220.726,
+        "turn_latency_ms": 69202.074
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 2.929,
+        "ttft_ms": 12918.195,
+        "turn_latency_ms": 36909.129
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.009,
+        "ttft_ms": 24265.682,
+        "turn_latency_ms": 69330.52
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 29.408,
+        "ttft_ms": 16215.03,
+        "turn_latency_ms": 46328.657
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 1.618,
+        "ttft_ms": 7135.929,
+        "turn_latency_ms": 20388.37
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 7.078,
+        "ttft_ms": 20930.291,
+        "turn_latency_ms": 59800.83
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.335,
+        "ttft_ms": 19121.332,
+        "turn_latency_ms": 54632.377
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.401,
+        "ttft_ms": 15001.351,
+        "turn_latency_ms": 42861.003
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.324,
+        "ttft_ms": 24439.715,
+        "turn_latency_ms": 69827.756
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.477,
+        "ttft_ms": 24523.763,
+        "turn_latency_ms": 70067.893
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.47,
+        "ttft_ms": 24520.278,
+        "turn_latency_ms": 70057.938
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.469,
+        "ttft_ms": 24519.433,
+        "turn_latency_ms": 70055.523
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.19,
+        "ttft_ms": 24365.826,
+        "turn_latency_ms": 69616.646
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.224,
+        "ttft_ms": 24384.219,
+        "turn_latency_ms": 69669.197
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.185,
+        "ttft_ms": 24362.654,
+        "turn_latency_ms": 69607.584
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 3.0,
+        "ttft_ms": 12391.654,
+        "turn_latency_ms": 35404.725
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 6.494,
+        "ttft_ms": 22883.929,
+        "turn_latency_ms": 65382.653
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.988,
+        "ttft_ms": 24254.258,
+        "turn_latency_ms": 69297.881
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.405,
+        "ttft_ms": 24484.137,
+        "turn_latency_ms": 69954.677
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 3.75,
+        "ttft_ms": 16065.523,
+        "turn_latency_ms": 45901.493
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.477,
+        "ttft_ms": 24523.857,
+        "turn_latency_ms": 70068.163
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.581,
+        "ttft_ms": 24581.01,
+        "turn_latency_ms": 70231.456
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.2,
+        "ttft_ms": 24370.969,
+        "turn_latency_ms": 69631.34
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.095,
+        "ttft_ms": 24313.487,
+        "turn_latency_ms": 69467.106
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.43,
+        "ttft_ms": 23946.774,
+        "turn_latency_ms": 68419.353
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.429,
+        "ttft_ms": 15127.315,
+        "turn_latency_ms": 43220.9
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.724,
+        "ttft_ms": 23557.459,
+        "turn_latency_ms": 67307.025
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 100.184,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/baseline_a/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.477,
+      "promql": 44.477
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24523.763,
+      "promql": 24523.763
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 70067.893,
+      "promql": 70067.893
+    },
+    "vllm_metrics_snapshot_ref": "candidates/baseline_a/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 434.472,
+      "measurement_end_wallclock": "2026-04-25T09:06:30Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T08:59:16Z",
+      "warmup_s": 120
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "074b33e9-3fdf-4ee4-8c1c-83ee29b1651e",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "baseline_b",
+    "candidate_uuid": "074b33e9-3fdf-4ee4-8c1c-83ee29b1651e",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": true,
+      "gpu_memory_utilization": 0.9,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 8192,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 72.812,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.175,
+        "promql": 44.175
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24448.437,
+        "promql": 24448.437
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 69852.676,
+        "promql": 69852.676
+      }
+    },
+    "eval_throughput": 0.045166,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "baseline_b",
+    "no_oom_events": true,
+    "parent_candidate_uuid": null,
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.992,
+        "ttft_ms": 24256.628,
+        "turn_latency_ms": 69304.651
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.965,
+        "ttft_ms": 17491.509,
+        "turn_latency_ms": 49975.74
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.991,
+        "ttft_ms": 24255.912,
+        "turn_latency_ms": 69302.607
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.909,
+        "ttft_ms": 24210.704,
+        "turn_latency_ms": 69173.439
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 43.466,
+        "ttft_ms": 191732.266,
+        "turn_latency_ms": 547806.474
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 6.268,
+        "ttft_ms": 18537.34,
+        "turn_latency_ms": 52963.828
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.259,
+        "ttft_ms": 14375.198,
+        "turn_latency_ms": 41071.995
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 2.293,
+        "ttft_ms": 10114.551,
+        "turn_latency_ms": 28898.718
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.068,
+        "ttft_ms": 24298.467,
+        "turn_latency_ms": 69424.191
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.128,
+        "ttft_ms": 24331.424,
+        "turn_latency_ms": 69518.355
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.104,
+        "ttft_ms": 24318.012,
+        "turn_latency_ms": 69480.033
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.083,
+        "ttft_ms": 24306.733,
+        "turn_latency_ms": 69447.809
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.175,
+        "ttft_ms": 24357.565,
+        "turn_latency_ms": 69593.044
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.887,
+        "ttft_ms": 24198.511,
+        "turn_latency_ms": 69138.602
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.923,
+        "ttft_ms": 24218.59,
+        "turn_latency_ms": 69195.972
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 5.062,
+        "ttft_ms": 20905.356,
+        "turn_latency_ms": 59729.59
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 3.08,
+        "ttft_ms": 10854.066,
+        "turn_latency_ms": 31011.617
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.831,
+        "ttft_ms": 24167.613,
+        "turn_latency_ms": 69050.322
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.682,
+        "ttft_ms": 24085.334,
+        "turn_latency_ms": 68815.239
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 6.472,
+        "ttft_ms": 27726.517,
+        "turn_latency_ms": 79218.62
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.269,
+        "ttft_ms": 24409.013,
+        "turn_latency_ms": 69740.036
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.34,
+        "ttft_ms": 24448.437,
+        "turn_latency_ms": 69852.676
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.022,
+        "ttft_ms": 24273.14,
+        "turn_latency_ms": 69351.828
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 33.441,
+        "ttft_ms": 18438.773,
+        "turn_latency_ms": 52682.21
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.767,
+        "ttft_ms": 24132.438,
+        "turn_latency_ms": 68949.823
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.224,
+        "ttft_ms": 14222.137,
+        "turn_latency_ms": 40634.676
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.861,
+        "ttft_ms": 23633.001,
+        "turn_latency_ms": 67522.859
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 72.812,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/baseline_b/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.175,
+      "promql": 44.175
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24448.437,
+      "promql": 24448.437
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 69852.676,
+      "promql": 69852.676
+    },
+    "vllm_metrics_snapshot_ref": "candidates/baseline_b/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 597.797,
+      "measurement_end_wallclock": "2026-04-25T09:16:28Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T09:06:30Z",
+      "warmup_s": 120
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "d59a19e0-c8ef-43b9-b9bc-b46b449ea065",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "baseline_c",
+    "candidate_uuid": "d59a19e0-c8ef-43b9-b9bc-b46b449ea065",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": true,
+      "gpu_memory_utilization": 0.9,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 8192,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 99.274,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.522,
+        "promql": 44.522
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24549.007,
+        "promql": 24549.007
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 70140.021,
+        "promql": 70140.021
+      }
+    },
+    "eval_throughput": 0.06158,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "baseline_c",
+    "no_oom_events": true,
+    "parent_candidate_uuid": null,
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.903,
+        "ttft_ms": 24207.34,
+        "turn_latency_ms": 69163.829
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.217,
+        "ttft_ms": 18601.904,
+        "turn_latency_ms": 53148.296
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.986,
+        "ttft_ms": 24253.107,
+        "turn_latency_ms": 69294.592
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.985,
+        "ttft_ms": 24252.916,
+        "turn_latency_ms": 69294.044
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.085,
+        "ttft_ms": 13607.497,
+        "turn_latency_ms": 38878.562
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 5.515,
+        "ttft_ms": 16309.827,
+        "turn_latency_ms": 46599.506
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.34,
+        "ttft_ms": 19142.949,
+        "turn_latency_ms": 54694.14
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.794,
+        "ttft_ms": 16733.916,
+        "turn_latency_ms": 47811.189
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.389,
+        "ttft_ms": 24475.639,
+        "turn_latency_ms": 69930.397
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.51,
+        "ttft_ms": 24541.983,
+        "turn_latency_ms": 70119.952
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.469,
+        "ttft_ms": 24519.41,
+        "turn_latency_ms": 70055.456
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.522,
+        "ttft_ms": 24549.007,
+        "turn_latency_ms": 70140.021
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.182,
+        "ttft_ms": 24361.287,
+        "turn_latency_ms": 69603.678
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.538,
+        "ttft_ms": 24557.692,
+        "turn_latency_ms": 70164.835
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.25,
+        "ttft_ms": 24398.892,
+        "turn_latency_ms": 69711.12
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 2.833,
+        "ttft_ms": 11701.388,
+        "turn_latency_ms": 33432.536
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 2.562,
+        "ttft_ms": 9027.112,
+        "turn_latency_ms": 25791.75
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.442,
+        "ttft_ms": 24504.879,
+        "turn_latency_ms": 70013.94
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.443,
+        "ttft_ms": 24505.439,
+        "turn_latency_ms": 70015.541
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 3.528,
+        "ttft_ms": 15114.2,
+        "turn_latency_ms": 43183.428
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.418,
+        "ttft_ms": 24491.463,
+        "turn_latency_ms": 69975.607
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.592,
+        "ttft_ms": 24587.193,
+        "turn_latency_ms": 70249.124
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.216,
+        "ttft_ms": 24380.297,
+        "turn_latency_ms": 69657.992
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.1,
+        "ttft_ms": 24315.831,
+        "turn_latency_ms": 69473.802
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.797,
+        "ttft_ms": 24149.034,
+        "turn_latency_ms": 68997.24
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.112,
+        "ttft_ms": 18138.231,
+        "turn_latency_ms": 51823.517
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.659,
+        "ttft_ms": 23521.352,
+        "turn_latency_ms": 67203.863
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 99.274,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/baseline_c/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.522,
+      "promql": 44.522
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24549.007,
+      "promql": 24549.007
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 70140.021,
+      "promql": 70140.021
+    },
+    "vllm_metrics_snapshot_ref": "candidates/baseline_c/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 438.451,
+      "measurement_end_wallclock": "2026-04-25T09:23:47Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T09:16:28Z",
+      "warmup_s": 120
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "e07295ca-8921-44ad-9989-cb7083d11105",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "baseline_d",
+    "candidate_uuid": "e07295ca-8921-44ad-9989-cb7083d11105",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": true,
+      "gpu_memory_utilization": 0.9,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 8192,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 100.209,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.571,
+        "promql": 44.571
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24575.896,
+        "promql": 24575.896
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 70216.847,
+        "promql": 70216.847
+      }
+    },
+    "eval_throughput": 0.06216,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "baseline_d",
+    "no_oom_events": true,
+    "parent_candidate_uuid": null,
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.243,
+        "ttft_ms": 24394.796,
+        "turn_latency_ms": 69699.418
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.437,
+        "ttft_ms": 15161.587,
+        "turn_latency_ms": 43318.82
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 26.134,
+        "ttft_ms": 14409.927,
+        "turn_latency_ms": 41171.221
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.241,
+        "ttft_ms": 24393.582,
+        "turn_latency_ms": 69695.95
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 2.934,
+        "ttft_ms": 12941.223,
+        "turn_latency_ms": 36974.923
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 6.136,
+        "ttft_ms": 18144.221,
+        "turn_latency_ms": 51840.632
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.433,
+        "ttft_ms": 15141.842,
+        "turn_latency_ms": 43262.407
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.22,
+        "ttft_ms": 18614.909,
+        "turn_latency_ms": 53185.455
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.342,
+        "ttft_ms": 24449.227,
+        "turn_latency_ms": 69854.934
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.752,
+        "ttft_ms": 24675.346,
+        "turn_latency_ms": 70500.99
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.848,
+        "ttft_ms": 24728.543,
+        "turn_latency_ms": 70652.981
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 25.247,
+        "ttft_ms": 13921.068,
+        "turn_latency_ms": 39774.481
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.173,
+        "ttft_ms": 24356.479,
+        "turn_latency_ms": 69589.94
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.251,
+        "ttft_ms": 24399.35,
+        "turn_latency_ms": 69712.427
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.201,
+        "ttft_ms": 24371.874,
+        "turn_latency_ms": 69633.924
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 3.744,
+        "ttft_ms": 15463.688,
+        "turn_latency_ms": 44181.966
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 4.089,
+        "ttft_ms": 14406.77,
+        "turn_latency_ms": 41162.199
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.344,
+        "ttft_ms": 24450.5,
+        "turn_latency_ms": 69858.572
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.345,
+        "ttft_ms": 24450.955,
+        "turn_latency_ms": 69859.871
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 4.828,
+        "ttft_ms": 20681.567,
+        "turn_latency_ms": 59090.191
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.42,
+        "ttft_ms": 24492.638,
+        "turn_latency_ms": 69978.967
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.571,
+        "ttft_ms": 24575.896,
+        "turn_latency_ms": 70216.847
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.197,
+        "ttft_ms": 24369.708,
+        "turn_latency_ms": 69627.738
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.109,
+        "ttft_ms": 24320.908,
+        "turn_latency_ms": 69488.31
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.578,
+        "ttft_ms": 24028.406,
+        "turn_latency_ms": 68652.589
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.601,
+        "ttft_ms": 15884.801,
+        "turn_latency_ms": 45385.145
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.571,
+        "ttft_ms": 23473.041,
+        "turn_latency_ms": 67065.831
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 100.209,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/baseline_d/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.571,
+      "promql": 44.571
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24575.896,
+      "promql": 24575.896
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 70216.847,
+      "promql": 70216.847
+    },
+    "vllm_metrics_snapshot_ref": "candidates/baseline_d/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 434.363,
+      "measurement_end_wallclock": "2026-04-25T09:31:01Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T09:23:47Z",
+      "warmup_s": 120
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "85ff7643-cdab-42eb-8374-8ebf65188039",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "baseline_e",
+    "candidate_uuid": "85ff7643-cdab-42eb-8374-8ebf65188039",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": true,
+      "gpu_memory_utilization": 0.9,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 8192,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 101.208,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.445,
+        "promql": 44.445
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24534.429,
+        "promql": 24534.429
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 70098.367,
+        "promql": 70098.367
+      }
+    },
+    "eval_throughput": 0.06278,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "baseline_e",
+    "no_oom_events": true,
+    "parent_candidate_uuid": null,
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.889,
+        "ttft_ms": 24199.569,
+        "turn_latency_ms": 69141.626
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.022,
+        "ttft_ms": 13328.631,
+        "turn_latency_ms": 38081.804
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.973,
+        "ttft_ms": 24245.889,
+        "turn_latency_ms": 69273.969
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.972,
+        "ttft_ms": 24245.263,
+        "turn_latency_ms": 69272.18
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.853,
+        "ttft_ms": 16997.948,
+        "turn_latency_ms": 48565.566
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 4.975,
+        "ttft_ms": 14713.16,
+        "turn_latency_ms": 42037.601
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.06,
+        "ttft_ms": 13500.064,
+        "turn_latency_ms": 38571.612
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 7.462,
+        "ttft_ms": 32914.155,
+        "turn_latency_ms": 94040.443
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.993,
+        "ttft_ms": 24257.051,
+        "turn_latency_ms": 69305.859
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.426,
+        "ttft_ms": 24495.743,
+        "turn_latency_ms": 69987.838
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.382,
+        "ttft_ms": 24471.685,
+        "turn_latency_ms": 69919.1
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.496,
+        "ttft_ms": 24534.429,
+        "turn_latency_ms": 70098.367
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.209,
+        "ttft_ms": 24376.429,
+        "turn_latency_ms": 69646.939
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.887,
+        "ttft_ms": 24198.369,
+        "turn_latency_ms": 69138.197
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.957,
+        "ttft_ms": 24237.427,
+        "turn_latency_ms": 69249.793
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 3.669,
+        "ttft_ms": 15154.451,
+        "turn_latency_ms": 43298.432
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 5.594,
+        "ttft_ms": 19711.859,
+        "turn_latency_ms": 56319.598
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.349,
+        "ttft_ms": 24453.375,
+        "turn_latency_ms": 69866.786
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.356,
+        "ttft_ms": 24456.957,
+        "turn_latency_ms": 69877.019
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 3.278,
+        "ttft_ms": 14041.975,
+        "turn_latency_ms": 40119.929
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.445,
+        "ttft_ms": 24506.169,
+        "turn_latency_ms": 70017.625
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.558,
+        "ttft_ms": 24568.482,
+        "turn_latency_ms": 70195.663
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.178,
+        "ttft_ms": 24359.208,
+        "turn_latency_ms": 69597.736
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.091,
+        "ttft_ms": 24311.046,
+        "turn_latency_ms": 69460.131
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.359,
+        "ttft_ms": 23907.377,
+        "turn_latency_ms": 68306.791
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 2.945,
+        "ttft_ms": 12988.486,
+        "turn_latency_ms": 37109.959
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 27.69,
+        "ttft_ms": 15267.844,
+        "turn_latency_ms": 43622.411
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 101.208,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/baseline_e/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.445,
+      "promql": 44.445
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24534.429,
+      "promql": 24534.429
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 70098.367,
+      "promql": 70098.367
+    },
+    "vllm_metrics_snapshot_ref": "candidates/baseline_e/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 430.074,
+      "measurement_end_wallclock": "2026-04-25T09:38:11Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T09:31:01Z",
+      "warmup_s": 120
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "import_001",
+    "candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.92,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 12288,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 74.989,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.322,
+        "promql": 44.322
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24454.085,
+        "promql": 24454.085
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 69868.814,
+        "promql": 69868.814
+      }
+    },
+    "eval_throughput": 0.046516,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "import_001",
+    "no_oom_events": true,
+    "parent_candidate_uuid": null,
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.248,
+        "ttft_ms": 24397.416,
+        "turn_latency_ms": 69706.903
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 43.714,
+        "ttft_ms": 192827.561,
+        "turn_latency_ms": 550935.888
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.248,
+        "ttft_ms": 24397.907,
+        "turn_latency_ms": 69708.305
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.248,
+        "ttft_ms": 24397.462,
+        "turn_latency_ms": 69707.033
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.48,
+        "ttft_ms": 19759.819,
+        "turn_latency_ms": 56456.625
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 6.501,
+        "ttft_ms": 19223.568,
+        "turn_latency_ms": 54924.481
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.407,
+        "ttft_ms": 15029.154,
+        "turn_latency_ms": 42940.439
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.878,
+        "ttft_ms": 17105.493,
+        "turn_latency_ms": 48872.836
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.1,
+        "ttft_ms": 24316.33,
+        "turn_latency_ms": 69475.229
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.111,
+        "ttft_ms": 24322.394,
+        "turn_latency_ms": 69492.554
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.15,
+        "ttft_ms": 24343.39,
+        "turn_latency_ms": 69552.544
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.12,
+        "ttft_ms": 24327.017,
+        "turn_latency_ms": 69505.763
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.204,
+        "ttft_ms": 24373.614,
+        "turn_latency_ms": 69638.898
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.904,
+        "ttft_ms": 24208.246,
+        "turn_latency_ms": 69166.417
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.984,
+        "ttft_ms": 24251.901,
+        "turn_latency_ms": 69291.147
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 3.389,
+        "ttft_ms": 13998.169,
+        "turn_latency_ms": 39994.767
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 4.076,
+        "ttft_ms": 14361.399,
+        "turn_latency_ms": 41032.568
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.868,
+        "ttft_ms": 24188.045,
+        "turn_latency_ms": 69108.7
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.133,
+        "ttft_ms": 24334.09,
+        "turn_latency_ms": 69525.97
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 3.645,
+        "ttft_ms": 15616.051,
+        "turn_latency_ms": 44617.287
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.322,
+        "ttft_ms": 24438.585,
+        "turn_latency_ms": 69824.53
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.412,
+        "ttft_ms": 24488.314,
+        "turn_latency_ms": 69966.611
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.35,
+        "ttft_ms": 24454.085,
+        "turn_latency_ms": 69868.814
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.932,
+        "ttft_ms": 24223.499,
+        "turn_latency_ms": 69209.996
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.84,
+        "ttft_ms": 24172.498,
+        "turn_latency_ms": 69064.281
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.274,
+        "ttft_ms": 14442.434,
+        "turn_latency_ms": 41264.096
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.531,
+        "ttft_ms": 23450.761,
+        "turn_latency_ms": 67002.174
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 74.989,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/import_001/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.322,
+      "promql": 44.322
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24454.085,
+      "promql": 24454.085
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 69868.814,
+      "promql": 69868.814
+    },
+    "vllm_metrics_snapshot_ref": "candidates/import_001/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 580.447,
+      "measurement_end_wallclock": "2026-04-25T09:47:52Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T09:38:12Z",
+      "warmup_s": 120
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "386f4dc7-fe70-4f05-ad93-3134c4bc5b82",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "rescreen_01_full_1",
+    "candidate_uuid": "386f4dc7-fe70-4f05-ad93-3134c4bc5b82",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.92,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 12288,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 96.617,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.444,
+        "promql": 44.444
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24544.679,
+        "promql": 24544.679
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 70127.654,
+        "promql": 70127.654
+      }
+    },
+    "eval_throughput": 0.059932,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "rescreen_01_full_1",
+    "no_oom_events": true,
+    "parent_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.893,
+        "ttft_ms": 24201.865,
+        "turn_latency_ms": 69148.185
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 6.886,
+        "ttft_ms": 30374.051,
+        "turn_latency_ms": 86783.004
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.975,
+        "ttft_ms": 24246.871,
+        "turn_latency_ms": 69276.775
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.975,
+        "ttft_ms": 24246.988,
+        "turn_latency_ms": 69277.108
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.156,
+        "ttft_ms": 13923.071,
+        "turn_latency_ms": 39780.203
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 5.459,
+        "ttft_ms": 16143.957,
+        "turn_latency_ms": 46125.593
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 2.775,
+        "ttft_ms": 12238.674,
+        "turn_latency_ms": 34967.639
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.221,
+        "ttft_ms": 18617.782,
+        "turn_latency_ms": 53193.663
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.42,
+        "ttft_ms": 24492.5,
+        "turn_latency_ms": 69978.572
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.444,
+        "ttft_ms": 24505.663,
+        "turn_latency_ms": 70016.179
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.424,
+        "ttft_ms": 24494.849,
+        "turn_latency_ms": 69985.284
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.515,
+        "ttft_ms": 24544.679,
+        "turn_latency_ms": 70127.654
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.189,
+        "ttft_ms": 24364.886,
+        "turn_latency_ms": 69613.959
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.282,
+        "ttft_ms": 24416.357,
+        "turn_latency_ms": 69761.02
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.237,
+        "ttft_ms": 24391.806,
+        "turn_latency_ms": 69690.873
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 2.848,
+        "ttft_ms": 11760.511,
+        "turn_latency_ms": 33601.461
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 4.469,
+        "ttft_ms": 15748.349,
+        "turn_latency_ms": 44995.283
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.394,
+        "ttft_ms": 24478.174,
+        "turn_latency_ms": 69937.64
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.377,
+        "ttft_ms": 24468.818,
+        "turn_latency_ms": 69910.908
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 3.199,
+        "ttft_ms": 13703.809,
+        "turn_latency_ms": 39153.74
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.045,
+        "ttft_ms": 23734.081,
+        "turn_latency_ms": 67811.659
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.56,
+        "ttft_ms": 24569.609,
+        "turn_latency_ms": 70198.882
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.169,
+        "ttft_ms": 24353.949,
+        "turn_latency_ms": 69582.711
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.086,
+        "ttft_ms": 24308.192,
+        "turn_latency_ms": 69451.977
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.375,
+        "ttft_ms": 23916.576,
+        "turn_latency_ms": 68333.076
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.129,
+        "ttft_ms": 18211.747,
+        "turn_latency_ms": 52033.562
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.619,
+        "ttft_ms": 23499.699,
+        "turn_latency_ms": 67141.998
+      }
+    ],
+    "profile": "full",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 96.617,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/rescreen_01_full_1/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.444,
+      "promql": 44.444
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24544.679,
+      "promql": 24544.679
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 70127.654,
+      "promql": 70127.654
+    },
+    "vllm_metrics_snapshot_ref": "candidates/rescreen_01_full_1/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 450.512,
+      "measurement_end_wallclock": "2026-04-25T10:18:22Z",
+      "measurement_s": 1500,
+      "measurement_start_wallclock": "2026-04-25T10:10:52Z",
+      "warmup_s": 300
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "c8a21c55-6f99-47f4-ac5c-00d0283c4936",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "rescreen_01_screen_1",
+    "candidate_uuid": "c8a21c55-6f99-47f4-ac5c-00d0283c4936",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.92,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 12288,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 94.962,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.436,
+        "promql": 44.436
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24548.406,
+        "promql": 24548.406
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 70138.302,
+        "promql": 70138.302
+      }
+    },
+    "eval_throughput": 0.058905,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "rescreen_01_screen_1",
+    "no_oom_events": true,
+    "parent_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.202,
+        "ttft_ms": 24372.298,
+        "turn_latency_ms": 69635.136
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.753,
+        "ttft_ms": 16555.427,
+        "turn_latency_ms": 47301.22
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.201,
+        "ttft_ms": 24371.92,
+        "turn_latency_ms": 69634.057
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.2,
+        "ttft_ms": 24371.257,
+        "turn_latency_ms": 69632.164
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 5.364,
+        "ttft_ms": 23663.216,
+        "turn_latency_ms": 67609.189
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 9.454,
+        "ttft_ms": 27958.643,
+        "turn_latency_ms": 79881.838
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.382,
+        "ttft_ms": 14916.169,
+        "turn_latency_ms": 42617.627
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.166,
+        "ttft_ms": 13966.136,
+        "turn_latency_ms": 39903.246
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.424,
+        "ttft_ms": 24494.917,
+        "turn_latency_ms": 69985.478
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.436,
+        "ttft_ms": 24501.478,
+        "turn_latency_ms": 70004.223
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.405,
+        "ttft_ms": 24484.126,
+        "turn_latency_ms": 69954.646
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.506,
+        "ttft_ms": 24539.989,
+        "turn_latency_ms": 70114.255
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.202,
+        "ttft_ms": 24372.575,
+        "turn_latency_ms": 69635.928
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.28,
+        "ttft_ms": 24415.555,
+        "turn_latency_ms": 69758.728
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.241,
+        "ttft_ms": 24393.684,
+        "turn_latency_ms": 69696.241
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 2.423,
+        "ttft_ms": 10006.193,
+        "turn_latency_ms": 28589.124
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 4.216,
+        "ttft_ms": 14856.456,
+        "turn_latency_ms": 42447.017
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.936,
+        "ttft_ms": 24225.575,
+        "turn_latency_ms": 69215.928
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.942,
+        "ttft_ms": 24228.927,
+        "turn_latency_ms": 69225.506
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 8.542,
+        "ttft_ms": 36594.506,
+        "turn_latency_ms": 104555.732
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.4,
+        "ttft_ms": 24481.602,
+        "turn_latency_ms": 69947.433
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.521,
+        "ttft_ms": 24548.406,
+        "turn_latency_ms": 70138.302
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.152,
+        "ttft_ms": 24344.639,
+        "turn_latency_ms": 69556.11
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.041,
+        "ttft_ms": 24283.675,
+        "turn_latency_ms": 69381.929
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.753,
+        "ttft_ms": 24124.828,
+        "turn_latency_ms": 68928.079
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 5.122,
+        "ttft_ms": 22593.599,
+        "turn_latency_ms": 64553.14
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.881,
+        "ttft_ms": 23644.151,
+        "turn_latency_ms": 67554.718
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 94.962,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/rescreen_01_screen_1/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.436,
+      "promql": 44.436
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24548.406,
+      "promql": 24548.406
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 70138.302,
+      "promql": 70138.302
+    },
+    "vllm_metrics_snapshot_ref": "candidates/rescreen_01_screen_1/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 458.361,
+      "measurement_end_wallclock": "2026-04-25T09:55:30Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T09:47:52Z",
+      "warmup_s": 120
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "b4c9d2e6-138c-4e44-a235-6f1cec0e1a9d",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "rescreen_01_screen_2",
+    "candidate_uuid": "b4c9d2e6-138c-4e44-a235-6f1cec0e1a9d",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.92,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 12288,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 99.736,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.45,
+        "promql": 44.45
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 24509.205,
+        "promql": 24509.205
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 70026.3,
+        "promql": 70026.3
+      }
+    },
+    "eval_throughput": 0.061867,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "rescreen_01_screen_2",
+    "no_oom_events": true,
+    "parent_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.292,
+        "ttft_ms": 24422.201,
+        "turn_latency_ms": 69777.716
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 1.654,
+        "ttft_ms": 7297.013,
+        "turn_latency_ms": 20848.609
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.294,
+        "ttft_ms": 24422.811,
+        "turn_latency_ms": 69779.459
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.292,
+        "ttft_ms": 24422.184,
+        "turn_latency_ms": 69777.668
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.806,
+        "ttft_ms": 16787.223,
+        "turn_latency_ms": 47963.494
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 4.045,
+        "ttft_ms": 11963.071,
+        "turn_latency_ms": 34180.203
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 4.083,
+        "ttft_ms": 18011.577,
+        "turn_latency_ms": 51461.648
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 2.951,
+        "ttft_ms": 13016.136,
+        "turn_latency_ms": 37188.961
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.305,
+        "ttft_ms": 24429.315,
+        "turn_latency_ms": 69798.044
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.45,
+        "ttft_ms": 24509.205,
+        "turn_latency_ms": 70026.3
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.811,
+        "ttft_ms": 24707.93,
+        "turn_latency_ms": 70594.087
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 33.439,
+        "ttft_ms": 18437.816,
+        "turn_latency_ms": 52679.473
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.157,
+        "ttft_ms": 24347.408,
+        "turn_latency_ms": 69564.024
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.183,
+        "ttft_ms": 24361.881,
+        "turn_latency_ms": 69605.375
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.138,
+        "ttft_ms": 24337.08,
+        "turn_latency_ms": 69534.513
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 4.432,
+        "ttft_ms": 18305.832,
+        "turn_latency_ms": 52302.377
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 3.701,
+        "ttft_ms": 13040.607,
+        "turn_latency_ms": 37258.878
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.409,
+        "ttft_ms": 24486.713,
+        "turn_latency_ms": 69962.036
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.425,
+        "ttft_ms": 24495.213,
+        "turn_latency_ms": 69986.322
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 3.258,
+        "ttft_ms": 13956.758,
+        "turn_latency_ms": 39876.452
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.401,
+        "ttft_ms": 24482.116,
+        "turn_latency_ms": 69948.902
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.555,
+        "ttft_ms": 24566.687,
+        "turn_latency_ms": 70190.534
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.17,
+        "ttft_ms": 24354.701,
+        "turn_latency_ms": 69584.861
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.072,
+        "ttft_ms": 24300.778,
+        "turn_latency_ms": 69430.795
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.768,
+        "ttft_ms": 24132.81,
+        "turn_latency_ms": 68950.886
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.918,
+        "ttft_ms": 17282.932,
+        "turn_latency_ms": 49379.806
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.528,
+        "ttft_ms": 23449.412,
+        "turn_latency_ms": 66998.319
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 99.736,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/rescreen_01_screen_2/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.45,
+      "promql": 44.45
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24509.205,
+      "promql": 24509.205
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 70026.3,
+      "promql": 70026.3
+    },
+    "vllm_metrics_snapshot_ref": "candidates/rescreen_01_screen_2/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 436.421,
+      "measurement_end_wallclock": "2026-04-25T10:02:47Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T09:55:30Z",
+      "warmup_s": 120
+    }
+  },
+  {
+    "active_layer": "L1",
+    "cache_isolation": {
+      "cache_salt": "510d6477-1571-43b8-8559-b553ba1a8a6f",
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0,
+      "prefix_cache_reset_at_bootstrap": true
+    },
+    "candidate_label": "rescreen_01_screen_3",
+    "candidate_uuid": "510d6477-1571-43b8-8559-b553ba1a8a6f",
+    "candidate_vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.92,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_model_len": 131072,
+      "max_num_batched_tokens": 12288,
+      "max_num_seqs": 4
+    },
+    "determinism_pass_rate": 1.0,
+    "diagnostics": {
+      "rollout_throughput": 89.803,
+      "target_concurrency": 4,
+      "tpot_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 44.401,
+        "promql": 44.401
+      },
+      "ttft_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 31245.45,
+        "promql": 31245.45
+      },
+      "turn_latency_p95_ms": {
+        "delta_pct": 0.0,
+        "driver": 89272.714,
+        "promql": 89272.714
+      }
+    },
+    "eval_throughput": 0.055705,
+    "feasibility_failures": [],
+    "feasible": true,
+    "generator": "RealMeasurementHarness v0.1.0",
+    "harness_health_warnings": [],
+    "iteration": "rescreen_01_screen_3",
+    "no_oom_events": true,
+    "parent_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "per_request_latencies": [
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0001",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.893,
+        "ttft_ms": 24202.038,
+        "turn_latency_ms": 69148.679
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0002",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 7.083,
+        "ttft_ms": 31245.45,
+        "turn_latency_ms": 89272.714
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0003",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.977,
+        "ttft_ms": 24247.987,
+        "turn_latency_ms": 69279.964
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0004",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.975,
+        "ttft_ms": 24247.163,
+        "turn_latency_ms": 69277.608
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0005",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 10.129,
+        "ttft_ms": 44681.106,
+        "turn_latency_ms": 127660.303
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0006",
+        "response_tokens": 2746,
+        "thinking_tokens": 2746,
+        "tpot_ms": 4.677,
+        "ttft_ms": 13830.986,
+        "turn_latency_ms": 39517.102
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0007",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 2.733,
+        "ttft_ms": 12054.415,
+        "turn_latency_ms": 34441.186
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0008",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 3.987,
+        "ttft_ms": 17586.908,
+        "turn_latency_ms": 50248.31
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0009",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.05,
+        "ttft_ms": 24288.373,
+        "turn_latency_ms": 69395.35
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0010",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.074,
+        "ttft_ms": 24301.594,
+        "turn_latency_ms": 69433.126
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0011",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.401,
+        "ttft_ms": 24482.221,
+        "turn_latency_ms": 69949.203
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0012",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.472,
+        "ttft_ms": 24521.417,
+        "turn_latency_ms": 70061.19
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0013",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.182,
+        "ttft_ms": 24361.036,
+        "turn_latency_ms": 69602.96
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0014",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.871,
+        "ttft_ms": 24189.715,
+        "turn_latency_ms": 69113.472
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0015",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.914,
+        "ttft_ms": 24213.702,
+        "turn_latency_ms": 69182.006
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0016",
+        "response_tokens": 3835,
+        "thinking_tokens": 3835,
+        "tpot_ms": 4.888,
+        "ttft_ms": 20187.603,
+        "turn_latency_ms": 57678.865
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0017",
+        "response_tokens": 3272,
+        "thinking_tokens": 3272,
+        "tpot_ms": 4.975,
+        "ttft_ms": 17530.694,
+        "turn_latency_ms": 50087.698
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0018",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.953,
+        "ttft_ms": 24235.203,
+        "turn_latency_ms": 69243.437
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0019",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.975,
+        "ttft_ms": 24247.017,
+        "turn_latency_ms": 69277.19
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0020",
+        "response_tokens": 3978,
+        "thinking_tokens": 3978,
+        "tpot_ms": 7.442,
+        "ttft_ms": 31881.428,
+        "turn_latency_ms": 91089.794
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0021",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.102,
+        "ttft_ms": 24317.4,
+        "turn_latency_ms": 69478.287
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0022",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.498,
+        "ttft_ms": 24535.642,
+        "turn_latency_ms": 70101.833
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0023",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.127,
+        "ttft_ms": 24330.824,
+        "turn_latency_ms": 69516.641
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0024",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 44.035,
+        "ttft_ms": 24280.159,
+        "turn_latency_ms": 69371.882
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0025",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 43.469,
+        "ttft_ms": 23968.065,
+        "turn_latency_ms": 68480.186
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0026",
+        "response_tokens": 4096,
+        "thinking_tokens": 4096,
+        "tpot_ms": 2.733,
+        "ttft_ms": 12054.072,
+        "turn_latency_ms": 34440.205
+      },
+      {
+        "concurrency_when_dispatched": 4,
+        "req_id": "req-0027",
+        "response_tokens": 512,
+        "thinking_tokens": 512,
+        "tpot_ms": 42.679,
+        "ttft_ms": 23532.814,
+        "turn_latency_ms": 67236.612
+      }
+    ],
+    "profile": "screen",
+    "reasoning_content_purity": 1.0,
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "rollout_throughput": 89.803,
+    "round_id": "qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z",
+    "seed_trace_replay_ref": "candidates/rescreen_01_screen_3/replay.jsonl",
+    "sustained_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.401,
+      "promql": 44.401
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 31245.45,
+      "promql": 31245.45
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 89272.714,
+      "promql": 89272.714
+    },
+    "vllm_metrics_snapshot_ref": "candidates/rescreen_01_screen_3/vllm_metrics.prom",
+    "window_completed": true,
+    "windows": {
+      "measurement_elapsed_s": 484.693,
+      "measurement_end_wallclock": "2026-04-25T10:10:52Z",
+      "measurement_s": 600,
+      "measurement_start_wallclock": "2026-04-25T10:02:47Z",
+      "warmup_s": 120
+    }
+  }
+]

@@ -1,0 +1,41 @@
+[
+  {
+    "iteration": "rescreen_01_screen_1",
+    "profile": "screen",
+    "candidate_uuid": "c8a21c55-6f99-47f4-ac5c-00d0283c4936",
+    "parent_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "eval_throughput": 0.058905,
+    "objective_mean_screen": 0.05574825,
+    "objective_ci_95_screen": 0.009242558749633402,
+    "commit_sha": "2f9e8efdb16baa011d34a3e59fd9cee5f2f8d00b"
+  },
+  {
+    "iteration": "rescreen_01_screen_2",
+    "profile": "screen",
+    "candidate_uuid": "b4c9d2e6-138c-4e44-a235-6f1cec0e1a9d",
+    "parent_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "eval_throughput": 0.061867,
+    "objective_mean_screen": 0.05574825,
+    "objective_ci_95_screen": 0.009242558749633402,
+    "commit_sha": "b06c5063749b98bb56998e35458dd2e9cee2eded"
+  },
+  {
+    "iteration": "rescreen_01_screen_3",
+    "profile": "screen",
+    "candidate_uuid": "510d6477-1571-43b8-8559-b553ba1a8a6f",
+    "parent_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "eval_throughput": 0.055705,
+    "objective_mean_screen": 0.05574825,
+    "objective_ci_95_screen": 0.009242558749633402,
+    "commit_sha": "217768e4d75483e0a5f73a63800209e817f578f3"
+  },
+  {
+    "iteration": "rescreen_01_full_1",
+    "profile": "full",
+    "candidate_uuid": "386f4dc7-fe70-4f05-ad93-3134c4bc5b82",
+    "parent_candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+    "eval_throughput": 0.059932,
+    "screen_full_divergence": false,
+    "commit_sha": "f508b5964ce86ba7ae67f30d94a7b1bb7c0f2d75"
+  }
+]

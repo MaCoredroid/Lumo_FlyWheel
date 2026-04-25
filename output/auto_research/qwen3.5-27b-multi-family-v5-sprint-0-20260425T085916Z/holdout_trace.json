@@ -1,0 +1,165 @@
+{
+  "pass": true,
+  "reasons_failed": [],
+  "candidate_uuid": "ee33f94e-9fda-4c03-89ed-8d4146676a4e",
+  "harness": "real",
+  "trace": {
+    "generator": "RealMeasurementHarness v0.1.0",
+    "candidate_vllm_config": {
+      "max_num_seqs": 4,
+      "max_num_batched_tokens": 12288,
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": false,
+      "gpu_memory_utilization": 0.92,
+      "max_model_len": 131072,
+      "kv_cache_dtype": "fp8_e5m2"
+    },
+    "resolved": {
+      "attention_backend": "unknown",
+      "deltanet_kernel": "unknown",
+      "torch_compile_mode": "default"
+    },
+    "cache_isolation": {
+      "cache_salt": "",
+      "prefix_cache_reset_at_bootstrap": true,
+      "first_10_req_prefix_cache_hit_rate": 0.0,
+      "last_10_req_prefix_cache_hit_rate": 0.0
+    },
+    "windows": {
+      "warmup_s": 300,
+      "measurement_s": 1500,
+      "measurement_elapsed_s": 150.01,
+      "measurement_start_wallclock": "2026-04-25T10:18:22Z",
+      "measurement_end_wallclock": "2026-04-25T10:20:52Z"
+    },
+    "per_request_latencies": [
+      {
+        "req_id": "req-0001",
+        "ttft_ms": 12846.264,
+        "tpot_ms": 2.912,
+        "turn_latency_ms": 36703.612,
+        "thinking_tokens": 4096,
+        "response_tokens": 4096,
+        "concurrency_when_dispatched": 4
+      },
+      {
+        "req_id": "req-0002",
+        "ttft_ms": 11043.428,
+        "tpot_ms": 2.504,
+        "turn_latency_ms": 31552.653,
+        "thinking_tokens": 4096,
+        "response_tokens": 4096,
+        "concurrency_when_dispatched": 4
+      },
+      {
+        "req_id": "req-0003",
+        "ttft_ms": 21771.607,
+        "tpot_ms": 4.936,
+        "turn_latency_ms": 62204.592,
+        "thinking_tokens": 4096,
+        "response_tokens": 4096,
+        "concurrency_when_dispatched": 4
+      },
+      {
+        "req_id": "req-0004",
+        "ttft_ms": 19694.735,
+        "tpot_ms": 4.465,
+        "turn_latency_ms": 56270.671,
+        "thinking_tokens": 4096,
+        "response_tokens": 4096,
+        "concurrency_when_dispatched": 4
+      },
+      {
+        "req_id": "req-0005",
+        "ttft_ms": 15464.949,
+        "tpot_ms": 3.506,
+        "turn_latency_ms": 44185.57,
+        "thinking_tokens": 4096,
+        "response_tokens": 4096,
+        "concurrency_when_dispatched": 4
+      },
+      {
+        "req_id": "req-0006",
+        "ttft_ms": 15041.445,
+        "tpot_ms": 3.41,
+        "turn_latency_ms": 42975.558,
+        "thinking_tokens": 4096,
+        "response_tokens": 4096,
+        "concurrency_when_dispatched": 4
+      },
+      {
+        "req_id": "req-0007",
+        "ttft_ms": 27539.468,
+        "tpot_ms": 7.125,
+        "turn_latency_ms": 78684.195,
+        "thinking_tokens": 3589,
+        "response_tokens": 3589,
+        "concurrency_when_dispatched": 4
+      },
+      {
+        "req_id": "req-0008",
+        "ttft_ms": 5161.57,
+        "tpot_ms": 1.17,
+        "turn_latency_ms": 14747.343,
+        "thinking_tokens": 4096,
+        "response_tokens": 4096,
+        "concurrency_when_dispatched": 4
+      },
+      {
+        "req_id": "req-0009",
+        "ttft_ms": 25990.726,
+        "tpot_ms": 5.892,
+        "turn_latency_ms": 74259.216,
+        "thinking_tokens": 4096,
+        "response_tokens": 4096,
+        "concurrency_when_dispatched": 4
+      }
+    ],
+    "diagnostics": {
+      "ttft_p95_ms": {
+        "driver": 25990.726,
+        "promql": 25990.726,
+        "delta_pct": 0.0
+      },
+      "tpot_p95_ms": {
+        "driver": 5.892,
+        "promql": 5.892,
+        "delta_pct": 0.0
+      },
+      "turn_latency_p95_ms": {
+        "driver": 74259.216,
+        "promql": 74259.216,
+        "delta_pct": 0.0
+      },
+      "rollout_throughput": 242.364,
+      "target_concurrency": 4
+    },
+    "ttft_p95_ms": {
+      "driver": 25990.726,
+      "promql": 25990.726,
+      "delta_pct": 0.0
+    },
+    "tpot_p95_ms": {
+      "driver": 5.892,
+      "promql": 5.892,
+      "delta_pct": 0.0
+    },
+    "turn_latency_p95_ms": {
+      "driver": 74259.216,
+      "promql": 74259.216,
+      "delta_pct": 0.0
+    },
+    "sustained_concurrency": 4,
+    "eval_throughput": 0.059996,
+    "rollout_throughput": 242.364,
+    "window_completed": true,
+    "reasoning_content_purity": 1.0,
+    "determinism_pass_rate": 1.0,
+    "no_oom_events": true,
+    "feasible": true,
+    "feasibility_failures": [],
+    "vllm_metrics_snapshot_ref": "",
+    "seed_trace_replay_ref": "",
+    "harness_health_warnings": []
+  }
+}
