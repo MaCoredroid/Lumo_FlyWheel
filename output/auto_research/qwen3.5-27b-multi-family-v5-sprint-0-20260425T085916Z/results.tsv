@@ -1,0 +1,2 @@
+candidate_uuid	parent_candidate_uuid	iteration	profile	candidate_label	feasible	eval_throughput	objective_mean	objective_ci_95	measurement_count	window_completed	no_oom_events	reasoning_content_purity	determinism_pass_rate	status	notes
+ed7f01ec-a2c9-4e52-b699-3b2843f1a3c7		baseline_a	screen	baseline_a	true	0.062144			1	true	true	1.0	1.0	baseline	default-config baseline replay a
