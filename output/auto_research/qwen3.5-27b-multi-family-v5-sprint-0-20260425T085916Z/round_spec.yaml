@@ -27,9 +27,9 @@ screen_profile_s: 900
 full_profile_s: 1980
 per_iteration_codex_wall_clock_s: 2700
 diminishing_returns_window_k: 4
-noise_floor: 0.0
-baseline_mean_screen: 0.0
-baseline_stddev_screen: 0.0
+noise_floor: 0.015228949799641473
+baseline_mean_screen: 0.058766
+baseline_stddev_screen: 0.007614474899820737
 measurements_per_candidate_screen: 3
 measurements_per_candidate_full: 1
 parent_head_sha: b750b04c341ca86b8edd83037bfb7fa52bb18bcf
