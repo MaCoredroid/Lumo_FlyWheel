@@ -1865,6 +1865,59 @@ def test_finalize_round_populates_hardened_honesty_metadata(tmp_path: Path, monk
     assert "screen_full_divergence_note" in run_log["diagnostics"]
 
 
+def test_replay_round_imports_candidate_without_agent_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _init_repo(tmp_path)
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT", "1")
+    imported_candidate = repo / "candidate.yaml"
+    imported_candidate.write_text(
+        """
+max_num_batched_tokens: 8192
+max_num_seqs: 4
+gpu_memory_utilization: 0.9
+enable_chunked_prefill: true
+enable_prefix_caching: true
+max_model_len: 131072
+kv_cache_dtype: fp8_e5m2
+""",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "candidate.yaml"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "candidate"], cwd=repo, check=True, capture_output=True, text=True)
+
+    result = round_driver.run_replay_round(
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+        port=8000,
+        proxy_port=8001,
+        workload_file=repo
+        / "benchmark_blueprints"
+        / "families"
+        / "proposal-ranking-manager-judgment"
+        / "serving_workload.yaml",
+        baselines=5,
+        import_candidate=imported_candidate,
+        rescreens_screen=3,
+        rescreens_full=1,
+        holdout_rows=1,
+        round_root=repo / "output" / "auto_research",
+        harness_mode="synthetic",
+        model_id="qwen3.5-27b",
+    )
+
+    round_dir = Path(result["round_dir"])
+    assert result["outcome"] == round_driver.ROUND_BUNDLE_READY
+    assert not list(round_dir.glob("candidates/*/agent_session.jsonl"))
+    assert (round_dir / "candidates" / "import_001" / "candidate.yaml").read_text(encoding="utf-8") == imported_candidate.read_text(
+        encoding="utf-8"
+    )
+    bundle_payload = auto_research.load_yaml_file(result["bundle_path"])
+    provenance = bundle_payload["tuned_config_bundle"]["round_provenance"]
+    assert provenance["round_type"] == "replay"
+    assert provenance["imported_from_candidate"] == str(imported_candidate.resolve())
+    assert provenance["imported_from_commit"]
+
+
 def test_bootstrap_round_rejects_incompatible_codex_cli_version_without_side_effects(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

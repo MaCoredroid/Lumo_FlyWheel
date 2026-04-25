@@ -67,6 +67,7 @@ PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "finalize-round",
     "status",
     "run-round",
+    "replay-round",
 )
 AUTO_RESEARCH_HELP_SUBCOMMANDS = PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS + ("run",)
 RESULTS_COLUMNS = [
@@ -87,7 +88,9 @@ RESULTS_COLUMNS = [
     "status",
     "notes",
 ]
-ITERATION_ID_RE = re.compile(r"^(\d{3}|baseline_[a-e]|rescreen_\d{2}(?:_screen_[1-9]\d*|_full_[1-9]\d*)?)$")
+ITERATION_ID_RE = re.compile(
+    r"^(\d{3}|baseline_[a-e]|import_\d{3}|rescreen_\d{2}(?:_screen_[1-9]\d*|_full_[1-9]\d*)?)$"
+)
 
 IMPL_BRIEF_TEMPLATE = """# IMPL Brief — Auto-Research Substrate (LLD-SB-06)
 
@@ -1256,6 +1259,7 @@ class AutoResearchRoundManager:
         baseline_bundle: str | Path | None = None,
         serving_thinking_probe: str | Path | None = None,
         allow_legacy_workload: bool = False,
+        skip_codex_preflight: bool = False,
     ) -> dict[str, Any]:
         workload_file = resolve_workload_descriptor(self.repo_root, family_id, workload_file)
         round_root = Path(round_root).resolve()
@@ -1311,6 +1315,7 @@ class AutoResearchRoundManager:
                 family_id=family_id,
                 weight_version_id=weight_version_id,
                 workload=workload,
+                include_codex=not skip_codex_preflight,
             )
 
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -1886,7 +1891,14 @@ class AutoResearchRoundManager:
         holdout_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return payload
 
-    def finalize_round(self, *, round_id: str, dry_run: bool = False) -> dict[str, Any]:
+    def finalize_round(
+        self,
+        *,
+        round_id: str,
+        dry_run: bool = False,
+        imported_from_candidate: str | None = None,
+        imported_from_commit: str | None = None,
+    ) -> dict[str, Any]:
         round_dir = self._round_dir(round_id)
         spec = RoundSpecRecord.from_path(round_dir / "round_spec.yaml")
         rows = self._read_results(round_dir / "results.tsv")
@@ -2015,6 +2027,15 @@ class AutoResearchRoundManager:
                 "agent_model_pin": {"model": "gpt-5.4", "reasoning_effort": "high"},
                 "results_tsv_ref": str((round_dir / "results.tsv").relative_to(self.repo_root)),
                 "holdout_validation": "skipped" if dry_run else "pass",
+                **(
+                    {
+                        "round_type": "replay",
+                        "imported_from_candidate": imported_from_candidate,
+                        "imported_from_commit": imported_from_commit,
+                    }
+                    if imported_from_candidate
+                    else {}
+                ),
             },
         )
         bundle_path = self._bundle_output_path(bundle)
@@ -2047,6 +2068,8 @@ class AutoResearchRoundManager:
             f"rescreened_count={sum(1 for row in rows if row.status == 'rescreened')} holdout_validation={'skipped' if dry_run else 'pass'}\n"
             f"stopping_reason=ok\n\n"
             f"Winner-Candidate-UUID: {winner_parent_uuid}\n"
+            f"{f'imported_from_candidate: {imported_from_candidate}\n' if imported_from_candidate else ''}"
+            f"{f'imported_from_commit: {imported_from_commit or ''}\n' if imported_from_candidate else ''}"
             f"{'Fixture-Mode: true\n' if spec.harness_type == 'synthetic' else ''}"
             f"Signed-off-by: {SIGNED_OFF_BY}\n"
         )
@@ -2587,6 +2610,7 @@ class AutoResearchRoundManager:
         family_id: str,
         weight_version_id: str | None,
         workload: SyntheticWorkloadDistribution,
+        include_codex: bool = True,
     ) -> None:
         if RealMeasurementHarness is None:
             raise RuntimeError("bootstrap-round preflight failed: harness module missing")
@@ -2594,18 +2618,19 @@ class AutoResearchRoundManager:
             raise RuntimeError("bootstrap-round preflight failed: non-agent mode enabled")
         if self._git_status_short():
             raise RuntimeError("bootstrap-round requires a clean git worktree")
-        if shutil.which("codex") is None:
-            raise RuntimeError("bootstrap-round preflight failed: codex cli missing")
-        try:
-            version_result = subprocess.run(
-                ["codex", "--version"],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-            raise RuntimeError("bootstrap-round preflight failed: codex cli missing or wrong version") from exc
-        self._assert_supported_codex_cli_version(version_result.stdout)
+        if include_codex:
+            if shutil.which("codex") is None:
+                raise RuntimeError("bootstrap-round preflight failed: codex cli missing")
+            try:
+                version_result = subprocess.run(
+                    ["codex", "--version"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+                raise RuntimeError("bootstrap-round preflight failed: codex cli missing or wrong version") from exc
+            self._assert_supported_codex_cli_version(version_result.stdout)
 
         help_output = self._run_cli_probe(["auto-research", "--help"])
         for subcommand in AUTO_RESEARCH_HELP_SUBCOMMANDS:

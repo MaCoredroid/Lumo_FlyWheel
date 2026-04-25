@@ -15,7 +15,7 @@ from .auto_research import AutoResearchRoundManager, OfflineAutoResearchRunner, 
 from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .registry import load_registry
-from .round_driver import RoundContext, run_round, run_round_exit_code
+from .round_driver import RoundContext, run_replay_round, run_round, run_round_exit_code
 
 
 def _prefix_cache_probe_messages(prior_reply: str | None = None) -> list[dict[str, str]]:
@@ -730,6 +730,31 @@ def cmd_auto_research_run_round(args: argparse.Namespace) -> int:
     return run_round_exit_code(result)
 
 
+def cmd_auto_research_replay_round(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "workload_file", "import_candidate")
+    payload = run_replay_round(
+        registry_path=Path(args.registry),
+        tuned_config_root=Path(args.tuned_config_root),
+        port=args.port,
+        proxy_port=args.proxy_port,
+        workload_file=Path(args.workload_file),
+        baselines=args.baselines,
+        import_candidate=Path(args.import_candidate),
+        rescreens_screen=args.rescreens_screen,
+        rescreens_full=args.rescreens_full,
+        holdout_rows=args.holdout_rows,
+        round_root=Path(args.round_root),
+        harness_mode=args.harness,
+        model_id=args.model_id,
+        family_id=args.family_id,
+        sprint=args.sprint,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0 if payload.get("outcome") != "ROUND_BLOCKED" else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Lumo FlyWheel vLLM serving tooling")
     parser.set_defaults(func=None)
@@ -874,6 +899,21 @@ def build_parser() -> argparse.ArgumentParser:
     auto_run_round.add_argument("--iteration-cap", type=int, default=12)
     auto_run_round.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_run_round.set_defaults(func=cmd_auto_research_run_round)
+
+    auto_replay_round = auto_research_subparsers.add_parser("replay-round")
+    auto_replay_round.add_argument("--help-only", action="store_true")
+    auto_replay_round.add_argument("--workload-file")
+    auto_replay_round.add_argument("--baselines", type=int, default=5)
+    auto_replay_round.add_argument("--import-candidate")
+    auto_replay_round.add_argument("--rescreens-screen", type=int, default=3)
+    auto_replay_round.add_argument("--rescreens-full", type=int, default=1)
+    auto_replay_round.add_argument("--holdout-rows", type=int, default=28)
+    auto_replay_round.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
+    auto_replay_round.add_argument("--harness", choices=["real", "synthetic"], default="real")
+    auto_replay_round.add_argument("--model-id", default="qwen3.5-27b")
+    auto_replay_round.add_argument("--family-id")
+    auto_replay_round.add_argument("--sprint", default="sprint-0")
+    auto_replay_round.set_defaults(func=cmd_auto_research_replay_round)
 
     auto_research_run = auto_research_subparsers.add_parser("run")
     auto_research_run.add_argument("--help-only", action="store_true")

@@ -837,6 +837,49 @@ def test_auto_research_rescreen_defaults_to_hardened_screen_full_split() -> None
     assert args.profile == "screen"
 
 
+def test_auto_research_replay_round_registered_and_passes_arguments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_run_replay_round(**kwargs):
+        seen.update(kwargs)
+        return {"round_id": "round-123", "outcome": "ROUND_BUNDLE_READY"}
+
+    monkeypatch.setattr(cli, "run_replay_round", fake_run_replay_round)
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "auto-research",
+            "replay-round",
+            "--workload-file",
+            str(tmp_path / "workload.yaml"),
+            "--baselines",
+            "5",
+            "--import-candidate",
+            str(tmp_path / "candidate.yaml"),
+            "--rescreens-screen",
+            "3",
+            "--rescreens-full",
+            "1",
+            "--holdout-rows",
+            "28",
+            "--round-root",
+            str(tmp_path / "rounds"),
+        ]
+    )
+
+    assert args.func(args) == 0
+    assert json.loads(capsys.readouterr().out)["outcome"] == "ROUND_BUNDLE_READY"
+    assert seen["workload_file"] == tmp_path / "workload.yaml"
+    assert seen["import_candidate"] == tmp_path / "candidate.yaml"
+    assert seen["baselines"] == 5
+    assert seen["rescreens_screen"] == 3
+    assert seen["rescreens_full"] == 1
+    assert seen["holdout_rows"] == 28
+    assert seen["harness_mode"] == "real"
+
+
 def test_auto_research_status_reports_missing_round(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     repo = _init_auto_research_repo(tmp_path)
     monkeypatch.setattr(cli, "REPO_ROOT", repo)
