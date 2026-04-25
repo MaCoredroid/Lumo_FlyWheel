@@ -1,0 +1,46 @@
+round_id: qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z
+round_root: /home/mark/shared/lumoFlyWheel/output/auto_research
+round_dir: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z
+worktree_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-multi-family-v5-sprint-0-20260425T085916Z
+round_branch: autoresearch/qwen3.5-27b/multi-family-v5/sprint-0/20260425T085916Z
+model_id: qwen3.5-27b
+family_id: multi-family-v5
+sprint: sprint-0
+weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+workload_file: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/multi-family-v5/workload.yaml
+workload_descriptor_path: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/multi-family-v5/workload.yaml
+workload_distribution_id: 8d3e9038afd0c6f6be23c57e47d3a2ee8d619433d3c2e7c4127376a10ad456e8
+workload_distribution_id_hardening_version: v1-multi-family-v5-thinking-realistic
+latency_ceiling_ms: 650
+tpot_ceiling_ms: 80
+turn_latency_ceiling_ms: 650
+active_layer: L1
+target_concurrency: 4
+iteration_cap: 12
+rescreen_top_k: 3
+round_wall_clock_s: 43200
+screen_warmup_s: 120
+screen_measurement_s: 600
+full_warmup_s: 300
+full_measurement_s: 1500
+screen_profile_s: 900
+full_profile_s: 1980
+per_iteration_codex_wall_clock_s: 2700
+diminishing_returns_window_k: 4
+noise_floor: 0.0
+baseline_mean_screen: 0.0
+baseline_stddev_screen: 0.0
+measurements_per_candidate_screen: 3
+measurements_per_candidate_full: 1
+parent_head_sha: b750b04c341ca86b8edd83037bfb7fa52bb18bcf
+harness_type: real
+round_started_at: 1777107556.010587
+sub_spec_version: v0.1.12
+baseline_bundle_path: ''
+baseline_bundle_id: ''
+frozen_vllm_config: {}
+serving_thinking_probe:
+  path: reports/thinking-probe-20260424.md
+  capture_date: '2026-04-24T23:25:47.178065Z'
+  outcome: row-3
+  file_mtime: '2026-04-24T23:34:48.355209Z'
