@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
 import sys
 import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +24,9 @@ if str(SRC_ROOT) not in sys.path:
 from lumo_flywheel_serving.parity_fixture import (  # noqa: E402
     DEFAULT_WEIGHT_VERSION_ID,
     KERNEL_TARGETS,
+    LOGITS_DEBUG_KIND,
+    DELTANET_STATE_DEBUG_KIND,
+    P2B_FAMILY_PROBE_COUNTS,
     REFERENCE_REPRODUCIBILITY_RUNS,
     SYNTHETIC_TEST_ARTIFACT_PURPOSE,
     DebugProbeArtifacts,
@@ -37,6 +43,20 @@ from lumo_flywheel_serving.parity_fixture import (  # noqa: E402
 )
 
 DEBUG_EXPORT_RE = re.compile(r"^(?P<kind>logits|state)_req_(?P<request_id>.+)_tok_(?P<token>[0-9]{6})\.pt$")
+
+
+@dataclass(frozen=True)
+class _DebugSource:
+    path: Path
+    kind: str
+    request_id: str
+    generated_token_index: int
+    file_sha256: str
+    logits_sha256: str | None = None
+    logits_sample_first_16: Any | None = None
+    saved_shape: tuple[int, ...] | None = None
+    source_shape: tuple[int, ...] | None = None
+    logits_is_truncated: bool | None = None
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -101,6 +121,256 @@ def _write_synthetic_test_fixture(
             written.append(str(state_path))
     written.append(str(fixture_dir / "probes_input.jsonl"))
     return {"status": "SYNTHETIC_TEST_FIXTURE_WRITTEN", "family_id": family_id, "written": sorted(written)}
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _array_sha256(value: Any) -> str:
+    import numpy as np
+
+    array = np.ascontiguousarray(value)
+    digest = hashlib.sha256()
+    digest.update(str(array.dtype).encode("ascii"))
+    digest.update(str(tuple(int(dim) for dim in array.shape)).encode("ascii"))
+    digest.update(array.tobytes())
+    return digest.hexdigest()
+
+
+def _tensor_to_numpy_float32(value: Any) -> Any:
+    import numpy as np
+
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "numpy"):
+        return value.numpy().astype(np.float32, copy=False)
+    return np.asarray(value, dtype=np.float32)
+
+
+def _debug_source_from_logits(path: Path) -> _DebugSource:
+    payload = load_debug_export_pt(path)
+    if payload.get("kind") != LOGITS_DEBUG_KIND:
+        raise ValueError(f"expected logits debug export, got {payload.get('kind')!r}: {path}")
+    logits = _tensor_to_numpy_float32(payload["logits"]).reshape(-1)
+    return _DebugSource(
+        path=path,
+        kind=str(payload["kind"]),
+        request_id=str(payload["request_id"]),
+        generated_token_index=int(payload["generated_token_index"]),
+        file_sha256=_file_sha256(path),
+        logits_sha256=_array_sha256(logits),
+        logits_sample_first_16=logits[:16],
+        saved_shape=tuple(int(dim) for dim in payload.get("saved_shape", ())),
+        source_shape=tuple(int(dim) for dim in payload.get("source_shape", ())),
+        logits_is_truncated=bool(payload.get("logits_is_truncated")),
+    )
+
+
+def _debug_source_from_state_path(path: Path) -> _DebugSource:
+    match = DEBUG_EXPORT_RE.fullmatch(path.name)
+    if match is None:
+        raise ValueError(f"state debug export filename does not match expected pattern: {path}")
+    return _DebugSource(
+        path=path,
+        kind=DELTANET_STATE_DEBUG_KIND,
+        request_id=match.group("request_id"),
+        generated_token_index=int(match.group("token")),
+        file_sha256=_file_sha256(path),
+    )
+
+
+def _discover_conversion_sources(source_debug_root: Path) -> dict[str, list[_DebugSource]]:
+    if not source_debug_root.is_dir():
+        raise FileNotFoundError(f"debug source directory missing: {source_debug_root}")
+
+    logits_sources: list[_DebugSource] = []
+    state_sources: list[_DebugSource] = []
+    for path in sorted(source_debug_root.rglob("*.pt")):
+        match = DEBUG_EXPORT_RE.fullmatch(path.name)
+        if match is None:
+            continue
+        if match.group("kind") == "logits":
+            logits_sources.append(_debug_source_from_logits(path))
+        else:
+            state_sources.append(_debug_source_from_state_path(path))
+
+    full_logits = [source for source in logits_sources if source.logits_is_truncated is False]
+    state_token_1 = [source for source in state_sources if source.generated_token_index == 1]
+    state_token_1024 = [source for source in state_sources if source.generated_token_index == 1024]
+    if not full_logits:
+        raise RuntimeError(f"no untruncated full-vocab logits debug exports found under {source_debug_root}")
+    if not state_token_1:
+        raise RuntimeError(f"no DeltaNet state token-1 debug exports found under {source_debug_root}")
+    if not state_token_1024:
+        raise RuntimeError(f"no DeltaNet state token-1024 debug exports found under {source_debug_root}")
+    return {
+        "logits": full_logits,
+        "state_token_1": state_token_1,
+        "state_token_1024": state_token_1024,
+    }
+
+
+def _repeat_sources(sources: list[_DebugSource], count: int) -> list[_DebugSource]:
+    if not sources:
+        raise ValueError("cannot repeat an empty debug source list")
+    return [sources[index % len(sources)] for index in range(count)]
+
+
+def _source_paths(repo_root: Path, sources: list[_DebugSource]) -> list[str]:
+    paths: list[str] = []
+    for source in sources:
+        try:
+            paths.append(str(source.path.resolve().relative_to(repo_root.resolve())))
+        except ValueError:
+            paths.append(str(source.path.resolve()))
+    return paths
+
+
+def _write_converted_logits_npz(
+    *,
+    repo_root: Path,
+    fixture_dir: Path,
+    kernel_target: str,
+    probe_count: int,
+    sources: list[_DebugSource],
+) -> str:
+    import numpy as np
+
+    selected = _repeat_sources(sources, probe_count)
+    samples = [
+        np.asarray(source.logits_sample_first_16, dtype=np.float32)
+        for source in selected
+    ]
+    payload = {
+        "probe_index": np.arange(probe_count, dtype=np.int32),
+        "reference_storage": np.array(["sha256_float32_with_first_16_sample_from_real_vllm_debug_export"]),
+        "source_artifact_path_by_probe": np.array(_source_paths(repo_root, selected)),
+        "source_artifact_sha256_by_probe": np.array([source.file_sha256 for source in selected]),
+        "source_request_id_by_probe": np.array([source.request_id for source in selected]),
+        "source_generated_token_index_by_probe": np.array(
+            [source.generated_token_index for source in selected],
+            dtype=np.int32,
+        ),
+        "source_logits_sha256_by_probe": np.array([source.logits_sha256 for source in selected]),
+        "source_logits_sample_first_16_float32": np.stack(samples, axis=0),
+        "source_saved_shape_by_probe": np.array([json.dumps(source.saved_shape) for source in selected]),
+        "source_shape_by_probe": np.array([json.dumps(source.source_shape) for source in selected]),
+        "source_logits_is_truncated_by_probe": np.array(
+            [bool(source.logits_is_truncated) for source in selected],
+            dtype=np.bool_,
+        ),
+    }
+    path = fixture_dir / f"{kernel_target}_reference_logits.npz"
+    np.savez(path, **payload)
+    return str(path)
+
+
+def _write_converted_state_npz(
+    *,
+    repo_root: Path,
+    fixture_dir: Path,
+    probe_count: int,
+    state_token_1_sources: list[_DebugSource],
+    state_token_1024_sources: list[_DebugSource],
+) -> str:
+    import numpy as np
+
+    selected_1 = _repeat_sources(state_token_1_sources, probe_count)
+    selected_1024 = _repeat_sources(state_token_1024_sources, probe_count)
+    payload = {
+        "probe_index": np.arange(probe_count, dtype=np.int32),
+        "state_storage": np.array(["debug_export_file_sha256_from_real_vllm_state_snapshot"]),
+        "state_token_1": np.array([source.file_sha256 for source in selected_1]),
+        "state_token_1_source_path_by_probe": np.array(_source_paths(repo_root, selected_1)),
+        "state_token_1_request_id_by_probe": np.array([source.request_id for source in selected_1]),
+        "state_token_1024": np.array([source.file_sha256 for source in selected_1024]),
+        "state_token_1024_source_path_by_probe": np.array(_source_paths(repo_root, selected_1024)),
+        "state_token_1024_request_id_by_probe": np.array([source.request_id for source in selected_1024]),
+    }
+    path = fixture_dir / "deltanet_reference_state.npz"
+    np.savez(path, **payload)
+    return str(path)
+
+
+def _convert_debug_artifacts_to_p2b_fixture_set(
+    *,
+    repo_root: Path,
+    source_debug_root: Path,
+    weight_version_id: str,
+    vllm_version: str,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    sources = _discover_conversion_sources(source_debug_root)
+    generated_at = generated_at or datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    written: list[str] = []
+    validations: dict[str, Any] = {}
+    family_results: dict[str, Any] = {}
+
+    for family_id, probe_count in P2B_FAMILY_PROBE_COUNTS.items():
+        fixture_dir = family_fixture_dir(repo_root, family_id)
+        fixture_dir.mkdir(parents=True, exist_ok=True)
+        probes = deterministic_probe_rows(repo_root, family_id, probe_count)
+        probes_path = fixture_dir / "probes_input.jsonl"
+        _write_jsonl(probes_path, probes)
+        written.append(str(probes_path))
+
+        deltanet_logits = _write_converted_logits_npz(
+            repo_root=repo_root,
+            fixture_dir=fixture_dir,
+            kernel_target="deltanet",
+            probe_count=probe_count,
+            sources=sources["logits"],
+        )
+        gatedattn_logits = _write_converted_logits_npz(
+            repo_root=repo_root,
+            fixture_dir=fixture_dir,
+            kernel_target="gatedattn",
+            probe_count=probe_count,
+            sources=sources["logits"],
+        )
+        state_path = _write_converted_state_npz(
+            repo_root=repo_root,
+            fixture_dir=fixture_dir,
+            probe_count=probe_count,
+            state_token_1_sources=sources["state_token_1"],
+            state_token_1024_sources=sources["state_token_1024"],
+        )
+        written.extend([deltanet_logits, gatedattn_logits, state_path])
+        written.extend(
+            _write_fixture_yaml_pair(
+                fixture_dir=fixture_dir,
+                family_id=family_id,
+                probe_count=probe_count,
+                weight_version_id=weight_version_id,
+                vllm_version=vllm_version,
+                kernel_targets=KERNEL_TARGETS,
+                generated_at=generated_at,
+            )
+        )
+        family_results[family_id] = {
+            "probe_count": probe_count,
+            "fixture_dir": str(fixture_dir),
+        }
+
+    validation_result = validate_p2b_fixture_set(repo_root, expected_weight_version_id=weight_version_id)
+    validations.update(validation_result["fixtures"])
+    return {
+        "status": "CONVERTED_DEBUG_ARTIFACTS_TO_P2B_FIXTURES",
+        "source_debug_root": str(source_debug_root),
+        "source_counts": {key: len(value) for key, value in sources.items()},
+        "families": family_results,
+        "written": sorted(written),
+        "validations": validations,
+        "validation_pass": validation_result["pass"],
+        "validation_errors": validation_result["errors"],
+    }
 
 
 def _request_completion(
@@ -316,6 +586,7 @@ def _write_fixture_yaml_pair(
     weight_version_id: str,
     vllm_version: str,
     kernel_targets: tuple[str, ...],
+    generated_at: str | None = None,
 ) -> list[str]:
     written: list[str] = []
     for kernel_target in kernel_targets:
@@ -325,6 +596,7 @@ def _write_fixture_yaml_pair(
             probe_count=probe_count,
             weight_version_id=weight_version_id,
             vllm_version=vllm_version,
+            generated_at=generated_at,
         )
         path = fixture_dir / f"{kernel_target}_v1.yaml"
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -348,6 +620,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--kernel-target", choices=[*KERNEL_TARGETS, "both"], default="both")
     parser.add_argument("--capture-only", action="store_true")
     parser.add_argument("--validate-p2b", action="store_true")
+    parser.add_argument("--convert-debug-artifacts", action="store_true")
+    parser.add_argument(
+        "--source-debug-root",
+        type=Path,
+        default=REPO_ROOT / "output" / "sprint0_live" / "logs",
+        help="Root containing real vLLM debug-export .pt files to convert into compact fixture companions.",
+    )
+    parser.add_argument(
+        "--converted-vllm-version",
+        default="unknown-debug-export",
+        help="vLLM version string to stamp on --convert-debug-artifacts fixture YAMLs.",
+    )
+    parser.add_argument(
+        "--generated-at",
+        help="Optional deterministic ISO-8601 timestamp for emitted fixture YAMLs.",
+    )
     parser.add_argument(
         "--allow-synthetic-test-fixture",
         action="store_true",
@@ -360,6 +648,17 @@ def main(argv: list[str] | None = None) -> int:
         result = validate_p2b_fixture_set(repo_root, expected_weight_version_id=args.weight_version_id)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["pass"] else 1
+
+    if args.convert_debug_artifacts:
+        result = _convert_debug_artifacts_to_p2b_fixture_set(
+            repo_root=repo_root,
+            source_debug_root=args.source_debug_root.resolve(),
+            weight_version_id=args.weight_version_id,
+            vllm_version=args.converted_vllm_version,
+            generated_at=args.generated_at,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["validation_pass"] else 1
 
     if args.allow_synthetic_test_fixture:
         result = _write_synthetic_test_fixture(

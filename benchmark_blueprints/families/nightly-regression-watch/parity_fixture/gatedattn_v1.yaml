@@ -1,0 +1,24 @@
+fixture_id: nightly-regression-watch-gatedattn-v1
+generated_at: '2026-04-26T00:00:00Z'
+generated_against:
+  vllm_version: unknown-debug-export
+  weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+  reference_baseline:
+    attention_backend: flash-attn-4
+    deltanet_kernel: triton-chunked-delta-v2
+    fp8_gemm_kernel: cublas
+    torch_compile_mode: default
+    cuda_graph_capture: 'off'
+  reference_reproducibility_runs: 3
+probe_count: 16
+probe_token_lengths:
+- 16
+- 64
+- 256
+- 1024
+probe_input_ref: probes_input.jsonl
+reference_logits_ref: gatedattn_reference_logits.npz
+tolerances:
+  rtol_logit: 0.001
+  atol_logit: 0.001
+parity_check_method: per_token_logit_compare

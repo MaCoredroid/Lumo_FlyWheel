@@ -340,8 +340,10 @@ def test_aggregate_real_debug_exports_into_npz_companions(tmp_path: Path) -> Non
     state = np.load(result.state_path)
     assert logits["probe_index"].tolist() == [0, 1]
     assert logits["probe_000000_logits"].shape == (1, 3)
-    assert state["state_token_1"].shape == (2, 2)
-    assert state["state_token_1024"].shape == (2, 2)
+    assert state["state_token_1"].shape == (2,)
+    assert state["state_token_1_sample_first_16_float32"].shape == (2, 2)
+    assert state["state_token_1024"].shape == (2,)
+    assert state["state_token_1024_sample_first_16_float32"].shape == (2, 2)
     summary = summarize_debug_export_pt(artifacts[0].logits_paths[0])
     assert summary["kind"] == LOGITS_DEBUG_KIND
     assert "synthetic_test_placeholder" not in logits.files
