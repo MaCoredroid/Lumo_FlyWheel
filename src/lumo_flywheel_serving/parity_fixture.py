@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,6 +34,7 @@ P2B_FAMILY_PROBE_COUNTS = {HEAVY_FAMILY_ID: 64, **{family_id: 16 for family_id i
 KERNEL_TARGETS = ("deltanet", "gatedattn")
 REFERENCED_KEYS = ("probe_input_ref", "reference_logits_ref", "reference_state_snapshots_ref")
 DEFAULT_WEIGHT_VERSION_ID = "2e1b21350ce589fcaafbb3c7d7eac526a7aed582"
+SYNTHETIC_TEST_ARTIFACT_PURPOSE = "test_only_synthetic_placeholder"
 
 
 @dataclass(frozen=True)
@@ -198,6 +200,9 @@ def validate_fixture(
     if not isinstance(fixture, dict):
         return FixtureValidation(path=relative, exists=True, errors=("fixture_yaml_not_mapping",))
 
+    if fixture.get("artifact_purpose") == SYNTHETIC_TEST_ARTIFACT_PURPOSE:
+        errors.append("production_fixture_declares_synthetic_test_placeholder")
+
     expected_fixture_id = f"{expected_family_id}-{expected_kernel_target}-v1"
     if fixture.get("fixture_id") != expected_fixture_id:
         errors.append("fixture_id_mismatch")
@@ -239,6 +244,19 @@ def validate_fixture(
         if len(probe_rows) != expected_probe_count:
             errors.append("probe_input_count_mismatch")
 
+    logits_ref = fixture.get("reference_logits_ref")
+    if isinstance(logits_ref, str):
+        errors.extend(_validate_npz_reference_blob(path.parent / logits_ref, required_members=("probe_index",)))
+    if expected_kernel_target == "deltanet":
+        state_ref = fixture.get("reference_state_snapshots_ref")
+        if isinstance(state_ref, str):
+            errors.extend(
+                _validate_npz_reference_blob(
+                    path.parent / state_ref,
+                    required_members=("state_token_1", "state_token_1024", "probe_index"),
+                )
+            )
+
     content_hash: str | None = None
     try:
         content_hash = fixture_content_hash(path)
@@ -247,6 +265,32 @@ def validate_fixture(
     except ValueError as exc:
         errors.append(f"fixture_content_hash_invalid:{exc}")
     return FixtureValidation(path=relative, exists=True, errors=tuple(errors), content_hash=content_hash)
+
+
+def _validate_npz_reference_blob(path: Path, *, required_members: tuple[str, ...]) -> list[str]:
+    errors: list[str] = []
+    if not path.is_file():
+        return errors
+    if path.suffix != ".npz":
+        errors.append(f"reference_blob_not_npz:{path.name}")
+        return errors
+    if path.read_bytes()[:4] != b"PK\x03\x04":
+        errors.append(f"reference_blob_not_zip_npz:{path.name}")
+        return errors
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = set(archive.namelist())
+    except zipfile.BadZipFile:
+        errors.append(f"reference_blob_bad_npz:{path.name}")
+        return errors
+
+    stems = {Path(name).stem for name in names}
+    missing = [member for member in required_members if member not in stems]
+    if missing:
+        errors.append(f"reference_blob_missing_members:{path.name}:{','.join(missing)}")
+    if "synthetic_test_placeholder" in stems:
+        errors.append(f"reference_blob_contains_synthetic_test_placeholder:{path.name}")
+    return errors
 
 
 def validate_p2b_fixture_set(
@@ -285,6 +329,8 @@ def fetch_endpoint_capabilities(endpoint: str, *, api_key: str, model: str, time
         "vllm_version": "unknown",
         "full_logits_available": False,
         "deltanet_state_snapshots_available": False,
+        "openai_logprobs_full_vocab_available": False,
+        "dev_collective_rpc_available": False,
     }
     server_base = base.removesuffix("/v1")
     health = requests.get(f"{server_base}/health", headers=headers, timeout=timeout)
@@ -305,8 +351,78 @@ def fetch_endpoint_capabilities(endpoint: str, *, api_key: str, model: str, time
         if isinstance(version_payload, dict):
             capabilities["vllm_version"] = str(version_payload.get("version", "unknown"))
 
+    server_info = requests.get(f"{server_base}/server_info?config_format=json", headers=headers, timeout=timeout)
+    capabilities["server_info_status_code"] = server_info.status_code
+    if server_info.status_code == 200:
+        server_payload = server_info.json()
+        if isinstance(server_payload, dict):
+            vllm_config = server_payload.get("vllm_config")
+            if isinstance(vllm_config, dict):
+                model_config = vllm_config.get("model_config")
+                if isinstance(model_config, dict):
+                    capabilities["max_logprobs"] = model_config.get("max_logprobs")
+                    capabilities["logprobs_mode"] = model_config.get("logprobs_mode")
+
+    openapi = requests.get(f"{server_base}/openapi.json", headers=headers, timeout=timeout)
+    capabilities["openapi_status_code"] = openapi.status_code
+    if openapi.status_code == 200:
+        openapi_payload = openapi.json()
+        paths = openapi_payload.get("paths", {}) if isinstance(openapi_payload, dict) else {}
+        if isinstance(paths, dict):
+            capabilities["dev_collective_rpc_available"] = "/collective_rpc" in paths
+
+    probe_payload = {
+        "model": model,
+        "prompt": "P2b logit introspection capability probe.",
+        "max_tokens": 1,
+        "temperature": 0,
+        "logprobs": 100000,
+    }
+    logprobs_probe = requests.post(f"{base}/completions", headers=headers, json=probe_payload, timeout=timeout)
+    capabilities["full_vocab_logprobs_probe_status_code"] = logprobs_probe.status_code
+    if logprobs_probe.status_code == 200:
+        capabilities["openai_logprobs_full_vocab_available"] = True
+    else:
+        try:
+            capabilities["full_vocab_logprobs_probe_error"] = logprobs_probe.json().get("error", logprobs_probe.text)
+        except ValueError:
+            capabilities["full_vocab_logprobs_probe_error"] = logprobs_probe.text
+
+    capabilities["missing_repo_supported_hooks"] = (
+        "no OpenAI-compatible route returns full-vocabulary logits or raw logits",
+        "no route returns DeltaNet recurrent state snapshots at generated-token checkpoints",
+        "the vLLM dev collective_rpc endpoint is control-plane only here and does not provide a repo-owned "
+        "data-plane export for GPUModelRunner logits plus GatedDeltaNetAttention ssm_state",
+    )
     capabilities["blocking_reason"] = (
-        "live endpoint exposes OpenAI-compatible token logprobs only; HLD section 2.2 requires full per-token "
-        "reference logits and DeltaNet recurrent state snapshots"
+        "HLD section 2.2 requires full per-token reference logits and DeltaNet recurrent state snapshots; "
+        "the live server exposes only capped OpenAI logprobs and no state-snapshot export hook"
     )
     return capabilities
+
+
+def p2b_blocked_payload(
+    *,
+    family_id: str,
+    probe_count: int,
+    weight_version_id: str,
+    capabilities: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "status": "BLOCKED_NEEDS_USER_HELP",
+        "halt_reason": "missing_real_kernel_logit_state_introspection",
+        "family_id": family_id,
+        "probe_count": probe_count,
+        "weight_version_id": weight_version_id,
+        "capabilities": capabilities,
+        "required_by_hld": {
+            "gatedattn": "full per-token reference logits for every probe across 3 bit-identical runs",
+            "deltanet": "full per-token reference logits plus recurrent state snapshots at tokens [1, 1024]",
+        },
+        "required_vllm_or_model_change": (
+            "Add a repo-supported debug export hook in the vLLM model runner that writes raw logits before sampling "
+            "and the Qwen3.5 GatedDeltaNetAttention recurrent ssm_state after generated tokens 1 and 1024, keyed by "
+            "request/probe id, without synthetic data or OpenAI logprob truncation."
+        ),
+        "files_written": [],
+    }

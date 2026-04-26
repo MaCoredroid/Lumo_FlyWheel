@@ -17,10 +17,12 @@ if str(SRC_ROOT) not in sys.path:
 from lumo_flywheel_serving.parity_fixture import (  # noqa: E402
     DEFAULT_WEIGHT_VERSION_ID,
     KERNEL_TARGETS,
+    SYNTHETIC_TEST_ARTIFACT_PURPOSE,
     deterministic_probe_rows,
     fetch_endpoint_capabilities,
     fixture_payload,
     family_fixture_dir,
+    p2b_blocked_payload,
     validate_p2b_fixture_set,
 )
 
@@ -75,7 +77,7 @@ def _write_synthetic_test_fixture(
             weight_version_id=weight_version_id,
             vllm_version=vllm_version,
         )
-        payload["artifact_purpose"] = "test_only_synthetic_placeholder"
+        payload["artifact_purpose"] = SYNTHETIC_TEST_ARTIFACT_PURPOSE
         yaml_path = fixture_dir / f"{kernel_target}_v1.yaml"
         yaml_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
         logits_path = fixture_dir / f"{kernel_target}_reference_logits.npz"
@@ -124,19 +126,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     capabilities = fetch_endpoint_capabilities(args.endpoint, api_key=args.api_key, model=args.model)
-    result = {
-        "status": "BLOCKED_NEEDS_USER_HELP",
-        "halt_reason": "missing_real_kernel_logit_state_introspection",
-        "family_id": args.family_id,
-        "probe_count": args.probe_count,
-        "weight_version_id": args.weight_version_id,
-        "capabilities": capabilities,
-        "required_by_hld": {
-            "gatedattn": "full per-token reference logits for every probe across 3 bit-identical runs",
-            "deltanet": "full per-token reference logits plus recurrent state snapshots at tokens [1, 1024]",
-        },
-        "files_written": [],
-    }
+    result = p2b_blocked_payload(
+        family_id=args.family_id,
+        probe_count=args.probe_count,
+        weight_version_id=args.weight_version_id,
+        capabilities=capabilities,
+    )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 2
 

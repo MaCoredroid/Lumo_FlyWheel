@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -11,9 +12,12 @@ from lumo_flywheel_serving.parity_fixture import (
     KERNEL_TARGETS,
     P2B_FAMILY_PROBE_COUNTS,
     REFERENCE_BASELINE,
+    SYNTHETIC_TEST_ARTIFACT_PURPOSE,
+    fetch_endpoint_capabilities,
     fixture_content_hash,
     fixture_payload,
     fixture_yaml_path,
+    p2b_blocked_payload,
     validate_fixture,
     validate_p2b_fixture_set,
 )
@@ -55,7 +59,7 @@ def _write_fixture(repo: Path, family_id: str, kernel_target: str, probe_count: 
         "\n".join(json.dumps(probe, sort_keys=True) for probe in probes) + "\n",
         encoding="utf-8",
     )
-    (fixture_dir / f"{kernel_target}_reference_logits.npz").write_bytes(f"{kernel_target}-logits".encode("ascii"))
+    _write_npz_like(fixture_dir / f"{kernel_target}_reference_logits.npz", ["logits", "probe_index"])
     payload = fixture_payload(
         family_id=family_id,
         kernel_target=kernel_target,
@@ -65,10 +69,16 @@ def _write_fixture(repo: Path, family_id: str, kernel_target: str, probe_count: 
         generated_at="2026-04-26T00:00:00Z",
     )
     if kernel_target == "deltanet":
-        (fixture_dir / "deltanet_reference_state.npz").write_bytes(b"deltanet-state")
+        _write_npz_like(fixture_dir / "deltanet_reference_state.npz", ["state_token_1", "state_token_1024", "probe_index"])
     path = fixture_dir / f"{kernel_target}_v1.yaml"
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     return path
+
+
+def _write_npz_like(path: Path, members: list[str]) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        for member in members:
+            archive.writestr(f"{member}.npy", b"npz-member-placeholder")
 
 
 def test_fixture_schema_and_weight_version_binding(tmp_path: Path) -> None:
@@ -146,6 +156,96 @@ def test_validate_fixture_reports_missing_referenced_blob(tmp_path: Path) -> Non
     assert any(error.startswith("referenced_blob_missing:") for error in validation.errors)
 
 
+def test_validate_fixture_rejects_synthetic_production_artifacts(tmp_path: Path) -> None:
+    path = _write_fixture(tmp_path, "responses-sdk-adapter-cutover", "deltanet", 64)
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    payload["artifact_purpose"] = SYNTHETIC_TEST_ARTIFACT_PURPOSE
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    _write_npz_like(path.parent / "deltanet_reference_logits.npz", ["logits", "probe_index", "synthetic_test_placeholder"])
+
+    validation = validate_fixture(
+        path,
+        repo_root=tmp_path,
+        expected_family_id="responses-sdk-adapter-cutover",
+        expected_kernel_target="deltanet",
+        expected_probe_count=64,
+        expected_weight_version_id=DEFAULT_WEIGHT_VERSION_ID,
+    )
+
+    assert "production_fixture_declares_synthetic_test_placeholder" in validation.errors
+    assert any(error.startswith("reference_blob_contains_synthetic_test_placeholder:") for error in validation.errors)
+
+
+def test_validate_fixture_rejects_non_npz_reference_blob(tmp_path: Path) -> None:
+    path = _write_fixture(tmp_path, "codex-provider-rollover", "gatedattn", 16)
+    (path.parent / "gatedattn_reference_logits.npz").write_bytes(b"not-a-zip")
+
+    validation = validate_fixture(
+        path,
+        repo_root=tmp_path,
+        expected_family_id="codex-provider-rollover",
+        expected_kernel_target="gatedattn",
+        expected_probe_count=16,
+        expected_weight_version_id=DEFAULT_WEIGHT_VERSION_ID,
+    )
+
+    assert "reference_blob_not_zip_npz:gatedattn_reference_logits.npz" in validation.errors
+
+
+def test_fetch_endpoint_capabilities_records_missing_full_logits_and_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Response:
+        def __init__(self, status_code: int, payload: dict | None = None, text: str = "") -> None:
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.text = text
+
+        def json(self) -> dict:
+            return self._payload
+
+    def fake_get(url: str, headers: dict, timeout: float) -> _Response:
+        if url.endswith("/health"):
+            return _Response(200)
+        if url.endswith("/v1/models"):
+            return _Response(200, {"data": [{"id": "qwen3.5-27b"}]})
+        if url.endswith("/version"):
+            return _Response(200, {"version": "0.19.0"})
+        if url.endswith("/server_info?config_format=json"):
+            return _Response(
+                200,
+                {"vllm_config": {"model_config": {"max_logprobs": 20, "logprobs_mode": "raw_logprobs"}}},
+            )
+        if url.endswith("/openapi.json"):
+            return _Response(200, {"paths": {"/collective_rpc": {}}})
+        return _Response(404)
+
+    def fake_post(url: str, headers: dict, json: dict, timeout: float) -> _Response:
+        assert json["logprobs"] == 100000
+        return _Response(
+            400,
+            {"error": {"message": "Requested sample logprobs of 100000, which is greater than max allowed: 20"}},
+        )
+
+    import lumo_flywheel_serving.parity_fixture as parity_fixture
+
+    monkeypatch.setattr(parity_fixture.requests, "get", fake_get)
+    monkeypatch.setattr(parity_fixture.requests, "post", fake_post)
+
+    capabilities = fetch_endpoint_capabilities("http://127.0.0.1:8100/v1", api_key="EMPTY", model="qwen3.5-27b")
+
+    assert capabilities["health_ok"]
+    assert capabilities["models_ok"]
+    assert capabilities["max_logprobs"] == 20
+    assert not capabilities["openai_logprobs_full_vocab_available"]
+    assert not capabilities["deltanet_state_snapshots_available"]
+    assert capabilities["dev_collective_rpc_available"]
+    assert "GatedDeltaNetAttention" in p2b_blocked_payload(
+        family_id="responses-sdk-adapter-cutover",
+        probe_count=64,
+        weight_version_id=DEFAULT_WEIGHT_VERSION_ID,
+        capabilities=capabilities,
+    )["required_vllm_or_model_change"]
+
+
 def test_p2b_presence_checks_all_families_and_kernels(tmp_path: Path) -> None:
     missing = validate_p2b_fixture_set(tmp_path, expected_weight_version_id=DEFAULT_WEIGHT_VERSION_ID)
     assert not missing["pass"]
@@ -160,4 +260,3 @@ def test_p2b_presence_checks_all_families_and_kernels(tmp_path: Path) -> None:
     assert result["pass"], result["errors"]
     assert not result["errors"]
     assert fixture_yaml_path(tmp_path, "responses-sdk-adapter-cutover", "deltanet").is_file()
-
