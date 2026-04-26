@@ -35,6 +35,8 @@ KERNEL_TARGETS = ("deltanet", "gatedattn")
 REFERENCED_KEYS = ("probe_input_ref", "reference_logits_ref", "reference_state_snapshots_ref")
 DEFAULT_WEIGHT_VERSION_ID = "2e1b21350ce589fcaafbb3c7d7eac526a7aed582"
 SYNTHETIC_TEST_ARTIFACT_PURPOSE = "test_only_synthetic_placeholder"
+LOGITS_DEBUG_KIND = "full_vocab_logits_before_sampling"
+DELTANET_STATE_DEBUG_KIND = "qwen35_mamba_deltanet_recurrent_state"
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,21 @@ class FixtureValidation:
             "errors": list(self.errors),
             "content_hash": self.content_hash,
         }
+
+
+@dataclass(frozen=True)
+class DebugProbeArtifacts:
+    probe_index: int
+    request_id: str
+    logits_paths: tuple[Path, ...]
+    state_paths: tuple[Path, ...] = ()
+
+
+@dataclass(frozen=True)
+class DebugAggregationResult:
+    logits_path: str
+    state_path: str | None
+    shapes: dict[str, Any]
 
 
 def _repo_relative(repo_root: Path, path: Path) -> str:
@@ -176,6 +193,258 @@ def fixture_payload(
         payload["tolerances"]["atol_state"] = 5.0e-3
         payload["parity_check_method"] = "logit_plus_state_compare"
     return payload
+
+
+def load_debug_export_pt(path: str | Path) -> dict[str, Any]:
+    """Load one repo-owned vLLM debug export tensor file."""
+    try:
+        import torch
+    except ImportError as exc:  # pragma: no cover - environment guard
+        raise RuntimeError("torch is required to load vLLM debug export .pt artifacts") from exc
+
+    payload = torch.load(Path(path), map_location="cpu", weights_only=False)
+    if not isinstance(payload, dict):
+        raise ValueError(f"debug export is not a mapping: {path}")
+    if payload.get("kind") not in {LOGITS_DEBUG_KIND, DELTANET_STATE_DEBUG_KIND}:
+        raise ValueError(f"unsupported debug export kind in {path}: {payload.get('kind')!r}")
+    return payload
+
+
+def summarize_debug_export_pt(path: str | Path) -> dict[str, Any]:
+    payload = load_debug_export_pt(path)
+    return {
+        "path": str(path),
+        "kind": payload.get("kind"),
+        "request_id": payload.get("request_id"),
+        "generated_token_index": payload.get("generated_token_index"),
+        "saved_shape": payload.get("saved_shape"),
+        "source_shape": payload.get("source_shape"),
+        "logits_is_truncated": payload.get("logits_is_truncated"),
+    }
+
+
+def write_debug_export_npz_companions(
+    *,
+    fixture_dir: str | Path,
+    kernel_target: str,
+    probe_artifacts: list[DebugProbeArtifacts],
+    expected_probe_count: int,
+    require_state_tokens: tuple[int, ...] = (1, 1024),
+) -> DebugAggregationResult:
+    """Aggregate real vLLM debug-export .pt files into fixture companion .npz files.
+
+    This intentionally has no synthetic fallback. Missing or malformed debug exports
+    raise before any production companion can be written.
+    """
+    if kernel_target not in KERNEL_TARGETS:
+        raise ValueError(f"unsupported kernel_target: {kernel_target}")
+    if len(probe_artifacts) != expected_probe_count:
+        raise ValueError(
+            f"expected {expected_probe_count} probe debug captures, got {len(probe_artifacts)}"
+        )
+    if sorted(artifact.probe_index for artifact in probe_artifacts) != list(range(expected_probe_count)):
+        raise ValueError("probe debug captures must cover contiguous probe_index values")
+
+    try:
+        import numpy as np
+    except ImportError as exc:  # pragma: no cover - environment guard
+        raise RuntimeError("numpy is required to aggregate parity fixture debug exports") from exc
+
+    output_dir = Path(fixture_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    sorted_artifacts = sorted(probe_artifacts, key=lambda artifact: artifact.probe_index)
+
+    logits_payload: dict[str, Any] = {
+        "probe_index": np.array([artifact.probe_index for artifact in sorted_artifacts], dtype=np.int32),
+        "request_id": np.array([artifact.request_id for artifact in sorted_artifacts]),
+    }
+    shapes: dict[str, Any] = {"logits": {}, "state": {}}
+    for artifact in sorted_artifacts:
+        logits_by_token = _load_logits_by_token(artifact)
+        token_indices = sorted(logits_by_token)
+        logits_arrays = [logits_by_token[token] for token in token_indices]
+        member_prefix = f"probe_{artifact.probe_index:06d}"
+        if logits_arrays:
+            logits_payload[f"{member_prefix}_logits"] = np.stack(logits_arrays, axis=0)
+            logits_payload[f"{member_prefix}_logit_tokens"] = np.array(token_indices, dtype=np.int32)
+            shapes["logits"][member_prefix] = tuple(int(dim) for dim in logits_payload[f"{member_prefix}_logits"].shape)
+        else:
+            raise ValueError(f"probe {artifact.probe_index} has no logits debug exports")
+    logits_payload["logits_member_names"] = np.array(
+        [f"probe_{artifact.probe_index:06d}_logits" for artifact in sorted_artifacts]
+    )
+    logits_path = output_dir / f"{kernel_target}_reference_logits.npz"
+    np.savez(logits_path, **logits_payload)
+
+    state_path: Path | None = None
+    if kernel_target == "deltanet":
+        state_payload: dict[str, Any] = {
+            "probe_index": logits_payload["probe_index"],
+            "request_id": logits_payload["request_id"],
+            "state_storage": np.array(["sha256_float32_flattened_with_sample"]),
+        }
+        for token in require_state_tokens:
+            digests: list[str] = []
+            lengths: list[int] = []
+            samples: list[Any] = []
+            metadata: list[str] = []
+            for artifact in sorted_artifacts:
+                state_by_token = _load_state_by_token(artifact)
+                if token not in state_by_token:
+                    raise ValueError(f"probe {artifact.probe_index} missing DeltaNet state token {token}")
+                vector, meta = state_by_token[token]
+                digests.append(_array_sha256(vector))
+                lengths.append(int(vector.size))
+                samples.append(vector[:16].astype(np.float32, copy=False))
+                metadata.append(json.dumps(meta, sort_keys=True))
+            state_payload[f"state_token_{token}"] = np.array(digests)
+            state_payload[f"state_token_{token}_lengths"] = np.array(lengths, dtype=np.int64)
+            state_payload[f"state_token_{token}_sample_first_16_float32"] = np.stack(samples, axis=0)
+            state_payload[f"state_token_{token}_metadata_json"] = np.array(metadata)
+            shapes["state"][f"state_token_{token}"] = (len(digests),)
+        state_path = output_dir / "deltanet_reference_state.npz"
+        np.savez(state_path, **state_payload)
+
+    return DebugAggregationResult(
+        logits_path=str(logits_path),
+        state_path=str(state_path) if state_path is not None else None,
+        shapes=shapes,
+    )
+
+
+def assert_debug_capture_runs_reproduce(
+    *,
+    runs: list[list[DebugProbeArtifacts]],
+    kernel_target: str,
+    require_state_tokens: tuple[int, ...] = (1, 1024),
+) -> None:
+    if len(runs) != REFERENCE_REPRODUCIBILITY_RUNS:
+        raise ValueError(f"expected {REFERENCE_REPRODUCIBILITY_RUNS} reproducibility runs, got {len(runs)}")
+    if not runs:
+        raise ValueError("no debug capture runs supplied")
+    baseline = _capture_signature(runs[0], kernel_target=kernel_target, require_state_tokens=require_state_tokens)
+    for run_index, run in enumerate(runs[1:], start=2):
+        current = _capture_signature(run, kernel_target=kernel_target, require_state_tokens=require_state_tokens)
+        if current != baseline:
+            raise ValueError(f"fixture_reference_nondeterministic: run {run_index} differs from run 1")
+
+
+def _capture_signature(
+    artifacts: list[DebugProbeArtifacts],
+    *,
+    kernel_target: str,
+    require_state_tokens: tuple[int, ...],
+) -> list[tuple[Any, ...]]:
+    signature: list[tuple[Any, ...]] = []
+    for artifact in sorted(artifacts, key=lambda item: item.probe_index):
+        logits_by_token = _load_logits_by_token(artifact)
+        logits_sig = tuple(
+            (token, _array_sha256(array))
+            for token, array in sorted(logits_by_token.items())
+        )
+        state_sig: tuple[Any, ...] = ()
+        if kernel_target == "deltanet":
+            state_by_token = _load_state_by_token(artifact)
+            state_sig = tuple(
+                (token, _array_sha256(state_by_token[token][0]))
+                for token in require_state_tokens
+            )
+        signature.append((artifact.probe_index, logits_sig, state_sig))
+    return signature
+
+
+def _load_logits_by_token(artifact: DebugProbeArtifacts) -> dict[int, Any]:
+    logits_by_token: dict[int, Any] = {}
+    for path in sorted(artifact.logits_paths):
+        payload = load_debug_export_pt(path)
+        if payload.get("kind") != LOGITS_DEBUG_KIND:
+            raise ValueError(f"expected logits debug export, got {payload.get('kind')!r}: {path}")
+        if payload.get("request_id") != artifact.request_id:
+            raise ValueError(f"request_id mismatch for {path}")
+        token = int(payload["generated_token_index"])
+        if token in logits_by_token:
+            raise ValueError(f"duplicate logits token {token} for probe {artifact.probe_index}")
+        logits_by_token[token] = _tensor_payload_to_numpy(payload["logits"])
+    return logits_by_token
+
+
+def _load_state_by_token(artifact: DebugProbeArtifacts) -> dict[int, tuple[Any, dict[str, Any]]]:
+    state_by_token: dict[int, tuple[Any, dict[str, Any]]] = {}
+    for path in sorted(artifact.state_paths):
+        payload = load_debug_export_pt(path)
+        if payload.get("kind") != DELTANET_STATE_DEBUG_KIND:
+            raise ValueError(f"expected DeltaNet state debug export, got {payload.get('kind')!r}: {path}")
+        if payload.get("request_id") != artifact.request_id:
+            raise ValueError(f"request_id mismatch for {path}")
+        token = int(payload["generated_token_index"])
+        if token in state_by_token:
+            raise ValueError(f"duplicate state token {token} for probe {artifact.probe_index}")
+        state_by_token[token] = _flatten_state_payload(payload)
+    return state_by_token
+
+
+def _tensor_payload_to_numpy(value: Any) -> Any:
+    import numpy as np
+
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "numpy"):
+        return value.numpy().astype(np.float32, copy=False)
+    return np.asarray(value, dtype=np.float32)
+
+
+def _flatten_state_payload(payload: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    import numpy as np
+
+    pieces: list[Any] = []
+    entries: list[dict[str, Any]] = []
+    layers = payload.get("layers")
+    if not isinstance(layers, dict) or not layers:
+        raise ValueError(f"state payload has no layers for request {payload.get('request_id')}")
+    for layer_name in sorted(layers):
+        layer_entries = layers[layer_name]
+        if not isinstance(layer_entries, list):
+            raise ValueError(f"state layer payload is not a list: {layer_name}")
+        for entry in sorted(layer_entries, key=lambda item: int(item.get("state_index", 0))):
+            array = _tensor_payload_to_numpy(entry["tensor"]).reshape(-1)
+            pieces.append(array)
+            entries.append(
+                {
+                    "layer_name": layer_name,
+                    "state_index": int(entry.get("state_index", -1)),
+                    "state_role": entry.get("state_role"),
+                    "shape": list(array.shape),
+                    "saved_shape": list(entry.get("saved_shape", ())),
+                    "saved_dtype": entry.get("saved_dtype"),
+                }
+            )
+    if not pieces:
+        raise ValueError(f"state payload has no tensors for request {payload.get('request_id')}")
+    return np.concatenate(pieces).astype(np.float32, copy=False), {"entries": entries}
+
+
+def _pad_float_vectors(vectors: list[Any]) -> tuple[Any, Any]:
+    import numpy as np
+
+    lengths = np.array([int(vector.size) for vector in vectors], dtype=np.int32)
+    width = int(lengths.max()) if len(lengths) else 0
+    padded = np.full((len(vectors), width), np.nan, dtype=np.float32)
+    for row, vector in enumerate(vectors):
+        padded[row, : vector.size] = vector.astype(np.float32, copy=False)
+    return padded, lengths
+
+
+def _array_sha256(array: Any) -> str:
+    import numpy as np
+
+    contiguous = np.ascontiguousarray(array)
+    digest = hashlib.sha256()
+    digest.update(str(contiguous.dtype).encode("ascii"))
+    digest.update(str(tuple(int(dim) for dim in contiguous.shape)).encode("ascii"))
+    digest.update(contiguous.tobytes())
+    return digest.hexdigest()
 
 
 def validate_fixture(

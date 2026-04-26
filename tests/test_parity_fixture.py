@@ -9,17 +9,23 @@ import yaml
 
 from lumo_flywheel_serving.parity_fixture import (
     DEFAULT_WEIGHT_VERSION_ID,
+    DELTANET_STATE_DEBUG_KIND,
     KERNEL_TARGETS,
+    LOGITS_DEBUG_KIND,
     P2B_FAMILY_PROBE_COUNTS,
     REFERENCE_BASELINE,
     SYNTHETIC_TEST_ARTIFACT_PURPOSE,
+    DebugProbeArtifacts,
+    assert_debug_capture_runs_reproduce,
     fetch_endpoint_capabilities,
     fixture_content_hash,
     fixture_payload,
     fixture_yaml_path,
+    summarize_debug_export_pt,
     p2b_blocked_payload,
     validate_fixture,
     validate_p2b_fixture_set,
+    write_debug_export_npz_companions,
 )
 
 
@@ -260,3 +266,105 @@ def test_p2b_presence_checks_all_families_and_kernels(tmp_path: Path) -> None:
     assert result["pass"], result["errors"]
     assert not result["errors"]
     assert fixture_yaml_path(tmp_path, "responses-sdk-adapter-cutover", "deltanet").is_file()
+
+
+def _write_debug_logits(path: Path, torch_module: object, *, request_id: str, token: int, values: list[float]) -> None:
+    torch_module.save(
+        {
+            "kind": LOGITS_DEBUG_KIND,
+            "request_id": request_id,
+            "generated_token_index": token,
+            "source_shape": (len(values),),
+            "saved_shape": (len(values),),
+            "logits_is_truncated": False,
+            "logits": torch_module.tensor(values, dtype=torch_module.float32),
+        },
+        path,
+    )
+
+
+def _write_debug_state(path: Path, torch_module: object, *, request_id: str, token: int, values: list[float]) -> None:
+    torch_module.save(
+        {
+            "kind": DELTANET_STATE_DEBUG_KIND,
+            "request_id": request_id,
+            "generated_token_index": token,
+            "layers": {
+                "model.layers.0.linear_attn": [
+                    {
+                        "state_index": 1,
+                        "state_role": "recurrent_ssm_state",
+                        "saved_shape": (len(values),),
+                        "saved_dtype": "torch.float32",
+                        "tensor": torch_module.tensor(values, dtype=torch_module.float32),
+                    }
+                ]
+            },
+        },
+        path,
+    )
+
+
+def test_aggregate_real_debug_exports_into_npz_companions(tmp_path: Path) -> None:
+    torch = pytest.importorskip("torch")
+    artifacts: list[DebugProbeArtifacts] = []
+    for probe_index in range(2):
+        request_id = f"cmpl-live-{probe_index}"
+        probe_dir = tmp_path / f"probe_{probe_index:06d}"
+        probe_dir.mkdir()
+        logits_path = probe_dir / f"logits_req_{request_id}_tok_000001.pt"
+        state_1 = probe_dir / f"state_req_{request_id}_tok_000001.pt"
+        state_1024 = probe_dir / f"state_req_{request_id}_tok_001024.pt"
+        _write_debug_logits(logits_path, torch, request_id=request_id, token=1, values=[probe_index, 2.0, 3.0])
+        _write_debug_state(state_1, torch, request_id=request_id, token=1, values=[1.0, float(probe_index)])
+        _write_debug_state(state_1024, torch, request_id=request_id, token=1024, values=[1024.0, float(probe_index)])
+        artifacts.append(
+            DebugProbeArtifacts(
+                probe_index=probe_index,
+                request_id=request_id,
+                logits_paths=(logits_path,),
+                state_paths=(state_1, state_1024),
+            )
+        )
+
+    result = write_debug_export_npz_companions(
+        fixture_dir=tmp_path / "parity_fixture",
+        kernel_target="deltanet",
+        probe_artifacts=artifacts,
+        expected_probe_count=2,
+    )
+
+    import numpy as np
+
+    logits = np.load(result.logits_path)
+    state = np.load(result.state_path)
+    assert logits["probe_index"].tolist() == [0, 1]
+    assert logits["probe_000000_logits"].shape == (1, 3)
+    assert state["state_token_1"].shape == (2, 2)
+    assert state["state_token_1024"].shape == (2, 2)
+    summary = summarize_debug_export_pt(artifacts[0].logits_paths[0])
+    assert summary["kind"] == LOGITS_DEBUG_KIND
+    assert "synthetic_test_placeholder" not in logits.files
+
+
+def test_reproducibility_check_rejects_debug_tensor_drift(tmp_path: Path) -> None:
+    torch = pytest.importorskip("torch")
+    runs: list[list[DebugProbeArtifacts]] = []
+    for run_index, final_logit in enumerate([1.0, 2.0, 9.0], start=1):
+        request_id = f"cmpl-run-{run_index}"
+        probe_dir = tmp_path / f"run_{run_index:02d}" / "probe_000000"
+        probe_dir.mkdir(parents=True)
+        logits_path = probe_dir / f"logits_req_{request_id}_tok_000001.pt"
+        _write_debug_logits(logits_path, torch, request_id=request_id, token=1, values=[0.0, final_logit])
+        runs.append(
+            [
+                DebugProbeArtifacts(
+                    probe_index=0,
+                    request_id=request_id,
+                    logits_paths=(logits_path,),
+                )
+            ]
+        )
+
+    with pytest.raises(ValueError, match="fixture_reference_nondeterministic"):
+        assert_debug_capture_runs_reproduce(runs=runs, kernel_target="gatedattn")
