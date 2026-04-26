@@ -47,12 +47,19 @@ def test_p2b_vllm_debug_export_is_disabled_by_default_and_probe_keyed() -> None:
     assert patch.PATCH_VERSION == "0.19.0"
     assert "LUMO_P2B_VLLM_DEBUG_EXPORT" in patch.DEBUG_ENV_VARS
     assert "LUMO_P2B_DEBUG_PROBE_REQUEST_IDS" in patch.DEBUG_ENV_VARS
-    assert 'os.environ.get("LUMO_P2B_VLLM_DEBUG_EXPORT", "")' in patch.HELPER_MODULE
+    assert '_env_value("LUMO_P2B_VLLM_DEBUG_EXPORT", "VLLM_LUMO_P2B_DEBUG_EXPORT")' in patch.HELPER_MODULE
+    assert "VLLM_LUMO_P2B_DEBUG_EXPORT" in patch.HELPER_MODULE
+    assert "VLLM_LUMO_P2B_DEBUG_EXPORT_DIR" in patch.HELPER_MODULE
+    assert "VLLM_LUMO_P2B_DEBUG_PROBE_REQUEST_IDS" in patch.HELPER_MODULE
     assert "return cls.disabled()" in patch.HELPER_MODULE
-    assert "if req_id not in self.config.probe_request_ids:" in patch.HELPER_MODULE
+    assert ") or bool(probe_request_ids)" in patch.HELPER_MODULE
+    assert "if not self._matches_probe_request(req_id):" in patch.HELPER_MODULE
+    assert '"*" in self.config.probe_request_ids' in patch.HELPER_MODULE
     assert "generated_token_index not in self.config.state_tokens" in patch.HELPER_MODULE
     assert "frozenset({1, 1024})" in patch.HELPER_MODULE
     assert "full_vocab_logits_before_sampling" in patch.HELPER_MODULE
+    assert "self._exported_logits_count" in patch.HELPER_MODULE
+    assert "def _next_generated_token_index(" in patch.HELPER_MODULE
     assert "qwen35_mamba_deltanet_recurrent_state" in patch.HELPER_MODULE
 
 

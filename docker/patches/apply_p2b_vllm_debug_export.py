@@ -56,6 +56,7 @@ class P2BDebugConfig:
 class P2BDebugExporter:
     def __init__(self, config: P2BDebugConfig) -> None:
         self.config = config
+        self._exported_logits_count: dict[str, int] = {}
         self._exported_state: set[tuple[str, int]] = set()
 
     @classmethod
@@ -71,18 +72,18 @@ class P2BDebugExporter:
 
     @classmethod
     def from_env(cls) -> "P2BDebugExporter":
-        enabled = (
-            os.environ.get("LUMO_P2B_VLLM_DEBUG_EXPORT", "").strip().lower()
-            in _TRUE_VALUES
+        probe_request_ids = frozenset(
+            value
+            for value in _split_env("LUMO_P2B_DEBUG_PROBE_REQUEST_IDS", "VLLM_LUMO_P2B_DEBUG_PROBE_REQUEST_IDS")
+            if value
         )
+        enabled = (
+            _env_value("LUMO_P2B_VLLM_DEBUG_EXPORT", "VLLM_LUMO_P2B_DEBUG_EXPORT").strip().lower()
+            in _TRUE_VALUES
+        ) or bool(probe_request_ids)
         if not enabled:
             return cls.disabled()
 
-        probe_request_ids = frozenset(
-            value
-            for value in _split_env("LUMO_P2B_DEBUG_PROBE_REQUEST_IDS")
-            if value
-        )
         if not probe_request_ids:
             logger.warning(
                 "LUMO_P2B_VLLM_DEBUG_EXPORT is set but "
@@ -92,12 +93,20 @@ class P2BDebugExporter:
 
         state_tokens = frozenset(
             int(value)
-            for value in _split_env("LUMO_P2B_DEBUG_STATE_TOKENS", default="1,1024")
+            for value in _split_env(
+                "LUMO_P2B_DEBUG_STATE_TOKENS",
+                "VLLM_LUMO_P2B_DEBUG_STATE_TOKENS",
+                default="1,1024",
+            )
         )
         output_dir = Path(
-            os.environ.get("LUMO_P2B_DEBUG_EXPORT_DIR", "/tmp/lumo-p2b-vllm-debug")
+            _env_value(
+                "LUMO_P2B_DEBUG_EXPORT_DIR",
+                "VLLM_LUMO_P2B_DEBUG_EXPORT_DIR",
+                default="/tmp/lumo-p2b-vllm-debug",
+            )
         )
-        strict = os.environ.get("LUMO_P2B_DEBUG_STRICT", "").strip().lower() in _TRUE_VALUES
+        strict = _env_value("LUMO_P2B_DEBUG_STRICT", "VLLM_LUMO_P2B_DEBUG_STRICT").strip().lower() in _TRUE_VALUES
         return cls(
             P2BDebugConfig(
                 enabled=True,
@@ -120,11 +129,15 @@ class P2BDebugExporter:
         try:
             self.config.output_dir.mkdir(parents=True, exist_ok=True)
             for req_index, req_id in enumerate(req_ids):
-                if req_id not in self.config.probe_request_ids:
+                if not self._matches_probe_request(req_id):
                     continue
                 if req_index >= logits.shape[0]:
                     continue
-                generated_token_index = len(output_token_ids[req_index]) + 1
+                generated_token_index = self._next_generated_token_index(
+                    req_id=req_id,
+                    req_index=req_index,
+                    output_token_ids=output_token_ids,
+                )
                 payload = {
                     "kind": "full_vocab_logits_before_sampling",
                     "request_id": req_id,
@@ -150,7 +163,7 @@ class P2BDebugExporter:
             forward_context = runner.compilation_config.static_forward_context
             req_ids = runner.input_batch.req_ids[: runner.input_batch.num_reqs]
             for req_id in req_ids:
-                if req_id not in self.config.probe_request_ids:
+                if not self._matches_probe_request(req_id):
                     continue
                 req_state = runner.requests.get(req_id)
                 if req_state is None:
@@ -218,9 +231,34 @@ class P2BDebugExporter:
         torch.save(payload, tmp_path)
         tmp_path.replace(final_path)
 
+    def _matches_probe_request(self, req_id: str) -> bool:
+        return "*" in self.config.probe_request_ids or req_id in self.config.probe_request_ids
 
-def _split_env(name: str, *, default: str = "") -> list[str]:
-    raw = os.environ.get(name, default)
+    def _next_generated_token_index(
+        self,
+        *,
+        req_id: str,
+        req_index: int,
+        output_token_ids: list[list[int]],
+    ) -> int:
+        if req_index < len(output_token_ids):
+            generated_token_index = len(output_token_ids[req_index]) + 1
+        else:
+            generated_token_index = self._exported_logits_count.get(req_id, 0) + 1
+        self._exported_logits_count[req_id] = generated_token_index
+        return generated_token_index
+
+
+def _env_value(name: str, alias: str | None = None, *, default: str = "") -> str:
+    if name in os.environ:
+        return os.environ[name]
+    if alias is not None and alias in os.environ:
+        return os.environ[alias]
+    return default
+
+
+def _split_env(name: str, alias: str | None = None, *, default: str = "") -> list[str]:
+    raw = _env_value(name, alias, default=default)
     return [value.strip() for value in raw.split(",") if value.strip()]
 
 

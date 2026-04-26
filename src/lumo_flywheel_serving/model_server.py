@@ -48,6 +48,20 @@ GPU_MEMORY_ERROR_RE = re.compile(
     r"Free memory on device cuda:\d+ \((?P<free>[0-9.]+)/(?P<total>[0-9.]+) GiB\)"
 )
 LOCAL_ENV_ASSIGNMENT_RE = re.compile(r"^(?:export\s+)?(?P<key>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$")
+P2B_DEBUG_EXPORT_ENV_VARS = (
+    "LUMO_P2B_VLLM_DEBUG_EXPORT",
+    "LUMO_P2B_DEBUG_EXPORT_DIR",
+    "LUMO_P2B_DEBUG_PROBE_REQUEST_IDS",
+    "LUMO_P2B_DEBUG_STATE_TOKENS",
+    "LUMO_P2B_DEBUG_STRICT",
+)
+P2B_DEBUG_EXPORT_VLLM_ENV_ALIASES = {
+    "LUMO_P2B_VLLM_DEBUG_EXPORT": "VLLM_LUMO_P2B_DEBUG_EXPORT",
+    "LUMO_P2B_DEBUG_EXPORT_DIR": "VLLM_LUMO_P2B_DEBUG_EXPORT_DIR",
+    "LUMO_P2B_DEBUG_PROBE_REQUEST_IDS": "VLLM_LUMO_P2B_DEBUG_PROBE_REQUEST_IDS",
+    "LUMO_P2B_DEBUG_STATE_TOKENS": "VLLM_LUMO_P2B_DEBUG_STATE_TOKENS",
+    "LUMO_P2B_DEBUG_STRICT": "VLLM_LUMO_P2B_DEBUG_STRICT",
+}
 
 
 class ModelServer:
@@ -701,6 +715,7 @@ class ModelServer:
             f"VLLM_API_KEY={self._api_key()}",
             "-e",
             f"VLLM_LOGGING_LEVEL={'DEBUG' if enable_request_logging else 'INFO'}",
+            *self._p2b_debug_export_env_args(),
             "-v",
             "/models:/models",
             "-v",
@@ -715,6 +730,27 @@ class ModelServer:
             "-lc",
             shell_cmd,
         ]
+
+    @staticmethod
+    def _p2b_debug_export_env_args() -> list[str]:
+        args: list[str] = []
+        p2b_debug_enabled = False
+        for name in P2B_DEBUG_EXPORT_ENV_VARS:
+            value = os.environ.get(name)
+            if value is not None:
+                p2b_debug_enabled = True
+                args.extend(["-e", f"{name}={value}"])
+                args.extend(["-e", f"{P2B_DEBUG_EXPORT_VLLM_ENV_ALIASES[name]}={value}"])
+        if p2b_debug_enabled:
+            prefixes = [
+                prefix.strip()
+                for prefix in os.environ.get("VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY", "").split(",")
+                if prefix.strip()
+            ]
+            if "LUMO_P2B_" not in prefixes:
+                prefixes.append("LUMO_P2B_")
+            args.extend(["-e", f"VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY={','.join(prefixes)}"])
+        return args
 
     def _ensure_image_present(self) -> None:
         inspect = self._run(["docker", "image", "inspect", self.image], check=False)
