@@ -11,6 +11,7 @@ import pytest
 
 from lumo_flywheel_serving import auto_research, measurement_harness, round_driver
 from lumo_flywheel_serving.round_driver import RoundContext, RoundResult, run_round, run_round_exit_code
+from lumo_flywheel_serving.tuned_config import StructuredValidationError, load_tuned_config_bundle, validate_bundle_load_policy
 from lumo_flywheel_serving.workload_p1 import write_heavy_workload_descriptor
 
 
@@ -194,6 +195,79 @@ def _write_l0_heavy_workload(repo: Path) -> Path:
         capture_date="2026-04-25T00:00:00Z",
         thinking_probe_ref="reports/thinking-probe-20260424.md",
     )
+
+
+def _write_l0a_fixture_pair(repo: Path, source_family: str = "responses-sdk-adapter-cutover") -> None:
+    fixture_dir = repo / "benchmark_blueprints" / "families" / source_family / "parity_fixture"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    (fixture_dir / "probes_input.jsonl").write_text(
+        "\n".join(json.dumps({"probe_index": index, "prompt": f"probe {index}"}) for index in range(4)) + "\n",
+        encoding="utf-8",
+    )
+    for kernel in ("deltanet", "gatedattn"):
+        (fixture_dir / f"{kernel}_reference_logits.npz").write_bytes(b"dummy logits")
+        payload = {
+            "fixture_id": f"{source_family}-{kernel}-v1",
+            "probe_input_ref": "probes_input.jsonl",
+            "reference_logits_ref": f"{kernel}_reference_logits.npz",
+            "generated_against": {
+                "weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+            },
+        }
+        if kernel == "deltanet":
+            (fixture_dir / "deltanet_reference_state.npz").write_bytes(b"dummy state")
+            payload["reference_state_snapshots_ref"] = "deltanet_reference_state.npz"
+        (fixture_dir / f"{kernel}_v1.yaml").write_text(
+            auto_research.yaml.safe_dump(payload, sort_keys=False),
+            encoding="utf-8",
+        )
+
+
+def _write_l0a_workload(repo: Path) -> Path:
+    workload_dir = repo / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy"
+    workload_dir.mkdir(parents=True, exist_ok=True)
+    _write_trace(workload_dir / "seed_trace.jsonl", prompt_tokens=4096, output_tokens=1200)
+    _write_trace(workload_dir / "holdout_trace.jsonl", prompt_tokens=3072, output_tokens=900)
+    workload_path = workload_dir / "workload.yaml"
+    workload_path.write_text(
+        auto_research.yaml.safe_dump(
+            {
+                "family_id": "responses-sdk-adapter-cutover-heavy",
+                "source_family": "responses-sdk-adapter-cutover",
+                "workload_distribution_id": None,
+                "workload_distribution_id_hardening_version": "v2-l0-kernel-heavy",
+                "seed_trace_ref": "seed_trace.jsonl",
+                "holdout_trace_ref": "holdout_trace.jsonl",
+                "parity_fixture_refs": {
+                    "deltanet": "parity_fixture/deltanet_v1.yaml",
+                    "gatedattn": "parity_fixture/gatedattn_v1.yaml",
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    payload = auto_research.load_yaml_file(workload_path)
+    assert isinstance(payload, dict)
+    payload["workload_distribution_id"] = auto_research.compute_workload_distribution_id(workload_path)
+    workload_path.write_text(auto_research.yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return workload_path
+
+
+def _write_l0a_action_space(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        """
+axes:
+  attention_backend: [vllm-default, flash-attn-4, flashinfer]
+  deltanet_kernel: [triton-chunked-delta-v2, triton-experimental-scan]
+  fp8_gemm_kernel: [cublas, cutlass]
+  torch_compile_mode: [default, reduce-overhead]
+  cuda_graph_capture: ['off', 'on']
+""",
+        encoding="utf-8",
+    )
+    return path
 
 
 def test_capture_seed_workload_updates_seed_and_holdout_refs(tmp_path: Path) -> None:
@@ -3128,3 +3202,84 @@ def test_run_round_exit_code_distinguishes_honest_terminal_outcomes() -> None:
     assert run_round_exit_code(result("ROUND_BUNDLE_READY", live_gate="not_run")) == 1
     assert run_round_exit_code(result("ROUND_BLOCKED")) == 1
     assert run_round_exit_code(result("ROUND_BUNDLE_REJECTED", live_gate="fail")) == 1
+
+
+def test_l0a_kernel_select_synthetic_writes_p3_artifacts_and_refuses_production_load(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        action_space_file=action_space_path,
+        baselines=5,
+        screen_measurements_per_combo=2,
+        rescreen_top_k=8,
+        rescreen_measurements_per_candidate=4,
+        parallel_instances="auto",
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+    )
+
+    assert result.total_combos == 48
+    assert result.survivor_count > 0
+    eliminated = (result.round_dir / "eliminated.tsv").read_text(encoding="utf-8").splitlines()
+    header = eliminated[0].split("\t")
+    rows = [dict(zip(header, line.split("\t"))) for line in eliminated[1:]]
+    assert {row["elimination_reason"] for row in rows} == {
+        "nondeterministic",
+        "parity_diverges_from_reference",
+    }
+    parity_rows = [row for row in rows if row["elimination_reason"] == "parity_diverges_from_reference"]
+    assert parity_rows
+    assert all(row["first_diverging_probe_index"] for row in parity_rows)
+    assert all(float(row["tolerance_overshoot"]) > 0.0 for row in parity_rows)
+
+    determinism_log = json.loads((result.round_dir / "determinism_log.json").read_text(encoding="utf-8"))
+    parity_check = json.loads((result.round_dir / "parity_check.json").read_text(encoding="utf-8"))
+    assert determinism_log["pass"] is True
+    assert determinism_log["probe_count"] == 64
+    assert parity_check["pass"] is True
+    assert parity_check["reason"] == "ran_passed"
+    run_log = json.loads((result.round_dir / "run_log.json").read_text(encoding="utf-8"))
+    assert run_log["artifact_counts"]["baseline_rows"] == 5
+    assert run_log["artifact_counts"]["rescreen_rows"] == 32
+
+    bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
+    assert bundle_payload["round_provenance"]["round_type"] == "l0a_select_only"
+    assert bundle_payload["round_provenance"]["parallel_instances"] == 1
+    assert bundle_payload["kernel_selection"]["attention_backend"] == "flash-attn-4"
+    assert bundle_payload["kernel_selection"]["deltanet_kernel"] == "triton-chunked-delta-v2"
+
+    with pytest.raises(StructuredValidationError, match="bundle-validity: refused"):
+        validate_bundle_load_policy(load_tuned_config_bundle(result.bundle_path), bundle_confidence_policy="passthrough")
+
+
+def test_l0a_kernel_select_refuses_missing_parity_fixture(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="HALT_REASON: l0a_precondition_missing_fixture"):
+        runner.run(
+            workload_file=workload_path,
+            action_space_file=action_space_path,
+            baselines=5,
+            screen_measurements_per_combo=2,
+            rescreen_top_k=8,
+            rescreen_measurements_per_candidate=4,
+            parallel_instances="auto",
+            round_root=repo / "output" / "auto_research",
+            harness="synthetic",
+        )

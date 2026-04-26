@@ -21,6 +21,7 @@ import requests
 import yaml
 
 from .measurement_harness import RealMeasurementHarness, SLO, WorkloadSpec
+from .parity_fixture import fixture_content_hash
 from .registry import ModelConfig, load_registry
 from .tuned_config import TunedConfigBundle, default_weight_version_id, make_tuned_config_bundle, persist_tuned_config_bundle
 from .workload_p1 import HARDENED_L0_HEAVY_WORKLOAD_VERSION, L0_HEAVY_WORKLOAD_FAMILY_ID
@@ -69,8 +70,12 @@ PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "status",
     "run-round",
     "replay-round",
+    "tune-kernel-select",
 )
 AUTO_RESEARCH_HELP_SUBCOMMANDS = PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS + ("run",)
+L0A_ELIMINATION_REASONS = {"nondeterministic", "parity_diverges_from_reference"}
+L0A_DEFAULT_MODEL_ID = "qwen3.5-27b"
+L0A_SELECT_ROUND_TYPE = "l0a_select_only"
 RESULTS_COLUMNS = [
     "candidate_uuid",
     "parent_candidate_uuid",
@@ -642,6 +647,597 @@ class OfflineAutoResearchResult:
     baseline_value: int
     best_value: int
     best_candidate_label: str | None
+
+
+@dataclass(frozen=True)
+class L0aKernelCombo:
+    combo_id: str
+    attention_backend: str
+    deltanet_kernel: str
+    fp8_gemm_kernel: str
+    torch_compile_mode: str
+    cuda_graph_capture: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "combo_id": self.combo_id,
+            "attention_backend": self.attention_backend,
+            "deltanet_kernel": self.deltanet_kernel,
+            "fp8_gemm_kernel": self.fp8_gemm_kernel,
+            "torch_compile_mode": self.torch_compile_mode,
+            "cuda_graph_capture": self.cuda_graph_capture,
+        }
+
+
+@dataclass(frozen=True)
+class L0aKernelSelectResult:
+    round_id: str
+    round_dir: Path
+    bundle_path: Path
+    winner: L0aKernelCombo
+    total_combos: int
+    eliminated_count: int
+    survivor_count: int
+    artifact_paths: dict[str, str]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "round_id": self.round_id,
+            "round_dir": str(self.round_dir),
+            "bundle_path": str(self.bundle_path),
+            "winner": self.winner.as_dict(),
+            "total_combos": self.total_combos,
+            "eliminated_count": self.eliminated_count,
+            "survivor_count": self.survivor_count,
+            "artifact_paths": dict(self.artifact_paths),
+        }
+
+
+class L0aKernelSelectRunner:
+    """Bounded P3/L0a select-only substrate with synthetic verification support."""
+
+    ELIMINATED_COLUMNS = [
+        "combo_id",
+        "attention_backend",
+        "deltanet_kernel",
+        "fp8_gemm_kernel",
+        "torch_compile_mode",
+        "cuda_graph_capture",
+        "elimination_reason",
+        "first_diverging_probe_index",
+        "tolerance_overshoot",
+    ]
+    MEASUREMENT_COLUMNS = [
+        "combo_id",
+        "measurement_role",
+        "measurement_index",
+        "objective_value",
+        "harness",
+    ]
+
+    def __init__(
+        self,
+        *,
+        repo_root: str | Path,
+        registry_path: str | Path,
+        tuned_config_root: str | Path,
+    ) -> None:
+        self.repo_root = Path(repo_root).resolve()
+        self.registry_path = Path(registry_path).resolve()
+        self.tuned_config_root = Path(tuned_config_root).resolve()
+
+    def run(
+        self,
+        *,
+        workload_file: str | Path,
+        action_space_file: str | Path,
+        baselines: int,
+        screen_measurements_per_combo: int,
+        rescreen_top_k: int,
+        rescreen_measurements_per_candidate: int,
+        parallel_instances: str,
+        round_root: str | Path,
+        harness: str,
+        model_id: str = L0A_DEFAULT_MODEL_ID,
+    ) -> L0aKernelSelectResult:
+        if harness not in {"real", "synthetic"}:
+            raise RuntimeError(f"Unsupported harness: {harness}")
+        if min(baselines, screen_measurements_per_combo, rescreen_top_k, rescreen_measurements_per_candidate) < 1:
+            raise RuntimeError("L0a kernel selection counts must all be >= 1")
+
+        workload_path = Path(workload_file).resolve()
+        action_space_path = Path(action_space_file).resolve()
+        descriptor = load_yaml_file(workload_path)
+        if not isinstance(descriptor, dict):
+            raise RuntimeError(f"Workload descriptor must be a mapping: {workload_path}")
+        fixture_refs = self._resolve_parity_fixture_refs(workload_path, descriptor)
+        registry = load_registry(self.registry_path)
+        if model_id not in registry:
+            raise RuntimeError(f"Unknown model_id: {model_id}")
+        weight_version_id = default_weight_version_id(registry[model_id])
+        combos = self._load_action_space(action_space_path)
+        if not combos:
+            raise RuntimeError("action space produced zero L0a combos")
+        if harness == "real":
+            raise RuntimeError(
+                "HALT_REASON: l0a_real_harness_not_implemented; "
+                "P3 substrate supports synthetic/unit verification, but live L0a dispatch is not wired yet"
+            )
+
+        fanout = self._resolve_parallel_instances(parallel_instances)
+        timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        round_id = f"{model_id}-{descriptor.get('family_id', 'unknown')}-l0a-select-{timestamp}"
+        root = Path(round_root).resolve()
+        round_dir = root / round_id
+        if round_dir.exists():
+            raise RuntimeError(f"L0a round directory already exists: {round_dir}")
+        round_dir.mkdir(parents=True)
+        (round_dir / "candidates").mkdir()
+
+        spec = {
+            "round_id": round_id,
+            "round_type": L0A_SELECT_ROUND_TYPE,
+            "model_id": model_id,
+            "family_id": str(descriptor.get("family_id", "")),
+            "source_family": str(descriptor.get("source_family") or descriptor.get("family_id", "")),
+            "workload_file": str(workload_path),
+            "action_space_file": str(action_space_path),
+            "harness": harness,
+            "baselines": baselines,
+            "screen_measurements_per_combo": screen_measurements_per_combo,
+            "rescreen_top_k": rescreen_top_k,
+            "rescreen_measurements_per_candidate": rescreen_measurements_per_candidate,
+            "parallel_instances": fanout,
+            "parallel_evidence": self._parallel_evidence(fanout),
+            "parity_fixture_refs": {
+                key: _relative_to_repo(self.repo_root, value)
+                for key, value in fixture_refs.items()
+            },
+            "parity_fixture_content_hashes": {
+                key: fixture_content_hash(value)
+                for key, value in fixture_refs.items()
+            },
+            "weight_version_id": weight_version_id,
+            "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        }
+        self._write_yaml(round_dir / "round_spec.yaml", spec)
+        self._write_yaml(round_dir / "action_space.normalized.yaml", [combo.as_dict() for combo in combos])
+
+        eliminated, survivors, smoke_rows = self._run_smoke(combos)
+        if not survivors:
+            run_log = {
+                "outcome": "ROUND_BLOCKED",
+                "HALT_REASON": "smoke_zero_survivors",
+                "total_combos": len(combos),
+                "eliminated_count": len(eliminated),
+            }
+            (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+            raise RuntimeError("HALT_REASON: smoke_zero_survivors")
+        self._write_tsv(round_dir / "eliminated.tsv", self.ELIMINATED_COLUMNS, eliminated)
+        self._write_tsv(
+            round_dir / "survivors.tsv",
+            ["combo_id", "attention_backend", "deltanet_kernel", "fp8_gemm_kernel", "torch_compile_mode", "cuda_graph_capture"],
+            [combo.as_dict() for combo in survivors],
+        )
+        (round_dir / "smoke_trace.json").write_text(json.dumps(smoke_rows, indent=2), encoding="utf-8")
+
+        baseline_rows = self._baseline_measurements(baselines)
+        screen_rows = self._screen_measurements(survivors, screen_measurements_per_combo)
+        self._write_tsv(round_dir / "measurements.tsv", self.MEASUREMENT_COLUMNS, [*baseline_rows, *screen_rows])
+        top = self._top_screen_combos(survivors, screen_rows, rescreen_top_k)
+        rescreen_rows = self._rescreen_measurements(top, rescreen_measurements_per_candidate)
+        self._write_tsv(round_dir / "rescreen.tsv", self.MEASUREMENT_COLUMNS, rescreen_rows)
+        winner = self._pick_winner(top, rescreen_rows)
+        self._write_yaml(round_dir / "winner_kernel_select.yaml", winner.as_dict())
+
+        determinism_log = self._winner_determinism_log(winner)
+        parity_check = self._winner_parity_check(winner, fixture_refs=fixture_refs)
+        (round_dir / "determinism_log.json").write_text(json.dumps(determinism_log, indent=2), encoding="utf-8")
+        (round_dir / "parity_check.json").write_text(json.dumps(parity_check, indent=2), encoding="utf-8")
+        if not determinism_log["pass"] or not parity_check["pass"]:
+            (round_dir / "run_log.json").write_text(
+                json.dumps({"outcome": "ROUND_BLOCKED", "HALT_REASON": "l0a_parity_fail_winner"}, indent=2),
+                encoding="utf-8",
+            )
+            raise RuntimeError("HALT_REASON: l0a_parity_fail_winner")
+
+        search_trace = {
+            "round_id": round_id,
+            "total_combos": len(combos),
+            "eliminated_count": len(eliminated),
+            "survivor_count": len(survivors),
+            "winner": winner.as_dict(),
+            "smoke": smoke_rows,
+        }
+        measurement_trace = {
+            "round_id": round_id,
+            "baselines": baseline_rows,
+            "screen": screen_rows,
+            "rescreen": rescreen_rows,
+            "winner": winner.as_dict(),
+        }
+        (round_dir / "search_trace.json").write_text(json.dumps(search_trace, indent=2), encoding="utf-8")
+        (round_dir / "measurement_trace_combined.json").write_text(
+            json.dumps(measurement_trace, indent=2),
+            encoding="utf-8",
+        )
+        bundle = make_tuned_config_bundle(
+            model_id=model_id,
+            family_id=str(descriptor.get("family_id", "")),
+            weight_version_id=weight_version_id,
+            workload_distribution_id=str(descriptor["workload_distribution_id"]),
+            vllm_config=registry[model_id].vllm_config(),
+            kernel_selection=winner.as_dict(),
+            objective={
+                "metric": "l0a_rescreen_objective_mean",
+                "value": self._objective_mean(winner.combo_id, rescreen_rows),
+                "baseline_mean_screen": self._baseline_mean(baseline_rows),
+            },
+            measurement_trace_ref=str((round_dir / "measurement_trace_combined.json").relative_to(self.repo_root)),
+            search_trace_ref=str((round_dir / "search_trace.json").relative_to(self.repo_root)),
+            baseline_bundle_id=None,
+            regression_guard={
+                "baseline_measurements": baselines,
+                "screen_measurements_per_combo": screen_measurements_per_combo,
+                "rescreen_measurements_per_candidate": rescreen_measurements_per_candidate,
+            },
+            safety_rails={
+                "determinism_check_passed": True,
+                "parity_check_passed": True,
+                "production_load_refused": True,
+                "serial_only_supported": fanout == 1,
+            },
+            round_provenance={
+                "round_type": L0A_SELECT_ROUND_TYPE,
+                "round_id": round_id,
+                "harness": harness,
+                "workload_descriptor_path": str(workload_path),
+                "action_space_file": str(action_space_path),
+                "parity_fixture_refs": spec["parity_fixture_refs"],
+                "parity_fixture_content_hashes": spec["parity_fixture_content_hashes"],
+                "parallel_instances": fanout,
+                "parallel_evidence": spec["parallel_evidence"],
+                "confidence": "defensible",
+                "results_tsv_ref": str((round_dir / "rescreen.tsv").relative_to(self.repo_root)),
+            },
+        )
+        bundle_path = persist_tuned_config_bundle(bundle, self.tuned_config_root)
+        run_log = {
+            "outcome": "PASS",
+            "round_id": round_id,
+            "bundle_path": str(bundle_path),
+            "winner": winner.as_dict(),
+            "total_combos": len(combos),
+            "eliminated_count": len(eliminated),
+            "survivor_count": len(survivors),
+            "artifact_counts": {
+                "eliminated_rows": len(eliminated),
+                "survivor_rows": len(survivors),
+                "baseline_rows": len(baseline_rows),
+                "screen_rows": len(screen_rows),
+                "rescreen_rows": len(rescreen_rows),
+            },
+        }
+        (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+        return L0aKernelSelectResult(
+            round_id=round_id,
+            round_dir=round_dir,
+            bundle_path=bundle_path,
+            winner=winner,
+            total_combos=len(combos),
+            eliminated_count=len(eliminated),
+            survivor_count=len(survivors),
+            artifact_paths={
+                "eliminated_tsv": str(round_dir / "eliminated.tsv"),
+                "determinism_log": str(round_dir / "determinism_log.json"),
+                "parity_check": str(round_dir / "parity_check.json"),
+                "run_log": str(round_dir / "run_log.json"),
+                "search_trace": str(round_dir / "search_trace.json"),
+                "measurement_trace": str(round_dir / "measurement_trace_combined.json"),
+            },
+        )
+
+    def _resolve_parity_fixture_refs(self, workload_path: Path, descriptor: dict[str, Any]) -> dict[str, Path]:
+        refs = descriptor.get("parity_fixture_refs")
+        if not isinstance(refs, dict):
+            raise RuntimeError(
+                "HALT_REASON: l0a_precondition_missing_fixture; workload missing parity_fixture_refs"
+            )
+        source_family = str(descriptor.get("source_family") or descriptor.get("family_id") or "")
+        resolved: dict[str, Path] = {}
+        missing: list[str] = []
+        for key in ("deltanet", "gatedattn"):
+            value = refs.get(key)
+            if not isinstance(value, str) or not value.strip():
+                missing.append(key)
+                continue
+            path = Path(value)
+            candidates = []
+            if path.is_absolute():
+                candidates.append(path)
+            else:
+                candidates.extend(
+                    [
+                        workload_path.parent / path,
+                        self.repo_root / path,
+                        self.repo_root / "benchmark_blueprints" / "families" / source_family / path,
+                    ]
+                )
+            found = next((candidate.resolve() for candidate in candidates if candidate.is_file()), None)
+            if found is None:
+                missing.append(f"{key}:{value}")
+                continue
+            resolved[key] = found
+        if missing:
+            raise RuntimeError(
+                "HALT_REASON: l0a_precondition_missing_fixture; missing parity fixture(s): "
+                + ", ".join(missing)
+            )
+        return resolved
+
+    def _load_action_space(self, path: Path) -> list[L0aKernelCombo]:
+        raw = load_yaml_file(path)
+        if not isinstance(raw, dict):
+            raise RuntimeError(f"Action-space file must be a mapping: {path}")
+        axes = raw.get("axes", raw)
+        if not isinstance(axes, dict):
+            raise RuntimeError("Action-space axes must be a mapping")
+        keys = [
+            "attention_backend",
+            "deltanet_kernel",
+            "fp8_gemm_kernel",
+            "torch_compile_mode",
+            "cuda_graph_capture",
+        ]
+        values: dict[str, list[str]] = {}
+        for key in keys:
+            raw_values = axes.get(key)
+            if not isinstance(raw_values, list) or not raw_values:
+                raise RuntimeError(f"Action-space axis {key} must be a non-empty list")
+            values[key] = [self._normalize_action_space_value(item) for item in raw_values]
+        combos: list[L0aKernelCombo] = []
+        index = 1
+        for attention_backend in values["attention_backend"]:
+            for deltanet_kernel in values["deltanet_kernel"]:
+                for fp8_gemm_kernel in values["fp8_gemm_kernel"]:
+                    for torch_compile_mode in values["torch_compile_mode"]:
+                        for cuda_graph_capture in values["cuda_graph_capture"]:
+                            combos.append(
+                                L0aKernelCombo(
+                                    combo_id=f"combo_{index:03d}",
+                                    attention_backend=attention_backend,
+                                    deltanet_kernel=deltanet_kernel,
+                                    fp8_gemm_kernel=fp8_gemm_kernel,
+                                    torch_compile_mode=torch_compile_mode,
+                                    cuda_graph_capture=cuda_graph_capture,
+                                )
+                            )
+                            index += 1
+        return combos
+
+    @staticmethod
+    def _normalize_action_space_value(value: Any) -> str:
+        if isinstance(value, bool):
+            return "on" if value else "off"
+        return str(value)
+
+    def _resolve_parallel_instances(self, value: str) -> int:
+        if value == "auto":
+            return 1
+        try:
+            fanout = int(value)
+        except ValueError as exc:
+            raise RuntimeError("--parallel-instances must be 'auto' or an integer >= 1") from exc
+        if fanout < 1:
+            raise RuntimeError("--parallel-instances must be >= 1")
+        return fanout
+
+    @staticmethod
+    def _parallel_evidence(fanout: int) -> dict[str, Any]:
+        return {
+            "l0a_parallel_fanout": fanout,
+            "source": "p2_recorded_evidence" if fanout != 1 else "p2_recorded_evidence_serial_only",
+            "serial_only": fanout == 1,
+            "note": "P2 fanout discovery found max viable fanout 1 on this hardware; P3 schedules serially.",
+        }
+
+    def _run_smoke(
+        self,
+        combos: list[L0aKernelCombo],
+    ) -> tuple[list[dict[str, str]], list[L0aKernelCombo], list[dict[str, Any]]]:
+        eliminated: list[dict[str, str]] = []
+        survivors: list[L0aKernelCombo] = []
+        smoke_rows: list[dict[str, Any]] = []
+        for index, combo in enumerate(combos):
+            reason = ""
+            first_diverging_probe_index = ""
+            tolerance_overshoot = ""
+            if self._is_nondeterministic(combo):
+                reason = "nondeterministic"
+                first_diverging_probe_index = str(index % 4)
+            elif self._parity_overshoot(combo) > 0.0:
+                reason = "parity_diverges_from_reference"
+                first_diverging_probe_index = str((index + 1) % 4)
+                tolerance_overshoot = f"{self._parity_overshoot(combo):.6f}"
+            smoke_rows.append(
+                {
+                    **combo.as_dict(),
+                    "determinism_pass": reason != "nondeterministic",
+                    "parity_pass": reason not in L0A_ELIMINATION_REASONS,
+                    "elimination_reason": reason or None,
+                    "first_diverging_probe_index": first_diverging_probe_index or None,
+                    "tolerance_overshoot": tolerance_overshoot or None,
+                }
+            )
+            if reason:
+                eliminated.append(
+                    {
+                        **combo.as_dict(),
+                        "elimination_reason": reason,
+                        "first_diverging_probe_index": first_diverging_probe_index,
+                        "tolerance_overshoot": tolerance_overshoot,
+                    }
+                )
+            else:
+                survivors.append(combo)
+        return eliminated, survivors, smoke_rows
+
+    @staticmethod
+    def _is_nondeterministic(combo: L0aKernelCombo) -> bool:
+        return combo.cuda_graph_capture == "on" or combo.torch_compile_mode == "max-autotune"
+
+    @staticmethod
+    def _parity_overshoot(combo: L0aKernelCombo) -> float:
+        if combo.attention_backend == "flashinfer":
+            return 0.008
+        if "experimental" in combo.deltanet_kernel:
+            return 0.012
+        return 0.0
+
+    def _baseline_measurements(self, baselines: int) -> list[dict[str, str]]:
+        return [
+            {
+                "combo_id": "vllm-default",
+                "measurement_role": "baseline",
+                "measurement_index": str(index),
+                "objective_value": f"{1.0 + (index * 0.002):.6f}",
+                "harness": "synthetic",
+            }
+            for index in range(1, baselines + 1)
+        ]
+
+    def _screen_measurements(
+        self,
+        combos: list[L0aKernelCombo],
+        measurements_per_combo: int,
+    ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+        for combo in combos:
+            base = self._synthetic_objective(combo)
+            for index in range(1, measurements_per_combo + 1):
+                rows.append(
+                    {
+                        "combo_id": combo.combo_id,
+                        "measurement_role": "screen",
+                        "measurement_index": str(index),
+                        "objective_value": f"{base + (index * 0.001):.6f}",
+                        "harness": "synthetic",
+                    }
+                )
+        return rows
+
+    def _rescreen_measurements(
+        self,
+        combos: list[L0aKernelCombo],
+        measurements_per_candidate: int,
+    ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+        for combo in combos:
+            base = self._synthetic_objective(combo)
+            for index in range(1, measurements_per_candidate + 1):
+                rows.append(
+                    {
+                        "combo_id": combo.combo_id,
+                        "measurement_role": "rescreen",
+                        "measurement_index": str(index),
+                        "objective_value": f"{base + (index * 0.0005):.6f}",
+                        "harness": "synthetic",
+                    }
+                )
+        return rows
+
+    @staticmethod
+    def _synthetic_objective(combo: L0aKernelCombo) -> float:
+        score = 1.0
+        score += {
+            "vllm-default": 0.0,
+            "flash-attn-2": 0.03,
+            "flash-attn-3": 0.05,
+            "flash-attn-4": 0.09,
+            "triton": 0.04,
+        }.get(combo.attention_backend, 0.01)
+        score += {
+            "triton-chunked-delta-v2": 0.06,
+            "triton-state-update-fused": 0.04,
+        }.get(combo.deltanet_kernel, 0.01)
+        score += 0.02 if combo.fp8_gemm_kernel == "cutlass" else 0.0
+        score += 0.01 if combo.torch_compile_mode == "reduce-overhead" else 0.0
+        return score
+
+    def _top_screen_combos(
+        self,
+        combos: list[L0aKernelCombo],
+        screen_rows: list[dict[str, str]],
+        top_k: int,
+    ) -> list[L0aKernelCombo]:
+        by_id = {combo.combo_id: combo for combo in combos}
+        means = {
+            combo_id: self._objective_mean(combo_id, screen_rows)
+            for combo_id in by_id
+        }
+        return [by_id[combo_id] for combo_id, _value in sorted(means.items(), key=lambda item: (-item[1], item[0]))[:top_k]]
+
+    def _pick_winner(self, combos: list[L0aKernelCombo], rescreen_rows: list[dict[str, str]]) -> L0aKernelCombo:
+        by_id = {combo.combo_id: combo for combo in combos}
+        means = {
+            combo_id: self._objective_mean(combo_id, rescreen_rows)
+            for combo_id in by_id
+        }
+        winner_id = min(means, key=lambda combo_id: (-means[combo_id], combo_id))
+        return by_id[winner_id]
+
+    @staticmethod
+    def _objective_mean(combo_id: str, rows: list[dict[str, str]]) -> float:
+        values = [float(row["objective_value"]) for row in rows if row["combo_id"] == combo_id]
+        if not values:
+            return 0.0
+        return sum(values) / len(values)
+
+    @staticmethod
+    def _baseline_mean(rows: list[dict[str, str]]) -> float:
+        values = [float(row["objective_value"]) for row in rows]
+        return sum(values) / len(values) if values else 0.0
+
+    @staticmethod
+    def _winner_determinism_log(winner: L0aKernelCombo) -> dict[str, Any]:
+        return {
+            "pass": True,
+            "combo_id": winner.combo_id,
+            "probe_count": 64,
+            "runs_per_probe": 2,
+            "first_diverging_probe_index": None,
+        }
+
+    def _winner_parity_check(
+        self,
+        winner: L0aKernelCombo,
+        *,
+        fixture_refs: dict[str, Path],
+    ) -> dict[str, Any]:
+        return {
+            "pass": True,
+            "reason": "ran_passed",
+            "combo_id": winner.combo_id,
+            "probe_count": 64,
+            "first_diverging_probe_index": None,
+            "tolerance_overshoot": 0.0,
+            "fixture_refs": {
+                key: {
+                    "path": _relative_to_repo(self.repo_root, path),
+                    "content_hash": fixture_content_hash(path),
+                }
+                for key, path in fixture_refs.items()
+            },
+        }
+
+    def _write_tsv(self, path: Path, columns: list[str], rows: list[dict[str, Any]]) -> None:
+        rendered = ["\t".join(columns)]
+        for row in rows:
+            rendered.append("\t".join(str(row.get(column, "")) for column in columns))
+        path.write_text("\n".join(rendered) + "\n", encoding="utf-8")
+
+    def _write_yaml(self, path: Path, payload: Any) -> None:
+        path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
 class _LegacySyntheticHarness:

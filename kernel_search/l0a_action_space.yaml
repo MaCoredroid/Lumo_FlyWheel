@@ -1,0 +1,20 @@
+axes:
+  attention_backend:
+    - vllm-default
+    - flash-attn-4
+    - flash-attn-3
+    - flashinfer
+    - triton
+  deltanet_kernel:
+    - triton-chunked-delta-v2
+    - triton-state-update-fused
+    - triton-experimental-scan
+  fp8_gemm_kernel:
+    - cublas
+    - cutlass
+  torch_compile_mode:
+    - default
+    - reduce-overhead
+  cuda_graph_capture:
+    - 'off'
+    - 'on'

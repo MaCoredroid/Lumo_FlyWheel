@@ -371,6 +371,17 @@ def validate_bundle_load_policy(
         raise ValueError("bundle_confidence_policy must be strict, warn, or passthrough")
     provenance = bundle.round_provenance
     warnings: list[dict[str, Any]] = []
+    if provenance.get("round_type") == "l0a_select_only":
+        raise StructuredValidationError(
+            message="bundle-validity: refused",
+            issues=[
+                ValidationIssue(
+                    field="round_provenance.round_type",
+                    message="l0a_select_only bundle is intermediate and cannot be loaded in production mode",
+                    value=provenance.get("round_type"),
+                )
+            ],
+        )
     confidence = provenance.get("confidence", "unknown")
     latency_above_slo = bool(provenance.get("latency_above_slo", False))
     if confidence != "defensible":

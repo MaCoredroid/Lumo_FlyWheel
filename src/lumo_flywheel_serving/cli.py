@@ -11,7 +11,13 @@ from pathlib import Path
 
 import requests
 
-from .auto_research import AutoResearchRoundManager, OfflineAutoResearchRunner, SyntheticWorkloadDistribution, load_baseline_bundle
+from .auto_research import (
+    AutoResearchRoundManager,
+    L0aKernelSelectRunner,
+    OfflineAutoResearchRunner,
+    SyntheticWorkloadDistribution,
+    load_baseline_bundle,
+)
 from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .multi_instance_vllm import MultiInstanceP2Verifier, MultiInstanceVllmDriver
@@ -865,6 +871,31 @@ def cmd_auto_research_replay_round(args: argparse.Namespace) -> int:
     return 0 if payload.get("outcome") != "ROUND_BLOCKED" else 1
 
 
+def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "workload_file", "action_space_file")
+    runner = L0aKernelSelectRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    result = runner.run(
+        workload_file=args.workload_file,
+        action_space_file=args.action_space_file,
+        baselines=args.baselines,
+        screen_measurements_per_combo=args.screen_measurements_per_combo,
+        rescreen_top_k=args.rescreen_top_k,
+        rescreen_measurements_per_candidate=args.rescreen_measurements_per_candidate,
+        parallel_instances=args.parallel_instances,
+        round_root=args.round_root,
+        harness=args.harness,
+        model_id=args.model_id,
+    )
+    print(json.dumps(result.as_dict(), indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Lumo FlyWheel vLLM serving tooling")
     parser.set_defaults(func=None)
@@ -1030,6 +1061,20 @@ def build_parser() -> argparse.ArgumentParser:
     auto_replay_round.add_argument("--family-id")
     auto_replay_round.add_argument("--sprint", default="sprint-0")
     auto_replay_round.set_defaults(func=cmd_auto_research_replay_round)
+
+    auto_tune_kernel_select = auto_research_subparsers.add_parser("tune-kernel-select")
+    auto_tune_kernel_select.add_argument("--help-only", action="store_true")
+    auto_tune_kernel_select.add_argument("--workload-file")
+    auto_tune_kernel_select.add_argument("--action-space-file")
+    auto_tune_kernel_select.add_argument("--baselines", type=int, default=5)
+    auto_tune_kernel_select.add_argument("--screen-measurements-per-combo", type=int, default=2)
+    auto_tune_kernel_select.add_argument("--rescreen-top-k", type=int, default=8)
+    auto_tune_kernel_select.add_argument("--rescreen-measurements-per-candidate", type=int, default=4)
+    auto_tune_kernel_select.add_argument("--parallel-instances", default="auto")
+    auto_tune_kernel_select.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
+    auto_tune_kernel_select.add_argument("--harness", choices=["real", "synthetic"], default="real")
+    auto_tune_kernel_select.add_argument("--model-id", default="qwen3.5-27b")
+    auto_tune_kernel_select.set_defaults(func=cmd_auto_research_tune_kernel_select)
 
     auto_research_run = auto_research_subparsers.add_parser("run")
     auto_research_run.add_argument("--help-only", action="store_true")
