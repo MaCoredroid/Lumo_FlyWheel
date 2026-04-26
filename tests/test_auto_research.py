@@ -3247,6 +3247,250 @@ def test_run_round_exit_code_distinguishes_honest_terminal_outcomes() -> None:
     assert run_round_exit_code(result("ROUND_BUNDLE_REJECTED", live_gate="fail")) == 1
 
 
+def _agent_runtime_ctx(
+    tmp_path: Path,
+    *,
+    agent_runtime: str,
+    round_spec: dict | None = None,
+) -> RoundContext:
+    worktree = tmp_path / "worktree"
+    round_dir = tmp_path / "round"
+    worktree.mkdir()
+    round_dir.mkdir()
+    return RoundContext(
+        round_id="round-test",
+        round_dir=round_dir,
+        round_branch="autoresearch/test",
+        worktree=worktree,
+        round_spec_path=round_dir / "round_spec.yaml",
+        round_spec=round_spec or {},
+        harness_mode="real",
+        registry_path=tmp_path / "model_registry.yaml",
+        tuned_config_root=tmp_path / "output" / "tuned_configs",
+        iteration_cap=1,
+        agent_runtime=agent_runtime,
+    )
+
+
+def test_agent_invocation_codex_argv_is_unchanged(tmp_path: Path) -> None:
+    ctx = _agent_runtime_ctx(tmp_path, agent_runtime="codex")
+    last_message_path = ctx.round_dir / "last.txt"
+    argv, timeout = round_driver._agent_invocation(
+        ctx,
+        iteration_dir=ctx.round_dir,
+        last_message_path=last_message_path,
+    )
+    assert argv == [
+        "codex",
+        "-c",
+        'model="gpt-5.4"',
+        "-c",
+        'model_reasoning_effort="high"',
+        "exec",
+        "--cd",
+        str(ctx.worktree),
+        "--json",
+        "--output-last-message",
+        str(last_message_path),
+        "--skip-git-repo-check",
+        "-",
+    ]
+    assert timeout == 45 * 60
+
+
+def test_agent_invocation_claude_argv_uses_claude_cli_and_anthropic_auth(tmp_path: Path) -> None:
+    ctx = _agent_runtime_ctx(tmp_path, agent_runtime="claude")
+    argv, timeout = round_driver._agent_invocation(
+        ctx,
+        iteration_dir=ctx.round_dir,
+        last_message_path=ctx.round_dir / "last.txt",
+    )
+    assert argv[0] == "claude"
+    assert "-p" in argv
+    assert ["--output-format", "stream-json"] == argv[argv.index("--output-format"):argv.index("--output-format") + 2]
+    assert "--verbose" in argv
+    assert ["--model", round_driver.DEFAULT_CLAUDE_MODEL] == argv[argv.index("--model"):argv.index("--model") + 2]
+    assert ["--effort", round_driver.DEFAULT_CLAUDE_EFFORT] == argv[argv.index("--effort"):argv.index("--effort") + 2]
+    assert ["--permission-mode", round_driver.DEFAULT_CLAUDE_PERMISSION_MODE] == argv[
+        argv.index("--permission-mode"):argv.index("--permission-mode") + 2
+    ]
+    assert ["--add-dir", str(ctx.worktree)] == argv[argv.index("--add-dir"):argv.index("--add-dir") + 2]
+    assert timeout == 45 * 60
+
+
+def test_agent_invocation_claude_round_spec_overrides_apply(tmp_path: Path) -> None:
+    ctx = _agent_runtime_ctx(
+        tmp_path,
+        agent_runtime="claude",
+        round_spec={
+            "claude_model": "claude-sonnet-4-6",
+            "claude_effort": "medium",
+            "claude_permission_mode": "acceptEdits",
+            "per_iteration_claude_wall_clock_s": 600,
+        },
+    )
+    argv, timeout = round_driver._agent_invocation(
+        ctx,
+        iteration_dir=ctx.round_dir,
+        last_message_path=ctx.round_dir / "last.txt",
+    )
+    assert ["--model", "claude-sonnet-4-6"] == argv[argv.index("--model"):argv.index("--model") + 2]
+    assert ["--effort", "medium"] == argv[argv.index("--effort"):argv.index("--effort") + 2]
+    assert ["--permission-mode", "acceptEdits"] == argv[
+        argv.index("--permission-mode"):argv.index("--permission-mode") + 2
+    ]
+    assert timeout == 600
+
+
+def test_extract_claude_last_message_picks_final_result(tmp_path: Path) -> None:
+    transcript = tmp_path / "agent_session.jsonl"
+    transcript.write_text(
+        "\n".join(
+            [
+                json.dumps({"type": "system", "subtype": "init"}),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {"content": [{"type": "text", "text": "interim text"}]},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "result",
+                        "subtype": "success",
+                        "result": "FINAL_REPORT_LINE",
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    last_message_path = tmp_path / "agent_last_message.txt"
+    round_driver._extract_claude_last_message(transcript, last_message_path)
+    assert last_message_path.read_text(encoding="utf-8") == "FINAL_REPORT_LINE"
+
+
+def test_extract_claude_last_message_falls_back_to_last_assistant_text(tmp_path: Path) -> None:
+    transcript = tmp_path / "agent_session.jsonl"
+    transcript.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {"content": [{"type": "text", "text": "first"}]},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {"content": [{"type": "text", "text": "second_final"}]},
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    last_message_path = tmp_path / "agent_last_message.txt"
+    round_driver._extract_claude_last_message(transcript, last_message_path)
+    assert last_message_path.read_text(encoding="utf-8") == "second_final"
+
+
+def test_round_context_rejects_unknown_agent_runtime(tmp_path: Path) -> None:
+    bootstrap_payload = {
+        "round_id": "r-1",
+        "round_dir": str(tmp_path),
+        "round_branch": "branch",
+        "round_spec_path": str(tmp_path / "round_spec.yaml"),
+        "worktree_path": str(tmp_path),
+    }
+    (tmp_path / "round_spec.yaml").write_text("model_id: x\nfamily_id: y\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Invalid agent_runtime"):
+        RoundContext.from_bootstrap_json(
+            bootstrap_payload,
+            harness_mode="synthetic",
+            registry_path=tmp_path / "registry.yaml",
+            tuned_config_root=tmp_path / "tc",
+            agent_runtime="bogus",
+        )
+
+
+def test_run_agent_main_loop_dispatches_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _init_repo(tmp_path)
+    manager = auto_research.AutoResearchRoundManager(
+        registry_path=repo / "model_registry.yaml",
+        repo_root=repo,
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    monkeypatch.setenv("LUMO_AUTO_RESEARCH_ALLOW_NON_AGENT", "1")
+    bootstrap = manager.bootstrap_round(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        sprint="sprint-0",
+        workload_file=repo / "benchmark_blueprints" / "families" / "proposal-ranking-manager-judgment" / "serving_workload.yaml",
+        weight_version_id=None,
+        round_root=repo / "output" / "auto_research",
+        harness_type="synthetic",
+        skip_preflight=True,
+    )
+    ctx = RoundContext.from_bootstrap_json(
+        bootstrap,
+        harness_mode="real",
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+        iteration_cap=1,
+        agent_runtime="claude",
+    )
+
+    captured: dict = {}
+    real_run = round_driver.subprocess.run
+
+    class _FakeCompleted:
+        returncode = 0
+        stderr = b""
+
+    def _fake_run(argv, *args, **kwargs):
+        if not argv or argv[0] not in {"codex", "claude"}:
+            return real_run(argv, *args, **kwargs)
+        captured["argv"] = argv
+        captured["cwd"] = kwargs.get("cwd")
+        captured["timeout"] = kwargs.get("timeout")
+        captured["input"] = kwargs.get("input")
+        stdout = kwargs.get("stdout")
+        if stdout is not None:
+            stdout.write(
+                (
+                    json.dumps(
+                        {
+                            "type": "result",
+                            "subtype": "success",
+                            "result": "iteration-1-final",
+                        }
+                    )
+                    + "\n"
+                ).encode("utf-8")
+            )
+        return _FakeCompleted()
+
+    monkeypatch.setattr(round_driver.subprocess, "run", _fake_run)
+    # Short-circuit the loop after one iteration by returning a status that says we advanced.
+    monkeypatch.setattr(
+        manager,
+        "status",
+        lambda round_id: {"iterations_total": 99, "feasible_count": 0, "rescreened_count": 0},
+    )
+
+    round_driver._run_agent_main_loop(manager, ctx)
+
+    assert captured["argv"][0] == "claude"
+    assert captured["cwd"] == str(ctx.worktree)
+    iteration_dir = ctx.round_dir / "candidates" / "001"
+    assert (iteration_dir / "agent_session.jsonl").read_text(encoding="utf-8").strip().startswith("{")
+    assert (iteration_dir / "agent_last_message.txt").read_text(encoding="utf-8") == "iteration-1-final"
+
+
 def test_l0a_kernel_select_synthetic_writes_p3_artifacts_and_refuses_production_load(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     _write_l0a_fixture_pair(repo)

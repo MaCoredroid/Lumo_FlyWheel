@@ -857,6 +857,50 @@ def test_auto_research_tune_kernel_autotune_registered(capsys: pytest.CaptureFix
     }
 
 
+def test_auto_research_run_round_agent_runtime_flag_defaults_to_codex() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        ["auto-research", "run-round", "--help-only", "--model-id", "m", "--family-id", "f"]
+    )
+    assert args.agent_runtime == "codex"
+
+
+def test_auto_research_run_round_agent_runtime_flag_accepts_claude() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "auto-research",
+            "run-round",
+            "--help-only",
+            "--model-id",
+            "m",
+            "--family-id",
+            "f",
+            "--agent-runtime",
+            "claude",
+        ]
+    )
+    assert args.agent_runtime == "claude"
+
+
+def test_auto_research_run_round_agent_runtime_flag_rejects_unknown_choice() -> None:
+    parser = cli.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "auto-research",
+                "run-round",
+                "--help-only",
+                "--model-id",
+                "m",
+                "--family-id",
+                "f",
+                "--agent-runtime",
+                "gpt5",
+            ]
+        )
+
+
 def test_multi_vllm_verify_p2_registered_and_reports_payload(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

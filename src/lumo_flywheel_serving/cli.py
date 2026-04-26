@@ -23,7 +23,14 @@ from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
 from .multi_instance_vllm import MultiInstanceP2Verifier, MultiInstanceVllmDriver
 from .registry import load_registry
-from .round_driver import RoundContext, run_replay_round, run_round, run_round_exit_code
+from .round_driver import (
+    AGENT_RUNTIMES,
+    DEFAULT_AGENT_RUNTIME,
+    RoundContext,
+    run_replay_round,
+    run_round,
+    run_round_exit_code,
+)
 from .workload_p1 import heavy_workload_descriptor_path, validate_p1_workload
 
 
@@ -841,6 +848,7 @@ def cmd_auto_research_run_round(args: argparse.Namespace) -> int:
         port=args.port,
         proxy_port=args.proxy_port,
         iteration_cap=args.iteration_cap,
+        agent_runtime=args.agent_runtime,
     )
     result = run_round(ctx)
     print(json.dumps(result.as_dict(), indent=2))
@@ -1090,6 +1098,12 @@ def build_parser() -> argparse.ArgumentParser:
     auto_run_round.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_run_round.add_argument("--iteration-cap", type=int, default=12)
     auto_run_round.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
+    auto_run_round.add_argument(
+        "--agent-runtime",
+        choices=sorted(AGENT_RUNTIMES),
+        default=DEFAULT_AGENT_RUNTIME,
+        help="Driver agent that performs each iteration (codex default; claude uses Claude Code CLI auth).",
+    )
     auto_run_round.set_defaults(func=cmd_auto_research_run_round)
 
     auto_replay_round = auto_research_subparsers.add_parser("replay-round")

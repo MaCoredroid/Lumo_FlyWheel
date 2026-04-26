@@ -20,6 +20,12 @@ ROUND_BLOCKED = "ROUND_BLOCKED"
 ROUND_BUNDLE_REJECTED = "ROUND_BUNDLE_REJECTED"
 ROUND_BUNDLE_READY = "ROUND_BUNDLE_READY"
 
+AGENT_RUNTIMES = frozenset({"codex", "claude"})
+DEFAULT_AGENT_RUNTIME = "codex"
+DEFAULT_CLAUDE_MODEL = "claude-opus-4-7"
+DEFAULT_CLAUDE_EFFORT = "high"
+DEFAULT_CLAUDE_PERMISSION_MODE = "bypassPermissions"
+
 TERMINAL_OUTCOMES = frozenset(
     {
         ROUND_PASSED,
@@ -46,6 +52,7 @@ class RoundContext:
     port: int = 8000
     proxy_port: int = 8001
     iteration_cap: int | None = None
+    agent_runtime: str = DEFAULT_AGENT_RUNTIME
 
     @classmethod
     def from_bootstrap_json(
@@ -58,11 +65,16 @@ class RoundContext:
         port: int = 8000,
         proxy_port: int = 8001,
         iteration_cap: int | None = None,
+        agent_runtime: str = DEFAULT_AGENT_RUNTIME,
     ) -> "RoundContext":
         round_spec_path = Path(str(payload["round_spec_path"])).resolve()
         raw = yaml.safe_load(round_spec_path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             raise RuntimeError(f"Invalid round spec: {round_spec_path}")
+        if agent_runtime not in AGENT_RUNTIMES:
+            raise RuntimeError(
+                f"Invalid agent_runtime {agent_runtime!r}; expected one of {sorted(AGENT_RUNTIMES)}"
+            )
         return cls(
             round_id=str(payload["round_id"]),
             round_dir=Path(str(payload["round_dir"])).resolve(),
@@ -76,6 +88,7 @@ class RoundContext:
             port=port,
             proxy_port=proxy_port,
             iteration_cap=iteration_cap,
+            agent_runtime=agent_runtime,
         )
 
 
@@ -137,7 +150,7 @@ def run_round(ctx: RoundContext) -> RoundResult:
         if ctx.harness_mode == "synthetic":
             _run_synthetic_main_loop(manager, ctx)
         else:
-            _run_codex_main_loop(manager, ctx)
+            _run_agent_main_loop(manager, ctx)
 
         if not (ctx.round_dir / "rescreen_trace.json").is_file():
             manager.rescreen(
@@ -616,7 +629,11 @@ def _run_synthetic_main_loop(manager: AutoResearchRoundManager, ctx: RoundContex
         )
 
 
-def _run_codex_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
+def _run_agent_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -> None:
+    if ctx.agent_runtime not in AGENT_RUNTIMES:
+        raise RuntimeError(
+            f"Invalid agent_runtime {ctx.agent_runtime!r}; expected one of {sorted(AGENT_RUNTIMES)}"
+        )
     for index in range(1, int(ctx.iteration_cap or ctx.round_spec.get("iteration_cap", 12)) + 1):
         iteration = f"{index:03d}"
         if iteration in _finalized_iterations(ctx.round_dir):
@@ -625,36 +642,130 @@ def _run_codex_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -
         iteration_dir.mkdir(parents=True, exist_ok=True)
         prompt = _iteration_prompt(ctx, iteration=iteration, next_iteration=f"{index + 1:03d}")
         transcript = iteration_dir / "agent_session.jsonl"
+        last_message_path = iteration_dir / "agent_last_message.txt"
+        argv, timeout_seconds = _agent_invocation(
+            ctx,
+            iteration_dir=iteration_dir,
+            last_message_path=last_message_path,
+        )
         with transcript.open("wb") as transcript_handle:
             result = subprocess.run(
-                [
-                    "codex",
-                    "-c",
-                    'model="gpt-5.4"',
-                    "-c",
-                    'model_reasoning_effort="high"',
-                    "exec",
-                    "--cd",
-                    str(ctx.worktree),
-                    "--json",
-                    "--output-last-message",
-                    str(iteration_dir / "agent_last_message.txt"),
-                    "--skip-git-repo-check",
-                    "-",
-                ],
+                argv,
                 input=prompt.encode(),
                 stdout=transcript_handle,
                 stderr=subprocess.PIPE,
                 env=os.environ.copy(),
-                timeout=int(ctx.round_spec.get("per_iteration_codex_wall_clock_s", 45 * 60)),
+                cwd=str(ctx.worktree) if ctx.agent_runtime == "claude" else None,
+                timeout=timeout_seconds,
             )
-        if result.returncode == 2:
+        if ctx.agent_runtime == "claude":
+            _extract_claude_last_message(transcript, last_message_path)
+        if result.returncode == 2 and ctx.agent_runtime == "codex":
             raise RuntimeError(f"iteration {iteration} blocked")
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.decode("utf-8", errors="replace").strip() or f"codex exited {result.returncode}")
+            stderr_text = result.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(stderr_text or f"{ctx.agent_runtime} exited {result.returncode}")
         status = manager.status(round_id=ctx.round_id)
         if status["iterations_total"] >= index + 2:
             continue
+
+
+# Backwards-compat alias for callers/tests that import the old name.
+_run_codex_main_loop = _run_agent_main_loop
+
+
+def _agent_invocation(
+    ctx: RoundContext,
+    *,
+    iteration_dir: Path,
+    last_message_path: Path,
+) -> tuple[list[str], int]:
+    if ctx.agent_runtime == "codex":
+        argv = [
+            "codex",
+            "-c",
+            'model="gpt-5.4"',
+            "-c",
+            'model_reasoning_effort="high"',
+            "exec",
+            "--cd",
+            str(ctx.worktree),
+            "--json",
+            "--output-last-message",
+            str(last_message_path),
+            "--skip-git-repo-check",
+            "-",
+        ]
+        timeout = int(ctx.round_spec.get("per_iteration_codex_wall_clock_s", 45 * 60))
+        return argv, timeout
+    if ctx.agent_runtime == "claude":
+        model = str(ctx.round_spec.get("claude_model", DEFAULT_CLAUDE_MODEL))
+        effort = str(ctx.round_spec.get("claude_effort", DEFAULT_CLAUDE_EFFORT))
+        permission_mode = str(
+            ctx.round_spec.get("claude_permission_mode", DEFAULT_CLAUDE_PERMISSION_MODE)
+        )
+        argv = [
+            "claude",
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--model",
+            model,
+            "--effort",
+            effort,
+            "--permission-mode",
+            permission_mode,
+            "--add-dir",
+            str(ctx.worktree),
+        ]
+        timeout = int(
+            ctx.round_spec.get(
+                "per_iteration_claude_wall_clock_s",
+                ctx.round_spec.get("per_iteration_codex_wall_clock_s", 45 * 60),
+            )
+        )
+        return argv, timeout
+    raise RuntimeError(f"Unsupported agent_runtime {ctx.agent_runtime!r}")
+
+
+def _extract_claude_last_message(transcript: Path, last_message_path: Path) -> None:
+    """Mirror codex's --output-last-message: write the final assistant text from the stream."""
+    try:
+        raw = transcript.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        last_message_path.write_text("", encoding="utf-8")
+        return
+    final_text = ""
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "result":
+            result_text = event.get("result")
+            if isinstance(result_text, str) and result_text:
+                final_text = result_text
+                continue
+        if event.get("type") == "assistant":
+            message = event.get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, list):
+                    for block in content:
+                        if (
+                            isinstance(block, dict)
+                            and block.get("type") == "text"
+                            and isinstance(block.get("text"), str)
+                            and block["text"]
+                        ):
+                            final_text = block["text"]
+    last_message_path.write_text(final_text, encoding="utf-8")
 
 
 def _iteration_prompt(ctx: RoundContext, *, iteration: str, next_iteration: str) -> str:
