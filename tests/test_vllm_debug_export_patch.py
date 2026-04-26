@@ -217,6 +217,100 @@ def test_p2b_vllm_debug_export_bounds_logits_and_records_source_metadata(
     assert payload["logits"].device == "cpu"
 
 
+def test_p2b_vllm_debug_export_state_uses_default_mamba_cache_block(
+    monkeypatch, tmp_path: Path
+) -> None:
+    patch = _load_patch_module()
+    helper = _load_helper_module(patch.HELPER_MODULE)
+    monkeypatch.setenv("LUMO_P2B_VLLM_DEBUG_EXPORT", "1")
+    monkeypatch.setenv("LUMO_P2B_DEBUG_EXPORT_DIR", str(tmp_path))
+    monkeypatch.setenv("LUMO_P2B_DEBUG_PROBE_REQUEST_IDS", "req-state")
+    monkeypatch.setenv("LUMO_P2B_DEBUG_STATE_TOKENS", "1")
+
+    exporter = helper.P2BDebugExporter.from_env()
+    req_state = types.SimpleNamespace(
+        output_token_ids=[123],
+        block_ids=[[7]],
+        num_prompt_tokens=5,
+        num_computed_tokens=6,
+    )
+    runner = types.SimpleNamespace(
+        cache_config=types.SimpleNamespace(mamba_cache_mode="none"),
+        mamba_state_idx={},
+        input_batch=types.SimpleNamespace(req_ids=["req-state"], num_reqs=1),
+        requests={"req-state": req_state},
+        kv_cache_config=types.SimpleNamespace(
+            kv_cache_groups=[
+                types.SimpleNamespace(layer_names=["model.layers.0.linear_attn"])
+            ]
+        ),
+        compilation_config=types.SimpleNamespace(
+            static_forward_context={
+                "model.layers.0.linear_attn": types.SimpleNamespace(
+                    kv_cache=[
+                        _FakeTensor(
+                            [
+                                [10, 11],
+                                [20, 21],
+                                [30, 31],
+                                [40, 41],
+                                [50, 51],
+                                [60, 61],
+                                [70, 71],
+                                [80, 81],
+                            ]
+                        ),
+                        _FakeTensor(
+                            [
+                                [100, 101],
+                                [200, 201],
+                                [300, 301],
+                                [400, 401],
+                                [500, 501],
+                                [600, 601],
+                                [700, 701],
+                                [800, 801],
+                            ]
+                        ),
+                    ]
+                )
+            }
+        ),
+    )
+    runner._get_mamba_copy_bufs = lambda: types.SimpleNamespace(
+        mamba_group_ids=[0],
+        mamba_spec=types.SimpleNamespace(block_size=16),
+    )
+
+    exporter.export_state_snapshots(runner=runner)
+
+    exports = sorted(tmp_path.glob("state_req_req-state_tok_*.pt"))
+    assert [path.name for path in exports] == ["state_req_req-state_tok_000001.pt"]
+    payload = helper.torch.load(exports[0], weights_only=False)
+    layer_payload = payload["layers"]["model.layers.0.linear_attn"]
+    assert payload["kind"] == "qwen35_mamba_deltanet_recurrent_state"
+    assert payload["request_id"] == "req-state"
+    assert payload["generated_token_index"] == 1
+    assert payload["mamba_cache_mode"] == "none"
+    assert payload["state_block_idx"] == 0
+    assert payload["state_block_idx_source"] == "cache_mode_none_first_block"
+    assert payload["request_num_prompt_tokens"] == 5
+    assert payload["request_num_computed_tokens"] == 6
+    assert payload["request_output_token_count"] == 1
+    assert [entry["state_role"] for entry in layer_payload] == [
+        "conv_state",
+        "recurrent_ssm_state",
+    ]
+    assert layer_payload[1]["block_id"] == 7
+    assert layer_payload[1]["source_shape"] == (2,)
+    assert layer_payload[1]["source_dtype"] == "torch.float16"
+    assert layer_payload[1]["source_device"] == "cuda:0"
+    assert layer_payload[1]["saved_shape"] == (2,)
+    assert layer_payload[1]["saved_dtype"] == "torch.float16"
+    assert layer_payload[1]["tensor"].data == [800, 801]
+    assert layer_payload[1]["tensor"].device == "cpu"
+
+
 def test_p2b_vllm_debug_export_failures_are_non_strict_by_default(monkeypatch, tmp_path: Path) -> None:
     patch = _load_patch_module()
     helper = _load_helper_module(patch.HELPER_MODULE)

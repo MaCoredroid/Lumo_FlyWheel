@@ -206,19 +206,40 @@ class P2BDebugExporter:
                 if exported_key in self._exported_state:
                     continue
 
-                state_block_idx = runner.mamba_state_idx.get(req_id)
+                state_block_idx, state_block_idx_source = _resolve_mamba_state_block_idx(
+                    runner=runner,
+                    req_id=req_id,
+                    req_state=req_state,
+                    mamba_spec=copy_bufs.mamba_spec,
+                )
                 if state_block_idx is None or state_block_idx < 0:
                     self._write_state_diagnostic(
                         req_id=req_id,
                         reason="mamba_state_idx_missing",
                         generated_token_index=generated_token_index,
                         mamba_state_idx=state_block_idx,
+                        mamba_cache_mode=getattr(
+                            runner.cache_config, "mamba_cache_mode", None
+                        ),
+                        state_block_idx_source=state_block_idx_source,
                     )
                     continue
                 snapshots: dict[str, list[dict[str, Any]]] = {}
                 for mamba_group_id in copy_bufs.mamba_group_ids:
                     block_ids = req_state.block_ids[mamba_group_id]
                     if state_block_idx >= len(block_ids):
+                        self._write_state_diagnostic(
+                            req_id=req_id,
+                            reason="mamba_state_block_out_of_range",
+                            generated_token_index=generated_token_index,
+                            mamba_group_id=int(mamba_group_id),
+                            state_block_idx=state_block_idx,
+                            block_count=len(block_ids),
+                            mamba_cache_mode=getattr(
+                                runner.cache_config, "mamba_cache_mode", None
+                            ),
+                            state_block_idx_source=state_block_idx_source,
+                        )
                         continue
                     block_id = int(block_ids[state_block_idx])
                     layer_names = kv_cache_config.kv_cache_groups[
@@ -233,11 +254,28 @@ class P2BDebugExporter:
                         for state_index, state in enumerate(kv_caches):
                             if block_id >= state.shape[0]:
                                 continue
+                            source = state[block_id].detach()
+                            exported = source.to("cpu")
                             layer_payload.append(
                                 {
                                     "state_index": state_index,
+                                    "state_role": _mamba_state_role(state_index),
+                                    "mamba_group_id": int(mamba_group_id),
+                                    "state_block_idx": state_block_idx,
+                                    "state_block_idx_source": state_block_idx_source,
                                     "block_id": block_id,
-                                    "tensor": state[block_id].detach().to("cpu"),
+                                    "source_shape": tuple(
+                                        int(dim) for dim in source.shape
+                                    ),
+                                    "source_dtype": str(source.dtype),
+                                    "source_device": str(source.device),
+                                    "source_numel": int(source.numel()),
+                                    "saved_shape": tuple(
+                                        int(dim) for dim in exported.shape
+                                    ),
+                                    "saved_dtype": str(exported.dtype),
+                                    "saved_numel": int(exported.numel()),
+                                    "tensor": exported,
                                 }
                             )
                         if layer_payload:
@@ -248,7 +286,13 @@ class P2BDebugExporter:
                         reason="no_kv_cache_state_tensors",
                         generated_token_index=generated_token_index,
                         mamba_state_idx=state_block_idx,
-                        mamba_group_ids=[int(group_id) for group_id in copy_bufs.mamba_group_ids],
+                        mamba_cache_mode=getattr(
+                            runner.cache_config, "mamba_cache_mode", None
+                        ),
+                        state_block_idx_source=state_block_idx_source,
+                        mamba_group_ids=[
+                            int(group_id) for group_id in copy_bufs.mamba_group_ids
+                        ],
                     )
                     continue
 
@@ -257,6 +301,18 @@ class P2BDebugExporter:
                     "request_id": req_id,
                     "generated_token_index": generated_token_index,
                     "state_tokens": sorted(self.config.state_tokens),
+                    "mamba_cache_mode": getattr(
+                        runner.cache_config, "mamba_cache_mode", None
+                    ),
+                    "state_block_idx": state_block_idx,
+                    "state_block_idx_source": state_block_idx_source,
+                    "request_num_prompt_tokens": getattr(
+                        req_state, "num_prompt_tokens", None
+                    ),
+                    "request_num_computed_tokens": getattr(
+                        req_state, "num_computed_tokens", None
+                    ),
+                    "request_output_token_count": len(req_state.output_token_ids),
                     "layers": snapshots,
                 }
                 self._write_pt(
@@ -379,6 +435,39 @@ def _bounded_last_dim(tensor: torch.Tensor, max_items: int | None) -> torch.Tens
     if max_items is None or tensor.ndim == 0:
         return tensor
     return tensor[..., :max_items]
+
+
+def _resolve_mamba_state_block_idx(
+    *,
+    runner: Any,
+    req_id: str,
+    req_state: Any,
+    mamba_spec: Any,
+) -> tuple[int | None, str]:
+    state_block_idx = runner.mamba_state_idx.get(req_id)
+    if state_block_idx is not None:
+        return int(state_block_idx), "runner.mamba_state_idx"
+
+    cache_mode = getattr(runner.cache_config, "mamba_cache_mode", "none")
+    if cache_mode in {"none", "all"}:
+        return 0, f"cache_mode_{cache_mode}_first_block"
+
+    block_size = getattr(mamba_spec, "block_size", None)
+    num_computed_tokens = getattr(req_state, "num_computed_tokens", None)
+    if block_size and num_computed_tokens:
+        return (
+            max(0, (int(num_computed_tokens) - 1) // int(block_size)),
+            "num_computed_tokens",
+        )
+    return None, "unresolved"
+
+
+def _mamba_state_role(state_index: int) -> str:
+    if state_index == 0:
+        return "conv_state"
+    if state_index == 1:
+        return "recurrent_ssm_state"
+    return f"state_{state_index}"
 
 
 def _safe_name(value: str) -> str:
