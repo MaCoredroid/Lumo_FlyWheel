@@ -894,6 +894,11 @@ def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
         port=args.port,
         proxy_port=args.proxy_port,
         max_combos=args.max_combos,
+        image=args.image,
+        container_name=args.container_name,
+        logs_root=args.logs_root,
+        triton_cache_root=args.triton_cache_root,
+        state_root=args.state_root,
     )
     print(json.dumps(result.as_dict(), indent=2))
     return 0

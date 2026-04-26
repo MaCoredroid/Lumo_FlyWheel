@@ -20,6 +20,7 @@ from uuid import uuid4
 import requests
 import yaml
 
+from .kernel_activation import KERNEL_SELECTION_RUNTIME_UNSUPPORTED, resolve_kernel_runtime_activation
 from .measurement_harness import RealMeasurementHarness, SLO, WorkloadSpec
 from .parity_fixture import fixture_content_hash
 from .registry import ModelConfig, load_registry
@@ -76,7 +77,6 @@ AUTO_RESEARCH_HELP_SUBCOMMANDS = PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS + ("run",)
 L0A_ELIMINATION_REASONS = {"nondeterministic", "parity_diverges_from_reference"}
 L0A_DEFAULT_MODEL_ID = "qwen3.5-27b"
 L0A_SELECT_ROUND_TYPE = "l0a_select_only"
-L0A_REAL_KERNEL_ACTIVATION_BLOCKER = "l0a_kernel_selection_runtime_activation_missing"
 RESULTS_COLUMNS = [
     "candidate_uuid",
     "parent_candidate_uuid",
@@ -697,9 +697,9 @@ class L0aKernelSelectResult:
 class L0aKernelSelectRunner:
     """Bounded P3/L0a select-only substrate.
 
-    Real mode intentionally dispatches through the live repo endpoint, but it
-    does not claim P3 PASS until there is a repo-owned runtime path that applies
-    each kernel combo to vLLM rather than storing it as bundle metadata.
+    Real mode dispatches through the live repo endpoint and restarts vLLM per
+    supported runtime activation signature. Unsupported knobs halt before live
+    dispatch with structured evidence.
     """
 
     ELIMINATED_COLUMNS = [
@@ -750,6 +750,11 @@ class L0aKernelSelectRunner:
         port: int = 8000,
         proxy_port: int = 8001,
         max_combos: int | None = None,
+        image: str | None = None,
+        container_name: str = "lumo-vllm",
+        logs_root: str | Path = "/logs",
+        triton_cache_root: str | Path = "/tmp/triton_cache",
+        state_root: str | Path | None = None,
     ) -> L0aKernelSelectResult:
         if harness not in {"real", "synthetic"}:
             raise RuntimeError(f"Unsupported harness: {harness}")
@@ -854,34 +859,79 @@ class L0aKernelSelectRunner:
                 round_dir=round_dir,
                 port=port,
                 proxy_port=proxy_port,
+                image=image,
+                container_name=container_name,
+                logs_root=logs_root,
+                triton_cache_root=triton_cache_root,
+                state_root=state_root,
             )
-            baseline_rows = self._real_baseline_measurements(
-                real_harness,
-                baselines=baselines,
-                baseline_vllm_config=registry[model_id].vllm_config(),
-                round_dir=round_dir,
-            )
-            screen_rows = self._real_combo_measurements(
-                real_harness,
-                combos=survivors,
-                measurements_per_combo=screen_measurements_per_combo,
-                baseline_vllm_config=registry[model_id].vllm_config(),
-                round_dir=round_dir,
-                role="screen",
-            )
+            unsupported_activation = self._unsupported_runtime_activation(survivors)
+            if unsupported_activation:
+                run_log = {
+                    "outcome": "ROUND_BLOCKED",
+                    "HALT_REASON": KERNEL_SELECTION_RUNTIME_UNSUPPORTED,
+                    "round_id": round_id,
+                    "total_combos_available": total_combos_available,
+                    "total_combos_scheduled": len(combos),
+                    "full_action_space_sweep": len(combos) == total_combos_available,
+                    "limited_mode": len(combos) != total_combos_available,
+                    "unsupported_runtime_activation": unsupported_activation,
+                    "live_dispatch": {
+                        "attempted": False,
+                        "reason": "scheduled survivor contains unsupported runtime kernel knob",
+                    },
+                }
+                (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+                (round_dir / "measurement_trace_combined.json").write_text(
+                    json.dumps(
+                        {
+                            "round_id": round_id,
+                            "harness": harness,
+                            "kernel_selection_runtime_activation": "unsupported_knobs",
+                            "unsupported_runtime_activation": unsupported_activation,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                raise RuntimeError(
+                    f"HALT_REASON: {KERNEL_SELECTION_RUNTIME_UNSUPPORTED}; "
+                    "scheduled survivor contains unsupported runtime kernel knob(s)"
+                )
+            try:
+                baseline_rows = self._real_baseline_measurements(
+                    real_harness,
+                    baselines=baselines,
+                    baseline_vllm_config=registry[model_id].vllm_config(),
+                    round_dir=round_dir,
+                )
+                screen_rows = self._real_combo_measurements(
+                    real_harness,
+                    combos=survivors,
+                    measurements_per_combo=screen_measurements_per_combo,
+                    baseline_vllm_config=registry[model_id].vllm_config(),
+                    round_dir=round_dir,
+                    role="screen",
+                )
+            except Exception:
+                real_harness.restore_runtime()
+                raise
         self._write_tsv(round_dir / "measurements.tsv", self.MEASUREMENT_COLUMNS, [*baseline_rows, *screen_rows])
         top = self._top_screen_combos(survivors, screen_rows, rescreen_top_k)
         if harness == "synthetic":
             rescreen_rows = self._rescreen_measurements(top, rescreen_measurements_per_candidate)
         else:
-            rescreen_rows = self._real_combo_measurements(
-                real_harness,
-                combos=top,
-                measurements_per_combo=rescreen_measurements_per_candidate,
-                baseline_vllm_config=registry[model_id].vllm_config(),
-                round_dir=round_dir,
-                role="rescreen",
-            )
+            try:
+                rescreen_rows = self._real_combo_measurements(
+                    real_harness,
+                    combos=top,
+                    measurements_per_combo=rescreen_measurements_per_candidate,
+                    baseline_vllm_config=registry[model_id].vllm_config(),
+                    round_dir=round_dir,
+                    role="rescreen",
+                )
+            finally:
+                real_harness.restore_runtime()
         self._write_tsv(round_dir / "rescreen.tsv", self.MEASUREMENT_COLUMNS, rescreen_rows)
         winner = self._pick_winner(top, rescreen_rows)
         self._write_yaml(round_dir / "winner_kernel_select.yaml", winner.as_dict())
@@ -914,7 +964,7 @@ class L0aKernelSelectRunner:
             "harness": harness,
             "limited_mode": len(combos) != total_combos_available,
             "kernel_selection_runtime_activation": (
-                "metadata_only_not_runtime_applied" if harness == "real" else "synthetic_fixture"
+                "runtime_applied" if harness == "real" else "synthetic_fixture"
             ),
         }
         (round_dir / "search_trace.json").write_text(json.dumps(search_trace, indent=2), encoding="utf-8")
@@ -922,38 +972,6 @@ class L0aKernelSelectRunner:
             json.dumps(measurement_trace, indent=2),
             encoding="utf-8",
         )
-        if harness == "real":
-            run_log = {
-                "outcome": "ROUND_BLOCKED",
-                "HALT_REASON": L0A_REAL_KERNEL_ACTIVATION_BLOCKER,
-                "round_id": round_id,
-                "provisional_winner": winner.as_dict(),
-                "total_combos_available": total_combos_available,
-                "total_combos_scheduled": len(combos),
-                "full_action_space_sweep": len(combos) == total_combos_available,
-                "limited_mode": len(combos) != total_combos_available,
-                "kernel_selection_runtime_activation": "metadata_only_not_runtime_applied",
-                "live_dispatch": {
-                    "endpoint": f"http://127.0.0.1:{proxy_port}",
-                    "baseline_rows": len(baseline_rows),
-                    "screen_rows": len(screen_rows),
-                    "rescreen_rows": len(rescreen_rows),
-                    "target_concurrency": 1,
-                },
-                "artifact_counts": {
-                    "eliminated_rows": len(eliminated),
-                    "survivor_rows": len(survivors),
-                    "baseline_rows": len(baseline_rows),
-                    "screen_rows": len(screen_rows),
-                    "rescreen_rows": len(rescreen_rows),
-                },
-            }
-            (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
-            raise RuntimeError(
-                f"HALT_REASON: {L0A_REAL_KERNEL_ACTIVATION_BLOCKER}; "
-                "live endpoint dispatch completed, but repo runtime only records L0a kernel_selection "
-                "as bundle metadata and does not apply each combo to the running vLLM process"
-            )
         bundle = make_tuned_config_bundle(
             model_id=model_id,
             family_id=str(descriptor.get("family_id", "")),
@@ -978,6 +996,7 @@ class L0aKernelSelectRunner:
                 "determinism_check_passed": True,
                 "parity_check_passed": True,
                 "production_load_refused": True,
+                "kernel_selection_runtime_activation": "runtime_applied" if harness == "real" else "synthetic_fixture",
                 "serial_only_supported": fanout == 1,
                 "full_action_space_sweep": len(combos) == total_combos_available,
             },
@@ -1010,6 +1029,7 @@ class L0aKernelSelectRunner:
             "survivor_count": len(survivors),
             "full_action_space_sweep": len(combos) == total_combos_available,
             "limited_mode": len(combos) != total_combos_available,
+            "kernel_selection_runtime_activation": "runtime_applied" if harness == "real" else "synthetic_fixture",
             "artifact_counts": {
                 "eliminated_rows": len(eliminated),
                 "survivor_rows": len(survivors),
@@ -1018,6 +1038,14 @@ class L0aKernelSelectRunner:
                 "rescreen_rows": len(rescreen_rows),
             },
         }
+        if harness == "real":
+            run_log["live_dispatch"] = {
+                "endpoint": f"http://127.0.0.1:{proxy_port}",
+                "baseline_rows": len(baseline_rows),
+                "screen_rows": len(screen_rows),
+                "rescreen_rows": len(rescreen_rows),
+                "target_concurrency": 1,
+            }
         (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
         return L0aKernelSelectResult(
             round_id=round_id,
@@ -1194,6 +1222,22 @@ class L0aKernelSelectRunner:
             return 0.012
         return 0.0
 
+    @staticmethod
+    def _unsupported_runtime_activation(combos: list[L0aKernelCombo]) -> list[dict[str, Any]]:
+        unsupported: list[dict[str, Any]] = []
+        for combo in combos:
+            plan = resolve_kernel_runtime_activation(combo.as_dict())
+            if plan.supported:
+                continue
+            unsupported.append(
+                {
+                    "combo_id": combo.combo_id,
+                    "kernel_selection": combo.as_dict(),
+                    "unsupported_knobs": [knob.as_dict() for knob in plan.unsupported_knobs],
+                }
+            )
+        return unsupported
+
     def _real_harness(
         self,
         *,
@@ -1206,6 +1250,11 @@ class L0aKernelSelectRunner:
         round_dir: Path,
         port: int,
         proxy_port: int,
+        image: str | None,
+        container_name: str,
+        logs_root: str | Path,
+        triton_cache_root: str | Path,
+        state_root: str | Path | None,
     ) -> RealMeasurementHarness:
         workload = SyntheticWorkloadDistribution.from_file(
             workload_path,
@@ -1229,6 +1278,15 @@ class L0aKernelSelectRunner:
             bundle_staging_dir=round_dir / ".staging_bundles",
             round_id=round_id,
             workload_descriptor_path=workload_path,
+            runtime_activation=True,
+            registry_path=self.registry_path,
+            port=port,
+            proxy_port=proxy_port,
+            image=image,
+            container_name=container_name,
+            logs_root=logs_root,
+            triton_cache_root=triton_cache_root,
+            state_root=state_root,
         )
 
     def _real_baseline_measurements(
@@ -1303,7 +1361,7 @@ class L0aKernelSelectRunner:
                 "measurement_role": role,
                 "measurement_index": measurement_index,
                 "kernel_selection": kernel_selection,
-                "kernel_selection_runtime_activation": "metadata_only_not_runtime_applied",
+                "kernel_selection_runtime_activation": "runtime_applied",
                 "target_concurrency": 1,
             }
         )
@@ -1318,7 +1376,7 @@ class L0aKernelSelectRunner:
             "objective_value": f"{float(trace.get('eval_throughput', 0.0)):.6f}",
             "harness": "real",
             "trace_ref": str(trace_path.relative_to(round_dir)),
-            "kernel_selection_applied": "false",
+            "kernel_selection_applied": "runtime",
         }
 
     def _baseline_measurements(self, baselines: int) -> list[dict[str, str]]:

@@ -11,6 +11,7 @@ from typing import Any
 import requests
 import yaml
 
+from .kernel_activation import require_supported_kernel_runtime_activation
 from .metrics import parse_prometheus_text
 from .tuned_config import make_tuned_config_bundle
 
@@ -55,6 +56,15 @@ class RealMeasurementHarness:
         bundle_staging_dir: Path,
         round_id: str | None = None,
         workload_descriptor_path: Path | None = None,
+        runtime_activation: bool = False,
+        registry_path: str | Path | None = None,
+        port: int = 8000,
+        proxy_port: int = 8001,
+        image: str | None = None,
+        container_name: str = "lumo-vllm",
+        logs_root: str | Path = "/logs",
+        triton_cache_root: str | Path = "/tmp/triton_cache",
+        state_root: str | Path | None = None,
     ) -> None:
         self.workload_spec = workload_spec
         self.seed_trace_path = Path(seed_trace_path)
@@ -67,6 +77,17 @@ class RealMeasurementHarness:
         self.bundle_staging_dir = Path(bundle_staging_dir)
         self.round_id = round_id
         self.workload_descriptor_path = Path(workload_descriptor_path) if workload_descriptor_path is not None else None
+        self.runtime_activation = runtime_activation
+        self.registry_path = Path(registry_path) if registry_path is not None else None
+        self.port = port
+        self.proxy_port = proxy_port
+        self.image = image
+        self.container_name = container_name
+        self.logs_root = Path(logs_root)
+        self.triton_cache_root = Path(triton_cache_root)
+        self.state_root = Path(state_root) if state_root is not None else None
+        self._active_runtime_signature: str | None = None
+        self._original_runtime_state: Any | None = None
 
     def measure(
         self,
@@ -82,7 +103,7 @@ class RealMeasurementHarness:
         if target_concurrency is None:
             target_concurrency = max(target_concurrency_sweep or [self.workload_spec.target_concurrency])
         try:
-            self._activate_candidate(
+            activation_evidence = self._activate_candidate(
                 candidate_vllm_config,
                 request_shaping=request_shaping,
                 kernel_selection=kernel_selection,
@@ -90,7 +111,9 @@ class RealMeasurementHarness:
         except TypeError as exc:
             if "request_shaping" not in str(exc) and "kernel_selection" not in str(exc):
                 raise
-            self._activate_candidate(candidate_vllm_config)
+            activation_evidence = self._activate_candidate(candidate_vllm_config)
+        if activation_evidence is None:
+            activation_evidence = {}
         started = time.time()
         window_completed = False
         before_metrics = self._metrics_snapshot()
@@ -136,11 +159,8 @@ class RealMeasurementHarness:
         return {
             "generator": self.VERSION,
             "candidate_vllm_config": dict(candidate_vllm_config),
-            "resolved": {
-                "attention_backend": "unknown",
-                "deltanet_kernel": "unknown",
-                "torch_compile_mode": "default",
-            },
+            "resolved": dict(activation_evidence.get("resolved", {})),
+            "runtime_activation": activation_evidence,
             "cache_isolation": {
                 "cache_salt": "",
                 "prefix_cache_reset_at_bootstrap": True,
@@ -189,7 +209,7 @@ class RealMeasurementHarness:
         *,
         request_shaping: dict[str, Any] | None = None,
         kernel_selection: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> dict[str, Any]:
         self.bundle_staging_dir.mkdir(parents=True, exist_ok=True)
         bundle_path = self.bundle_staging_dir / f"candidate-{time.time_ns()}.yaml"
         bundle = make_tuned_config_bundle(
@@ -218,6 +238,11 @@ class RealMeasurementHarness:
             },
         )
         bundle_path.write_text(yaml.safe_dump(bundle.as_dict(), sort_keys=False), encoding="utf-8")
+        if self.runtime_activation:
+            return self._activate_candidate_with_runtime_restart(
+                bundle_path=bundle_path,
+                kernel_selection=kernel_selection,
+            )
         response = requests.post(
             f"{self.admin_url}/load_tuned_config",
             json={"bundle_path": str(bundle_path)},
@@ -226,6 +251,86 @@ class RealMeasurementHarness:
         response.raise_for_status()
         self._reset_prefix_cache()
         self._wait_for_health()
+        return {
+            "mode": "admin_load_tuned_config_only",
+            "supported": False,
+            "activation_status": "metadata_only_not_runtime_applied",
+            "bundle_path": str(bundle_path),
+            "resolved": {
+                "attention_backend": "unknown",
+                "deltanet_kernel": "unknown",
+                "torch_compile_mode": "default",
+            },
+        }
+
+    def _activate_candidate_with_runtime_restart(
+        self,
+        *,
+        bundle_path: Path,
+        kernel_selection: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if self.registry_path is None:
+            raise RuntimeError("runtime_activation requires registry_path")
+        plan = require_supported_kernel_runtime_activation(kernel_selection)
+        from .model_server import DEFAULT_VLLM_IMAGE, DEFAULT_STATE_ROOT, ModelServer
+
+        server = ModelServer(
+            registry_path=self.registry_path,
+            port=self.port,
+            image=self.image or DEFAULT_VLLM_IMAGE,
+            container_name=self.container_name,
+            logs_root=self.logs_root,
+            triton_cache_root=self.triton_cache_root,
+            proxy_port=self.proxy_port,
+            state_root=self.state_root or DEFAULT_STATE_ROOT,
+        )
+        if self._original_runtime_state is None:
+            self._original_runtime_state = server.state_store.load()
+        server.load_tuned_config(bundle_path)
+        runtime_signature = plan.activation_id
+        restarted = False
+        if self._active_runtime_signature != runtime_signature:
+            server.start(model_id=self.model_id)
+            self._active_runtime_signature = runtime_signature
+            restarted = True
+        else:
+            self._reset_prefix_cache()
+            self._wait_for_health()
+        return {
+            "mode": "model_server_restart",
+            "activation_status": "runtime_applied",
+            "bundle_path": str(bundle_path),
+            "restarted": restarted,
+            **plan.as_dict(),
+        }
+
+    def restore_runtime(self) -> None:
+        if not self.runtime_activation or self.registry_path is None or self._original_runtime_state is None:
+            return
+        from .model_server import DEFAULT_VLLM_IMAGE, DEFAULT_STATE_ROOT, ModelServer
+
+        server = ModelServer(
+            registry_path=self.registry_path,
+            port=self.port,
+            image=self.image or DEFAULT_VLLM_IMAGE,
+            container_name=self.container_name,
+            logs_root=self.logs_root,
+            triton_cache_root=self.triton_cache_root,
+            proxy_port=self.proxy_port,
+            state_root=self.state_root or DEFAULT_STATE_ROOT,
+        )
+        original = self._original_runtime_state
+        if original.active_tuned_config_path:
+            from .tuned_config import load_tuned_config_bundle
+
+            bundle = load_tuned_config_bundle(original.active_tuned_config_path)
+            server.state_store.activate_bundle(original.active_tuned_config_path, bundle)
+        else:
+            server.state_store.clear_active_bundle()
+        if original.current_model_id:
+            server.start(model_id=original.current_model_id)
+        else:
+            server.stop(missing_ok=True)
 
     def _reset_prefix_cache(self) -> None:
         response = requests.post(self._server_root_url("/reset_prefix_cache"), timeout=30)

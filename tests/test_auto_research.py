@@ -3261,7 +3261,7 @@ def test_l0a_kernel_select_synthetic_writes_p3_artifacts_and_refuses_production_
         validate_bundle_load_policy(load_tuned_config_bundle(result.bundle_path), bundle_confidence_policy="passthrough")
 
 
-def test_l0a_kernel_select_real_dispatches_live_smoke_then_blocks_on_runtime_activation(
+def test_l0a_kernel_select_real_dispatches_live_smoke_with_runtime_activation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3300,6 +3300,9 @@ def test_l0a_kernel_select_real_dispatches_live_smoke_then_blocks_on_runtime_act
                 "harness_health_warnings": [],
             }
 
+        def restore_runtime(self) -> None:
+            return None
+
     monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeRealMeasurementHarness)
     runner = auto_research.L0aKernelSelectRunner(
         repo_root=repo,
@@ -3307,25 +3310,24 @@ def test_l0a_kernel_select_real_dispatches_live_smoke_then_blocks_on_runtime_act
         tuned_config_root=repo / "output" / "tuned_configs",
     )
 
-    with pytest.raises(RuntimeError, match="HALT_REASON: l0a_kernel_selection_runtime_activation_missing"):
-        runner.run(
-            workload_file=workload_path,
-            action_space_file=action_space_path,
-            baselines=1,
-            screen_measurements_per_combo=1,
-            rescreen_top_k=1,
-            rescreen_measurements_per_candidate=1,
-            parallel_instances="auto",
-            round_root=repo / "output" / "auto_research",
-            harness="real",
-            max_combos=1,
-            proxy_port=8101,
-        )
+    result = runner.run(
+        workload_file=workload_path,
+        action_space_file=action_space_path,
+        baselines=1,
+        screen_measurements_per_combo=1,
+        rescreen_top_k=1,
+        rescreen_measurements_per_candidate=1,
+        parallel_instances="auto",
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        max_combos=1,
+        proxy_port=8101,
+    )
 
-    round_dir = next((repo / "output" / "auto_research").glob("*-l0a-select-*"))
+    round_dir = result.round_dir
     run_log = json.loads((round_dir / "run_log.json").read_text(encoding="utf-8"))
-    assert run_log["outcome"] == "ROUND_BLOCKED"
-    assert run_log["HALT_REASON"] == "l0a_kernel_selection_runtime_activation_missing"
+    assert run_log["outcome"] == "PASS"
+    assert run_log["kernel_selection_runtime_activation"] == "runtime_applied"
     assert run_log["limited_mode"] is True
     assert run_log["live_dispatch"]["baseline_rows"] == 1
     assert run_log["live_dispatch"]["screen_rows"] == 1
@@ -3340,6 +3342,64 @@ def test_l0a_kernel_select_real_dispatches_live_smoke_then_blocks_on_runtime_act
         "torch_compile_mode": "default",
         "cuda_graph_capture": "off",
     }
+    measurements = (round_dir / "measurements.tsv").read_text(encoding="utf-8")
+    assert "kernel_selection_applied" in measurements
+    assert "\truntime" in measurements
+
+
+def test_l0a_kernel_select_real_blocks_precisely_on_unsupported_runtime_knobs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    calls: list[dict[str, object]] = []
+
+    class _FakeRealMeasurementHarness:
+        VERSION = "RealMeasurementHarness v0.1.0"
+
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            calls.append({"candidate_vllm_config": candidate_vllm_config, **kwargs})
+            return {}
+
+        def restore_runtime(self) -> None:
+            return None
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeRealMeasurementHarness)
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="HALT_REASON: l0a_kernel_selection_runtime_unsupported_knobs"):
+        runner.run(
+            workload_file=workload_path,
+            action_space_file=action_space_path,
+            baselines=1,
+            screen_measurements_per_combo=1,
+            rescreen_top_k=1,
+            rescreen_measurements_per_candidate=1,
+            parallel_instances="auto",
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            max_combos=3,
+            proxy_port=8101,
+        )
+
+    round_dir = next((repo / "output" / "auto_research").glob("*-l0a-select-*"))
+    run_log = json.loads((round_dir / "run_log.json").read_text(encoding="utf-8"))
+    assert run_log["outcome"] == "ROUND_BLOCKED"
+    assert run_log["HALT_REASON"] == "l0a_kernel_selection_runtime_unsupported_knobs"
+    assert run_log["live_dispatch"]["attempted"] is False
+    assert run_log["unsupported_runtime_activation"][0]["combo_id"] == "combo_003"
+    assert run_log["unsupported_runtime_activation"][0]["unsupported_knobs"][0]["axis"] == "torch_compile_mode"
+    assert calls == []
 
 
 def test_l0a_kernel_select_refuses_missing_parity_fixture(tmp_path: Path) -> None:

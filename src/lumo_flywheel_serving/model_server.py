@@ -16,6 +16,7 @@ import requests
 
 from .metrics import parse_prometheus_text, resolve_metric_schema
 from .registry import ModelConfig, load_registry
+from .kernel_activation import KernelRuntimeActivationPlan, require_supported_kernel_runtime_activation
 from .tuned_config import (
     RuntimeStateStore,
     StructuredValidationError,
@@ -288,6 +289,9 @@ class ModelServer:
         self.ensure_runtime_scaffolding()
         self._ensure_image_present()
         config, active_bundle_path, active_bundle = self.resolved_model_config(model_id)
+        kernel_activation = require_supported_kernel_runtime_activation(
+            active_bundle.kernel_selection if active_bundle is not None else None
+        )
         weight_version_id = (
             active_bundle.weight_version_id if active_bundle is not None else default_weight_version_id(self.registry[model_id])
         )
@@ -314,6 +318,7 @@ class ModelServer:
                     enforce_eager=enforce_eager,
                     tuned_config_id=active_bundle.bundle_id if active_bundle is not None else None,
                     weight_version_id=weight_version_id,
+                    kernel_activation=kernel_activation,
                 ),
             )
             container_id = launch.stdout.strip()
@@ -616,6 +621,7 @@ class ModelServer:
         enforce_eager: bool,
         tuned_config_id: str | None = None,
         weight_version_id: str | None = None,
+        kernel_activation: KernelRuntimeActivationPlan | None = None,
     ) -> list[str]:
         log_path = self.logs_path(model_id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -669,6 +675,11 @@ class ModelServer:
             )
         if enforce_eager:
             vllm_args.append("--enforce-eager")
+        if kernel_activation is not None:
+            for arg in kernel_activation.launch_args:
+                if arg == "--enforce-eager" and "--enforce-eager" in vllm_args:
+                    continue
+                vllm_args.append(arg)
         if self.use_sleep_mode:
             vllm_args.append("--enable-sleep-mode")
         if enable_request_logging:
@@ -684,6 +695,7 @@ class ModelServer:
             enforce_eager=enforce_eager,
             tuned_config_id=tuned_config_id,
             weight_version_id=weight_version_id,
+            kernel_activation=kernel_activation,
         )
         shell_cmd = (
             "set -euo pipefail\n"
@@ -791,6 +803,7 @@ class ModelServer:
         enforce_eager: bool,
         tuned_config_id: str | None,
         weight_version_id: str | None,
+        kernel_activation: KernelRuntimeActivationPlan | None = None,
     ) -> str:
         payload = {
             "timestamp": datetime.now(UTC).isoformat(),
@@ -809,6 +822,7 @@ class ModelServer:
             "max_lora_rank": config.max_lora_rank,
             "tuned_config_id": tuned_config_id or "baseline",
             "weight_version_id": weight_version_id or default_weight_version_id(config),
+            "kernel_runtime_activation": kernel_activation.as_dict() if kernel_activation is not None else None,
             "launch_cmd": shlex.join(vllm_args),
         }
         encoded = json.dumps(payload)
@@ -828,6 +842,8 @@ class ModelServer:
             "    handle.write(f\"[VLLM-INIT] max_model_len={payload['max_model_len']} gpu_memory_utilization={payload['gpu_memory_utilization']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] enforce_eager={str(payload['enforce_eager']).lower()}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] tuned_config_id={payload['tuned_config_id']} weight_version_id={payload['weight_version_id']}\\n\")\n"
+            "    if payload.get('kernel_runtime_activation') is not None:\n"
+            "        handle.write('[VLLM-INIT] kernel_runtime_activation=' + json.dumps(payload['kernel_runtime_activation'], sort_keys=True) + '\\n')\n"
             "    handle.write(f\"[VLLM-INIT] wire_api={payload['wire_api']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] responses_api_store={str(payload['responses_api_store']).lower()}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] dev_mode={str(payload['dev_mode']).lower()} sleep_mode={'enabled' if payload['sleep_mode'] else 'disabled'}\\n\")\n"
