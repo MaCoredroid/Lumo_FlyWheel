@@ -4031,6 +4031,7 @@ def test_l0b_kernel_autotune_real_dispatches_l0a_base_runtime_activation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Real harness drives autotune-phase replays + baseline + winner, captures Triton cache."""
     repo = _init_repo(tmp_path)
     _write_l0a_fixture_pair(repo)
     workload_path = _write_l0a_workload(repo)
@@ -4043,9 +4044,23 @@ def test_l0b_kernel_autotune_real_dispatches_l0a_base_runtime_activation(
 
         def __init__(self, **kwargs: object) -> None:
             self.kwargs = kwargs
+            self.triton_cache_root = Path(kwargs["triton_cache_root"])  # round-local
+            self._call_index = 0
 
         def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            self._call_index += 1
             calls.append({"candidate_vllm_config": candidate_vllm_config, **kwargs})
+            # Emulate Triton's first-call autotune: write 3 cache entries on the
+            # very first measure(), zero on every subsequent call. The stable
+            # window check must therefore trip on the second autotune-phase replay.
+            if self._call_index == 1:
+                for shape_id in range(3):
+                    cache_path = self.triton_cache_root / f"autotune_shape_{shape_id}" / "winner.json"
+                    cache_path.parent.mkdir(parents=True, exist_ok=True)
+                    cache_path.write_text(
+                        json.dumps({"BV": 64, "num_warps": 4, "num_stages": 3}),
+                        encoding="utf-8",
+                    )
             return {
                 "generator": self.VERSION,
                 "candidate_vllm_config": candidate_vllm_config,
@@ -4084,23 +4099,119 @@ def test_l0b_kernel_autotune_real_dispatches_l0a_base_runtime_activation(
         round_root=repo / "output" / "auto_research",
         harness="real",
         max_autotune_candidates=4,
+        warmup_replays=2,
+        stable_window_replays=2,
     )
 
-    assert len(calls) == 2
+    # 2 warmup + 2 stable_window + 1 baseline + 1 winner = 6 measure() calls.
+    assert len(calls) == 6
     assert restores == [True]
-    assert calls[0]["kernel_selection"] == {
-        "combo_id": "combo_001",
-        "attention_backend": "vllm-default",
-        "deltanet_kernel": "triton-chunked-delta-v2",
-        "fp8_gemm_kernel": "cublas",
-        "torch_compile_mode": "default",
-        "cuda_graph_capture": "off",
-    }
-    assert calls[1]["kernel_selection"] == calls[0]["kernel_selection"]
+    assert calls[0]["kernel_selection"]["deltanet_kernel"] == "triton-chunked-delta-v2"
+    # Every replay invokes the L0a kernel selection (no per-call kernel switching).
+    assert all(call["kernel_selection"] == calls[0]["kernel_selection"] for call in calls)
+
+    warmup_trace = json.loads((result.round_dir / "warmup_stable_trace.json").read_text(encoding="utf-8"))
+    assert warmup_trace["stabilized"] is True
+    # First replay produced 3 cache entries; subsequent replays produced none.
+    assert warmup_trace["events"][0]["phase"] == "warmup"
+    final_event = warmup_trace["events"][-1]
+    assert final_event["phase"] == "stable_window"
+    assert final_event["new_winners"] == []
+
+    frozen = auto_research.load_yaml_file(result.round_dir / "frozen_autotune_params.yaml")
+    assert frozen["frozen_at"] is True
+    assert frozen["stabilized"] is True
+    assert frozen["per_kernel_params"]["captured_from"] == "upstream_triton_autotune"
+    assert frozen["per_kernel_params"]["cache_file_count"] == 3
+    archive = result.round_dir / frozen["frozen_triton_cache_ref"]
+    assert archive.is_file()
+    assert frozen["frozen_triton_cache_sha256"]
+
     run_log = json.loads((result.round_dir / "run_log.json").read_text(encoding="utf-8"))
-    assert run_log["live_dispatch"]["autotune_params_runtime_applied"] is False
+    assert run_log["live_dispatch"]["autotune_params_runtime_applied"] is True
+    assert run_log["live_dispatch"]["autotune_phase_replays"] == 4
+    assert run_log["live_dispatch"]["stabilized"] is True
     assert run_log["artifact_counts"]["baseline_rows"] == 1
     assert run_log["artifact_counts"]["winner_rows"] == 1
+
+
+def test_l0b_kernel_autotune_real_records_budget_exhausted_when_cache_keeps_growing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If Triton keeps autotuning new shapes, autotune phase records budget_exhausted."""
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+
+    class _NeverStableHarness:
+        VERSION = "RealMeasurementHarness v0.1.0"
+
+        def __init__(self, **kwargs: object) -> None:
+            self.triton_cache_root = Path(kwargs["triton_cache_root"])
+            self._idx = 0
+
+        def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            self._idx += 1
+            cache_path = self.triton_cache_root / f"shape_{self._idx}" / "winner.json"
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text("{}", encoding="utf-8")
+            return {
+                "generator": self.VERSION,
+                "candidate_vllm_config": candidate_vllm_config,
+                "cache_isolation": {},
+                "windows": {"measurement_elapsed_s": 1.0},
+                "per_request_latencies": [],
+                "diagnostics": {},
+                "eval_throughput": 1.0,
+                "rollout_throughput": 1.0,
+                "window_completed": True,
+                "reasoning_content_purity": 1.0,
+                "determinism_pass_rate": 1.0,
+                "no_oom_events": True,
+                "feasible": True,
+                "feasibility_failures": [],
+                "harness_health_warnings": [],
+            }
+
+        def restore_runtime(self) -> None:
+            pass
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _NeverStableHarness)
+    # The runner's hard replay cap (max_extra_replays = stable_window * 4) is
+    # the safety net we exercise here: every replay introduces a new cache
+    # file, so consecutive_stable can never reach stable_window_replays.
+
+    runner = auto_research.L0bKernelAutotuneRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        base_measurements=1,
+        autotune_budget_minutes=1,
+        measurement_rescreens=1,
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        max_autotune_candidates=2,
+        warmup_replays=2,
+        stable_window_replays=2,
+    )
+
+    warmup_trace = json.loads((result.round_dir / "warmup_stable_trace.json").read_text(encoding="utf-8"))
+    assert warmup_trace["stabilized"] is False
+    assert warmup_trace["stable_window_condition"] == "budget_exhausted_before_stable"
+    # Hard replay cap: stable_window_replays * 4 = 8 extra replays.
+    extra_events = [event for event in warmup_trace["events"] if event["phase"] == "stable_window"]
+    assert len(extra_events) == 8
+    frozen = auto_research.load_yaml_file(result.round_dir / "frozen_autotune_params.yaml")
+    assert frozen["freeze_reason"] == "budget_exhausted_before_stable"
+    assert frozen["stabilized"] is False
 
 
 def test_l0b_kernel_autotune_real_blocks_unsupported_base_runtime_knobs(tmp_path: Path) -> None:

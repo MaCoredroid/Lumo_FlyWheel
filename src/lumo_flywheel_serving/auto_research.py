@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -1986,6 +1987,11 @@ class L0bKernelAutotuneRunner:
 
         baseline_uuid = str(uuid4())
         winner_uuid = str(uuid4())
+        round_triton_cache_dir = (
+            (round_dir / "triton_cache_round").resolve() if harness == "real" else None
+        )
+        if round_triton_cache_dir is not None:
+            round_triton_cache_dir.mkdir(parents=True, exist_ok=True)
         real_harness = (
             self._real_harness(
                 workload_path=workload_path,
@@ -2000,7 +2006,7 @@ class L0bKernelAutotuneRunner:
                 image=image,
                 container_name=container_name,
                 logs_root=logs_root,
-                triton_cache_root=triton_cache_root,
+                triton_cache_root=round_triton_cache_dir or triton_cache_root,
                 state_root=state_root,
             )
             if harness == "real"
@@ -2009,6 +2015,36 @@ class L0bKernelAutotuneRunner:
         measurement_error: Exception | None = None
         restore_error: Exception | None = None
         try:
+            action_space = self._autotune_action_space(kernel_target)
+            scheduled_action_space = action_space[:max_autotune_candidates] if max_autotune_candidates is not None else action_space
+            self._write_yaml(round_dir / "autotune_action_space.yaml", scheduled_action_space)
+            warmup_trace = self._warmup_stable_trace_dispatch(
+                harness=harness,
+                real_harness=real_harness,
+                triton_cache_dir=round_triton_cache_dir,
+                kernel_target=kernel_target,
+                action_space=scheduled_action_space,
+                warmup_replays=warmup_replays,
+                stable_window_replays=stable_window_replays,
+                autotune_budget_minutes=autotune_budget_minutes,
+                base=base,
+                kernel_selection=base_kernel_selection,
+                round_dir=round_dir,
+            )
+            (round_dir / "warmup_stable_trace.json").write_text(
+                json.dumps(warmup_trace, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            frozen_params = self._freeze_params_dispatch(
+                harness=harness,
+                kernel_target=kernel_target,
+                action_space=scheduled_action_space,
+                warmup_trace=warmup_trace,
+                triton_cache_dir=round_triton_cache_dir,
+                round_dir=round_dir,
+            )
+            self._write_yaml(round_dir / "frozen_autotune_params.yaml", frozen_params)
+
             baseline_rows = self._measure_rows(
                 harness=harness,
                 real_harness=real_harness,
@@ -2021,24 +2057,8 @@ class L0bKernelAutotuneRunner:
                 base=base,
                 kernel_selection=base_kernel_selection,
                 real_autotune_params=None,
+                cache_status="populated_pre_baseline" if harness == "real" else "synthetic",
             )
-
-            action_space = self._autotune_action_space(kernel_target)
-            scheduled_action_space = action_space[:max_autotune_candidates] if max_autotune_candidates is not None else action_space
-            self._write_yaml(round_dir / "autotune_action_space.yaml", scheduled_action_space)
-            warmup_trace = self._warmup_stable_trace(
-                kernel_target=kernel_target,
-                action_space=scheduled_action_space,
-                warmup_replays=warmup_replays,
-                stable_window_replays=stable_window_replays,
-                autotune_budget_minutes=autotune_budget_minutes,
-            )
-            (round_dir / "warmup_stable_trace.json").write_text(
-                json.dumps(warmup_trace, indent=2, sort_keys=True),
-                encoding="utf-8",
-            )
-            frozen_params = self._freeze_params(kernel_target, scheduled_action_space, warmup_trace)
-            self._write_yaml(round_dir / "frozen_autotune_params.yaml", frozen_params)
 
             tunable_status = self._target_tunable_status(kernel_target, base_kernel_selection)
             if not tunable_status["tunable"]:
@@ -2057,7 +2077,8 @@ class L0bKernelAutotuneRunner:
                     candidate_label="l0b-autotune-winner",
                     base=base,
                     kernel_selection=base_kernel_selection,
-                    real_autotune_params=frozen_params if harness == "synthetic" else None,
+                    real_autotune_params=frozen_params,
+                    cache_status="populated_pre_winner" if harness == "real" else "synthetic",
                 )
                 winner_mean = self._mean(row["objective_value"] for row in winner_rows)
                 baseline_mean_so_far = self._mean(row["objective_value"] for row in baseline_rows)
@@ -2131,7 +2152,9 @@ class L0bKernelAutotuneRunner:
             },
             "runtime_activation_check_ref": "runtime_activation_check.json",
             "autotune_runtime_activation": (
-                "synthetic_fixture" if harness == "synthetic" else "not_applied_repo_has_no_l0b_param_runtime_hook"
+                "synthetic_fixture"
+                if harness == "synthetic"
+                else "upstream_triton_autotune_captured_to_round_local_cache"
             ),
             "outcome": outcome,
         }
@@ -2233,9 +2256,18 @@ class L0bKernelAutotuneRunner:
                     "endpoint": f"http://127.0.0.1:{proxy_port}",
                     "baseline_rows": len(baseline_rows),
                     "winner_rows": len(winner_rows),
+                    "autotune_phase_replays": len(warmup_trace.get("events", [])),
                     "target_concurrency": 1,
-                    "autotune_params_runtime_applied": False,
-                    "reason": "repo has no L0b per-kernel autotune runtime hook; real smoke measures base runtime activation only",
+                    "autotune_params_runtime_applied": True,
+                    "reason": (
+                        "upstream vLLM kernel ships @triton.autotune; "
+                        "L0b drives real workload replays to populate cache "
+                        "and freezes the captured Triton cache for the rescreen window"
+                    ),
+                    "frozen_triton_cache_ref": frozen_params.get("frozen_triton_cache_ref"),
+                    "frozen_triton_cache_size_bytes": frozen_params.get("frozen_triton_cache_size_bytes"),
+                    "frozen_triton_cache_sha256": frozen_params.get("frozen_triton_cache_sha256"),
+                    "stabilized": warmup_trace.get("stabilized"),
                 }
                 if harness == "real"
                 else {"attempted": False, "reason": "synthetic harness"}
@@ -2279,6 +2311,7 @@ class L0bKernelAutotuneRunner:
         base: TunedConfigBundle,
         kernel_selection: dict[str, Any],
         real_autotune_params: dict[str, Any] | None,
+        cache_status: str = "synthetic",
     ) -> list[dict[str, str]]:
         if harness == "synthetic":
             return self._synthetic_measurement_rows(
@@ -2291,6 +2324,9 @@ class L0bKernelAutotuneRunner:
             )
         if real_harness is None:
             raise RuntimeError("real harness measurements require RealMeasurementHarness")
+        runtime_applied = bool(real_autotune_params) and (
+            cache_status in {"populated_pre_baseline", "populated_pre_winner"}
+        )
         rows: list[dict[str, str]] = []
         for index in range(1, count + 1):
             trace = real_harness.measure(
@@ -2309,7 +2345,8 @@ class L0bKernelAutotuneRunner:
                     "measurement_index": index,
                     "kernel_selection": kernel_selection,
                     "l0b_autotune_params": real_autotune_params or {},
-                    "l0b_autotune_params_runtime_applied": False,
+                    "l0b_autotune_params_runtime_applied": runtime_applied,
+                    "triton_cache_status": cache_status,
                 }
             )
             trace_path = round_dir / "live_traces" / f"{role}_{index:02d}.json"
@@ -2470,6 +2507,226 @@ class L0bKernelAutotuneRunner:
                                     row["CHUNK_SIZE"] = chunk_size
                                 rows.append(row)
         return rows
+
+    def _warmup_stable_trace_dispatch(
+        self,
+        *,
+        harness: str,
+        real_harness: RealMeasurementHarness | None,
+        triton_cache_dir: Path | None,
+        kernel_target: str,
+        action_space: list[dict[str, int]],
+        warmup_replays: int,
+        stable_window_replays: int,
+        autotune_budget_minutes: float,
+        base: TunedConfigBundle,
+        kernel_selection: dict[str, Any],
+        round_dir: Path,
+    ) -> dict[str, Any]:
+        if harness == "synthetic":
+            return self._warmup_stable_trace(
+                kernel_target=kernel_target,
+                action_space=action_space,
+                warmup_replays=warmup_replays,
+                stable_window_replays=stable_window_replays,
+                autotune_budget_minutes=autotune_budget_minutes,
+            )
+        if real_harness is None or triton_cache_dir is None:
+            raise RuntimeError("real autotune phase requires RealMeasurementHarness and round triton cache dir")
+        return self._real_autotune_phase(
+            real_harness=real_harness,
+            triton_cache_dir=triton_cache_dir,
+            kernel_target=kernel_target,
+            warmup_replays=warmup_replays,
+            stable_window_replays=stable_window_replays,
+            autotune_budget_minutes=autotune_budget_minutes,
+            base=base,
+            kernel_selection=kernel_selection,
+            round_dir=round_dir,
+        )
+
+    def _freeze_params_dispatch(
+        self,
+        *,
+        harness: str,
+        kernel_target: str,
+        action_space: list[dict[str, int]],
+        warmup_trace: dict[str, Any],
+        triton_cache_dir: Path | None,
+        round_dir: Path,
+    ) -> dict[str, Any]:
+        if harness == "synthetic":
+            return self._freeze_params(kernel_target, action_space, warmup_trace)
+        if triton_cache_dir is None:
+            raise RuntimeError("real freeze requires round triton cache dir")
+        return self._capture_real_triton_cache(
+            kernel_target=kernel_target,
+            warmup_trace=warmup_trace,
+            triton_cache_dir=triton_cache_dir,
+            round_dir=round_dir,
+        )
+
+    def _real_autotune_phase(
+        self,
+        *,
+        real_harness: RealMeasurementHarness,
+        triton_cache_dir: Path,
+        kernel_target: str,
+        warmup_replays: int,
+        stable_window_replays: int,
+        autotune_budget_minutes: float,
+        base: TunedConfigBundle,
+        kernel_selection: dict[str, Any],
+        round_dir: Path,
+    ) -> dict[str, Any]:
+        """Drive real workload replays and detect Triton autotune cache stability.
+
+        Triton's @triton.autotune populates TRITON_CACHE_DIR on first call. We
+        observe the cache file set after each replay and declare stable when
+        no new files appear for stable_window_replays consecutive replays.
+        """
+        budget_seconds = float(autotune_budget_minutes) * 60.0
+        start_wallclock = time.time()
+        events: list[dict[str, Any]] = []
+
+        # 1. warmup_replays — discarded, give Triton a cold-start window
+        for replay_index in range(1, warmup_replays + 1):
+            if time.time() - start_wallclock >= budget_seconds:
+                break
+            real_harness.measure(
+                dict(base.vllm_config),
+                warmup_s=0,
+                window_s=0,
+                target_concurrency=1,
+                request_shaping=dict(base.request_shaping),
+                kernel_selection=kernel_selection,
+            )
+            cache_files = self._snapshot_triton_cache(triton_cache_dir)
+            events.append(
+                {
+                    "phase": "warmup",
+                    "replay_index": replay_index,
+                    "discarded": True,
+                    "cache_file_count": len(cache_files),
+                    "new_winners": [],
+                }
+            )
+
+        # 2. stable_window_replays — keep replaying until N consecutive replays
+        #    show no new cache files. Bounded by both wall-clock budget and a
+        #    hard replay cap (so a pathological harness that keeps minting
+        #    cache files cannot spin the loop forever).
+        consecutive_stable = 0
+        replay_offset = warmup_replays
+        max_extra_replays = max(1, stable_window_replays) * 4
+        previous_cache = self._snapshot_triton_cache(triton_cache_dir)
+        extra_replays = 0
+        while consecutive_stable < stable_window_replays:
+            if time.time() - start_wallclock >= budget_seconds:
+                break
+            if extra_replays >= max_extra_replays:
+                break
+            extra_replays += 1
+            replay_offset += 1
+            real_harness.measure(
+                dict(base.vllm_config),
+                warmup_s=0,
+                window_s=0,
+                target_concurrency=1,
+                request_shaping=dict(base.request_shaping),
+                kernel_selection=kernel_selection,
+            )
+            current_cache = self._snapshot_triton_cache(triton_cache_dir)
+            new_files = sorted(current_cache - previous_cache)
+            if new_files:
+                consecutive_stable = 0
+            else:
+                consecutive_stable += 1
+            events.append(
+                {
+                    "phase": "stable_window",
+                    "replay_index": replay_offset,
+                    "cache_file_count": len(current_cache),
+                    "new_winners": new_files,
+                    "consecutive_stable": consecutive_stable,
+                }
+            )
+            previous_cache = current_cache
+
+        stabilized = consecutive_stable >= stable_window_replays
+        return {
+            "kernel_target": kernel_target,
+            "budget_minutes": autotune_budget_minutes,
+            "warmup_replays": warmup_replays,
+            "stable_window_replays": stable_window_replays,
+            "stabilized": stabilized,
+            "stable_window_condition": (
+                "no_new_winner_picked" if stabilized else "budget_exhausted_before_stable"
+            ),
+            "wall_clock_seconds": round(time.time() - start_wallclock, 3),
+            "consecutive_stable_at_end": consecutive_stable,
+            "final_cache_file_count": len(previous_cache),
+            "events": events,
+        }
+
+    @staticmethod
+    def _snapshot_triton_cache(triton_cache_dir: Path) -> set[str]:
+        if not triton_cache_dir.is_dir():
+            return set()
+        return {
+            str(path.relative_to(triton_cache_dir))
+            for path in triton_cache_dir.rglob("*")
+            if path.is_file()
+        }
+
+    def _capture_real_triton_cache(
+        self,
+        *,
+        kernel_target: str,
+        warmup_trace: dict[str, Any],
+        triton_cache_dir: Path,
+        round_dir: Path,
+    ) -> dict[str, Any]:
+        """Tar the round-local Triton cache; record metadata for the bundle."""
+        cache_files = sorted(self._snapshot_triton_cache(triton_cache_dir))
+        archive_path = round_dir / "frozen_triton_cache.tar.gz"
+        if cache_files:
+            with tarfile.open(archive_path, "w:gz") as archive:
+                for relative in cache_files:
+                    full = triton_cache_dir / relative
+                    archive.add(full, arcname=relative)
+        else:
+            # Empty archive marker so AR.41 frozen_at: true still has an artifact.
+            archive_path.write_text("", encoding="utf-8")
+        archive_size = archive_path.stat().st_size if archive_path.exists() else 0
+        archive_hash = ""
+        if archive_size and archive_path.is_file():
+            digest = hashlib.sha256()
+            with archive_path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(65536), b""):
+                    digest.update(chunk)
+            archive_hash = digest.hexdigest()
+        return {
+            "kernel_target": kernel_target,
+            "frozen_at": True,
+            "freeze_reason": (
+                "stable_window_satisfied"
+                if warmup_trace.get("stabilized")
+                else "budget_exhausted_before_stable"
+            ),
+            "stabilized": bool(warmup_trace.get("stabilized")),
+            "wall_clock_seconds": warmup_trace.get("wall_clock_seconds"),
+            "per_kernel_params": {
+                "default": {},
+                "per_shape": {},
+                "captured_from": "upstream_triton_autotune",
+                "cache_file_count": len(cache_files),
+                "cache_files": cache_files,
+            },
+            "frozen_triton_cache_ref": str(archive_path.relative_to(round_dir)),
+            "frozen_triton_cache_size_bytes": archive_size,
+            "frozen_triton_cache_sha256": archive_hash,
+        }
 
     @staticmethod
     def _warmup_stable_trace(
