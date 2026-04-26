@@ -452,7 +452,7 @@ def test_smoke_test_rejects_ttft_count_mismatch(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(cli, "LatencyCapture", _FakeLatencyCapture)
     monkeypatch.setattr(requests, "post", fake_post)
 
-    with pytest.raises(RuntimeError, match="expected ttft_count=5"):
+    with pytest.raises(RuntimeError, match="expected at least ttft_count=5"):
         cli.cmd_smoke_test(_args())
 
 

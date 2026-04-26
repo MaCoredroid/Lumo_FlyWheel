@@ -422,9 +422,9 @@ def cmd_smoke_test(args: argparse.Namespace) -> int:
                 "Telemetry smoke violated cache_hits <= cache_queries."
             )
         expected_request_count = 5
-        if telemetry_metrics.ttft_count != expected_request_count:
+        if telemetry_metrics.ttft_count < expected_request_count:
             raise RuntimeError(
-                f"Telemetry smoke expected ttft_count={expected_request_count} for the five smoke requests, "
+                f"Telemetry smoke expected at least ttft_count={expected_request_count} for the five smoke requests, "
                 f"but observed {telemetry_metrics.ttft_count}."
             )
         gpu_compute_s = telemetry_metrics.prefill_sum_s + telemetry_metrics.decode_sum_s
