@@ -1268,6 +1268,8 @@ models:
     monkeypatch.setenv("LUMO_P2B_DEBUG_EXPORT_DIR", str(tmp_path / "logs" / "p2b_debug"))
     monkeypatch.setenv("LUMO_P2B_DEBUG_PROBE_REQUEST_IDS", "cmpl-p2b-min-0")
     monkeypatch.setenv("LUMO_P2B_DEBUG_STATE_TOKENS", "1,1024")
+    monkeypatch.setenv("LUMO_P2B_DEBUG_LOGITS_MAX_TOKENS", "32")
+    monkeypatch.setenv("LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS", "1")
 
     cmd = server._build_run_command(
         "qwen3.5-27b",
@@ -1282,10 +1284,14 @@ models:
     assert f"LUMO_P2B_DEBUG_EXPORT_DIR={tmp_path / 'logs' / 'p2b_debug'}" in cmd
     assert "LUMO_P2B_DEBUG_PROBE_REQUEST_IDS=cmpl-p2b-min-0" in cmd
     assert "LUMO_P2B_DEBUG_STATE_TOKENS=1,1024" in cmd
+    assert "LUMO_P2B_DEBUG_LOGITS_MAX_TOKENS=32" in cmd
+    assert "LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS=1" in cmd
     assert "VLLM_LUMO_P2B_DEBUG_EXPORT=1" in cmd
     assert f"VLLM_LUMO_P2B_DEBUG_EXPORT_DIR={tmp_path / 'logs' / 'p2b_debug'}" in cmd
     assert "VLLM_LUMO_P2B_DEBUG_PROBE_REQUEST_IDS=cmpl-p2b-min-0" in cmd
     assert "VLLM_LUMO_P2B_DEBUG_STATE_TOKENS=1,1024" in cmd
+    assert "VLLM_LUMO_P2B_DEBUG_LOGITS_MAX_TOKENS=32" in cmd
+    assert "VLLM_LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS=1" in cmd
     assert "VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY=LUMO_P2B_" in cmd
 
 

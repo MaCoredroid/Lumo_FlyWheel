@@ -15,6 +15,8 @@ DEBUG_ENV_VARS = (
     "LUMO_P2B_DEBUG_EXPORT_DIR",
     "LUMO_P2B_DEBUG_PROBE_REQUEST_IDS",
     "LUMO_P2B_DEBUG_STATE_TOKENS",
+    "LUMO_P2B_DEBUG_LOGITS_MAX_TOKENS",
+    "LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS",
     "LUMO_P2B_DEBUG_STRICT",
 )
 
@@ -27,8 +29,10 @@ and LUMO_P2B_DEBUG_PROBE_REQUEST_IDS names one or more request ids.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+from fnmatch import fnmatchcase
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -50,6 +54,8 @@ class P2BDebugConfig:
     output_dir: Path
     probe_request_ids: frozenset[str]
     state_tokens: frozenset[int]
+    logits_max_tokens: int | None = None
+    logits_max_exports_per_request: int | None = 1
     strict: bool = False
 
 
@@ -57,7 +63,9 @@ class P2BDebugExporter:
     def __init__(self, config: P2BDebugConfig) -> None:
         self.config = config
         self._exported_logits_count: dict[str, int] = {}
+        self._written_logits_count: dict[str, int] = {}
         self._exported_state: set[tuple[str, int]] = set()
+        self._written_state_diagnostics: set[tuple[str, str]] = set()
 
     @classmethod
     def disabled(cls) -> "P2BDebugExporter":
@@ -67,6 +75,8 @@ class P2BDebugExporter:
                 output_dir=Path("/tmp/lumo-p2b-vllm-debug"),
                 probe_request_ids=frozenset(),
                 state_tokens=frozenset({1, 1024}),
+                logits_max_tokens=None,
+                logits_max_exports_per_request=1,
             )
         )
 
@@ -107,12 +117,24 @@ class P2BDebugExporter:
             )
         )
         strict = _env_value("LUMO_P2B_DEBUG_STRICT", "VLLM_LUMO_P2B_DEBUG_STRICT").strip().lower() in _TRUE_VALUES
+        logits_max_tokens = _optional_nonnegative_int(
+            _env_value("LUMO_P2B_DEBUG_LOGITS_MAX_TOKENS", "VLLM_LUMO_P2B_DEBUG_LOGITS_MAX_TOKENS")
+        )
+        logits_max_exports_per_request = _optional_nonnegative_int(
+            _env_value(
+                "LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS",
+                "VLLM_LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS",
+                default="1",
+            )
+        )
         return cls(
             P2BDebugConfig(
                 enabled=True,
                 output_dir=output_dir,
                 probe_request_ids=probe_request_ids,
                 state_tokens=state_tokens,
+                logits_max_tokens=logits_max_tokens,
+                logits_max_exports_per_request=logits_max_exports_per_request,
                 strict=strict,
             )
         )
@@ -133,21 +155,23 @@ class P2BDebugExporter:
                     continue
                 if req_index >= logits.shape[0]:
                     continue
+                if self._logits_export_limit_reached(req_id):
+                    continue
                 generated_token_index = self._next_generated_token_index(
                     req_id=req_id,
                     req_index=req_index,
                     output_token_ids=output_token_ids,
                 )
-                payload = {
-                    "kind": "full_vocab_logits_before_sampling",
-                    "request_id": req_id,
-                    "generated_token_index": generated_token_index,
-                    "logits": logits[req_index].detach().to("cpu", dtype=torch.float32),
-                }
+                payload = self._build_logits_payload(
+                    req_id=req_id,
+                    generated_token_index=generated_token_index,
+                    logits=logits[req_index],
+                )
                 self._write_pt(
                     f"logits_req_{_safe_name(req_id)}_tok_{generated_token_index:06d}.pt",
                     payload,
                 )
+                self._written_logits_count[req_id] = self._written_logits_count.get(req_id, 0) + 1
         except Exception:
             logger.exception("P2b debug logits export failed")
             if self.config.strict:
@@ -167,9 +191,16 @@ class P2BDebugExporter:
                     continue
                 req_state = runner.requests.get(req_id)
                 if req_state is None:
+                    self._write_state_diagnostic(req_id=req_id, reason="request_state_missing")
                     continue
                 generated_token_index = len(req_state.output_token_ids)
                 if generated_token_index not in self.config.state_tokens:
+                    self._write_state_diagnostic(
+                        req_id=req_id,
+                        reason="generated_token_not_checkpoint",
+                        generated_token_index=generated_token_index,
+                        state_tokens=sorted(self.config.state_tokens),
+                    )
                     continue
                 exported_key = (req_id, generated_token_index)
                 if exported_key in self._exported_state:
@@ -177,6 +208,12 @@ class P2BDebugExporter:
 
                 state_block_idx = runner.mamba_state_idx.get(req_id)
                 if state_block_idx is None or state_block_idx < 0:
+                    self._write_state_diagnostic(
+                        req_id=req_id,
+                        reason="mamba_state_idx_missing",
+                        generated_token_index=generated_token_index,
+                        mamba_state_idx=state_block_idx,
+                    )
                     continue
                 snapshots: dict[str, list[dict[str, Any]]] = {}
                 for mamba_group_id in copy_bufs.mamba_group_ids:
@@ -206,6 +243,13 @@ class P2BDebugExporter:
                         if layer_payload:
                             snapshots[layer_name] = layer_payload
                 if not snapshots:
+                    self._write_state_diagnostic(
+                        req_id=req_id,
+                        reason="no_kv_cache_state_tensors",
+                        generated_token_index=generated_token_index,
+                        mamba_state_idx=state_block_idx,
+                        mamba_group_ids=[int(group_id) for group_id in copy_bufs.mamba_group_ids],
+                    )
                     continue
 
                 payload = {
@@ -227,12 +271,71 @@ class P2BDebugExporter:
 
     def _write_pt(self, filename: str, payload: dict[str, Any]) -> None:
         final_path = self.config.output_dir / filename
-        tmp_path = final_path.with_suffix(final_path.suffix + ".tmp")
-        torch.save(payload, tmp_path)
-        tmp_path.replace(final_path)
+        tmp_path = final_path.with_name(f"{final_path.name}.{os.getpid()}.tmp")
+        try:
+            torch.save(payload, tmp_path)
+            tmp_path.replace(final_path)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+    def _write_json(self, filename: str, payload: dict[str, Any]) -> None:
+        final_path = self.config.output_dir / filename
+        tmp_path = final_path.with_name(f"{final_path.name}.{os.getpid()}.tmp")
+        try:
+            tmp_path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+            tmp_path.replace(final_path)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+    def _write_state_diagnostic(self, *, req_id: str, reason: str, **details: Any) -> None:
+        diagnostic_key = (req_id, reason)
+        if diagnostic_key in self._written_state_diagnostics:
+            return
+        self._written_state_diagnostics.add(diagnostic_key)
+        payload = {
+            "kind": "qwen35_mamba_deltanet_recurrent_state_diagnostic",
+            "request_id": req_id,
+            "reason": reason,
+            **details,
+        }
+        self._write_json(f"state_diag_req_{_safe_name(req_id)}_{reason}.json", payload)
 
     def _matches_probe_request(self, req_id: str) -> bool:
-        return "*" in self.config.probe_request_ids or req_id in self.config.probe_request_ids
+        return any(fnmatchcase(req_id, pattern) for pattern in self.config.probe_request_ids)
+
+    def _logits_export_limit_reached(self, req_id: str) -> bool:
+        limit = self.config.logits_max_exports_per_request
+        return limit is not None and self._written_logits_count.get(req_id, 0) >= limit
+
+    def _build_logits_payload(
+        self,
+        *,
+        req_id: str,
+        generated_token_index: int,
+        logits: torch.Tensor,
+    ) -> dict[str, Any]:
+        source = logits.detach()
+        source_shape = tuple(int(dim) for dim in source.shape)
+        bounded = _bounded_last_dim(source, self.config.logits_max_tokens)
+        with torch.inference_mode():
+            exported = bounded.to("cpu", dtype=torch.float32).contiguous()
+        return {
+            "kind": "full_vocab_logits_before_sampling",
+            "request_id": req_id,
+            "generated_token_index": generated_token_index,
+            "source_shape": source_shape,
+            "source_dtype": str(source.dtype),
+            "source_device": str(source.device),
+            "source_numel": int(source.numel()),
+            "logits_max_tokens": self.config.logits_max_tokens,
+            "logits_is_truncated": tuple(int(dim) for dim in exported.shape) != source_shape,
+            "saved_shape": tuple(int(dim) for dim in exported.shape),
+            "saved_dtype": str(exported.dtype),
+            "saved_numel": int(exported.numel()),
+            "logits": exported,
+        }
 
     def _next_generated_token_index(
         self,
@@ -260,6 +363,22 @@ def _env_value(name: str, alias: str | None = None, *, default: str = "") -> str
 def _split_env(name: str, alias: str | None = None, *, default: str = "") -> list[str]:
     raw = _env_value(name, alias, default=default)
     return [value.strip() for value in raw.split(",") if value.strip()]
+
+
+def _optional_nonnegative_int(raw: str) -> int | None:
+    value = raw.strip()
+    if not value:
+        return None
+    parsed = int(value)
+    if parsed < 0:
+        raise ValueError(f"expected a non-negative integer, got {raw!r}")
+    return parsed
+
+
+def _bounded_last_dim(tensor: torch.Tensor, max_items: int | None) -> torch.Tensor:
+    if max_items is None or tensor.ndim == 0:
+        return tensor
+    return tensor[..., :max_items]
 
 
 def _safe_name(value: str) -> str:
