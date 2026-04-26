@@ -17,6 +17,7 @@ from .yaml_utils import load_yaml_file
 
 P2_INSUFFICIENT_MEMORY = "multi_instance_insufficient_memory"
 P2_CONCURRENT_DIVERGES = "multi_instance_concurrent_diverges"
+P2_FIXTURE_REQUEST_FAILED = "multi_instance_fixture_request_failed"
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,43 @@ class MultiInstanceVllmDriver:
                 stopped.append({"container_name": spec.container_name, "status": "error", "error": str(exc)})
         return stopped
 
+    def cuda_memory_snapshot(self) -> dict[str, float] | None:
+        specs = self.instance_specs(count=1, gpu_memory_utilization=0.2)
+        snapshot = self._server_for(specs[0])._cuda_mem_get_info_gib()
+        if snapshot is None:
+            return None
+        free_gib, total_gib = snapshot
+        return {"free_gib": free_gib, "total_gib": total_gib}
+
+    def log_tails(
+        self,
+        *,
+        model_id: str,
+        count: int,
+        gpu_memory_utilization: float,
+        lines: int = 80,
+    ) -> list[dict[str, Any]]:
+        tails: list[dict[str, Any]] = []
+        for spec in self.instance_specs(count=count, gpu_memory_utilization=gpu_memory_utilization):
+            log_path = self._server_for(spec).logs_path(model_id)
+            entry: dict[str, Any] = {
+                "instance": spec.index,
+                "container_name": spec.container_name,
+                "log_path": str(log_path),
+            }
+            try:
+                if log_path.exists():
+                    entry["tail"] = "\n".join(log_path.read_text(encoding="utf-8").splitlines()[-lines:])
+                else:
+                    entry["tail"] = ""
+                    entry["status"] = "missing"
+            except Exception as exc:
+                entry["tail"] = ""
+                entry["status"] = "error"
+                entry["error"] = str(exc)
+            tails.append(entry)
+        return tails
+
     def _server_for(self, spec: VllmInstanceSpec) -> ModelServer:
         return ModelServer(
             registry_path=self.registry_path,
@@ -223,6 +261,7 @@ class MultiInstanceP2Verifier:
         enable_request_logging: bool = False,
     ) -> dict[str, Any]:
         instances: list[VllmInstanceSpec] = []
+        startup_evidence = self._startup_evidence(count=count, gpu_memory_utilization=gpu_memory_utilization)
         try:
             instances = self.driver.start(
                 model_id=model_id,
@@ -243,6 +282,37 @@ class MultiInstanceP2Verifier:
                 model_name=self._request_model_name(model_id),
                 count=count,
             )
+            if count == 1:
+                first_result = self._post_fixture(instances[0], fixture_requests[0], timeout_s=request_timeout_s)
+                second_result = self._post_fixture(instances[0], fixture_requests[0], timeout_s=request_timeout_s)
+                if first_result["normalized_result"] != second_result["normalized_result"]:
+                    raise P2GateBlocked(
+                        P2_CONCURRENT_DIVERGES,
+                        "Single-instance P2 fixture result was not deterministic across repeated requests.",
+                        details={
+                            "mismatches": [
+                                {
+                                    "fixture_id": first_result["fixture_id"],
+                                    "serial": first_result["normalized_result"],
+                                    "repeat": second_result["normalized_result"],
+                                    "concurrent_instance": second_result["instance_index"],
+                                }
+                            ]
+                        },
+                    )
+                return {
+                    "pass": True,
+                    "status": "serial_only",
+                    "model_id": model_id,
+                    "workload_file": str(workload_file),
+                    "instance_count": len(instances),
+                    "gpu_memory_utilization": gpu_memory_utilization,
+                    "instances": [instance.__dict__ for instance in instances],
+                    "startup_evidence": {**startup_evidence, "started_instances": [instance.__dict__ for instance in instances]},
+                    "serial_results": [first_result, second_result],
+                    "concurrent_results": [],
+                }
+
             serial_results = [
                 self._post_fixture(instances[0], fixture_request, timeout_s=request_timeout_s)
                 for fixture_request in fixture_requests
@@ -278,6 +348,7 @@ class MultiInstanceP2Verifier:
                 "instance_count": len(instances),
                 "gpu_memory_utilization": gpu_memory_utilization,
                 "instances": [instance.__dict__ for instance in instances],
+                "startup_evidence": {**startup_evidence, "started_instances": [instance.__dict__ for instance in instances]},
                 "serial_results": serial_results,
                 "concurrent_results": concurrent_results,
             }
@@ -287,17 +358,157 @@ class MultiInstanceP2Verifier:
                 "status": "BLOCKED_NEEDS_USER_HELP",
                 "halt_reason": exc.halt_reason,
                 "error": str(exc),
+                "startup_evidence": startup_evidence,
+                "log_tails": self._log_tails(
+                    model_id=model_id,
+                    count=count,
+                    gpu_memory_utilization=gpu_memory_utilization,
+                ),
                 **exc.details,
+            }
+        except Exception as exc:
+            return {
+                "pass": False,
+                "status": "BLOCKED_NEEDS_USER_HELP",
+                "halt_reason": P2_FIXTURE_REQUEST_FAILED,
+                "error": str(exc),
+                "startup_evidence": startup_evidence,
+                "log_tails": self._log_tails(
+                    model_id=model_id,
+                    count=count,
+                    gpu_memory_utilization=gpu_memory_utilization,
+                ),
             }
         finally:
             if not keep_running:
                 self.driver.stop(count=count, missing_ok=True)
+
+    def discover_max_viable_fanout(
+        self,
+        *,
+        model_id: str,
+        workload_file: str | Path,
+        candidate_fanouts: list[int],
+        gpu_memory_utilization: float = 0.2,
+        bind_retries: int = 3,
+        request_timeout_s: int = 240,
+        keep_running: bool = False,
+        enable_request_logging: bool = False,
+    ) -> dict[str, Any]:
+        candidates = self._normalize_candidate_fanouts(candidate_fanouts)
+        attempts: list[dict[str, Any]] = []
+        for fanout in candidates:
+            payload = self.run(
+                model_id=model_id,
+                workload_file=workload_file,
+                count=fanout,
+                gpu_memory_utilization=gpu_memory_utilization,
+                bind_retries=bind_retries,
+                request_timeout_s=request_timeout_s,
+                keep_running=keep_running,
+                enable_request_logging=enable_request_logging,
+            )
+            details = self._attempt_details(payload)
+            attempt = {
+                "fanout": fanout,
+                "pass": bool(payload.get("pass")),
+                "status": payload.get("status"),
+                "halt_reason": payload.get("halt_reason"),
+                "error": payload.get("error"),
+                "startup_evidence": payload.get("startup_evidence"),
+                "log_tails": payload.get("log_tails", []),
+                "details": details,
+            }
+            attempts.append(attempt)
+            if payload.get("pass"):
+                max_viable_fanout = fanout
+                return {
+                    **payload,
+                    "pass": True,
+                    "status": "serial_only" if max_viable_fanout == 1 else "IMPLEMENTED_VERIFIED",
+                    "max_viable_fanout": max_viable_fanout,
+                    "candidate_fanouts": candidates,
+                    "fanout_attempts": attempts,
+                }
+
+        return {
+            "pass": False,
+            "status": "BLOCKED_NEEDS_USER_HELP",
+            "halt_reason": attempts[-1].get("halt_reason") if attempts else P2_INSUFFICIENT_MEMORY,
+            "error": attempts[-1].get("error") if attempts else "No P2 fanout candidates were supplied.",
+            "max_viable_fanout": 0,
+            "candidate_fanouts": candidates,
+            "fanout_attempts": attempts,
+        }
 
     def _request_model_name(self, model_id: str) -> str:
         config = self.driver._server_for(
             self.driver.instance_specs(count=1, gpu_memory_utilization=0.2)[0]
         ).registry[model_id]
         return ModelServer._request_model_name(config)
+
+    def _startup_evidence(self, *, count: int, gpu_memory_utilization: float) -> dict[str, Any]:
+        evidence: dict[str, Any] = {
+            "fanout": count,
+            "gpu_memory_utilization": gpu_memory_utilization,
+            "pre_start_cuda_memory": self._cuda_memory_snapshot(),
+        }
+        try:
+            evidence["instance_specs"] = [
+                spec.__dict__ for spec in self.driver.instance_specs(count=count, gpu_memory_utilization=gpu_memory_utilization)
+            ]
+        except Exception as exc:
+            evidence["instance_specs_error"] = str(exc)
+        return evidence
+
+    def _cuda_memory_snapshot(self) -> dict[str, float] | None:
+        snapshot = getattr(self.driver, "cuda_memory_snapshot", None)
+        if not callable(snapshot):
+            return None
+        try:
+            return snapshot()
+        except Exception:
+            return None
+
+    def _log_tails(self, *, model_id: str, count: int, gpu_memory_utilization: float) -> list[dict[str, Any]]:
+        log_tails = getattr(self.driver, "log_tails", None)
+        if not callable(log_tails):
+            return []
+        try:
+            return log_tails(model_id=model_id, count=count, gpu_memory_utilization=gpu_memory_utilization)
+        except Exception as exc:
+            return [{"status": "error", "error": str(exc)}]
+
+    @staticmethod
+    def _normalize_candidate_fanouts(candidate_fanouts: list[int]) -> list[int]:
+        normalized: list[int] = []
+        for fanout in candidate_fanouts:
+            if fanout < 1:
+                raise ValueError("candidate fanouts must be >= 1")
+            if fanout not in normalized:
+                normalized.append(fanout)
+        return sorted(normalized, reverse=True)
+
+    @staticmethod
+    def _attempt_details(payload: dict[str, Any]) -> dict[str, Any]:
+        omitted = {
+            "pass",
+            "status",
+            "model_id",
+            "workload_file",
+            "instance_count",
+            "gpu_memory_utilization",
+            "instances",
+            "startup_evidence",
+            "serial_results",
+            "concurrent_results",
+            "candidate_fanouts",
+            "fanout_attempts",
+            "halt_reason",
+            "error",
+            "log_tails",
+        }
+        return {key: value for key, value in payload.items() if key not in omitted}
 
     @staticmethod
     def _fixture_requests(*, workload_file: Path, model_name: str, count: int) -> list[dict[str, Any]]:

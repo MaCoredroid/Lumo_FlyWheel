@@ -598,18 +598,50 @@ def cmd_multi_vllm_stop(args: argparse.Namespace) -> int:
 def cmd_multi_vllm_verify_p2(args: argparse.Namespace) -> int:
     driver = _multi_instance_driver(args)
     verifier = MultiInstanceP2Verifier(driver)
-    payload = verifier.run(
-        model_id=args.model_id,
-        workload_file=args.workload_file,
-        count=args.count,
-        gpu_memory_utilization=args.gpu_memory_utilization,
-        bind_retries=args.bind_retries,
-        request_timeout_s=args.request_timeout_s,
-        keep_running=args.keep_running,
-        enable_request_logging=args.enable_request_logging,
-    )
+    if args.fixed_count:
+        payload = verifier.run(
+            model_id=args.model_id,
+            workload_file=args.workload_file,
+            count=args.count,
+            gpu_memory_utilization=args.gpu_memory_utilization,
+            bind_retries=args.bind_retries,
+            request_timeout_s=args.request_timeout_s,
+            keep_running=args.keep_running,
+            enable_request_logging=args.enable_request_logging,
+        )
+    else:
+        payload = verifier.discover_max_viable_fanout(
+            model_id=args.model_id,
+            workload_file=args.workload_file,
+            candidate_fanouts=_fanout_candidates(args.fanout_candidates, max_fanout=args.count),
+            gpu_memory_utilization=args.gpu_memory_utilization,
+            bind_retries=args.bind_retries,
+            request_timeout_s=args.request_timeout_s,
+            keep_running=args.keep_running,
+            enable_request_logging=args.enable_request_logging,
+        )
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0 if payload.get("pass") else 1
+
+
+def _fanout_candidates(raw: str | None, *, max_fanout: int) -> list[int]:
+    if max_fanout < 1:
+        raise ValueError("--count must be >= 1")
+    if raw is None or not raw.strip():
+        return list(range(max_fanout, 0, -1))
+    candidates: list[int] = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        candidate = int(item)
+        if candidate < 1:
+            raise ValueError("--fanout-candidates values must be >= 1")
+        if candidate not in candidates:
+            candidates.append(candidate)
+    if not candidates:
+        raise ValueError("--fanout-candidates must include at least one integer")
+    return sorted(candidates, reverse=True)
 
 
 def _auto_research_manager(args: argparse.Namespace) -> AutoResearchRoundManager:
@@ -1040,6 +1072,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     multi_verify_p2.add_argument("--request-timeout-s", type=int, default=240)
     multi_verify_p2.add_argument("--keep-running", action="store_true")
+    multi_verify_p2.add_argument(
+        "--fanout-candidates",
+        help="Comma-separated fanouts to try for discovery. Defaults to --count down to 1.",
+    )
+    multi_verify_p2.add_argument(
+        "--fixed-count",
+        action="store_true",
+        help="Run the legacy fixed --count verifier instead of hardware-aware fanout discovery.",
+    )
     multi_verify_p2.set_defaults(func=cmd_multi_vllm_verify_p2)
     return parser
 

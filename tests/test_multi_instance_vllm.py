@@ -89,7 +89,7 @@ class _FakeDriver:
     def __init__(self) -> None:
         self.stopped = False
 
-    def start(self, **kwargs):
+    def instance_specs(self, *, count: int, gpu_memory_utilization: float) -> list[VllmInstanceSpec]:
         return [
             VllmInstanceSpec(
                 index=index,
@@ -97,16 +97,25 @@ class _FakeDriver:
                 proxy_port=9200 + index,
                 container_name=f"p2-{index}",
                 base_url=f"http://127.0.0.1:{8200 + index}/v1",
-                gpu_memory_utilization=kwargs["gpu_memory_utilization"],
+                gpu_memory_utilization=gpu_memory_utilization,
                 logs_root="/logs",
                 triton_cache_root="/tmp/triton_cache",
             )
-            for index in range(kwargs["count"])
+            for index in range(count)
         ]
+
+    def start(self, **kwargs):
+        return self.instance_specs(count=kwargs["count"], gpu_memory_utilization=kwargs["gpu_memory_utilization"])
 
     def stop(self, **kwargs):
         self.stopped = True
         return []
+
+    def cuda_memory_snapshot(self):
+        return {"free_gib": 92.0, "total_gib": 128.0}
+
+    def log_tails(self, **kwargs):
+        return [{"instance": 0, "container_name": "p2-0", "tail": "fake vllm tail"}]
 
 
 class _Response:
@@ -154,4 +163,74 @@ def test_p2_verifier_blocks_when_concurrent_result_diverges(
     assert payload["status"] == "BLOCKED_NEEDS_USER_HELP"
     assert payload["halt_reason"] == P2_CONCURRENT_DIVERGES
     assert payload["mismatches"][0]["fixture_id"] == "P2-FIXTURE-2-label-2"
+    assert payload["startup_evidence"]["pre_start_cuda_memory"] == {"free_gib": 92.0, "total_gib": 128.0}
+    assert payload["log_tails"][0]["tail"] == "fake vllm tail"
     assert driver.stopped is True
+
+
+def test_p2_verifier_count_one_returns_serial_only_after_repeat_determinism(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workload = tmp_path / "workload.yaml"
+    seed = tmp_path / "seed_trace.jsonl"
+    workload.write_text("seed_trace_ref: seed_trace.jsonl\n", encoding="utf-8")
+    seed.write_text(json.dumps({"turn_index": 0, "capture_prompt_label": "label-0"}) + "\n", encoding="utf-8")
+    driver = _FakeDriver()
+    verifier = MultiInstanceP2Verifier(driver)  # type: ignore[arg-type]
+    monkeypatch.setattr(verifier, "_request_model_name", lambda model_id: model_id)
+
+    def fake_post(url: str, headers: dict[str, str], json: dict, timeout: int) -> _Response:
+        expected = json["input"].rsplit(": ", 1)[1]
+        return _Response({"output_text": expected, "usage": {"output_tokens": 1, "reasoning_tokens": 0}})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    payload = verifier.run(model_id="qwen3.5-27b", workload_file=workload, count=1)
+
+    assert payload["pass"] is True
+    assert payload["status"] == "serial_only"
+    assert payload["instance_count"] == 1
+    assert len(payload["serial_results"]) == 2
+    assert payload["concurrent_results"] == []
+    assert driver.stopped is True
+
+
+def test_p2_discovery_returns_highest_viable_fanout_and_attempt_evidence(monkeypatch) -> None:
+    verifier = MultiInstanceP2Verifier(_FakeDriver())  # type: ignore[arg-type]
+    seen_counts: list[int] = []
+
+    def fake_run(**kwargs):
+        count = kwargs["count"]
+        seen_counts.append(count)
+        if count > 2:
+            return {
+                "pass": False,
+                "status": "BLOCKED_NEEDS_USER_HELP",
+                "halt_reason": "startup_failed",
+                "error": f"fanout {count} failed",
+                "startup_evidence": {"fanout": count, "pre_start_cuda_memory": {"free_gib": 10.0, "total_gib": 20.0}},
+                "log_tails": [{"instance": 0, "tail": "oom"}],
+            }
+        return {
+            "pass": True,
+            "status": "IMPLEMENTED_VERIFIED",
+            "instance_count": count,
+            "startup_evidence": {"fanout": count, "pre_start_cuda_memory": {"free_gib": 10.0, "total_gib": 20.0}},
+        }
+
+    monkeypatch.setattr(verifier, "run", fake_run)
+
+    payload = verifier.discover_max_viable_fanout(
+        model_id="qwen3.5-27b",
+        workload_file=Path("workload.yaml"),
+        candidate_fanouts=[1, 4, 3, 2, 4],
+    )
+
+    assert payload["pass"] is True
+    assert payload["status"] == "IMPLEMENTED_VERIFIED"
+    assert payload["max_viable_fanout"] == 2
+    assert payload["candidate_fanouts"] == [4, 3, 2, 1]
+    assert seen_counts == [4, 3, 2]
+    assert payload["fanout_attempts"][0]["halt_reason"] == "startup_failed"
+    assert payload["fanout_attempts"][0]["startup_evidence"]["pre_start_cuda_memory"]["free_gib"] == 10.0
