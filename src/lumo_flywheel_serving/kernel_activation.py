@@ -76,6 +76,7 @@ def resolve_kernel_runtime_activation(kernel_selection: dict[str, Any] | None) -
     selection = dict(kernel_selection or {})
     launch_args: list[str] = []
     env: dict[str, str] = {}
+    compilation_config: dict[str, Any] = {}
     resolved: dict[str, Any] = {}
     unsupported: list[UnsupportedKernelKnob] = []
 
@@ -112,9 +113,23 @@ def resolve_kernel_runtime_activation(kernel_selection: dict[str, Any] | None) -
 
     _apply_attention_backend(selection.get("attention_backend"), launch_args, resolved, unsupported)
     _apply_deltanet_kernel(selection.get("deltanet_kernel"), launch_args, resolved, unsupported)
-    _apply_fp8_gemm_kernel(selection.get("fp8_gemm_kernel"), resolved, unsupported)
-    _apply_torch_compile_mode(selection.get("torch_compile_mode"), resolved, unsupported)
-    _apply_cuda_graph_capture(selection.get("cuda_graph_capture"), launch_args, resolved, unsupported)
+    _apply_fp8_gemm_kernel(selection.get("fp8_gemm_kernel"), env, resolved, unsupported)
+    compile_mode_applied = _apply_torch_compile_mode(
+        selection.get("torch_compile_mode"),
+        compilation_config,
+        resolved,
+        unsupported,
+    )
+    _apply_cuda_graph_capture(
+        selection.get("cuda_graph_capture"),
+        launch_args,
+        compilation_config,
+        resolved,
+        unsupported,
+        compile_mode_applied=compile_mode_applied,
+    )
+    if compilation_config:
+        launch_args.extend(["--compilation-config", json.dumps(compilation_config, sort_keys=True)])
 
     return KernelRuntimeActivationPlan(
         kernel_selection=selection,
@@ -196,6 +211,7 @@ def _apply_deltanet_kernel(
 
 def _apply_fp8_gemm_kernel(
     value: Any,
+    env: dict[str, str],
     resolved: dict[str, Any],
     unsupported: list[UnsupportedKernelKnob],
 ) -> None:
@@ -204,7 +220,27 @@ def _apply_fp8_gemm_kernel(
         return
     normalized = str(value)
     if normalized == "cublas":
-        resolved["fp8_gemm_kernel"] = "vllm-default"
+        env["VLLM_DISABLED_KERNELS"] = ",".join(
+            [
+                "MarlinFP8ScaledMMLinearKernel",
+                "FlashInferFP8ScaledMMLinearKernel",
+                "CutlassFP8ScaledMMLinearKernel",
+            ]
+        )
+        resolved["fp8_gemm_kernel"] = "torch_scaled_mm"
+        resolved["fp8_gemm_kernel_activation"] = "disabled non-Torch FP8 scaled-mm kernels"
+    elif normalized == "cutlass":
+        env["VLLM_DISABLED_KERNELS"] = ",".join(
+            [
+                "MarlinFP8ScaledMMLinearKernel",
+                "FlashInferFP8ScaledMMLinearKernel",
+                "PerTensorTorchFP8ScaledMMLinearKernel",
+                "ChannelWiseTorchFP8ScaledMMLinearKernel",
+                "RowWiseTorchFP8ScaledMMLinearKernel",
+            ]
+        )
+        resolved["fp8_gemm_kernel"] = "CutlassFP8ScaledMMLinearKernel"
+        resolved["fp8_gemm_kernel_activation"] = "disabled non-CUTLASS FP8 scaled-mm kernels"
     else:
         unsupported.append(
             UnsupportedKernelKnob(
@@ -218,15 +254,41 @@ def _apply_fp8_gemm_kernel(
 
 def _apply_torch_compile_mode(
     value: Any,
+    compilation_config: dict[str, Any],
     resolved: dict[str, Any],
     unsupported: list[UnsupportedKernelKnob],
-) -> None:
+) -> bool:
     if value is None:
         resolved["torch_compile_mode"] = "vllm-default"
-        return
+        return False
     normalized = str(value)
     if normalized == "default":
         resolved["torch_compile_mode"] = "vllm-default"
+        return False
+    mode_options = {
+        "reduce-overhead": {
+            "triton.cudagraphs": True,
+        },
+        "max-autotune": {
+            "max_autotune": True,
+            "triton.cudagraphs": True,
+            "coordinate_descent_tuning": True,
+        },
+        "max-autotune-no-cudagraphs": {
+            "max_autotune": True,
+            "coordinate_descent_tuning": True,
+        },
+    }
+    if normalized in mode_options:
+        compilation_config["mode"] = "VLLM_COMPILE"
+        inductor_config = compilation_config.setdefault("inductor_compile_config", {})
+        inductor_config.update(mode_options[normalized])
+        resolved["torch_compile_mode"] = normalized
+        resolved["torch_compile_mode_activation"] = {
+            "vllm_compilation_config.mode": "VLLM_COMPILE",
+            "vllm_compilation_config.inductor_compile_config": dict(mode_options[normalized]),
+        }
+        return True
     else:
         unsupported.append(
             UnsupportedKernelKnob(
@@ -236,23 +298,32 @@ def _apply_torch_compile_mode(
                 required_runtime_hook="add a repo-owned vLLM compilation_config mapping with parity/runtime proof",
             )
         )
+        return False
 
 
 def _apply_cuda_graph_capture(
     value: Any,
     launch_args: list[str],
+    compilation_config: dict[str, Any],
     resolved: dict[str, Any],
     unsupported: list[UnsupportedKernelKnob],
+    *,
+    compile_mode_applied: bool,
 ) -> None:
     if value is None:
         resolved["cuda_graph_capture"] = "vllm-default"
         return
     normalized = str(value)
     if normalized == "off":
-        launch_args.append("--enforce-eager")
-        resolved["cuda_graph_capture"] = "off"
+        if compile_mode_applied:
+            compilation_config["cudagraph_mode"] = "NONE"
+            resolved["cuda_graph_capture"] = "NONE"
+            resolved["cuda_graph_capture_activation"] = "vLLM compilation_config cudagraph_mode NONE"
+        else:
+            launch_args.append("--enforce-eager")
+            resolved["cuda_graph_capture"] = "off"
     elif normalized == "on":
-        launch_args.extend(["--compilation-config", json.dumps({"cudagraph_mode": "FULL"})])
+        compilation_config["cudagraph_mode"] = "FULL"
         resolved["cuda_graph_capture"] = "FULL"
     else:
         resolved["cuda_graph_capture"] = "unknown"

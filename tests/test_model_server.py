@@ -273,7 +273,62 @@ models:
     assert '"flash_attn_version": 4' in command
     assert "--gdn-prefill-backend triton" in command
     assert "--enforce-eager" in command
+    assert "VLLM_DISABLED_KERNELS=MarlinFP8ScaledMMLinearKernel,FlashInferFP8ScaledMMLinearKernel,CutlassFP8ScaledMMLinearKernel" in command
     assert "kernel_runtime_activation=" in command
+
+
+def test_build_run_command_applies_compile_and_cutlass_kernel_activation(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    plan = resolve_kernel_runtime_activation(
+        {
+            "combo_id": "combo_007",
+            "attention_backend": "vllm-default",
+            "deltanet_kernel": "triton-chunked-delta-v2",
+            "fp8_gemm_kernel": "cutlass",
+            "torch_compile_mode": "reduce-overhead",
+            "cuda_graph_capture": "off",
+        }
+    )
+
+    cmd = server._build_run_command(
+        "qwen3.5-27b",
+        server.registry["qwen3.5-27b"],
+        enable_request_logging=False,
+        kv_cache_dtype="auto",
+        gpu_memory_utilization=0.9,
+        enforce_eager=False,
+        kernel_activation=plan,
+    )
+    command = " ".join(cmd)
+
+    assert plan.supported is True
+    assert "--compilation-config" in command
+    assert '"mode": "VLLM_COMPILE"' in command
+    assert '"triton.cudagraphs": true' in command
+    assert '"cudagraph_mode": "NONE"' in command
+    assert "--enforce-eager" not in command
+    assert "VLLM_DISABLED_KERNELS=MarlinFP8ScaledMMLinearKernel,FlashInferFP8ScaledMMLinearKernel,PerTensorTorchFP8ScaledMMLinearKernel,ChannelWiseTorchFP8ScaledMMLinearKernel,RowWiseTorchFP8ScaledMMLinearKernel" in command
+    assert plan.resolved["fp8_gemm_kernel"] == "CutlassFP8ScaledMMLinearKernel"
 
 
 def test_fp8_checkpoints_default_initial_kv_cache_dtype_to_auto(tmp_path: Path) -> None:

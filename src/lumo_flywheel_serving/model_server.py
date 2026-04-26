@@ -684,6 +684,10 @@ class ModelServer:
             vllm_args.append("--enable-sleep-mode")
         if enable_request_logging:
             vllm_args.append("--enable-log-requests")
+        kernel_activation_env_args: list[str] = []
+        if kernel_activation is not None:
+            for key, value in sorted(kernel_activation.env.items()):
+                kernel_activation_env_args.extend(["-e", f"{key}={value}"])
 
         header = self._header_script(
             model_id=model_id,
@@ -746,6 +750,7 @@ class ModelServer:
             f"VLLM_API_KEY={self._api_key()}",
             "-e",
             f"VLLM_LOGGING_LEVEL={'DEBUG' if enable_request_logging else 'INFO'}",
+            *kernel_activation_env_args,
             *self._p2b_debug_export_env_args(),
             *volume_args,
             "--entrypoint",

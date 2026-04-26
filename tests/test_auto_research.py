@@ -3347,6 +3347,85 @@ def test_l0a_kernel_select_real_dispatches_live_smoke_with_runtime_activation(
     assert "\truntime" in measurements
 
 
+def test_l0a_kernel_select_real_reaches_reduce_overhead_runtime_activation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    calls: list[dict[str, object]] = []
+
+    class _FakeRealMeasurementHarness:
+        VERSION = "RealMeasurementHarness v0.1.0"
+
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            calls.append({"candidate_vllm_config": candidate_vllm_config, **kwargs})
+            return {
+                "generator": self.VERSION,
+                "candidate_vllm_config": candidate_vllm_config,
+                "cache_isolation": {},
+                "windows": {"measurement_elapsed_s": 1.0},
+                "per_request_latencies": [],
+                "diagnostics": {},
+                "ttft_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "tpot_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "turn_latency_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "eval_throughput": 1.25,
+                "rollout_throughput": 10.0,
+                "window_completed": True,
+                "reasoning_content_purity": 1.0,
+                "determinism_pass_rate": 1.0,
+                "no_oom_events": True,
+                "feasible": True,
+                "feasibility_failures": [],
+                "harness_health_warnings": [],
+            }
+
+        def restore_runtime(self) -> None:
+            return None
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeRealMeasurementHarness)
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        action_space_file=action_space_path,
+        baselines=1,
+        screen_measurements_per_combo=1,
+        rescreen_top_k=2,
+        rescreen_measurements_per_candidate=1,
+        parallel_instances="auto",
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        max_combos=3,
+        proxy_port=8101,
+    )
+
+    assert result.survivor_count == 2
+    dispatched_kernel_selections = [
+        call.get("kernel_selection")
+        for call in calls
+        if isinstance(call.get("kernel_selection"), dict) and call["kernel_selection"]
+    ]
+    assert any(
+        selection["combo_id"] == "combo_003"
+        and selection["torch_compile_mode"] == "reduce-overhead"
+        for selection in dispatched_kernel_selections
+    )
+    run_log = json.loads((result.round_dir / "run_log.json").read_text(encoding="utf-8"))
+    assert run_log["outcome"] == "PASS"
+    assert run_log["kernel_selection_runtime_activation"] == "runtime_applied"
+
+
 def test_l0a_kernel_select_real_blocks_precisely_on_unsupported_runtime_knobs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3355,6 +3434,17 @@ def test_l0a_kernel_select_real_blocks_precisely_on_unsupported_runtime_knobs(
     _write_l0a_fixture_pair(repo)
     workload_path = _write_l0a_workload(repo)
     action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    action_space_path.write_text(
+        """
+axes:
+  attention_backend: [vllm-default]
+  deltanet_kernel: [triton-chunked-delta-v2, triton-state-update-fused]
+  fp8_gemm_kernel: [cublas, cutlass]
+  torch_compile_mode: [default, reduce-overhead]
+  cuda_graph_capture: ['off', 'on']
+""",
+        encoding="utf-8",
+    )
     calls: list[dict[str, object]] = []
 
     class _FakeRealMeasurementHarness:
@@ -3388,7 +3478,7 @@ def test_l0a_kernel_select_real_blocks_precisely_on_unsupported_runtime_knobs(
             parallel_instances="auto",
             round_root=repo / "output" / "auto_research",
             harness="real",
-            max_combos=3,
+            max_combos=9,
             proxy_port=8101,
         )
 
@@ -3397,8 +3487,8 @@ def test_l0a_kernel_select_real_blocks_precisely_on_unsupported_runtime_knobs(
     assert run_log["outcome"] == "ROUND_BLOCKED"
     assert run_log["HALT_REASON"] == "l0a_kernel_selection_runtime_unsupported_knobs"
     assert run_log["live_dispatch"]["attempted"] is False
-    assert run_log["unsupported_runtime_activation"][0]["combo_id"] == "combo_003"
-    assert run_log["unsupported_runtime_activation"][0]["unsupported_knobs"][0]["axis"] == "torch_compile_mode"
+    assert run_log["unsupported_runtime_activation"][0]["combo_id"] == "combo_009"
+    assert run_log["unsupported_runtime_activation"][0]["unsupported_knobs"][0]["axis"] == "deltanet_kernel"
     assert calls == []
 
 
