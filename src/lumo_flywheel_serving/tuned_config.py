@@ -194,6 +194,9 @@ class TunedConfigBundle:
     request_shaping: dict[str, Any] = field(default_factory=dict)
     kernel_selection: dict[str, Any] = field(default_factory=dict)
     lora_policy: dict[str, Any] = field(default_factory=dict)
+    layer_0_deltanet: dict[str, Any] = field(default_factory=dict)
+    layer_0_gatedattn: dict[str, Any] = field(default_factory=dict)
+    layer_0_fp8_gemm: dict[str, Any] = field(default_factory=dict)
     objective: dict[str, Any] = field(default_factory=dict)
     measurement_trace_ref: str = ""
     search_trace_ref: str = ""
@@ -215,6 +218,9 @@ class TunedConfigBundle:
                 "request_shaping": dict(self.request_shaping),
                 "kernel_selection": dict(self.kernel_selection),
                 "lora_policy": dict(self.lora_policy),
+                "layer_0_deltanet": dict(self.layer_0_deltanet),
+                "layer_0_gatedattn": dict(self.layer_0_gatedattn),
+                "layer_0_fp8_gemm": dict(self.layer_0_fp8_gemm),
                 "objective": dict(self.objective),
                 "measurement_trace_ref": self.measurement_trace_ref,
                 "search_trace_ref": self.search_trace_ref,
@@ -272,6 +278,21 @@ class TunedConfigBundle:
             lora_policy=_require_mapping(
                 bundle_payload.get("lora_policy", {}),
                 field_name="tuned_config_bundle.lora_policy",
+                issues=issues,
+            ),
+            layer_0_deltanet=_require_mapping(
+                bundle_payload.get("layer_0_deltanet", {}),
+                field_name="tuned_config_bundle.layer_0_deltanet",
+                issues=issues,
+            ),
+            layer_0_gatedattn=_require_mapping(
+                bundle_payload.get("layer_0_gatedattn", {}),
+                field_name="tuned_config_bundle.layer_0_gatedattn",
+                issues=issues,
+            ),
+            layer_0_fp8_gemm=_require_mapping(
+                bundle_payload.get("layer_0_fp8_gemm", {}),
+                field_name="tuned_config_bundle.layer_0_fp8_gemm",
                 issues=issues,
             ),
             objective=_require_mapping(
@@ -475,6 +496,9 @@ def make_tuned_config_bundle(
     request_shaping: dict[str, Any] | None = None,
     kernel_selection: dict[str, Any] | None = None,
     lora_policy: dict[str, Any] | None = None,
+    layer_0_deltanet: dict[str, Any] | None = None,
+    layer_0_gatedattn: dict[str, Any] | None = None,
+    layer_0_fp8_gemm: dict[str, Any] | None = None,
 ) -> TunedConfigBundle:
     return TunedConfigBundle(
         bundle_id=str(uuid4()),
@@ -487,6 +511,9 @@ def make_tuned_config_bundle(
         request_shaping=dict(request_shaping or {}),
         kernel_selection=dict(kernel_selection or {}),
         lora_policy=dict(lora_policy or {}),
+        layer_0_deltanet=dict(layer_0_deltanet or {}),
+        layer_0_gatedattn=dict(layer_0_gatedattn or {}),
+        layer_0_fp8_gemm=dict(layer_0_fp8_gemm or {}),
         objective=dict(objective),
         measurement_trace_ref=measurement_trace_ref,
         search_trace_ref=search_trace_ref,

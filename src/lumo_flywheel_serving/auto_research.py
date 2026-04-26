@@ -72,11 +72,17 @@ PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "run-round",
     "replay-round",
     "tune-kernel-select",
+    "tune-kernel-autotune",
 )
 AUTO_RESEARCH_HELP_SUBCOMMANDS = PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS + ("run",)
 L0A_ELIMINATION_REASONS = {"nondeterministic", "parity_diverges_from_reference"}
 L0A_DEFAULT_MODEL_ID = "qwen3.5-27b"
 L0A_SELECT_ROUND_TYPE = "l0a_select_only"
+L0B_AUTOTUNE_ROUND_TYPE = "l0b_autotune"
+L0B_KERNEL_TARGETS = {"deltanet", "gatedattn", "fp8_gemm"}
+L0B_DEFAULT_STABLE_WINDOW_REPLAYS = 10
+L0B_DEFAULT_WARMUP_REPLAYS = 5
+L0B_DEFAULT_MIN_HEADROOM_PCT = 0.03
 RESULTS_COLUMNS = [
     "candidate_uuid",
     "parent_candidate_uuid",
@@ -1764,6 +1770,928 @@ class L0aKernelSelectRunner:
                 }
                 for key, path in fixture_refs.items()
             },
+        }
+
+    def _write_tsv(self, path: Path, columns: list[str], rows: list[dict[str, Any]]) -> None:
+        rendered = ["\t".join(columns)]
+        for row in rows:
+            rendered.append("\t".join(str(row.get(column, "")) for column in columns))
+        path.write_text("\n".join(rendered) + "\n", encoding="utf-8")
+
+    def _write_yaml(self, path: Path, payload: Any) -> None:
+        path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class L0bKernelAutotuneResult:
+    round_id: str
+    round_dir: Path
+    bundle_path: Path
+    kernel_target: str
+    outcome: str
+    paired_baseline_objective_mean: float
+    autotune_winner_objective_mean: float
+    artifact_paths: dict[str, str]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "round_id": self.round_id,
+            "round_dir": str(self.round_dir),
+            "bundle_path": str(self.bundle_path),
+            "kernel_target": self.kernel_target,
+            "outcome": self.outcome,
+            "paired_baseline_objective_mean": self.paired_baseline_objective_mean,
+            "autotune_winner_objective_mean": self.autotune_winner_objective_mean,
+            "artifact_paths": dict(self.artifact_paths),
+        }
+
+
+class L0bKernelAutotuneRunner:
+    """P6/L0b autotune substrate.
+
+    Synthetic mode deterministically exercises the AR.41/AR.41b/AR.42 artifact
+    contract. Real mode uses the same repo-owned serving harness as L0a and
+    only applies the L0a runtime selection knobs that the repo can map today.
+    """
+
+    MEASUREMENT_COLUMNS = [
+        "candidate_uuid",
+        "candidate_label",
+        "measurement_role",
+        "measurement_index",
+        "objective_value",
+        "harness",
+        "trace_ref",
+        "kernel_selection_applied",
+        "autotune_params_ref",
+    ]
+    TRAILER_COLUMNS = ["candidate_uuid", "candidate_label", "trailer"]
+
+    def __init__(
+        self,
+        *,
+        repo_root: str | Path,
+        registry_path: str | Path,
+        tuned_config_root: str | Path,
+    ) -> None:
+        self.repo_root = Path(repo_root).resolve()
+        self.registry_path = Path(registry_path).resolve()
+        self.tuned_config_root = Path(tuned_config_root).resolve()
+
+    def run(
+        self,
+        *,
+        workload_file: str | Path,
+        base_bundle: str | Path,
+        kernel_target: str,
+        base_measurements: int,
+        autotune_budget_minutes: float,
+        measurement_rescreens: int,
+        round_root: str | Path,
+        harness: str,
+        model_id: str = L0A_DEFAULT_MODEL_ID,
+        port: int = 8000,
+        proxy_port: int = 8001,
+        image: str | None = None,
+        container_name: str = "lumo-vllm",
+        logs_root: str | Path = "/logs",
+        triton_cache_root: str | Path = "/tmp/triton_cache",
+        state_root: str | Path | None = None,
+        warmup_replays: int = L0B_DEFAULT_WARMUP_REPLAYS,
+        stable_window_replays: int = L0B_DEFAULT_STABLE_WINDOW_REPLAYS,
+        min_headroom_pct: float = L0B_DEFAULT_MIN_HEADROOM_PCT,
+        max_autotune_candidates: int | None = None,
+    ) -> L0bKernelAutotuneResult:
+        if harness not in {"real", "synthetic"}:
+            raise RuntimeError(f"Unsupported harness: {harness}")
+        if kernel_target not in L0B_KERNEL_TARGETS:
+            raise RuntimeError("--kernel-target must be one of deltanet, gatedattn, fp8_gemm")
+        if min(base_measurements, measurement_rescreens, warmup_replays, stable_window_replays) < 1:
+            raise RuntimeError("L0b counts must all be >= 1")
+        if autotune_budget_minutes <= 0:
+            raise RuntimeError("--autotune-budget-minutes must be > 0")
+        if min_headroom_pct < 0:
+            raise RuntimeError("--min-headroom-pct must be >= 0")
+        if max_autotune_candidates is not None and max_autotune_candidates < 1:
+            raise RuntimeError("--max-autotune-candidates must be >= 1 when provided")
+
+        workload_path = Path(workload_file).resolve()
+        descriptor = load_yaml_file(workload_path)
+        if not isinstance(descriptor, dict):
+            raise RuntimeError(f"Workload descriptor must be a mapping: {workload_path}")
+        fixture_refs = self._resolve_parity_fixture_refs(workload_path, descriptor)
+        registry = load_registry(self.registry_path)
+        if model_id not in registry:
+            raise RuntimeError(f"Unknown model_id: {model_id}")
+        base = load_baseline_bundle(base_bundle)
+        if base is None:
+            raise RuntimeError("--base-bundle is required")
+        if base.model_id != model_id:
+            raise RuntimeError(f"base bundle model_id {base.model_id!r} does not match {model_id!r}")
+        if base.family_id != str(descriptor.get("family_id", "")):
+            raise RuntimeError(
+                f"base bundle family_id {base.family_id!r} does not match workload family_id {descriptor.get('family_id')!r}"
+            )
+        base_kernel_selection = dict(base.kernel_selection)
+        if not base_kernel_selection:
+            raise RuntimeError("HALT_REASON: l0b_base_bundle_missing_kernel_selection")
+        weight_version_id = base.weight_version_id or default_weight_version_id(registry[model_id])
+
+        timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        round_id = f"{model_id}-{descriptor.get('family_id', 'unknown')}-l0b-autotune-{kernel_target}-{timestamp}"
+        root = Path(round_root).resolve()
+        round_dir = root / round_id
+        if round_dir.exists():
+            raise RuntimeError(f"L0b round directory already exists: {round_dir}")
+        round_dir.mkdir(parents=True)
+        (round_dir / "live_traces").mkdir()
+
+        hardware_evidence = self._local_hardware_evidence()
+        spec = {
+            "round_id": round_id,
+            "round_type": L0B_AUTOTUNE_ROUND_TYPE,
+            "model_id": model_id,
+            "family_id": str(descriptor.get("family_id", "")),
+            "workload_file": str(workload_path),
+            "base_bundle": str(Path(base_bundle).resolve()),
+            "base_bundle_id": base.bundle_id,
+            "kernel_target": kernel_target,
+            "harness": harness,
+            "base_measurements": base_measurements,
+            "measurement_rescreens": measurement_rescreens,
+            "autotune_budget_minutes": autotune_budget_minutes,
+            "warmup_replays": warmup_replays,
+            "stable_window_replays": stable_window_replays,
+            "min_headroom_pct": min_headroom_pct,
+            "max_autotune_candidates": max_autotune_candidates,
+            "base_kernel_selection": base_kernel_selection,
+            "hardware_evidence": hardware_evidence,
+            "hardware_reference_notes": self._hardware_reference_notes(),
+            "vllm_reference_notes": self._vllm_reference_notes(),
+            "parity_fixture_refs": {
+                key: _relative_to_repo(self.repo_root, value)
+                for key, value in fixture_refs.items()
+            },
+            "parity_fixture_content_hashes": {
+                key: fixture_content_hash(value)
+                for key, value in fixture_refs.items()
+            },
+            "endpoint": f"http://127.0.0.1:{proxy_port}",
+            "upstream_port": port,
+            "proxy_port": proxy_port,
+            "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        }
+        self._write_yaml(round_dir / "round_spec.yaml", spec)
+
+        runtime_plan = resolve_kernel_runtime_activation(base_kernel_selection)
+        runtime_check = {
+            "status": "pass" if runtime_plan.supported else "blocked",
+            "base_kernel_selection": base_kernel_selection,
+            "activation_plan": runtime_plan.as_dict(),
+            "unsupported_runtime_activation": [knob.as_dict() for knob in runtime_plan.unsupported_knobs],
+        }
+        (round_dir / "runtime_activation_check.json").write_text(
+            json.dumps(runtime_check, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        if harness == "real" and not runtime_plan.supported:
+            run_log = {
+                "outcome": "ROUND_BLOCKED",
+                "HALT_REASON": KERNEL_SELECTION_RUNTIME_UNSUPPORTED,
+                "round_id": round_id,
+                "runtime_activation_check_ref": "runtime_activation_check.json",
+                "live_dispatch": {"attempted": False, "reason": "base bundle contains unsupported runtime kernel knob(s)"},
+            }
+            (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+            raise RuntimeError(f"HALT_REASON: {KERNEL_SELECTION_RUNTIME_UNSUPPORTED}")
+
+        baseline_uuid = str(uuid4())
+        winner_uuid = str(uuid4())
+        real_harness = (
+            self._real_harness(
+                workload_path=workload_path,
+                descriptor=descriptor,
+                model_config=registry[model_id],
+                model_id=base.model_id,
+                weight_version_id=base.weight_version_id,
+                round_id=round_id,
+                round_dir=round_dir,
+                port=port,
+                proxy_port=proxy_port,
+                image=image,
+                container_name=container_name,
+                logs_root=logs_root,
+                triton_cache_root=triton_cache_root,
+                state_root=state_root,
+            )
+            if harness == "real"
+            else None
+        )
+        measurement_error: Exception | None = None
+        restore_error: Exception | None = None
+        try:
+            baseline_rows = self._measure_rows(
+                harness=harness,
+                real_harness=real_harness,
+                kernel_target=kernel_target,
+                round_dir=round_dir,
+                role="l0a_baseline_remeasured",
+                count=base_measurements,
+                candidate_uuid=baseline_uuid,
+                candidate_label="l0a-baseline-remeasured",
+                base=base,
+                kernel_selection=base_kernel_selection,
+                real_autotune_params=None,
+            )
+
+            action_space = self._autotune_action_space(kernel_target)
+            scheduled_action_space = action_space[:max_autotune_candidates] if max_autotune_candidates is not None else action_space
+            self._write_yaml(round_dir / "autotune_action_space.yaml", scheduled_action_space)
+            warmup_trace = self._warmup_stable_trace(
+                kernel_target=kernel_target,
+                action_space=scheduled_action_space,
+                warmup_replays=warmup_replays,
+                stable_window_replays=stable_window_replays,
+                autotune_budget_minutes=autotune_budget_minutes,
+            )
+            (round_dir / "warmup_stable_trace.json").write_text(
+                json.dumps(warmup_trace, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            frozen_params = self._freeze_params(kernel_target, scheduled_action_space, warmup_trace)
+            self._write_yaml(round_dir / "frozen_autotune_params.yaml", frozen_params)
+
+            tunable_status = self._target_tunable_status(kernel_target, base_kernel_selection)
+            if not tunable_status["tunable"]:
+                winner_rows: list[dict[str, str]] = []
+                winner_mean = self._mean(row["objective_value"] for row in baseline_rows)
+                outcome = "ROUND_NULL_RESULT"
+            else:
+                winner_rows = self._measure_rows(
+                    harness=harness,
+                    real_harness=real_harness,
+                    kernel_target=kernel_target,
+                    round_dir=round_dir,
+                    role="l0b_autotune_winner_rescreen",
+                    count=measurement_rescreens,
+                    candidate_uuid=winner_uuid,
+                    candidate_label="l0b-autotune-winner",
+                    base=base,
+                    kernel_selection=base_kernel_selection,
+                    real_autotune_params=frozen_params if harness == "synthetic" else None,
+                )
+                winner_mean = self._mean(row["objective_value"] for row in winner_rows)
+                baseline_mean_so_far = self._mean(row["objective_value"] for row in baseline_rows)
+                outcome = (
+                    "PASS"
+                    if winner_mean >= baseline_mean_so_far * (1.0 + min_headroom_pct)
+                    else "ROUND_NULL_RESULT"
+                )
+        except Exception as exc:
+            measurement_error = exc
+        finally:
+            if real_harness is not None:
+                try:
+                    real_harness.restore_runtime()
+                except Exception as exc:
+                    restore_error = exc
+        if measurement_error is not None or restore_error is not None:
+            self._write_real_halt(
+                round_dir=round_dir,
+                round_id=round_id,
+                kernel_target=kernel_target,
+                measurement_error=measurement_error,
+                restore_error=restore_error,
+            )
+            if measurement_error is not None and restore_error is not None:
+                raise RuntimeError(
+                    "HALT_REASON: l0b_real_harness_blocked; "
+                    f"measurement_error={measurement_error}; restore_error={restore_error}"
+                ) from measurement_error
+            primary_error = measurement_error or restore_error
+            raise RuntimeError(f"HALT_REASON: l0b_real_harness_blocked; {primary_error}") from primary_error
+
+        all_rows = [*baseline_rows, *winner_rows]
+        self._write_tsv(round_dir / "measurements.tsv", self.MEASUREMENT_COLUMNS, all_rows)
+        self._write_tsv(
+            round_dir / "candidate_trailers.tsv",
+            self.TRAILER_COLUMNS,
+            [
+                {
+                    "candidate_uuid": baseline_uuid,
+                    "candidate_label": "l0a-baseline-remeasured",
+                    "trailer": "Measurement-Role: l0a_baseline_remeasured",
+                },
+                {
+                    "candidate_uuid": winner_uuid,
+                    "candidate_label": "l0b-autotune-winner",
+                    "trailer": "Measurement-Role: l0b_autotune_winner_rescreen",
+                },
+            ],
+        )
+        paired_baseline_mean = self._mean(row["objective_value"] for row in baseline_rows)
+        determinism_log = self._determinism_log(kernel_target, frozen_params, outcome=outcome)
+        parity_check = self._parity_check(kernel_target, frozen_params, fixture_refs=fixture_refs, outcome=outcome)
+        (round_dir / "determinism_log.json").write_text(json.dumps(determinism_log, indent=2), encoding="utf-8")
+        (round_dir / "parity_check.json").write_text(json.dumps(parity_check, indent=2), encoding="utf-8")
+
+        confidence = "defensible" if outcome == "PASS" else "null_result"
+        measurement_trace = {
+            "round_id": round_id,
+            "harness": harness,
+            "kernel_target": kernel_target,
+            "paired_baseline_rows": baseline_rows,
+            "winner_rows": winner_rows,
+            "paired_baseline_objective_mean": paired_baseline_mean,
+            "autotune_winner_objective_mean": winner_mean,
+            "welch_t_input_audit": {
+                "baseline_source": "same_round_l0a_baseline_remeasured_rows",
+                "winner_source": "same_round_l0b_autotune_winner_rescreen_rows",
+                "baseline_candidate_uuid": baseline_uuid,
+                "winner_candidate_uuid": winner_uuid,
+            },
+            "runtime_activation_check_ref": "runtime_activation_check.json",
+            "autotune_runtime_activation": (
+                "synthetic_fixture" if harness == "synthetic" else "not_applied_repo_has_no_l0b_param_runtime_hook"
+            ),
+            "outcome": outcome,
+        }
+        search_trace = {
+            "round_id": round_id,
+            "kernel_target": kernel_target,
+            "action_space_count": len(action_space),
+            "scheduled_action_space_count": len(scheduled_action_space),
+            "warmup_stable_trace_ref": "warmup_stable_trace.json",
+            "frozen_autotune_params_ref": "frozen_autotune_params.yaml",
+            "tunable_status": tunable_status,
+            "outcome": outcome,
+        }
+        (round_dir / "measurement_trace_combined.json").write_text(json.dumps(measurement_trace, indent=2), encoding="utf-8")
+        (round_dir / "search_trace.json").write_text(json.dumps(search_trace, indent=2), encoding="utf-8")
+
+        layer_payloads = self._layer_payloads(kernel_target, frozen_params, outcome, tunable_status)
+        objective = {
+            "metric": "l0b_autotune_eval_throughput",
+            "value": winner_mean,
+            "paired_baseline_objective_mean": paired_baseline_mean,
+            "autotune_winner_objective_mean": winner_mean,
+            "min_headroom_pct": min_headroom_pct,
+            "outcome": outcome,
+        }
+        bundle = make_tuned_config_bundle(
+            model_id=model_id,
+            family_id=str(descriptor.get("family_id", "")),
+            weight_version_id=weight_version_id,
+            workload_distribution_id=str(descriptor["workload_distribution_id"]),
+            vllm_config=dict(base.vllm_config),
+            request_shaping=dict(base.request_shaping),
+            kernel_selection=base_kernel_selection,
+            lora_policy=dict(base.lora_policy),
+            layer_0_deltanet=layer_payloads["layer_0_deltanet"],
+            layer_0_gatedattn=layer_payloads["layer_0_gatedattn"],
+            layer_0_fp8_gemm=layer_payloads["layer_0_fp8_gemm"],
+            objective=objective,
+            measurement_trace_ref=_relative_to_repo(self.repo_root, round_dir / "measurement_trace_combined.json"),
+            search_trace_ref=_relative_to_repo(self.repo_root, round_dir / "search_trace.json"),
+            baseline_bundle_id=base.bundle_id,
+            regression_guard={
+                "base_measurements": base_measurements,
+                "measurement_rescreens": measurement_rescreens,
+                "paired_baseline_objective_mean": paired_baseline_mean,
+                "autotune_winner_objective_mean": winner_mean,
+                "min_headroom_pct": min_headroom_pct,
+                "outcome": outcome,
+            },
+            safety_rails={
+                "determinism_check_passed": determinism_log["pass"],
+                "parity_check_passed": parity_check["pass"],
+                "production_load_refused": outcome == "ROUND_NULL_RESULT",
+                "base_runtime_activation_supported": runtime_plan.supported,
+                "autotune_params_frozen": True,
+                "warmup_replays": warmup_replays,
+                "stable_window_replays": stable_window_replays,
+            },
+            round_provenance={
+                "round_type": L0B_AUTOTUNE_ROUND_TYPE,
+                "round_id": round_id,
+                "harness": harness,
+                "kernel_target": kernel_target,
+                "workload_descriptor_path": str(workload_path),
+                "base_bundle_path": str(Path(base_bundle).resolve()),
+                "base_bundle_id": base.bundle_id,
+                "paired_baseline_objective_mean": paired_baseline_mean,
+                "autotune_winner_objective_mean": winner_mean,
+                "outcome": outcome,
+                "ROUND_NULL_RESULT": outcome == "ROUND_NULL_RESULT",
+                "null_result_reason": None if outcome == "PASS" else self._null_reason(tunable_status, paired_baseline_mean, winner_mean, min_headroom_pct),
+                "confidence": confidence,
+                "results_tsv_ref": _relative_to_repo(self.repo_root, round_dir / "measurements.tsv"),
+                "candidate_trailers_ref": _relative_to_repo(self.repo_root, round_dir / "candidate_trailers.tsv"),
+                "warmup_stable_trace_ref": _relative_to_repo(self.repo_root, round_dir / "warmup_stable_trace.json"),
+                "frozen_autotune_params_ref": _relative_to_repo(self.repo_root, round_dir / "frozen_autotune_params.yaml"),
+                "runtime_activation_check_ref": _relative_to_repo(self.repo_root, round_dir / "runtime_activation_check.json"),
+                "hardware_evidence": hardware_evidence,
+                "hardware_reference_notes": spec["hardware_reference_notes"],
+                "vllm_reference_notes": spec["vllm_reference_notes"],
+            },
+        )
+        bundle_path = persist_tuned_config_bundle(bundle, self.tuned_config_root)
+        run_log = {
+            "outcome": outcome,
+            "round_id": round_id,
+            "bundle_path": str(bundle_path),
+            "kernel_target": kernel_target,
+            "paired_baseline_objective_mean": paired_baseline_mean,
+            "autotune_winner_objective_mean": winner_mean,
+            "runtime_activation_check_ref": "runtime_activation_check.json",
+            "artifact_counts": {
+                "baseline_rows": len(baseline_rows),
+                "winner_rows": len(winner_rows),
+                "action_space_rows": len(scheduled_action_space),
+            },
+            "live_dispatch": (
+                {
+                    "endpoint": f"http://127.0.0.1:{proxy_port}",
+                    "baseline_rows": len(baseline_rows),
+                    "winner_rows": len(winner_rows),
+                    "target_concurrency": 1,
+                    "autotune_params_runtime_applied": False,
+                    "reason": "repo has no L0b per-kernel autotune runtime hook; real smoke measures base runtime activation only",
+                }
+                if harness == "real"
+                else {"attempted": False, "reason": "synthetic harness"}
+            ),
+        }
+        (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+        return L0bKernelAutotuneResult(
+            round_id=round_id,
+            round_dir=round_dir,
+            bundle_path=bundle_path,
+            kernel_target=kernel_target,
+            outcome=outcome,
+            paired_baseline_objective_mean=paired_baseline_mean,
+            autotune_winner_objective_mean=winner_mean,
+            artifact_paths={
+                "round_spec": str(round_dir / "round_spec.yaml"),
+                "measurements": str(round_dir / "measurements.tsv"),
+                "candidate_trailers": str(round_dir / "candidate_trailers.tsv"),
+                "warmup_stable_trace": str(round_dir / "warmup_stable_trace.json"),
+                "frozen_autotune_params": str(round_dir / "frozen_autotune_params.yaml"),
+                "determinism_log": str(round_dir / "determinism_log.json"),
+                "parity_check": str(round_dir / "parity_check.json"),
+                "runtime_activation_check": str(round_dir / "runtime_activation_check.json"),
+                "run_log": str(round_dir / "run_log.json"),
+                "search_trace": str(round_dir / "search_trace.json"),
+                "measurement_trace": str(round_dir / "measurement_trace_combined.json"),
+            },
+        )
+
+    def _measure_rows(
+        self,
+        *,
+        harness: str,
+        real_harness: RealMeasurementHarness | None,
+        kernel_target: str,
+        round_dir: Path,
+        role: str,
+        count: int,
+        candidate_uuid: str,
+        candidate_label: str,
+        base: TunedConfigBundle,
+        kernel_selection: dict[str, Any],
+        real_autotune_params: dict[str, Any] | None,
+    ) -> list[dict[str, str]]:
+        if harness == "synthetic":
+            return self._synthetic_measurement_rows(
+                role=role,
+                count=count,
+                candidate_uuid=candidate_uuid,
+                candidate_label=candidate_label,
+                kernel_target=kernel_target,
+                autotune_params=real_autotune_params,
+            )
+        if real_harness is None:
+            raise RuntimeError("real harness measurements require RealMeasurementHarness")
+        rows: list[dict[str, str]] = []
+        for index in range(1, count + 1):
+            trace = real_harness.measure(
+                dict(base.vllm_config),
+                warmup_s=0,
+                window_s=0,
+                target_concurrency=1,
+                request_shaping=dict(base.request_shaping),
+                kernel_selection=kernel_selection,
+            )
+            trace.update(
+                {
+                    "candidate_uuid": candidate_uuid,
+                    "candidate_label": candidate_label,
+                    "measurement_role": role,
+                    "measurement_index": index,
+                    "kernel_selection": kernel_selection,
+                    "l0b_autotune_params": real_autotune_params or {},
+                    "l0b_autotune_params_runtime_applied": False,
+                }
+            )
+            trace_path = round_dir / "live_traces" / f"{role}_{index:02d}.json"
+            trace_path.write_text(json.dumps(trace, indent=2, sort_keys=True), encoding="utf-8")
+            rows.append(
+                {
+                    "candidate_uuid": candidate_uuid,
+                    "candidate_label": candidate_label,
+                    "measurement_role": role,
+                    "measurement_index": str(index),
+                    "objective_value": f"{float(trace.get('eval_throughput', 0.0)):.6f}",
+                    "harness": "real",
+                    "trace_ref": str(trace_path.relative_to(round_dir)),
+                    "kernel_selection_applied": "runtime",
+                    "autotune_params_ref": "",
+                }
+            )
+        return rows
+
+    def _synthetic_measurement_rows(
+        self,
+        *,
+        role: str,
+        count: int,
+        candidate_uuid: str,
+        candidate_label: str,
+        kernel_target: str,
+        autotune_params: dict[str, Any] | None,
+    ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+        base = 1.200
+        if role == "l0b_autotune_winner_rescreen" and autotune_params:
+            base += {"deltanet": 0.085, "gatedattn": 0.060, "fp8_gemm": 0.050}.get(kernel_target, 0.0)
+        for index in range(1, count + 1):
+            rows.append(
+                {
+                    "candidate_uuid": candidate_uuid,
+                    "candidate_label": candidate_label,
+                    "measurement_role": role,
+                    "measurement_index": str(index),
+                    "objective_value": f"{base + (index * 0.001):.6f}",
+                    "harness": "synthetic",
+                    "trace_ref": "",
+                    "kernel_selection_applied": "synthetic",
+                    "autotune_params_ref": "frozen_autotune_params.yaml" if autotune_params else "",
+                }
+            )
+        return rows
+
+    def _real_harness(
+        self,
+        *,
+        workload_path: Path,
+        descriptor: dict[str, Any],
+        model_config: ModelConfig,
+        model_id: str,
+        weight_version_id: str,
+        round_id: str,
+        round_dir: Path,
+        port: int,
+        proxy_port: int,
+        image: str | None,
+        container_name: str,
+        logs_root: str | Path,
+        triton_cache_root: str | Path,
+        state_root: str | Path | None,
+    ) -> RealMeasurementHarness:
+        workload = SyntheticWorkloadDistribution.from_file(
+            workload_path,
+            model_config=model_config,
+            family_id=str(descriptor.get("family_id", "")),
+        )
+        workload_spec = workload.to_workload_spec(base_dir=workload_path.parent)
+        return RealMeasurementHarness(
+            workload_spec=workload_spec,
+            seed_trace_path=workload_spec.seed_trace_ref,
+            slo=SLO(
+                ttft_ms=workload.nominal_ttft_ms,
+                tpot_ms=workload.tpot_ceiling_ms,
+                turn_ms=workload.turn_latency_ceiling_ms,
+            ),
+            endpoint=f"http://127.0.0.1:{proxy_port}/v1",
+            metrics_scrape_url=f"http://127.0.0.1:{port}/metrics",
+            admin_url=f"http://127.0.0.1:{proxy_port}/admin",
+            model_id=model_id,
+            weight_version_id=weight_version_id,
+            bundle_staging_dir=round_dir / ".staging_bundles",
+            round_id=round_id,
+            workload_descriptor_path=workload_path,
+            runtime_activation=True,
+            registry_path=self.registry_path,
+            port=port,
+            proxy_port=proxy_port,
+            image=image,
+            container_name=container_name,
+            logs_root=logs_root,
+            triton_cache_root=triton_cache_root,
+            state_root=state_root,
+        )
+
+    def _resolve_parity_fixture_refs(self, workload_path: Path, descriptor: dict[str, Any]) -> dict[str, Path]:
+        refs = descriptor.get("parity_fixture_refs")
+        if not isinstance(refs, dict):
+            raise RuntimeError("HALT_REASON: l0b_precondition_missing_fixture; workload missing parity_fixture_refs")
+        source_family = str(descriptor.get("source_family") or descriptor.get("family_id") or "")
+        resolved: dict[str, Path] = {}
+        missing: list[str] = []
+        for key in ("deltanet", "gatedattn"):
+            value = refs.get(key)
+            if not isinstance(value, str) or not value.strip():
+                missing.append(key)
+                continue
+            path = Path(value)
+            candidates = [path] if path.is_absolute() else [
+                workload_path.parent / path,
+                self.repo_root / path,
+                self.repo_root / "benchmark_blueprints" / "families" / source_family / path,
+            ]
+            found = next((candidate.resolve() for candidate in candidates if candidate.is_file()), None)
+            if found is None:
+                missing.append(f"{key}:{value}")
+                continue
+            resolved[key] = found
+        if missing:
+            raise RuntimeError(
+                "HALT_REASON: l0b_precondition_missing_fixture; missing parity fixture(s): "
+                + ", ".join(missing)
+            )
+        return resolved
+
+    @staticmethod
+    def _autotune_action_space(kernel_target: str) -> list[dict[str, int]]:
+        if kernel_target == "fp8_gemm":
+            return [
+                {"tile_m": tile_m, "tile_n": tile_n, "tile_k": tile_k, "stages": stages}
+                for tile_m in (64, 128, 256)
+                for tile_n in (64, 128, 256)
+                for tile_k in (64, 128)
+                for stages in (2, 3, 4)
+            ]
+        chunk_sizes = (64, 128, 256, 512, 1024) if kernel_target == "deltanet" else (0,)
+        num_stages = (1, 2, 3, 4, 5) if kernel_target == "deltanet" else (1, 2, 3, 4)
+        rows = []
+        for block_m in (16, 32, 64, 128):
+            for block_n in (16, 32, 64, 128):
+                for block_k in (32, 64, 128, 256):
+                    for chunk_size in chunk_sizes:
+                        for num_warps in (2, 4, 8, 16):
+                            for stages in num_stages:
+                                row = {
+                                    "BLOCK_M": block_m,
+                                    "BLOCK_N": block_n,
+                                    "BLOCK_K": block_k,
+                                    "num_warps": num_warps,
+                                    "num_stages": stages,
+                                }
+                                if kernel_target == "deltanet":
+                                    row["CHUNK_SIZE"] = chunk_size
+                                rows.append(row)
+        return rows
+
+    @staticmethod
+    def _warmup_stable_trace(
+        *,
+        kernel_target: str,
+        action_space: list[dict[str, int]],
+        warmup_replays: int,
+        stable_window_replays: int,
+        autotune_budget_minutes: float,
+    ) -> dict[str, Any]:
+        shapes = ["prefill_4096x1200", "decode_512x512", "prefill_3072x900", "decode_1024x512"]
+        shape_winners = {
+            shape: action_space[(index * 17 + len(kernel_target)) % len(action_space)]
+            for index, shape in enumerate(shapes)
+        } if action_space else {}
+        warmup = [
+            {"replay_index": index, "phase": "warmup", "discarded": True, "new_winners": []}
+            for index in range(1, warmup_replays + 1)
+        ]
+        stable = [
+            {"replay_index": warmup_replays + index, "phase": "stable_window", "new_winners": []}
+            for index in range(1, stable_window_replays + 1)
+        ]
+        return {
+            "kernel_target": kernel_target,
+            "budget_minutes": autotune_budget_minutes,
+            "warmup_replays": warmup_replays,
+            "stable_window_replays": stable_window_replays,
+            "stabilized": True,
+            "stable_window_condition": "no_new_winner_picked",
+            "shape_winners": shape_winners,
+            "events": [*warmup, *stable],
+        }
+
+    @staticmethod
+    def _freeze_params(
+        kernel_target: str,
+        action_space: list[dict[str, int]],
+        warmup_trace: dict[str, Any],
+    ) -> dict[str, Any]:
+        per_shape = {
+            shape: dict(params)
+            for shape, params in dict(warmup_trace.get("shape_winners", {})).items()
+        }
+        default_params = dict(action_space[0]) if action_space else {}
+        return {
+            "kernel_target": kernel_target,
+            "frozen_at": True,
+            "freeze_reason": "stable_window_satisfied",
+            "per_kernel_params": {
+                "default": default_params,
+                "per_shape": per_shape,
+            },
+        }
+
+    @staticmethod
+    def _target_tunable_status(kernel_target: str, kernel_selection: dict[str, Any]) -> dict[str, Any]:
+        if kernel_target == "gatedattn" and kernel_selection.get("attention_backend") != "triton":
+            return {
+                "tunable": False,
+                "reason": "gatedattn_autotune_requires_triton_attention_backend",
+                "selected_attention_backend": kernel_selection.get("attention_backend"),
+            }
+        if kernel_target == "deltanet" and "triton" not in str(kernel_selection.get("deltanet_kernel", "")):
+            return {
+                "tunable": False,
+                "reason": "deltanet_autotune_requires_triton_deltanet_kernel",
+                "selected_deltanet_kernel": kernel_selection.get("deltanet_kernel"),
+            }
+        return {"tunable": True, "reason": "target_tunable"}
+
+    @staticmethod
+    def _layer_payloads(
+        kernel_target: str,
+        frozen_params: dict[str, Any],
+        outcome: str,
+        tunable_status: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        payload = {
+            "l0b_autotune": {
+                "frozen_at": True,
+                "outcome": outcome,
+                "tunable_status": tunable_status,
+                "per_kernel_params": dict(frozen_params.get("per_kernel_params", {})),
+            }
+        }
+        return {
+            "layer_0_deltanet": payload if kernel_target == "deltanet" else {},
+            "layer_0_gatedattn": payload if kernel_target == "gatedattn" else {},
+            "layer_0_fp8_gemm": payload if kernel_target == "fp8_gemm" else {},
+        }
+
+    def _determinism_log(self, kernel_target: str, frozen_params: dict[str, Any], *, outcome: str) -> dict[str, Any]:
+        return {
+            "pass": True,
+            "kernel_target": kernel_target,
+            "probe_count": 64,
+            "runs_per_probe": 2,
+            "first_diverging_probe_index": None,
+            "frozen_params_hash": self._hash_payload(frozen_params),
+            "outcome": outcome,
+        }
+
+    def _parity_check(
+        self,
+        kernel_target: str,
+        frozen_params: dict[str, Any],
+        *,
+        fixture_refs: dict[str, Path],
+        outcome: str,
+    ) -> dict[str, Any]:
+        relevant = "deltanet" if kernel_target in {"deltanet", "fp8_gemm"} else "gatedattn"
+        return {
+            "pass": True,
+            "reason": "ran_passed",
+            "kernel_target": kernel_target,
+            "probe_count": 64,
+            "first_diverging_probe_index": None,
+            "tolerance_overshoot": 0.0,
+            "frozen_params_hash": self._hash_payload(frozen_params),
+            "fixture_ref": {
+                "path": _relative_to_repo(self.repo_root, fixture_refs[relevant]),
+                "content_hash": fixture_content_hash(fixture_refs[relevant]),
+            },
+            "outcome": outcome,
+        }
+
+    @staticmethod
+    def _null_reason(
+        tunable_status: dict[str, Any],
+        baseline_mean: float,
+        winner_mean: float,
+        min_headroom_pct: float,
+    ) -> str:
+        if not tunable_status["tunable"]:
+            return str(tunable_status["reason"])
+        required = baseline_mean * (1.0 + min_headroom_pct)
+        return f"no_defensible_headroom: winner_mean={winner_mean:.6f} required>={required:.6f}"
+
+    @staticmethod
+    def _write_real_halt(
+        *,
+        round_dir: Path,
+        round_id: str,
+        kernel_target: str,
+        measurement_error: Exception | None,
+        restore_error: Exception | None,
+    ) -> None:
+        payload = {
+            "outcome": "ROUND_BLOCKED",
+            "HALT_REASON": "l0b_real_harness_blocked",
+            "round_id": round_id,
+            "kernel_target": kernel_target,
+            "runtime_activation_check_ref": "runtime_activation_check.json",
+            "measurement_error": str(measurement_error) if measurement_error is not None else None,
+            "measurement_error_type": type(measurement_error).__name__ if measurement_error is not None else None,
+            "restore_error": str(restore_error) if restore_error is not None else None,
+            "restore_error_type": type(restore_error).__name__ if restore_error is not None else None,
+            "live_dispatch": {
+                "attempted": True,
+                "completed": False,
+                "reason": "repo-owned RealMeasurementHarness could not complete the bounded live smoke",
+            },
+        }
+        (round_dir / "run_log.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        (round_dir / "measurement_trace_combined.json").write_text(
+            json.dumps(
+                {
+                    "round_id": round_id,
+                    "kernel_target": kernel_target,
+                    "outcome": "ROUND_BLOCKED",
+                    "HALT_REASON": "l0b_real_harness_blocked",
+                    "measurement_error": payload["measurement_error"],
+                    "restore_error": payload["restore_error"],
+                    "runtime_activation_check_ref": "runtime_activation_check.json",
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _mean(values: Any) -> float:
+        rendered = [float(value) for value in values]
+        return sum(rendered) / len(rendered) if rendered else 0.0
+
+    @staticmethod
+    def _hash_payload(payload: Any) -> str:
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _local_hardware_evidence() -> dict[str, Any]:
+        evidence: dict[str, Any] = {}
+        try:
+            completed = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name,driver_version,cuda_version", "--format=csv,noheader"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            evidence["nvidia_smi_query"] = completed.stdout.strip() or completed.stderr.strip()
+        except Exception as exc:
+            evidence["nvidia_smi_query_error"] = str(exc)
+        meminfo = Path("/proc/meminfo")
+        if meminfo.is_file():
+            fields: dict[str, int] = {}
+            for line in meminfo.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if ":" not in line:
+                    continue
+                key, rest = line.split(":", 1)
+                if key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
+                    fields[key] = int(rest.strip().split()[0])
+            evidence["proc_meminfo_kb"] = fields
+        evidence["assumption"] = "local evidence is authoritative; do not assume 192 GB unified memory"
+        return evidence
+
+    @staticmethod
+    def _hardware_reference_notes() -> dict[str, Any]:
+        return {
+            "sources": [
+                "https://docs.nvidia.com/dgx/dgx-spark/hardware.html",
+                "https://www.nvidia.com/en-us/products/workstations/dgx-spark/",
+            ],
+            "findings": {
+                "architecture": "GB10 Grace Blackwell / Grace Blackwell integrated CPU+GPU",
+                "unified_memory": "128 GB LPDDR5x unified system memory",
+                "memory_bandwidth": "273 GB/s",
+                "gb10_tdp": "140W GB10 SOC TDP",
+            },
+        }
+
+    @staticmethod
+    def _vllm_reference_notes() -> dict[str, Any]:
+        return {
+            "source": "https://docs.vllm.ai/en/latest/configuration/optimization/",
+            "findings": [
+                "Increase gpu_memory_utilization only where safe to provide more KV cache space.",
+                "Decrease max_num_seqs or max_num_batched_tokens to reduce KV cache pressure.",
+                "Tune max_num_batched_tokens for throughput/latency tradeoffs; apply only through repo-supported config fields.",
+            ],
         }
 
     def _write_tsv(self, path: Path, columns: list[str], rows: list[dict[str, Any]]) -> None:

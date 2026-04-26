@@ -270,6 +270,49 @@ axes:
     return path
 
 
+def _write_l0a_bundle(repo: Path, *, kernel_selection: dict | None = None) -> Path:
+    bundle = auto_research.make_tuned_config_bundle(
+        model_id="qwen3.5-27b",
+        family_id="responses-sdk-adapter-cutover-heavy",
+        weight_version_id="2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+        workload_distribution_id=auto_research.compute_workload_distribution_id(
+            repo / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy" / "workload.yaml"
+        ),
+        vllm_config={
+            "max_num_seqs": 4,
+            "max_num_batched_tokens": 8192,
+            "enable_chunked_prefill": True,
+            "enable_prefix_caching": True,
+            "gpu_memory_utilization": 0.90,
+            "max_model_len": 131072,
+            "kv_cache_dtype": "fp8_e5m2",
+        },
+        kernel_selection=kernel_selection
+        or {
+            "combo_id": "combo_001",
+            "attention_backend": "vllm-default",
+            "deltanet_kernel": "triton-chunked-delta-v2",
+            "fp8_gemm_kernel": "cublas",
+            "torch_compile_mode": "default",
+            "cuda_graph_capture": "off",
+        },
+        objective={"metric": "l0a_rescreen_objective_mean", "value": 1.20},
+        measurement_trace_ref="output/auto_research/l0a/measurement_trace_combined.json",
+        search_trace_ref="output/auto_research/l0a/search_trace.json",
+        baseline_bundle_id=None,
+        regression_guard={},
+        safety_rails={"determinism_check_passed": True, "parity_check_passed": True},
+        round_provenance={
+            "round_type": "l0a_select_only",
+            "workload_descriptor_path": str(
+                repo / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy" / "workload.yaml"
+            ),
+            "confidence": "defensible",
+        },
+    )
+    return auto_research.persist_tuned_config_bundle(bundle, repo / "output" / "tuned_configs")
+
+
 def test_capture_seed_workload_updates_seed_and_holdout_refs(tmp_path: Path) -> None:
     workload_path = tmp_path / "serving_workload.yaml"
     _write_workload(workload_path)
@@ -3659,3 +3702,250 @@ def test_l0a_kernel_select_refuses_missing_parity_fixture(tmp_path: Path) -> Non
             round_root=repo / "output" / "auto_research",
             harness="synthetic",
         )
+
+
+def test_l0b_kernel_autotune_synthetic_writes_p6_artifacts(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    runner = auto_research.L0bKernelAutotuneRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        base_measurements=2,
+        autotune_budget_minutes=1,
+        measurement_rescreens=2,
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+        max_autotune_candidates=8,
+    )
+
+    assert result.outcome == "PASS"
+    measurements = (result.round_dir / "measurements.tsv").read_text(encoding="utf-8")
+    assert "l0a_baseline_remeasured" in measurements
+    trailers = (result.round_dir / "candidate_trailers.tsv").read_text(encoding="utf-8")
+    assert "Measurement-Role: l0a_baseline_remeasured" in trailers
+    warmup_trace = json.loads((result.round_dir / "warmup_stable_trace.json").read_text(encoding="utf-8"))
+    assert warmup_trace["warmup_replays"] == 5
+    assert warmup_trace["stable_window_replays"] == 10
+    frozen = auto_research.load_yaml_file(result.round_dir / "frozen_autotune_params.yaml")
+    assert frozen["frozen_at"] is True
+    assert "per_kernel_params" in frozen
+    determinism_log = json.loads((result.round_dir / "determinism_log.json").read_text(encoding="utf-8"))
+    parity_check = json.loads((result.round_dir / "parity_check.json").read_text(encoding="utf-8"))
+    assert determinism_log["pass"] is True
+    assert parity_check["pass"] is True
+
+    bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
+    assert bundle_payload["round_provenance"]["round_type"] == "l0b_autotune"
+    assert bundle_payload["round_provenance"]["ROUND_NULL_RESULT"] is False
+    assert bundle_payload["objective"]["paired_baseline_objective_mean"] > 0
+    assert bundle_payload["objective"]["autotune_winner_objective_mean"] > bundle_payload["objective"]["paired_baseline_objective_mean"]
+    assert bundle_payload["layer_0_deltanet"]["l0b_autotune"]["frozen_at"] is True
+    assert bundle_payload["layer_0_deltanet"]["l0b_autotune"]["per_kernel_params"]
+
+
+def test_l0b_kernel_autotune_synthetic_records_null_result_for_unsupported_target(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    runner = auto_research.L0bKernelAutotuneRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="gatedattn",
+        base_measurements=1,
+        autotune_budget_minutes=1,
+        measurement_rescreens=1,
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+        max_autotune_candidates=4,
+    )
+
+    run_log = json.loads((result.round_dir / "run_log.json").read_text(encoding="utf-8"))
+    bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
+    assert result.outcome == "ROUND_NULL_RESULT"
+    assert run_log["outcome"] == "ROUND_NULL_RESULT"
+    assert bundle_payload["round_provenance"]["ROUND_NULL_RESULT"] is True
+    assert bundle_payload["round_provenance"]["null_result_reason"] == "gatedattn_autotune_requires_triton_attention_backend"
+
+
+def test_l0b_kernel_autotune_real_dispatches_l0a_base_runtime_activation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    calls: list[dict[str, object]] = []
+    restores: list[bool] = []
+
+    class _FakeRealMeasurementHarness:
+        VERSION = "RealMeasurementHarness v0.1.0"
+
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            calls.append({"candidate_vllm_config": candidate_vllm_config, **kwargs})
+            return {
+                "generator": self.VERSION,
+                "candidate_vllm_config": candidate_vllm_config,
+                "cache_isolation": {},
+                "windows": {"measurement_elapsed_s": 1.0},
+                "per_request_latencies": [],
+                "diagnostics": {},
+                "eval_throughput": 1.25,
+                "rollout_throughput": 10.0,
+                "window_completed": True,
+                "reasoning_content_purity": 1.0,
+                "determinism_pass_rate": 1.0,
+                "no_oom_events": True,
+                "feasible": True,
+                "feasibility_failures": [],
+                "harness_health_warnings": [],
+            }
+
+        def restore_runtime(self) -> None:
+            restores.append(True)
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeRealMeasurementHarness)
+    runner = auto_research.L0bKernelAutotuneRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        base_measurements=1,
+        autotune_budget_minutes=1,
+        measurement_rescreens=1,
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        max_autotune_candidates=4,
+    )
+
+    assert len(calls) == 2
+    assert restores == [True]
+    assert calls[0]["kernel_selection"] == {
+        "combo_id": "combo_001",
+        "attention_backend": "vllm-default",
+        "deltanet_kernel": "triton-chunked-delta-v2",
+        "fp8_gemm_kernel": "cublas",
+        "torch_compile_mode": "default",
+        "cuda_graph_capture": "off",
+    }
+    assert calls[1]["kernel_selection"] == calls[0]["kernel_selection"]
+    run_log = json.loads((result.round_dir / "run_log.json").read_text(encoding="utf-8"))
+    assert run_log["live_dispatch"]["autotune_params_runtime_applied"] is False
+    assert run_log["artifact_counts"]["baseline_rows"] == 1
+    assert run_log["artifact_counts"]["winner_rows"] == 1
+
+
+def test_l0b_kernel_autotune_real_blocks_unsupported_base_runtime_knobs(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(
+        repo,
+        kernel_selection={
+            "combo_id": "combo_999",
+            "attention_backend": "vllm-default",
+            "deltanet_kernel": "triton-state-update-fused",
+            "fp8_gemm_kernel": "cublas",
+            "torch_compile_mode": "default",
+            "cuda_graph_capture": "off",
+        },
+    )
+    runner = auto_research.L0bKernelAutotuneRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="HALT_REASON: l0a_kernel_selection_runtime_unsupported_knobs"):
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="deltanet",
+            base_measurements=1,
+            autotune_budget_minutes=1,
+            measurement_rescreens=1,
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            max_autotune_candidates=4,
+        )
+
+    round_dir = next((repo / "output" / "auto_research").glob("*-l0b-autotune-deltanet-*"))
+    run_log = json.loads((round_dir / "run_log.json").read_text(encoding="utf-8"))
+    activation_check = json.loads((round_dir / "runtime_activation_check.json").read_text(encoding="utf-8"))
+    assert run_log["outcome"] == "ROUND_BLOCKED"
+    assert run_log["live_dispatch"]["attempted"] is False
+    assert activation_check["status"] == "blocked"
+    assert activation_check["unsupported_runtime_activation"][0]["axis"] == "deltanet_kernel"
+
+
+def test_l0b_kernel_autotune_real_writes_halt_artifact_on_live_harness_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+
+    class _FailingRealMeasurementHarness:
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            raise RuntimeError("live service unavailable")
+
+        def restore_runtime(self) -> None:
+            raise RuntimeError("restore unavailable")
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FailingRealMeasurementHarness)
+    runner = auto_research.L0bKernelAutotuneRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="HALT_REASON: l0b_real_harness_blocked"):
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="deltanet",
+            base_measurements=1,
+            autotune_budget_minutes=1,
+            measurement_rescreens=1,
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            max_autotune_candidates=4,
+        )
+
+    round_dir = next((repo / "output" / "auto_research").glob("*-l0b-autotune-deltanet-*"))
+    run_log = json.loads((round_dir / "run_log.json").read_text(encoding="utf-8"))
+    trace = json.loads((round_dir / "measurement_trace_combined.json").read_text(encoding="utf-8"))
+    assert run_log["outcome"] == "ROUND_BLOCKED"
+    assert run_log["HALT_REASON"] == "l0b_real_harness_blocked"
+    assert "live service unavailable" in run_log["measurement_error"]
+    assert "restore unavailable" in run_log["restore_error"]
+    assert trace["HALT_REASON"] == "l0b_real_harness_blocked"

@@ -843,6 +843,20 @@ def test_auto_research_tune_kernel_select_registered(capsys: pytest.CaptureFixtu
     }
 
 
+def test_auto_research_tune_kernel_autotune_registered(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(["auto-research", "tune-kernel-autotune", "--help-only"])
+    assert args.func(args) == 0
+    assert args.base_measurements == 5
+    assert args.measurement_rescreens == 4
+    assert args.warmup_replays == 5
+    assert args.stable_window_replays == 10
+    assert json.loads(capsys.readouterr().out) == {
+        "subcommand": "tune-kernel-autotune",
+        "status": "registered",
+    }
+
+
 def test_multi_vllm_verify_p2_registered_and_reports_payload(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

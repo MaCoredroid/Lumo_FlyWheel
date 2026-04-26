@@ -14,6 +14,7 @@ import requests
 from .auto_research import (
     AutoResearchRoundManager,
     L0aKernelSelectRunner,
+    L0bKernelAutotuneRunner,
     OfflineAutoResearchRunner,
     SyntheticWorkloadDistribution,
     load_baseline_bundle,
@@ -905,6 +906,41 @@ def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_auto_research_tune_kernel_autotune(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "workload_file", "base_bundle", "kernel_target")
+    runner = L0bKernelAutotuneRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    result = runner.run(
+        workload_file=args.workload_file,
+        base_bundle=args.base_bundle,
+        kernel_target=args.kernel_target,
+        base_measurements=args.base_measurements,
+        autotune_budget_minutes=args.autotune_budget_minutes,
+        measurement_rescreens=args.measurement_rescreens,
+        round_root=args.round_root,
+        harness=args.harness,
+        model_id=args.model_id,
+        port=args.port,
+        proxy_port=args.proxy_port,
+        image=args.image,
+        container_name=args.container_name,
+        logs_root=args.logs_root,
+        triton_cache_root=args.triton_cache_root,
+        state_root=args.state_root,
+        warmup_replays=args.warmup_replays,
+        stable_window_replays=args.stable_window_replays,
+        min_headroom_pct=args.min_headroom_pct,
+        max_autotune_candidates=args.max_autotune_candidates,
+    )
+    print(json.dumps(result.as_dict(), indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Lumo FlyWheel vLLM serving tooling")
     parser.set_defaults(func=None)
@@ -1091,6 +1127,23 @@ def build_parser() -> argparse.ArgumentParser:
     auto_tune_kernel_select.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_tune_kernel_select.add_argument("--model-id", default="qwen3.5-27b")
     auto_tune_kernel_select.set_defaults(func=cmd_auto_research_tune_kernel_select)
+
+    auto_tune_kernel_autotune = auto_research_subparsers.add_parser("tune-kernel-autotune")
+    auto_tune_kernel_autotune.add_argument("--help-only", action="store_true")
+    auto_tune_kernel_autotune.add_argument("--workload-file")
+    auto_tune_kernel_autotune.add_argument("--base-bundle")
+    auto_tune_kernel_autotune.add_argument("--kernel-target", choices=["deltanet", "gatedattn", "fp8_gemm"])
+    auto_tune_kernel_autotune.add_argument("--base-measurements", type=int, default=5)
+    auto_tune_kernel_autotune.add_argument("--autotune-budget-minutes", type=float, default=60.0)
+    auto_tune_kernel_autotune.add_argument("--measurement-rescreens", type=int, default=4)
+    auto_tune_kernel_autotune.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
+    auto_tune_kernel_autotune.add_argument("--harness", choices=["real", "synthetic"], default="real")
+    auto_tune_kernel_autotune.add_argument("--model-id", default="qwen3.5-27b")
+    auto_tune_kernel_autotune.add_argument("--warmup-replays", type=int, default=5)
+    auto_tune_kernel_autotune.add_argument("--stable-window-replays", type=int, default=10)
+    auto_tune_kernel_autotune.add_argument("--min-headroom-pct", type=float, default=0.03)
+    auto_tune_kernel_autotune.add_argument("--max-autotune-candidates", type=int, default=None)
+    auto_tune_kernel_autotune.set_defaults(func=cmd_auto_research_tune_kernel_autotune)
 
     auto_research_run = auto_research_subparsers.add_parser("run")
     auto_research_run.add_argument("--help-only", action="store_true")
