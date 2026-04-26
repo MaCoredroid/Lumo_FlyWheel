@@ -722,6 +722,16 @@ class L0aKernelSelectRunner:
         "trace_ref",
         "kernel_selection_applied",
     ]
+    RUNTIME_UNSUPPORTED_COLUMNS = [
+        "combo_id",
+        "smoke_status",
+        "attention_backend",
+        "deltanet_kernel",
+        "fp8_gemm_kernel",
+        "torch_compile_mode",
+        "cuda_graph_capture",
+        "unsupported_knobs_json",
+    ]
 
     def __init__(
         self,
@@ -755,9 +765,12 @@ class L0aKernelSelectRunner:
         logs_root: str | Path = "/logs",
         triton_cache_root: str | Path = "/tmp/triton_cache",
         state_root: str | Path | None = None,
+        runtime_unsupported_policy: str = "partition",
     ) -> L0aKernelSelectResult:
         if harness not in {"real", "synthetic"}:
             raise RuntimeError(f"Unsupported harness: {harness}")
+        if runtime_unsupported_policy not in {"partition", "strict"}:
+            raise RuntimeError("--runtime-unsupported-policy must be 'partition' or 'strict'")
         if min(baselines, screen_measurements_per_combo, rescreen_top_k, rescreen_measurements_per_candidate) < 1:
             raise RuntimeError("L0a kernel selection counts must all be >= 1")
 
@@ -799,6 +812,7 @@ class L0aKernelSelectRunner:
             "workload_file": str(workload_path),
             "action_space_file": str(action_space_path),
             "harness": harness,
+            "runtime_unsupported_policy": runtime_unsupported_policy if harness == "real" else "not_applicable",
             "baselines": baselines,
             "screen_measurements_per_combo": screen_measurements_per_combo,
             "rescreen_top_k": rescreen_top_k,
@@ -845,23 +859,76 @@ class L0aKernelSelectRunner:
         )
         (round_dir / "smoke_trace.json").write_text(json.dumps(smoke_rows, indent=2), encoding="utf-8")
 
+        runtime_activation_check: dict[str, Any] | None = None
+        runtime_activation_check_path: Path | None = None
+        runtime_supported_survivors = list(survivors)
+        unsupported_runtime_audit_ref: str | None = None
+        runtime_supported_action_space_ref: str | None = None
+        runtime_unsupported_action_space_ref: str | None = None
+
         if harness == "synthetic":
             baseline_rows = self._baseline_measurements(baselines)
             screen_rows = self._screen_measurements(survivors, screen_measurements_per_combo)
         else:
             runtime_activation_check = self._runtime_activation_check(combos, survivors)
             runtime_activation_check_path = round_dir / "runtime_activation_check.json"
-            runtime_activation_check_path.write_text(
-                json.dumps(runtime_activation_check, indent=2, sort_keys=True),
-                encoding="utf-8",
-            )
             unsupported_activation = runtime_activation_check["unsupported_runtime_activation"]
             unsupported_survivor_activation = [
                 item
                 for item in unsupported_activation
                 if item["smoke_status"] == "survivor"
             ]
-            if unsupported_activation:
+            runtime_activation_check["runtime_unsupported_policy"] = runtime_unsupported_policy
+            runtime_activation_check["status"] = (
+                "blocked"
+                if unsupported_activation and runtime_unsupported_policy == "strict"
+                else "partitioned"
+                if unsupported_activation
+                else "pass"
+            )
+            supported_combo_ids = {
+                item["combo_id"]
+                for item in runtime_activation_check["supported_runtime_activation"]
+            }
+            runtime_supported_survivors = [
+                combo for combo in survivors if combo.combo_id in supported_combo_ids
+            ]
+            runtime_activation_check["supported_survivor_count"] = len(runtime_supported_survivors)
+            runtime_activation_check["runtime_measured_survivor_combo_ids"] = [
+                combo.combo_id for combo in runtime_supported_survivors
+            ]
+            runtime_activation_check["unsupported_runtime_audit_ref"] = "unsupported_runtime_candidates.tsv"
+            runtime_activation_check_path.write_text(
+                json.dumps(runtime_activation_check, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            unsupported_runtime_audit_ref = "unsupported_runtime_candidates.tsv"
+            runtime_supported_action_space_ref = "action_space.runtime_supported.yaml"
+            runtime_unsupported_action_space_ref = "action_space.runtime_unsupported.yaml"
+            self._write_tsv(
+                round_dir / unsupported_runtime_audit_ref,
+                self.RUNTIME_UNSUPPORTED_COLUMNS,
+                self._unsupported_runtime_rows(unsupported_activation),
+            )
+            self._write_yaml(
+                round_dir / runtime_supported_action_space_ref,
+                [
+                    item["kernel_selection"]
+                    for item in runtime_activation_check["supported_runtime_activation"]
+                ],
+            )
+            self._write_yaml(
+                round_dir / runtime_unsupported_action_space_ref,
+                [
+                    {
+                        **item["kernel_selection"],
+                        "smoke_status": item["smoke_status"],
+                        "unsupported_knobs": item["unsupported_knobs"],
+                    }
+                    for item in unsupported_activation
+                ],
+            )
+            if unsupported_activation and runtime_unsupported_policy == "strict":
                 live_dispatch_reason = (
                     "scheduled survivor contains unsupported runtime kernel knob"
                     if unsupported_survivor_activation
@@ -876,6 +943,7 @@ class L0aKernelSelectRunner:
                     "full_action_space_sweep": len(combos) == total_combos_available,
                     "limited_mode": len(combos) != total_combos_available,
                     "runtime_activation_check_ref": str(runtime_activation_check_path.relative_to(round_dir)),
+                    "unsupported_runtime_audit_ref": unsupported_runtime_audit_ref,
                     "unsupported_runtime_activation": unsupported_activation,
                     "live_dispatch": {
                         "attempted": False,
@@ -890,6 +958,7 @@ class L0aKernelSelectRunner:
                             "harness": harness,
                             "kernel_selection_runtime_activation": "unsupported_knobs",
                             "runtime_activation_check_ref": str(runtime_activation_check_path.relative_to(round_dir)),
+                            "unsupported_runtime_audit_ref": unsupported_runtime_audit_ref,
                             "unsupported_runtime_activation": unsupported_activation,
                             "live_dispatch": {
                                 "attempted": False,
@@ -905,6 +974,26 @@ class L0aKernelSelectRunner:
                     f"HALT_REASON: {KERNEL_SELECTION_RUNTIME_UNSUPPORTED}; "
                     "scheduled candidate contains unsupported runtime kernel knob(s)"
                 )
+            if not runtime_supported_survivors:
+                run_log = {
+                    "outcome": "ROUND_BLOCKED",
+                    "HALT_REASON": "l0a_runtime_supported_zero_survivors",
+                    "round_id": round_id,
+                    "total_combos_available": total_combos_available,
+                    "total_combos_scheduled": len(combos),
+                    "runtime_activation_check_ref": str(runtime_activation_check_path.relative_to(round_dir)),
+                    "unsupported_runtime_audit_ref": unsupported_runtime_audit_ref,
+                    "runtime_unsupported_policy": runtime_unsupported_policy,
+                    "supported_combo_count": runtime_activation_check["supported_combo_count"],
+                    "unsupported_combo_count": runtime_activation_check["unsupported_combo_count"],
+                    "unsupported_survivor_count": runtime_activation_check["unsupported_survivor_count"],
+                    "live_dispatch": {
+                        "attempted": False,
+                        "reason": "no smoke survivor has supported runtime activation",
+                    },
+                }
+                (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+                raise RuntimeError("HALT_REASON: l0a_runtime_supported_zero_survivors")
             real_harness = self._real_harness(
                 workload_path=workload_path,
                 descriptor=descriptor,
@@ -930,7 +1019,7 @@ class L0aKernelSelectRunner:
                 )
                 screen_rows = self._real_combo_measurements(
                     real_harness,
-                    combos=survivors,
+                    combos=runtime_supported_survivors,
                     measurements_per_combo=screen_measurements_per_combo,
                     baseline_vllm_config=registry[model_id].vllm_config(),
                     round_dir=round_dir,
@@ -940,7 +1029,8 @@ class L0aKernelSelectRunner:
                 real_harness.restore_runtime()
                 raise
         self._write_tsv(round_dir / "measurements.tsv", self.MEASUREMENT_COLUMNS, [*baseline_rows, *screen_rows])
-        top = self._top_screen_combos(survivors, screen_rows, rescreen_top_k)
+        measurable_survivors = runtime_supported_survivors if harness == "real" else survivors
+        top = self._top_screen_combos(measurable_survivors, screen_rows, rescreen_top_k)
         if harness == "synthetic":
             rescreen_rows = self._rescreen_measurements(top, rescreen_measurements_per_candidate)
         else:
@@ -975,6 +1065,14 @@ class L0aKernelSelectRunner:
             "total_combos": len(combos),
             "eliminated_count": len(eliminated),
             "survivor_count": len(survivors),
+            "runtime_supported_survivor_count": len(runtime_supported_survivors) if harness == "real" else len(survivors),
+            "runtime_unsupported_policy": runtime_unsupported_policy if harness == "real" else "not_applicable",
+            "runtime_activation_check_ref": (
+                str(runtime_activation_check_path.relative_to(round_dir))
+                if runtime_activation_check_path is not None
+                else None
+            ),
+            "unsupported_runtime_audit_ref": unsupported_runtime_audit_ref,
             "winner": winner.as_dict(),
             "smoke": smoke_rows,
         }
@@ -988,6 +1086,24 @@ class L0aKernelSelectRunner:
             "limited_mode": len(combos) != total_combos_available,
             "kernel_selection_runtime_activation": (
                 "runtime_applied" if harness == "real" else "synthetic_fixture"
+            ),
+            "runtime_unsupported_policy": runtime_unsupported_policy if harness == "real" else "not_applicable",
+            "runtime_activation_check_ref": (
+                str(runtime_activation_check_path.relative_to(round_dir))
+                if runtime_activation_check_path is not None
+                else None
+            ),
+            "unsupported_runtime_audit_ref": unsupported_runtime_audit_ref,
+            "runtime_supported_survivor_count": len(runtime_supported_survivors) if harness == "real" else len(survivors),
+            "runtime_unsupported_combo_count": (
+                runtime_activation_check["unsupported_combo_count"]
+                if runtime_activation_check is not None
+                else 0
+            ),
+            "runtime_unsupported_survivor_count": (
+                runtime_activation_check["unsupported_survivor_count"]
+                if runtime_activation_check is not None
+                else 0
             ),
         }
         (round_dir / "search_trace.json").write_text(json.dumps(search_trace, indent=2), encoding="utf-8")
@@ -1020,6 +1136,13 @@ class L0aKernelSelectRunner:
                 "parity_check_passed": True,
                 "production_load_refused": True,
                 "kernel_selection_runtime_activation": "runtime_applied" if harness == "real" else "synthetic_fixture",
+                "runtime_unsupported_policy": runtime_unsupported_policy if harness == "real" else "not_applicable",
+                "runtime_supported_survivor_count": len(runtime_supported_survivors) if harness == "real" else len(survivors),
+                "runtime_unsupported_combo_count": (
+                    runtime_activation_check["unsupported_combo_count"]
+                    if runtime_activation_check is not None
+                    else 0
+                ),
                 "serial_only_supported": fanout == 1,
                 "full_action_space_sweep": len(combos) == total_combos_available,
             },
@@ -1035,6 +1158,33 @@ class L0aKernelSelectRunner:
                 "parallel_evidence": spec["parallel_evidence"],
                 "total_combos_available": total_combos_available,
                 "total_combos_scheduled": len(combos),
+                "runtime_unsupported_policy": runtime_unsupported_policy if harness == "real" else "not_applicable",
+                "runtime_supported_combo_count": (
+                    runtime_activation_check["supported_combo_count"]
+                    if runtime_activation_check is not None
+                    else len(combos)
+                ),
+                "runtime_supported_survivor_count": len(runtime_supported_survivors) if harness == "real" else len(survivors),
+                "runtime_unsupported_combo_count": (
+                    runtime_activation_check["unsupported_combo_count"]
+                    if runtime_activation_check is not None
+                    else 0
+                ),
+                "runtime_unsupported_survivor_count": (
+                    runtime_activation_check["unsupported_survivor_count"]
+                    if runtime_activation_check is not None
+                    else 0
+                ),
+                "runtime_activation_check_ref": (
+                    _relative_to_repo(self.repo_root, runtime_activation_check_path)
+                    if runtime_activation_check_path is not None
+                    else None
+                ),
+                "unsupported_runtime_audit_ref": (
+                    _relative_to_repo(self.repo_root, round_dir / unsupported_runtime_audit_ref)
+                    if unsupported_runtime_audit_ref is not None
+                    else None
+                ),
                 "limited_mode": len(combos) != total_combos_available,
                 "confidence": "defensible",
                 "results_tsv_ref": _relative_to_repo(self.repo_root, round_dir / "rescreen.tsv"),
@@ -1050,12 +1200,26 @@ class L0aKernelSelectRunner:
             "total_combos_available": total_combos_available,
             "eliminated_count": len(eliminated),
             "survivor_count": len(survivors),
+            "runtime_supported_survivor_count": len(runtime_supported_survivors) if harness == "real" else len(survivors),
+            "runtime_unsupported_policy": runtime_unsupported_policy if harness == "real" else "not_applicable",
+            "runtime_activation_check_ref": (
+                str(runtime_activation_check_path.relative_to(round_dir))
+                if runtime_activation_check_path is not None
+                else None
+            ),
+            "unsupported_runtime_audit_ref": unsupported_runtime_audit_ref,
             "full_action_space_sweep": len(combos) == total_combos_available,
             "limited_mode": len(combos) != total_combos_available,
             "kernel_selection_runtime_activation": "runtime_applied" if harness == "real" else "synthetic_fixture",
             "artifact_counts": {
                 "eliminated_rows": len(eliminated),
                 "survivor_rows": len(survivors),
+                "runtime_supported_survivor_rows": len(runtime_supported_survivors) if harness == "real" else len(survivors),
+                "runtime_unsupported_rows": (
+                    runtime_activation_check["unsupported_combo_count"]
+                    if runtime_activation_check is not None
+                    else 0
+                ),
                 "baseline_rows": len(baseline_rows),
                 "screen_rows": len(screen_rows),
                 "rescreen_rows": len(rescreen_rows),
@@ -1067,6 +1231,10 @@ class L0aKernelSelectRunner:
                 "baseline_rows": len(baseline_rows),
                 "screen_rows": len(screen_rows),
                 "rescreen_rows": len(rescreen_rows),
+                "unsupported_runtime_excluded_rows": runtime_activation_check["unsupported_combo_count"] if runtime_activation_check is not None else 0,
+                "unsupported_runtime_excluded_survivors": runtime_activation_check["unsupported_survivor_count"] if runtime_activation_check is not None else 0,
+                "runtime_supported_action_space_ref": runtime_supported_action_space_ref,
+                "runtime_unsupported_action_space_ref": runtime_unsupported_action_space_ref,
                 "target_concurrency": 1,
             }
         (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
@@ -1085,6 +1253,20 @@ class L0aKernelSelectRunner:
                 "run_log": str(round_dir / "run_log.json"),
                 "search_trace": str(round_dir / "search_trace.json"),
                 "measurement_trace": str(round_dir / "measurement_trace_combined.json"),
+                **(
+                    {
+                        "runtime_activation_check": str(runtime_activation_check_path),
+                        "unsupported_runtime_audit": str(round_dir / unsupported_runtime_audit_ref),
+                        "runtime_supported_action_space": str(round_dir / runtime_supported_action_space_ref),
+                        "runtime_unsupported_action_space": str(round_dir / runtime_unsupported_action_space_ref),
+                    }
+                    if harness == "real"
+                    and runtime_activation_check_path is not None
+                    and unsupported_runtime_audit_ref is not None
+                    and runtime_supported_action_space_ref is not None
+                    and runtime_unsupported_action_space_ref is not None
+                    else {}
+                ),
             },
         )
 
@@ -1281,6 +1463,25 @@ class L0aKernelSelectRunner:
             "supported_runtime_activation": supported,
             "unsupported_runtime_activation": unsupported,
         }
+
+    @staticmethod
+    def _unsupported_runtime_rows(unsupported_activation: list[dict[str, Any]]) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+        for item in unsupported_activation:
+            selection = item["kernel_selection"]
+            rows.append(
+                {
+                    "combo_id": item["combo_id"],
+                    "smoke_status": item["smoke_status"],
+                    "attention_backend": selection["attention_backend"],
+                    "deltanet_kernel": selection["deltanet_kernel"],
+                    "fp8_gemm_kernel": selection["fp8_gemm_kernel"],
+                    "torch_compile_mode": selection["torch_compile_mode"],
+                    "cuda_graph_capture": selection["cuda_graph_capture"],
+                    "unsupported_knobs_json": json.dumps(item["unsupported_knobs"], sort_keys=True),
+                }
+            )
+        return rows
 
     def _real_harness(
         self,

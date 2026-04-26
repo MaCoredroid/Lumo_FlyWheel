@@ -3482,6 +3482,7 @@ axes:
             harness="real",
             max_combos=17,
             proxy_port=8101,
+            runtime_unsupported_policy="strict",
         )
 
     round_dir = next((repo / "output" / "auto_research").glob("*-l0a-select-*"))
@@ -3502,6 +3503,138 @@ axes:
     assert activation_check["unsupported_runtime_activation"][-1]["smoke_status"] == "eliminated"
     assert harness_inits == []
     assert calls == []
+
+
+def test_l0a_kernel_select_real_partitions_unsupported_runtime_knobs_before_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    action_space_path.write_text(
+        """
+axes:
+  attention_backend: [vllm-default]
+  deltanet_kernel: [triton-chunked-delta-v2, triton-state-update-fused, triton-experimental-scan]
+  fp8_gemm_kernel: [cublas, cutlass]
+  torch_compile_mode: [default, reduce-overhead]
+  cuda_graph_capture: ['off', 'on']
+""",
+        encoding="utf-8",
+    )
+    calls: list[dict[str, object]] = []
+
+    class _FakeRealMeasurementHarness:
+        VERSION = "RealMeasurementHarness v0.1.0"
+
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            calls.append({"candidate_vllm_config": candidate_vllm_config, **kwargs})
+            kernel_selection = kwargs.get("kernel_selection")
+            if isinstance(kernel_selection, dict) and kernel_selection:
+                assert kernel_selection["deltanet_kernel"] == "triton-chunked-delta-v2"
+            return {
+                "generator": self.VERSION,
+                "candidate_vllm_config": candidate_vllm_config,
+                "cache_isolation": {},
+                "windows": {"measurement_elapsed_s": 1.0},
+                "per_request_latencies": [],
+                "diagnostics": {},
+                "ttft_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "tpot_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "turn_latency_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "eval_throughput": 1.25,
+                "rollout_throughput": 10.0,
+                "window_completed": True,
+                "reasoning_content_purity": 1.0,
+                "determinism_pass_rate": 1.0,
+                "no_oom_events": True,
+                "feasible": True,
+                "feasibility_failures": [],
+                "harness_health_warnings": [],
+            }
+
+        def restore_runtime(self) -> None:
+            return None
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeRealMeasurementHarness)
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        action_space_file=action_space_path,
+        baselines=1,
+        screen_measurements_per_combo=1,
+        rescreen_top_k=2,
+        rescreen_measurements_per_candidate=1,
+        parallel_instances="auto",
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        max_combos=17,
+        proxy_port=8101,
+    )
+
+    run_log = json.loads((result.round_dir / "run_log.json").read_text(encoding="utf-8"))
+    assert run_log["outcome"] == "PASS"
+    assert run_log["runtime_unsupported_policy"] == "partition"
+    assert run_log["total_combos"] == 17
+    assert run_log["survivor_count"] == 8
+    assert run_log["runtime_supported_survivor_count"] == 4
+    assert run_log["artifact_counts"]["runtime_unsupported_rows"] == 9
+    assert run_log["artifact_counts"]["screen_rows"] == 4
+    assert run_log["live_dispatch"]["unsupported_runtime_excluded_rows"] == 9
+    assert run_log["live_dispatch"]["unsupported_runtime_excluded_survivors"] == 4
+
+    activation_check = json.loads((result.round_dir / "runtime_activation_check.json").read_text(encoding="utf-8"))
+    assert activation_check["status"] == "partitioned"
+    assert activation_check["checked_combo_count"] == 17
+    assert activation_check["supported_combo_count"] == 8
+    assert activation_check["unsupported_combo_count"] == 9
+    assert activation_check["supported_survivor_count"] == 4
+    assert activation_check["unsupported_survivor_count"] == 4
+    assert activation_check["runtime_measured_survivor_combo_ids"] == [
+        "combo_001",
+        "combo_003",
+        "combo_005",
+        "combo_007",
+    ]
+
+    audit = (result.round_dir / "unsupported_runtime_candidates.tsv").read_text(encoding="utf-8").splitlines()
+    assert len(audit) == 10
+    assert audit[0].split("\t") == auto_research.L0aKernelSelectRunner.RUNTIME_UNSUPPORTED_COLUMNS
+    assert "combo_009" in audit[1]
+    assert "deltanet_kernel" in audit[1]
+
+    supported_action_space = auto_research.load_yaml_file(result.round_dir / "action_space.runtime_supported.yaml")
+    unsupported_action_space = auto_research.load_yaml_file(result.round_dir / "action_space.runtime_unsupported.yaml")
+    assert len(supported_action_space) == 8
+    assert len(unsupported_action_space) == 9
+    assert {item["deltanet_kernel"] for item in supported_action_space} == {"triton-chunked-delta-v2"}
+    assert {item["deltanet_kernel"] for item in unsupported_action_space} == {
+        "triton-state-update-fused",
+        "triton-experimental-scan",
+    }
+
+    dispatched = [
+        call["kernel_selection"]
+        for call in calls
+        if isinstance(call.get("kernel_selection"), dict) and call["kernel_selection"]
+    ]
+    assert len(dispatched) == 6
+    assert {selection["combo_id"] for selection in dispatched} <= {
+        "combo_001",
+        "combo_003",
+        "combo_005",
+        "combo_007",
+    }
 
 
 def test_l0a_kernel_select_refuses_missing_parity_fixture(tmp_path: Path) -> None:

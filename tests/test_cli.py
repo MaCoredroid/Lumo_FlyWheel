@@ -836,6 +836,7 @@ def test_auto_research_tune_kernel_select_registered(capsys: pytest.CaptureFixtu
     parser = cli.build_parser()
     args = parser.parse_args(["auto-research", "tune-kernel-select", "--help-only"])
     assert args.func(args) == 0
+    assert args.runtime_unsupported_policy == "partition"
     assert json.loads(capsys.readouterr().out) == {
         "subcommand": "tune-kernel-select",
         "status": "registered",

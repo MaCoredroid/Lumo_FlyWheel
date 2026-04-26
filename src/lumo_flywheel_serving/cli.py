@@ -899,6 +899,7 @@ def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
         logs_root=args.logs_root,
         triton_cache_root=args.triton_cache_root,
         state_root=args.state_root,
+        runtime_unsupported_policy=args.runtime_unsupported_policy,
     )
     print(json.dumps(result.as_dict(), indent=2))
     return 0
@@ -1080,6 +1081,12 @@ def build_parser() -> argparse.ArgumentParser:
     auto_tune_kernel_select.add_argument("--rescreen-measurements-per-candidate", type=int, default=4)
     auto_tune_kernel_select.add_argument("--parallel-instances", default="auto")
     auto_tune_kernel_select.add_argument("--max-combos", type=int, default=None)
+    auto_tune_kernel_select.add_argument(
+        "--runtime-unsupported-policy",
+        choices=["partition", "strict"],
+        default="partition",
+        help="In real mode, either partition unsupported kernel candidates before live dispatch or halt strictly.",
+    )
     auto_tune_kernel_select.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_tune_kernel_select.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_tune_kernel_select.add_argument("--model-id", default="qwen3.5-27b")
