@@ -832,6 +832,56 @@ def test_auto_research_validate_p1_workload_registered(capsys: pytest.CaptureFix
     }
 
 
+def test_multi_vllm_verify_p2_registered_and_reports_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen: dict[str, object] = {}
+
+    class _FakeVerifier:
+        def __init__(self, driver: object) -> None:
+            seen["driver"] = driver
+
+        def run(self, **kwargs):
+            seen["kwargs"] = kwargs
+            return {"pass": True, "status": "IMPLEMENTED_VERIFIED", "instance_count": kwargs["count"]}
+
+    monkeypatch.setattr(cli, "MultiInstanceP2Verifier", _FakeVerifier)
+
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "--registry",
+            str(tmp_path / "model_registry.yaml"),
+            "multi-vllm",
+            "--model-id",
+            "qwen3.5-27b",
+            "--count",
+            "4",
+            "--gpu-memory-utilization",
+            "0.2",
+            "--base-port",
+            "8200",
+            "verify-p2",
+            "--workload-file",
+            str(tmp_path / "workload.yaml"),
+        ]
+    )
+
+    assert args.func(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"pass": True, "status": "IMPLEMENTED_VERIFIED", "instance_count": 4}
+    assert seen["kwargs"] == {
+        "model_id": "qwen3.5-27b",
+        "workload_file": str(tmp_path / "workload.yaml"),
+        "count": 4,
+        "gpu_memory_utilization": 0.2,
+        "bind_retries": 3,
+        "request_timeout_s": 240,
+        "keep_running": False,
+        "enable_request_logging": False,
+    }
+
+
 def test_auto_research_measure_requires_arguments_after_help_only_check() -> None:
     parser = cli.build_parser()
     args = parser.parse_args(["auto-research", "measure"])

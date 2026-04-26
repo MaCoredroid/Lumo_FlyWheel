@@ -14,6 +14,7 @@ import requests
 from .auto_research import AutoResearchRoundManager, OfflineAutoResearchRunner, SyntheticWorkloadDistribution, load_baseline_bundle
 from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
+from .multi_instance_vllm import MultiInstanceP2Verifier, MultiInstanceVllmDriver
 from .registry import load_registry
 from .round_driver import RoundContext, run_replay_round, run_round, run_round_exit_code
 from .workload_p1 import heavy_workload_descriptor_path, validate_p1_workload
@@ -550,6 +551,67 @@ def cmd_resume(args: argparse.Namespace) -> int:
     return 0
 
 
+def _multi_instance_driver(args: argparse.Namespace) -> MultiInstanceVllmDriver:
+    return MultiInstanceVllmDriver(
+        registry_path=args.registry,
+        image=args.image,
+        container_prefix=args.container_prefix,
+        base_port=args.base_port,
+        base_proxy_port=args.base_proxy_port,
+        logs_root=args.logs_root,
+        triton_cache_root=args.triton_cache_root,
+        state_root=args.state_root,
+    )
+
+
+def cmd_multi_vllm_start(args: argparse.Namespace) -> int:
+    driver = _multi_instance_driver(args)
+    instances = driver.start(
+        model_id=args.model_id,
+        count=args.count,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        enable_request_logging=args.enable_request_logging,
+        bind_retries=args.bind_retries,
+    )
+    print(
+        json.dumps(
+            {
+                "status": "started",
+                "model_id": args.model_id,
+                "instance_count": len(instances),
+                "gpu_memory_utilization": args.gpu_memory_utilization,
+                "instances": [instance.__dict__ for instance in instances],
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def cmd_multi_vllm_stop(args: argparse.Namespace) -> int:
+    driver = _multi_instance_driver(args)
+    stopped = driver.stop(count=args.count, missing_ok=True)
+    print(json.dumps({"status": "stopped", "instances": stopped}, indent=2))
+    return 0
+
+
+def cmd_multi_vllm_verify_p2(args: argparse.Namespace) -> int:
+    driver = _multi_instance_driver(args)
+    verifier = MultiInstanceP2Verifier(driver)
+    payload = verifier.run(
+        model_id=args.model_id,
+        workload_file=args.workload_file,
+        count=args.count,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        bind_retries=args.bind_retries,
+        request_timeout_s=args.request_timeout_s,
+        keep_running=args.keep_running,
+        enable_request_logging=args.enable_request_logging,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if payload.get("pass") else 1
+
+
 def _auto_research_manager(args: argparse.Namespace) -> AutoResearchRoundManager:
     return AutoResearchRoundManager(
         registry_path=args.registry,
@@ -953,6 +1015,32 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--enable-request-logging", action="store_true")
     resume.add_argument("--from-baseline", action="store_true")
     resume.set_defaults(func=cmd_resume)
+
+    multi_vllm = subparsers.add_parser("multi-vllm")
+    multi_vllm.add_argument("--model-id", default="qwen3.5-27b")
+    multi_vllm.add_argument("--count", type=int, default=4)
+    multi_vllm.add_argument("--gpu-memory-utilization", type=float, default=0.2)
+    multi_vllm.add_argument("--base-port", type=int, default=8100)
+    multi_vllm.add_argument("--base-proxy-port", type=int, default=9100)
+    multi_vllm.add_argument("--container-prefix", default="lumo-vllm-p2")
+    multi_vllm.add_argument("--bind-retries", type=int, default=3)
+    multi_vllm.add_argument("--enable-request-logging", action="store_true")
+    multi_vllm_subparsers = multi_vllm.add_subparsers(dest="multi_vllm_command", required=True)
+
+    multi_start = multi_vllm_subparsers.add_parser("start")
+    multi_start.set_defaults(func=cmd_multi_vllm_start)
+
+    multi_stop = multi_vllm_subparsers.add_parser("stop")
+    multi_stop.set_defaults(func=cmd_multi_vllm_stop)
+
+    multi_verify_p2 = multi_vllm_subparsers.add_parser("verify-p2")
+    multi_verify_p2.add_argument(
+        "--workload-file",
+        default=str(REPO_ROOT / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy" / "workload.yaml"),
+    )
+    multi_verify_p2.add_argument("--request-timeout-s", type=int, default=240)
+    multi_verify_p2.add_argument("--keep-running", action="store_true")
+    multi_verify_p2.set_defaults(func=cmd_multi_vllm_verify_p2)
     return parser
 
 
