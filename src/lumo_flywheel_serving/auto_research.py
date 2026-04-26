@@ -76,6 +76,7 @@ AUTO_RESEARCH_HELP_SUBCOMMANDS = PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS + ("run",)
 L0A_ELIMINATION_REASONS = {"nondeterministic", "parity_diverges_from_reference"}
 L0A_DEFAULT_MODEL_ID = "qwen3.5-27b"
 L0A_SELECT_ROUND_TYPE = "l0a_select_only"
+L0A_REAL_KERNEL_ACTIVATION_BLOCKER = "l0a_kernel_selection_runtime_activation_missing"
 RESULTS_COLUMNS = [
     "candidate_uuid",
     "parent_candidate_uuid",
@@ -694,7 +695,12 @@ class L0aKernelSelectResult:
 
 
 class L0aKernelSelectRunner:
-    """Bounded P3/L0a select-only substrate with synthetic verification support."""
+    """Bounded P3/L0a select-only substrate.
+
+    Real mode intentionally dispatches through the live repo endpoint, but it
+    does not claim P3 PASS until there is a repo-owned runtime path that applies
+    each kernel combo to vLLM rather than storing it as bundle metadata.
+    """
 
     ELIMINATED_COLUMNS = [
         "combo_id",
@@ -713,6 +719,8 @@ class L0aKernelSelectRunner:
         "measurement_index",
         "objective_value",
         "harness",
+        "trace_ref",
+        "kernel_selection_applied",
     ]
 
     def __init__(
@@ -739,6 +747,9 @@ class L0aKernelSelectRunner:
         round_root: str | Path,
         harness: str,
         model_id: str = L0A_DEFAULT_MODEL_ID,
+        port: int = 8000,
+        proxy_port: int = 8001,
+        max_combos: int | None = None,
     ) -> L0aKernelSelectResult:
         if harness not in {"real", "synthetic"}:
             raise RuntimeError(f"Unsupported harness: {harness}")
@@ -758,11 +769,11 @@ class L0aKernelSelectRunner:
         combos = self._load_action_space(action_space_path)
         if not combos:
             raise RuntimeError("action space produced zero L0a combos")
-        if harness == "real":
-            raise RuntimeError(
-                "HALT_REASON: l0a_real_harness_not_implemented; "
-                "P3 substrate supports synthetic/unit verification, but live L0a dispatch is not wired yet"
-            )
+        total_combos_available = len(combos)
+        if max_combos is not None:
+            if max_combos < 1:
+                raise RuntimeError("--max-combos must be >= 1 when provided")
+            combos = combos[:max_combos]
 
         fanout = self._resolve_parallel_instances(parallel_instances)
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -788,6 +799,11 @@ class L0aKernelSelectRunner:
             "rescreen_top_k": rescreen_top_k,
             "rescreen_measurements_per_candidate": rescreen_measurements_per_candidate,
             "parallel_instances": fanout,
+            "total_combos_available": total_combos_available,
+            "total_combos_scheduled": len(combos),
+            "full_action_space_sweep": len(combos) == total_combos_available,
+            "limited_mode": len(combos) != total_combos_available,
+            "max_combos": max_combos,
             "parallel_evidence": self._parallel_evidence(fanout),
             "parity_fixture_refs": {
                 key: _relative_to_repo(self.repo_root, value)
@@ -798,6 +814,9 @@ class L0aKernelSelectRunner:
                 for key, value in fixture_refs.items()
             },
             "weight_version_id": weight_version_id,
+            "endpoint": f"http://127.0.0.1:{proxy_port}",
+            "upstream_port": port,
+            "proxy_port": proxy_port,
             "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
         }
         self._write_yaml(round_dir / "round_spec.yaml", spec)
@@ -821,11 +840,48 @@ class L0aKernelSelectRunner:
         )
         (round_dir / "smoke_trace.json").write_text(json.dumps(smoke_rows, indent=2), encoding="utf-8")
 
-        baseline_rows = self._baseline_measurements(baselines)
-        screen_rows = self._screen_measurements(survivors, screen_measurements_per_combo)
+        if harness == "synthetic":
+            baseline_rows = self._baseline_measurements(baselines)
+            screen_rows = self._screen_measurements(survivors, screen_measurements_per_combo)
+        else:
+            real_harness = self._real_harness(
+                workload_path=workload_path,
+                descriptor=descriptor,
+                model_config=registry[model_id],
+                model_id=model_id,
+                weight_version_id=weight_version_id,
+                round_id=round_id,
+                round_dir=round_dir,
+                port=port,
+                proxy_port=proxy_port,
+            )
+            baseline_rows = self._real_baseline_measurements(
+                real_harness,
+                baselines=baselines,
+                baseline_vllm_config=registry[model_id].vllm_config(),
+                round_dir=round_dir,
+            )
+            screen_rows = self._real_combo_measurements(
+                real_harness,
+                combos=survivors,
+                measurements_per_combo=screen_measurements_per_combo,
+                baseline_vllm_config=registry[model_id].vllm_config(),
+                round_dir=round_dir,
+                role="screen",
+            )
         self._write_tsv(round_dir / "measurements.tsv", self.MEASUREMENT_COLUMNS, [*baseline_rows, *screen_rows])
         top = self._top_screen_combos(survivors, screen_rows, rescreen_top_k)
-        rescreen_rows = self._rescreen_measurements(top, rescreen_measurements_per_candidate)
+        if harness == "synthetic":
+            rescreen_rows = self._rescreen_measurements(top, rescreen_measurements_per_candidate)
+        else:
+            rescreen_rows = self._real_combo_measurements(
+                real_harness,
+                combos=top,
+                measurements_per_combo=rescreen_measurements_per_candidate,
+                baseline_vllm_config=registry[model_id].vllm_config(),
+                round_dir=round_dir,
+                role="rescreen",
+            )
         self._write_tsv(round_dir / "rescreen.tsv", self.MEASUREMENT_COLUMNS, rescreen_rows)
         winner = self._pick_winner(top, rescreen_rows)
         self._write_yaml(round_dir / "winner_kernel_select.yaml", winner.as_dict())
@@ -855,12 +911,49 @@ class L0aKernelSelectRunner:
             "screen": screen_rows,
             "rescreen": rescreen_rows,
             "winner": winner.as_dict(),
+            "harness": harness,
+            "limited_mode": len(combos) != total_combos_available,
+            "kernel_selection_runtime_activation": (
+                "metadata_only_not_runtime_applied" if harness == "real" else "synthetic_fixture"
+            ),
         }
         (round_dir / "search_trace.json").write_text(json.dumps(search_trace, indent=2), encoding="utf-8")
         (round_dir / "measurement_trace_combined.json").write_text(
             json.dumps(measurement_trace, indent=2),
             encoding="utf-8",
         )
+        if harness == "real":
+            run_log = {
+                "outcome": "ROUND_BLOCKED",
+                "HALT_REASON": L0A_REAL_KERNEL_ACTIVATION_BLOCKER,
+                "round_id": round_id,
+                "provisional_winner": winner.as_dict(),
+                "total_combos_available": total_combos_available,
+                "total_combos_scheduled": len(combos),
+                "full_action_space_sweep": len(combos) == total_combos_available,
+                "limited_mode": len(combos) != total_combos_available,
+                "kernel_selection_runtime_activation": "metadata_only_not_runtime_applied",
+                "live_dispatch": {
+                    "endpoint": f"http://127.0.0.1:{proxy_port}",
+                    "baseline_rows": len(baseline_rows),
+                    "screen_rows": len(screen_rows),
+                    "rescreen_rows": len(rescreen_rows),
+                    "target_concurrency": 1,
+                },
+                "artifact_counts": {
+                    "eliminated_rows": len(eliminated),
+                    "survivor_rows": len(survivors),
+                    "baseline_rows": len(baseline_rows),
+                    "screen_rows": len(screen_rows),
+                    "rescreen_rows": len(rescreen_rows),
+                },
+            }
+            (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+            raise RuntimeError(
+                f"HALT_REASON: {L0A_REAL_KERNEL_ACTIVATION_BLOCKER}; "
+                "live endpoint dispatch completed, but repo runtime only records L0a kernel_selection "
+                "as bundle metadata and does not apply each combo to the running vLLM process"
+            )
         bundle = make_tuned_config_bundle(
             model_id=model_id,
             family_id=str(descriptor.get("family_id", "")),
@@ -873,8 +966,8 @@ class L0aKernelSelectRunner:
                 "value": self._objective_mean(winner.combo_id, rescreen_rows),
                 "baseline_mean_screen": self._baseline_mean(baseline_rows),
             },
-            measurement_trace_ref=str((round_dir / "measurement_trace_combined.json").relative_to(self.repo_root)),
-            search_trace_ref=str((round_dir / "search_trace.json").relative_to(self.repo_root)),
+            measurement_trace_ref=_relative_to_repo(self.repo_root, round_dir / "measurement_trace_combined.json"),
+            search_trace_ref=_relative_to_repo(self.repo_root, round_dir / "search_trace.json"),
             baseline_bundle_id=None,
             regression_guard={
                 "baseline_measurements": baselines,
@@ -886,6 +979,7 @@ class L0aKernelSelectRunner:
                 "parity_check_passed": True,
                 "production_load_refused": True,
                 "serial_only_supported": fanout == 1,
+                "full_action_space_sweep": len(combos) == total_combos_available,
             },
             round_provenance={
                 "round_type": L0A_SELECT_ROUND_TYPE,
@@ -897,8 +991,11 @@ class L0aKernelSelectRunner:
                 "parity_fixture_content_hashes": spec["parity_fixture_content_hashes"],
                 "parallel_instances": fanout,
                 "parallel_evidence": spec["parallel_evidence"],
+                "total_combos_available": total_combos_available,
+                "total_combos_scheduled": len(combos),
+                "limited_mode": len(combos) != total_combos_available,
                 "confidence": "defensible",
-                "results_tsv_ref": str((round_dir / "rescreen.tsv").relative_to(self.repo_root)),
+                "results_tsv_ref": _relative_to_repo(self.repo_root, round_dir / "rescreen.tsv"),
             },
         )
         bundle_path = persist_tuned_config_bundle(bundle, self.tuned_config_root)
@@ -908,8 +1005,11 @@ class L0aKernelSelectRunner:
             "bundle_path": str(bundle_path),
             "winner": winner.as_dict(),
             "total_combos": len(combos),
+            "total_combos_available": total_combos_available,
             "eliminated_count": len(eliminated),
             "survivor_count": len(survivors),
+            "full_action_space_sweep": len(combos) == total_combos_available,
+            "limited_mode": len(combos) != total_combos_available,
             "artifact_counts": {
                 "eliminated_rows": len(eliminated),
                 "survivor_rows": len(survivors),
@@ -1094,6 +1194,133 @@ class L0aKernelSelectRunner:
             return 0.012
         return 0.0
 
+    def _real_harness(
+        self,
+        *,
+        workload_path: Path,
+        descriptor: dict[str, Any],
+        model_config: ModelConfig,
+        model_id: str,
+        weight_version_id: str,
+        round_id: str,
+        round_dir: Path,
+        port: int,
+        proxy_port: int,
+    ) -> RealMeasurementHarness:
+        workload = SyntheticWorkloadDistribution.from_file(
+            workload_path,
+            model_config=model_config,
+            family_id=str(descriptor.get("family_id", "")),
+        )
+        workload_spec = workload.to_workload_spec(base_dir=workload_path.parent)
+        return RealMeasurementHarness(
+            workload_spec=workload_spec,
+            seed_trace_path=workload_spec.seed_trace_ref,
+            slo=SLO(
+                ttft_ms=workload.nominal_ttft_ms,
+                tpot_ms=workload.tpot_ceiling_ms,
+                turn_ms=workload.turn_latency_ceiling_ms,
+            ),
+            endpoint=f"http://127.0.0.1:{proxy_port}/v1",
+            metrics_scrape_url=f"http://127.0.0.1:{port}/metrics",
+            admin_url=f"http://127.0.0.1:{proxy_port}/admin",
+            model_id=model_id,
+            weight_version_id=weight_version_id,
+            bundle_staging_dir=round_dir / ".staging_bundles",
+            round_id=round_id,
+            workload_descriptor_path=workload_path,
+        )
+
+    def _real_baseline_measurements(
+        self,
+        harness: RealMeasurementHarness,
+        *,
+        baselines: int,
+        baseline_vllm_config: dict[str, Any],
+        round_dir: Path,
+    ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+        for index in range(1, baselines + 1):
+            rows.append(
+                self._real_measurement_row(
+                    harness,
+                    combo=None,
+                    measurement_index=index,
+                    baseline_vllm_config=baseline_vllm_config,
+                    round_dir=round_dir,
+                    role="baseline",
+                )
+            )
+        return rows
+
+    def _real_combo_measurements(
+        self,
+        harness: RealMeasurementHarness,
+        *,
+        combos: list[L0aKernelCombo],
+        measurements_per_combo: int,
+        baseline_vllm_config: dict[str, Any],
+        round_dir: Path,
+        role: str,
+    ) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+        for combo in combos:
+            for index in range(1, measurements_per_combo + 1):
+                rows.append(
+                    self._real_measurement_row(
+                        harness,
+                        combo=combo,
+                        measurement_index=index,
+                        baseline_vllm_config=baseline_vllm_config,
+                        round_dir=round_dir,
+                        role=role,
+                    )
+                )
+        return rows
+
+    def _real_measurement_row(
+        self,
+        harness: RealMeasurementHarness,
+        *,
+        combo: L0aKernelCombo | None,
+        measurement_index: int,
+        baseline_vllm_config: dict[str, Any],
+        round_dir: Path,
+        role: str,
+    ) -> dict[str, str]:
+        combo_id = combo.combo_id if combo is not None else "vllm-default"
+        kernel_selection = combo.as_dict() if combo is not None else {}
+        trace = harness.measure(
+            dict(baseline_vllm_config),
+            warmup_s=0,
+            window_s=0,
+            target_concurrency=1,
+            kernel_selection=kernel_selection,
+        )
+        trace.update(
+            {
+                "combo_id": combo_id,
+                "measurement_role": role,
+                "measurement_index": measurement_index,
+                "kernel_selection": kernel_selection,
+                "kernel_selection_runtime_activation": "metadata_only_not_runtime_applied",
+                "target_concurrency": 1,
+            }
+        )
+        trace_dir = round_dir / "live_traces"
+        trace_dir.mkdir(exist_ok=True)
+        trace_path = trace_dir / f"{role}_{combo_id}_{measurement_index:02d}.json"
+        trace_path.write_text(json.dumps(trace, indent=2, sort_keys=True), encoding="utf-8")
+        return {
+            "combo_id": combo_id,
+            "measurement_role": role,
+            "measurement_index": str(measurement_index),
+            "objective_value": f"{float(trace.get('eval_throughput', 0.0)):.6f}",
+            "harness": "real",
+            "trace_ref": str(trace_path.relative_to(round_dir)),
+            "kernel_selection_applied": "false",
+        }
+
     def _baseline_measurements(self, baselines: int) -> list[dict[str, str]]:
         return [
             {
@@ -1102,6 +1329,8 @@ class L0aKernelSelectRunner:
                 "measurement_index": str(index),
                 "objective_value": f"{1.0 + (index * 0.002):.6f}",
                 "harness": "synthetic",
+                "trace_ref": "",
+                "kernel_selection_applied": "synthetic",
             }
             for index in range(1, baselines + 1)
         ]
@@ -1122,6 +1351,8 @@ class L0aKernelSelectRunner:
                         "measurement_index": str(index),
                         "objective_value": f"{base + (index * 0.001):.6f}",
                         "harness": "synthetic",
+                        "trace_ref": "",
+                        "kernel_selection_applied": "synthetic",
                     }
                 )
         return rows
@@ -1142,6 +1373,8 @@ class L0aKernelSelectRunner:
                         "measurement_index": str(index),
                         "objective_value": f"{base + (index * 0.0005):.6f}",
                         "harness": "synthetic",
+                        "trace_ref": "",
+                        "kernel_selection_applied": "synthetic",
                     }
                 )
         return rows
@@ -2887,6 +3120,7 @@ class AutoResearchRoundManager:
             weight_version_id=spec.weight_version_id,
             bundle_staging_dir=Path(spec.round_dir) / ".measure-staging",
             round_id=spec.round_id,
+            workload_descriptor_path=Path(spec.workload_file),
         )
         warmup_s = spec.full_warmup_s if profile == "full" else spec.screen_warmup_s
         measurement_s = spec.full_measurement_s if profile == "full" else spec.screen_measurement_s

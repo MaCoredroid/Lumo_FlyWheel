@@ -891,6 +891,9 @@ def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
         round_root=args.round_root,
         harness=args.harness,
         model_id=args.model_id,
+        port=args.port,
+        proxy_port=args.proxy_port,
+        max_combos=args.max_combos,
     )
     print(json.dumps(result.as_dict(), indent=2))
     return 0
@@ -1071,6 +1074,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_tune_kernel_select.add_argument("--rescreen-top-k", type=int, default=8)
     auto_tune_kernel_select.add_argument("--rescreen-measurements-per-candidate", type=int, default=4)
     auto_tune_kernel_select.add_argument("--parallel-instances", default="auto")
+    auto_tune_kernel_select.add_argument("--max-combos", type=int, default=None)
     auto_tune_kernel_select.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_tune_kernel_select.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_tune_kernel_select.add_argument("--model-id", default="qwen3.5-27b")

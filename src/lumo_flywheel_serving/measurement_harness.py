@@ -54,6 +54,7 @@ class RealMeasurementHarness:
         weight_version_id: str,
         bundle_staging_dir: Path,
         round_id: str | None = None,
+        workload_descriptor_path: Path | None = None,
     ) -> None:
         self.workload_spec = workload_spec
         self.seed_trace_path = Path(seed_trace_path)
@@ -65,6 +66,7 @@ class RealMeasurementHarness:
         self.weight_version_id = weight_version_id
         self.bundle_staging_dir = Path(bundle_staging_dir)
         self.round_id = round_id
+        self.workload_descriptor_path = Path(workload_descriptor_path) if workload_descriptor_path is not None else None
 
     def measure(
         self,
@@ -75,13 +77,18 @@ class RealMeasurementHarness:
         target_concurrency: int | None = None,
         target_concurrency_sweep: list[int] | None = None,
         request_shaping: dict[str, Any] | None = None,
+        kernel_selection: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if target_concurrency is None:
             target_concurrency = max(target_concurrency_sweep or [self.workload_spec.target_concurrency])
         try:
-            self._activate_candidate(candidate_vllm_config, request_shaping=request_shaping)
+            self._activate_candidate(
+                candidate_vllm_config,
+                request_shaping=request_shaping,
+                kernel_selection=kernel_selection,
+            )
         except TypeError as exc:
-            if "request_shaping" not in str(exc):
+            if "request_shaping" not in str(exc) and "kernel_selection" not in str(exc):
                 raise
             self._activate_candidate(candidate_vllm_config)
         started = time.time()
@@ -181,6 +188,7 @@ class RealMeasurementHarness:
         candidate_vllm_config: dict[str, Any],
         *,
         request_shaping: dict[str, Any] | None = None,
+        kernel_selection: dict[str, Any] | None = None,
     ) -> None:
         self.bundle_staging_dir.mkdir(parents=True, exist_ok=True)
         bundle_path = self.bundle_staging_dir / f"candidate-{time.time_ns()}.yaml"
@@ -190,6 +198,7 @@ class RealMeasurementHarness:
             weight_version_id=self.weight_version_id,
             workload_distribution_id=self.workload_spec.workload_distribution_id,
             vllm_config=dict(candidate_vllm_config),
+            kernel_selection=dict(kernel_selection or {}),
             objective={"metric": "measurement_staging", "value": 0},
             measurement_trace_ref="pending-measurement-trace.json",
             search_trace_ref="pending-search-trace.json",
@@ -201,23 +210,22 @@ class RealMeasurementHarness:
                 "round_id": self.round_id,
                 "dry_run": True,
                 "staging_only": True,
+                **(
+                    {"workload_descriptor_path": str(self.workload_descriptor_path)}
+                    if self.workload_descriptor_path is not None
+                    else {}
+                ),
             },
         )
         bundle_path.write_text(yaml.safe_dump(bundle.as_dict(), sort_keys=False), encoding="utf-8")
-        try:
-            response = requests.post(
-                f"{self.admin_url}/load_tuned_config",
-                json={"bundle_path": str(bundle_path)},
-                timeout=30,
-            )
-            response.raise_for_status()
-            self._reset_prefix_cache()
-            self._wait_for_health()
-        finally:
-            try:
-                bundle_path.unlink()
-            except FileNotFoundError:
-                pass
+        response = requests.post(
+            f"{self.admin_url}/load_tuned_config",
+            json={"bundle_path": str(bundle_path)},
+            timeout=30,
+        )
+        response.raise_for_status()
+        self._reset_prefix_cache()
+        self._wait_for_health()
 
     def _reset_prefix_cache(self) -> None:
         response = requests.post(self._server_root_url("/reset_prefix_cache"), timeout=30)
