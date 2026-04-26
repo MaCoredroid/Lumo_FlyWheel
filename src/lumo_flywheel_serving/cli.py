@@ -15,6 +15,7 @@ from .auto_research import (
     AutoResearchRoundManager,
     L0aKernelSelectRunner,
     L0bKernelAutotuneRunner,
+    L0cKernelMutationRunner,
     OfflineAutoResearchRunner,
     SyntheticWorkloadDistribution,
     load_baseline_bundle,
@@ -914,6 +915,60 @@ def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_auto_research_mutate_kernel(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(
+        args,
+        "workload_file",
+        "base_bundle",
+        "kernel_target",
+        "kernel_source_path",
+        "parity_fixture",
+    )
+    runner = L0cKernelMutationRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    result = runner.run(
+        workload_file=args.workload_file,
+        base_bundle=args.base_bundle,
+        kernel_target=args.kernel_target,
+        kernel_source_path=args.kernel_source_path,
+        parity_fixture=args.parity_fixture,
+        base_measurements=args.base_measurements,
+        accepted_iteration_cap=args.accepted_iteration_cap,
+        total_attempt_cap=args.total_attempt_cap,
+        round_timeout_hours=args.round_timeout_hours,
+        round_root=args.round_root,
+        harness=args.harness,
+        model_id=args.model_id,
+    )
+    print(json.dumps(result.as_dict(), indent=2))
+    return 0
+
+
+def cmd_auto_research_apply_and_test(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "round_id", "iteration", "kernel_target")
+    runner = L0cKernelMutationRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    payload = runner.apply_and_test(
+        round_id=args.round_id,
+        iteration=args.iteration,
+        kernel_target=args.kernel_target,
+        harness=args.harness,
+        round_root=args.round_root,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def cmd_auto_research_tune_kernel_autotune(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
@@ -1158,6 +1213,35 @@ def build_parser() -> argparse.ArgumentParser:
     auto_tune_kernel_autotune.add_argument("--min-headroom-pct", type=float, default=0.03)
     auto_tune_kernel_autotune.add_argument("--max-autotune-candidates", type=int, default=None)
     auto_tune_kernel_autotune.set_defaults(func=cmd_auto_research_tune_kernel_autotune)
+
+    auto_mutate_kernel = auto_research_subparsers.add_parser("mutate-kernel")
+    auto_mutate_kernel.add_argument("--help-only", action="store_true")
+    auto_mutate_kernel.add_argument("--workload-file")
+    auto_mutate_kernel.add_argument("--base-bundle")
+    auto_mutate_kernel.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
+    auto_mutate_kernel.add_argument("--kernel-source-path")
+    auto_mutate_kernel.add_argument("--parity-fixture")
+    auto_mutate_kernel.add_argument("--base-measurements", type=int, default=5)
+    auto_mutate_kernel.add_argument("--accepted-iteration-cap", type=int, default=12)
+    auto_mutate_kernel.add_argument("--total-attempt-cap", type=int, default=36)
+    auto_mutate_kernel.add_argument("--round-timeout-hours", type=float, default=12.0)
+    auto_mutate_kernel.add_argument(
+        "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
+    )
+    auto_mutate_kernel.add_argument("--harness", choices=["real", "synthetic"], default="real")
+    auto_mutate_kernel.add_argument("--model-id", default="qwen3.5-27b")
+    auto_mutate_kernel.set_defaults(func=cmd_auto_research_mutate_kernel)
+
+    auto_apply_and_test = auto_research_subparsers.add_parser("apply-and-test")
+    auto_apply_and_test.add_argument("--help-only", action="store_true")
+    auto_apply_and_test.add_argument("--round-id")
+    auto_apply_and_test.add_argument("--iteration")
+    auto_apply_and_test.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
+    auto_apply_and_test.add_argument("--harness", choices=["real", "synthetic"], default="real")
+    auto_apply_and_test.add_argument(
+        "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
+    )
+    auto_apply_and_test.set_defaults(func=cmd_auto_research_apply_and_test)
 
     auto_research_run = auto_research_subparsers.add_parser("run")
     auto_research_run.add_argument("--help-only", action="store_true")

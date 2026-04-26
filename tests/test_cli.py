@@ -883,6 +883,58 @@ def test_auto_research_run_round_agent_runtime_flag_accepts_claude() -> None:
     assert args.agent_runtime == "claude"
 
 
+def test_auto_research_mutate_kernel_registered(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "auto-research",
+            "mutate-kernel",
+            "--help-only",
+            "--workload-file",
+            "x",
+            "--base-bundle",
+            "x",
+            "--kernel-target",
+            "deltanet",
+            "--kernel-source-path",
+            "x",
+            "--parity-fixture",
+            "x",
+        ]
+    )
+    assert args.func(args) == 0
+    assert args.accepted_iteration_cap == 12
+    assert args.total_attempt_cap == 36
+    assert args.round_timeout_hours == 12.0
+    assert json.loads(capsys.readouterr().out) == {
+        "subcommand": "mutate-kernel",
+        "status": "registered",
+    }
+
+
+def test_auto_research_apply_and_test_registered(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "auto-research",
+            "apply-and-test",
+            "--help-only",
+            "--round-id",
+            "r",
+            "--iteration",
+            "001",
+            "--kernel-target",
+            "deltanet",
+        ]
+    )
+    assert args.func(args) == 0
+    assert args.harness == "real"
+    assert json.loads(capsys.readouterr().out) == {
+        "subcommand": "apply-and-test",
+        "status": "registered",
+    }
+
+
 def test_auto_research_run_round_agent_runtime_flag_rejects_unknown_choice() -> None:
     parser = cli.build_parser()
     with pytest.raises(SystemExit):

@@ -4193,3 +4193,322 @@ def test_l0b_kernel_autotune_real_writes_halt_artifact_on_live_harness_failure(
     assert "live service unavailable" in run_log["measurement_error"]
     assert "restore unavailable" in run_log["restore_error"]
     assert trace["HALT_REASON"] == "l0b_real_harness_blocked"
+
+
+def test_l0c_kernel_mutation_synthetic_writes_p5_artifacts_and_passes(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    fixture_path = (
+        repo
+        / "benchmark_blueprints"
+        / "families"
+        / "responses-sdk-adapter-cutover"
+        / "parity_fixture"
+        / "deltanet_v1.yaml"
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path="kernels/deltanet/chunked_delta.py",
+        parity_fixture=fixture_path,
+        base_measurements=2,
+        accepted_iteration_cap=4,
+        total_attempt_cap=12,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+    )
+
+    assert result.outcome == "ROUND_PASSED"
+    assert result.terminal_condition == "accepted_cap_reached"
+    assert result.accepted_count == 4
+    # Default outcome rejects every 3rd attempt; the cap check is evaluated BEFORE
+    # the next attempt runs, so reaching 4 accepted finishes after attempt 005
+    # (001/002/004/005 pass; 003 fails) — the runner does not spawn 006.
+    assert result.total_attempt_count == 5
+    assert result.rejected_count == 1
+
+    measurements = (result.round_dir / "measurements.tsv").read_text(encoding="utf-8")
+    assert "l0b_baseline_remeasured" in measurements
+    assert "l0c_candidate" in measurements
+    trailers = (result.round_dir / "candidate_trailers.tsv").read_text(encoding="utf-8")
+    assert "Measurement-Role: l0b_baseline_remeasured" in trailers
+    assert "Mutation-Hash:" in trailers
+
+    rejected = (result.round_dir / "mutations_rejected.tsv").read_text(encoding="utf-8").splitlines()
+    assert rejected[0].split("\t")[0] == "iteration"
+    rejected_iterations = [line.split("\t")[0] for line in rejected[1:]]
+    assert rejected_iterations == ["003"]
+
+    iteration_labels = sorted(p.name for p in (result.round_dir / "candidates").iterdir())
+    assert iteration_labels == ["001", "002", "003", "004", "005"]
+    # Per AR.43: parity_check.json present every iteration; measurement_trace.json
+    # only when parity passed (no faster-but-wrong leakage).
+    for label in iteration_labels:
+        cand = result.round_dir / "candidates" / label
+        parity = json.loads((cand / "parity_check.json").read_text(encoding="utf-8"))
+        if label == "003":
+            assert parity["pass"] is False
+            assert parity["reason"] == "parity_logit_diverged"
+            assert not (cand / "measurement_trace.json").exists()
+        else:
+            assert parity["pass"] is True
+            assert parity["reason"] == "ran_passed"
+            assert parity["checkpoints_checked"] == [1, 1024]
+            assert (cand / "measurement_trace.json").exists()
+        assert (cand / "mutation.patch").exists()
+
+    assert result.bundle_path is not None
+    bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
+    assert bundle_payload["round_provenance"]["round_type"] == "l0c_mutation"
+    assert bundle_payload["round_provenance"]["terminal_condition"] == "accepted_cap_reached"
+    l0c_block = bundle_payload["layer_0_deltanet"]["l0c_mutation"]
+    assert l0c_block["accepted_count"] == 4
+    assert l0c_block["total_attempt_count"] == 5
+    assert l0c_block["rejected_count"] == 1
+    assert l0c_block["parity_attestation"]["checkpoints_checked"] == [1, 1024]
+    # AR.48b counter audit: accepted + rejected == total.
+    assert (
+        l0c_block["accepted_count"] + l0c_block["rejected_count"]
+        == l0c_block["total_attempt_count"]
+    )
+
+
+def test_l0c_kernel_mutation_synthetic_halts_on_proposer_stuck(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    fixture_path = (
+        repo
+        / "benchmark_blueprints"
+        / "families"
+        / "responses-sdk-adapter-cutover"
+        / "parity_fixture"
+        / "deltanet_v1.yaml"
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    def _always_parity_fail(attempt_index: int) -> dict:
+        return {"stage": "parity_fail"}
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path="kernels/deltanet/chunked_delta.py",
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=4,
+        total_attempt_cap=12,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+        attempt_outcome_fn=_always_parity_fail,
+    )
+
+    assert result.terminal_condition == "proposer_stuck"
+    assert result.accepted_count == 0
+    assert result.total_attempt_count == 3
+    assert result.outcome == "ROUND_BLOCKED"
+    assert result.bundle_path is None
+
+
+def test_l0c_kernel_mutation_synthetic_halts_on_compile_failures(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    fixture_path = (
+        repo
+        / "benchmark_blueprints"
+        / "families"
+        / "responses-sdk-adapter-cutover"
+        / "parity_fixture"
+        / "deltanet_v1.yaml"
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    def _always_compile_fail(attempt_index: int) -> dict:
+        return {"stage": "compile_failed"}
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path="kernels/deltanet/chunked_delta.py",
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=4,
+        total_attempt_cap=12,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+        attempt_outcome_fn=_always_compile_fail,
+    )
+
+    assert result.terminal_condition == "compile_failures_3x"
+    assert result.outcome == "ROUND_BLOCKED"
+
+
+def test_l0c_kernel_mutation_real_harness_blocks_with_named_halt(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    fixture_path = (
+        repo
+        / "benchmark_blueprints"
+        / "families"
+        / "responses-sdk-adapter-cutover"
+        / "parity_fixture"
+        / "deltanet_v1.yaml"
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="HALT_REASON: l0c_real_harness_not_implemented"):
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="deltanet",
+            kernel_source_path="kernels/deltanet/chunked_delta.py",
+            parity_fixture=fixture_path,
+            base_measurements=1,
+            accepted_iteration_cap=2,
+            total_attempt_cap=4,
+            round_timeout_hours=0.1,
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+        )
+
+    halt_log_path = next((repo / "output" / "auto_research").glob("*-l0c-mutation-deltanet-*/run_log.json"))
+    halt_log = json.loads(halt_log_path.read_text(encoding="utf-8"))
+    assert halt_log["outcome"] == "ROUND_BLOCKED"
+    assert halt_log["HALT_REASON"] == "l0c_real_harness_not_implemented"
+
+
+def test_l0c_apply_and_test_synthetic_routes_parity_outcomes(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    fixture_path = (
+        repo
+        / "benchmark_blueprints"
+        / "families"
+        / "responses-sdk-adapter-cutover"
+        / "parity_fixture"
+        / "deltanet_v1.yaml"
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    # Bootstrap a round so the apply-and-test CLI has a round_spec.yaml to read.
+    bootstrapped = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path="kernels/deltanet/chunked_delta.py",
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=1,
+        total_attempt_cap=2,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+    )
+    round_id = bootstrapped.round_id
+
+    iteration_dir = bootstrapped.round_dir / "candidates" / "010"
+    iteration_dir.mkdir()
+    (iteration_dir / "mutation.patch").write_text(
+        "--- a/kernels/deltanet/chunked_delta.py\n+++ b/kernels/deltanet/chunked_delta.py\n@@ -1 +1 @@\n-# baseline\n+# good mutation\n",
+        encoding="utf-8",
+    )
+    payload = runner.apply_and_test(
+        round_id=round_id,
+        iteration="010",
+        kernel_target="deltanet",
+        harness="synthetic",
+        round_root=repo / "output" / "auto_research",
+    )
+    assert payload["outcome"] == "parity_passed"
+    assert (iteration_dir / "measurement_trace.json").is_file()
+
+    bad_dir = bootstrapped.round_dir / "candidates" / "011"
+    bad_dir.mkdir()
+    (bad_dir / "mutation.patch").write_text(
+        "--- a/kernels/deltanet/chunked_delta.py\n+++ b/kernels/deltanet/chunked_delta.py\n@@ -1 +1 @@\n-# baseline\n+# BAD_PARITY\n",
+        encoding="utf-8",
+    )
+    payload = runner.apply_and_test(
+        round_id=round_id,
+        iteration="011",
+        kernel_target="deltanet",
+        harness="synthetic",
+        round_root=repo / "output" / "auto_research",
+    )
+    assert payload["outcome"] == "parity_failed"
+    assert not (bad_dir / "measurement_trace.json").exists()
+
+
+def test_l0c_iteration_brief_substitutes_kernel_target_and_round_id(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    fixture_path = (
+        repo
+        / "benchmark_blueprints"
+        / "families"
+        / "responses-sdk-adapter-cutover"
+        / "parity_fixture"
+        / "deltanet_v1.yaml"
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path="kernels/deltanet/chunked_delta.py",
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=1,
+        total_attempt_cap=2,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+    )
+    brief = (result.round_dir / "iteration_brief.md").read_text(encoding="utf-8")
+    assert "kernels/deltanet/chunked_delta.py" in brief
+    assert result.round_id in brief
+    assert "auto-research apply-and-test" in brief
+    assert "{{kernel_target}}" not in brief
