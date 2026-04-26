@@ -849,6 +849,62 @@ class L0aKernelSelectRunner:
             baseline_rows = self._baseline_measurements(baselines)
             screen_rows = self._screen_measurements(survivors, screen_measurements_per_combo)
         else:
+            runtime_activation_check = self._runtime_activation_check(combos, survivors)
+            runtime_activation_check_path = round_dir / "runtime_activation_check.json"
+            runtime_activation_check_path.write_text(
+                json.dumps(runtime_activation_check, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            unsupported_activation = runtime_activation_check["unsupported_runtime_activation"]
+            unsupported_survivor_activation = [
+                item
+                for item in unsupported_activation
+                if item["smoke_status"] == "survivor"
+            ]
+            if unsupported_activation:
+                live_dispatch_reason = (
+                    "scheduled survivor contains unsupported runtime kernel knob"
+                    if unsupported_survivor_activation
+                    else "scheduled candidate contains unsupported runtime kernel knob"
+                )
+                run_log = {
+                    "outcome": "ROUND_BLOCKED",
+                    "HALT_REASON": KERNEL_SELECTION_RUNTIME_UNSUPPORTED,
+                    "round_id": round_id,
+                    "total_combos_available": total_combos_available,
+                    "total_combos_scheduled": len(combos),
+                    "full_action_space_sweep": len(combos) == total_combos_available,
+                    "limited_mode": len(combos) != total_combos_available,
+                    "runtime_activation_check_ref": str(runtime_activation_check_path.relative_to(round_dir)),
+                    "unsupported_runtime_activation": unsupported_activation,
+                    "live_dispatch": {
+                        "attempted": False,
+                        "reason": live_dispatch_reason,
+                    },
+                }
+                (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+                (round_dir / "measurement_trace_combined.json").write_text(
+                    json.dumps(
+                        {
+                            "round_id": round_id,
+                            "harness": harness,
+                            "kernel_selection_runtime_activation": "unsupported_knobs",
+                            "runtime_activation_check_ref": str(runtime_activation_check_path.relative_to(round_dir)),
+                            "unsupported_runtime_activation": unsupported_activation,
+                            "live_dispatch": {
+                                "attempted": False,
+                                "reason": live_dispatch_reason,
+                            },
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                    encoding="utf-8",
+                )
+                raise RuntimeError(
+                    f"HALT_REASON: {KERNEL_SELECTION_RUNTIME_UNSUPPORTED}; "
+                    "scheduled candidate contains unsupported runtime kernel knob(s)"
+                )
             real_harness = self._real_harness(
                 workload_path=workload_path,
                 descriptor=descriptor,
@@ -865,39 +921,6 @@ class L0aKernelSelectRunner:
                 triton_cache_root=triton_cache_root,
                 state_root=state_root,
             )
-            unsupported_activation = self._unsupported_runtime_activation(survivors)
-            if unsupported_activation:
-                run_log = {
-                    "outcome": "ROUND_BLOCKED",
-                    "HALT_REASON": KERNEL_SELECTION_RUNTIME_UNSUPPORTED,
-                    "round_id": round_id,
-                    "total_combos_available": total_combos_available,
-                    "total_combos_scheduled": len(combos),
-                    "full_action_space_sweep": len(combos) == total_combos_available,
-                    "limited_mode": len(combos) != total_combos_available,
-                    "unsupported_runtime_activation": unsupported_activation,
-                    "live_dispatch": {
-                        "attempted": False,
-                        "reason": "scheduled survivor contains unsupported runtime kernel knob",
-                    },
-                }
-                (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
-                (round_dir / "measurement_trace_combined.json").write_text(
-                    json.dumps(
-                        {
-                            "round_id": round_id,
-                            "harness": harness,
-                            "kernel_selection_runtime_activation": "unsupported_knobs",
-                            "unsupported_runtime_activation": unsupported_activation,
-                        },
-                        indent=2,
-                    ),
-                    encoding="utf-8",
-                )
-                raise RuntimeError(
-                    f"HALT_REASON: {KERNEL_SELECTION_RUNTIME_UNSUPPORTED}; "
-                    "scheduled survivor contains unsupported runtime kernel knob(s)"
-                )
             try:
                 baseline_rows = self._real_baseline_measurements(
                     real_harness,
@@ -1223,20 +1246,41 @@ class L0aKernelSelectRunner:
         return 0.0
 
     @staticmethod
-    def _unsupported_runtime_activation(combos: list[L0aKernelCombo]) -> list[dict[str, Any]]:
+    def _runtime_activation_check(
+        scheduled_combos: list[L0aKernelCombo],
+        survivors: list[L0aKernelCombo],
+    ) -> dict[str, Any]:
+        survivor_ids = {combo.combo_id for combo in survivors}
+        supported: list[dict[str, Any]] = []
         unsupported: list[dict[str, Any]] = []
-        for combo in combos:
+        for combo in scheduled_combos:
             plan = resolve_kernel_runtime_activation(combo.as_dict())
+            item = {
+                "combo_id": combo.combo_id,
+                "smoke_status": "survivor" if combo.combo_id in survivor_ids else "eliminated",
+                "kernel_selection": combo.as_dict(),
+                "activation_plan": plan.as_dict(),
+            }
             if plan.supported:
-                continue
-            unsupported.append(
-                {
-                    "combo_id": combo.combo_id,
-                    "kernel_selection": combo.as_dict(),
-                    "unsupported_knobs": [knob.as_dict() for knob in plan.unsupported_knobs],
-                }
-            )
-        return unsupported
+                supported.append(item)
+            else:
+                unsupported.append(
+                    {
+                        **item,
+                        "unsupported_knobs": [knob.as_dict() for knob in plan.unsupported_knobs],
+                    }
+                )
+        return {
+            "status": "blocked" if unsupported else "pass",
+            "checked_combo_count": len(scheduled_combos),
+            "supported_combo_count": len(supported),
+            "unsupported_combo_count": len(unsupported),
+            "unsupported_survivor_count": sum(
+                1 for item in unsupported if item["smoke_status"] == "survivor"
+            ),
+            "supported_runtime_activation": supported,
+            "unsupported_runtime_activation": unsupported,
+        }
 
     def _real_harness(
         self,

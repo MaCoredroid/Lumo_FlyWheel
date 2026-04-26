@@ -3438,19 +3438,21 @@ def test_l0a_kernel_select_real_blocks_precisely_on_unsupported_runtime_knobs(
         """
 axes:
   attention_backend: [vllm-default]
-  deltanet_kernel: [triton-chunked-delta-v2, triton-state-update-fused]
+  deltanet_kernel: [triton-chunked-delta-v2, triton-state-update-fused, triton-experimental-scan]
   fp8_gemm_kernel: [cublas, cutlass]
   torch_compile_mode: [default, reduce-overhead]
   cuda_graph_capture: ['off', 'on']
 """,
         encoding="utf-8",
     )
+    harness_inits: list[dict[str, object]] = []
     calls: list[dict[str, object]] = []
 
     class _FakeRealMeasurementHarness:
         VERSION = "RealMeasurementHarness v0.1.0"
 
         def __init__(self, **kwargs: object) -> None:
+            harness_inits.append(kwargs)
             self.kwargs = kwargs
 
         def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
@@ -3478,7 +3480,7 @@ axes:
             parallel_instances="auto",
             round_root=repo / "output" / "auto_research",
             harness="real",
-            max_combos=9,
+            max_combos=17,
             proxy_port=8101,
         )
 
@@ -3487,8 +3489,18 @@ axes:
     assert run_log["outcome"] == "ROUND_BLOCKED"
     assert run_log["HALT_REASON"] == "l0a_kernel_selection_runtime_unsupported_knobs"
     assert run_log["live_dispatch"]["attempted"] is False
+    assert run_log["runtime_activation_check_ref"] == "runtime_activation_check.json"
     assert run_log["unsupported_runtime_activation"][0]["combo_id"] == "combo_009"
     assert run_log["unsupported_runtime_activation"][0]["unsupported_knobs"][0]["axis"] == "deltanet_kernel"
+    activation_check = json.loads((round_dir / "runtime_activation_check.json").read_text(encoding="utf-8"))
+    assert activation_check["status"] == "blocked"
+    assert activation_check["checked_combo_count"] == 17
+    assert activation_check["unsupported_combo_count"] == 9
+    assert activation_check["unsupported_survivor_count"] == 4
+    assert activation_check["unsupported_runtime_activation"][0]["smoke_status"] == "survivor"
+    assert activation_check["unsupported_runtime_activation"][-1]["combo_id"] == "combo_017"
+    assert activation_check["unsupported_runtime_activation"][-1]["smoke_status"] == "eliminated"
+    assert harness_inits == []
     assert calls == []
 
 
