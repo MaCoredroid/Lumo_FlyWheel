@@ -114,6 +114,7 @@ models:
     command = " ".join(cmd)
 
     assert f"{tmp_path / 'logs'}:{tmp_path / 'logs'}" in command
+    assert f"{tmp_path / 'logs'}:/logs" in command
     assert f"{tmp_path / 'triton'}:{tmp_path / 'triton'}" in command
     assert server.state_store.root == (tmp_path / "state")
 
@@ -616,6 +617,56 @@ models:
     monkeypatch.setattr(server, "_wait_ready", fake_wait_ready)
 
     server.start("qwen3.5-27b")
+
+
+def test_wait_ready_preserves_missing_container_diagnostics(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        container_name="lumo-vllm-p2b-debug-test",
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    server.logs_path("qwen3.5-27b").parent.mkdir(parents=True, exist_ok=True)
+    server.logs_path("qwen3.5-27b").write_text("vllm log detail\n", encoding="utf-8")
+
+    def fake_run(cmd: list[str], capture_output: bool = True, check: bool = True) -> subprocess.CompletedProcess[str]:
+        if cmd[:3] == ["docker", "inspect", "-f"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="No such container")
+        if cmd[:2] == ["docker", "logs"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="docker logs says missing")
+        if cmd[:2] == ["docker", "ps"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(server, "_run", fake_run)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        server._wait_ready("qwen3.5-27b", timeout_s=1)
+
+    message = str(excinfo.value)
+    assert "docker inspect status stdout=''" in message
+    assert "No such container" in message
+    assert "[docker logs --tail 200]" in message
+    assert "docker logs says missing" in message
+    assert "vllm log detail" in message
 
 
 def test_start_waits_for_vram_release_before_first_launch(

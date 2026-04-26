@@ -110,8 +110,9 @@ def _request_completion(
     model: str,
     probe: dict[str, Any],
     timeout_s: float,
+    minimum_completion_tokens: int | None = None,
 ) -> dict[str, Any]:
-    output_token_count = int(probe["output_token_count"])
+    output_token_count = max(int(probe["output_token_count"]), int(minimum_completion_tokens or 0))
     payload = {
         "model": model,
         "prompt": probe["prompt"],
@@ -248,6 +249,11 @@ def _capture_live_runs(
                 model=model,
                 probe=probe,
                 timeout_s=request_timeout_s,
+                # vLLM can remove a request before the final-token state hook
+                # sees it, so make required state checkpoints non-terminal.
+                minimum_completion_tokens=(
+                    max(expected_state_tokens) + 1 if require_state and expected_state_tokens else None
+                ),
             )
             _wait_for_quiet_exports(staging_dir)
             archive_dir = debug_export_dir / f"run_{run_index:02d}" / f"probe_{int(probe['probe_index']):06d}"

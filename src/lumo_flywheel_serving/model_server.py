@@ -37,6 +37,7 @@ DEFAULT_INFERENCE_PROXY_PORT = 8001
 VLLM_ENABLE_RESPONSES_API_STORE = "1"
 QWEN_CHAT_TEMPLATE_HOST_PATH = REPO_ROOT / "docker" / "chat_templates" / "qwen3-openai-codex.jinja"
 QWEN_CHAT_TEMPLATE_CONTAINER_PATH = Path("/opt/lumo/chat_templates/qwen3-openai-codex.jinja")
+CONTAINER_LOGS_ALIAS_PATH = Path("/logs")
 MIN_GPU_MEMORY_UTILIZATION = max(0.05, float(os.environ.get("LUMO_MIN_GPU_MEMORY_UTILIZATION", "0.05")))
 MIN_KV_CACHE_STARTUP_UTILIZATION = 0.30
 UNSUPPORTED_NVIDIA_SMI_GRACE_S = 20
@@ -303,7 +304,7 @@ class ModelServer:
         enforce_eager = False
         low_memory_grace_retries = 0
         while True:
-            self._run(
+            launch = self._run(
                 self._build_run_command(
                     model_id,
                     config,
@@ -314,8 +315,10 @@ class ModelServer:
                     tuned_config_id=active_bundle.bundle_id if active_bundle is not None else None,
                     weight_version_id=weight_version_id,
                 ),
-                capture_output=False,
             )
+            container_id = launch.stdout.strip()
+            if container_id:
+                self._append_log_text(model_id, f"[VLLM-CONTAINER] id={container_id}\n")
             try:
                 self._wait_ready(model_id=model_id)
                 break
@@ -691,6 +694,18 @@ class ModelServer:
             + shlex.quote(str(log_path))
         )
 
+        volume_args = [
+            "-v",
+            "/models:/models",
+            "-v",
+            f"{self.logs_root}:{self.logs_root}",
+            *self._logs_alias_volume_args(),
+            "-v",
+            f"{self.triton_cache_root}:{self.triton_cache_root}",
+            "-v",
+            f"{QWEN_CHAT_TEMPLATE_HOST_PATH}:{QWEN_CHAT_TEMPLATE_CONTAINER_PATH}:ro",
+        ]
+
         return [
             "docker",
             "run",
@@ -720,20 +735,18 @@ class ModelServer:
             "-e",
             f"VLLM_LOGGING_LEVEL={'DEBUG' if enable_request_logging else 'INFO'}",
             *self._p2b_debug_export_env_args(),
-            "-v",
-            "/models:/models",
-            "-v",
-            f"{self.logs_root}:{self.logs_root}",
-            "-v",
-            f"{self.triton_cache_root}:{self.triton_cache_root}",
-            "-v",
-            f"{QWEN_CHAT_TEMPLATE_HOST_PATH}:{QWEN_CHAT_TEMPLATE_CONTAINER_PATH}:ro",
+            *volume_args,
             "--entrypoint",
             "bash",
             self.image,
             "-lc",
             shell_cmd,
         ]
+
+    def _logs_alias_volume_args(self) -> list[str]:
+        if self.logs_root == CONTAINER_LOGS_ALIAS_PATH:
+            return []
+        return ["-v", f"{self.logs_root}:{CONTAINER_LOGS_ALIAS_PATH}"]
 
     @staticmethod
     def _p2b_debug_export_env_args() -> list[str]:
@@ -887,14 +900,11 @@ class ModelServer:
                 ["docker", "inspect", "-f", "{{.State.Status}}", self.container_name], check=False
             )
             if inspect.returncode != 0 or inspect.stdout.strip() == "exited":
-                logs = self._run(["docker", "logs", "--tail", "200", self.container_name], check=False)
-                log_path_text = ""
-                if log_path.exists():
-                    log_path_text = log_path.read_text(encoding="utf-8")
+                logs_text = self._startup_failure_logs(log_path)
                 raise RuntimeError(
                     "vLLM container failed during startup:\n"
-                    f"{logs.stdout}{logs.stderr}"
-                    f"{log_path_text}"
+                    f"docker inspect status stdout={inspect.stdout.strip()!r} stderr={inspect.stderr.strip()!r}\n"
+                    f"{logs_text}"
                 )
             try:
                 response = requests.get(
@@ -921,6 +931,33 @@ class ModelServer:
                 pass
             time.sleep(5)
         raise TimeoutError(f"vLLM not ready within {timeout_s}s")
+
+    def _startup_failure_logs(self, log_path: Path) -> str:
+        parts: list[str] = []
+        logs = self._run(["docker", "logs", "--tail", "200", self.container_name], check=False)
+        docker_logs_text = f"{logs.stdout}{logs.stderr}"
+        if docker_logs_text.strip():
+            parts.append("[docker logs --tail 200]\n" + docker_logs_text)
+        ps = self._run(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                f"name=^{self.container_name}$",
+                "--format",
+                "{{.ID}}\t{{.Names}}\t{{.Status}}",
+            ],
+            check=False,
+        )
+        ps_text = f"{ps.stdout}{ps.stderr}"
+        if ps_text.strip():
+            parts.append("[docker ps -a exact-name]\n" + ps_text)
+        if log_path.exists():
+            log_path_text = log_path.read_text(encoding="utf-8")
+            if log_path_text.strip():
+                parts.append(f"[{log_path}]\n" + log_path_text)
+        return "\n".join(parts)
 
     def _served_model_ids(self) -> list[str]:
         payload = self.models().json()
