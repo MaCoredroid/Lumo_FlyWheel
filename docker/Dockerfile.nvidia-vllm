@@ -26,3 +26,7 @@ PY
 
 RUN python3 -m pip install --no-cache-dir -r /tmp/vllm-requirements.txt \
     && rm -f /tmp/vllm-requirements.txt
+
+COPY docker/patches/apply_p2b_vllm_debug_export.py /tmp/apply_p2b_vllm_debug_export.py
+RUN python3 /tmp/apply_p2b_vllm_debug_export.py \
+    && rm -f /tmp/apply_p2b_vllm_debug_export.py
