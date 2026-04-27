@@ -24,6 +24,7 @@ import yaml
 from .kernel_activation import KERNEL_SELECTION_RUNTIME_UNSUPPORTED, resolve_kernel_runtime_activation
 from .measurement_harness import RealMeasurementHarness, SLO, WorkloadSpec
 from .parity_fixture import fixture_content_hash
+from .parity_probe import ParityProbeResult, run_parity_probe
 from .registry import ModelConfig, load_registry
 from .tuned_config import TunedConfigBundle, default_weight_version_id, make_tuned_config_bundle, persist_tuned_config_bundle
 from .workload_p1 import HARDENED_L0_HEAVY_WORKLOAD_VERSION, L0_HEAVY_WORKLOAD_FAMILY_ID
@@ -5761,6 +5762,12 @@ best on the workload, AND passes the parity gate at {{parity_fixture_path}}.
 
 
 @dataclass(frozen=True)
+class _L0cPatchOutcome:
+    ok: bool
+    error: str | None
+
+
+@dataclass(frozen=True)
 class L0cKernelMutationResult:
     round_id: str
     round_dir: Path
@@ -6385,22 +6392,17 @@ class L0cKernelMutationRunner:
         fixture_id = str(spec.get("parity_fixture_id", ""))
 
         if harness == "real":
-            self._write_parity_check(
-                iteration_dir,
-                pass_=False,
-                reason="real_harness_not_implemented",
-                error_detail="HALT_REASON: l0c_real_harness_not_implemented",
-                fixture_id=fixture_id,
+            return self._real_apply_and_test(
+                round_id=round_id,
+                iteration=iteration,
+                iteration_dir=iteration_dir,
+                round_dir=round_dir,
                 kernel_target=kernel_target,
+                spec=spec,
+                patch_path=patch_path,
+                mutation_hash=mutation_hash,
+                fixture_id=fixture_id,
             )
-            return {
-                "round_id": round_id,
-                "iteration": iteration,
-                "kernel_target": kernel_target,
-                "harness": harness,
-                "mutation_hash": mutation_hash,
-                "outcome": "HALT_REASON: l0c_real_harness_not_implemented",
-            }
 
         if "BAD_PARITY" in patch_text:
             self._write_parity_check(
@@ -6486,6 +6488,329 @@ class L0cKernelMutationRunner:
             "candidate_uuid": candidate_uuid,
             "objective_mean": objective_mean,
         }
+
+    # --- real apply-and-test ------------------------------------------------
+
+    def _real_apply_and_test(
+        self,
+        *,
+        round_id: str,
+        iteration: str,
+        iteration_dir: Path,
+        round_dir: Path,
+        kernel_target: str,
+        spec: dict[str, Any],
+        patch_path: Path,
+        mutation_hash: str,
+        fixture_id: str,
+    ) -> dict[str, Any]:
+        kernel_path_str = spec.get("kernel_source_path")
+        if not kernel_path_str:
+            raise RuntimeError("round_spec.yaml missing kernel_source_path for real harness")
+        kernel_path = Path(kernel_path_str)
+        base_bytes_path = round_dir / "kernel_base" / kernel_path.name
+        if not base_bytes_path.is_file():
+            raise RuntimeError(
+                f"L0c round {round_id} missing kernel_base snapshot at {base_bytes_path}; "
+                f"the round driver must snapshot kernel bytes at bootstrap"
+            )
+        base_bytes = base_bytes_path.read_bytes()
+
+        fixture_relative = spec.get("parity_fixture")
+        if not fixture_relative:
+            raise RuntimeError("round_spec.yaml missing parity_fixture for real harness")
+        fixture_dir = (self.repo_root / fixture_relative).parent
+
+        common_outcome: dict[str, Any] = {
+            "round_id": round_id,
+            "iteration": iteration,
+            "kernel_target": kernel_target,
+            "harness": "real",
+            "mutation_hash": mutation_hash,
+        }
+
+        try:
+            if not kernel_path.is_file():
+                kernel_path.write_bytes(base_bytes)
+
+            patch_outcome = self._apply_kernel_patch(
+                kernel_path=kernel_path, patch_path=patch_path
+            )
+            if not patch_outcome.ok:
+                self._write_parity_check(
+                    iteration_dir,
+                    pass_=False,
+                    reason="compile_nvcc_error",
+                    fixture_id=fixture_id,
+                    kernel_target=kernel_target,
+                    error_detail=patch_outcome.error,
+                )
+                return {**common_outcome, "outcome": "compile_failed"}
+
+            try:
+                self._restart_serving_runtime(spec=spec)
+            except Exception as exc:  # noqa: BLE001 - any restart failure is compile-class
+                self._write_parity_check(
+                    iteration_dir,
+                    pass_=False,
+                    reason="compile_nvcc_error",
+                    fixture_id=fixture_id,
+                    kernel_target=kernel_target,
+                    error_detail=f"runtime_restart_failed: {type(exc).__name__}: {exc}",
+                )
+                return {**common_outcome, "outcome": "compile_failed"}
+
+            debug_export_dir = iteration_dir / "debug_export"
+            try:
+                parity_result = self._invoke_parity_probe(
+                    spec=spec,
+                    fixture_dir=fixture_dir,
+                    kernel_target=kernel_target,
+                    debug_export_dir=debug_export_dir,
+                )
+            except Exception as exc:  # noqa: BLE001 - probe wrapper crash is capture-class
+                self._write_parity_check(
+                    iteration_dir,
+                    pass_=False,
+                    reason="capture_failed",
+                    fixture_id=fixture_id,
+                    kernel_target=kernel_target,
+                    error_detail=f"{type(exc).__name__}: {exc}",
+                )
+                return {**common_outcome, "outcome": "compile_failed"}
+
+            (iteration_dir / "parity_probe_result.json").write_text(
+                json.dumps(parity_result.as_dict(), indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            self._write_parity_check(
+                iteration_dir,
+                pass_=parity_result.pass_,
+                reason=parity_result.reason,
+                fixture_id=parity_result.fixture_id or fixture_id,
+                kernel_target=kernel_target,
+                first_diverging_probe=parity_result.first_diverging_probe,
+                tolerance_overshoot=(
+                    parity_result.tolerance_overshoot
+                    if not parity_result.pass_ and parity_result.tolerance_overshoot
+                    else None
+                ),
+                error_detail=parity_result.error_detail,
+            )
+            if not parity_result.pass_:
+                if parity_result.reason in {"endpoint_unreachable", "capture_failed", "comparison_failed"}:
+                    outcome = "compile_failed"
+                else:
+                    outcome = "parity_failed"
+                return {**common_outcome, "outcome": outcome}
+
+            measurement_rows, candidate_uuid, objective_mean = self._run_paired_l0c_measurements(
+                spec=spec,
+                iteration=iteration,
+                iteration_dir=iteration_dir,
+                count=L0C_MEASUREMENTS_PER_ACCEPTED,
+            )
+            (iteration_dir / "measurement_trace.json").write_text(
+                json.dumps(
+                    {
+                        "candidate_uuid": candidate_uuid,
+                        "candidate_label": f"l0c-attempt-{iteration}",
+                        "harness": "real",
+                        "measurement_role": "l0c_candidate",
+                        "measurements": measurement_rows,
+                        "objective_mean": objective_mean,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            return {
+                **common_outcome,
+                "outcome": "parity_passed",
+                "candidate_uuid": candidate_uuid,
+                "objective_mean": objective_mean,
+            }
+        finally:
+            kernel_path.write_bytes(base_bytes)
+
+    def _apply_kernel_patch(
+        self, *, kernel_path: Path, patch_path: Path
+    ) -> _L0cPatchOutcome:
+        try:
+            result = subprocess.run(
+                ["patch", str(kernel_path), str(patch_path)],
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            return _L0cPatchOutcome(ok=False, error=f"patch_command_missing: {exc}")
+        except subprocess.TimeoutExpired as exc:
+            return _L0cPatchOutcome(ok=False, error=f"patch_timeout: {exc}")
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            stdout = result.stdout.decode("utf-8", errors="replace").strip()
+            detail = stderr or stdout or f"patch exit {result.returncode}"
+            return _L0cPatchOutcome(ok=False, error=f"patch_apply_failed: {detail}")
+        return _L0cPatchOutcome(ok=True, error=None)
+
+    def _restart_serving_runtime(self, *, spec: dict[str, Any]) -> None:
+        runtime = spec.get("runtime")
+        if not isinstance(runtime, dict):
+            raise RuntimeError(
+                "round_spec.yaml missing 'runtime' block; the round driver must populate it"
+            )
+        from .model_server import ModelServer  # local import: keeps test surface minimal
+
+        model_id = runtime.get("model_id") or spec.get("model_id")
+        if not model_id:
+            raise RuntimeError("runtime block missing model_id")
+        port = int(runtime.get("port", 8000))
+        proxy_port = int(runtime.get("proxy_port", port + 1))
+        container_name = runtime.get("container_name") or "lumo-vllm"
+        image = runtime.get("image")
+        logs_root = Path(runtime.get("logs_root", "/tmp/lumo-l0c-logs"))
+        triton_cache_root = Path(runtime.get("triton_cache_root", "/tmp/lumo-l0c-triton"))
+        state_root = (
+            Path(runtime["state_root"]) if runtime.get("state_root") else None
+        )
+
+        server = ModelServer(
+            registry_path=self.registry_path,
+            tuned_config_root=self.tuned_config_root,
+            port=port,
+            proxy_port=proxy_port,
+            image=image,
+            container_name=container_name,
+            logs_root=logs_root,
+            triton_cache_root=triton_cache_root,
+            state_root=state_root,
+        )
+        server.stop(missing_ok=True)
+        server.start(model_id, enable_request_logging=False)
+
+    def _invoke_parity_probe(
+        self,
+        *,
+        spec: dict[str, Any],
+        fixture_dir: Path,
+        kernel_target: str,
+        debug_export_dir: Path,
+    ) -> ParityProbeResult:
+        runtime = spec.get("runtime") or {}
+        endpoint = runtime.get("endpoint")
+        if not endpoint:
+            port = int(runtime.get("port", 8000))
+            endpoint = f"http://127.0.0.1:{port}/v1"
+        model_id = runtime.get("model_id") or spec.get("model_id") or ""
+        api_key = runtime.get("api_key", "EMPTY")
+        request_timeout = float(runtime.get("request_timeout_s", 1800.0))
+        debug_export_dir.mkdir(parents=True, exist_ok=True)
+        return run_parity_probe(
+            repo_root=self.repo_root,
+            fixture_dir=fixture_dir,
+            kernel_target=kernel_target,
+            endpoint=endpoint,
+            model=model_id,
+            api_key=api_key,
+            debug_export_dir=debug_export_dir,
+            request_timeout_s=request_timeout,
+        )
+
+    def _run_paired_l0c_measurements(
+        self,
+        *,
+        spec: dict[str, Any],
+        iteration: str,
+        iteration_dir: Path,
+        count: int,
+    ) -> tuple[list[dict[str, Any]], str, float]:
+        runtime = spec.get("runtime") or {}
+        endpoint = runtime.get("endpoint")
+        port = int(runtime.get("port", 8000))
+        proxy_port = int(runtime.get("proxy_port", port + 1))
+        if not endpoint:
+            endpoint = f"http://127.0.0.1:{port}/v1"
+        admin_url = runtime.get("admin_url") or endpoint
+        metrics_url = runtime.get("metrics_url") or f"http://127.0.0.1:{port}/metrics"
+        model_id = runtime.get("model_id") or spec.get("model_id") or ""
+        weight_version_id = (
+            runtime.get("weight_version_id")
+            or spec.get("weight_version_id")
+            or ""
+        )
+        workload_descriptor_path = Path(spec["workload_file"])
+        registry = load_registry(self.registry_path)
+        if model_id not in registry:
+            raise RuntimeError(f"Unknown model_id in registry: {model_id}")
+        model_config = registry[model_id]
+        workload_descriptor = load_yaml_file(workload_descriptor_path)
+        if not isinstance(workload_descriptor, dict):
+            raise RuntimeError(f"workload descriptor invalid: {workload_descriptor_path}")
+        workload = SyntheticWorkloadDistribution.from_file(
+            workload_descriptor_path,
+            model_config=model_config,
+            family_id=str(workload_descriptor.get("family_id", "")),
+        )
+        workload_spec = workload.to_workload_spec(base_dir=workload_descriptor_path.parent)
+        slo = SLO(
+            ttft_ms=workload.nominal_ttft_ms,
+            tpot_ms=workload.tpot_ceiling_ms,
+            turn_ms=workload.turn_latency_ceiling_ms,
+        )
+        bundle_staging_dir = iteration_dir / "bundle_staging"
+        bundle_staging_dir.mkdir(parents=True, exist_ok=True)
+        harness = RealMeasurementHarness(
+            workload_spec=workload_spec,
+            seed_trace_path=workload_spec.seed_trace_ref,
+            slo=slo,
+            endpoint=endpoint,
+            metrics_scrape_url=metrics_url,
+            admin_url=admin_url,
+            model_id=model_id,
+            weight_version_id=weight_version_id,
+            bundle_staging_dir=bundle_staging_dir,
+            round_id=spec.get("round_id"),
+            workload_descriptor_path=workload_descriptor_path,
+            runtime_activation=True,
+            registry_path=self.registry_path,
+            port=port,
+            proxy_port=proxy_port,
+            container_name=runtime.get("container_name", "lumo-vllm"),
+            logs_root=runtime.get("logs_root", "/tmp/lumo-l0c-logs"),
+            triton_cache_root=runtime.get("triton_cache_root", "/tmp/lumo-l0c-triton"),
+            state_root=runtime.get("state_root"),
+        )
+        candidate_uuid = str(uuid4())
+        rows: list[dict[str, Any]] = []
+        objective_total = 0.0
+        for index in range(1, count + 1):
+            measurement = harness.measure(
+                candidate_vllm_config=runtime.get("vllm_config", {}),
+                warmup_s=int(runtime.get("warmup_s", 5)),
+                window_s=int(runtime.get("window_s", 30)),
+            )
+            objective_value = float(measurement.get("objective_value", 0.0))
+            objective_total += objective_value
+            trace_ref = f"candidates/{iteration}/measurement_{index:02d}.json"
+            (iteration_dir / f"measurement_{index:02d}.json").write_text(
+                json.dumps(measurement, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            rows.append(
+                self._make_measurement_row(
+                    candidate_uuid=candidate_uuid,
+                    candidate_label=f"l0c-attempt-{iteration}",
+                    role="l0c_candidate",
+                    measurement_index=index,
+                    objective_value=objective_value,
+                    harness="real",
+                    trace_ref=trace_ref,
+                )
+            )
+        objective_mean = objective_total / count if count else 0.0
+        return rows, candidate_uuid, objective_mean
 
     # --- helpers ------------------------------------------------------------
 
