@@ -90,8 +90,34 @@ def main() -> int:
     Path(args.triton_cache_root).mkdir(parents=True, exist_ok=True)
     Path(args.state_root).mkdir(parents=True, exist_ok=True)
 
-    extra_mounts = ["-v", f"{kernel_source}:{args.kernel_container_path}"]
+    # build_parity_fixture polls <debug_export_dir>/<family_id>/staging for the .pt
+    # files vLLM writes through the LUMO_P2B_* debug-export hooks. The staging dir
+    # must be bind-mounted into the container at the same path so vLLM can write
+    # there, and the LUMO_P2B_* env vars must be set in os.environ before
+    # server.start() (ModelServer forwards them via -e LUMO_P2B_*).
+    debug_export_root = (REPO_ROOT / "output" / "p2b_fixture_capture").resolve()
+    staging_dir = debug_export_root / args.family_id / "staging"
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    for stale in staging_dir.glob("*"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass
+    extra_mounts = [
+        "-v", f"{kernel_source}:{args.kernel_container_path}",
+        "-v", f"{debug_export_root}:{debug_export_root}",
+    ]
     print(f"[fixture-rebuild] bind-mount: {kernel_source} -> {args.kernel_container_path}")
+    print(f"[fixture-rebuild] bind-mount: {debug_export_root} -> {debug_export_root}")
+    os.environ["LUMO_P2B_VLLM_DEBUG_EXPORT"] = "1"
+    os.environ["LUMO_P2B_DEBUG_EXPORT_DIR"] = str(staging_dir)
+    os.environ["LUMO_P2B_DEBUG_PROBE_REQUEST_IDS"] = "*"
+    os.environ.setdefault("LUMO_P2B_DEBUG_STATE_TOKENS", "1,1024")
+    os.environ.setdefault("LUMO_P2B_DEBUG_STRICT", "1")
+    print(
+        "[fixture-rebuild] LUMO_P2B env: "
+        f"{[k for k in os.environ if k.startswith('LUMO_P2B_')]}"
+    )
 
     server = ModelServer(
         registry_path=args.registry,
