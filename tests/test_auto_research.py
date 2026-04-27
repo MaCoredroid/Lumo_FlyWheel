@@ -4479,7 +4479,13 @@ def test_l0c_kernel_mutation_synthetic_halts_on_compile_failures(tmp_path: Path)
     assert result.outcome == "ROUND_BLOCKED"
 
 
-def test_l0c_kernel_mutation_real_harness_blocks_with_named_halt(tmp_path: Path) -> None:
+def test_l0c_kernel_mutation_real_harness_requires_runtime_block(tmp_path: Path) -> None:
+    """Real-harness L0c rounds need a runtime block (container/port/endpoints).
+
+    Slice 3 wired the round driver; the old HALT_REASON gate is gone. The remaining
+    pre-flight check is that callers explicitly pass runtime info — without it we
+    can't restart vLLM or talk to the parity probe endpoint.
+    """
     repo = _init_repo(tmp_path)
     _write_l0a_fixture_pair(repo)
     workload_path = _write_l0a_workload(repo)
@@ -4498,7 +4504,7 @@ def test_l0c_kernel_mutation_real_harness_blocks_with_named_halt(tmp_path: Path)
         tuned_config_root=repo / "output" / "tuned_configs",
     )
 
-    with pytest.raises(RuntimeError, match="HALT_REASON: l0c_real_harness_not_implemented"):
+    with pytest.raises(RuntimeError, match="real-harness L0c rounds require --runtime"):
         runner.run(
             workload_file=workload_path,
             base_bundle=base_bundle,
@@ -4512,11 +4518,6 @@ def test_l0c_kernel_mutation_real_harness_blocks_with_named_halt(tmp_path: Path)
             round_root=repo / "output" / "auto_research",
             harness="real",
         )
-
-    halt_log_path = next((repo / "output" / "auto_research").glob("*-l0c-mutation-deltanet-*/run_log.json"))
-    halt_log = json.loads(halt_log_path.read_text(encoding="utf-8"))
-    assert halt_log["outcome"] == "ROUND_BLOCKED"
-    assert halt_log["HALT_REASON"] == "l0c_real_harness_not_implemented"
 
 
 def test_l0c_apply_and_test_synthetic_routes_parity_outcomes(tmp_path: Path) -> None:

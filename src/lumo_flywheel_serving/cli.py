@@ -931,6 +931,29 @@ def cmd_auto_research_mutate_kernel(args: argparse.Namespace) -> int:
         registry_path=args.registry,
         tuned_config_root=args.tuned_config_root,
     )
+    runtime: dict[str, object] | None = None
+    if args.harness == "real":
+        endpoint = args.endpoint or f"http://127.0.0.1:{args.proxy_port}/v1"
+        metrics_url = args.metrics_url or f"http://127.0.0.1:{args.port}/metrics"
+        admin_url = args.admin_url or f"http://127.0.0.1:{args.proxy_port}/admin"
+        runtime = {
+            "container_name": args.container_name,
+            "model_id": args.model_id,
+            "port": args.port,
+            "proxy_port": args.proxy_port,
+            "endpoint": endpoint,
+            "metrics_url": metrics_url,
+            "admin_url": admin_url,
+            "api_key": args.api_key,
+            "logs_root": args.logs_root,
+            "triton_cache_root": args.triton_cache_root,
+            "warmup_s": args.warmup_s,
+            "window_s": args.window_s,
+        }
+        if args.image is not None:
+            runtime["image"] = args.image
+        if args.state_root is not None:
+            runtime["state_root"] = args.state_root
     result = runner.run(
         workload_file=args.workload_file,
         base_bundle=args.base_bundle,
@@ -944,6 +967,11 @@ def cmd_auto_research_mutate_kernel(args: argparse.Namespace) -> int:
         round_root=args.round_root,
         harness=args.harness,
         model_id=args.model_id,
+        runtime=runtime,
+        agent_runtime=args.agent_runtime,
+        claude_model=args.claude_model,
+        claude_effort=args.claude_effort,
+        per_iteration_wall_clock_s=args.per_iteration_wall_clock_s,
     )
     print(json.dumps(result.as_dict(), indent=2))
     return 0
@@ -1230,6 +1258,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     auto_mutate_kernel.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_mutate_kernel.add_argument("--model-id", default="qwen3.5-27b")
+    auto_mutate_kernel.add_argument("--port", type=int, default=8100)
+    auto_mutate_kernel.add_argument("--proxy-port", type=int, default=8101)
+    auto_mutate_kernel.add_argument("--container-name", default="lumo-vllm-l0c")
+    auto_mutate_kernel.add_argument("--image")
+    auto_mutate_kernel.add_argument("--logs-root", default="/tmp/lumo-l0c-logs")
+    auto_mutate_kernel.add_argument("--triton-cache-root", default="/tmp/lumo-l0c-triton")
+    auto_mutate_kernel.add_argument("--state-root")
+    auto_mutate_kernel.add_argument("--endpoint")
+    auto_mutate_kernel.add_argument("--metrics-url")
+    auto_mutate_kernel.add_argument("--admin-url")
+    auto_mutate_kernel.add_argument("--api-key", default="EMPTY")
+    auto_mutate_kernel.add_argument(
+        "--agent-runtime", choices=["claude", "codex"], default="claude"
+    )
+    auto_mutate_kernel.add_argument("--claude-model")
+    auto_mutate_kernel.add_argument(
+        "--claude-effort", choices=["low", "medium", "high", "xhigh", "max"]
+    )
+    auto_mutate_kernel.add_argument("--per-iteration-wall-clock-s", type=int, default=45 * 60)
+    auto_mutate_kernel.add_argument("--warmup-s", type=int, default=5)
+    auto_mutate_kernel.add_argument("--window-s", type=int, default=30)
     auto_mutate_kernel.set_defaults(func=cmd_auto_research_mutate_kernel)
 
     auto_apply_and_test = auto_research_subparsers.add_parser("apply-and-test")
