@@ -918,6 +918,23 @@ def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
 def cmd_auto_research_mutate_kernel(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
+    # Resolve the base-stack source per HLD v0.3.3 §5.3. In v0.3.3 EXECUTABLE
+    # only 'bundle' resolution actually runs; the other two modes carry the
+    # architectural intent forward without wiring (v0.3.4+).
+    resolution = getattr(args, "base_stack_resolution", "bundle")
+    if resolution != "bundle":
+        raise SystemExit(
+            f"--base-stack-resolution={resolution} is reserved for v0.3.4+; "
+            f"v0.3.3 EXECUTABLE only supports 'bundle' (anchored on the L0b "
+            f"empirical-winner bundle)."
+        )
+    base_bundle_path = getattr(args, "base_bundle_path", None) or args.base_bundle
+    if not base_bundle_path:
+        raise SystemExit(
+            "--base-stack-resolution=bundle requires --base-bundle-path "
+            "(or the legacy --base-bundle alias)."
+        )
+    args.base_bundle = base_bundle_path
     _require_auto_research_args(
         args,
         "workload_file",
@@ -1246,6 +1263,28 @@ def build_parser() -> argparse.ArgumentParser:
     auto_mutate_kernel = auto_research_subparsers.add_parser("mutate-kernel")
     auto_mutate_kernel.add_argument("--help-only", action="store_true")
     auto_mutate_kernel.add_argument("--workload-file")
+    auto_mutate_kernel.add_argument(
+        "--base-stack-resolution",
+        choices=["vllm_default", "reference_baseline", "bundle"],
+        default="bundle",
+        help=(
+            "How L0c resolves its paired-A/B base stack (HLD v0.3.3 §5.3). "
+            "'bundle' (default, v0.3.3 EXECUTABLE) anchors on an L0a/L0b winner "
+            "bundle whose actually_resolved_kernel_selection pins vllm-default's "
+            "symbolic alias to concrete values; requires --base-bundle-path or "
+            "--base-bundle. 'vllm_default' and 'reference_baseline' are reserved "
+            "for v0.3.4+ when L0a/L0b have not produced a winner."
+        ),
+    )
+    auto_mutate_kernel.add_argument(
+        "--base-bundle-path",
+        default=None,
+        help=(
+            "Path to the L0a/L0b winner tuned-config bundle YAML. Required when "
+            "--base-stack-resolution=bundle. Synonym for --base-bundle (the legacy "
+            "name); --base-bundle-path takes precedence when both are supplied."
+        ),
+    )
     auto_mutate_kernel.add_argument("--base-bundle")
     auto_mutate_kernel.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
     auto_mutate_kernel.add_argument(

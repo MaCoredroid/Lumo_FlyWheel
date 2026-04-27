@@ -368,6 +368,11 @@ def test_real_run_passes_round_and_mints_bundle_when_winner_beats_baseline(
     l0c_block = bundle["layer_0_deltanet"]["l0c_mutation"]
     assert l0c_block["accepted_count"] == 1
     assert l0c_block["parity_attestation"]["checkpoints_checked"] == [1, 1024]
+    # HLD v0.3.3 §7.X: real-harness baseline trailer is renamed to reflect
+    # the empirical-winner anchor; synthetic-harness keeps the legacy name.
+    trailers = (result.round_dir / "candidate_trailers.tsv").read_text(encoding="utf-8")
+    assert "Measurement-Role: l0b_empirical_winner_baseline_remeasured" in trailers
+    assert "Measurement-Role: l0b_baseline_remeasured" not in trailers
 
 
 def test_real_run_returns_round_null_result_when_winner_under_baseline(

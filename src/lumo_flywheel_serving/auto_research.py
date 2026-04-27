@@ -7541,11 +7541,16 @@ class L0cKernelMutationRunner:
             self.MEASUREMENT_COLUMNS,
             [*baseline_rows, *accepted_rows],
         )
+        # HLD v0.3.3 §7.X: real-harness P7a baselines are the L0b empirical
+        # winner re-measured in-round, so the operator-facing measurement role
+        # name reflects "empirical winner" rather than the legacy alias. The
+        # synthetic harness above keeps "l0b_baseline_remeasured" — v0.3.3 only
+        # narrowed the EXECUTABLE rename, not the synthetic-test contract.
         trailer_rows = [
             {
                 "candidate_uuid": baseline_uuid,
-                "candidate_label": "l0b-baseline-remeasured",
-                "trailer": "Measurement-Role: l0b_baseline_remeasured",
+                "candidate_label": "l0b-empirical-winner-baseline-remeasured",
+                "trailer": "Measurement-Role: l0b_empirical_winner_baseline_remeasured",
             }
         ]
         for row in results_rows:
