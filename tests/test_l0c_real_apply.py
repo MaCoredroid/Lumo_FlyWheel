@@ -180,8 +180,9 @@ def _bad_patch(kernel_path: Path) -> str:
 def _stub_passing_helpers(monkeypatch, runner: auto_research.L0cKernelMutationRunner, *, objective: float = 1.05) -> dict[str, Any]:
     calls: dict[str, Any] = {"restart": 0, "probe": 0, "measure": 0}
 
-    def _stub_restart(self, *, spec: dict[str, Any]) -> None:
+    def _stub_restart(self, *, spec: dict[str, Any], extra_volume_mounts: list[str] | None = None) -> None:
         calls["restart"] += 1
+        calls["restart_mounts"] = list(extra_volume_mounts or [])
 
     def _stub_probe(self, *, spec, fixture_dir, kernel_target, debug_export_dir) -> ParityProbeResult:
         calls["probe"] += 1
@@ -252,7 +253,12 @@ def test_real_apply_and_test_passes_when_patch_runtime_probe_and_measure_succeed
     assert payload["outcome"] == "parity_passed", payload
     assert payload["candidate_uuid"] == "cand-uuid-test"
     assert payload["objective_mean"] == pytest.approx(1.05005, rel=1e-3)
-    assert calls == {"restart": 1, "probe": 1, "measure": 1}
+    assert calls["restart"] == 1
+    assert calls["probe"] == 1
+    assert calls["measure"] == 1
+    # The runner threads the per-iteration debug-export staging dir as a bind-mount
+    # so vLLM's debug-export hooks can write .pt files where parity_probe will read them.
+    assert any("debug_export/staging" in m for m in calls["restart_mounts"])
 
     parity = json.loads((iteration_dir / "parity_check.json").read_text(encoding="utf-8"))
     assert parity["pass"] is True
@@ -298,7 +304,7 @@ def test_real_apply_and_test_returns_compile_failed_when_runtime_restart_raises(
     (iteration_dir / "mutation.patch").write_text(_good_patch(kernel_path), encoding="utf-8")
     _stub_passing_helpers(monkeypatch, runner)
 
-    def _restart_explodes(self, *, spec):
+    def _restart_explodes(self, *, spec, extra_volume_mounts=None):  # noqa: ARG001
         raise RuntimeError("vLLM container failed to come up")
 
     monkeypatch.setattr(

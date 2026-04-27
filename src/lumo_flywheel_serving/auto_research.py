@@ -6609,8 +6609,21 @@ class L0cKernelMutationRunner:
                 )
                 return {**common_outcome, "outcome": "compile_failed"}
 
+            debug_export_dir = iteration_dir / "debug_export"
+            staging_dir = debug_export_dir / "staging"
+            staging_dir.mkdir(parents=True, exist_ok=True)
+            # vLLM's debug-export hooks read these from os.environ; the model_server
+            # container-launch path forwards them to the running container.
+            os.environ["LUMO_P2B_VLLM_DEBUG_EXPORT"] = "1"
+            os.environ["LUMO_P2B_DEBUG_EXPORT_DIR"] = str(staging_dir)
+            os.environ.setdefault("LUMO_P2B_DEBUG_STATE_TOKENS", "1,1024")
+            os.environ.setdefault("LUMO_P2B_DEBUG_STRICT", "1")
+
             try:
-                self._restart_serving_runtime(spec=spec)
+                self._restart_serving_runtime(
+                    spec=spec,
+                    extra_volume_mounts=[f"{staging_dir}:{staging_dir}"],
+                )
             except Exception as exc:  # noqa: BLE001 - any restart failure is compile-class
                 self._write_parity_check(
                     iteration_dir,
@@ -6622,7 +6635,6 @@ class L0cKernelMutationRunner:
                 )
                 return {**common_outcome, "outcome": "compile_failed"}
 
-            debug_export_dir = iteration_dir / "debug_export"
             try:
                 parity_result = self._invoke_parity_probe(
                     spec=spec,
@@ -6717,7 +6729,12 @@ class L0cKernelMutationRunner:
             return _L0cPatchOutcome(ok=False, error=f"patch_apply_failed: {detail}")
         return _L0cPatchOutcome(ok=True, error=None)
 
-    def _restart_serving_runtime(self, *, spec: dict[str, Any]) -> None:
+    def _restart_serving_runtime(
+        self,
+        *,
+        spec: dict[str, Any],
+        extra_volume_mounts: list[str] | None = None,
+    ) -> None:
         runtime = spec.get("runtime")
         if not isinstance(runtime, dict):
             raise RuntimeError(
@@ -6745,6 +6762,8 @@ class L0cKernelMutationRunner:
                 ["-v", f"{Path(host_kernel_path).resolve()}:{container_kernel_path}"]
             )
         for entry in runtime.get("extra_volume_mounts") or []:
+            extra_mounts.extend(["-v", str(entry)])
+        for entry in extra_volume_mounts or []:
             extra_mounts.extend(["-v", str(entry)])
 
         kwargs: dict[str, Any] = {
