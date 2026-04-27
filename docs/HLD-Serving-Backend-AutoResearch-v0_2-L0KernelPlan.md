@@ -28,7 +28,122 @@
 
 ---
 
-## 1. Heavy family commitment — `responses-sdk-adapter-cutover`
+## 0.5 Hardware grounding — GB10 specifics + bandwidth-bound thesis (v0.3.0)
+
+The v0.2.x plan focused on attention + FP8 GEMM as the kernel-tuning surface. v0.3.0 expands the surface to all kernel categories called out in the @TheAhmadOsman framing — MatMul, Attention, RMSNorm, KV cache, Quantized linear, Sampling, and Fused. The expansion is grounded in concrete GB10/DGX Spark physical facts that change the relative priority of these categories.
+
+### 0.5.1 GB10 / DGX Spark hardware facts (load-bearing for this plan)
+
+| Property | Value | Source / note |
+|---|---|---|
+| GPU architecture | Blackwell (sm_100/sm_101 family) | NVIDIA DGX Spark product page |
+| Unified memory | **128 GB LPDDR5x** | NVIDIA spec (NOT 192 GB — v0.2.x had this wrong) |
+| Aggregate memory bandwidth | **~273 GB/s** (LPDDR5x-8533, 256-bit) | NVIDIA spec; ~30× LOWER than B200's HBM3e |
+| FP4 tensor peak | 1 PFLOP sparse / 500 TFLOPS dense | NVIDIA marketing |
+| FP8 tensor peak | ~500 TFLOPS dense (inferred) | Not separately published; halved from FP4 |
+| NVLink-C2C (CPU↔GPU) | ~600 GB/s | Consistent with Grace-Blackwell C2C; not separately documented for GB10 |
+| 5th-gen Tensor Cores | Native FP8/FP6/FP4, MXFP block scaling | Blackwell architecture |
+| TMA (Tensor Memory Accelerator) | Supported (Hopper-era feature retained) | Async bulk copies with swizzle |
+| Thread Block Clusters / DSMEM | Supported | Hopper-era |
+| `tcgen05` PTX (new Blackwell tensor-core MMAs) | Supported, exposed by CUTLASS 3.6+ | Blackwell-specific |
+| 2-CTA MMA shape | Supported on Blackwell | Favors 256×256-class GEMM tiles vs Hopper |
+
+**Undocumented for GB10 specifically** (treat as uncertain; verify on-device before tuning):
+- SM count, register file per SM, shared memory per SM, L1/L2 cache sizes.
+- GB10-specific FA4 perf table (FA4 is **beta/experimental** on Blackwell as of late 2025; vLLM `FLASH_ATTN_VERSION=4` is gated behind an env flag and not the default — see open-question §10.6).
+- GB10-specific CUTLASS perf table (sm_100 kernels work but tile schedulers are tuned for B200 SM counts).
+
+### 0.5.2 Bandwidth-bound thesis (the core insight)
+
+**GB10 is severely bandwidth-bound for inference.** 273 GB/s vs ~500 TFLOPS FP8 dense gives an arithmetic intensity threshold of ~1800 FLOPS/byte to be compute-bound. Most decode-path kernels (norm, residual, sampler, KV write, small-batch GEMM) are nowhere near that — they are bandwidth-bound by 1–2 orders of magnitude. This reframes the optimization priority:
+
+1. **Every saved memory pass is high-leverage.** A kernel that fuses `attn_output + residual + rmsnorm + fp8_quant` into one pass eliminates 2–3 full-tensor reads/writes per layer × 64 layers × thousands of decode tokens. On a 273 GB/s memory system each saved pass is roughly 10 µs/layer in steady-state decode — hundreds of microseconds per token.
+2. **Tile sizes for GB10 should NOT be inherited from B200 defaults.** Larger tiles improve compute reuse but increase per-launch overhead and register pressure; on a smaller-SM-count GB10 the tradeoff differs.
+3. **Norms and samplers, individually small, become non-trivial when fused.** RMSNorm alone is ~1–2% of decode; fused into a quant-epilogue path it pulls 8–15% e2e on bandwidth-bound hardware.
+4. **DeltaNet's recurrent-state writeback is bandwidth-bound, not compute-bound.** Tile size matters less than write-coalescing and async-copy pipelining.
+
+This is the v0.3.0 thesis: **kernel categories that reduce memory traffic outrank kernel categories that improve raw FLOPS** on GB10. Section §0.6 ranks the categories accordingly.
+
+### 0.6 Kernel category priority order — provisional, gated on P3a roofline (v0.3.1)
+
+The §0.5.2 bandwidth-bound thesis predicts the priority order below. **It is provisional**: AR.54 priority enforcement does NOT activate until phase P3a (mandatory roofline probe, see §7.2) has measured per-category Tpot share, DRAM throughput, SM occupancy, tensor-core utilization, and kernel launch count on the actual GB10 + Qwen 3.5 27B FP8 + heavy workload. If the measured roofline contradicts the predicted priority, this section is rewritten and the executable target list in §0.7 is re-narrowed.
+
+**Predicted priority** (Qwen 3.5 27B FP8 hybrid, layout `16 × (3×DeltaNet + 1×GatedAttn)` per HF model card):
+
+| Rank | Category | Predicted reason | v0.3.1 status |
+|---|---|---|---|
+| 1 | **DeltaNet Triton kernels** (48/64 layers) | Dominant by layer count; recurrent-state writeback bandwidth-bound; default `BLOCK_*`/`num_warps` mis-tuned for GB10 | **executable L0c target** |
+| 2 | **Fused norm+residual+quant epilogues** (Triton sidecar) | Triton sidecar fuses **`+residual → RMSNorm → FP8 quantize`** into one kernel — eliminates 1–2 memory passes per layer × 64 layers × thousands of tokens. **Caveat (P0.4 fix):** sidecar runs *after* the GEMM and cannot eliminate the GEMM-output write itself; eliminating that write requires CUTLASS/CuTe epilogue integration deferred to v0.3.3+. P3a must measure **actual launch-count and pass-count reduction** before this row's priority is enforced. Magnitude ("3–8% e2e" reduced from v0.3.0's overclaimed "8–15%") is a hypothesis pending P3a. | **executable L0c target — Triton-sidecar surface only**, NOT CUTLASS |
+| 3 | **Sampling (top-k/top-p)** | Qwen3.5-27B-FP8 padded vocab is **248,320** (per HF model card, larger than v0.3.0's 152K estimate); thinking-heavy decode amplifies | **gated L0c target** — runs only if P3a measures sampler share ≥ 3–5% of Tpot |
+| 4 | **GatedAttn backend selection + paged KV** (16 layers) | Long-context thinking amplifies KV traffic; affects only 16/64 layers | **L0a-only**, NOT L0c (FA4/FA3/FA2/FlashInfer are vendor; Triton GatedAttn is rarely the L0a winner) |
+| 5 | **Quantized Linear (GEMM) backend selection** | Backend choice is high-leverage; CUTLASS schedulers are B200-tuned. Mutation surface depends on which backend is shipped as a Triton kernel | **L0a backend selection only** in v0.3.1; Triton-mutation deferred to v0.3.2 if shipping kernels are mutable |
+
+**Categories explicitly NOT pursued as standalone L0c targets in v0.3.1:**
+- **RMSNorm standalone.** Standalone RMSNorm uplift is small (~1–2% of decode); the leverage is through fused epilogues (#2). RMSNorm is reachable inside the fused-epilogue Triton kernel; no separate L0c round.
+- **KV-cache standalone mutation.** PagedAttention C++ is not source-mutable; only the Triton paged path is, and KV-cache rarely dominates Tpot. Stays as L0a config knobs (`kv_cache_block_size`, `kv_cache_dtype`).
+- **FP8 GEMM Triton mutation (former P7f).** Removed from v0.3.1 as unreachable: the L0a action space exposes `fp8_gemm_kernel ∈ {cutlass, cublas}` only; there is no Triton FP8 GEMM in vLLM's shipping path that is straightforward to mutate. Defer to v0.3.2 if we add a Triton FP8 GEMM to the action space first.
+
+### 0.7 What v0.3.1 adds at-a-glance
+
+- **§3.1 L0a action space**: keeps v0.2.x's 5 knobs; adds 4 new knobs (`kv_cache_block_size`, `kv_cache_dtype`, `sampling_kernel`, `epilogue_fusion_mode`). Drops `rmsnorm_kernel` (fused inside epilogue). FP8 GEMM stays `{cutlass, cublas}` — no Triton.
+- **§4 L0b autotune**: stays at DeltaNet only. v0.3.0's expansion to RMSNorm/sampling autotune was not coherent (no concrete autotune surfaces defined) and is dropped.
+- **§5 L0c mutation**: `--kernel-target` accepts **three executable values** in v0.3.1: `deltanet`, `fused_epilogue`, `sampling` (sampling gated on roofline). GatedAttn remains in the schema but is L0a-only unless a Triton GatedAttn kernel is L0a-selected.
+- **§7 Phase DAG re-ordered**: **L0c runs FIRST** against `vllm-default` baseline (per operator note: prior L0a/L0b rounds showed no headroom against baseline, so L0c is the unexplored surface). Order is now P1/P2/P2b/P5 setup → **P3a mandatory roofline probe** → P7a/P7e/P7d L0c rounds → P9/P10 → optional later P3/P6 if L0c results suggest config-space headroom on top.
+- **§5.5 iteration_brief.md**: now includes embedded DGX Spark hardware notes + speedup tips so the L0c agent doesn't waste cycles on online research per iteration.
+- **§2.2 parity fixtures**: §2.2.3 (RMSNorm), §2.2.5 (KV cache mutation), §2.2.7 (FP8 GEMM Triton) removed. §2.2.6 (Fused epilogue) keeps but Triton-sidecar shape only.
+- **§9 verification**: AR.49 (RMSNorm), AR.52 (FP8 GEMM Triton) dropped. AR.53 (kernel-target coverage) now enumerates the 3 executable targets. AR.54 (priority-order audit) gated on P3a roofline pass.
+- **§10 open questions**: §10.6 FA4 GB10 status, §10.7 CUTLASS GB10 tile schedulers, §10.8 bandwidth thesis verification (now answered by P3a). New §10.9 multi-instance memory math (per P0.6).
+
+The L0a/b/c contract, parity-fixture infrastructure, BOOTSTRAP/Candidate/Rescreen/FINALIZE commit shape, three-cap structure, paired-A/B baselines, composite-bundle identity, and partition-completeness invariants from v0.2.x ALL carry forward unchanged. v0.3.1 is narrower than v0.3.0 (3 executable targets vs 6) and re-ordered (L0c first, not last).
+
+---
+
+## 1. Workload commitment — composite multi-family with full-agent-flow trajectories (v0.3.2)
+
+### 1.0 Architectural shift from v0.3.1 (operator directive)
+
+v0.3.1 committed to a **single heavy family** (`responses-sdk-adapter-cutover`, 4-turn trajectory) with v0.2.x's "promote heavy → multi-family at P10" architecture. v0.3.2 inverts: **the workload itself is multi-family from the start**, with each family contributing a *full-agent-flow trajectory* (8–30 turns of real agent work, not 4-turn thinking-only snippets). The L0c bundle's `workload_distribution_id` is then the multi-family-composite id directly — no separate "heavy bundle → composite at P10" promotion phase.
+
+This:
+- Removes the L0c-target-vs-multi-family-promotion lock (any of `deltanet`, `fused_epilogue`, `sampling` can multi-family-promote, since the bundle is for the composite workload from the start).
+- Collapses the v0.2.x/v0.3.1 sibling-fixture phase (P9 step b) — fixtures are captured against the composite, covering all per-family shapes natively.
+- Surfaces the operator's "not just several turns" directive: trajectories are full agent flows, captured via codex driving each family's eval set to completion or to a defensible cap.
+- Increases workload-construction work upfront (multi-family full-flow capture is a multi-day codex-driven effort) but eliminates the P9/P10 fixture-promotion fragility.
+
+### 1.1 Composite workload definition
+
+`benchmark_blueprints/workloads/multi-family-v5-l0c-composite/workload.yaml`. Includes 1–9 component families from the v0.1.5 included pool, sorted alphabetically by `family_id`. Each family contributes a **full-agent-flow trajectory** captured against `vllm-default` baseline.
+
+**Component-family selection (v0.3.2 starting set):**
+
+| Family | Variant | Why included | Trajectory turn count target |
+|---|---|---|---|
+| `responses-sdk-adapter-cutover` | v5 | Decode-heavy thinking-heavy (4096+512+512+4096 thinking) — already captured per v0.3.1 §2.1 | 4 (existing) → 12+ (full-flow expansion in v0.3.2 P1) |
+| `codex-provider-rollover` | v5 | Multi-step config-migration; tool-use heavy | 8–20 |
+| `codex-skill-runtime-v2-split` | v5 | Code-and-test trajectory; longer flows | 12–25 |
+| `esm-plugin-loader-modernization` | v5 | Module refactor with reasoning chains | 10–20 |
+| `nightly-regression-watch` | v5 | Iterative debugging trajectory | 15–30 |
+| `objective-driven-repo-improvement` | v5 | Open-ended improvement task; very long | 20–30 |
+| `policy-aware-request-resolution` | v5 | Compliance reasoning + branching | 8–18 |
+| `release-manifest-v2-modernization` | v5 | Manifest schema migration | 10–18 |
+| `sqlalchemy-2-session-modernization` | v5 | DB session migration; iterative | 12–22 |
+
+**Full-agent-flow capture criteria** (per family):
+- Trajectory runs to either (a) family eval-set completion (success or terminal failure) OR (b) a 30-turn cap, whichever is first.
+- Captured against `vllm-default` baseline + thinking-probe row-3 verified at every turn.
+- `reasoning_tokens` non-zero at expected turns; `output_tokens` non-zero at expected turns.
+- Per-trajectory metadata records: `turn_count`, `total_thinking_tokens`, `total_output_tokens`, `total_prompt_tokens`, `terminated_reason ∈ {completed, failed, cap_reached}`.
+
+**Per-family holdout slice** (v0.1.5 stratified-split style, baked into workload):
+- Each family's full-flow trajectory is split 3:1 seed:holdout at trajectory boundary (NOT mid-turn).
+- Seed slice is used for L0c measurement; holdout slice is used for §7.2 P9 per-family generalization check.
+- Both slices are captured at workload-build time, both committed to main, both included in `workload_distribution_id` via the §6.6 canonical hash.
+
+**Dropping v0.3.1's "heavy family" framing.** §2.1 onward refers to the composite as **the workload** — the v0.3.1 heavy-family pseudo-bundle pattern is replaced by direct composite identity. The §1.X heavy-trajectory description below is the *first variant* in the composite, retained for v0.3.2 P1's incremental expansion.
+
+---
+
+## 1.X (v0.3.1 carry-forward) First-variant trajectory — `responses-sdk-adapter-cutover`
 
 **Why this family.** Among the 9 included pool families:
 - **Reasoning-heavy:** `seed_trace_v5.jsonl` rows show `thinking_tokens` of 4096, 512, 512, 4096 — exclusively thinking, zero response tokens. Pure decode-side load on Qwen3.5's hybrid attention path (DeltaNet recurrent state update + GatedAttn KV read). Exercises both kernel families v0.2 cares about.
@@ -67,11 +182,16 @@ nominal_turn_ms: 30000
 target_concurrency: 4
 thinking_probe_ref: reports/thinking-probe-<yyyymmdd>.md
 thinking_probe_outcome: row-3   # required (thinking fires when asked)
-# Per-kernel parity fixture references (consumed by L0a smoke phase + L0b/L0c rounds).
-# Both files MUST exist before L0a runs (built against reference baseline — see §2.2.0).
+# Per-kernel parity fixture references (consumed by L0a smoke phase + L0c rounds).
+# All files MUST exist before any L0c round runs (built against reference baseline — see §2.2.0).
+# v0.3.1: full map covering all v0.3.1 kernel targets (P0.2 fix).
 parity_fixture_refs:
-  deltanet:  parity_fixture/deltanet_v1.yaml
-  gatedattn: parity_fixture/gatedattn_v1.yaml
+  deltanet:        parity_fixture/deltanet_v1.yaml         # §2.2.2
+  gatedattn:       parity_fixture/gatedattn_v1.yaml        # §2.2.1 — schema-only target in v0.3.1
+  fused_epilogue:  parity_fixture/fused_epilogue_v1.yaml   # §2.2.6 — Triton-sidecar parity (4 checkpoints)
+  sampling:        parity_fixture/sampling_v1.yaml         # §2.2.4 — token-id determinism + KL divergence
+  # NOTE: rmsnorm and fp8_gemm_triton fixtures are NOT in v0.3.1 (targets dropped per §0.6).
+  # NOTE: kv_cache fixture is NOT in v0.3.1 — KV cache is L0a-only, no L0c mutation target.
 ```
 
 ### 2.2 Per-family parity fixture (the correctness substrate)
@@ -158,6 +278,138 @@ parity_check_method: logit_plus_state_compare   # see §6.2
 
 **Why state-snapshot checkpoints matter.** A bad DeltaNet kernel mutation can pass logit parity at token 1 (output looks fine) but corrupt the recurrent state, which then accumulates error and produces wrong logits by token 1024+. Parent §5.6 calls this "slow drift" and explicitly requires the 1024-token checkpoint. Logit-only parity at token 1 is necessary but **not sufficient** for DeltaNet.
 
+#### 2.2.3 ~~RMSNorm fixture~~ (REMOVED in v0.3.1; subsumed into §2.2.6 fused-epilogue)
+
+The standalone RMSNorm fixture from v0.3.0 is removed. RMSNorm correctness is now verified inside the fused-epilogue 4-checkpoint compare (§2.2.6 checkpoint 2: `post_norm`). Standalone RMSNorm L0c target dropped per §0.6.
+
+<details>
+<summary>v0.3.0 schema (kept here for archival reference only — NOT in v0.3.2 active scope)</summary>
+
+```yaml
+# parity_fixture/rmsnorm_v1.yaml
+fixture_id: <family>-rmsnorm-v1
+generated_against:
+  reference_baseline: <§2.2.0>
+  reference_reproducibility_runs: 3
+probe_count: 32                              # smaller surface than attention; norm shapes are simpler
+probe_input_tensors_ref: norm_input_tensors.npz   # input tensors at norm boundary (post-residual)
+reference_norm_output_ref:  rmsnorm_reference_output.npz
+reference_downstream_logits_ref: rmsnorm_reference_downstream_logits.npz   # logits 32 layers downstream — catches norm errors that compound
+tolerances:
+  rtol_norm_output: 5.0e-4   # tighter than logit (norm operates on smaller-magnitude tensors)
+  atol_norm_output: 5.0e-4
+  rtol_downstream_logit: 1.0e-3
+  atol_downstream_logit: 1.0e-3
+parity_check_method: norm_output_plus_downstream_logit
+```
+
+A mutated RMSNorm kernel passes parity iff: (a) its output matches reference at every probe within `(rtol_norm_output, atol_norm_output)`, AND (b) feeding that output through the rest of the model produces logits within `(rtol_downstream_logit, atol_downstream_logit)` of reference. The downstream check catches small norm errors that compound across the remaining layers — analogous to the DeltaNet state-snapshot check at token 1024.
+
+</details>
+
+#### 2.2.4 Sampling fixture (token-id determinism + KL divergence) — v0.3.1+ (gated)
+
+```yaml
+# parity_fixture/sampling_v1.yaml
+fixture_id: <family>-sampling-v1
+generated_against:
+  reference_baseline: <§2.2.0>
+  reference_reproducibility_runs: 3
+probe_count: 64                              # 64 (logits, sampling_params, seed) tuples
+probe_input_logits_ref: sampling_input_logits.npz   # 64 × vocab_size FP32 logits tensors
+probe_sampling_params_ref: sampling_params.jsonl    # per-probe (top_k, top_p, temperature, seed)
+reference_sampled_token_ids_ref: reference_token_ids.jsonl   # 64 token IDs from reference run
+reference_distribution_ref: reference_sampling_distribution.npz   # 64 × vocab post-top-k-top-p softmax distributions
+tolerances:
+  token_id_must_match: true                  # sampled token MUST be byte-equal to reference (deterministic given seed)
+  kl_divergence_max: 1.0e-4                  # post-top-k-top-p distribution KL(reference || mutated) <= threshold
+parity_check_method: token_id_plus_kl_divergence
+```
+
+A mutated sampling kernel passes parity iff: (a) for every probe, the sampled token ID is byte-identical to the reference (deterministic test, easiest to verify), AND (b) the post-top-k-top-p softmax distribution has KL divergence from reference ≤ `kl_divergence_max`. Token-id-only would catch boolean correctness; KL-divergence catches subtle precision drift in the top-k/top-p selection that wouldn't change the sampled token but would shift probability mass.
+
+#### 2.2.5 ~~KV cache fixture~~ (REMOVED in v0.3.1; KV cache is L0a-only, no L0c mutation target)
+
+KV cache stays as L0a config knobs (`kv_cache_block_size`, `kv_cache_dtype`) per §0.6 #4. The standalone KV-cache fixture from v0.3.0 is not used in v0.3.1+. KV-cache correctness for L0a smoke parity is checked by the existing GatedAttn fixture (§2.2.1) since the GatedAttn forward pass exercises both KV write and KV read paths.
+
+<details>
+<summary>v0.3.0 schema (kept here for archival reference only — NOT in v0.3.2 active scope)</summary>
+
+```yaml
+# parity_fixture/kv_cache_v1.yaml
+fixture_id: <family>-kv-cache-v1
+generated_against:
+  reference_baseline: <§2.2.0>
+  reference_reproducibility_runs: 3
+probe_count: 32
+probe_token_lengths: [16, 256, 4096]         # span short to long-context regimes
+probe_input_ref: kv_input_sequences.jsonl
+reference_kv_state_after_write_ref: kv_state_post_write.npz   # full KV cache state after each token write
+tolerances:
+  rtol_kv_state: 1.0e-3   # tighter for FP16/BF16 paths
+  atol_kv_state: 1.0e-3
+  rtol_kv_state_fp8: 5.0e-3   # looser for FP8 KV path
+  atol_kv_state_fp8: 5.0e-3
+parity_check_method: kv_state_post_write_compare
+```
+
+KV-cache mutations are not a primary L0c target in v0.3.0 (paged-attention C++ is not source-mutable; only the Triton paged path is, and it's secondary). This fixture is included for completeness and for L0a parity-vs-reference checking when `kv_cache_dtype` changes. It catches FP8 KV scale drift before any KV-dependent measurement runs.
+
+</details>
+
+#### 2.2.6 Fused-epilogue fixture (intermediate-tensor parity at fusion boundary) — v0.3.1+ (active)
+
+```yaml
+# parity_fixture/fused_epilogue_v1.yaml
+fixture_id: <family>-fused-epilogue-v1
+generated_against:
+  reference_baseline: <§2.2.0>
+  reference_reproducibility_runs: 3
+probe_count: 32
+probe_input_attn_output_ref: attn_output_input.npz
+probe_input_residual_ref: residual_input.npz
+reference_post_residual_add_ref: post_residual.npz       # checkpoint 1: after residual add
+reference_post_norm_ref: post_norm.npz                   # checkpoint 2: after RMSNorm
+reference_post_quant_ref: post_quant.npz                 # checkpoint 3: after FP8 quantize
+reference_downstream_logits_ref: downstream_logits.npz   # checkpoint 4: 32 layers downstream
+tolerances:
+  rtol_at_each_checkpoint: 1.0e-3
+  atol_at_each_checkpoint: 1.0e-3
+parity_check_method: four_checkpoint_compare
+```
+
+A mutated fused-epilogue kernel must match reference at all four checkpoints. Each checkpoint isolates a fusion boundary; a mutation that fuses incorrectly will fail the first checkpoint after the broken boundary, surfacing the precise step that's wrong. This is the **v0.3.0 thesis target** (priority #3) and gets the most thorough fixture.
+
+#### 2.2.7 ~~FP8 GEMM Triton fixture~~ (REMOVED in v0.3.1; target was unreachable per P0.1)
+
+FP8 GEMM Triton mutation target was dropped because vLLM's shipping FP8 GEMM path is CUTLASS/cuBLAS, not Triton. No Triton FP8 GEMM in the L0a action space → no L0c surface to mutate. Re-add when v0.3.3+ either lands a Triton FP8 GEMM in the action space or admits CUTLASS-side mutation.
+
+<details>
+<summary>v0.3.0 schema (kept here for archival reference only — NOT in v0.3.2 active scope)</summary>
+
+```yaml
+# parity_fixture/fp8_gemm_triton_v1.yaml
+fixture_id: <family>-fp8-gemm-triton-v1
+generated_against:
+  reference_baseline: <§2.2.0>
+  reference_reproducibility_runs: 3
+probe_count: 32
+probe_input_a_ref: gemm_input_a.npz   # FP8 input matrices
+probe_input_b_ref: gemm_input_b.npz
+reference_gemm_output_ref: gemm_reference_output.npz
+reference_downstream_logits_ref: downstream_logits.npz
+tolerances:
+  rtol_gemm_output: 2.0e-3   # looser than other kernels — FP8 native rounding has stronger inherent error
+  atol_gemm_output: 2.0e-3
+  rtol_downstream_logit: 1.0e-3
+  atol_downstream_logit: 1.0e-3
+parity_check_method: gemm_output_plus_downstream_logit
+```
+
+Looser GEMM-output tolerances reflect FP8's inherent ~3-bit mantissa rounding; the downstream-logit tolerance stays tight because the model's logits are computed in FP16/BF16 reductions and shouldn't drift more than 1e-3 from any correct FP8 GEMM path.
+
+</details>
+
 ### 2.3 Parity-fixture build pipeline
 
 New script: `scripts/build_parity_fixture.py`. Run **once before L0a** against the §2.2.0 reference baseline. Re-built only when `weight_version_id` rotates. **Not** rebuilt when an L0a/L0b/L0c winner changes — the fixture is the round-independent ground truth that all three rounds are evaluated against.
@@ -217,17 +469,49 @@ Same shape for `gatedattn_v1.yaml` (logit-only, no state checkpoint).
 
 ## 3. Workstream 2 — L0a kernel selection
 
-### 3.1 Action space
+### 3.1 Action space (v0.3.0 expanded)
+
+The v0.2.x action space (5 attention/GEMM/compile knobs, 180 combos) carries forward unchanged. v0.3.0 adds five new knobs covering RMSNorm, KV cache, sampling, and epilogue fusion. The grid grows from 180 to ~3,840 combos before pruning; the smoke phase's determinism + parity-vs-reference culls (§3.2) typically eliminate >90% of combos before any latency is measured, so the wall-clock impact is bounded by the number of survivors, not the grid size.
+
+#### 3.1.1 v0.2.x knobs (unchanged)
 
 | Knob | Candidates | Notes |
 |---|---|---|
-| `attention_backend` (GatedAttn) | `flash-attn-4`, `flash-attn-3`, `flash-attn-2`, `flashinfer`, `triton` | Per parent §2 Decision 2 + §11.10. FlashInfer has the #35138 accuracy issue on Qwen3.5 — must pass purity probe explicitly. |
+| `attention_backend` (GatedAttn) | `flash-attn-4`, `flash-attn-3`, `flash-attn-2`, `flashinfer`, `triton` | Per parent §2 Decision 2 + §11.10. FlashInfer has the #35138 accuracy issue on Qwen3.5 — must pass purity probe explicitly. **FA4 is beta on Blackwell** (vLLM gated behind `FLASH_ATTN_VERSION=4` env flag); GB10-specific perf table not published — see §10.6. |
 | `deltanet_kernel` | `triton-chunked-delta-v1`, `triton-chunked-delta-v2`, `triton-state-update-fused` | Triton-only; vLLM doesn't ship FA-style kernels for linear attention. |
 | `torch_compile_mode` | `default`, `reduce-overhead`, `max-autotune` | Cross-cutting. |
 | `cuda_graph_capture` | `on`, `off` | On may trade compile time for steady-state speed. |
-| `fp8_gemm_kernel` | `cutlass`, `cublas` | The FP8 GEMM under both DeltaNet and GatedAttn. |
+| `fp8_gemm_kernel` | `cutlass`, `cublas` | The FP8 GEMM under both DeltaNet and GatedAttn. CUTLASS tile schedulers are tuned for B200 SM counts and may underperform on GB10 — see §10.7. |
 
-Total combinations ≈ 5 × 3 × 3 × 2 × 2 = **180**. Pruning rule: a combination is eliminated if it fails **either** the determinism probe **or** the parity-against-reference probe — see §3.2.
+Subtotal: 5 × 3 × 3 × 2 × 2 = **180** v0.2.x combos.
+
+#### 3.1.2 v0.3.1 new knobs (RMSNorm dropped, FP8 GEMM stays at `{cutlass, cublas}`)
+
+| Knob | Candidates | Notes |
+|---|---|---|
+| `kv_cache_block_size` | `8`, `16`, `32` | PagedAttention block size. Smaller = less internal fragmentation; larger = better attention compute/memory ratio. Affects only the 16 GatedAttn layers (DeltaNet has no KV cache). Per vLLM PagedAttention design (https://docs.vllm.ai/en/latest/design/paged_attention/). |
+| `kv_cache_dtype` | `fp16`, `bf16`, `fp8_e4m3`, `fp8_e5m2` | FP8 KV cache halves bandwidth pressure on the 16 GatedAttn layers. Requires explicit purity probe — FP8 KV scales can drift from reference logits beyond rtol/atol. |
+| `sampling_kernel` | `flashinfer-sampling-from-probs`, `triton-top-k-top-p`, `torch-native-top-k`, `vllm-v1-triton-sampler` | Qwen3.5-27B-FP8's padded vocab is **248,320** (per HF model card, larger than v0.3.0's 152K estimate); top-k/top-p over that vocab is non-trivial. v1-engine Triton sampler is L0c-mutable; FlashInfer is vendor-only. |
+| `epilogue_fusion_mode` | `none`, `attn_out+residual`, `attn_out+residual+rmsnorm`, `attn_out+residual+rmsnorm+fp8_quant` | Predicted #2 priority per §0.6 (provisional, P3a-gated). Each level fuses one more pass into a **Triton sidecar kernel** (NOT CUTLASS — see §5.2 and P0.5 fix). `attn_out+residual+rmsnorm+fp8_quant` is the v0.3.1 thesis target. Triton fused kernel must be the path; combinations that require CUTLASS-side epilogue support are not in v0.3.1 scope. |
+
+Subtotal: 3 × 4 × 4 × 4 = **192** v0.3.1 combos from the new knobs.
+
+**Total grid arithmetic (made explicit per P1 fix):**
+- v0.2.x knobs: `attention_backend(5) × deltanet_kernel(3) × torch_compile_mode(3) × cuda_graph_capture(2) × fp8_gemm_kernel(2)` = **180** combos.
+- v0.3.1 new knobs: `kv_cache_block_size(3) × kv_cache_dtype(4) × sampling_kernel(4) × epilogue_fusion_mode(4)` = **192** combos.
+- Cartesian product: 180 × 192 = **34,560** raw combos.
+- Static incompatibility pruning per §3.1.3 reduces to ≈ **5,000–8,000** eligible combos before smoke phase. Range, not a single number — actual count depends on which incompatibilities the matrix file declares.
+- Smoke-phase determinism + parity-vs-reference culls then eliminate >90% before any latency is measured. Post-smoke survivor count is typically ≤ a few hundred, the same regime as v0.2.x.
+
+#### 3.1.3 Combinatorial pruning hints (kernel_compatibility_matrix.yaml)
+
+`benchmark_blueprints/kernel_compatibility_matrix.yaml` is checked into git, included in the round's BOOTSTRAP commit, and applied before smoke phase. Documented incompatibilities:
+
+- `epilogue_fusion_mode != none` AND `fp8_gemm_kernel = cublas` → cuBLAS exposes limited epilogue surface; eliminate. `elimination_reason: epilogue_fusion_unsupported_on_backend`.
+- `kv_cache_dtype ∈ {fp8_e4m3, fp8_e5m2}` AND `attention_backend = triton` → no Triton path for FP8 KV in vLLM main as of late 2025; eliminate. Reconsider when vLLM PR series lands.
+- `epilogue_fusion_mode != none` AND `attention_backend ∈ {flash-attn-2, flash-attn-3, flash-attn-4, flashinfer}` → these are vendor attention kernels with their own epilogues; the Triton-sidecar fused-epilogue replaces the GEMM-output → residual → norm → quant chain that is downstream of the *attention output projection*, not downstream of the attention kernel itself. The combination is admissible. (No elimination; flagged here for clarity.)
+- `sampling_kernel = flashinfer-sampling-from-probs` AND P7d L0c-Sampling round exists → P7d cannot mutate FlashInfer (vendor); P7d skipped per its own precondition. (No grid elimination; precondition handled in §5.2.)
+- All other combinations: enumerated and run through the smoke phase. The matrix file is part of the round's BOOTSTRAP commit, so the eligible-combination set is auditable post-round.
 
 ### 3.2 Search strategy — deterministic grid + correctness gate
 
@@ -244,7 +528,7 @@ L0a is **not** an LLM-in-the-loop search. It's a finite, enumerable, determinist
 
 L0a is the workstream where parallelism pays back the most. The P2 driver therefore discovers the **maximum viable fanout on the current hardware** under repo-approved serving settings, then records that value as `l0a_parallel_fanout` for P3 scheduling. A four-vLLM-instance fanout on DGX Spark/GB10 at `gpu_memory_utilization: 0.2` remains the optimization target, but it is not a hard pass/fail requirement.
 
-**vLLM fanout caveat.** GB10 has 192 GB unified memory; a 4-way attempt at 4 × 0.2 = 0.8 utilization is below the 0.92 single-instance L1 winner, but each instance has only ~38 GB to work with and kernel-tuning rounds can carry extra compile/KV pressure. P2 probes candidate fanouts from the 4-way target downward until it finds the largest value whose endpoints start, accept fixture traffic, and satisfy the concurrency correctness check. Rejected fanouts record memory evidence (`gpu_memory_utilization`, free/used memory before and after startup, OOM/bind/timeout traces) plus a structured halt/rejection reason. If the maximum viable fanout is 1, P2 can pass as serial-only with explicit evidence, provided the single endpoint is healthy and deterministic. If the maximum viable fanout is 0, P2 blocks downstream phases.
+**vLLM fanout caveat.** GB10 has **128 GB unified LPDDR5x memory** (not 192 GB; this was a v0.2.x error corrected in v0.3.0) at ~273 GB/s aggregate bandwidth. A 4-way attempt at 4 × 0.2 = 0.8 utilization is below the 0.92 single-instance L1 winner, but each instance has only ~25.6 GB to work with and kernel-tuning rounds can carry extra compile/KV pressure. P2 probes candidate fanouts from the 4-way target downward until it finds the largest value whose endpoints start, accept fixture traffic, and satisfy the concurrency correctness check. Rejected fanouts record memory evidence (`gpu_memory_utilization`, free/used memory before and after startup, OOM/bind/timeout traces) plus a structured halt/rejection reason. If the maximum viable fanout is 1, P2 can pass as serial-only with explicit evidence, provided the single endpoint is healthy and deterministic. If the maximum viable fanout is 0, P2 blocks downstream phases. **Bandwidth implication:** GB10's 273 GB/s is ~30× lower than B200-class HBM3e — every saved memory pass is high-leverage; epilogue fusion (norm + residual + quant) becomes a top-tier optimization, see §0.5.
 
 For every discovered `l0a_parallel_fanout > 1`, concurrent fixture results must equal sequential single-instance results byte-for-byte before that fanout is usable. A mismatch halts even if all instances start, because the parallel harness would be measuring different numbers than serial execution.
 
@@ -392,19 +676,51 @@ Karpathy's `autoresearch` lets one agent edit `train.py`, run, check `val_bpb`, 
 - IS recorded in `mutations_rejected.tsv` with the first-diverging probe index + tolerance margin so the proposer learns from rejections.
 - Triggers an `inconsistent_rescreen`-equivalent flag on the agent's transcript so the proposer knows not to re-propose the same edit.
 
-### 5.2 Per-kernel-family L0c strategy
+### 5.2 Per-kernel-target L0c strategy (v0.3.1 narrowed — 3 executable targets)
 
-L0c runs **per kernel family**. v0.2 commits to two L0c rounds:
-1. **L0c-DeltaNet** — agent mutates the chosen DeltaNet kernel. Parity fixture: §2.2.2 (logit + state-snapshot). 12 mutation attempts cap.
-2. **L0c-GatedAttn** — agent mutates the chosen GatedAttn kernel **only if** the L0a winner was `triton`. If the winner was FA4/FA3/FA2/FlashInfer (vendor kernels), L0c-GatedAttn is skipped — we don't have the source. Parity fixture: §2.2.1 (logit-space). 12 mutation attempts cap if run.
+L0c runs **per kernel target**. v0.3.1 narrows from v0.3.0's six targets to **three executable targets** plus one schema-only target (GatedAttn). The narrowing addresses P0.1 (fp8_gemm_triton was unreachable), P0.5 (fused_epilogue Triton-vs-CUTLASS contradiction), and the operator directive ("standalone RMSNorm not in scope; mutation surface should be tight"). The Karpathy spawn-per-iteration loop, three-cap structure, paired-A/B baseline, and watchdog rails are unchanged across targets — only the kernel-source-path, parity fixture, and `iteration_brief.md` template differ.
+
+**Sequencing inversion (v0.3.1/v0.3.2).** Per operator note: prior v0.1/v0.2 rounds confirmed L0a/L0b have no defensible headroom against `vllm-default` baseline within noise floor. v0.3.1+ therefore runs **L0c FIRST against `vllm-default` baseline directly** — not against an L0a/L0b winner. The paired-A/B baseline measured in each L0c round is `vllm-default` resolution. L0a/L0b are deferred (and remain as v0.3.3+ exploration phases if any L0c result suggests config-space headroom on top of the kernel mutation).
+
+**v0.3.2 fixed base stack (P0.3 fix — L0a is deferred, so L0c preconditions cannot read an L0a winner).** Since v0.3.2 runs L0c without a prior L0a, P7e and P7d's preconditions cannot reference "L0a winner has `epilogue_fusion_mode != none`" or "L0a winner has `sampling_kernel = triton-*`" — those L0a knobs are unresolved at this stage. Instead, v0.3.2 commits to a **fixed base stack** that enables the relevant Triton paths up front:
+
+| Knob | v0.3.2 fixed value | Reason |
+|---|---|---|
+| `attention_backend` | `flash-attn-3` | Stable production path; FA4 is beta on Blackwell (§10.6) |
+| `deltanet_kernel` | `triton-chunked-delta-v2` | Mutable Triton source for P7a |
+| `fp8_gemm_kernel` | `cublas` | Default; Triton FP8 GEMM not in shipping path (§0.6) |
+| `torch_compile_mode` | `default` | Conservative for fixture reproducibility |
+| `cuda_graph_capture` | `off` | Conservative; eliminates capture-replay correctness ambiguity |
+| `epilogue_fusion_mode` | `attn_out+residual+rmsnorm+fp8_quant` (Triton sidecar enabled) | Allows P7e to mutate the sidecar; can be toggled to `none` at smoke phase if Triton sidecar fails to compile on GB10 |
+| `sampling_kernel` | `vllm-v1-triton-sampler` | Mutable Triton source for P7d (gated on P3a roofline) |
+| `kv_cache_block_size` | `16` | vLLM stable default |
+| `kv_cache_dtype` | `bf16` | Conservative; FP8 KV requires explicit purity probe |
+
+This is the "v0.3.2 base stack". P7a/P7e/P7d mutate kernels on top of this fixed stack. v0.3.3 (when L0a runs) replaces it with the L0a winner.
+
+| `--kernel-target` | Source path | Parity-check semantic | Skip condition | §0.6 rank |
+|---|---|---|---|---|
+| `deltanet` | `kernels/deltanet/chunked_delta.py` (Triton) | logit + state-snapshot at token 1 and 1024 (§2.2.2) | never skipped | #1 |
+| `fused_epilogue` | `kernels/fused/attn_residual_norm_quant.py` (**Triton sidecar — no CUTLASS path in v0.3.1**) | 4-checkpoint compare: post-residual-add, post-norm, post-quant, downstream-logit (§2.2.6) | `epilogue_fusion_mode == none` (no fusion to mutate). NO CUTLASS-side precondition — Triton-sidecar always available regardless of `fp8_gemm_kernel` | #2 |
+| `sampling` (gated) | `kernels/sampling/triton_sampler.py` | sampled-token-id parity (deterministic given seed) + post-top-k-top-p KL divergence (§2.2.4) | (a) L0a winner is `flashinfer-sampling-from-probs` or `torch-native-top-k` (vendor / non-Triton); OR (b) **P3a roofline measures sampler share < 3% of Tpot** (sampler-cost-too-small-to-justify-mutation gate per §0.6) | #3 |
+| `gatedattn` *(schema-only in v0.3.1)* | `kernels/gatedattn/<chosen_triton>.py` (Triton) | logit-only (§2.2.1) | **almost always skipped in practice**: L0a winner is vendor (FA4/FA3/FA2/FlashInfer) for ~all combinations the smoke phase admits; round only runs if a Triton GatedAttn kernel is the L0a winner AND P3a roofline shows attention-output share > 5% of Tpot | (rarely actionable) |
+
+**Removed from v0.3.1** (was in v0.3.0): `rmsnorm` (subsumed into `fused_epilogue`; no standalone round), `fp8_gemm_triton` (P7f was unreachable per P0.1; no Triton FP8 GEMM in vLLM shipping path). To re-add either, v0.3.2 must (a) add a mutable shipping kernel to the L0a action space, (b) define a roofline justification for it, and (c) author the corresponding parity fixture.
+
+**Skip-condition handling.** A skipped target produces no L0c round (no `ROUND_NULL_RESULT` artifact, no rounds counted toward §8.4). Skip metadata is recorded in `output/p7_skipped_targets.tsv` with structured reason: `l0a_winner_is_vendor`, `epilogue_fusion_disabled`, `roofline_share_below_threshold`, or `triton_kernel_unavailable`. The composite descriptor's `kernel_mutations` list reflects which targets actually ran AND produced winners — the same mutated-kernel-set invariants from v0.2.x apply (AR.48d nested eligibility check ensures `parity_fixture_refs[family].keys() == set(kernel_mutations[].kernel_target)`).
+
+**Parallelizability across targets.** L0c rounds for `deltanet`, `fused_epilogue`, and (when ungated) `sampling` are independent — they mutate disjoint source files, use disjoint parity fixtures, and produce disjoint candidate commits. They can run in parallel on the same GB10 (constrained by §3.3 multi-instance limits) or sequentially.
+
+**Priority-driven ordering when GPU time is constrained.** §0.6 priority order dictates: `deltanet` → `fused_epilogue` → `sampling` (if ungated). Per AR.54, GPU-budget-skipped targets must be a suffix of this priority. A round that ran `sampling` but skipped `fused_epilogue` due to budget is invalid.
 
 ### 5.3 New CLI subcommand
 
 ```
 lumoserve auto-research mutate-kernel \
   --workload-file benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/workload.yaml \
-  --base-bundle output/tuned_configs/.../<l0b-bundle.yaml> \
-  --kernel-target {deltanet, gatedattn} \
+  --base-stack-resolution {vllm_default, reference_baseline, bundle} \    # v0.3.2: 'vllm_default' is the v0.3.1/v0.3.2 default (L0c-first ordering — no L0b winner exists yet). 'bundle' takes a path to an L0a/L0b bundle and is the v0.3.3+ path when L0a/L0b run.
+  --base-bundle-path <bundle.yaml>                                        # required iff --base-stack-resolution=bundle. ignored otherwise.
+  --kernel-target {deltanet, fused_epilogue, sampling, gatedattn} \    # v0.3.1: 3 executable + 1 schema-only (gatedattn rarely runs)
   --kernel-source-path kernels/deltanet/chunked_delta.py \
   --parity-fixture benchmark_blueprints/families/responses-sdk-adapter-cutover/parity_fixture/deltanet_v1.yaml \
   --base-measurements 5 \                # paired-A/B: re-measure L0b baseline IN THIS ROUND
@@ -423,7 +739,10 @@ The 3-in-a-row halt conditions (`proposer_stuck`, `compile_failures_3x`) remain 
 
 Effects, in order:
 1. Bootstrap a round (worktree, BOOTSTRAP commit, codex-home, iteration_brief.md generated for L0c).
-2. **Paired-A/B baseline.** Run n=`--base-measurements` Screen measurements of the L0b winner kernel in the same round, same vLLM process lifecycle, before any mutation is proposed. Committed with `Measurement-Role: l0b_baseline_remeasured`. All accepted-mutation Welch-t comparisons use these rows.
+2. **Paired-A/B baseline (resolved per `--base-stack-resolution`).** Run n=`--base-measurements` Screen measurements of the resolved base stack in the same round, same vLLM process lifecycle, before any mutation is proposed. The base stack and `Measurement-Role` trailer are determined by `--base-stack-resolution`:
+   - `vllm_default` (v0.3.1/v0.3.2 default — L0c-first ordering): runs `vllm-default` resolution; trailer `Measurement-Role: vllm_default_baseline_remeasured`.
+   - `reference_baseline`: runs the §2.2.0 externally-trusted reference stack (forced FA4 + Triton DeltaNet defaults + cuBLAS + default torch_compile + cuda_graph off); trailer `Measurement-Role: reference_baseline_remeasured`.
+   - `bundle` (v0.3.3+ path): loads `--base-bundle-path`, runs that bundle's resolved stack; trailer `Measurement-Role: <round_type>_baseline_remeasured` (e.g., `l0b_autotune_baseline_remeasured` if the bundle is from L0b). All accepted-mutation Welch-t comparisons use these rows.
 3. For each attempt while `accepted < accepted_iteration_cap` AND `total_attempts < total_attempt_cap` AND `wall_clock < round_timeout_hours`:
    a. Spawn ONE `codex exec` process. Brief tells codex: read `kernels/deltanet/chunked_delta.py`, read `mutations_rejected.tsv` (prior failures), propose a `.patch` diff, write it to `candidates/<NNN>/mutation.patch`.
    b. `total_attempts += 1` (increments unconditionally — every spawn counts toward total cap).
@@ -487,6 +806,72 @@ best on the workload, AND passes the parity gate at
 - You do not call finalize-round. Python does that.
 - You do not run measurement directly. The CLI does that.
 - You do not write any file except mutation.patch and BLOCKED.md.
+
+# DGX Spark hardware notes (embedded — do NOT do online research)
+The system you are tuning for is NVIDIA DGX Spark with the GB10 Superchip.
+These facts are pre-researched and load-bearing for kernel decisions:
+- 128 GB unified LPDDR5x memory at ~273 GB/s aggregate bandwidth.
+  This is ~30x lower BW than B200 HBM3e. Most decode-path kernels are
+  bandwidth-bound, NOT compute-bound. Eliminating memory passes (fused
+  epilogues, in-place ops, async copy pipelining) is high-leverage.
+- Blackwell architecture (sm_100/sm_101). 5th-gen Tensor Cores with
+  native FP8/FP6/FP4. TMA (Tensor Memory Accelerator), Thread Block
+  Clusters / DSMEM, and `tcgen05` PTX MMAs are available.
+- 2-CTA MMA shape on Blackwell favors 256x256-class GEMM tiles vs
+  Hopper's 128x256. CUTLASS bundled tile schedulers target B200 SM
+  counts; GB10 has fewer SMs and may want different tile sizes —
+  empirically discover.
+- SM count, register file per SM, shared memory per SM, L1/L2 cache
+  sizes are NOT publicly documented for GB10. Do not assume B200
+  values. If your mutation is sensitive to register pressure, prefer
+  conservative tile sizes and let L0b autotune (later phase) widen.
+- FA4 is beta on Blackwell (vLLM gated behind FLASH_ATTN_VERSION=4
+  env flag). FA3 is the production-stable path.
+
+# DGX Spark speedup tips for L0c agents
+For DeltaNet (recurrent-state update kernel):
+- Recurrent-state writeback is the dominant memory traffic. Coalescing
+  writes and using cp.async / TMA bulk copies saves more than tile
+  reshape.
+- num_warps=4 is rarely the right answer on GB10's small-SM-count
+  profile; try num_warps=2 or num_warps=8 for narrow tiles.
+- chunk_size affects compute vs recurrent-state-memory tradeoff;
+  smaller chunks = more launches, larger chunks = more state held
+  in SMEM/registers.
+
+For fused_epilogue (Triton sidecar kernel attn_residual_norm_quant.py):
+- The chain is: attn_output_proj_GEMM_output -> +residual -> RMSNorm
+  -> FP8_quantize. Each arrow is a memory pass at default. Fusing
+  saves 2-3 memory passes per layer x 64 layers x thousands of tokens.
+- The Triton kernel takes the GEMM output as input (already in SMEM
+  ideally) and writes the FP8-quantized output once. RMSNorm reduction
+  is a within-tile reduction; SMEM-only.
+- Watch out for: numerical precision in the RMSNorm sqrt-rsqrt step
+  (FP32 reduction required for stability), and FP8 quantization scale
+  computation (per-token vs per-tensor matters).
+
+For sampling (Triton sampler — only if P3a roofline shows >=3% Tpot share):
+- Qwen3.5-27B-FP8 padded vocab is 248,320 (NOT 152K). top-k over this
+  vocab is non-trivial.
+- FlashInfer ships fused top-k/top-p with rejection sampling that
+  avoids explicit sorting. Beating that requires either better
+  rejection-sampling iteration or fundamentally different algorithm.
+- KL divergence between mutated and reference distributions is the
+  load-bearing parity check, not just sampled-token-id equality.
+
+# References (do not browse; these are the sources behind the embedded facts above)
+- NVIDIA DGX Spark spec: 128 GB LPDDR5x / 273 GB/s aggregate BW.
+- NVIDIA Blackwell architecture: 5th-gen TC, FP8/FP4 native, tcgen05.
+- LMSYS DGX Spark inference benchmark: confirms LPDDR5x BW is the
+  practical inference bottleneck on this box.
+- vLLM PagedAttention design doc: BLOCK_SIZE 8/16/32 affects KV
+  layout and fragmentation.
+- HF Qwen3.5-27B-FP8 model card: 64-layer hybrid layout
+  (16 x (3 GatedDeltaNet -> FFN + 1 GatedAttn -> FFN)),
+  padded vocab 248,320.
+- FlashAttention repo: FA4 beta on Blackwell as of late 2025.
+- flash-linear-attention repo: source of the DeltaNet Triton kernels
+  vLLM calls.
 ```
 
 ### 5.6 Verification
@@ -517,7 +902,7 @@ best on the workload, AND passes the parity gate at
   Artifact: per-commit hash recompute + `git apply --check` dry-run.
 - **9.3.AR.48 Weight-sensitive flag honored.** Mutations whose proposer-annotated `weight_sensitive: true` are flagged in the bundle's `layer_0_*.l0c_mutation.weight_sensitive`. Artifact: bundle field check.
 - **9.3.AR.48b L0c three-cap structure recorded.** Bundle's `layer_0_*.l0c_mutation.terminal_condition` ∈ {`accepted_cap_reached`, `total_attempt_cap_reached`, `round_timeout`, `proposer_stuck`, `compile_failures_3x`, `intermittent_parity_observed`}. Counter values `accepted_count`, `total_attempt_count`, `wall_clock_minutes` recorded. The accepted_count + (count of `mutations_rejected.tsv` rows) = total_attempt_count exactly. Artifact: counter audit.
-- **9.3.AR.48c L0c paired-A/B baseline measured in same round.** Round commits include n=`--base-measurements` rows with `Measurement-Role: l0b_baseline_remeasured` trailer. All accepted-mutation Welch-t comparisons use these contemporaneous rows, NOT the L0b bundle's prior `objective_mean`. Artifact: trailer grep + Welch-t input audit.
+- **9.3.AR.48c L0c paired-A/B baseline measured in same round.** Round commits include n=`--base-measurements` rows with `Measurement-Role: <stack>_baseline_remeasured` trailer where `<stack>` matches `--base-stack-resolution` (`vllm_default`, `reference_baseline`, or the bundle's `round_type` for `bundle`). All accepted-mutation Welch-t comparisons use these contemporaneous rows, NOT any prior round's `objective_mean`. v0.3.1/v0.3.2 L0c-first rounds use `vllm_default_baseline_remeasured`. Artifact: trailer grep + Welch-t input audit.
 - **9.3.AR.48c2 P9 paired sibling baselines.** For each parity-passing sibling family, the P9 round commits include n=5 measurements with `Measurement-Role: sibling_baseline` (running `vllm-default` resolution) AND n=5 measurements with `Measurement-Role: sibling_winner` (running the kernel-tuned bundle). Per-sibling Welch-t comparisons consume only contemporaneous (sibling_baseline, sibling_winner) pairs — never historical `objective_mean`. Total per round: up to 80 measurement commits (8 parity-passing siblings × 10), fewer if any sibling failed parity in step (b). Artifact: trailer grep + per-family pair audit.
 - **9.3.AR.48c3 P1 sibling holdout pre-capture (verified at P9).** For each of the 8 sibling families, P1 produced `benchmark_blueprints/families/<sibling_fid>/holdout_trace_v5.jsonl` and committed it to main. P9's step-(a) staleness check verifies for each: file present; thinking-probe row-3 still passes; `weight_version_id` at capture matches current. Heavy family's holdout is the §2.1 capture. Artifact: P1 capture log + P9 staleness-check log per family.
 - **9.3.AR.48c4 P9 sibling parity probe (per sibling × per mutated kernel target) + complete partition + composite exclusion.** A sibling passes P9 parity ONLY if it passes against **every** mutated kernel target in `kernel_mutations`. Concretely: for each sibling family AND each `kernel_target` ∈ `{m.kernel_target for m in kernel_mutations}` (so dual-mutation rounds check both DeltaNet AND GatedAttn per sibling), `parity_check_sibling_<sibling_fid>_<kernel_target>.json` exists with `pass: true|false`, `probe_count: 16`, `fixture_id` matching `benchmark_blueprints/families/<sibling_fid>/parity_fixture/<kernel_target>_v1.yaml`. The TSV-derivation rule is mechanical, with canonical row shapes that byte-equality reconstruction relies on:
@@ -556,6 +941,13 @@ best on the workload, AND passes the parity gate at
   - (h) **Evidence preservation.** Heavy-family-keyed bundle from P7/P8 is preserved as evidence at `composite_bundle.evidence_refs[]` and is NOT independently loadable for sibling families.
 
   Artifact: per-step recomputation log; mismatches surface as the matching halt code.
+
+- **9.3.AR.50 P7d (Sampling) parity contract.** When P7d runs (gated on P3a roofline showing sampler share ≥ 3% of Tpot), every `candidates/<NNN>/parity_check.json` records token-id determinism (every probe's sampled token-id byte-equal to reference) AND post-top-k-top-p KL divergence ≤ `kl_divergence_max`. Both must pass for parity. Token-id-only is insufficient because it can paper over distribution drift that doesn't change the sampled token but changes generation diversity over many tokens. Artifact: token-id-equality count (must equal probe_count) + KL-divergence audit per probe.
+- **9.3.AR.51 P7e (Fused-epilogue, Triton-sidecar) parity contract.** When P7e runs, every `candidates/<NNN>/parity_check.json` records all four checkpoints from §2.2.6 (post-residual-add, post-norm, post-quant, downstream-logit). Mutations may pass earlier checkpoints and fail later ones; the parity gate fails on first failure but records which checkpoint failed so the proposer can isolate the broken fusion boundary. The mutation surface is **Triton sidecar only** (`kernels/fused/attn_residual_norm_quant.py`) — no CUTLASS-side epilogue mutation in v0.3.1. Artifact: per-iteration four-checkpoint matrix (each cell records pass/fail).
+- *(AR.49 [P7c RMSNorm] removed in v0.3.1 — RMSNorm dropped as standalone L0c target; subsumed into P7e.)*
+- *(AR.52 [P7f FP8 GEMM Triton] removed in v0.3.1 — target unreachable; dropped per §0.6.)*
+- **9.3.AR.53 v0.3.1 kernel-target skip semantics.** For each `--kernel-target` in the v0.3.1 set `{deltanet, fused_epilogue, sampling, gatedattn}` (3 executable + 1 schema-only), exactly one of: (a) a P7x round produced a winning mutation in `kernel_mutations`, OR (b) a P7x round produced `ROUND_NULL_RESULT`, OR (c) the target was skipped per its precondition and recorded in `output/p7_skipped_targets.tsv` with a structured reason (`l0a_winner_is_vendor`, `epilogue_fusion_disabled`, `roofline_share_below_threshold`, `triton_kernel_unavailable`). No target is silently absent. Verifier audits that `set(kernel_mutations[].kernel_target) ∪ set(round_null_result_targets) ∪ set(skipped_targets.target) == {4 v0.3.1 targets}`. Artifact: per-target census + complete-coverage check.
+- **9.3.AR.54 Priority-order audit — gated on P3a roofline.** AR.54 enforcement does NOT activate until P3a roofline (§7.2) has been completed AND its measured priority order has been compared against §0.6's predicted order. If they match, AR.54 enforces: GPU-budget-skipped targets must be a suffix of §0.6's order (i.e., higher-priority targets run before lower-priority ones get dropped). If they don't match, §0.6 is rewritten with the measured order before AR.54 activates. Round artifact `output/p3a_roofline_<id>.json` is the load-bearing input — its absence blocks AR.54 enforcement. Artifact: priority-order-source audit (predicted-vs-measured) + GPU-budget-skipped-suffix audit (when applicable).
 
 ### 5.7 Step-level verification — Workstream 4 (L0c)
 
@@ -611,6 +1003,68 @@ def state_parity(reference_state: np.ndarray, mutated_state: np.ndarray, rtol: f
     # Token 1024: catches slow-drift corruption that logit-only misses.
     ...
 ```
+
+#### 6.2.3 Sampling parity — token-id determinism + KL divergence (v0.3.1+, P7d only)
+
+```python
+def sampling_parity(
+    reference_token_ids: list[int],
+    mutated_token_ids: list[int],
+    reference_distribution: np.ndarray,   # shape (probe_count, vocab_size), post-top-k-top-p softmax
+    mutated_distribution: np.ndarray,
+    kl_divergence_max: float,
+) -> dict:
+    # (a) Token-id byte-equality check.
+    if reference_token_ids != mutated_token_ids:
+        first_diff = next(i for i, (a, b) in enumerate(zip(reference_token_ids, mutated_token_ids)) if a != b)
+        return {"pass": False, "reason": "token_id_diverged", "first_diverging_probe": first_diff}
+    # (b) KL divergence per probe; max across probes must be <= threshold.
+    epsilon = 1e-12
+    p = reference_distribution + epsilon
+    q = mutated_distribution + epsilon
+    kl_per_probe = (p * (np.log(p) - np.log(q))).sum(axis=-1)
+    max_kl = float(kl_per_probe.max())
+    if max_kl > kl_divergence_max:
+        return {
+            "pass": False, "reason": "kl_divergence_exceeded",
+            "max_kl": max_kl, "kl_threshold": kl_divergence_max,
+            "first_diverging_probe": int(np.argmax(kl_per_probe)),
+        }
+    return {"pass": True, "max_kl": max_kl}
+```
+
+A mutated sampling kernel passes parity iff both checks pass. Token-id-only would catch boolean correctness but miss distribution drift that wouldn't change the sampled token; KL divergence catches the latter and is what AR.50 audits.
+
+#### 6.2.4 Fused-epilogue parity — four-checkpoint compare (v0.3.1+, P7e only)
+
+```python
+def fused_epilogue_parity(
+    reference_post_residual_add: np.ndarray,
+    mutated_post_residual_add: np.ndarray,
+    reference_post_norm: np.ndarray,
+    mutated_post_norm: np.ndarray,
+    reference_post_quant: np.ndarray,
+    mutated_post_quant: np.ndarray,
+    reference_downstream_logits: np.ndarray,
+    mutated_downstream_logits: np.ndarray,
+    rtol: float, atol: float,
+) -> dict:
+    # Four checkpoints, evaluated in fusion-step order. Fail-on-first reports which
+    # fusion boundary broke so the proposer can isolate.
+    for name, (ref, mut) in [
+        ("post_residual_add", (reference_post_residual_add, mutated_post_residual_add)),
+        ("post_norm",         (reference_post_norm, mutated_post_norm)),
+        ("post_quant",        (reference_post_quant, mutated_post_quant)),
+        ("downstream_logit",  (reference_downstream_logits, mutated_downstream_logits)),
+    ]:
+        result = logit_parity(ref, mut, rtol=rtol, atol=atol)  # reused; tensor-comparison shape is the same
+        if not result["pass"]:
+            return {"pass": False, "reason": "fused_epilogue_checkpoint_fail",
+                    "failed_checkpoint": name, **result}
+    return {"pass": True, "checkpoints_passed": ["post_residual_add", "post_norm", "post_quant", "downstream_logit"]}
+```
+
+A mutated fused-epilogue kernel passes parity iff all four checkpoints pass. The order matters: a mutation that fuses incorrectly will fail the first checkpoint after the broken boundary, surfacing the precise step that's wrong (P7e iteration_brief uses this to give the proposer targeted feedback).
 
 A DeltaNet mutation passes parity iff **all three** pass: logit at every token, state at token 1, state at token 1024.
 
@@ -857,13 +1311,42 @@ def fixture_content_hash(fixture_yaml_path: Path) -> str:
     are skipped — their absence is implicitly captured because the yaml itself
     (which is included first) records which keys were defined.
     """
-    REFERENCED_KEYS = ("probe_input_ref", "reference_logits_ref",
-                       "reference_state_snapshots_ref")  # extend if fixture schema grows
+    # P0.5 fix (v0.3.2): schema-specific referenced-key lists. Each fixture schema declares
+    # its own set of *_ref keys. The function picks the right list by reading the fixture's
+    # `parity_check_method` field. New schemas extend this map; missing schemas raise.
+    REFERENCED_KEYS_BY_SCHEMA = {
+        # DeltaNet (§2.2.2): logit + recurrent-state-snapshot
+        "logit_plus_state_compare": (
+            "probe_input_ref", "reference_logits_ref", "reference_state_snapshots_ref",
+        ),
+        # GatedAttn (§2.2.1): logit-only
+        "per_token_logit_compare": (
+            "probe_input_ref", "reference_logits_ref",
+        ),
+        # Sampling (§2.2.4): token-id determinism + KL divergence
+        "token_id_plus_kl_divergence": (
+            "probe_input_logits_ref", "probe_sampling_params_ref",
+            "reference_sampled_token_ids_ref", "reference_distribution_ref",
+        ),
+        # Fused epilogue (§2.2.6): four checkpoints
+        "four_checkpoint_compare": (
+            "probe_input_attn_output_ref", "probe_input_residual_ref",
+            "reference_post_residual_add_ref", "reference_post_norm_ref",
+            "reference_post_quant_ref", "reference_downstream_logits_ref",
+        ),
+    }
     fixture = yaml.safe_load(fixture_yaml_path.read_text())
     base_dir = fixture_yaml_path.parent
+    method = fixture.get("parity_check_method")
+    if method not in REFERENCED_KEYS_BY_SCHEMA:
+        raise ValueError(
+            f"unknown parity_check_method: {method!r}. Add it to "
+            f"REFERENCED_KEYS_BY_SCHEMA before this fixture can be content-hashed."
+        )
+    keys = REFERENCED_KEYS_BY_SCHEMA[method]
     h = hashlib.sha256()
     h.update(fixture_yaml_path.read_bytes())
-    for key in sorted(REFERENCED_KEYS):
+    for key in sorted(keys):
         if key in fixture and fixture[key]:
             ref_path = base_dir / fixture[key]
             if not ref_path.exists():
@@ -896,29 +1379,56 @@ P2 Hardware-aware vLLM fanout  ─────┘                               
                                                                                                 P5 (parallel) L0c plumbing (apply-and-test + mutate-kernel CLIs against synthetic fixture)
 ```
 
-Key change from v0.2.1-plan: the parity fixture (P2b) is now built **before** L0a, against an externally-trusted reference baseline (§2.2.0), not against the L0a winner. This makes L0a's smoke phase a determinism + correctness gate rather than determinism-only, and removes the previous P4 "capture fixture against L0a winner" phase entirely.
+**v0.3.1 phase DAG (L0c-first ordering — L0a/L0b deferred):**
+
+```
+P1 Workload + capture (heavy + 8 sibling holdouts)   ──┐
+P2 Multi-instance vLLM driver (empirical 1–4 count)  ──┤
+                                                       ├──> P3a Roofline probe (vllm-default) ──> P7a L0c-DeltaNet (vs vllm-default)   ──┐
+P2b Parity fixtures (heavy + sibling, 9 families)    ──┘                                       ──> P7e L0c-FusedEpilogue (vs vllm-default) ──┤──> P9 Cross-family ──> P10 Composite
+                                                                                               ──> P7d L0c-Sampling (gated on P3a share)  ──┘                          (optional later: P3 L0a + P6 L0b
+                              P5 (parallel) L0c plumbing (apply-and-test + mutate-kernel CLIs against synthetic fixture)                                              if any L0c result hints config-space headroom)
+```
+
+**Key changes from v0.3.0-plan:**
+1. **L0c runs first against `vllm-default`**, not against an L0a/L0b winner (operator note: prior L0a/L0b rounds confirmed empty against baseline; L0c is the unexplored surface).
+2. **P3a roofline probe is mandatory before P7a/e/d** — measures per-category Tpot share, DRAM throughput, SM occupancy, tensor-core utilization, kernel launch count. Outputs gate AR.54 priority enforcement and the `sampling` skip condition.
+3. **P3 (L0a) and P6 (L0b) are deferred to v0.3.2 exploration**, after L0c results are in. They are not in v0.3.1's executable scope.
+4. **L0c executable target set narrowed to `{deltanet, fused_epilogue, sampling (gated)}`** — see §5.2. RMSNorm and FP8 GEMM Triton dropped.
+
+Key change from v0.2.1-plan (still applicable): the parity fixture (P2b) is built **before** L0a/L0c, against an externally-trusted reference baseline (§2.2.0), not against any round winner. Smoke phase (when L0a runs in v0.3.2) is a determinism + correctness gate rather than determinism-only.
 
 ### 7.2 Phase preconditions and exit gates
 
 | Phase | Precondition | Exit gate (PASS to advance) | Halt-and-surface conditions |
 |---|---|---|---|
 | **P1** workload descriptor + capture (§2.1, §2.2 schema) | Heavy family hardened (already true); 8 sibling families hardened (already true per v0.1.5-plan) | **Heavy artifacts:** `workload.yaml` schema-valid; `seed_trace.jsonl` + `holdout_trace.jsonl` both pass thinking-probe row-3; canonical `workload_distribution_id` reproducible. **Sibling artifacts (load-bearing for P9):** all 8 of `benchmark_blueprints/families/<sibling_fid>/holdout_trace_v5.jsonl` exist on main, each captured against `vllm-default` baseline (capture metadata records `vllm-default + weight_version_id`), each passes thinking-probe row-3 at capture time. `git log --diff-filter=A` against main shows 8 new sibling holdout files added by P1. Without these, P9 cannot proceed. | Heavy capture yields `reasoning_tokens == 0` after 2 retries → halt with `capture_thinking_zero`. Sibling capture yields `reasoning_tokens == 0` for any family after 2 retries → halt with `sibling_holdout_capture_failed`. Any sibling holdout file missing from main at end of P1 → P1 PASS gate is not satisfied; downstream phases cannot precondition on P1 |
-| **P2** hardware-aware vLLM fanout discovery (§3.3) | None | Maximum viable fanout `N >= 1` discovered under repo-approved settings; attempted fanouts above `N` have memory evidence and structured rejection reasons; `l0a_parallel_fanout: N` recorded for P3. Four-way fanout is the DGX Spark/GB10 optimization target, not the pass gate. If `N > 1`, concurrent fixture requests for that fanout produce results equal to sequential single-instance results. If `N == 1`, the single endpoint is healthy and deterministic and later L0a scheduling runs serial-only. | `N == 0` → halt (`vllm_driver_no_viable_fanout`). Any `N > 1` concurrent result differs from sequential single-instance result → halt (`multi_instance_concurrent_diverges`). Fanout < 4 due only to memory/contention is recorded, not terminal |
+| **P2** hardware-aware vLLM fanout discovery (§3.3) — empirical instance-count discovery (v0.3.1 fix per P0.6) | None | Driver attempts to launch up to 4 vLLM instances at decreasing `gpu_memory_utilization` values (0.4, 0.3, 0.2, 0.15); records the maximum viable fanout `N ≥ 1` for which all `N` instances start AND produce concurrent fixture results equal to sequential single-instance results. Attempted fanouts above `N` have memory evidence and structured rejection reasons; `l0a_parallel_fanout: N` (also `instance_count_max`) recorded in `output/p2_instance_capacity.json` and consumed by all downstream phases. Four-way fanout is the DGX Spark/GB10 optimization target, not the pass gate. If `N == 1`, the single endpoint must be healthy and deterministic and later L0a scheduling runs serial-only. | `N == 0` (no single instance starts at any utilization) → halt (`vllm_driver_no_viable_fanout`). Any `N > 0` concurrent result differs from sequential single-instance result → halt (`multi_instance_concurrent_diverges`). Fanout < 4 due only to memory/contention is recorded, not terminal |
 | **P2b** parity fixture capture against §2.2.0 reference baseline | P1 & P2 PASS | Heavy fixture (64 probes) written at `benchmark_blueprints/families/responses-sdk-adapter-cutover/parity_fixture/{deltanet,gatedattn}_v1.{yaml,npz}`. **Per-sibling fixtures** (16 probes each) written at `benchmark_blueprints/families/<sibling_fid>/parity_fixture/{deltanet,gatedattn}_v1.{yaml,npz}` for all 8 siblings. §2.2.0 reference baseline reproduces bit-identically 3 times per family before each fixture is sealed | Reference itself non-deterministic → halt (`fixture_reference_nondeterministic`); the entire L0 thesis is invalid until fixed. Sibling fixture capture fails for any family → halt (`sibling_fixture_capture_failed`); P9 cannot run without per-sibling fixtures |
-| **P3** L0a real round (§3) | P1 & P2 & P2b PASS | Bundle `round_type: l0a_select_only` written; AR.38–40 PASS; smoke phase uses fixture as correctness gate; winner CI strictly > 0 against `vllm-default` baseline | All L0a §3.6 escalation rows |
-| **P5** (parallel to P3) L0c plumbing — `apply-and-test` + `mutate-kernel` CLIs (§5.3) | P2 & P2b PASS | Synthetic-fixture L0c round uses P2's discovered fanout, passes: no-op patch path PASS-PASS, broken patch path FAIL-recorded | No-op patch fails the synthetic fixture → halt |
-| **P6** L0b real round (§4) | P3 PASS | Bundle `round_type: l0b_autotune` written; AR.41–42 PASS; L0b winner CI strictly > L0a winner using **paired-A/B baseline measured in same round** OR `ROUND_NULL_RESULT` written deliberately | All L0b §4.5 escalation rows |
-| **P7** L0c-DeltaNet real round (§5.2) | P2b, P5, P6 PASS | Bundle records winning mutation OR records `ROUND_NULL_RESULT` (no parity-passing mutation beat the paired-A/B L0b baseline); AR.43–48c PASS | All L0c §5.7 escalation rows |
-| **P8** L0c-GatedAttn real round (§5.2) | P7 complete AND L0a winner was Triton (not vendor kernel) | Same shape as P7 | Same as P7 |
-| **P9** cross-family generalization (§8.4) | At least one of P7 or P8 (whichever ran; P8 may be skipped per its own precondition) produced a winning mutation; P1 produced sibling holdouts; P2b produced sibling parity fixtures | Three sub-steps in order, all in the same round / same vLLM lifecycle: **(a) Sibling holdout staleness check** — for each of the 8 sibling families, verify the pre-existing holdout (captured by P1) is still valid against the live serving stack: file present, thinking-probe row-3 still passes, `weight_version_id` at capture matches current. **(b) Sibling parity probe — per sibling × per mutated kernel target** — for each sibling AND each `kernel_target` in `kernel_mutations` (DeltaNet AND GatedAttn in dual-mutation rounds), run a 16-probe parity-vs-§2.2.0-reference check using the per-(sibling, kernel) fixture from §2.4-pre. A sibling is `parity_pass` only if it passes for ALL mutated kernel targets; if it fails on any one, it goes to `sibling_parity_failures.tsv` with `failing_kernel_target` recorded. **(c) Paired throughput measurement** — for **only parity-passing** siblings: n=5 `vllm-default` baseline + n=5 kernel-mutated winner, with `Measurement-Role: sibling_baseline` / `sibling_winner` trailers. Per-sibling Welch-t from contemporaneous pairs only. P9 produces `sibling_parity_passes.tsv` (the eligible-for-composite list) and `sibling_parity_failures.tsv` (the excluded list, for audit). P10 reads `sibling_parity_passes.tsv` and builds the composite **only over heavy + the parity-passing siblings**. The §8.4 outcome is computed over parity-passing siblings only — denominator is `len(parity_passes)`, not 8. | Sibling holdout fails staleness check → halt with `sibling_holdout_stale_or_invalid`. `inconsistent_baseline` fires repeatedly → halt with `sibling_baseline_inconsistent_repeated`. ≥ 2 siblings fail parity → halt with `cross_family_correctness_broad_fail` (kernel is workload-overfit on correctness and not safely promotable in any composite shape) |
+| **P3a** roofline probe — v0.3.1 mandatory | P1 & P2 & P2b PASS | Run `vllm-default` resolution against the heavy workload at `target_concurrency=4` for 5 minutes; collect via Nsight Compute / Nsight Systems (or NVIDIA `nvbandwidth`/`ncu` equivalent on DGX Spark): per-category Tpot share (DeltaNet, GatedAttn, FFN/Linear, sampler, norm, KV write/read), DRAM read/write throughput (% of 273 GB/s peak), SM occupancy, tensor-core utilization, kernel launch count per token. Output: `output/p3a_roofline_<round_id>.json`. **Gates downstream:** (a) AR.54 priority enforcement activates if measured priority order matches §0.6 prediction; otherwise §0.6 is rewritten with measured order before AR.54 activates; (b) `sampling` L0c target is ungated only if measured sampler share ≥ 3% of Tpot. | Roofline run produces `Tpot_share` summing to <70% of decode time → unaccounted overhead is large; halt with `roofline_unaccounted_overhead`. Nsight tooling unavailable on DGX Spark → halt with `roofline_tooling_unavailable`; surface for human (alternative: nvprof, vLLM internal profiler) |
+| **P5** (parallel to P3a) L0c plumbing — `apply-and-test` + `mutate-kernel` CLIs (§5.3) | P2 & P2b PASS | Synthetic-fixture L0c round uses P2's discovered fanout, passes: no-op patch path PASS-PASS, broken patch path FAIL-recorded | No-op patch fails the synthetic fixture → halt |
+| **P7a** L0c-DeltaNet real round (§5.2) — **baselined against `vllm-default`**, not L0b | P2b, P5, P3a PASS | Bundle records winning mutation OR records `ROUND_NULL_RESULT` (no parity-passing mutation beat the paired-A/B `vllm-default` baseline); AR.43–48c PASS. Paired baseline is `vllm-default`, NOT an L0b winner (L0b not run in v0.3.1) | All L0c §5.7 escalation rows |
+| **P7e** L0c-FusedEpilogue real round (§5.2) — **Triton sidecar, vs `vllm-default`** | P2b, P5, P3a PASS AND L0a `epilogue_fusion_mode` not forced to `none` (no incompatibility) | Same shape as P7a but uses §2.2.6 fixture (4-checkpoint compare) and AR.51 verifier. **Triton-sidecar mutation surface only**, no CUTLASS path in v0.3.1 | All L0c §5.7 escalation rows |
+| **P7d** L0c-Sampling real round (§5.2) — **gated on P3a sampler share ≥ 3%** | P2b, P5, P3a PASS AND P3a measured sampler-Tpot-share ≥ 3% AND L0a winner was `triton-top-k-top-p` or `vllm-v1-triton-sampler` (skip if FlashInfer / torch-native) | Same shape as P7a but uses §2.2.4 fixture (token-id determinism + KL divergence) and AR.50 verifier | All L0c §5.7 escalation rows |
+| ~~**P3** L0a real round~~ | DEFERRED to v0.3.2 | Not in v0.3.1 executable scope (operator note: prior L0a rounds showed no headroom against baseline) | n/a |
+| ~~**P6** L0b real round~~ | DEFERRED to v0.3.2 | Not in v0.3.1 executable scope | n/a |
+| ~~**P7b** L0c-GatedAttn~~ | NOT in v0.3.1 executable scope | Schema-only target — runs only if a Triton GatedAttn kernel is the L0a winner AND P3a measures attention-output share > 5% Tpot. Both unlikely. | n/a |
+| ~~**P7c** L0c-RMSNorm~~ | DROPPED in v0.3.1 | RMSNorm is subsumed into `fused_epilogue` Triton sidecar. No standalone round. | n/a |
+| ~~**P7f** L0c-FP8GEMMTriton~~ | DROPPED in v0.3.1 | Was unreachable (P0.1: L0a action space had no `triton` FP8 GEMM choice). Defer to v0.3.2 if a mutable Triton FP8 GEMM is added. | n/a |
+| **P9** cross-family generalization (§8.4) | At least one of P7a/P7b/P7c/P7d/P7e/P7f (whichever ran; each may be skipped per its own precondition) produced a winning mutation; P1 produced sibling holdouts; P2b produced sibling parity fixtures for every kernel target represented in `kernel_mutations` | Three sub-steps in order, all in the same round / same vLLM lifecycle: **(a) Sibling holdout staleness check** — for each of the 8 sibling families, verify the pre-existing holdout (captured by P1) is still valid against the live serving stack: file present, thinking-probe row-3 still passes, `weight_version_id` at capture matches current. **(b) Sibling parity probe — per sibling × per mutated kernel target** — for each sibling AND each `kernel_target` in `kernel_mutations` (DeltaNet AND GatedAttn in dual-mutation rounds), run a 16-probe parity-vs-§2.2.0-reference check using the per-(sibling, kernel) fixture from §2.4-pre. A sibling is `parity_pass` only if it passes for ALL mutated kernel targets; if it fails on any one, it goes to `sibling_parity_failures.tsv` with `failing_kernel_target` recorded. **(c) Paired throughput measurement** — for **only parity-passing** siblings: n=5 `vllm-default` baseline + n=5 kernel-mutated winner, with `Measurement-Role: sibling_baseline` / `sibling_winner` trailers. Per-sibling Welch-t from contemporaneous pairs only. P9 produces `sibling_parity_passes.tsv` (the eligible-for-composite list) and `sibling_parity_failures.tsv` (the excluded list, for audit). P10 reads `sibling_parity_passes.tsv` and builds the composite **only over heavy + the parity-passing siblings**. The §8.4 outcome is computed over parity-passing siblings only — denominator is `len(parity_passes)`, not 8. | Sibling holdout fails staleness check → halt with `sibling_holdout_stale_or_invalid`. `inconsistent_baseline` fires repeatedly → halt with `sibling_baseline_inconsistent_repeated`. ≥ 2 siblings fail parity → halt with `cross_family_correctness_broad_fail` (kernel is workload-overfit on correctness and not safely promotable in any composite shape) |
 | **P10** production-bundle finalize | P9 satisfies the **advance predicate**: `R == 0 AND I ≥ ⌈0.75 × S⌉` (the §8.4 advance row, NOT row 1 — the §8.4 table is ordered with overfit/regression rows first; a literal "row 1" reference would point at the overfit reframe-scope outcome). Equivalently: zero regressing siblings AND ≥6 of 8 (S=8) or ≥6 of 7 (S=7) improving | A **new composite descriptor + bundle** is minted per §6.6 (composite-family pseudo-id, newline-safe concatenated trace files, list of mutation patch hashes inside descriptor body, **`component_families` = heavy ∪ parity-passing siblings only — parity-failing siblings excluded**, per-family seed/holdout paths reference P1-captured holdouts + existing v0.1.5 seed_trace_v5). `workload_distribution_id` is computed by **parent §5.9 canonical procedure unchanged** — no second hash algorithm. `round_type: l0_kernel_tuned`; live family gate (parent §11.5) PASS. The heavy-family pseudo-bundle from P7/P8 is NOT directly promoted — it's the *evidence* the composite bundle was minted from. | Live family gate FAIL → composite bundle goes to disk only; missing per-family trace inputs OR non-newline-terminated inputs OR hash recompute mismatch OR composite includes a sibling listed in `sibling_parity_failures.tsv` OR partition-completeness audit fails → halt with the matching §9.1 code; heavy-family bundle is preserved as evidence |
 
 ### 7.3 Dependencies (rationale)
 
-- **Parity fixture (P2b) → L0a:** fixture must exist before L0a so L0a's smoke phase can use it as a correctness gate. Without this, L0a could pick a deterministic-but-wrong kernel (FlashInfer #35138 class). Fixture is captured against the externally-trusted §2.2.0 reference baseline, not against any round's winner.
-- **L0a → L0b:** L0b needs the L0a winner kernel choice as its base. L0b's Welch-t comparison must use a paired baseline measured **in the same L0b round** (AR.41b), not the L0a bundle's prior `objective_mean`.
-- **L0b → L0c:** L0c mutations sit on top of L0b-autotuned baselines. L0c's Welch-t comparison must use a paired baseline measured **in the same L0c round** (AR.48c). A mutation that beats the L0b-autotuned baseline contemporaneously is a real win; one that beats only a stale L0b `objective_mean` is comparing across time windows.
-- **L0c → P9:** P9 advances if AT LEAST ONE of P7 or P8 produced a winning mutation (the round that ran). Skipped rounds don't block.
+**v0.3.1+ L0c-first ordering (active):**
+- **Parity fixture (P2b) → L0c:** fixture must exist before L0c so per-mutation parity gating works (§5.6 AR.43). Without this, L0c rounds cannot bootstrap. Fixture is captured against the externally-trusted §2.2.0 reference baseline, not against any round's winner.
+- **L0c (v0.3.1+) baselines against `vllm-default` directly.** The paired-A/B baseline is measured in the same L0c round with `Measurement-Role: vllm_default_baseline_remeasured`. No L0a/L0b winner is required.
+- **P3a roofline → AR.54 priority:** AR.54 priority enforcement does not activate until P3a measures actual per-category Tpot share; if the measurement contradicts §0.6's predicted order, §0.6 is rewritten before AR.54 activates.
+
+**v0.3.3+ L0a → L0b → L0c ordering (deferred, included for documentation):**
+- **L0a → L0b:** L0b would need the L0a winner kernel choice as its base. L0b's Welch-t comparison would use a paired baseline measured in the same L0b round (AR.41b), not the L0a bundle's prior `objective_mean`.
+- **L0b → L0c:** L0c mutations would sit on top of L0b-autotuned baselines via `--base-stack-resolution=bundle --base-bundle-path <l0b-bundle>`. v0.3.1/v0.3.2 do not run this path because prior rounds confirmed L0a/L0b have no defensible headroom.
+- **L0c → P9:** P9 advances if AT LEAST ONE of P7a–P7f produced a winning mutation (the rounds that ran; each is skippable per its own precondition). Skipped rounds don't block.
 - **All → composite bundle (P10):** a winning mutation does NOT promote as the heavy-family-keyed pseudo-bundle; P10 mints a new composite-family bundle whose `workload_distribution_id` hashes over the trace files for `component_families` (heavy + parity-passing siblings; size dynamic per P9 outcome) + every mutation patch hash + every per-family parity fixture content hash.
 - **All → live family gate:** every kernel-tuned composite bundle that finalizes runs the parent §11.5 live family gate before promotion.
 
@@ -928,7 +1438,7 @@ Key change from v0.2.1-plan: the parity fixture (P2b) is now built **before** L0
 
 These are the gates a human looks at to decide "advance / hold / reframe". Each row makes the action explicit. There is no "this is concerning, we should think about it" outcome — every row is one of: **advance**, **halt-and-diagnose**, **ship-as-is-and-stop**, or **reframe-scope**.
 
-### 8.1 After L0a (gate on phase P3)
+### 8.1 After L0a (gate on phase P3) — **DEFERRED to v0.3.3+** (P3 is not in v0.3.1/v0.3.2 executable scope; this section preserved for the documentation of the eventual L0a decision gate)
 
 | Observed outcome | Classification | Action |
 |---|---|---|
@@ -937,7 +1447,7 @@ These are the gates a human looks at to decide "advance / hold / reframe". Each 
 | L0a winner is `flashinfer + …` | conditional advance | Trigger parent §9.3.13 flashinfer accuracy-screen. PASS → advance; FAIL → force-select FA4 manually and advance with that as winner |
 | Round halts (any §3.6 escalation row triggered) | halt-and-diagnose | Round transcript surfaced; human decides whether the halt-cause is fixable or terminal |
 
-### 8.2 After L0b (gate on phase P6)
+### 8.2 After L0b (gate on phase P6) — **DEFERRED to v0.3.3+** (P6 is not in v0.3.1/v0.3.2 executable scope; preserved for documentation)
 
 | Observed outcome | Classification | Action |
 |---|---|---|
@@ -980,9 +1490,9 @@ Let `I = improved-vs-vllm-default count among those S siblings`, `R = regressed-
 
 ---
 
-## 9. Verification — extends v0.1.5-plan AR list (AR.38–48d)
+## 9. Verification — extends v0.1.5-plan AR list (AR.38–54)
 
-All new items are covered in §3.5, §4.4, §5.6 with full artifact specs. Items break into seven groups:
+All new items are covered in §3.5, §4.4, §5.6 with full artifact specs. Items break into eight groups:
 
 - **L0a determinism + parity-vs-reference + intermediate-bundle marking:** AR.38, AR.38b, AR.39, AR.40
 - **L0b autotune frozen + paired baseline + determinism + parity-vs-reference:** AR.41, AR.41b, AR.42
@@ -991,6 +1501,7 @@ All new items are covered in §3.5, §4.4, §5.6 with full artifact specs. Items
 - **P2b per-sibling parity fixtures:** AR.48c4b
 - **P9 cross-family paired baselines + per-(sibling × kernel) parity probe + composite exclusion:** AR.48c2, AR.48c4
 - **GatedAttn mutation invariant + P10 composite bundle identity (incl. canonical fixture content hash per §6.6.6):** AR.48c5, AR.48d
+- **v0.3.1+ kernel-target expansion (Sampling + Fused-epilogue + coverage + priority-order):** AR.50, AR.51, AR.53, AR.54. *(AR.49 RMSNorm and AR.52 FP8-GEMM-Triton dropped per §0.6 — targets removed.)*
 
 ### 9.1 Named halt conditions (catalogue)
 
@@ -1000,9 +1511,9 @@ Every escalation row in §2.4, §3.6, §4.5, §5.7 writes one of these named cod
 |---|---|---|
 | `capture_thinking_zero` | P1 | `reasoning_tokens == 0` after 2 retries — vLLM Responses API regression |
 | `fixture_reference_nondeterministic` | P1, P2b | Reference run produces different logits across same-input invocations — backbone determinism broken |
-| `fixture_weight_mismatch` | P2b, P3, P6, P7, P8 | `generated_against.weight_version_id` ≠ live serving weights — every round that consumes the fixture rejects on mismatch |
-| `multi_instance_concurrent_diverges` | P2 | Discovered `N > 1` fanout's concurrent results ≠ sequential single-instance results |
-| `vllm_driver_no_viable_fanout` | P2 | No healthy single-instance endpoint starts under repo-approved settings (`max_viable_fanout == 0`) |
+| `fixture_weight_mismatch` | P2b, P3, P6, P7a–P7f | `generated_against.weight_version_id` ≠ live serving weights — every round that consumes the fixture rejects on mismatch |
+| `multi_instance_concurrent_diverges` | P2 | 4-instance concurrent results ≠ sequential single-instance results |
+| `multi_instance_insufficient_memory` | P2 | **0 instances start** at the lowest probed `gpu_memory_utilization` (0.15) — not a count-below-4 issue (P2 accepts `N ≥ 1` per v0.3.1 P0.6 fix); raised only when the model can't fit at any utilization. The accepted range is `1 ≤ N ≤ 4` |
 | `l0a_precondition_missing_fixture` | P3 | L0a refused to bootstrap — parity fixture file(s) not present at expected path |
 | `l0a_parity_fail_winner` | P3 | Combo passed determinism but failed parity-vs-reference — deterministic-but-wrong; eliminated mid-smoke |
 | `flashinfer_passes_parity` | P3 | FlashInfer combo unexpectedly passed parity — either #35138 fixed (audit fixture) or fixture too loose (tighten tolerances) |
@@ -1014,13 +1525,13 @@ Every escalation row in §2.4, §3.6, §4.5, §5.7 writes one of these named cod
 | `autotune_oscillating` | P6 | Stable window never reached — shape distribution too wide to autotune jointly |
 | `autotune_winner_nondeterministic` | P6 | Frozen autotune winner fails 64-probe determinism |
 | `noop_patch_fails_parity` | P5, P7 | Synthetic no-op patch fails the parity check — fixture or check function broken |
-| `mutation_unappliable_3x` | P7, P8 | 3 consecutive iterations produce un-applicable patches — proposer misconfigured |
-| `compile_failures_3x` | P7, P8 | 3 consecutive compile failures on different patches — toolchain regression |
-| `intermittent_parity_observed` | P7, P8 | Same mutation passes parity once and fails once — race condition leaking through gate |
-| `proposer_stuck` | P7, P8 | 3-in-a-row parity failures — brief or proposer model needs adjustment (NOT a system bug) |
-| `total_attempt_cap_reached` | P7, P8 | L0c spawn count hit `--total-attempt-cap` before reaching `--accepted-iteration-cap` — too many rejected mutations relative to accepted; surface for human review |
-| `round_timeout` | P7, P8 | L0c round-level wall-clock exceeded `--round-timeout-hours` — proposer too slow OR cycle-time engineering broken; surface |
-| `measurement_transient_2x` | P7, P8 | 2 consecutive measurement transient failures post-parity — vLLM/GPU instability |
+| `mutation_unappliable_3x` | P7a–P7f | 3 consecutive iterations produce un-applicable patches — proposer misconfigured |
+| `compile_failures_3x` | P7a–P7f | 3 consecutive compile failures on different patches — toolchain regression |
+| `intermittent_parity_observed` | P7a–P7f | Same mutation passes parity once and fails once — race condition leaking through gate |
+| `proposer_stuck` | P7a–P7f | 3-in-a-row parity failures — brief or proposer model needs adjustment (NOT a system bug) |
+| `total_attempt_cap_reached` | P7a–P7f | L0c spawn count hit `--total-attempt-cap` before reaching `--accepted-iteration-cap` — too many rejected mutations relative to accepted; surface for human review |
+| `round_timeout` | P7a–P7f | L0c round-level wall-clock exceeded `--round-timeout-hours` — proposer too slow OR cycle-time engineering broken; surface |
+| `measurement_transient_2x` | P7a–P7f | 2 consecutive measurement transient failures post-parity — vLLM/GPU instability |
 | `sibling_baseline_inconsistent_repeated` | P9 | Per-sibling `inconsistent_baseline` flag fires repeatedly even on retry — sibling workload not stable on this stack; halt cross-family round |
 | `sibling_holdout_capture_failed` | P1 | A sibling family's holdout capture failed thinking-probe row-3 OR `reasoning_tokens == 0` — workload stack regression on that sibling; halt P1 |
 | `sibling_holdout_stale_or_invalid` | P9 | A sibling holdout that pre-existed from P1 fails P9's staleness check (file missing, thinking-probe regression, weight_version_id mismatch) — halt P9; human decides whether to recapture or drop the sibling |
@@ -1032,6 +1543,12 @@ Every escalation row in §2.4, §3.6, §4.5, §5.7 writes one of these named cod
 | `composite_descriptor_component_families_mismatch_p9` | P10 | `set(component_families)` ≠ `{heavy} ∪ set(sibling_parity_passes.family_id)` — P10 either dropped a parity-passing sibling (silent shrinkage) or included a parity-failing one. Halt and surface; this is a P10 code-path bug |
 | `composite_descriptor_parity_fixture_content_drift` | P10 | A `parity_fixture_refs.<family>.<kernel>.content_hash` does not match recomputed §6.6.6 canonical manifest hash (yaml + every referenced blob in sorted-key delimiter-framed order) — fixture file mutated since P10 minted, OR descriptor's content_hash was wrong; bundle identity is invalid; halt |
 | `composite_descriptor_parity_fixture_blob_missing` | P10 | A fixture yaml references a blob (probes_input.jsonl, reference logits npz, reference state npz) that does not resolve on disk — manifest hash cannot be computed; halt |
+| `sampling_kl_divergence_exceeds_threshold` | P7d | Sampling mutation passes token-id determinism but fails KL-divergence check on post-top-k-top-p distribution — distribution drift that would harm long-horizon generation diversity; mutation rejected (NOT a round halt) |
+| `fused_epilogue_checkpoint_fail` | P7e | Fused-epilogue mutation fails one of the four §2.2.6 checkpoints; the failing checkpoint name is recorded so the proposer can isolate the broken fusion boundary; mutation rejected (NOT a round halt) |
+| `kernel_target_coverage_incomplete` | P10 (audited) | The union of {kernel_mutations targets, ROUND_NULL_RESULT targets, skipped_targets.target} does not equal the v0.3.1 target set `{deltanet, fused_epilogue, sampling, gatedattn}` — a target is silently absent; halt |
+| `gpu_budget_skip_violates_priority_order` | P10 (audited) | The set of GPU-budget-skipped targets is not a suffix of the §0.6 priority order (post-P3a-roofline) — a higher-priority target was skipped while a lower-priority target ran; halt |
+| `roofline_unaccounted_overhead` | P3a | Roofline run produces `Tpot_share` summing to <70% of decode time — unaccounted overhead is large; halt and surface |
+| `roofline_tooling_unavailable` | P3a | Nsight Compute / Nsight Systems / `ncu` not available on DGX Spark — alternative profiler needed before P3a can complete; halt and surface |
 | `composite_descriptor_parity_fixture_eligibility_mismatch` | P10 | Two-level invariant violated. **Outer:** `set(parity_fixture_refs.keys()) != set(component_families)` — descriptor has a fixture block for an excluded family, OR is missing one for an included family. **Nested:** for some `family in component_families`, `set(parity_fixture_refs[family].keys()) != set(m.kernel_target for m in kernel_mutations)` — family is missing a per-mutated-kernel fixture entry (e.g., dual-mutation round but family carries only `deltanet`), OR carries an entry for a non-mutated kernel target. Halt code surfaces with `level: outer` or `level: nested` plus the offending family/kernel pair |
 | `composite_descriptor_gatedattn_base_invalid` | P10 | `kernel_mutations` entry with `kernel_target: gatedattn` has a vendor `base_kernel` (FA-style or FlashInfer) — internally inconsistent with P8's Triton-only precondition |
 | `live_gate_failed` | P10 | Composite bundle passed parity but failed parent §11.5 live family gate — bundle goes to disk, no promotion |
@@ -1069,11 +1586,25 @@ Default vLLM auto-select on Blackwell already resolves to FlashInfer-first / FA-
 
 Each L0c attempt builds the kernel into an isolated build directory to prevent cross-mutation contamination. Open: how do we enforce `LD_LIBRARY_PATH` / `PYTHONPATH` isolation so mutation N+1 doesn't accidentally load mutation N's `.so`? Probably one isolated venv per round, but this is a cycle-time concern.
 
+### 10.6 GB10-specific FA4 / CUTLASS perf tables (v0.3.0)
+
+FA4 is **beta/experimental on Blackwell** as of late 2025; the vLLM `FLASH_ATTN_VERSION=4` path is gated behind an env flag and not the default. NVIDIA has not published a GB10-specific FA4 perf table. CUTLASS 3.6+ has Blackwell support but bundled tile schedulers are tuned for B200 SM counts, not GB10's smaller-SM-count workstation profile. Open: do we (a) ship an L0a winner that pins `attention_backend=flash-attn-3` for stability and let L0c-DeltaNet/Fused-Epilogue carry the kernel uplift, or (b) pin FA4 if smoke-phase parity passes and accept the beta-status risk? The plan's L0a smoke phase will eliminate FA4 if it fails parity-vs-reference; if it passes, the question becomes whether to gate it behind a `--allow-beta-backend` CLI flag for production bundles.
+
+### 10.7 GB10 SM count + register pressure for fused epilogues
+
+GB10's SM count, register file size per SM, and shared memory per SM are not publicly documented. The plan's L0a smoke phase exercises every viable combination, but L0b autotune ranges (especially for Triton fused epilogues which need register-rich tiles) may need to be empirically discovered rather than copied from B200 defaults. Open: should L0b for `fused_epilogue` start from a wider grid than other targets (e.g., test both 64×64 and 128×128 register-tile shapes) to compensate for missing hardware specs?
+
+### 10.8 Bandwidth-bound thesis verification
+
+§0.5.2 claims GB10 is bandwidth-bound at the 273 GB/s level and that fused epilogues are highest-leverage. Open: the v0.3.0 plan assumes this; before committing to the priority order in §0.6, P3 (L0a) should produce roofline measurements per kernel category to confirm bandwidth-bound vs compute-bound — if the actual roofline is different from §0.5.2's prediction, §0.6 priority order needs to be revised. Add a roofline-probe sub-step to P3.
+
 ---
 
 ## 11. Changelog
 
-- **v0.2.13-plan (2026-04-26)** — Twelfth reviewer P2 pass. One fix: P2's four-instance startup gate is now hardware-aware. DGX Spark/GB10 still targets 4-way fanout at `gpu_memory_utilization: 0.2`, but P2 passes by discovering the maximum viable fanout under repo-approved settings, recording memory evidence and rejection reasons for higher fanouts, and saving `l0a_parallel_fanout` for P3/P5 scheduling. `N > 1` fanout still must prove concurrent fixture results equal sequential single-instance results; `N == 1` can pass as serial-only with explicit healthy/deterministic endpoint evidence; `N == 0` blocks with `vllm_driver_no_viable_fanout`. Removed the stale `<4 instances start` terminal-failure wording from §3.6, §7.1/§7.2, §9.1, and §10.1.
+- **v0.3.2-plan (2026-04-27)** — Architectural reframe: composite-multi-family workload from start + reviewer P0/P1 fixes. (operator directive) Pivoted from v0.3.1's "heavy family + late-stage multi-family promotion at P10" to **composite multi-family workload from the start**: workload spans variants from multiple families with full-agent-flow trajectories (8–30 turns, captured via codex against each family's eval set, NOT v0.3.1's 4-turn thinking-only snippets). Bundle's `workload_distribution_id` IS the multi-family identity directly — no separate "heavy bundle → composite" promotion phase. Closes the L0c-target-vs-multi-family-promotion lock the reviewer flagged: any of `deltanet`, `fused_epilogue`, `sampling` can multi-family-promote because the bundle is for the composite workload from the start, not heavy-then-promoted. Each family's full-flow trajectory is split 3:1 seed:holdout at trajectory boundary; both slices included in `workload_distribution_id` via §6.6 canonical hash; per-family holdout slice is what P9 cross-family check uses (v0.1.5 stratified-split style). Adds §1.0 architectural shift, §1.1 composite workload definition with 9-family table + full-agent-flow capture criteria + per-family holdout slice contract. **Reviewer P0/P1 fixes also landed:** (P0.1 P9/P10 fused/sampling fixture gap) Resolved architecturally by composite-from-start — fixtures cover all per-family shapes natively. (P0.2 L0c-first baseline residue) `--base-bundle` renamed to `--base-stack-resolution {vllm_default, reference_baseline, bundle}` + `--base-bundle-path`; `Measurement-Role` becomes `vllm_default_baseline_remeasured` for L0c-first ordering; AR.48c reworded to match. (P0.3 fused/sampling depend on deferred L0a) v0.3.2 commits to a **fixed base stack** (FA3 + Triton DeltaNet v2 + Triton sidecar epilogue + Triton sampler + cuBLAS FP8 + bf16 KV) so P7e/P7d preconditions don't reference an unresolved L0a winner. v0.3.3 replaces the fixed stack with the actual L0a winner. (P0.4 fused_epilogue overclaim) Revised §0.6 row #2: Triton sidecar fuses `+residual → RMSNorm → FP8 quant` but cannot eliminate the GEMM-output write itself (that requires CUTLASS/CuTe epilogue integration deferred to v0.3.3+). Magnitude downgraded from "8–15% e2e" to "3–8% e2e" pending P3a. (P0.5 fixture content_hash schema-blind) `fixture_content_hash` rewritten as a schema-aware function: `REFERENCED_KEYS_BY_SCHEMA` map keyed by `parity_check_method`. Each schema declares its referenced-key list; unknown schemas raise. New schemas (sampling, fused_epilogue) bind their full referenced-blob set into bundle identity. (P1 cleanup) §2.2.3 RMSNorm, §2.2.5 KV cache, §2.2.7 FP8 GEMM Triton fixture sections marked REMOVED with archival `<details>` tags. §6.2 parity semantics gains §6.2.3 (sampling — token-id determinism + KL divergence) and §6.2.4 (fused-epilogue — four-checkpoint fail-on-first). §7.3 dependency rationale split into v0.3.1+ active (L0c-first) and v0.3.3+ deferred (L0a→L0b→L0c) sections. §8.1 and §8.2 marked DEFERRED to v0.3.3+. §9 verification group description updated to drop AR.49/AR.52. `multi_instance_insufficient_memory` halt code reworded for the `N ≥ 1` empirical-discovery semantics.
+- **v0.3.1-plan (2026-04-27)** — Reviewer P0/P1 pass on v0.3.0 + operator sequencing inversion. Six fixes + scope narrowing + L0c-first reordering: (P0.1 fp8_gemm_triton unreachable) Dropped P7f entirely. L0a action space's FP8 GEMM stays `{cutlass, cublas}` — no Triton path. AR.52 removed. Re-add deferred to v0.3.2 if a mutable Triton FP8 GEMM enters vLLM shipping. (P0.2 workload.yaml fixture map) `parity_fixture_refs` now a full map covering all v0.3.1 targets `{deltanet, gatedattn, fused_epilogue, sampling}`. (P0.3 sibling fixtures) Heavy-family-only for non-DeltaNet/GatedAttn targets in v0.3.1; sibling-fixture work for fused_epilogue / sampling deferred to v0.3.2. (P0.4 L0b autotune undefined) Dropped expanded L0b. v0.3.1 keeps L0b for DeltaNet only, and even that is deferred (see L0c-first below). (P0.5 fused_epilogue Triton-vs-CUTLASS contradiction) Picked **Triton sidecar** as the sole mutation surface in v0.3.1. P7e precondition no longer requires CUTLASS; only requires `epilogue_fusion_mode != none`. CUTLASS-side fused-epilogue mutation deferred to v0.3.2. (P0.6 4-instance claim) P2 phase changed from "4 instances required" to **empirical instance-count discovery**: try 4 → 3 → 2 → 1 at decreasing utilization; accept `N ≥ 1`; halt only if no instance starts. `output/p2_instance_capacity.json` consumed by all downstream phases. (P0.7 bandwidth thesis numeric claim) AR.54 priority-order enforcement gated on **new P3a roofline phase** that measures actual per-category Tpot share, DRAM throughput, SM occupancy, tensor-core utilization, kernel launch count via Nsight Compute / Nsight Systems. If measured priority differs from §0.6's prediction, §0.6 is rewritten before AR.54 activates. **Scope narrowing:** v0.3.1 has 3 executable L0c targets `{deltanet, fused_epilogue, sampling-gated}` + 1 schema-only (`gatedattn`). RMSNorm dropped (subsumed into fused_epilogue). FP8 GEMM Triton dropped (unreachable). KV cache dropped as L0c (stays as L0a config knobs). **Sequencing inversion (operator note):** v0.2 / v0.3.0 ran L0a → L0b → L0c. v0.3.1 inverts to **L0c first against `vllm-default` baseline** (L0a/L0b have already been shown empty against baseline; L0c is the unexplored surface). New phase order: P1/P2/P2b/P5 setup → **P3a mandatory roofline probe** → P7a/P7e/P7d L0c rounds → P9/P10. Original P3 (L0a) and P6 (L0b) deferred to v0.3.2 exploration only. **§5.5 iteration_brief.md** now embeds DGX Spark hardware notes + per-target speedup tips so the L0c agent does NOT do online research per iteration — facts are pre-researched and load-bearing. New halt codes `roofline_unaccounted_overhead`, `roofline_tooling_unavailable`. Removed halt code `rmsnorm_downstream_logit_diverges` (target dropped). HF model card correction: Qwen3.5-27B-FP8 padded vocab is **248,320**, NOT 152K. Hardware corrections from v0.3.0 (128 GB LPDDR5x at 273 GB/s, FA4 beta on Blackwell) carry forward unchanged.
+- **v0.3.0-plan (2026-04-27)** — Scope expansion: kernel categories beyond attention + FP8 GEMM. Triggered by @TheAhmadOsman x.com post enumerating the kernel surface (MatMul, Attention, RMSNorm, KV cache, Quantized linear, Sampling, Fused) and grounded in GB10/DGX Spark physical facts. Six substantive additions: (1) **Hardware grounding §0.5.** GB10 = Blackwell + 128 GB LPDDR5x at 273 GB/s (NOT 192 GB — v0.2.x had this wrong). FP8 peak ~500 TFLOPS dense. FA4 is beta on Blackwell; CUTLASS tile schedulers are B200-tuned and may underperform on GB10. SM count / register file / cache sizes not publicly documented — must be empirically discovered. (2) **Bandwidth-bound thesis §0.5.2.** GB10 is severely bandwidth-bound at ~30× lower memory BW than B200; this reframes the priority order: kernel categories that reduce memory traffic (fused epilogues) outrank categories that improve raw FLOPS. (3) **Priority order §0.6** ranks five kernel categories by expected throughput uplift on Qwen 3.5 27B FP8 + GB10 + thinking-heavy decode: FP8 GEMM > DeltaNet > Fused norm+residual+quant epilogues > GatedAttn+KV > Sampling. (4) **§3.1 L0a action space expanded** with five new knobs (`rmsnorm_kernel`, `kv_cache_block_size`, `kv_cache_dtype`, `sampling_kernel`, `epilogue_fusion_mode`). Grid grows from 180 to ~3,840 combos; smoke-phase pruning unchanged. Added `kernel_compatibility_matrix.yaml` for documenting incompatible combinations (e.g., cuBLAS + epilogue fusion). (5) **§5.2 L0c kernel targets** generalized from {`deltanet`, `gatedattn`} to six targets {`deltanet`, `gatedattn`, `rmsnorm`, `sampling`, `fused_epilogue`, `fp8_gemm_triton`}, each with its own per-target parity-check semantic in §6.2 and per-target parity fixture schema in §2.2.3–§2.2.7. **`fused_epilogue` is the v0.3.0 thesis target** (priority #3 per §0.6, projected 8–15% e2e on bandwidth-bound GB10). (6) **Phase DAG §7** generalizes P7/P8 to P7a–P7f, one round per kernel target, parallelizable across independent kernel targets. New AR items AR.49–AR.54 cover the new kernel targets + skip-coverage + priority-order audits. New halt codes for per-target parity failures (`rmsnorm_downstream_logit_diverges`, `sampling_kl_divergence_exceeds_threshold`, `fused_epilogue_checkpoint_fail`) and round-coverage invariants (`kernel_target_coverage_incomplete`, `gpu_budget_skip_violates_priority_order`). New §10.6/§10.7/§10.8 open questions track FA4-on-GB10 status, GB10 register pressure for fused-epilogue tile sizing, and the bandwidth-bound thesis verification via P3 roofline probes. The L0a/b/c contract, parity-fixture infrastructure, BOOTSTRAP/Candidate/Rescreen/FINALIZE shape, three-cap structure, paired-A/B baselines, composite-bundle identity (parent §5.9 unchanged), partition-completeness invariants, and all v0.2.x AR items carry forward unchanged. v0.3.0 is purely additive scope.
 - **v0.2.12-plan (2026-04-26)** — Eleventh reviewer P1/P2 pass. Three fixes: (P1.1) P10 phase-table precondition was "P9 lands in §8.4 row 1 (generalizes)" — but v0.2.10 reordered §8.4 with overfit/regression rows first, so "row 1" now points at the overfit reframe-scope outcome. Replaced with the explicit advance predicate `R == 0 AND I ≥ ⌈0.75 × S⌉` (zero regressing siblings AND ≥6 of 8 or ≥6 of 7 improving) so the precondition cannot drift if §8.4 is reordered again. (P1.2) §6.6.5 P10 build procedure restructured with the partition-completeness audit as **step 1** (run BEFORE the TSVs are read as authoritative). The audit reconstructs `derived_passes` and `derived_failures` from the per-(sibling, kernel) parity_check artifacts and demands byte-equality with the committed TSVs. Steps 2–7 are now downstream of the audit — an implementer following the procedure literally cannot skip the partition check. Halt path summary added: step 1 → `sibling_parity_partition_invalid`; step 7 → `composite_descriptor_includes_parity_failed_sibling`. (P2.1) Specified canonical row shapes for both TSVs to make byte-equality reconstruction deterministic. `sibling_parity_passes.tsv`: single column `family_id`, sorted. `sibling_parity_failures.tsv`: **one row per (sibling, failing_kernel) pair**, with `(family_id, kernel_target)` ascending sort. A dual-kernel failure produces two rows, not one with a multi-value field. The partition's failure set is the projection over `family_id`. Closes the loophole where dual-kernel failure shape ambiguity could make AR.48c4's byte-equality reconstruction non-reproducible.
 - **v0.2.11-plan (2026-04-26)** — Tenth reviewer P1/P2 pass. One fix: (P1.1) Closed the partition-completeness gap. AR.48d(a0) anchors `component_families` to `sibling_parity_passes.tsv`, but a faulty P9 could have omitted a sibling from both `passes.tsv` and `failures.tsv` (silently shrinking S) or omitted a failing sibling from `failures.tsv` (slipping past the ≥2 broad-fail halt) — and AR.48c4 was trusting the TSVs as primary rather than deriving them from the per-(sibling, kernel) artifacts. Added an explicit partition-completeness invariant with four sub-checks: **coverage** (passes ∪ failures == 8-sibling pool), **disjointness** (passes ∩ failures == ∅), **pass-side derivation correctness** (every sibling in passes has all per-kernel artifacts with `pass: true`), **fail-side derivation correctness** (every sibling in failures has at least one per-kernel artifact with `pass: false`). The verifier reconstructs the partition from the per-(sibling, kernel) parity_check artifacts and demands byte-equality with the TSVs. New halt code `sibling_parity_partition_invalid` for any sub-check failure. The TSVs are now derived data audited against ground-truth artifacts, not primary trusted data.
 - **v0.2.10-plan (2026-04-26)** — Ninth reviewer P1/P2 pass. Three fixes: (P1.1) §8.4 had uncovered `(I, R)` pairs — outcomes like S=7, I=6, R=1 didn't match any row (advance requires R==0; partial/weak rows require R==0; overfit row requires R≥3). Restructured table with explicit decision precedence top-to-bottom, with R-bands handled before I-bands: row 1 is `R ≥ ⌈0.375×S⌉` (overfit), row 2 is the new `0 < R < ⌈0.375×S⌉` (small-regression → reframe-scope, ships heavy-family-only with per-cluster v0.3 note), rows 3–5 are the `R == 0` partition by I-band. Added explicit coverage proof showing every (I, R) maps to exactly one row. (P1.2) AR.48d gains a load-bearing first step (a0): `set(composite.component_families) == {"responses-sdk-adapter-cutover"} ∪ set(sibling_parity_passes.family_id)`. P10 cannot silently drop a parity-passing sibling (shrinking the promoted workload after P9's decision) and cannot include a parity-failing one. New halt code `composite_descriptor_component_families_mismatch_p9`. The other AR.48d steps now sit on top of this anchor: every fixture-eligibility/content-hash/trace-assembly check assumes `component_families` reflects P9's eligible set, which (a0) proves. (P2.1) Halt-code text for `composite_descriptor_parity_fixture_eligibility_mismatch` extended to describe both outer (family-key mismatch) and nested (per-family mutated-kernel mismatch) cases. Surface message includes `level: outer` or `level: nested` so an operator can tell at-a-glance which level the violation is at.
@@ -1090,4 +1621,25 @@ Each L0c attempt builds the kernel into an isolated build directory to prevent c
 
 ---
 
-*End of v0.2 plan v0.2.13-plan. The gist for reviewers: kernel headroom is what's left after L1 was exhausted by v0.1 hardening. Karpathy's autoresearch loop shape is the right reference for L0c — short cycles, LLM-driven, git-as-ledger, never-stop-until-terminal — but the parity gate is what kernel work needs that training-loop work doesn't. Coding agents drive every phase, so the plan does not estimate calendar time; it defines what each phase produces, when it advances, and which named failure modes a human needs to look at.*
+*End of v0.3 plan v0.3.2-plan.*
+
+---
+
+## 12. References (v0.3.0)
+
+External sources informing §0.5 hardware grounding and §0.6 priority order:
+
+- **NVIDIA DGX Spark / GB10 product page** — https://www.nvidia.com/en-us/products/workstations/dgx-spark/ (128 GB LPDDR5x, 273 GB/s, 1 PFLOP FP4 sparse / 500 TFLOPS dense)
+- **NVIDIA Blackwell architecture overview** — https://www.nvidia.com/en-us/data-center/technologies/blackwell-architecture/ (5th-gen Tensor Cores, FP8/FP6/FP4 native, MXFP block scaling, `tcgen05` PTX)
+- **CUTLASS Blackwell examples** — https://github.com/NVIDIA/cutlass/tree/main/examples (sm_100 kernel examples 62–67 series)
+- **FlashAttention repo (FA4 status)** — https://github.com/Dao-AILab/flash-attention (FA4 beta on Blackwell as of late 2025)
+- **vLLM source tree** — https://github.com/vllm-project/vllm/tree/main/csrc and `/vllm/model_executor/layers/` (rms_norm kernels, paged_attention, quantization, sampler, fused_moe)
+- **FlashInfer** — https://github.com/flashinfer-ai/flashinfer (paged batch attention, sampling kernels)
+- **flash-linear-attention (DeltaNet kernels)** — https://github.com/sustcsonglin/flash-linear-attention
+- **Qwen3 / Qwen3-Next** — https://github.com/QwenLM/Qwen3 + HuggingFace `Qwen/Qwen3-Next-*` model cards (hybrid attention reference)
+- **@TheAhmadOsman kernel framing** (x.com / r/LocalLLaMA admin post, 2026-04-27) — enumerates kernel categories operators care about: MatMul, Attention, RMSNorm, KV cache, Quantized linear, Sampling, Fused.
+
+**Caveats explicitly flagged** (informed §10.6/§10.7/§10.8 open questions):
+- GB10 SM count, register file per SM, shared memory per SM, L1/L2 cache sizes are NOT in public NVIDIA docs as of late 2025.
+- GB10-specific FA4 perf table and CUTLASS tile-scheduler perf table not published.
+- vLLM PR numbers cited in research are best-effort; verify against current tracker before quoting in implementation handoffs. The gist for reviewers: kernel headroom is what's left after L1 was exhausted by v0.1 hardening. Karpathy's autoresearch loop shape is the right reference for L0c — short cycles, LLM-driven, git-as-ledger, never-stop-until-terminal — but the parity gate is what kernel work needs that training-loop work doesn't. Coding agents drive every phase, so the plan does not estimate calendar time; it defines what each phase produces, when it advances, and which named failure modes a human needs to look at.*
