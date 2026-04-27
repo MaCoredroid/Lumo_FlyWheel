@@ -5938,6 +5938,12 @@ class L0cKernelMutationRunner:
             if isinstance(fixture_payload, dict)
             else ""
         )
+        # Refuse the round when the parity fixture's reference_baseline kernel_selection
+        # disagrees with the L0b-winner base bundle's kernel_selection: the fixture
+        # captures logits from a specific runtime config, and any difference (e.g.
+        # attention_backend) makes parity overshoot dominated by config drift instead
+        # of kernel-mutation effects. Fail fast with a precise diff.
+        self._assert_fixture_matches_base(fixture_payload, base, fixture_path)
 
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         round_id = (
@@ -6558,6 +6564,36 @@ class L0cKernelMutationRunner:
             "candidate_uuid": candidate_uuid,
             "objective_mean": objective_mean,
         }
+
+    @staticmethod
+    def _assert_fixture_matches_base(
+        fixture_payload: Any,
+        base: TunedConfigBundle,
+        fixture_path: Path,
+    ) -> None:
+        if not isinstance(fixture_payload, dict):
+            raise RuntimeError(f"parity fixture is not a mapping: {fixture_path}")
+        generated_against = fixture_payload.get("generated_against") or {}
+        reference_baseline = generated_against.get("reference_baseline") or {}
+        if not isinstance(reference_baseline, dict) or not reference_baseline:
+            return  # legacy fixture without reference_baseline metadata; nothing to check
+        base_kernel_selection = dict(base.kernel_selection or {})
+        diffs: list[str] = []
+        for key, expected in reference_baseline.items():
+            actual = base_kernel_selection.get(key)
+            if str(actual) != str(expected):
+                diffs.append(f"  {key}: fixture={expected!r}  base={actual!r}")
+        if diffs:
+            raise RuntimeError(
+                "parity fixture/base bundle kernel_selection mismatch — the fixture's "
+                "reference logits were captured against a different runtime config, "
+                "so the parity gate would compare apples to oranges. Either pick a "
+                "base bundle whose kernel_selection matches the fixture, or regenerate "
+                "the fixture against this base.\n"
+                f"  fixture: {fixture_path}\n"
+                f"  base:    {base.bundle_id}\n"
+                "  diffs:\n" + "\n".join(diffs)
+            )
 
     # --- real apply-and-test ------------------------------------------------
 

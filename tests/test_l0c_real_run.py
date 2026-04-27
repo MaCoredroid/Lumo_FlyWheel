@@ -522,3 +522,143 @@ def test_real_run_records_intermittent_parity_terminal_condition(
     # on threshold ordering; both are valid blocked terminations driven by the same
     # parity-failure stream. Assert at least one of the two.
     assert result.terminal_condition in {"intermittent_parity_observed", "proposer_stuck"}
+
+
+def test_real_run_refuses_when_fixture_baseline_disagrees_with_base_bundle(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    base_bundle = _write_base_bundle(repo, workload_path)  # attention_backend=vllm-default
+    kernel_path = _make_kernel_source(tmp_path)
+
+    fixture_dir = repo / "benchmark_blueprints" / "families" / "test-family" / "parity_fixture"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    fixture_path = fixture_dir / "deltanet_v1_skewed.yaml"
+    fixture_path.write_text(
+        yaml.safe_dump(
+            {
+                "fixture_id": "test-family-deltanet-v1-skewed",
+                "probe_count": 2,
+                "tolerances": {
+                    "rtol_logit": 0.001,
+                    "atol_logit": 0.001,
+                    "rtol_state": 0.005,
+                    "atol_state": 0.005,
+                },
+                "state_checkpoints_at_token": [1, 1024],
+                "parity_check_method": "logit_plus_state_compare",
+                "generated_against": {
+                    "reference_baseline": {
+                        "attention_backend": "flash-attn-4",
+                        "deltanet_kernel": "triton-chunked-delta-v2",
+                    },
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    with pytest.raises(RuntimeError) as excinfo:
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="deltanet",
+            kernel_source_path=str(kernel_path),
+            parity_fixture=fixture_path,
+            base_measurements=1,
+            accepted_iteration_cap=1,
+            total_attempt_cap=1,
+            round_timeout_hours=1.0,
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            runtime=_runtime_block(),
+        )
+    msg = str(excinfo.value)
+    assert "kernel_selection mismatch" in msg
+    assert "attention_backend" in msg
+    assert "flash-attn-4" in msg
+    assert "vllm-default" in msg
+
+
+def test_real_run_accepts_when_fixture_baseline_matches_base_bundle(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    base_bundle = _write_base_bundle(repo, workload_path)  # attention_backend=vllm-default
+    kernel_path = _make_kernel_source(tmp_path)
+
+    fixture_dir = repo / "benchmark_blueprints" / "families" / "test-family" / "parity_fixture"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    fixture_path = fixture_dir / "deltanet_v1_aligned.yaml"
+    fixture_path.write_text(
+        yaml.safe_dump(
+            {
+                "fixture_id": "test-family-deltanet-v1-aligned",
+                "probe_count": 2,
+                "tolerances": {"rtol_logit": 0.001, "atol_logit": 0.001, "rtol_state": 0.005, "atol_state": 0.005},
+                "state_checkpoints_at_token": [1, 1024],
+                "parity_check_method": "logit_plus_state_compare",
+                "generated_against": {
+                    "reference_baseline": {
+                        "attention_backend": "vllm-default",
+                        "deltanet_kernel": "triton-chunked-delta-v2",
+                        "fp8_gemm_kernel": "cublas",
+                    },
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    _stub_baseline(monkeypatch, rows=1, mean_obj=1.0)
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_spawn_l0c_agent_iteration",
+        _make_agent_writer(patch_text_for=lambda i: _patch_for(i)),
+        raising=True,
+    )
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "apply_and_test",
+        _stub_apply_and_test(
+            outcomes_for=lambda iteration: {
+                "outcome": "parity_passed",
+                "objective_mean": 1.20,
+                "candidate_uuid": f"cand-{iteration}",
+            }
+        ),
+        raising=True,
+    )
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path=str(kernel_path),
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=1,
+        total_attempt_cap=1,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        runtime=_runtime_block(),
+    )
+    assert result.outcome == "ROUND_PASSED"
