@@ -6614,8 +6614,13 @@ class L0cKernelMutationRunner:
             staging_dir.mkdir(parents=True, exist_ok=True)
             # vLLM's debug-export hooks read these from os.environ; the model_server
             # container-launch path forwards them to the running container.
+            #   LUMO_P2B_DEBUG_PROBE_REQUEST_IDS is required even when EXPORT=1 — without
+            #   at least one fnmatch pattern P2BDebugExporter.from_env() returns disabled.
+            #   "*" matches every request during the parity-probe window (the only requests
+            #   the container sees between restart and probe completion).
             os.environ["LUMO_P2B_VLLM_DEBUG_EXPORT"] = "1"
             os.environ["LUMO_P2B_DEBUG_EXPORT_DIR"] = str(staging_dir)
+            os.environ["LUMO_P2B_DEBUG_PROBE_REQUEST_IDS"] = "*"
             os.environ.setdefault("LUMO_P2B_DEBUG_STATE_TOKENS", "1,1024")
             os.environ.setdefault("LUMO_P2B_DEBUG_STRICT", "1")
 
