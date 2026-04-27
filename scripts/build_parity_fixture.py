@@ -567,6 +567,7 @@ def _validate_written_fixture(
     kernel_target: str,
     probe_count: int,
     weight_version_id: str,
+    reference_baseline: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return validate_fixture(
         family_fixture_dir(repo_root, family_id) / f"{kernel_target}_v1.yaml",
@@ -575,6 +576,7 @@ def _validate_written_fixture(
         expected_kernel_target=kernel_target,
         expected_probe_count=probe_count,
         expected_weight_version_id=weight_version_id,
+        expected_reference_baseline=reference_baseline,
     ).as_dict()
 
 
@@ -587,6 +589,7 @@ def _write_fixture_yaml_pair(
     vllm_version: str,
     kernel_targets: tuple[str, ...],
     generated_at: str | None = None,
+    reference_baseline: dict[str, Any] | None = None,
 ) -> list[str]:
     written: list[str] = []
     for kernel_target in kernel_targets:
@@ -597,6 +600,7 @@ def _write_fixture_yaml_pair(
             weight_version_id=weight_version_id,
             vllm_version=vllm_version,
             generated_at=generated_at,
+            reference_baseline=reference_baseline,
         )
         path = fixture_dir / f"{kernel_target}_v1.yaml"
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -641,11 +645,41 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Write deterministic placeholder blobs for tests only; never use for production P2b fixtures.",
     )
+    parser.add_argument(
+        "--reference-baseline-bundle",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a tuned-config bundle YAML; the bundle's kernel_selection is "
+            "stamped into the new fixture's generated_against.reference_baseline "
+            "(and used for validation), overriding the parity_fixture.REFERENCE_BASELINE "
+            "constant. Use this when the L0b winner converged to a kernel_selection "
+            "different from the historical default."
+        ),
+    )
     args = parser.parse_args(argv)
+    reference_baseline_override: dict[str, Any] | None = None
+    if args.reference_baseline_bundle is not None:
+        bundle_payload = yaml.safe_load(args.reference_baseline_bundle.read_text(encoding="utf-8"))
+        if not isinstance(bundle_payload, dict) or "tuned_config_bundle" not in bundle_payload:
+            raise SystemExit(
+                f"--reference-baseline-bundle does not contain a tuned_config_bundle: "
+                f"{args.reference_baseline_bundle}"
+            )
+        reference_baseline_override = dict(bundle_payload["tuned_config_bundle"].get("kernel_selection") or {})
+        if not reference_baseline_override:
+            raise SystemExit(
+                f"--reference-baseline-bundle has empty kernel_selection: "
+                f"{args.reference_baseline_bundle}"
+            )
 
     repo_root = args.repo_root.resolve()
     if args.validate_p2b:
-        result = validate_p2b_fixture_set(repo_root, expected_weight_version_id=args.weight_version_id)
+        result = validate_p2b_fixture_set(
+            repo_root,
+            expected_weight_version_id=args.weight_version_id,
+            expected_reference_baseline=reference_baseline_override,
+        )
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["pass"] else 1
 
@@ -742,6 +776,7 @@ def main(argv: list[str] | None = None) -> int:
             weight_version_id=args.weight_version_id,
             vllm_version=str(capabilities.get("vllm_version", "unknown")),
             kernel_targets=kernel_targets,
+            reference_baseline=reference_baseline_override,
         )
     )
     result.update(
@@ -756,6 +791,7 @@ def main(argv: list[str] | None = None) -> int:
                     kernel_target=kernel_target,
                     probe_count=args.probe_count,
                     weight_version_id=args.weight_version_id,
+                    reference_baseline=reference_baseline_override,
                 )
                 for kernel_target in kernel_targets
             },

@@ -166,14 +166,16 @@ def fixture_payload(
     weight_version_id: str,
     vllm_version: str,
     generated_at: str | None = None,
+    reference_baseline: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    baseline = dict(reference_baseline) if reference_baseline is not None else dict(REFERENCE_BASELINE)
     payload: dict[str, Any] = {
         "fixture_id": f"{family_id}-{kernel_target}-v1",
         "generated_at": generated_at or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "generated_against": {
             "vllm_version": vllm_version,
             "weight_version_id": weight_version_id,
-            "reference_baseline": dict(REFERENCE_BASELINE),
+            "reference_baseline": baseline,
             "reference_reproducibility_runs": REFERENCE_REPRODUCIBILITY_RUNS,
         },
         "probe_count": probe_count,
@@ -455,6 +457,7 @@ def validate_fixture(
     expected_kernel_target: str,
     expected_probe_count: int,
     expected_weight_version_id: str | None = None,
+    expected_reference_baseline: dict[str, Any] | None = None,
 ) -> FixtureValidation:
     path = Path(fixture_path)
     root = Path(repo_root)
@@ -481,7 +484,8 @@ def validate_fixture(
     if not isinstance(generated_against, dict):
         errors.append("generated_against_missing")
     else:
-        if generated_against.get("reference_baseline") != REFERENCE_BASELINE:
+        baseline = expected_reference_baseline if expected_reference_baseline is not None else REFERENCE_BASELINE
+        if generated_against.get("reference_baseline") != baseline:
             errors.append("reference_baseline_mismatch")
         if generated_against.get("reference_reproducibility_runs") != REFERENCE_REPRODUCIBILITY_RUNS:
             errors.append("reference_reproducibility_runs_mismatch")
@@ -566,6 +570,7 @@ def validate_p2b_fixture_set(
     repo_root: str | Path,
     *,
     expected_weight_version_id: str,
+    expected_reference_baseline: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root)
     validations: dict[str, dict[str, Any]] = {}
@@ -580,6 +585,7 @@ def validate_p2b_fixture_set(
                 expected_kernel_target=kernel_target,
                 expected_probe_count=probe_count,
                 expected_weight_version_id=expected_weight_version_id,
+                expected_reference_baseline=expected_reference_baseline,
             )
             key = f"{family_id}/{kernel_target}"
             validations[key] = validation.as_dict()
