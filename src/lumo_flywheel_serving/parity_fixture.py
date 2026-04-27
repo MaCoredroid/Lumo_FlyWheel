@@ -393,6 +393,9 @@ def _tensor_payload_to_numpy(value: Any) -> Any:
     if hasattr(value, "cpu"):
         value = value.cpu()
     if hasattr(value, "numpy"):
+        # bf16/fp16/fp8 torch tensors don't implement .numpy() directly — upcast to float32 first.
+        if hasattr(value, "float"):
+            value = value.float()
         return value.numpy().astype(np.float32, copy=False)
     return np.asarray(value, dtype=np.float32)
 

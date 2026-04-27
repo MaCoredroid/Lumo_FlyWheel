@@ -493,6 +493,90 @@ def _archive_probe_exports(
     )
 
 
+def _load_archived_probe(*, archive_dir: Path, expected_state_tokens: tuple[int, ...], require_state: bool) -> DebugProbeArtifacts:
+    """Reconstruct a DebugProbeArtifacts from an archived probe directory.
+
+    The directory layout matches what _archive_probe_exports() writes:
+    <run>/probe_NNNNNN/{logits,state}_req_<rid>_tok_NNNNNN.pt + state_diag_req_*.json.
+    """
+    if not archive_dir.is_dir():
+        raise FileNotFoundError(f"archived probe directory missing: {archive_dir}")
+    by_request: dict[str, dict[str, list[Path]]] = {}
+    for path in sorted(archive_dir.glob("*.pt")):
+        match = DEBUG_EXPORT_RE.fullmatch(path.name)
+        if match is None:
+            continue
+        request_id = match.group("request_id")
+        by_request.setdefault(request_id, {"logits": [], "state": []})[match.group("kind")].append(path)
+    if not by_request:
+        raise RuntimeError(f"archived probe dir has no debug .pt exports: {archive_dir}")
+    if len(by_request) != 1:
+        raise RuntimeError(f"archived probe dir has multiple request_ids {sorted(by_request)}: {archive_dir}")
+    request_id, grouped = next(iter(by_request.items()))
+    logits = sorted(grouped["logits"])
+    states = sorted(grouped["state"])
+    if not logits:
+        raise RuntimeError(f"archived probe {archive_dir} has no logits exports")
+    if require_state:
+        state_tokens = {
+            int(load_debug_export_pt(path)["generated_token_index"])
+            for path in states
+        }
+        missing = [token for token in expected_state_tokens if token not in state_tokens]
+        if missing:
+            raise RuntimeError(
+                f"archived probe {archive_dir} request {request_id} missing DeltaNet state tokens {missing}"
+            )
+    probe_index = int(archive_dir.name.rsplit("_", 1)[-1])
+    return DebugProbeArtifacts(
+        probe_index=probe_index,
+        request_id=request_id,
+        logits_paths=tuple(logits),
+        state_paths=tuple(states),
+    )
+
+
+def _load_archived_runs(
+    *,
+    capture_root: Path,
+    probe_count: int,
+    expected_state_tokens: tuple[int, ...],
+    require_state: bool,
+    only_run_index: int | None = None,
+) -> list[list[DebugProbeArtifacts]]:
+    """Load 1+ run_NN directories from a previous --capture-only invocation.
+
+    capture_root is the per-family debug-export dir, e.g.
+      output/p2b_fixture_capture/responses-sdk-adapter-cutover/
+    """
+    if not capture_root.is_dir():
+        raise FileNotFoundError(f"capture root missing: {capture_root}")
+    run_dirs = sorted(p for p in capture_root.iterdir() if p.is_dir() and re.fullmatch(r"run_\d+", p.name))
+    if not run_dirs:
+        raise RuntimeError(f"no run_NN directories found under {capture_root}")
+    if only_run_index is not None:
+        run_dirs = [p for p in run_dirs if int(p.name.split("_")[1]) == only_run_index]
+        if not run_dirs:
+            raise RuntimeError(f"requested run index {only_run_index} not present under {capture_root}")
+    runs: list[list[DebugProbeArtifacts]] = []
+    for run_dir in run_dirs:
+        probe_dirs = sorted(p for p in run_dir.iterdir() if p.is_dir() and re.fullmatch(r"probe_\d{6}", p.name))
+        if len(probe_dirs) != probe_count:
+            raise RuntimeError(
+                f"{run_dir.name}: expected {probe_count} probe dirs, found {len(probe_dirs)}"
+            )
+        artifacts = [
+            _load_archived_probe(
+                archive_dir=probe_dir,
+                expected_state_tokens=expected_state_tokens,
+                require_state=require_state,
+            )
+            for probe_dir in probe_dirs
+        ]
+        runs.append(artifacts)
+    return runs
+
+
 def _capture_live_runs(
     *,
     endpoint: str,
@@ -657,6 +741,28 @@ def main(argv: list[str] | None = None) -> int:
             "different from the historical default."
         ),
     )
+    parser.add_argument(
+        "--from-existing-captures",
+        action="store_true",
+        help=(
+            "Skip live vLLM capture; instead load run_NN/probe_NNNNNN dirs already "
+            "written under --debug-export-dir/<family-id>/ by a prior --capture-only "
+            "run, then aggregate them into a fixture (npz + yaml). Use this to "
+            "salvage capture data after a non-fatal aggregation failure (e.g. the "
+            "bf16 .numpy() bug) without re-running probe capture."
+        ),
+    )
+    parser.add_argument(
+        "--use-run-index",
+        type=int,
+        default=None,
+        help=(
+            "When --from-existing-captures is set, build npz companions from this "
+            "specific run_NN. If omitted, all available runs are loaded and the "
+            "last one is used for npz; reproducibility is asserted across all "
+            "loaded runs when --reproducibility-runs matches the count."
+        ),
+    )
     args = parser.parse_args(argv)
     reference_baseline_override: dict[str, Any] | None = None
     if args.reference_baseline_bundle is not None:
@@ -705,32 +811,55 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
-    capabilities = fetch_endpoint_capabilities(args.endpoint, api_key=args.api_key, model=args.model)
-    if not capabilities.get("health_ok") or not capabilities.get("models_ok"):
-        print(json.dumps({"status": "BLOCKED_NEEDS_USER_HELP", "capabilities": capabilities}, indent=2, sort_keys=True))
-        return 2
-
     kernel_targets = KERNEL_TARGETS if args.kernel_target == "both" else (args.kernel_target,)
     require_state = "deltanet" in kernel_targets
     probes = deterministic_probe_rows(repo_root, args.family_id, args.probe_count)
     probes = _override_output_tokens(probes, args.override_output_tokens)
     debug_export_dir = args.debug_export_dir.resolve() / args.family_id
-    runs, responses = _capture_live_runs(
-        endpoint=args.endpoint,
-        api_key=args.api_key,
-        model=args.model,
-        probes=probes,
-        debug_export_dir=debug_export_dir,
-        run_count=args.reproducibility_runs,
-        request_timeout_s=args.request_timeout_s,
-        expected_state_tokens=(1, 1024),
-        require_state=require_state,
-    )
 
-    if args.reproducibility_runs == REFERENCE_REPRODUCIBILITY_RUNS:
+    if args.from_existing_captures:
+        runs = _load_archived_runs(
+            capture_root=debug_export_dir,
+            probe_count=args.probe_count,
+            expected_state_tokens=(1, 1024),
+            require_state=require_state,
+            only_run_index=args.use_run_index,
+        )
+        responses = [
+            {
+                "run_index": run_index + 1,
+                "probe_index": artifact.probe_index,
+                "request_id": artifact.request_id,
+                "logits_files": [str(path) for path in artifact.logits_paths],
+                "state_files": [str(path) for path in artifact.state_paths],
+                "salvaged_from_existing_capture": True,
+            }
+            for run_index, run in enumerate(runs)
+            for artifact in run
+        ]
+        capabilities = {"vllm_version": args.converted_vllm_version}
+    else:
+        capabilities = fetch_endpoint_capabilities(args.endpoint, api_key=args.api_key, model=args.model)
+        if not capabilities.get("health_ok") or not capabilities.get("models_ok"):
+            print(json.dumps({"status": "BLOCKED_NEEDS_USER_HELP", "capabilities": capabilities}, indent=2, sort_keys=True))
+            return 2
+        runs, responses = _capture_live_runs(
+            endpoint=args.endpoint,
+            api_key=args.api_key,
+            model=args.model,
+            probes=probes,
+            debug_export_dir=debug_export_dir,
+            run_count=args.reproducibility_runs,
+            request_timeout_s=args.request_timeout_s,
+            expected_state_tokens=(1, 1024),
+            require_state=require_state,
+        )
+
+    effective_run_count = len(runs)
+    if effective_run_count == REFERENCE_REPRODUCIBILITY_RUNS:
         for kernel_target in kernel_targets:
             assert_debug_capture_runs_reproduce(runs=runs, kernel_target=kernel_target)
-    elif not args.capture_only:
+    elif not args.capture_only and not args.from_existing_captures:
         raise RuntimeError(
             f"production fixture capture requires --reproducibility-runs={REFERENCE_REPRODUCIBILITY_RUNS}"
         )
