@@ -1036,7 +1036,7 @@ def cmd_auto_research_tune_kernel_autotune(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Lumo FlyWheel vLLM serving tooling")
     parser.set_defaults(func=None)
-    parser.add_argument("--registry", default="model_registry.yaml")
+    parser.add_argument("--registry", default=str(REPO_ROOT / "model_registry.yaml"))
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--image", default=DEFAULT_VLLM_IMAGE)
     parser.add_argument("--dockerfile", default=str(DEFAULT_VLLM_DOCKERFILE))
