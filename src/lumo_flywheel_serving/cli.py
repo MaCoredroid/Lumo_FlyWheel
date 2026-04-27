@@ -949,6 +949,7 @@ def cmd_auto_research_mutate_kernel(args: argparse.Namespace) -> int:
             "triton_cache_root": args.triton_cache_root,
             "warmup_s": args.warmup_s,
             "window_s": args.window_s,
+            "kernel_container_path": args.kernel_container_path,
         }
         if args.image is not None:
             runtime["image"] = args.image
@@ -1247,7 +1248,19 @@ def build_parser() -> argparse.ArgumentParser:
     auto_mutate_kernel.add_argument("--workload-file")
     auto_mutate_kernel.add_argument("--base-bundle")
     auto_mutate_kernel.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
-    auto_mutate_kernel.add_argument("--kernel-source-path")
+    auto_mutate_kernel.add_argument(
+        "--kernel-source-path",
+        help=(
+            "Host path that holds the editable kernel bytes. The runner bind-mounts "
+            "this file into the vLLM container at --kernel-container-path so /usr/bin/patch "
+            "applied here is visible to vLLM after restart."
+        ),
+    )
+    auto_mutate_kernel.add_argument(
+        "--kernel-container-path",
+        default="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/chunk_delta_h.py",
+        help="In-container target of the kernel bind-mount.",
+    )
     auto_mutate_kernel.add_argument("--parity-fixture")
     auto_mutate_kernel.add_argument("--base-measurements", type=int, default=5)
     auto_mutate_kernel.add_argument("--accepted-iteration-cap", type=int, default=12)

@@ -82,6 +82,7 @@ class ModelServer:
         use_sleep_mode: bool = False,
         proxy_port: int = DEFAULT_INFERENCE_PROXY_PORT,
         state_root: str | Path = DEFAULT_STATE_ROOT,
+        extra_volume_mounts: list[str] | None = None,
     ) -> None:
         self.registry_path = Path(registry_path).resolve()
         self._load_local_runtime_env()
@@ -95,6 +96,9 @@ class ModelServer:
         self.proxy_port = proxy_port
         self.state_store = RuntimeStateStore(Path(state_root).resolve())
         self.current_model = self.state_store.load().current_model_id
+        # Each entry is one ["-v", "host:container"] pair already split as a flat
+        # list of strings — caller controls :ro and other docker mount flags.
+        self.extra_volume_mounts: list[str] = list(extra_volume_mounts or [])
 
     def ensure_runtime_scaffolding(self) -> None:
         for path in (Path("/models"), self.logs_root, self.triton_cache_root):
@@ -720,6 +724,7 @@ class ModelServer:
             f"{self.triton_cache_root}:{self.triton_cache_root}",
             "-v",
             f"{QWEN_CHAT_TEMPLATE_HOST_PATH}:{QWEN_CHAT_TEMPLATE_CONTAINER_PATH}:ro",
+            *self.extra_volume_mounts,
         ]
 
         return [

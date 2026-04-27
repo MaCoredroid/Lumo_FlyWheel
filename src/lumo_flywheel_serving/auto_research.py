@@ -6737,18 +6737,31 @@ class L0cKernelMutationRunner:
         state_root = (
             Path(runtime["state_root"]) if runtime.get("state_root") else None
         )
+        host_kernel_path = spec.get("kernel_source_path")
+        container_kernel_path = runtime.get("kernel_container_path")
+        extra_mounts: list[str] = []
+        if host_kernel_path and container_kernel_path:
+            extra_mounts.extend(
+                ["-v", f"{Path(host_kernel_path).resolve()}:{container_kernel_path}"]
+            )
+        for entry in runtime.get("extra_volume_mounts") or []:
+            extra_mounts.extend(["-v", str(entry)])
 
-        server = ModelServer(
-            registry_path=self.registry_path,
-            tuned_config_root=self.tuned_config_root,
-            port=port,
-            proxy_port=proxy_port,
-            image=image,
-            container_name=container_name,
-            logs_root=logs_root,
-            triton_cache_root=triton_cache_root,
-            state_root=state_root,
-        )
+        kwargs: dict[str, Any] = {
+            "registry_path": self.registry_path,
+            "port": port,
+            "proxy_port": proxy_port,
+            "container_name": container_name,
+            "logs_root": logs_root,
+            "triton_cache_root": triton_cache_root,
+            "extra_volume_mounts": extra_mounts,
+        }
+        if image is not None:
+            kwargs["image"] = image
+        if state_root is not None:
+            kwargs["state_root"] = state_root
+
+        server = ModelServer(**kwargs)
         server.stop(missing_ok=True)
         server.start(model_id, enable_request_logging=False)
 

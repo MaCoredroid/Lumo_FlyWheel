@@ -424,6 +424,49 @@ def test_real_apply_and_test_raises_when_kernel_base_snapshot_missing(
         )
 
 
+def test_restart_serving_runtime_threads_kernel_bindmount_through_model_server(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The runner constructs extra_volume_mounts so the host kernel file is
+    bind-mounted into the vLLM container. Without this the agent's patches on
+    host disk would be invisible to the running vLLM process after restart."""
+    runner, round_dir, kernel_path, _iteration_dir, _round_id = _seed_round(
+        tmp_path, iteration="010", patch_text="placeholder"
+    )
+    spec_path = round_dir / "round_spec.yaml"
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    spec["runtime"]["kernel_container_path"] = (
+        "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/chunk_delta_h.py"
+    )
+    spec_path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+
+    captured: dict[str, Any] = {}
+
+    class _StubServer:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def stop(self, missing_ok: bool = False) -> None:  # noqa: ARG002
+            captured["stop_called"] = True
+
+        def start(self, model_id: str, enable_request_logging: bool = False) -> None:  # noqa: ARG002
+            captured["start_model_id"] = model_id
+
+    import lumo_flywheel_serving.model_server as model_server_module
+
+    monkeypatch.setattr(model_server_module, "ModelServer", _StubServer, raising=True)
+    runner._restart_serving_runtime(spec=spec)
+
+    mounts = captured.get("extra_volume_mounts") or []
+    assert "-v" in mounts
+    bindmount_pair_index = mounts.index("-v")
+    pair = mounts[bindmount_pair_index + 1]
+    assert pair.endswith(
+        ":/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/chunk_delta_h.py"
+    )
+    assert pair.startswith(str(kernel_path))
+
+
 def test_real_apply_and_test_restores_base_bytes_even_on_exception(
     tmp_path: Path, monkeypatch
 ) -> None:
