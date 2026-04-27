@@ -662,3 +662,94 @@ def test_real_run_accepts_when_fixture_baseline_matches_base_bundle(
         runtime=_runtime_block(),
     )
     assert result.outcome == "ROUND_PASSED"
+
+
+def test_assert_actually_resolved_no_drift_halts_when_live_runtime_drifts(
+    monkeypatch,
+) -> None:
+    """HLD v0.3.3 §5.2: round must refuse if live runtime resolved aliases differently."""
+    fixture_payload = {
+        "generated_against": {
+            "actually_resolved_kernel_selection": {
+                "attention_backend": "vllm-default",
+                "kv_cache_dtype": "fp8_e5m2",
+                "deltanet_kernel": "triton-chunked-delta-v2",
+                "vllm_version": "0.19.0",
+                "weight_version_id": "abc",
+            }
+        }
+    }
+    monkeypatch.setattr(
+        auto_research,
+        "fetch_actually_resolved_kernel_selection",
+        lambda endpoint, *, api_key, **_: {
+            "attention_backend": "vllm-default",
+            "kv_cache_dtype": "bf16",  # drifted
+            "deltanet_kernel": "triton-chunked-delta-v2",
+            "vllm_version": "0.19.0",
+            "weight_version_id": "abc",
+            "fp8_gemm_kernel": "unknown",
+            "kv_cache_block_size": "unknown",
+            "torch_compile_mode": "unknown",
+            "cuda_graph_capture": "unknown",
+        },
+        raising=True,
+    )
+    with pytest.raises(RuntimeError) as excinfo:
+        auto_research.L0cKernelMutationRunner._assert_actually_resolved_no_drift(
+            fixture_payload,
+            endpoint="http://127.0.0.1:8000/v1",
+            api_key="EMPTY",
+            fixture_path=Path("/tmp/test_fixture.yaml"),
+        )
+    msg = str(excinfo.value)
+    assert "actually_resolved_kernel_selection_drift" in msg
+    assert "kv_cache_dtype" in msg
+    assert "fp8_e5m2" in msg
+    assert "bf16" in msg
+
+
+def test_assert_actually_resolved_no_drift_skips_unknown_pinned_keys(
+    monkeypatch,
+) -> None:
+    """Fixture's "unknown" sentinel means no claim was made — must not halt on it."""
+    fixture_payload = {
+        "generated_against": {
+            "actually_resolved_kernel_selection": {
+                "attention_backend": "vllm-default",
+                "kv_cache_dtype": "unknown",  # no claim — fall through
+            }
+        }
+    }
+    monkeypatch.setattr(
+        auto_research,
+        "fetch_actually_resolved_kernel_selection",
+        lambda endpoint, *, api_key, **_: {
+            "attention_backend": "vllm-default",
+            "kv_cache_dtype": "bf16",
+            "fp8_gemm_kernel": "unknown",
+            "kv_cache_block_size": "unknown",
+            "torch_compile_mode": "unknown",
+            "cuda_graph_capture": "unknown",
+            "vllm_version": "unknown",
+            "weight_version_id": "unknown",
+            "deltanet_kernel": "unknown",
+        },
+        raising=True,
+    )
+    auto_research.L0cKernelMutationRunner._assert_actually_resolved_no_drift(
+        fixture_payload,
+        endpoint="http://127.0.0.1:8000/v1",
+        api_key="EMPTY",
+        fixture_path=Path("/tmp/test_fixture.yaml"),
+    )
+
+
+def test_assert_actually_resolved_no_drift_legacy_fixture_without_block_passes() -> None:
+    """Pre-v0.3.3 fixtures have no actually_resolved_kernel_selection block; skip silently."""
+    auto_research.L0cKernelMutationRunner._assert_actually_resolved_no_drift(
+        {"generated_against": {"reference_baseline": {"attention_backend": "vllm-default"}}},
+        endpoint="http://127.0.0.1:8000/v1",
+        api_key="EMPTY",
+        fixture_path=Path("/tmp/test_fixture.yaml"),
+    )

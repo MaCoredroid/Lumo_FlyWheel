@@ -23,7 +23,11 @@ import yaml
 
 from .kernel_activation import KERNEL_SELECTION_RUNTIME_UNSUPPORTED, resolve_kernel_runtime_activation
 from .measurement_harness import RealMeasurementHarness, SLO, WorkloadSpec
-from .parity_fixture import fixture_content_hash
+from .parity_fixture import (
+    ACTUALLY_RESOLVED_KEYS,
+    fetch_actually_resolved_kernel_selection,
+    fixture_content_hash,
+)
 from .parity_probe import ParityProbeResult, run_parity_probe
 from .registry import ModelConfig, load_registry
 from .tuned_config import TunedConfigBundle, default_weight_version_id, make_tuned_config_bundle, persist_tuned_config_bundle
@@ -6566,6 +6570,58 @@ class L0cKernelMutationRunner:
         }
 
     @staticmethod
+    def _assert_actually_resolved_no_drift(
+        fixture_payload: Any,
+        *,
+        endpoint: str,
+        api_key: str,
+        fixture_path: Path,
+    ) -> None:
+        """Compare fixture's pinned actually_resolved_kernel_selection vs the live runtime.
+
+        Implements HLD v0.3.3 §5.2 / §9 halt code `actually_resolved_kernel_selection_drift`:
+        if the running vLLM resolved its symbolic aliases (e.g. vllm-default attention,
+        compile mode, KV dtype) to different concrete values than the fixture pinned at
+        capture time, the parity gate would compare logits across configs and any L0c
+        round bootstrapped against this base would chase ghost divergences.
+
+        Keys that the fixture pinned to "unknown" are skipped (no claim was made).
+        Keys absent from the fixture are skipped too (legacy fixtures pre-v0.3.3).
+        """
+        if not isinstance(fixture_payload, dict):
+            return
+        generated_against = fixture_payload.get("generated_against") or {}
+        pinned = generated_against.get("actually_resolved_kernel_selection") or {}
+        if not isinstance(pinned, dict) or not pinned:
+            return
+        live = fetch_actually_resolved_kernel_selection(endpoint, api_key=api_key)
+        diffs: list[str] = []
+        for key in ACTUALLY_RESOLVED_KEYS:
+            expected = pinned.get(key)
+            if expected is None or str(expected) == "unknown":
+                continue
+            actual = live.get(key, "unknown")
+            if str(actual) == "unknown":
+                # Live runtime didn't surface this key; we can't claim drift either way.
+                # Surface as a soft diff so it's visible without halting.
+                continue
+            if str(actual) != str(expected):
+                diffs.append(f"  {key}: fixture={expected!r}  live={actual!r}")
+        if diffs:
+            raise RuntimeError(
+                "HALT_REASON: actually_resolved_kernel_selection_drift\n"
+                "The live vLLM stack resolved its kernel-selection aliases (e.g. "
+                "vllm-default routing, compile mode, KV dtype) to values that differ "
+                "from what the parity fixture pinned at capture time. Any L0c parity "
+                "comparison would conflate config drift with kernel-mutation effects. "
+                "Either restore the runtime to the pinned config, or re-capture the "
+                "fixture against the new resolution.\n"
+                f"  fixture: {fixture_path}\n"
+                f"  endpoint: {endpoint}\n"
+                "  diffs:\n" + "\n".join(diffs)
+            )
+
+    @staticmethod
     def _assert_fixture_matches_base(
         fixture_payload: Any,
         base: TunedConfigBundle,
@@ -6987,6 +7043,20 @@ class L0cKernelMutationRunner:
         kernel_source: Path,
         spec: dict[str, Any],
     ) -> L0cKernelMutationResult:
+        # 0. Drift bootstrap: refuse the round if the live vLLM has resolved its
+        # kernel-selection aliases to different concrete values than the fixture
+        # pinned at capture time (HLD v0.3.3 §5.2 / halt: actually_resolved_kernel_selection_drift).
+        runtime = spec.get("runtime") or {}
+        runtime_port = int(runtime.get("port", 8000))
+        runtime_endpoint = runtime.get("endpoint") or f"http://127.0.0.1:{runtime_port}/v1"
+        runtime_api_key = runtime.get("api_key", "EMPTY")
+        self._assert_actually_resolved_no_drift(
+            fixture_payload,
+            endpoint=runtime_endpoint,
+            api_key=runtime_api_key,
+            fixture_path=fixture_path,
+        )
+
         # 1. Paired-A/B baseline measurements (l0b_baseline_remeasured) BEFORE any mutation.
         baseline_uuid = str(uuid4())
         baseline_dir = round_dir / "baselines"
