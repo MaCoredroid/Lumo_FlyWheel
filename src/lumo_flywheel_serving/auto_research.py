@@ -6000,6 +6000,14 @@ class L0cKernelMutationRunner:
             (base_bytes_dir / kernel_source.name).write_bytes(kernel_source.read_bytes())
 
             spec["runtime"] = dict(runtime)
+            # Thread the L0b-winner base-bundle config into runtime so paired baseline
+            # and candidate measurements rebuild the same vLLM activation: empty
+            # vllm_config/kernel_selection here would produce empty staging bundles
+            # and load_tuned_config would reject them.
+            spec["runtime"].setdefault("vllm_config", dict(base.vllm_config or {}))
+            spec["runtime"].setdefault("kernel_selection", dict(base.kernel_selection or {}))
+            spec["runtime"].setdefault("request_shaping", dict(base.request_shaping or {}))
+            spec["runtime"].setdefault("weight_version_id", weight_version_id)
             spec["agent_runtime"] = agent_runtime
             if claude_model is not None:
                 spec["claude_model"] = claude_model
@@ -6798,10 +6806,12 @@ class L0cKernelMutationRunner:
         debug_export_dir: Path,
     ) -> ParityProbeResult:
         runtime = spec.get("runtime") or {}
-        endpoint = runtime.get("endpoint")
-        if not endpoint:
-            port = int(runtime.get("port", 8000))
-            endpoint = f"http://127.0.0.1:{port}/v1"
+        # The parity probe is a low-level diagnostic that POSTs to /v1/completions.
+        # The lumo inference proxy (proxy_port) only whitelists /v1/responses and
+        # /v1/chat/completions, so probing the proxy returns 403 "endpoint_unreachable"
+        # before the kernel runs. Always bypass the proxy and hit the engine port.
+        port = int(runtime.get("port", 8000))
+        endpoint = f"http://127.0.0.1:{port}/v1"
         model_id = runtime.get("model_id") or spec.get("model_id") or ""
         api_key = runtime.get("api_key", "EMPTY")
         request_timeout = float(runtime.get("request_timeout_s", 1800.0))
@@ -6886,11 +6896,17 @@ class L0cKernelMutationRunner:
         objective_total = 0.0
         for index in range(1, count + 1):
             measurement = harness.measure(
-                candidate_vllm_config=runtime.get("vllm_config", {}),
+                candidate_vllm_config=dict(runtime.get("vllm_config") or {}),
                 warmup_s=int(runtime.get("warmup_s", 5)),
                 window_s=int(runtime.get("window_s", 30)),
+                request_shaping=dict(runtime.get("request_shaping") or {}),
+                kernel_selection=dict(runtime.get("kernel_selection") or {}),
             )
-            objective_value = float(measurement.get("objective_value", 0.0))
+            objective_value = float(
+                measurement.get("objective_value")
+                if measurement.get("objective_value") is not None
+                else measurement.get("eval_throughput", 0.0)
+            )
             objective_total += objective_value
             trace_ref = f"candidates/{iteration}/measurement_{index:02d}.json"
             (iteration_dir / f"measurement_{index:02d}.json").write_text(
@@ -7256,11 +7272,20 @@ class L0cKernelMutationRunner:
         rows: list[dict[str, Any]] = []
         for index in range(1, count + 1):
             measurement = harness.measure(
-                candidate_vllm_config=runtime.get("vllm_config", {}),
+                candidate_vllm_config=dict(runtime.get("vllm_config") or {}),
                 warmup_s=int(runtime.get("warmup_s", 5)),
                 window_s=int(runtime.get("window_s", 30)),
+                request_shaping=dict(runtime.get("request_shaping") or {}),
+                kernel_selection=dict(runtime.get("kernel_selection") or {}),
             )
-            objective_value = float(measurement.get("objective_value", 0.0))
+            # RealMeasurementHarness.measure() returns eval_throughput (req/s) but no
+            # objective_value key — match the L0a/L0b convention of treating
+            # eval_throughput as the L0c objective.
+            objective_value = float(
+                measurement.get("objective_value")
+                if measurement.get("objective_value") is not None
+                else measurement.get("eval_throughput", 0.0)
+            )
             (baseline_dir / f"measurement_{index:02d}.json").write_text(
                 json.dumps(measurement, indent=2, sort_keys=True),
                 encoding="utf-8",
