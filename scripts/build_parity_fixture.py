@@ -22,6 +22,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from lumo_flywheel_serving.parity_fixture import (  # noqa: E402
+    ACTUALLY_RESOLVED_KEYS,
     DEFAULT_WEIGHT_VERSION_ID,
     KERNEL_TARGETS,
     LOGITS_DEBUG_KIND,
@@ -33,6 +34,7 @@ from lumo_flywheel_serving.parity_fixture import (  # noqa: E402
     assert_debug_capture_runs_reproduce,
     deterministic_probe_rows,
     family_fixture_dir,
+    fetch_actually_resolved_kernel_selection,
     fetch_endpoint_capabilities,
     fixture_payload,
     load_debug_export_pt,
@@ -674,6 +676,7 @@ def _write_fixture_yaml_pair(
     kernel_targets: tuple[str, ...],
     generated_at: str | None = None,
     reference_baseline: dict[str, Any] | None = None,
+    actually_resolved_kernel_selection: dict[str, Any] | None = None,
 ) -> list[str]:
     written: list[str] = []
     for kernel_target in kernel_targets:
@@ -685,6 +688,7 @@ def _write_fixture_yaml_pair(
             vllm_version=vllm_version,
             generated_at=generated_at,
             reference_baseline=reference_baseline,
+            actually_resolved_kernel_selection=actually_resolved_kernel_selection,
         )
         path = fixture_dir / f"{kernel_target}_v1.yaml"
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -739,6 +743,20 @@ def main(argv: list[str] | None = None) -> int:
             "(and used for validation), overriding the parity_fixture.REFERENCE_BASELINE "
             "constant. Use this when the L0b winner converged to a kernel_selection "
             "different from the historical default."
+        ),
+    )
+    parser.add_argument(
+        "--actually-resolved-yaml",
+        type=Path,
+        default=None,
+        help=(
+            "Optional YAML file containing the actually_resolved_kernel_selection "
+            "block to stamp into the fixture's generated_against. Required for "
+            "salvage from existing captures (vLLM is no longer running to query); "
+            "for live capture, values from this file override anything auto-derived "
+            "from /server_info + /version. Per HLD v0.3.3 §5.2 this pins symbolic "
+            "aliases like vllm-default to concrete values that don't drift across "
+            "vLLM versions."
         ),
     )
     parser.add_argument(
@@ -817,6 +835,15 @@ def main(argv: list[str] | None = None) -> int:
     probes = _override_output_tokens(probes, args.override_output_tokens)
     debug_export_dir = args.debug_export_dir.resolve() / args.family_id
 
+    actually_resolved_override: dict[str, Any] | None = None
+    if args.actually_resolved_yaml is not None:
+        loaded = yaml.safe_load(args.actually_resolved_yaml.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict) or not loaded:
+            raise SystemExit(
+                f"--actually-resolved-yaml is empty or not a mapping: {args.actually_resolved_yaml}"
+            )
+        actually_resolved_override = dict(loaded)
+
     if args.from_existing_captures:
         runs = _load_archived_runs(
             capture_root=debug_export_dir,
@@ -838,6 +865,7 @@ def main(argv: list[str] | None = None) -> int:
             for artifact in run
         ]
         capabilities = {"vllm_version": args.converted_vllm_version}
+        actually_resolved = actually_resolved_override
     else:
         capabilities = fetch_endpoint_capabilities(args.endpoint, api_key=args.api_key, model=args.model)
         if not capabilities.get("health_ok") or not capabilities.get("models_ok"):
@@ -854,6 +882,17 @@ def main(argv: list[str] | None = None) -> int:
             expected_state_tokens=(1, 1024),
             require_state=require_state,
         )
+        # Auto-derive actually_resolved_kernel_selection from the live vLLM stack
+        # (HLD v0.3.3 §5.2). Operator-supplied --actually-resolved-yaml overrides
+        # any auto-derived field.
+        actually_resolved = fetch_actually_resolved_kernel_selection(
+            args.endpoint,
+            api_key=args.api_key,
+            base_kernel_selection=reference_baseline_override,
+        )
+        actually_resolved["weight_version_id"] = args.weight_version_id
+        if actually_resolved_override is not None:
+            actually_resolved.update(actually_resolved_override)
 
     effective_run_count = len(runs)
     if effective_run_count == REFERENCE_REPRODUCIBILITY_RUNS:
@@ -906,6 +945,7 @@ def main(argv: list[str] | None = None) -> int:
             vllm_version=str(capabilities.get("vllm_version", "unknown")),
             kernel_targets=kernel_targets,
             reference_baseline=reference_baseline_override,
+            actually_resolved_kernel_selection=actually_resolved,
         )
     )
     result.update(

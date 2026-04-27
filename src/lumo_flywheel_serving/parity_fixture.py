@@ -167,17 +167,21 @@ def fixture_payload(
     vllm_version: str,
     generated_at: str | None = None,
     reference_baseline: dict[str, Any] | None = None,
+    actually_resolved_kernel_selection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     baseline = dict(reference_baseline) if reference_baseline is not None else dict(REFERENCE_BASELINE)
+    generated_against: dict[str, Any] = {
+        "vllm_version": vllm_version,
+        "weight_version_id": weight_version_id,
+        "reference_baseline": baseline,
+        "reference_reproducibility_runs": REFERENCE_REPRODUCIBILITY_RUNS,
+    }
+    if actually_resolved_kernel_selection is not None:
+        generated_against["actually_resolved_kernel_selection"] = dict(actually_resolved_kernel_selection)
     payload: dict[str, Any] = {
         "fixture_id": f"{family_id}-{kernel_target}-v1",
         "generated_at": generated_at or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "generated_against": {
-            "vllm_version": vllm_version,
-            "weight_version_id": weight_version_id,
-            "reference_baseline": baseline,
-            "reference_reproducibility_runs": REFERENCE_REPRODUCIBILITY_RUNS,
-        },
+        "generated_against": generated_against,
         "probe_count": probe_count,
         "probe_token_lengths": probe_token_lengths(kernel_target),
         "probe_input_ref": "probes_input.jsonl",
@@ -594,6 +598,87 @@ def validate_p2b_fixture_set(
             validations[key] = validation.as_dict()
             all_errors.extend(f"{key}:{error}" for error in validation.errors)
     return {"pass": not all_errors, "fixtures": validations, "errors": all_errors}
+
+
+ACTUALLY_RESOLVED_KEYS = (
+    "attention_backend",
+    "deltanet_kernel",
+    "fp8_gemm_kernel",
+    "kv_cache_dtype",
+    "kv_cache_block_size",
+    "torch_compile_mode",
+    "cuda_graph_capture",
+    "vllm_version",
+    "weight_version_id",
+)
+
+
+def fetch_actually_resolved_kernel_selection(
+    endpoint: str,
+    *,
+    api_key: str,
+    timeout: float = 30.0,
+    base_kernel_selection: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Query /server_info + /version to capture vLLM's resolved kernel selection.
+
+    Per HLD v0.3.3 §5.2: vllm-default routing changes across versions/env vars/Blackwell-
+    specific selection logic; the symbolic alias is NOT stable identity. Recording the
+    resolved values at fixture-capture pins the base stack to a concrete configuration.
+
+    Returns a dict covering every ACTUALLY_RESOLVED_KEYS field. Values that vLLM does
+    not surface via the documented endpoints are filled from base_kernel_selection
+    (the L0b winner bundle's kernel_selection) when available; missing-and-not-in-base
+    fields surface as the literal string "unknown" so downstream drift checks see a
+    stable sentinel rather than an absent key.
+    """
+    base = endpoint.rstrip("/")
+    server_base = base.removesuffix("/v1")
+    headers = {"Authorization": f"Bearer {api_key}"}
+    resolved: dict[str, Any] = dict(base_kernel_selection or {})
+
+    try:
+        version = requests.get(f"{server_base}/version", headers=headers, timeout=timeout)
+        if version.status_code == 200:
+            payload = version.json()
+            if isinstance(payload, dict) and payload.get("version"):
+                resolved["vllm_version"] = str(payload["version"])
+    except requests.RequestException:
+        pass
+
+    try:
+        server_info = requests.get(
+            f"{server_base}/server_info?config_format=json",
+            headers=headers,
+            timeout=timeout,
+        )
+        if server_info.status_code == 200:
+            info = server_info.json()
+            if isinstance(info, dict):
+                vllm_config = info.get("vllm_config")
+                if isinstance(vllm_config, dict):
+                    cache_config = vllm_config.get("cache_config") or {}
+                    if isinstance(cache_config, dict):
+                        if cache_config.get("cache_dtype"):
+                            resolved["kv_cache_dtype"] = str(cache_config["cache_dtype"])
+                        if cache_config.get("block_size") is not None:
+                            resolved["kv_cache_block_size"] = int(cache_config["block_size"])
+                    compilation_config = vllm_config.get("compilation_config") or {}
+                    if isinstance(compilation_config, dict):
+                        if compilation_config.get("level") is not None:
+                            resolved["torch_compile_mode"] = str(compilation_config["level"])
+                        cudagraph = compilation_config.get("cudagraph_capture_sizes")
+                        if cudagraph is not None:
+                            resolved["cuda_graph_capture"] = "on" if cudagraph else "off"
+                    model_config = vllm_config.get("model_config") or {}
+                    if isinstance(model_config, dict) and model_config.get("attention_backend"):
+                        resolved["attention_backend"] = str(model_config["attention_backend"])
+    except requests.RequestException:
+        pass
+
+    for key in ACTUALLY_RESOLVED_KEYS:
+        resolved.setdefault(key, "unknown")
+    return resolved
 
 
 def fetch_endpoint_capabilities(endpoint: str, *, api_key: str, model: str, timeout: float = 30.0) -> dict[str, Any]:

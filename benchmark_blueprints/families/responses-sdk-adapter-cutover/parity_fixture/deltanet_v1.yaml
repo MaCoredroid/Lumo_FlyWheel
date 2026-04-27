@@ -1,5 +1,5 @@
 fixture_id: responses-sdk-adapter-cutover-deltanet-v1
-generated_at: '2026-04-27T23:43:39.998606Z'
+generated_at: '2026-04-27T23:47:48.903333Z'
 generated_against:
   vllm_version: 0.19.0-bind-mounted-deltanet
   weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
@@ -11,6 +11,16 @@ generated_against:
     torch_compile_mode: default
     cuda_graph_capture: 'off'
   reference_reproducibility_runs: 3
+  actually_resolved_kernel_selection:
+    attention_backend: vllm-default
+    deltanet_kernel: triton-chunked-delta-v2
+    fp8_gemm_kernel: cublas
+    kv_cache_dtype: fp8_e5m2
+    kv_cache_block_size: 16
+    torch_compile_mode: default
+    cuda_graph_capture: 'off'
+    vllm_version: 0.19.0-bind-mounted-deltanet
+    weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
 probe_count: 16
 probe_token_lengths:
 - 16
