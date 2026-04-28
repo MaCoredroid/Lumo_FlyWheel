@@ -674,6 +674,16 @@ class ModelServer:
         # same scheduler determinism profile, which is the basis the parity
         # gate's rtol_logit/atol_logit tolerances were tuned against.
         vllm_args.append("--no-async-scheduling")
+        # When VLLM_BATCH_INVARIANT=1 is on, vLLM's batch_invariant init refuses
+        # to start unless an explicit attention backend is passed (one of
+        # FLASH_ATTN / TRITON_ATTN / FLASH_ATTN_MLA / TRITON_MLA). Our bundle
+        # ships attention_backend=vllm-default which resolves to "auto" / None,
+        # which BI rejects. Pass FLASH_ATTN explicitly so BI can take effect —
+        # this is the same backend vLLM auto-selects for our bundle anyway,
+        # so the only behavioral change is enabling BI's GEMM/softmax/bmm
+        # invariance overrides.
+        if os.environ.get("LUMO_BATCH_INVARIANT_VLLM", "0").lower() in {"1", "true", "yes"}:
+            vllm_args.extend(["--attention-backend", "FLASH_ATTN"])
         if config.lora_modules:
             vllm_args.extend(["--enable-lora", "--max-lora-rank", str(config.max_lora_rank), "--lora-modules"])
             vllm_args.extend(self._format_lora_modules(config))
@@ -767,6 +777,7 @@ class ModelServer:
             f"VLLM_API_KEY={self._api_key()}",
             "-e",
             f"VLLM_LOGGING_LEVEL={'DEBUG' if enable_request_logging else 'INFO'}",
+            *self._batch_invariant_env_args(),
             *kernel_activation_env_args,
             *self._p2b_debug_export_env_args(),
             *volume_args,
@@ -781,6 +792,22 @@ class ModelServer:
         if self.logs_root == CONTAINER_LOGS_ALIAS_PATH:
             return []
         return ["-v", f"{self.logs_root}:{CONTAINER_LOGS_ALIAS_PATH}"]
+
+    @staticmethod
+    def _batch_invariant_env_args() -> list[str]:
+        # vLLM's batch-invariance layer (vllm/model_executor/layers/batch_invariant.py)
+        # replaces aten::mm/addmm/matmul/linear with batch-invariant Triton kernels,
+        # disables fp16/bf16 reduced-precision reduction, pins CUBLAS_WORKSPACE_CONFIG
+        # to ":16:8" (deterministic split-k workspace), and forces cublasLt. Required
+        # for cross-session L0c parity-fixture reproducibility — without it, two cold
+        # starts of the same bundle produce ~bf16-LSB-divergent first-token logits
+        # (max abs diff ≈ 0.3–0.5) even with shared Triton kernel cache and identical
+        # launch_cmd, because of session-time GPU-state nondeterminism in the GEMM
+        # accumulator order. Forwarded only when LUMO_BATCH_INVARIANT_VLLM=1 in host
+        # env so the perf cost (~no autotune freedom) is opt-in.
+        if os.environ.get("LUMO_BATCH_INVARIANT_VLLM", "0").lower() in {"1", "true", "yes"}:
+            return ["-e", "VLLM_BATCH_INVARIANT=1"]
+        return []
 
     @staticmethod
     def _p2b_debug_export_env_args() -> list[str]:
