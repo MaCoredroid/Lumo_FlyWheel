@@ -103,8 +103,13 @@ def main() -> int:
     print(f"[verify] bind-mount: {debug_export_dir} (host=container)")
 
     # The L0c parity probe path needs LUMO_P2B_* env vars to make vLLM emit .pt
-    # exports for each /v1/completions request the probe submits.
-    staging_dir = debug_export_dir / "staging"
+    # exports for each /v1/completions request the probe submits. The staging
+    # directory must match run_parity_probe()'s view: it derives staging from
+    # debug_export_dir (passed below as `<root>/probe`) as `<that>/staging`,
+    # so vLLM must write to the same `<root>/probe/staging` path. The host-side
+    # path is bind-mounted at the same location inside the container above.
+    probe_export_dir = debug_export_dir / "probe"
+    staging_dir = probe_export_dir / "staging"
     staging_dir.mkdir(parents=True, exist_ok=True)
     os.environ["LUMO_P2B_VLLM_DEBUG_EXPORT"] = "1"
     os.environ["LUMO_P2B_DEBUG_EXPORT_DIR"] = str(staging_dir)
@@ -148,7 +153,7 @@ def main() -> int:
             endpoint=endpoint,
             model=args.model_id,
             api_key="EMPTY",
-            debug_export_dir=debug_export_dir / "probe",
+            debug_export_dir=probe_export_dir,
             request_timeout_s=1800.0,
         )
 
