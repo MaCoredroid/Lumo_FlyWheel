@@ -122,21 +122,46 @@ def run_parity_probe(
     if not logits_npz_path.is_file():
         raise FileNotFoundError(f"reference logits NPZ missing: {logits_npz_path}")
     logits_ref = dict(np.load(logits_npz_path, allow_pickle=False))
-    if "source_artifact_path_by_probe" not in logits_ref:
+    # Two schemas are supported:
+    #  - legacy "converted" (build_parity_fixture._write_converted_logits_npz):
+    #    `source_artifact_path_by_probe` + sha256s + first-16 sample, full
+    #    reference array lives in source .pt files alongside the fixture.
+    #  - self-contained "aggregated" (write_debug_export_npz_companions):
+    #    `logits_member_names` + per-probe full-vocab logits embedded in npz.
+    #    No source-.pt dependency; salvageable across machines.
+    schema_self_contained = "logits_member_names" in logits_ref
+    schema_legacy = "source_artifact_path_by_probe" in logits_ref
+    if not (schema_self_contained or schema_legacy):
         raise ValueError(
-            f"unsupported logits fixture schema (missing source_artifact_path_by_probe): {logits_npz_path}"
+            f"unsupported logits fixture schema (need either logits_member_names "
+            f"or source_artifact_path_by_probe): {logits_npz_path}"
         )
 
     state_ref: dict[str, Any] | None = None
+    state_schema_self_contained = False
     if kernel_target == "deltanet":
         state_npz_path = fixture_dir / "deltanet_reference_state.npz"
         if not state_npz_path.is_file():
             raise FileNotFoundError(f"reference state NPZ missing: {state_npz_path}")
         state_ref = dict(np.load(state_npz_path, allow_pickle=False))
+        # Self-contained state schema records `state_storage` describing the
+        # digest convention (sha256 over flattened float32 state, with first-16
+        # sample alongside). Legacy state schema records `_source_path_by_probe`
+        # and full reference loads from a source .pt.
+        state_schema_self_contained = "state_storage" in state_ref
         for token in state_checkpoints:
-            key = f"state_token_{token}_source_path_by_probe"
-            if key not in state_ref:
-                raise ValueError(f"unsupported state fixture schema (missing {key}): {state_npz_path}")
+            if state_schema_self_contained:
+                key = f"state_token_{token}"
+                if key not in state_ref:
+                    raise ValueError(
+                        f"unsupported state fixture schema (missing {key}): {state_npz_path}"
+                    )
+            else:
+                key = f"state_token_{token}_source_path_by_probe"
+                if key not in state_ref:
+                    raise ValueError(
+                        f"unsupported state fixture schema (missing {key}): {state_npz_path}"
+                    )
 
     debug_export_dir = Path(debug_export_dir).resolve()
     staging_dir = debug_export_dir / "staging"
@@ -151,7 +176,15 @@ def run_parity_probe(
 
     for probe_index, probe in enumerate(probes):
         probe_index_int = int(probe.get("probe_index", probe_index))
-        target_logit_token = int(logits_ref["source_generated_token_index_by_probe"][probe_index])
+        if schema_self_contained:
+            # Aggregated schema stores per-probe captured token list; pick the
+            # first token (typically token-1, the standard parity checkpoint).
+            tokens_arr = logits_ref[f"probe_{probe_index_int:06d}_logit_tokens"]
+            target_logit_token = int(tokens_arr[0])
+        else:
+            target_logit_token = int(
+                logits_ref["source_generated_token_index_by_probe"][probe_index]
+            )
         require_state = bool(state_checkpoints)
         minimum_completion_tokens = (
             max(state_checkpoints) + 1 if require_state else None
@@ -217,6 +250,7 @@ def run_parity_probe(
                 fixture_index=probe_index,
                 rtol=rtol_logit,
                 atol=atol_logit,
+                schema_self_contained=schema_self_contained,
             )
             probe_record["logits"] = logit_outcome
             overshoot = max(overshoot, float(logit_outcome["overshoot"]))
@@ -236,6 +270,7 @@ def run_parity_probe(
                     fixture_index=probe_index,
                     rtol=rtol_state,
                     atol=atol_state,
+                    schema_self_contained=state_schema_self_contained,
                 )
                 probe_record["state"] = state_outcome
                 overshoot = max(overshoot, float(state_outcome["overshoot"]))
@@ -457,9 +492,63 @@ def _compare_logits(
     fixture_index: int,
     rtol: float,
     atol: float,
+    schema_self_contained: bool = False,
 ) -> dict[str, Any]:
     candidate_array = _candidate_logits_at_token(np_module, candidate_paths, target_token)
     candidate_sha = _array_sha256(np_module, candidate_array)
+
+    if schema_self_contained:
+        # Aggregated schema: full per-probe vocab logits live in the npz under
+        # `probe_NNNNNN_logits[row_for_target_token]`. No source-.pt round-trip.
+        member_logits = fixture_logits[f"probe_{fixture_index:06d}_logits"]
+        member_tokens = fixture_logits[f"probe_{fixture_index:06d}_logit_tokens"]
+        token_indices = [int(t) for t in member_tokens.tolist()]
+        if int(target_token) not in token_indices:
+            return {
+                "pass": False,
+                "exact_match": False,
+                "overshoot": float("inf"),
+                "candidate_sha256": candidate_sha,
+                "reference_sha256": "",
+                "target_token": int(target_token),
+                "detail": f"reference_token_not_captured:want={target_token},have={token_indices}",
+            }
+        row = token_indices.index(int(target_token))
+        ref_array = np_module.ascontiguousarray(
+            np_module.asarray(member_logits[row], dtype=np_module.float32)
+        ).reshape(-1)
+        ref_sha = _array_sha256(np_module, ref_array)
+        if candidate_sha == ref_sha:
+            return {
+                "pass": True,
+                "exact_match": True,
+                "overshoot": 0.0,
+                "candidate_sha256": candidate_sha,
+                "reference_sha256": ref_sha,
+                "target_token": int(target_token),
+            }
+        overshoot = _compute_overshoot(
+            np_module, candidate_array, ref_array, rtol=rtol, atol=atol
+        )
+        passed = overshoot == 0.0 and candidate_array.shape == ref_array.shape
+        detail: str | None = None
+        if not passed:
+            if candidate_array.shape != ref_array.shape:
+                detail = (
+                    f"shape_mismatch:candidate={candidate_array.shape},reference={ref_array.shape}"
+                )
+            else:
+                detail = f"overshoot={overshoot:.6e}"
+        return {
+            "pass": passed,
+            "exact_match": False,
+            "overshoot": overshoot,
+            "candidate_sha256": candidate_sha,
+            "reference_sha256": ref_sha,
+            "target_token": int(target_token),
+            "detail": detail,
+        }
+
     fixture_sha = str(fixture_logits["source_logits_sha256_by_probe"][fixture_index])
     if candidate_sha == fixture_sha:
         return {
@@ -500,7 +589,7 @@ def _compare_logits(
     ref_array = np_module.ascontiguousarray(ref_array.astype(np_module.float32, copy=False)).reshape(-1)
     overshoot = _compute_overshoot(np_module, candidate_array, ref_array, rtol=rtol, atol=atol)
     passed = overshoot == 0.0 and candidate_array.shape == ref_array.shape
-    detail: str | None = None
+    detail = None
     if not passed:
         if candidate_array.shape != ref_array.shape:
             detail = f"shape_mismatch:candidate={candidate_array.shape},reference={ref_array.shape}"
@@ -526,12 +615,65 @@ def _compare_state(
     fixture_index: int,
     rtol: float,
     atol: float,
+    schema_self_contained: bool = False,
 ) -> dict[str, Any]:
     per_token: list[dict[str, Any]] = []
     aggregate_overshoot = 0.0
     for token in state_tokens:
         candidate_array = _candidate_state_at_token(candidate_paths, token)
         candidate_sha = _array_sha256(np_module, candidate_array)
+        if schema_self_contained:
+            # Aggregated schema: state_token_<N> stores _array_sha256 of the
+            # flattened float32 state vector (NOT _file_sha256 of the source .pt).
+            # First-16 sample lives in state_token_<N>_sample_first_16_float32 for
+            # cheap divergence-fingerprint inspection on a digest miss.
+            ref_array_sha = str(fixture_state[f"state_token_{token}"][fixture_index])
+            sample_key = f"state_token_{token}_sample_first_16_float32"
+            ref_sample = (
+                fixture_state[sample_key][fixture_index]
+                if sample_key in fixture_state
+                else None
+            )
+            record: dict[str, Any] = {
+                "token": int(token),
+                "candidate_array_sha256": candidate_sha,
+                "reference_array_sha256": ref_array_sha,
+            }
+            if candidate_sha == ref_array_sha:
+                record.update({"pass": True, "exact_match": True, "overshoot": 0.0})
+                per_token.append(record)
+                continue
+            # Digest miss. Compute first-16 overshoot as a divergence-fingerprint
+            # bound — full-vocab state isn't stored in the npz under this schema.
+            sample_overshoot = float("inf")
+            if ref_sample is not None and candidate_array.size >= 16:
+                cand_first16 = np_module.ascontiguousarray(
+                    candidate_array[:16].astype(np_module.float32, copy=False)
+                )
+                sample_overshoot = _compute_overshoot(
+                    np_module,
+                    cand_first16,
+                    np_module.asarray(ref_sample, dtype=np_module.float32).reshape(-1),
+                    rtol=rtol,
+                    atol=atol,
+                )
+            aggregate_overshoot = max(aggregate_overshoot, sample_overshoot)
+            record.update(
+                {
+                    "pass": False,
+                    "exact_match": False,
+                    "overshoot": sample_overshoot,
+                    "detail": f"state_digest_mismatch_first16_overshoot={sample_overshoot:.6e}",
+                }
+            )
+            per_token.append(record)
+            return {
+                "pass": False,
+                "overshoot": aggregate_overshoot,
+                "tokens": per_token,
+                "detail": record["detail"],
+            }
+
         ref_file_sha = str(fixture_state[f"state_token_{token}"][fixture_index])
         candidate_file_sha: str | None = None
         for path in candidate_paths:
@@ -542,7 +684,7 @@ def _compare_state(
             ):
                 candidate_file_sha = _file_sha256(path)
                 break
-        record: dict[str, Any] = {
+        record = {
             "token": int(token),
             "candidate_array_sha256": candidate_sha,
             "candidate_file_sha256": candidate_file_sha,
