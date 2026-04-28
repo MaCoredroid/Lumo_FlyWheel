@@ -65,6 +65,11 @@ def main() -> int:
     parser.add_argument("--family-id", default="responses-sdk-adapter-cutover")
     parser.add_argument("--probe-count", type=int, default=64)
     parser.add_argument("--reproducibility-runs", type=int, default=3)
+    parser.add_argument(
+        "--override-output-tokens",
+        type=int,
+        help="Pin every probe row's output token count (forwarded to build_parity_fixture).",
+    )
     parser.add_argument("--kernel-target", choices=["deltanet", "gatedattn", "both"], default="deltanet")
     parser.add_argument("--port", type=int, default=8100)
     parser.add_argument("--proxy-port", type=int, default=8101)
@@ -158,6 +163,8 @@ def main() -> int:
             "--model", args.model_id,
             "--reference-baseline-bundle", str(base_bundle),
         ]
+        if args.override_output_tokens is not None:
+            cmd.extend(["--override-output-tokens", str(args.override_output_tokens)])
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{SRC_ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}"
         print(f"[fixture-rebuild] running: {' '.join(cmd)}")
