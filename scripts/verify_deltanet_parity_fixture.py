@@ -71,7 +71,19 @@ def main() -> int:
     parser.add_argument("--container-name", default="lumo-vllm-fixture-verify")
     parser.add_argument("--image", default="lumo-flywheel-vllm:26.01-py3-v0.19.0")
     parser.add_argument("--logs-root", default="/tmp/lumo-fixture-verify-logs")
-    parser.add_argument("--triton-cache-root", default="/tmp/lumo-fixture-verify-triton")
+    parser.add_argument(
+        "--triton-cache-root",
+        default="/tmp/lumo-fixture-rebuild-triton",
+        help=(
+            "Triton autotune cache directory. MUST be the same path used by "
+            "regenerate_deltanet_parity_fixture.py at fixture-build time — "
+            "Triton picks marginally different kernel configs per cold start, "
+            "and that drift surfaces as ~bf16-LSB cross-session divergence in "
+            "the parity probes (max abs diff ≈ 0.32, mean ≈ 0.05). Sharing "
+            "the cache pins the compiled kernels so capture and verify "
+            "produce byte-identical logits."
+        ),
+    )
     parser.add_argument("--state-root", default="/tmp/lumo-fixture-verify-state")
     parser.add_argument(
         "--debug-export-dir",
