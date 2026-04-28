@@ -662,6 +662,18 @@ class ModelServer:
             vllm_args.append("--enable-prefix-caching")
         if config.enable_chunked_prefill:
             vllm_args.append("--enable-chunked-prefill")
+        # vLLM 0.19 defaults async_scheduling to True when the executor supports
+        # it (V1 engine on GB10 does). Async scheduling overlaps GPU compute
+        # with CPU scheduling; the resulting batch composition is timing-
+        # sensitive across cold starts even with seed=0 and identical bundles,
+        # which translates to ~bf16-LSB drift in fp8 GEMM accumulation order
+        # and surfaces as ~0.3 absolute / 2% relative cross-session drift in
+        # the L0c parity-fixture probes. Within-session it's stable (warmup
+        # converges, scheduling is consistent); cross-session it isn't. Pin
+        # off so capture-time and probe/verify/canary sessions all see the
+        # same scheduler determinism profile, which is the basis the parity
+        # gate's rtol_logit/atol_logit tolerances were tuned against.
+        vllm_args.append("--no-async-scheduling")
         if config.lora_modules:
             vllm_args.extend(["--enable-lora", "--max-lora-rank", str(config.max_lora_rank), "--lora-modules"])
             vllm_args.extend(self._format_lora_modules(config))
