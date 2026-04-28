@@ -74,6 +74,25 @@ Interpreting the output:
 | `false` | `endpoint_unreachable` | The probe's `/v1/completions` POSTs got a non-2xx. The lumo inference proxy only whitelists `/v1/responses` and `/v1/chat/completions` — make sure you're hitting the engine port directly (`runtime.port`, not `proxy_port`). |
 | `false` | `comparison_failed` | The .npz reference itself failed to load — likely fixture corruption. Re-run `pytest tests/test_parity_fixture.py`. |
 
+### 4. P5b fp8_e5m2 KV purity attestation (~10 min, full GPU)
+
+Required only when the base stack's `kv_cache_dtype` is `fp8_e5m2` (i.e., the L0b empirical winner). HLD v0.3.3 §7.X. Skipped automatically by the script when the base bundle is already bf16/fp16.
+
+```bash
+PYTHONPATH=src python3 scripts/p5b_fp8_kv_purity_attestation.py \
+  --base-bundle output/tuned_configs/.../<bundle>_4866bc3f.yaml
+```
+
+The script (a) brings up vLLM with the fp8_e5m2 base bundle and captures 16 short-prompt-short-output probes, (b) synthesizes a sibling bundle with `kv_cache_dtype: bf16` (everything else identical) and captures the same probes, (c) compares element-wise logit divergence against the fixture tolerances `rtol_logit=1e-3, atol_logit=1e-3`. Output: `output/p5b_fp8_kv_purity_<timestamp>.json`.
+
+| Outcome | Meaning |
+|---|---|
+| `status: PASS` | fp8 KV introduces no divergence beyond the parity gate's noise floor; L0c rounds bootstrapped against this base will be measuring kernel mutations, not quantization noise. |
+| `status: FAIL`, `halt_code: fp8_kv_purity_violation` | fp8 KV introduces divergence beyond `rtol/atol` on >0 of 16 probes. Fix paths: re-capture parity fixture against bf16 KV, OR loosen tolerance with explicit justification, OR change base stack's `kv_cache_dtype`. |
+| `status: skipped`, `reason: base_kv_already_safe` | Base bundle is bf16/fp16 — no FP8 noise risk to validate, no work to do. |
+
+The 16 probes are deterministic (same row generator as the parity fixture), so two consecutive runs against the same base bundle byte-equal each other modulo accumulation noise within `rtol/atol`.
+
 ## Common ways a fixture goes stale
 
 1. **L0b converges to a new kernel_selection.** Caught by the pre-flight check (verification 2). Fix: regenerate fixture against the new winner via `scripts/regenerate_deltanet_parity_fixture.py --reference-baseline-bundle <new bundle>`.

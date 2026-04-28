@@ -416,6 +416,9 @@ def _candidate_logits_at_token(np_module: Any, candidate_paths: list[Path], toke
         if hasattr(tensor, "cpu"):
             tensor = tensor.cpu()
         if hasattr(tensor, "numpy"):
+            # bf16/fp16/fp8 torch tensors must upcast to float32 before .numpy().
+            if hasattr(tensor, "float"):
+                tensor = tensor.float()
             array = tensor.numpy()
         else:
             array = np_module.asarray(tensor)
@@ -488,6 +491,9 @@ def _compare_logits(
     if hasattr(tensor, "cpu"):
         tensor = tensor.cpu()
     if hasattr(tensor, "numpy"):
+        # bf16/fp16/fp8 torch tensors must upcast to float32 before .numpy().
+        if hasattr(tensor, "float"):
+            tensor = tensor.float()
         ref_array = tensor.numpy()
     else:
         ref_array = np_module.asarray(tensor)
