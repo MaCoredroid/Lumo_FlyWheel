@@ -7576,17 +7576,14 @@ class L0cKernelMutationRunner:
         if not prompt_path.is_file():
             return {"ok": False, "error": "iteration_brief.md missing"}
         prompt = prompt_path.read_text(encoding="utf-8")
-        # 0 (or negative) → no per-iteration agent timeout; round_timeout_hours
-        # remains the only ceiling. The 16-probe apply-and-test on GB10 takes
-        # ~80–110 min wallclock — a tight per-iter timeout was killing iters
-        # that were progressing fine, so the default is now no-timeout and the
-        # CLI must be passed an explicit positive value to opt in.
-        timeout_s = int(
-            spec.get(
-                "per_iteration_claude_wall_clock_s",
-                spec.get("per_iteration_codex_wall_clock_s", 0),
-            )
+        # 0 (or negative) disables the per-iteration agent timeout; otherwise
+        # the default finite canary ceiling is applied per runtime.
+        timeout_key = (
+            "per_iteration_claude_wall_clock_s"
+            if agent_runtime == "claude"
+            else "per_iteration_codex_wall_clock_s"
         )
+        timeout_s = int(spec.get(timeout_key, 0))
         subprocess_timeout = timeout_s if timeout_s > 0 else None
         if agent_runtime == "claude":
             argv = [
