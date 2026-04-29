@@ -7607,8 +7607,12 @@ class L0cKernelMutationRunner:
                 "or `tl.dot` operand ordering."
             ),
             (
-                "- Do not retry a mutation hash listed in `mutations_rejected.tsv` "
-                "or `prior_mutations_rejected.tsv`."
+            "- Do not retry a mutation hash listed in `mutations_rejected.tsv` "
+            "or `prior_mutations_rejected.tsv`."
+            ),
+            (
+                "- If an older `BLOCKED.md` suggestion conflicts with this forbidden "
+                "list, the forbidden list wins."
             ),
             "",
             "## Ranked Likely-Safe Targets",
@@ -7632,6 +7636,10 @@ class L0cKernelMutationRunner:
             "",
             "## Prior Rejections Carried Forward",
             "",
+            (
+                "Rows with `agent_exit_*` or `agent_spawn_failed` are historical "
+                "context unless their `source_ref` points to a parity artifact."
+            ),
             *prior_lines,
             "",
             "Use this brief as direction, not proof. The controller parity gate is canonical.",
