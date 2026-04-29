@@ -607,6 +607,52 @@ def test_real_run_writes_runtime_block_into_round_spec(tmp_path: Path, monkeypat
     assert snapshot_files[0].read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n"
 
 
+def test_real_paired_baseline_discards_first_cold_row(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    baseline_dir = repo / "round" / "baselines"
+    baseline_dir.mkdir(parents=True)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    calls: list[dict[str, Any]] = []
+
+    class _FakeHarness:
+        def __init__(self, **kwargs):
+            pass
+
+        def measure(self, **kwargs):
+            calls.append(kwargs)
+            return {"eval_throughput": float(len(calls))}
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeHarness)
+    rows = runner._run_real_paired_baseline(
+        spec={
+            "round_id": "round-1",
+            "model_id": "qwen3.5-27b",
+            "workload_file": str(workload_path),
+            "runtime": _runtime_block(),
+            "weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+        },
+        baseline_dir=baseline_dir,
+        baseline_uuid="base-uuid",
+        count=2,
+    )
+    assert len(calls) == 3
+    assert len(rows) == 2
+    assert rows[0]["objective_value"] == "2.000000"
+    assert rows[1]["objective_value"] == "3.000000"
+    assert rows[0]["trace_ref"] == "baselines/measurement_01.json"
+    assert (baseline_dir / "cold_discard_00.json").is_file()
+    assert json.loads((baseline_dir / "cold_discard_00.json").read_text(encoding="utf-8"))[
+        "discard_reason"
+    ] == "cold_start_baseline"
+
+
 def test_real_run_records_intermittent_parity_terminal_condition(
     tmp_path: Path, monkeypatch
 ) -> None:

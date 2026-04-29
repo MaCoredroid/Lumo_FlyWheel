@@ -15,6 +15,7 @@ from .auto_research import (
     AutoResearchRoundManager,
     L0aKernelSelectRunner,
     L0bKernelAutotuneRunner,
+    L0C_DEFAULT_AGENT_TIMEOUT_S,
     L0cKernelMutationRunner,
     OfflineAutoResearchRunner,
     SyntheticWorkloadDistribution,
@@ -1331,12 +1332,10 @@ def build_parser() -> argparse.ArgumentParser:
     auto_mutate_kernel.add_argument(
         "--per-iteration-wall-clock-s",
         type=int,
-        default=0,
-        help="Per-iteration agent subprocess timeout, in seconds. 0 (default) "
-        "disables the per-iter timeout — the round_timeout (--round-timeout-hours) "
-        "is then the only ceiling. The 16-probe apply-and-test on GB10 takes "
-        "~80–110 min wallclock, so a tight per-iter timeout was killing iters "
-        "that were progressing fine.",
+        default=L0C_DEFAULT_AGENT_TIMEOUT_S,
+        help="Per-iteration agent subprocess timeout, in seconds. 0 disables "
+        "the per-iter timeout and leaves --round-timeout-hours as the only "
+        "ceiling. The default is 7200s for the current 1-probe GB10 canary.",
     )
     auto_mutate_kernel.add_argument("--warmup-s", type=int, default=5)
     auto_mutate_kernel.add_argument("--window-s", type=int, default=30)

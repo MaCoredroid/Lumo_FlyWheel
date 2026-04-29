@@ -97,6 +97,7 @@ L0C_KERNEL_TARGETS = {"deltanet", "gatedattn"}
 L0C_DEFAULT_ACCEPTED_CAP = 12
 L0C_DEFAULT_TOTAL_ATTEMPT_CAP = 36
 L0C_DEFAULT_ROUND_TIMEOUT_HOURS = 12.0
+L0C_DEFAULT_AGENT_TIMEOUT_S = 2 * 60 * 60
 L0C_PROPOSER_STUCK_THRESHOLD = 3
 L0C_COMPILE_FAILURES_THRESHOLD = 3
 L0C_INTERMITTENT_PARITY_THRESHOLD = 2
@@ -5906,7 +5907,7 @@ class L0cKernelMutationRunner:
         agent_runtime: str = "codex",
         claude_model: str | None = None,
         claude_effort: str | None = None,
-        per_iteration_wall_clock_s: int = 0,
+        per_iteration_wall_clock_s: int = L0C_DEFAULT_AGENT_TIMEOUT_S,
     ) -> L0cKernelMutationResult:
         if harness not in {"real", "synthetic"}:
             raise RuntimeError(f"Unsupported harness: {harness}")
@@ -7507,7 +7508,9 @@ class L0cKernelMutationRunner:
             state_root=runtime.get("state_root"),
         )
         rows: list[dict[str, Any]] = []
-        for index in range(1, count + 1):
+        # Delete the cold baseline from statistical comparison. It is still
+        # persisted for audit, but not entered into measurements.tsv or Welch input.
+        for physical_index in range(0, count + 1):
             measurement = harness.measure(
                 candidate_vllm_config=dict(runtime.get("vllm_config") or {}),
                 warmup_s=int(runtime.get("warmup_s", 5)),
@@ -7523,7 +7526,16 @@ class L0cKernelMutationRunner:
                 if measurement.get("objective_value") is not None
                 else measurement.get("eval_throughput", 0.0)
             )
-            (baseline_dir / f"measurement_{index:02d}.json").write_text(
+            if physical_index == 0:
+                measurement["discarded_from_baseline_stats"] = True
+                measurement["discard_reason"] = "cold_start_baseline"
+                (baseline_dir / "cold_discard_00.json").write_text(
+                    json.dumps(measurement, indent=2, sort_keys=True),
+                    encoding="utf-8",
+                )
+                continue
+            measurement_index = physical_index
+            (baseline_dir / f"measurement_{measurement_index:02d}.json").write_text(
                 json.dumps(measurement, indent=2, sort_keys=True),
                 encoding="utf-8",
             )
@@ -7532,10 +7544,10 @@ class L0cKernelMutationRunner:
                     candidate_uuid=baseline_uuid,
                     candidate_label="l0b-empirical-winner-baseline-remeasured",
                     role="l0b_empirical_winner_baseline_remeasured",
-                    measurement_index=index,
+                    measurement_index=measurement_index,
                     objective_value=objective_value,
                     harness="real",
-                    trace_ref=f"baselines/measurement_{index:02d}.json",
+                    trace_ref=f"baselines/measurement_{measurement_index:02d}.json",
                 )
             )
         return rows
