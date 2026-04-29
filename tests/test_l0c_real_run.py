@@ -780,6 +780,8 @@ def test_real_run_embeds_strategy_brief_and_prior_rejections(
     assert "Forbidden Mutation Families" in strategy
     assert "v` load eviction/cache policy" in strategy
     assert "gate-path cache-policy hints" in strategy
+    assert "rebase `g`/`gk` pointers" in strategy
+    assert "shared `t_start` rewrites" in strategy
     assert "scalar metadata loads" in strategy
     brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
         encoding="utf-8"

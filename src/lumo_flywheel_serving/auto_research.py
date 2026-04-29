@@ -7613,6 +7613,8 @@ class L0cKernelMutationRunner:
             "- Do not add store hints or change store cache policy.",
             "- Do not make broad cache-policy edits spanning both `v` and `h0`/state paths.",
             "- Do not add new gate-path cache-policy hints on `g`/`gk` loads.",
+            "- Do not rebase `g`/`gk` pointers or rewrite their base/address arithmetic.",
+            "- Do not introduce shared `t_start` rewrites across dot-adjacent address paths.",
             (
                 "- Do not change `v` load eviction/cache policy; the last canary "
                 "`v` `evict_first` probe diverged immediately."
@@ -7634,8 +7636,8 @@ class L0cKernelMutationRunner:
             "",
             "1. Narrow scalar metadata loads such as sequence/chunk offsets, preserving types and control flow.",
             (
-                "2. Local address/mask expression cleanup that leaves arithmetic "
-                "order and tensor shapes unchanged."
+                "2. Local mask-only cleanup that leaves address arithmetic, "
+                "arithmetic order, and tensor shapes unchanged."
             ),
             (
                 "3. One-load-only cache hint rollback or tightening where prior "
