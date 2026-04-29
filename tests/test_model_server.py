@@ -410,6 +410,38 @@ models:
     assert server.proxy_base_url() == f"http://127.0.0.1:{DEFAULT_INFERENCE_PROXY_PORT}"
 
 
+def test_start_proxy_refuses_foreign_listener(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+        proxy_port=18101,
+    )
+    monkeypatch.setattr(server, "_stop_proxy", lambda missing_ok=False: None)
+    monkeypatch.setattr(server, "_tcp_port_open", lambda host, port: True)
+
+    with pytest.raises(RuntimeError, match="inference_proxy_port_in_use:18101"):
+        server._start_proxy()
+
+
 def test_record_launch_metadata_appends_sorted_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(

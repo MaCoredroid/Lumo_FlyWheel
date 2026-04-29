@@ -533,18 +533,20 @@ def run_proxy_server(
     state_root: Path | None = None,
     registry_path: Path | None = None,
 ) -> None:
-    if pid_file is not None:
-        pid_file.parent.mkdir(parents=True, exist_ok=True)
-        pid_file.write_text(str(os.getpid()), encoding="utf-8")
     server = ThreadingHTTPServer(
         (listen_host, listen_port),
         build_proxy_handler(upstream_base_url, state_root=state_root, registry_path=registry_path),
     )
+    pid_written = False
+    if pid_file is not None:
+        pid_file.parent.mkdir(parents=True, exist_ok=True)
+        pid_file.write_text(str(os.getpid()), encoding="utf-8")
+        pid_written = True
     try:
         server.serve_forever(poll_interval=0.2)
     finally:
         server.server_close()
-        if pid_file is not None:
+        if pid_written and pid_file is not None:
             pid_file.unlink(missing_ok=True)
 
 

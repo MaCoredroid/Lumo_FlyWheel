@@ -116,6 +116,11 @@ class ModelServer:
     def _start_proxy(self) -> None:
         self.logs_root.mkdir(parents=True, exist_ok=True)
         self._stop_proxy(missing_ok=True)
+        if self._tcp_port_open("127.0.0.1", self.proxy_port):
+            raise RuntimeError(
+                f"inference_proxy_port_in_use:{self.proxy_port}; "
+                "stop the existing listener or choose a different proxy_port"
+            )
         pid_path = self._proxy_pid_path()
         log_path = self._proxy_log_path()
         command = [
@@ -147,20 +152,42 @@ class ModelServer:
                 env=os.environ.copy(),
             )
         try:
-            self._wait_proxy_ready(timeout_s=10)
+            self._wait_proxy_ready(process=process, pid_path=pid_path, timeout_s=10)
         except Exception:
             process.poll()
             if process.returncode is None:
                 process.terminate()
             raise
 
-    def _wait_proxy_ready(self, timeout_s: int = 10) -> None:
+    @staticmethod
+    def _tcp_port_open(host: str, port: int) -> bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            return sock.connect_ex((host, port)) == 0
+
+    def _wait_proxy_ready(
+        self,
+        *,
+        process: subprocess.Popen[str] | None = None,
+        pid_path: Path | None = None,
+        timeout_s: int = 10,
+    ) -> None:
         deadline = time.time() + timeout_s
         while time.time() < deadline:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.settimeout(1)
-                if sock.connect_ex(("127.0.0.1", self.proxy_port)) == 0:
+            if process is not None and process.poll() is not None:
+                raise RuntimeError(
+                    f"Inference proxy exited before ready with code {process.returncode}"
+                )
+            if self._tcp_port_open("127.0.0.1", self.proxy_port):
+                if pid_path is None:
                     return
+                try:
+                    ready_pid = int(pid_path.read_text(encoding="utf-8").strip())
+                    expected_pid = process.pid if process is not None else ready_pid
+                    if ready_pid == expected_pid:
+                        return
+                except (FileNotFoundError, ValueError):
+                    pass
             time.sleep(0.2)
         raise RuntimeError(f"Inference proxy not ready within {timeout_s}s")
 
