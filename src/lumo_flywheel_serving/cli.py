@@ -1328,7 +1328,16 @@ def build_parser() -> argparse.ArgumentParser:
     auto_mutate_kernel.add_argument(
         "--claude-effort", choices=["low", "medium", "high", "xhigh", "max"]
     )
-    auto_mutate_kernel.add_argument("--per-iteration-wall-clock-s", type=int, default=45 * 60)
+    auto_mutate_kernel.add_argument(
+        "--per-iteration-wall-clock-s",
+        type=int,
+        default=0,
+        help="Per-iteration agent subprocess timeout, in seconds. 0 (default) "
+        "disables the per-iter timeout — the round_timeout (--round-timeout-hours) "
+        "is then the only ceiling. The 16-probe apply-and-test on GB10 takes "
+        "~80–110 min wallclock, so a tight per-iter timeout was killing iters "
+        "that were progressing fine.",
+    )
     auto_mutate_kernel.add_argument("--warmup-s", type=int, default=5)
     auto_mutate_kernel.add_argument("--window-s", type=int, default=30)
     auto_mutate_kernel.set_defaults(func=cmd_auto_research_mutate_kernel)

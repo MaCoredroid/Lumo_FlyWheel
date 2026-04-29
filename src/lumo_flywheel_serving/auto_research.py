@@ -3455,7 +3455,7 @@ class RoundSpecRecord:
     screen_measurement_s: int = 600
     full_warmup_s: int = 300
     full_measurement_s: int = 1500
-    per_iteration_codex_wall_clock_s: int = 45 * 60
+    per_iteration_codex_wall_clock_s: int = 0
     diminishing_returns_window_k: int = 4
     noise_floor: float = 0.0
     baseline_mean_screen: float = 0.0
@@ -3552,7 +3552,7 @@ class RoundSpecRecord:
             screen_measurement_s=int(payload.get("screen_measurement_s", 600)),
             full_warmup_s=int(payload.get("full_warmup_s", 300)),
             full_measurement_s=int(payload.get("full_measurement_s", 1500)),
-            per_iteration_codex_wall_clock_s=int(payload.get("per_iteration_codex_wall_clock_s", 45 * 60)),
+            per_iteration_codex_wall_clock_s=int(payload.get("per_iteration_codex_wall_clock_s", 0)),
             diminishing_returns_window_k=int(payload.get("diminishing_returns_window_k", 4)),
             noise_floor=float(payload.get("noise_floor", 0.0)),
             baseline_mean_screen=float(payload.get("baseline_mean_screen", 0.0)),
@@ -7159,12 +7159,26 @@ class L0cKernelMutationRunner:
             if not spawn_outcome["ok"]:
                 consecutive_compile_fails += 1
                 consecutive_parity_fails = 0
+                # spawn_outcome["error"] is the actual cause: "agent_timeout: ...",
+                # "agent_binary_missing: ...", "agent_exit_<rc>: ...". Surface its
+                # category in rejection_reason so post-mortem reads truthfully — the
+                # legacy generic "agent_spawn_failed" hid timeouts and exit-code
+                # failures behind a label that implies the spawn itself failed.
+                error_text = str(spawn_outcome.get("error", ""))
+                if error_text.startswith("agent_timeout"):
+                    rejection_reason = "agent_timeout"
+                elif error_text.startswith("agent_binary_missing"):
+                    rejection_reason = "agent_binary_missing"
+                elif error_text.startswith("agent_exit_"):
+                    rejection_reason = error_text.split(":", 1)[0]
+                else:
+                    rejection_reason = "agent_spawn_failed"
                 rejected_rows.append(
                     self._make_rejection_row(
                         iteration=attempt_label,
                         candidate_uuid=str(uuid4()),
                         mutation_hash="",
-                        reason="agent_spawn_failed",
+                        reason=rejection_reason,
                     )
                 )
                 if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
@@ -7477,12 +7491,18 @@ class L0cKernelMutationRunner:
         if not prompt_path.is_file():
             return {"ok": False, "error": "iteration_brief.md missing"}
         prompt = prompt_path.read_text(encoding="utf-8")
+        # 0 (or negative) → no per-iteration agent timeout; round_timeout_hours
+        # remains the only ceiling. The 16-probe apply-and-test on GB10 takes
+        # ~80–110 min wallclock — a tight per-iter timeout was killing iters
+        # that were progressing fine, so the default is now no-timeout and the
+        # CLI must be passed an explicit positive value to opt in.
         timeout_s = int(
             spec.get(
                 "per_iteration_claude_wall_clock_s",
-                spec.get("per_iteration_codex_wall_clock_s", 45 * 60),
+                spec.get("per_iteration_codex_wall_clock_s", 0),
             )
         )
+        subprocess_timeout = timeout_s if timeout_s > 0 else None
         if agent_runtime == "claude":
             argv = [
                 "claude",
@@ -7523,7 +7543,7 @@ class L0cKernelMutationRunner:
                     stdout=transcript_handle,
                     stderr=subprocess.PIPE,
                     cwd=str(round_dir) if agent_runtime == "claude" else None,
-                    timeout=timeout_s,
+                    timeout=subprocess_timeout,
                     check=False,
                 )
         except subprocess.TimeoutExpired as exc:

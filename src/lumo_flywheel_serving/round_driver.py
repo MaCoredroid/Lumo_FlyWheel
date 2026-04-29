@@ -648,6 +648,8 @@ def _run_agent_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -
             iteration_dir=iteration_dir,
             last_message_path=last_message_path,
         )
+        # 0 → no per-iter agent timeout; round_timeout is the only ceiling.
+        subprocess_timeout = timeout_seconds if timeout_seconds > 0 else None
         with transcript.open("wb") as transcript_handle:
             result = subprocess.run(
                 argv,
@@ -656,7 +658,7 @@ def _run_agent_main_loop(manager: AutoResearchRoundManager, ctx: RoundContext) -
                 stderr=subprocess.PIPE,
                 env=os.environ.copy(),
                 cwd=str(ctx.worktree) if ctx.agent_runtime == "claude" else None,
-                timeout=timeout_seconds,
+                timeout=subprocess_timeout,
             )
         if ctx.agent_runtime == "claude":
             _extract_claude_last_message(transcript, last_message_path)
@@ -696,7 +698,7 @@ def _agent_invocation(
             "--skip-git-repo-check",
             "-",
         ]
-        timeout = int(ctx.round_spec.get("per_iteration_codex_wall_clock_s", 45 * 60))
+        timeout = int(ctx.round_spec.get("per_iteration_codex_wall_clock_s", 0))
         return argv, timeout
     if ctx.agent_runtime == "claude":
         model = str(ctx.round_spec.get("claude_model", DEFAULT_CLAUDE_MODEL))
@@ -722,7 +724,7 @@ def _agent_invocation(
         timeout = int(
             ctx.round_spec.get(
                 "per_iteration_claude_wall_clock_s",
-                ctx.round_spec.get("per_iteration_codex_wall_clock_s", 45 * 60),
+                ctx.round_spec.get("per_iteration_codex_wall_clock_s", 0),
             )
         )
         return argv, timeout
