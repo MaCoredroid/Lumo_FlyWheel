@@ -66,6 +66,12 @@ def main() -> int:
     parser.add_argument("--probe-count", type=int, default=64)
     parser.add_argument("--reproducibility-runs", type=int, default=3)
     parser.add_argument(
+        "--max-concurrent",
+        type=int,
+        default=1,
+        help="Probes per run issued concurrently (forwarded to build_parity_fixture).",
+    )
+    parser.add_argument(
         "--override-output-tokens",
         type=int,
         help="Pin every probe row's output token count (forwarded to build_parity_fixture).",
@@ -165,6 +171,8 @@ def main() -> int:
         ]
         if args.override_output_tokens is not None:
             cmd.extend(["--override-output-tokens", str(args.override_output_tokens)])
+        if args.max_concurrent and args.max_concurrent > 1:
+            cmd.extend(["--max-concurrent", str(args.max_concurrent)])
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{SRC_ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}"
         print(f"[fixture-rebuild] running: {' '.join(cmd)}")

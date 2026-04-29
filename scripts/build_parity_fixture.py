@@ -7,7 +7,9 @@ import json
 import re
 import shutil
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -427,6 +429,44 @@ def _wait_for_quiet_exports(export_dir: Path, *, timeout_s: float = 10.0, quiet_
         time.sleep(0.1)
 
 
+def _files_for_response(export_dir: Path, response_id: str) -> list[Path]:
+    prefix_logit = f"logits_req_{response_id}-"
+    prefix_state = f"state_req_{response_id}-"
+    prefix_diag = f"state_diag_req_{response_id}-"
+    return [
+        path
+        for path in export_dir.glob("*")
+        if path.is_file()
+        and (
+            path.name.startswith(prefix_logit)
+            or path.name.startswith(prefix_state)
+            or path.name.startswith(prefix_diag)
+        )
+    ]
+
+
+def _wait_for_quiet_response_exports(
+    export_dir: Path,
+    response_id: str,
+    *,
+    timeout_s: float = 30.0,
+    quiet_s: float = 0.5,
+) -> None:
+    deadline = time.time() + timeout_s
+    previous: tuple[str, ...] | None = None
+    quiet_started: float | None = None
+    while time.time() < deadline:
+        current = tuple(sorted(p.name for p in _files_for_response(export_dir, response_id)))
+        if current == previous and current:
+            quiet_started = quiet_started or time.time()
+            if time.time() - quiet_started >= quiet_s:
+                return
+        else:
+            previous = current
+            quiet_started = None
+        time.sleep(0.1)
+
+
 def _clear_export_staging(export_dir: Path) -> None:
     export_dir.mkdir(parents=True, exist_ok=True)
     for path in export_dir.iterdir():
@@ -440,11 +480,27 @@ def _archive_probe_exports(
     archive_dir: Path,
     expected_state_tokens: tuple[int, ...],
     require_state: bool,
+    response_id: str | None = None,
 ) -> DebugProbeArtifacts:
-    files = [path for path in export_dir.glob("*.pt") if path.is_file()]
+    if response_id is not None:
+        prefix_logit = f"logits_req_{response_id}-"
+        prefix_state = f"state_req_{response_id}-"
+        files = [
+            p
+            for p in export_dir.glob("*.pt")
+            if p.is_file() and (p.name.startswith(prefix_logit) or p.name.startswith(prefix_state))
+        ]
+    else:
+        files = [path for path in export_dir.glob("*.pt") if path.is_file()]
     if not files:
-        diagnostics = sorted(path.name for path in export_dir.glob("state_diag_req_*.json"))
-        raise RuntimeError(f"no debug .pt exports produced; diagnostics={diagnostics}")
+        if response_id is not None:
+            diag_glob = f"state_diag_req_{response_id}-*.json"
+        else:
+            diag_glob = "state_diag_req_*.json"
+        diagnostics = sorted(path.name for path in export_dir.glob(diag_glob))
+        raise RuntimeError(
+            f"no debug .pt exports produced for response_id={response_id}; diagnostics={diagnostics}"
+        )
 
     by_request: dict[str, dict[str, list[Path]]] = {}
     for path in files:
@@ -483,7 +539,11 @@ def _archive_probe_exports(
         target = archive_dir / source.name
         shutil.move(str(source), target)
         archived_states.append(target)
-    for source in export_dir.glob("state_diag_req_*.json"):
+    if response_id is not None:
+        diag_pattern = f"state_diag_req_{response_id}-*.json"
+    else:
+        diag_pattern = "state_diag_req_*.json"
+    for source in export_dir.glob(diag_pattern):
         shutil.move(str(source), archive_dir / source.name)
 
     probe_index = int(archive_dir.name.rsplit("_", 1)[-1])
@@ -590,47 +650,81 @@ def _capture_live_runs(
     request_timeout_s: float,
     expected_state_tokens: tuple[int, ...],
     require_state: bool,
+    max_concurrent: int = 1,
 ) -> tuple[list[list[DebugProbeArtifacts]], list[dict[str, Any]]]:
     runs: list[list[DebugProbeArtifacts]] = []
     responses: list[dict[str, Any]] = []
     staging_dir = debug_export_dir / "staging"
-    for run_index in range(1, run_count + 1):
-        run_artifacts: list[DebugProbeArtifacts] = []
-        for probe in probes:
-            _clear_export_staging(staging_dir)
-            started = time.time()
-            response = _request_completion(
-                endpoint=endpoint,
-                api_key=api_key,
-                model=model,
-                probe=probe,
-                timeout_s=request_timeout_s,
-                # vLLM can remove a request before the final-token state hook
-                # sees it, so make required state checkpoints non-terminal.
-                minimum_completion_tokens=(
-                    max(expected_state_tokens) + 1 if require_state and expected_state_tokens else None
-                ),
-            )
-            _wait_for_quiet_exports(staging_dir)
-            archive_dir = debug_export_dir / f"run_{run_index:02d}" / f"probe_{int(probe['probe_index']):06d}"
+    archive_lock = threading.Lock()
+
+    def _capture_one(
+        probe: dict[str, Any],
+        run_index: int,
+    ) -> tuple[DebugProbeArtifacts, dict[str, Any]]:
+        started = time.time()
+        response = _request_completion(
+            endpoint=endpoint,
+            api_key=api_key,
+            model=model,
+            probe=probe,
+            timeout_s=request_timeout_s,
+            # vLLM can remove a request before the final-token state hook
+            # sees it, so make required state checkpoints non-terminal.
+            minimum_completion_tokens=(
+                max(expected_state_tokens) + 1 if require_state and expected_state_tokens else None
+            ),
+        )
+        response_id = response.get("id")
+        if not response_id:
+            raise RuntimeError("completion response missing 'id'")
+        _wait_for_quiet_response_exports(staging_dir, response_id)
+        archive_dir = debug_export_dir / f"run_{run_index:02d}" / f"probe_{int(probe['probe_index']):06d}"
+        # archive_lock guards the shutil.move steps so that two probes whose files
+        # might land at the same instant don't race on dir-creation/move sequencing.
+        with archive_lock:
             artifact = _archive_probe_exports(
                 export_dir=staging_dir,
                 archive_dir=archive_dir,
                 expected_state_tokens=expected_state_tokens,
                 require_state=require_state,
+                response_id=response_id,
             )
-            run_artifacts.append(artifact)
-            responses.append(
-                {
-                    "run_index": run_index,
-                    "probe_index": int(probe["probe_index"]),
-                    "request_id": artifact.request_id,
-                    "response_id": response.get("id"),
-                    "elapsed_s": round(time.time() - started, 3),
-                    "logits_files": [str(path) for path in artifact.logits_paths],
-                    "state_files": [str(path) for path in artifact.state_paths],
+        response_record = {
+            "run_index": run_index,
+            "probe_index": int(probe["probe_index"]),
+            "request_id": artifact.request_id,
+            "response_id": response_id,
+            "elapsed_s": round(time.time() - started, 3),
+            "logits_files": [str(path) for path in artifact.logits_paths],
+            "state_files": [str(path) for path in artifact.state_paths],
+        }
+        return artifact, response_record
+
+    for run_index in range(1, run_count + 1):
+        if max_concurrent <= 1:
+            _clear_export_staging(staging_dir)
+            run_artifacts: list[DebugProbeArtifacts] = []
+            for probe in probes:
+                artifact, record = _capture_one(probe, run_index)
+                run_artifacts.append(artifact)
+                responses.append(record)
+        else:
+            # Concurrent mode: do NOT clear staging between probes — each probe
+            # filters by its own response_id. Clear once before the run only.
+            _clear_export_staging(staging_dir)
+            artifact_by_index: dict[int, DebugProbeArtifacts] = {}
+            with ThreadPoolExecutor(max_workers=max_concurrent) as ex:
+                futures = {
+                    ex.submit(_capture_one, probe, run_index): int(probe["probe_index"])
+                    for probe in probes
                 }
-            )
+                for fut in futures:
+                    pass  # ensure all submitted before iterating .result()
+                for fut, probe_idx in futures.items():
+                    artifact, record = fut.result()
+                    artifact_by_index[probe_idx] = artifact
+                    responses.append(record)
+            run_artifacts = [artifact_by_index[int(p["probe_index"])] for p in probes]
         runs.append(run_artifacts)
     return runs, responses
 
@@ -708,6 +802,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--debug-export-dir", type=Path, default=REPO_ROOT / "output" / "p2b_fixture_capture")
     parser.add_argument("--request-timeout-s", type=float, default=1800.0)
     parser.add_argument("--reproducibility-runs", type=int, default=REFERENCE_REPRODUCIBILITY_RUNS)
+    parser.add_argument(
+        "--max-concurrent",
+        type=int,
+        default=1,
+        help="Probes per run to issue concurrently. >1 routes through ThreadPoolExecutor; "
+        "each probe filters its own debug-export files by response_id so staging-dir mixing "
+        "is safe. Speedup is bounded by vLLM's max_num_seqs and the per-probe token-cost.",
+    )
     parser.add_argument("--override-output-tokens", type=int)
     parser.add_argument("--kernel-target", choices=[*KERNEL_TARGETS, "both"], default="both")
     parser.add_argument("--capture-only", action="store_true")
@@ -881,6 +983,7 @@ def main(argv: list[str] | None = None) -> int:
             request_timeout_s=args.request_timeout_s,
             expected_state_tokens=(1, 1024),
             require_state=require_state,
+            max_concurrent=args.max_concurrent,
         )
         # Auto-derive actually_resolved_kernel_selection from the live vLLM stack
         # (HLD v0.3.3 §5.2). Operator-supplied --actually-resolved-yaml overrides

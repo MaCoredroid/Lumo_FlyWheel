@@ -297,10 +297,54 @@ def main() -> int:
         print(f"[p5b] skipped (base kv_cache_dtype={base_kv}); wrote {args.output_json}")
         return 0
 
-    # Synthesize the bf16-KV sibling bundle next to the base bundle.
+    # vLLM 0.19 rejects fp8_e5m2 KV for fp8 checkpoints during engine init, and
+    # ModelServer._initial_kv_cache_dtype proactively rewrites fp8_e5m2 -> auto
+    # before the first launch to dodge the crash. So on this runtime, requesting
+    # fp8_e5m2 KV against an fp8 checkpoint produces realized kv_cache_dtype=auto
+    # (i.e. native bf16) — the fp8 phase would be byte-identical to the
+    # unquantized sibling, and the comparison is vacuously satisfied. Skip with
+    # an explicit attestation rather than spending two cold starts to confirm 0.0.
+    server_for_registry = ModelServer(
+        registry_path=args.registry,
+        port=args.port,
+        proxy_port=args.proxy_port,
+        container_name=args.container_name,
+        logs_root=Path(args.logs_root),
+        triton_cache_root=Path(args.triton_cache_root),
+        state_root=Path(args.state_root),
+        image=args.image,
+    )
+    model_quantization = server_for_registry.registry[args.model_id].quantization
+    if str(model_quantization).lower() == "fp8" and str(base_kv).lower() == "fp8_e5m2":
+        result = {
+            "status": "passthrough",
+            "reason": "fp8_kv_path_dead_in_runtime",
+            "detail": (
+                f"vLLM 0.19 + quantization={model_quantization} forces "
+                f"kv_cache_dtype fp8_e5m2 -> auto at engine init; fp8 KV is never "
+                f"actually realized, so kernel mutations against this base cannot "
+                f"be debugging fp8 KV quantization noise."
+            ),
+            "base_kv_cache_dtype": str(base_kv),
+            "realized_kv_cache_dtype": "auto",
+            "model_quantization": str(model_quantization),
+            "base_bundle": str(base_bundle_path),
+        }
+        Path(args.output_json).write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+        print(
+            f"[p5b] passthrough — runtime forces fp8_e5m2 -> auto for "
+            f"quantization={model_quantization}; wrote {args.output_json}"
+        )
+        return 0
+
+    # Synthesize the unquantized-KV sibling bundle next to the base bundle.
+    # vLLM kv_cache_dtype only accepts {"fp8_e5m2", "auto"} (also enforced by
+    # tuned_config / registry validators); "auto" resolves to the model's
+    # native KV dtype, which is bf16 for Qwen3.5-27B-FP8 — i.e. unquantized KV
+    # vs the fp8_e5m2 base. That's the comparison P5b needs.
     bf16_bundle_path = debug_export_root / "bundle_bf16_sibling.yaml"
-    _override_kv_cache_dtype(base_bundle_path, "bf16", bf16_bundle_path)
-    print(f"[p5b] wrote bf16 sibling bundle: {bf16_bundle_path}")
+    _override_kv_cache_dtype(base_bundle_path, "auto", bf16_bundle_path)
+    print(f"[p5b] wrote unquantized-KV sibling bundle (kv_cache_dtype=auto): {bf16_bundle_path}")
 
     # Deterministic probes — short prompt, single-token output (HLD: ~10 min, 16 probes).
     probes = deterministic_probe_rows(REPO_ROOT, args.family_id, args.probe_count)

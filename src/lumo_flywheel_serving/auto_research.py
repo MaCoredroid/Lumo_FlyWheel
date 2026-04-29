@@ -5769,15 +5769,35 @@ on compute-side micro-opts that did not move the bandwidth-bound needle.
 - (DeltaNet only) State-snapshot tolerance: rtol={{rtol_state}} / atol={{atol_state}}
 - Recurrent-state checkpoints at: {{state_checkpoints_at_token}}
 
+# Reading prior-iteration history
+The canonical per-iteration record is `candidates/<NNN>/parity_check.json`
+(written by the round controller's authoritative re-run). `BLOCKED.md`,
+when present in a candidate dir, means the controller REJECTED that
+mutation — its content is the controller's reason, NOT the agent's
+prior commentary.
+
+IMPORTANT: your own apply-and-test (step 4 below) runs in a Triton
+autotune state that may diverge from the controller's later re-run.
+The agent's apply-and-test parity verdict can therefore disagree with
+the controller's verdict on the SAME patch (autotune-cache flips the
+config selection, and that changes `tl.dot` reduction order). When
+inspecting prior iterations, trust `parity_check.json` over any other
+record. If a prior iteration is in `results.tsv`, it was accepted —
+period — even if its dir contains stale agent commentary.
+
 # Procedure
 1. Do the research described in step 0 above.
 2. Read {{kernel_source_path}}, mutations_rejected.tsv, results.tsv (best_so_far).
+   For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
 3. Write your proposal to {{iteration_dir}}/mutation.patch.
 4. Run: {{lumoserve_cmd}} auto-research apply-and-test \\
      --round-id {{round_id}} --iteration {{iteration}} \\
      --kernel-target {{kernel_target}} --harness {{harness_mode}}
 5. Read the result. If parity fails, write a one-line note to BLOCKED.md
    explaining what you'll try next. Do NOT propose the same edit again.
+   Note: the controller will overwrite or remove your BLOCKED.md after
+   its own re-run, so write it for your own bookkeeping; the canonical
+   record will be the controller's.
 6. Exit 0.
 
 # What you do NOT do
@@ -6776,6 +6796,30 @@ class L0cKernelMutationRunner:
                 ),
                 error_detail=parity_result.error_detail,
             )
+            # The agent's per-iteration apply-and-test runs first and may write
+            # BLOCKED.md based on its own parity_check.json (later overwritten
+            # here). Triton autotune-cache state can diverge between the agent's
+            # rapid apply-and-test cycles and the controller's clean re-run, so
+            # the agent's verdict can disagree with the controller's. The
+            # controller is canonical: BLOCKED.md must reflect the controller's
+            # verdict so future iterations' agents read the truth, not stale
+            # agent perspective.
+            blocked_path = iteration_dir / "BLOCKED.md"
+            if parity_result.pass_:
+                if blocked_path.exists():
+                    blocked_path.unlink()
+            else:
+                blocker_lines = [
+                    "iteration rejected by controller's apply-and-test",
+                    f"reason: {parity_result.reason}",
+                ]
+                if parity_result.first_diverging_probe is not None:
+                    blocker_lines.append(f"first_diverging_probe: {parity_result.first_diverging_probe}")
+                if parity_result.tolerance_overshoot:
+                    blocker_lines.append(f"tolerance_overshoot: {parity_result.tolerance_overshoot}")
+                if parity_result.error_detail:
+                    blocker_lines.append(f"detail: {parity_result.error_detail}")
+                blocked_path.write_text("\n".join(blocker_lines) + "\n", encoding="utf-8")
             if not parity_result.pass_:
                 if parity_result.reason in {"endpoint_unreachable", "capture_failed", "comparison_failed"}:
                     outcome = "compile_failed"

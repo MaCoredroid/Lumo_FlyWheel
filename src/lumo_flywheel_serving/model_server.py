@@ -778,6 +778,7 @@ class ModelServer:
             "-e",
             f"VLLM_LOGGING_LEVEL={'DEBUG' if enable_request_logging else 'INFO'}",
             *self._batch_invariant_env_args(),
+            *self._triton_debug_env_args(),
             *kernel_activation_env_args,
             *self._p2b_debug_export_env_args(),
             *volume_args,
@@ -808,6 +809,15 @@ class ModelServer:
         if os.environ.get("LUMO_BATCH_INVARIANT_VLLM", "0").lower() in {"1", "true", "yes"}:
             return ["-e", "VLLM_BATCH_INVARIANT=1"]
         return []
+
+    @staticmethod
+    def _triton_debug_env_args() -> list[str]:
+        args: list[str] = []
+        for name in ("TRITON_PRINT_AUTOTUNING", "MLIR_ENABLE_DUMP", "TRITON_DEBUG"):
+            value = os.environ.get(name)
+            if value is not None and value != "":
+                args.extend(["-e", f"{name}={value}"])
+        return args
 
     @staticmethod
     def _p2b_debug_export_env_args() -> list[str]:
