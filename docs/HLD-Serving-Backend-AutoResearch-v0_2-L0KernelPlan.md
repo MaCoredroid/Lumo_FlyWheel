@@ -812,7 +812,15 @@ Per-attempt budget is enforced as a hard timeout per parent §5.7 watchdog rails
 
 ### 5.5 What the agent's `iteration_brief.md` says
 
-Per v0.1.11 §5.2, brief is short and instructs the agent. v0.2 brief for L0c (composed by `mutate-kernel` at bootstrap):
+Per v0.1.11 §5.2, brief is short and instructs the agent. v0.2 brief for L0c (composed by `mutate-kernel` at bootstrap) now includes a round-level `strategy_brief.md` and `prior_mutations_rejected.tsv`. The strategy brief is generated before the first candidate from local artifacts only: this HLD, the latest P3a/roofline probe, prior L0c `mutations_rejected.tsv` files, and prior candidate `parity_check.json`/`BLOCKED.md` verdicts from fresh round dirs. The candidate prompt embeds the strategy summary and tells the agent to read the structured prior-rejection ledger.
+
+The generated strategy brief must include:
+- Bottleneck thesis and P3a/roofline summary.
+- Forbidden mutation families, including `.cg`/cache changes on dot-adjacent `w`/`k` loads, store hints, broad `v+h0` cache-policy edits, and known-divergent `v` load eviction/cache changes.
+- Ranked likely-safe target areas, with single auxiliary `g`/`gk` load hints preferred before broader edits.
+- Carried-forward prior rejection rows with source round, iteration, mutation hash, rejection reason, first-diverging probe, and tolerance overshoot.
+
+The current L0c prompt skeleton:
 
 ```markdown
 You are an autonomous kernel-research agent for iteration {{iteration}} of round {{round_id}}.
@@ -839,7 +847,8 @@ best on the workload, AND passes the parity gate at
 - Recurrent-state checkpoints at: {{state_checkpoints_at_token}}
 
 # Procedure
-1. Read {{kernel_source_path}}, mutations_rejected.tsv, results.tsv (best_so_far).
+1. Read {{kernel_source_path}}, strategy_brief.md, prior_mutations_rejected.tsv,
+   mutations_rejected.tsv, results.tsv (best_so_far).
 2. Write your proposal to {{iteration_dir}}/mutation.patch.
 3. Run: lumoserve auto-research apply-and-test --round-id {{round_id}} \
      --iteration {{iteration}} --kernel-target {{kernel_target}}

@@ -102,6 +102,17 @@ L0C_PROPOSER_STUCK_THRESHOLD = 3
 L0C_COMPILE_FAILURES_THRESHOLD = 3
 L0C_INTERMITTENT_PARITY_THRESHOLD = 2
 L0C_MEASUREMENTS_PER_ACCEPTED = 2
+L0C_PRIOR_REJECTION_LIMIT = 20
+L0C_PRIOR_REJECTION_COLUMNS = [
+    "source_round_id",
+    "iteration",
+    "mutation_hash",
+    "rejection_reason",
+    "first_diverging_probe_index",
+    "tolerance_overshoot",
+    "source_ref",
+    "blocked_note",
+]
 L0C_TERMINAL_CONDITIONS = {
     "accepted_cap_reached",
     "total_attempt_cap_reached",
@@ -5742,6 +5753,8 @@ This kernel runs on a **DGX Spark GB10**. Treat it as bandwidth-bound:
 Mutations that reduce memory traffic or improve cache reuse are more likely
 to matter than compute-only micro-optimizations.
 
+{{strategy_brief}}
+
 Use the context already in this brief and the local rejection history. Do
 not spend iteration budget on online research inside the agent loop.
 
@@ -5778,7 +5791,8 @@ record. If a prior iteration is in `results.tsv`, it was accepted —
 period — even if its dir contains stale agent commentary.
 
 # Procedure
-1. Read {{kernel_source_path}}, mutations_rejected.tsv, results.tsv (best_so_far).
+1. Read {{kernel_source_path}}, strategy_brief.md, prior_mutations_rejected.tsv,
+   mutations_rejected.tsv, results.tsv (best_so_far).
    For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
 2. Write your proposal to {{iteration_dir}}/mutation.patch.
    Generate the patch with a real diff tool; do not hand-write hunk counts.
@@ -5979,6 +5993,23 @@ class L0cKernelMutationRunner:
         round_dir.mkdir(parents=True)
         (round_dir / "candidates").mkdir()
         (round_dir / "live_traces").mkdir()
+        prior_rejections = self._collect_prior_l0c_rejections(
+            round_root=root,
+            current_round_id=round_id,
+            kernel_target=kernel_target,
+        )
+        self._write_tsv(
+            round_dir / "prior_mutations_rejected.tsv",
+            L0C_PRIOR_REJECTION_COLUMNS,
+            prior_rejections,
+        )
+        strategy_brief = self._build_l0c_strategy_brief(
+            kernel_target=kernel_target,
+            round_id=round_id,
+            hld_path=self.repo_root / "docs" / "HLD-Serving-Backend-AutoResearch-v0_2-L0KernelPlan.md",
+            prior_rejections=prior_rejections,
+        )
+        (round_dir / "strategy_brief.md").write_text(strategy_brief, encoding="utf-8")
 
         spec = {
             "round_id": round_id,
@@ -6009,6 +6040,7 @@ class L0cKernelMutationRunner:
                 fixture_payload=fixture_payload,
                 round_id=round_id,
                 harness=harness,
+                strategy_brief=strategy_brief,
             ),
             encoding="utf-8",
         )
@@ -6440,8 +6472,10 @@ class L0cKernelMutationRunner:
             artifact_paths={
                 "round_spec": str(round_dir / "round_spec.yaml"),
                 "iteration_brief": str(round_dir / "iteration_brief.md"),
+                "strategy_brief": str(round_dir / "strategy_brief.md"),
                 "run_log": str(round_dir / "run_log.json"),
                 "measurement_trace_combined": str(round_dir / "measurement_trace_combined.json"),
+                "prior_mutations_rejected": str(round_dir / "prior_mutations_rejected.tsv"),
                 "mutations_rejected": str(round_dir / "mutations_rejected.tsv"),
                 "results": str(round_dir / "results.tsv"),
                 "measurements": str(round_dir / "measurements.tsv"),
@@ -7358,6 +7392,299 @@ class L0cKernelMutationRunner:
             wall_clock_minutes=wall_clock_minutes,
         )
 
+    def _collect_prior_l0c_rejections(
+        self,
+        *,
+        round_root: Path,
+        current_round_id: str,
+        kernel_target: str,
+    ) -> list[dict[str, Any]]:
+        if not round_root.exists():
+            return []
+        round_dirs = [
+            path
+            for path in round_root.iterdir()
+            if path.is_dir()
+            and path.name != current_round_id
+            and f"-l0c-mutation-{kernel_target}-" in path.name
+        ]
+        round_dirs.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        rows: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for prior_round in round_dirs:
+            for row in self._prior_rejections_from_tsv(prior_round):
+                key = (
+                    row["source_round_id"],
+                    row["iteration"],
+                    row["mutation_hash"],
+                    row["rejection_reason"],
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append(row)
+                if len(rows) >= L0C_PRIOR_REJECTION_LIMIT:
+                    return rows
+            for row in self._prior_rejections_from_candidate_artifacts(prior_round):
+                key = (
+                    row["source_round_id"],
+                    row["iteration"],
+                    row["mutation_hash"],
+                    row["rejection_reason"],
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append(row)
+                if len(rows) >= L0C_PRIOR_REJECTION_LIMIT:
+                    return rows
+        return rows
+
+    def _prior_rejections_from_tsv(self, round_dir: Path) -> list[dict[str, Any]]:
+        path = round_dir / "mutations_rejected.tsv"
+        if not path.is_file():
+            return []
+        rows: list[dict[str, Any]] = []
+        for payload in self._read_tsv(path):
+            iteration = str(payload.get("iteration", ""))
+            rows.append(
+                {
+                    "source_round_id": round_dir.name,
+                    "iteration": iteration,
+                    "mutation_hash": str(payload.get("mutation_hash", "")),
+                    "rejection_reason": str(payload.get("rejection_reason", "")),
+                    "first_diverging_probe_index": str(
+                        payload.get("first_diverging_probe_index", "")
+                    ),
+                    "tolerance_overshoot": str(payload.get("tolerance_overshoot", "")),
+                    "source_ref": _relative_to_repo(self.repo_root, path),
+                    "blocked_note": self._read_blocked_note(
+                        round_dir / "candidates" / iteration
+                    ),
+                }
+            )
+        return rows
+
+    def _prior_rejections_from_candidate_artifacts(
+        self, round_dir: Path
+    ) -> list[dict[str, Any]]:
+        candidates_dir = round_dir / "candidates"
+        if not candidates_dir.is_dir():
+            return []
+        rows: list[dict[str, Any]] = []
+        for iteration_dir in sorted(candidates_dir.iterdir(), key=lambda path: path.name):
+            if not iteration_dir.is_dir():
+                continue
+            parity_path = iteration_dir / "parity_check.json"
+            if not parity_path.is_file():
+                continue
+            try:
+                parity = json.loads(parity_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(parity, dict) or parity.get("pass") is not False:
+                continue
+            patch_path = iteration_dir / "mutation.patch"
+            mutation_hash = ""
+            if patch_path.is_file():
+                mutation_hash = hashlib.sha256(
+                    patch_path.read_text(encoding="utf-8").encode("utf-8")
+                ).hexdigest()
+            rows.append(
+                {
+                    "source_round_id": round_dir.name,
+                    "iteration": iteration_dir.name,
+                    "mutation_hash": mutation_hash,
+                    "rejection_reason": str(parity.get("reason", "")),
+                    "first_diverging_probe_index": (
+                        ""
+                        if parity.get("first_diverging_probe") is None
+                        else str(parity["first_diverging_probe"])
+                    ),
+                    "tolerance_overshoot": (
+                        ""
+                        if parity.get("tolerance_overshoot") is None
+                        else str(parity["tolerance_overshoot"])
+                    ),
+                    "source_ref": _relative_to_repo(self.repo_root, parity_path),
+                    "blocked_note": self._read_blocked_note(iteration_dir),
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _read_blocked_note(iteration_dir: Path) -> str:
+        path = iteration_dir / "BLOCKED.md"
+        if not path.is_file():
+            return ""
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = line.strip()
+            if stripped:
+                return stripped
+        return ""
+
+    @staticmethod
+    def _read_tsv(path: Path) -> list[dict[str, str]]:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        if not lines:
+            return []
+        header = lines[0].split("\t")
+        rows: list[dict[str, str]] = []
+        for line in lines[1:]:
+            if not line.strip():
+                continue
+            values = line.split("\t")
+            rows.append(
+                {
+                    key: values[index] if index < len(values) else ""
+                    for index, key in enumerate(header)
+                }
+            )
+        return rows
+
+    def _build_l0c_strategy_brief(
+        self,
+        *,
+        kernel_target: str,
+        round_id: str,
+        hld_path: Path,
+        prior_rejections: list[dict[str, Any]],
+    ) -> str:
+        p3a_lines = self._latest_p3a_strategy_lines()
+        prior_lines = ["- No prior cross-round rejections found for this kernel target."]
+        if prior_rejections:
+            prior_lines = []
+            for row in prior_rejections[:8]:
+                detail = (
+                    f"- {row['source_round_id']} {row['iteration']}: "
+                    f"{row['rejection_reason']}"
+                )
+                if row.get("first_diverging_probe_index"):
+                    detail += f", first_probe={row['first_diverging_probe_index']}"
+                if row.get("tolerance_overshoot"):
+                    detail += f", overshoot={row['tolerance_overshoot']}"
+                if row.get("blocked_note"):
+                    detail += f"; note: {row['blocked_note']}"
+                prior_lines.append(detail)
+        lines = [
+            "# L0c Strategy Brief",
+            "",
+            f"- Round: `{round_id}`",
+            f"- Kernel target: `{kernel_target}`",
+            f"- HLD source: `{_relative_to_repo(self.repo_root, hld_path)}`",
+            (
+                "- Prior rejection ledger: "
+                f"`prior_mutations_rejected.tsv` ({len(prior_rejections)} rows)"
+            ),
+            "",
+            "## Bottleneck Thesis",
+            "",
+            "- Treat the canary as decode-dominant and bandwidth-sensitive on GB10 LPDDR5x.",
+            (
+                "- Prefer changes that reduce memory traffic, improve cache locality, "
+                "or narrow one load/store behavior at a time."
+            ),
+            (
+                "- Do not trade numerical order or recurrent state semantics for speed; "
+                "parity dominates throughput."
+            ),
+            *p3a_lines,
+            "",
+            "## Forbidden Mutation Families",
+            "",
+            (
+                "- Do not add or expand `.cg`/cache modifiers on dot-adjacent "
+                "`w` or `k` load families."
+            ),
+            "- Do not add store hints or change store cache policy.",
+            "- Do not make broad cache-policy edits spanning both `v` and `h0`/state paths.",
+            (
+                "- Do not change `v` load eviction/cache policy; the last canary "
+                "`v` `evict_first` probe diverged immediately."
+            ),
+            (
+                "- Do not change tile sizes, grid shape, signatures, recurrence order, "
+                "or `tl.dot` operand ordering."
+            ),
+            (
+                "- Do not retry a mutation hash listed in `mutations_rejected.tsv` "
+                "or `prior_mutations_rejected.tsv`."
+            ),
+            "",
+            "## Ranked Likely-Safe Targets",
+            "",
+            (
+                "1. A single auxiliary gate-load hint on non-dot-adjacent `g`/`gk` "
+                "reads, one line only."
+            ),
+            (
+                "2. Narrow scalar metadata loads such as sequence/chunk offsets, "
+                "preserving types and control flow."
+            ),
+            (
+                "3. Local address/mask expression cleanup that leaves arithmetic "
+                "order and tensor shapes unchanged."
+            ),
+            (
+                "4. One-load-only cache hint rollback or tightening where prior "
+                "comments already identify cache pressure."
+            ),
+            "",
+            "## Prior Rejections Carried Forward",
+            "",
+            *prior_lines,
+            "",
+            "Use this brief as direction, not proof. The controller parity gate is canonical.",
+            "",
+        ]
+        return "\n".join(lines)
+
+    def _latest_p3a_strategy_lines(self) -> list[str]:
+        output_root = self.repo_root / "output"
+        if not output_root.is_dir():
+            return [
+                "- P3a: no local probe artifact found; fall back to HLD bandwidth thesis."
+            ]
+        probe_paths = list(output_root.glob("p3a_roofline_probe_*/p3a_roofline_probe.json"))
+        if not probe_paths:
+            return [
+                "- P3a: no local probe artifact found; fall back to HLD bandwidth thesis."
+            ]
+        probe_paths.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        path = probe_paths[0]
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return [
+                f"- P3a: latest artifact `{_relative_to_repo(self.repo_root, path)}` "
+                "is unreadable."
+            ]
+        derived = payload.get("derived") if isinstance(payload, dict) else {}
+        gpu = payload.get("gpu_poll_stats") if isinstance(payload, dict) else {}
+        util = gpu.get("utilization_gpu_pct", {}) if isinstance(gpu, dict) else {}
+        decision = payload.get("p3a_decision", {}) if isinstance(payload, dict) else {}
+        return [
+            (
+                f"- P3a: `{_relative_to_repo(self.repo_root, path)}` "
+                f"probe_count={payload.get('probe_count', '')}, "
+                f"wall={float(payload.get('wall_clock_s', 0.0)):.3f}s, "
+                "decode_share="
+                f"{float(derived.get('decode_time_share_of_prefill_plus_decode') or 0.0):.3f}, "
+                f"gen_tok_s={float(derived.get('observed_tokens_per_second_wall') or 0.0):.3f}, "
+                f"gpu_util_mean={float(util.get('mean') or 0.0):.1f}%."
+            ),
+            (
+                "- P3a decision: "
+                + str(
+                    decision.get(
+                        "basis",
+                        "no counter-evidence against DeltaNet-first ordering.",
+                    )
+                )
+            ),
+            "- P3a limitation: no full Nsight kernel-category split; keep mutations conservative.",
+        ]
+
     def _read_parity_check(self, iteration_dir: Path) -> dict[str, Any]:
         path = iteration_dir / "parity_check.json"
         if not path.is_file():
@@ -7451,6 +7778,9 @@ class L0cKernelMutationRunner:
             fixture_payload=fixture_payload,
             round_id=round_id,
             harness=harness,
+            strategy_brief=(iteration_dir.parent.parent / "strategy_brief.md").read_text(
+                encoding="utf-8"
+            ),
         )
         brief = brief.replace("{{iteration}}", iteration)
         brief = brief.replace("{{iteration_dir}}", str(iteration_dir))
@@ -7891,7 +8221,9 @@ class L0cKernelMutationRunner:
             artifact_paths={
                 "round_spec": str(round_dir / "round_spec.yaml"),
                 "iteration_brief": str(round_dir / "iteration_brief.md"),
+                "strategy_brief": str(round_dir / "strategy_brief.md"),
                 "results": str(round_dir / "results.tsv"),
+                "prior_mutations_rejected": str(round_dir / "prior_mutations_rejected.tsv"),
                 "mutations_rejected": str(round_dir / "mutations_rejected.tsv"),
                 "measurements": str(round_dir / "measurements.tsv"),
                 "candidate_trailers": str(round_dir / "candidate_trailers.tsv"),
@@ -8072,6 +8404,7 @@ class L0cKernelMutationRunner:
         fixture_payload: Any,
         round_id: str,
         harness: str,
+        strategy_brief: str = "",
     ) -> str:
         rtol_logit = ""
         atol_logit = ""
@@ -8103,6 +8436,7 @@ class L0cKernelMutationRunner:
             "rtol_state": rtol_state,
             "atol_state": atol_state,
             "state_checkpoints_at_token": ", ".join(state_checkpoints),
+            "strategy_brief": strategy_brief.strip(),
         }
         rendered = L0C_ITERATION_BRIEF_TEMPLATE
         for key, value in substitutions.items():

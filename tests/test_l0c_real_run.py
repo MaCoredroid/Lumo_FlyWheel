@@ -610,6 +610,115 @@ def test_real_run_writes_runtime_block_into_round_spec(tmp_path: Path, monkeypat
     assert snapshot_files[0].read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n"
 
 
+def test_real_run_embeds_strategy_brief_and_prior_rejections(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    fixture_path = _write_parity_fixture(repo)
+    base_bundle = _write_base_bundle(repo, workload_path)
+    kernel_path = _make_kernel_source(tmp_path)
+    round_root = repo / "output" / "auto_research"
+    prior_candidate = (
+        round_root
+        / "qwen3.5-27b-test-family-l0c-mutation-deltanet-20260429T203705Z"
+        / "candidates"
+        / "001"
+    )
+    prior_candidate.mkdir(parents=True)
+    (prior_candidate / "mutation.patch").write_text(_patch_for("old-v-hint"), encoding="utf-8")
+    (prior_candidate / "parity_check.json").write_text(
+        json.dumps(
+            {
+                "pass": False,
+                "reason": "parity_logit_diverged",
+                "first_diverging_probe": 0,
+                "tolerance_overshoot": 0.4989296875,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (prior_candidate / "BLOCKED.md").write_text(
+        "avoid v-load hint changes entirely\n",
+        encoding="utf-8",
+    )
+    p3a_dir = repo / "output" / "p3a_roofline_probe_20260429T193758Z"
+    p3a_dir.mkdir(parents=True)
+    (p3a_dir / "p3a_roofline_probe.json").write_text(
+        json.dumps(
+            {
+                "probe_count": 1,
+                "wall_clock_s": 18.302,
+                "derived": {
+                    "decode_time_share_of_prefill_plus_decode": 0.9773,
+                    "observed_tokens_per_second_wall": 6.9939,
+                },
+                "gpu_poll_stats": {"utilization_gpu_pct": {"mean": 86.4}},
+                "p3a_decision": {"basis": "DeltaNet-first L0c canary ordering remains allowed."},
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    _stub_baseline(monkeypatch, rows=1, mean_obj=1.0)
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_spawn_l0c_agent_iteration",
+        _make_agent_writer(patch_text_for=lambda iteration: _patch_for(iteration)),
+        raising=True,
+    )
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "apply_and_test",
+        _stub_apply_and_test(
+            outcomes_for=lambda iteration: {
+                "outcome": "parity_passed",
+                "objective_mean": 1.20,
+                "candidate_uuid": f"cand-{iteration}",
+            }
+        ),
+        raising=True,
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path=str(kernel_path),
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=1,
+        total_attempt_cap=1,
+        round_timeout_hours=1.0,
+        round_root=round_root,
+        harness="real",
+        runtime=_runtime_block(),
+    )
+
+    prior = (result.round_dir / "prior_mutations_rejected.tsv").read_text(encoding="utf-8")
+    assert "parity_logit_diverged" in prior
+    assert "0.4989296875" in prior
+    assert "avoid v-load hint changes entirely" in prior
+    strategy = (result.round_dir / "strategy_brief.md").read_text(encoding="utf-8")
+    assert "P3a" in strategy
+    assert "Forbidden Mutation Families" in strategy
+    assert "v` load eviction/cache policy" in strategy
+    assert "g`/`gk`" in strategy
+    brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
+        encoding="utf-8"
+    )
+    assert "strategy_brief.md" in brief
+    assert "prior_mutations_rejected.tsv" in brief
+    assert "DeltaNet-first L0c canary ordering remains allowed." in brief
+
+
 def test_real_paired_baseline_discards_first_cold_row(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
