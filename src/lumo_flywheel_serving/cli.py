@@ -1322,7 +1322,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_mutate_kernel.add_argument("--admin-url")
     auto_mutate_kernel.add_argument("--api-key", default="EMPTY")
     auto_mutate_kernel.add_argument(
-        "--agent-runtime", choices=["claude", "codex"], default="claude"
+        "--agent-runtime", choices=["claude", "codex"], default="codex"
     )
     auto_mutate_kernel.add_argument("--claude-model")
     auto_mutate_kernel.add_argument(

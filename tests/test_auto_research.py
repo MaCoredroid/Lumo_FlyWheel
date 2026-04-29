@@ -3295,7 +3295,7 @@ def test_agent_invocation_codex_argv_is_unchanged(tmp_path: Path) -> None:
         "--skip-git-repo-check",
         "-",
     ]
-    assert timeout == 45 * 60
+    assert timeout == 0
 
 
 def test_agent_invocation_claude_argv_uses_claude_cli_and_anthropic_auth(tmp_path: Path) -> None:
@@ -3315,7 +3315,7 @@ def test_agent_invocation_claude_argv_uses_claude_cli_and_anthropic_auth(tmp_pat
         argv.index("--permission-mode"):argv.index("--permission-mode") + 2
     ]
     assert ["--add-dir", str(ctx.worktree)] == argv[argv.index("--add-dir"):argv.index("--add-dir") + 2]
-    assert timeout == 45 * 60
+    assert timeout == 0
 
 
 def test_agent_invocation_claude_round_spec_overrides_apply(tmp_path: Path) -> None:

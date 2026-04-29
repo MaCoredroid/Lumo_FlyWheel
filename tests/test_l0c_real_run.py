@@ -444,6 +444,104 @@ def test_real_run_terminates_compile_failures_after_three_compile_fails(
     assert result.bundle_path is None
 
 
+def test_real_run_preserves_parity_verdict_when_agent_exits_after_apply(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    fixture_path = _write_parity_fixture(repo)
+    base_bundle = _write_base_bundle(repo, workload_path)
+    kernel_path = _make_kernel_source(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    _stub_baseline(monkeypatch, rows=1, mean_obj=1.0)
+
+    def _spawn(self, *, spec, round_dir, iteration_dir, iteration):
+        (iteration_dir / "mutation.patch").write_text(_patch_for(iteration), encoding="utf-8")
+        self._write_parity_check(
+            iteration_dir,
+            pass_=False,
+            reason="parity_logit_diverged",
+            fixture_id="test-family-deltanet-v1",
+            kernel_target="deltanet",
+            first_diverging_probe=0,
+            tolerance_overshoot=0.35843359375,
+        )
+        return {"ok": False, "error": "agent_exit_1: stale monitor killed"}
+
+    monkeypatch.setattr(auto_research.L0cKernelMutationRunner, "_spawn_l0c_agent_iteration", _spawn)
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path=str(kernel_path),
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=2,
+        total_attempt_cap=2,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        runtime=_runtime_block(),
+    )
+    rejected = (result.round_dir / "mutations_rejected.tsv").read_text(encoding="utf-8")
+    assert result.terminal_condition == "total_attempt_cap_reached"
+    assert "parity_logit_diverged" in rejected
+    assert "0.358434" in rejected
+    assert "agent_exit_1" not in rejected
+
+
+def test_real_run_rate_limit_blocks_without_burning_compile_failure_budget(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    fixture_path = _write_parity_fixture(repo)
+    base_bundle = _write_base_bundle(repo, workload_path)
+    kernel_path = _make_kernel_source(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    _stub_baseline(monkeypatch, rows=1, mean_obj=1.0)
+
+    def _spawn(self, *, spec, round_dir, iteration_dir, iteration):
+        (iteration_dir / "agent_session.jsonl").write_text(
+            json.dumps({"api_error_status": 429, "error": "You've hit your limit"})
+            + "\n",
+            encoding="utf-8",
+        )
+        return {"ok": False, "error": "agent_exit_1: rate limit"}
+
+    monkeypatch.setattr(auto_research.L0cKernelMutationRunner, "_spawn_l0c_agent_iteration", _spawn)
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path=str(kernel_path),
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=2,
+        total_attempt_cap=8,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        runtime=_runtime_block(),
+    )
+    assert result.outcome == "ROUND_BLOCKED"
+    assert result.terminal_condition == "agent_rate_limited"
+    assert result.total_attempt_count == 1
+    assert result.rejected_count == 0
+
+
 def test_real_run_dedupes_duplicate_mutation_hashes_without_resetting_streaks(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -491,9 +589,16 @@ def test_real_run_writes_runtime_block_into_round_spec(tmp_path: Path, monkeypat
         },
     )
     spec = yaml.safe_load((result.round_dir / "round_spec.yaml").read_text(encoding="utf-8"))
-    assert spec["agent_runtime"] == "claude"
+    assert spec["agent_runtime"] == "codex"
     assert spec["runtime"]["container_name"] == "lumo-vllm-test"
     assert spec["runtime"]["endpoint"] == "http://127.0.0.1:18101/v1"
+    brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
+        encoding="utf-8"
+    )
+    assert "rtol=0.001 / atol=0.001" in brief
+    assert "rtol=0.005 / atol=0.005" in brief
+    assert "BEFORE proposing a mutation" not in brief
+    assert "LPDDR5x" in brief
     # kernel_base snapshot must exist for apply_and_test (Slice 2) to read.
     base_bytes_dir = result.round_dir / "kernel_base"
     assert base_bytes_dir.is_dir()

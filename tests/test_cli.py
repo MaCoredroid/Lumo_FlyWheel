@@ -903,6 +903,7 @@ def test_auto_research_mutate_kernel_registered(capsys: pytest.CaptureFixture[st
         ]
     )
     assert args.func(args) == 0
+    assert args.agent_runtime == "codex"
     assert args.accepted_iteration_cap == 12
     assert args.total_attempt_cap == 36
     assert args.round_timeout_hours == 12.0

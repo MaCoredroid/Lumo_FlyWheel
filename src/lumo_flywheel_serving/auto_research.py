@@ -7,6 +7,7 @@ import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -107,6 +108,8 @@ L0C_TERMINAL_CONDITIONS = {
     "proposer_stuck",
     "compile_failures_3x",
     "intermittent_parity_observed",
+    "agent_rate_limited",
+    "agent_unavailable",
 }
 RESULTS_COLUMNS = [
     "candidate_uuid",
@@ -5733,25 +5736,13 @@ Propose ONE mutation to {{kernel_source_path}} that is faster than the current
 best on the workload, AND passes the parity gate at {{parity_fixture_path}}.
 
 # Hardware context (MATTERS for what mutations are worth proposing)
-This kernel runs on a **DGX Spark GB10** (Grace-Blackwell, GH200-class).
-The dominant bottleneck for prefill / DeltaNet recurrent compute on this
-host is **memory bandwidth, not raw FLOPs**. Mutations that improve
-bandwidth utilization (reduce HBM round-trips, improve L2 reuse, fuse
-loads, exploit shared memory, vectorize loads, increase arithmetic
-intensity, reorder loops to maximize on-chip residency) are far more
-likely to win than mutations that add compute or unroll arithmetic.
-A bandwidth-bound kernel does not care that you reduced an FMA.
+This kernel runs on a **DGX Spark GB10**. Treat it as bandwidth-bound:
+128 GB LPDDR5x unified memory at roughly 273 GB/s, not an HBM3e server GPU.
+Mutations that reduce memory traffic or improve cache reuse are more likely
+to matter than compute-only micro-optimizations.
 
-# Procedure step 0 — research before writing code
-BEFORE proposing a mutation, do online research on:
-  - GB10 / Grace-Blackwell / GH200 memory hierarchy + HBM3e bandwidth
-  - Triton / CUDA optimization patterns specifically for bandwidth-bound
-    GEMM and recurrent-state updates
-  - Known techniques: TMA, async copy, swizzling, pipelined prefetch,
-    register tiling for reuse, persistent kernels
-Use what you learn to pick a mutation class that targets the actual
-bottleneck. Do NOT skip this step — past iterations have wasted budget
-on compute-side micro-opts that did not move the bandwidth-bound needle.
+Use the context already in this brief and the local rejection history. Do
+not spend iteration budget on online research inside the agent loop.
 
 # Hard rules
 - Edit ONLY {{kernel_source_path}}. No other file.
@@ -5786,19 +5777,18 @@ record. If a prior iteration is in `results.tsv`, it was accepted —
 period — even if its dir contains stale agent commentary.
 
 # Procedure
-1. Do the research described in step 0 above.
-2. Read {{kernel_source_path}}, mutations_rejected.tsv, results.tsv (best_so_far).
+1. Read {{kernel_source_path}}, mutations_rejected.tsv, results.tsv (best_so_far).
    For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
-3. Write your proposal to {{iteration_dir}}/mutation.patch.
-4. Run: {{lumoserve_cmd}} auto-research apply-and-test \\
+2. Write your proposal to {{iteration_dir}}/mutation.patch.
+3. Run: {{lumoserve_cmd}} auto-research apply-and-test \\
      --round-id {{round_id}} --iteration {{iteration}} \\
      --kernel-target {{kernel_target}} --harness {{harness_mode}}
-5. Read the result. If parity fails, write a one-line note to BLOCKED.md
+4. Read the result. If parity fails, write a one-line note to BLOCKED.md
    explaining what you'll try next. Do NOT propose the same edit again.
    Note: the controller will overwrite or remove your BLOCKED.md after
    its own re-run, so write it for your own bookkeeping; the canonical
    record will be the controller's.
-6. Exit 0.
+5. Exit 0.
 
 # What you do NOT do
 - You do not call finalize-round. Python does that.
@@ -5913,10 +5903,10 @@ class L0cKernelMutationRunner:
         attempt_outcome_fn: Callable[[int], dict[str, Any]] | None = None,
         wall_clock_minutes_synthetic: float = 1.0,
         runtime: dict[str, Any] | None = None,
-        agent_runtime: str = "claude",
+        agent_runtime: str = "codex",
         claude_model: str | None = None,
         claude_effort: str | None = None,
-        per_iteration_wall_clock_s: int = 45 * 60,
+        per_iteration_wall_clock_s: int = 0,
     ) -> L0cKernelMutationResult:
         if harness not in {"real", "synthetic"}:
             raise RuntimeError(f"Unsupported harness: {harness}")
@@ -6307,6 +6297,8 @@ class L0cKernelMutationRunner:
             "compile_failures_3x",
             "intermittent_parity_observed",
             "round_timeout",
+            "agent_rate_limited",
+            "agent_unavailable",
         }:
             outcome_label = "ROUND_BLOCKED"
 
@@ -7157,8 +7149,27 @@ class L0cKernelMutationRunner:
             )
             total_attempts += 1
             if not spawn_outcome["ok"]:
-                consecutive_compile_fails += 1
-                consecutive_parity_fails = 0
+                existing_rejection = self._rejection_from_existing_artifacts(
+                    iteration=attempt_label,
+                    iteration_dir=iteration_dir,
+                    kernel_target=kernel_target,
+                    fixture_id=fixture_id,
+                )
+                if existing_rejection is not None:
+                    rejected_rows.append(existing_rejection)
+                    if existing_rejection["rejection_reason"].startswith("parity_"):
+                        consecutive_parity_fails += 1
+                        consecutive_compile_fails = 0
+                        if consecutive_parity_fails >= L0C_PROPOSER_STUCK_THRESHOLD:
+                            terminal_condition = "proposer_stuck"
+                            break
+                    else:
+                        consecutive_compile_fails += 1
+                        consecutive_parity_fails = 0
+                        if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
+                            terminal_condition = "compile_failures_3x"
+                            break
+                    continue
                 # spawn_outcome["error"] is the actual cause: "agent_timeout: ...",
                 # "agent_binary_missing: ...", "agent_exit_<rc>: ...". Surface its
                 # category in rejection_reason so post-mortem reads truthfully — the
@@ -7166,25 +7177,23 @@ class L0cKernelMutationRunner:
                 # failures behind a label that implies the spawn itself failed.
                 error_text = str(spawn_outcome.get("error", ""))
                 if error_text.startswith("agent_timeout"):
-                    rejection_reason = "agent_timeout"
-                elif error_text.startswith("agent_binary_missing"):
-                    rejection_reason = "agent_binary_missing"
-                elif error_text.startswith("agent_exit_"):
-                    rejection_reason = error_text.split(":", 1)[0]
-                else:
-                    rejection_reason = "agent_spawn_failed"
-                rejected_rows.append(
-                    self._make_rejection_row(
-                        iteration=attempt_label,
-                        candidate_uuid=str(uuid4()),
-                        mutation_hash="",
-                        reason=rejection_reason,
-                    )
-                )
-                if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
-                    terminal_condition = "compile_failures_3x"
+                    terminal_condition = "agent_unavailable"
                     break
-                continue
+                elif error_text.startswith("agent_binary_missing"):
+                    terminal_condition = "agent_unavailable"
+                    break
+                elif error_text.startswith("agent_rate_limited"):
+                    terminal_condition = "agent_rate_limited"
+                    break
+                elif error_text.startswith("agent_exit_"):
+                    if self._agent_error_is_rate_limit(error_text, iteration_dir / "agent_session.jsonl"):
+                        terminal_condition = "agent_rate_limited"
+                        break
+                    terminal_condition = "agent_unavailable"
+                    break
+                else:
+                    terminal_condition = "agent_unavailable"
+                    break
 
             patch_path = iteration_dir / "mutation.patch"
             if not patch_path.is_file():
@@ -7345,6 +7354,70 @@ class L0cKernelMutationRunner:
             return {}
         return payload if isinstance(payload, dict) else {}
 
+    def _rejection_from_existing_artifacts(
+        self,
+        *,
+        iteration: str,
+        iteration_dir: Path,
+        kernel_target: str,
+        fixture_id: str,
+    ) -> dict[str, Any] | None:
+        """Recover the authoritative apply-and-test verdict if the agent exits badly.
+
+        Some agent CLIs can produce the requested patch and run apply-and-test, then
+        still exit nonzero because of an unrelated helper process or shell state. In
+        that case the kernel verdict is already on disk and should not be overwritten
+        by a misleading agent-exit rejection.
+        """
+        patch_path = iteration_dir / "mutation.patch"
+        parity = self._read_parity_check(iteration_dir)
+        if not patch_path.is_file() or not parity:
+            return None
+        patch_text = patch_path.read_text(encoding="utf-8")
+        mutation_hash = hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
+        pass_value = parity.get("pass")
+        if pass_value is True:
+            return None
+        reason = str(parity.get("reason") or "agent_exit_after_apply_and_test")
+        if not reason:
+            reason = "agent_exit_after_apply_and_test"
+        if not parity.get("fixture_id"):
+            parity["fixture_id"] = fixture_id
+        if not parity.get("kernel_target"):
+            parity["kernel_target"] = kernel_target
+        return self._make_rejection_row(
+            iteration=iteration,
+            candidate_uuid=str(uuid4()),
+            mutation_hash=mutation_hash,
+            reason=reason,
+            first_diverging_probe_index=(
+                int(parity["first_diverging_probe"])
+                if "first_diverging_probe" in parity
+                else None
+            ),
+            tolerance_overshoot=(
+                float(parity["tolerance_overshoot"])
+                if "tolerance_overshoot" in parity
+                else None
+            ),
+        )
+
+    @staticmethod
+    def _agent_error_is_rate_limit(error_text: str, transcript_path: Path) -> bool:
+        haystack = error_text.lower()
+        if transcript_path.is_file():
+            haystack += "\n" + transcript_path.read_text(
+                encoding="utf-8", errors="replace"
+            ).lower()
+        return (
+            "rate_limit" in haystack
+            or "api_error_status\":429" in haystack
+            or "api_error_status\": 429" in haystack
+            or "you've hit your limit" in haystack
+            or "you have hit your limit" in haystack
+            or "429" in haystack and "limit" in haystack
+        )
+
     def _render_iteration_brief_to_disk(
         self,
         *,
@@ -7457,8 +7530,8 @@ class L0cKernelMutationRunner:
             rows.append(
                 self._make_measurement_row(
                     candidate_uuid=baseline_uuid,
-                    candidate_label="l0b-baseline-remeasured",
-                    role="l0b_baseline_remeasured",
+                    candidate_label="l0b-empirical-winner-baseline-remeasured",
+                    role="l0b_empirical_winner_baseline_remeasured",
                     measurement_index=index,
                     objective_value=objective_value,
                     harness="real",
@@ -7481,7 +7554,7 @@ class L0cKernelMutationRunner:
             DEFAULT_CLAUDE_PERMISSION_MODE,
         )
 
-        agent_runtime = str(spec.get("agent_runtime", "claude"))
+        agent_runtime = str(spec.get("agent_runtime", "codex"))
         if agent_runtime not in {"codex", "claude"}:
             return {"ok": False, "error": f"unsupported agent_runtime {agent_runtime!r}"}
 
@@ -7535,24 +7608,37 @@ class L0cKernelMutationRunner:
                 "--skip-git-repo-check",
                 "-",
             ]
+        proc: subprocess.Popen[bytes] | None = None
         try:
-            with transcript_path.open("wb") as transcript_handle:
-                completed = subprocess.run(
-                    argv,
-                    input=prompt.encode(),
-                    stdout=transcript_handle,
-                    stderr=subprocess.PIPE,
-                    cwd=str(round_dir) if agent_runtime == "claude" else None,
-                    timeout=subprocess_timeout,
-                    check=False,
-                )
+            proc = subprocess.Popen(
+                argv,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=str(round_dir) if agent_runtime == "claude" else None,
+                start_new_session=True,
+            )
+            stdout_bytes, stderr_bytes = proc.communicate(
+                input=prompt.encode(),
+                timeout=subprocess_timeout,
+            )
+            transcript_path.write_bytes(stdout_bytes)
         except subprocess.TimeoutExpired as exc:
+            if proc is not None:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                stdout_bytes, stderr_bytes = proc.communicate()
+                transcript_path.write_bytes(stdout_bytes or b"")
             return {"ok": False, "error": f"agent_timeout: {exc}"}
         except FileNotFoundError as exc:
             return {"ok": False, "error": f"agent_binary_missing: {exc}"}
-        if completed.returncode != 0:
-            stderr_text = completed.stderr.decode("utf-8", errors="replace").strip()
-            return {"ok": False, "error": f"agent_exit_{completed.returncode}: {stderr_text}"}
+        if proc.returncode != 0:
+            stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+            if self._agent_error_is_rate_limit(stderr_text, transcript_path):
+                return {"ok": False, "error": f"agent_rate_limited: {stderr_text}"}
+            return {"ok": False, "error": f"agent_exit_{proc.returncode}: {stderr_text}"}
         if agent_runtime == "claude":
             from .round_driver import _extract_claude_last_message
 
@@ -7645,6 +7731,8 @@ class L0cKernelMutationRunner:
             "compile_failures_3x",
             "intermittent_parity_observed",
             "round_timeout",
+            "agent_rate_limited",
+            "agent_unavailable",
         }:
             outcome_label = "ROUND_BLOCKED"
 
@@ -7674,7 +7762,7 @@ class L0cKernelMutationRunner:
             "paired_baseline_objective_mean": paired_baseline_mean,
             "winner_objective_mean": winner_mean,
             "welch_t_input_audit": {
-                "baseline_source": "same_round_l0b_baseline_remeasured_rows",
+                "baseline_source": "same_round_l0b_empirical_winner_baseline_remeasured_rows",
                 "winner_source": "same_round_l0c_candidate_rows",
                 "baseline_candidate_uuid": baseline_uuid,
                 "winner_candidate_uuid": winner_uuid,
@@ -7971,10 +8059,10 @@ class L0cKernelMutationRunner:
         if isinstance(fixture_payload, dict):
             tolerances = fixture_payload.get("tolerances") or {}
             if isinstance(tolerances, dict):
-                rtol_logit = str(tolerances.get("logit_rtol", ""))
-                atol_logit = str(tolerances.get("logit_atol", ""))
-                rtol_state = str(tolerances.get("state_rtol", ""))
-                atol_state = str(tolerances.get("state_atol", ""))
+                rtol_logit = str(tolerances.get("rtol_logit", tolerances.get("logit_rtol", "")))
+                atol_logit = str(tolerances.get("atol_logit", tolerances.get("logit_atol", "")))
+                rtol_state = str(tolerances.get("rtol_state", tolerances.get("state_rtol", "")))
+                atol_state = str(tolerances.get("atol_state", tolerances.get("state_atol", "")))
             checkpoints = fixture_payload.get("state_checkpoints_at_token")
             if isinstance(checkpoints, list):
                 state_checkpoints = [str(token) for token in checkpoints]
