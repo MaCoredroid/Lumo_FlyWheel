@@ -793,7 +793,7 @@ Effects, in order:
    b. `total_attempts += 1` (increments unconditionally — every spawn counts toward total cap).
    c. Apply the patch in an isolated build directory: `git -C <build_dir> apply mutation.patch`.
    d. Compile: `cd <build_dir> && make kernels/deltanet/<kernel>.so`. Timeout 20 min per parent §5.7 rail 1.
-   e. Run parity check (§6.2). If FAIL: write `mutations_rejected.tsv` row with first-diverging probe + tolerance, do NOT increment `accepted`, return to step 3a.
+   e. Run parity check (§6.2). If FAIL: immediately persist a `mutations_rejected.tsv` row with first-diverging probe + tolerance, do NOT increment `accepted`, return to step 3a.
    f. If parity PASS: run n=2 Screen-profile measurements against the workload. Record in `results.tsv`. `accepted += 1`.
    g. If improvement above noise floor against the paired baseline: keep, advance best_so_far. If regression: discard.
    h. `commit-candidate` with the mutation patch + measurement trace. Trailers: `Candidate-UUID`, `Mutation-Hash: <sha of patch>`, `Measurement-Role: l0c_candidate`, `Signed-off-by`.

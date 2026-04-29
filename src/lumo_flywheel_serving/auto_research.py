@@ -6153,7 +6153,9 @@ class L0cKernelMutationRunner:
                     fixture_id=fixture_id,
                     kernel_target=kernel_target,
                 )
-                rejected_rows.append(
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
                     self._make_rejection_row(
                         iteration=attempt_label,
                         candidate_uuid=candidate_uuid,
@@ -6173,7 +6175,9 @@ class L0cKernelMutationRunner:
                     fixture_id=fixture_id,
                     kernel_target=kernel_target,
                 )
-                rejected_rows.append(
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
                     self._make_rejection_row(
                         iteration=attempt_label,
                         candidate_uuid=candidate_uuid,
@@ -6198,7 +6202,9 @@ class L0cKernelMutationRunner:
                     first_diverging_probe=int(outcome.get("first_diverging_probe", attempt_index % 64)),
                     tolerance_overshoot=float(outcome.get("tolerance_overshoot", 0.001 * attempt_index)),
                 )
-                rejected_rows.append(
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
                     self._make_rejection_row(
                         iteration=attempt_label,
                         candidate_uuid=candidate_uuid,
@@ -7204,7 +7210,7 @@ class L0cKernelMutationRunner:
                     fixture_id=fixture_id,
                 )
                 if existing_rejection is not None:
-                    rejected_rows.append(existing_rejection)
+                    self._record_l0c_rejection(round_dir, rejected_rows, existing_rejection)
                     if existing_rejection["rejection_reason"].startswith("parity_"):
                         consecutive_parity_fails += 1
                         consecutive_compile_fails = 0
@@ -7247,7 +7253,9 @@ class L0cKernelMutationRunner:
             if not patch_path.is_file():
                 consecutive_compile_fails += 1
                 consecutive_parity_fails = 0
-                rejected_rows.append(
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
                     self._make_rejection_row(
                         iteration=attempt_label,
                         candidate_uuid=str(uuid4()),
@@ -7263,7 +7271,9 @@ class L0cKernelMutationRunner:
             patch_text = patch_path.read_text(encoding="utf-8")
             mutation_hash = hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
             if mutation_hash in seen_hashes:
-                rejected_rows.append(
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
                     self._make_rejection_row(
                         iteration=attempt_label,
                         candidate_uuid=str(uuid4()),
@@ -7287,7 +7297,9 @@ class L0cKernelMutationRunner:
                 consecutive_compile_fails += 1
                 consecutive_parity_fails = 0
                 parity = self._read_parity_check(iteration_dir)
-                rejected_rows.append(
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
                     self._make_rejection_row(
                         iteration=attempt_label,
                         candidate_uuid=str(uuid4()),
@@ -7304,7 +7316,9 @@ class L0cKernelMutationRunner:
                 consecutive_compile_fails = 0
                 parity = self._read_parity_check(iteration_dir)
                 reason = str(parity.get("reason", "parity_logit_diverged"))
-                rejected_rows.append(
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
                     self._make_rejection_row(
                         iteration=attempt_label,
                         candidate_uuid=str(uuid4()),
@@ -8393,6 +8407,19 @@ class L0cKernelMutationRunner:
         for row in rows:
             lines.append("\t".join(str(row.get(column, "")) for column in columns))
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def _record_l0c_rejection(
+        self,
+        round_dir: Path,
+        rejected_rows: list[dict[str, Any]],
+        row: dict[str, Any],
+    ) -> None:
+        rejected_rows.append(row)
+        self._write_tsv(
+            round_dir / "mutations_rejected.tsv",
+            self.MUTATION_TSV_COLUMNS,
+            rejected_rows,
+        )
 
     @staticmethod
     def _write_yaml(path: Path, payload: Any) -> None:

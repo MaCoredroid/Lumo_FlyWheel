@@ -572,6 +572,75 @@ def test_real_run_dedupes_duplicate_mutation_hashes_without_resetting_streaks(
     assert "duplicate_mutation_hash" in rejected
 
 
+def test_real_run_persists_rejections_before_finalization(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    fixture_path = _write_parity_fixture(repo)
+    base_bundle = _write_base_bundle(repo, workload_path)
+    kernel_path = _make_kernel_source(tmp_path)
+    round_root = repo / "output" / "auto_research"
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    _stub_baseline(monkeypatch, rows=1, mean_obj=1.0)
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_spawn_l0c_agent_iteration",
+        _make_agent_writer(patch_text_for=lambda iteration: _patch_for(iteration)),
+        raising=True,
+    )
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "apply_and_test",
+        _stub_apply_and_test(
+            outcomes_for=lambda iteration: {
+                "outcome": "parity_failed",
+                "reason": "parity_logit_diverged",
+                "first_diverging_probe": 0,
+                "tolerance_overshoot": 0.417515625,
+            }
+        ),
+        raising=True,
+    )
+
+    def _raise_before_final_log(self, **kwargs):
+        raise RuntimeError("synthetic finalization crash")
+
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_finalize_l0c_round",
+        _raise_before_final_log,
+        raising=True,
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic finalization crash"):
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="deltanet",
+            kernel_source_path=str(kernel_path),
+            parity_fixture=fixture_path,
+            base_measurements=1,
+            accepted_iteration_cap=1,
+            total_attempt_cap=1,
+            round_timeout_hours=1.0,
+            round_root=round_root,
+            harness="real",
+            runtime=_runtime_block(),
+        )
+
+    [round_dir] = list(round_root.iterdir())
+    rejected = (round_dir / "mutations_rejected.tsv").read_text(encoding="utf-8")
+    assert "parity_logit_diverged" in rejected
+    assert "0.417516" in rejected
+
+
 def test_real_run_writes_runtime_block_into_round_spec(tmp_path: Path, monkeypatch) -> None:
     result = _make_runner_and_run(
         tmp_path,
