@@ -599,6 +599,9 @@ def test_real_run_writes_runtime_block_into_round_spec(tmp_path: Path, monkeypat
     assert "rtol=0.005 / atol=0.005" in brief
     assert "BEFORE proposing a mutation" not in brief
     assert "LPDDR5x" in brief
+    assert f"cd {result.round_dir.parents[2]}" in brief
+    assert f"{result.round_dir.parents[2] / '.venv' / 'bin' / 'lumoserve'} auto-research apply-and-test" in brief
+    assert "patch --dry-run" in brief
     # kernel_base snapshot must exist for apply_and_test (Slice 2) to read.
     base_bytes_dir = result.round_dir / "kernel_base"
     assert base_bytes_dir.is_dir()
@@ -651,6 +654,68 @@ def test_real_paired_baseline_discards_first_cold_row(tmp_path: Path, monkeypatc
     assert json.loads((baseline_dir / "cold_discard_00.json").read_text(encoding="utf-8"))[
         "discard_reason"
     ] == "cold_start_baseline"
+
+
+def test_real_apply_and_test_resolves_relative_kernel_path_against_repo(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    fixture_path = _write_parity_fixture(repo)
+    relative_kernel = Path("output/auto_research/l0c_kernel_workdir/chunk_delta_h.py")
+    kernel_path = repo / relative_kernel
+    kernel_path.parent.mkdir(parents=True)
+    kernel_path.write_text("alpha\nbeta\ngamma\n", encoding="utf-8")
+    round_root = repo / "output" / "auto_research"
+    round_id = "round-relative-kernel"
+    round_dir = round_root / round_id
+    iteration_dir = round_dir / "candidates" / "001"
+    iteration_dir.mkdir(parents=True)
+    (round_dir / "kernel_base").mkdir()
+    (round_dir / "kernel_base" / kernel_path.name).write_text("alpha\nbeta\ngamma\n", encoding="utf-8")
+    (iteration_dir / "mutation.patch").write_text(_patch_for("001"), encoding="utf-8")
+    (round_dir / "round_spec.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "round_id": round_id,
+                "model_id": "qwen3.5-27b",
+                "kernel_target": "deltanet",
+                "kernel_source_path": str(relative_kernel),
+                "parity_fixture": str(fixture_path.relative_to(repo)),
+                "parity_fixture_id": "test-family-deltanet-v1",
+                "runtime": _runtime_block(),
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    seen: dict[str, Path] = {}
+
+    def _fake_apply_kernel_patch(self, *, kernel_path, patch_path):
+        seen["kernel_path"] = kernel_path
+        return auto_research._L0cPatchOutcome(ok=False, error="forced")
+
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_apply_kernel_patch",
+        _fake_apply_kernel_patch,
+        raising=True,
+    )
+    result = runner.apply_and_test(
+        round_id=round_id,
+        iteration="001",
+        kernel_target="deltanet",
+        harness="real",
+        round_root=round_root,
+    )
+    assert result["outcome"] == "compile_failed"
+    assert seen["kernel_path"] == kernel_path.resolve()
 
 
 def test_real_run_records_intermittent_parity_terminal_condition(

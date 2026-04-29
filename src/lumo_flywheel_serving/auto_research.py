@@ -5781,7 +5781,11 @@ period — even if its dir contains stale agent commentary.
 1. Read {{kernel_source_path}}, mutations_rejected.tsv, results.tsv (best_so_far).
    For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
 2. Write your proposal to {{iteration_dir}}/mutation.patch.
-3. Run: {{lumoserve_cmd}} auto-research apply-and-test \\
+   Generate the patch with a real diff tool; do not hand-write hunk counts.
+   The patch must apply with:
+     patch --dry-run {{kernel_source_path}} {{iteration_dir}}/mutation.patch
+3. Run from the repo root with the exact entrypoint:
+   cd {{repo_root}} && {{lumoserve_cmd}} auto-research apply-and-test \\
      --round-id {{round_id}} --iteration {{iteration}} \\
      --kernel-target {{kernel_target}} --harness {{harness_mode}}
 4. Read the result. If parity fails, write a one-line note to BLOCKED.md
@@ -5944,6 +5948,9 @@ class L0cKernelMutationRunner:
         weight_version_id = base.weight_version_id or default_weight_version_id(registry[model_id])
 
         kernel_source = Path(kernel_source_path)
+        if not kernel_source.is_absolute():
+            kernel_source = self.repo_root / kernel_source
+        kernel_source = kernel_source.resolve()
         fixture_path = Path(parity_fixture).resolve()
         if not fixture_path.is_file():
             raise RuntimeError(f"Parity fixture missing: {fixture_path}")
@@ -6683,6 +6690,9 @@ class L0cKernelMutationRunner:
         if not kernel_path_str:
             raise RuntimeError("round_spec.yaml missing kernel_source_path for real harness")
         kernel_path = Path(kernel_path_str)
+        if not kernel_path.is_absolute():
+            kernel_path = self.repo_root / kernel_path
+        kernel_path = kernel_path.resolve()
         base_bytes_path = round_dir / "kernel_base" / kernel_path.name
         if not base_bytes_path.is_file():
             raise RuntimeError(
@@ -6900,8 +6910,11 @@ class L0cKernelMutationRunner:
         container_kernel_path = runtime.get("kernel_container_path")
         extra_mounts: list[str] = []
         if host_kernel_path and container_kernel_path:
+            host_kernel = Path(str(host_kernel_path))
+            if not host_kernel.is_absolute():
+                host_kernel = self.repo_root / host_kernel
             extra_mounts.extend(
-                ["-v", f"{Path(host_kernel_path).resolve()}:{container_kernel_path}"]
+                ["-v", f"{host_kernel.resolve()}:{container_kernel_path}"]
             )
         for entry in runtime.get("extra_volume_mounts") or []:
             extra_mounts.extend(["-v", str(entry)])
@@ -8050,8 +8063,8 @@ class L0cKernelMutationRunner:
     def _write_yaml(path: Path, payload: Any) -> None:
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
-    @staticmethod
     def _render_brief(
+        self,
         *,
         kernel_target: str,
         kernel_source_path: Path,
@@ -8080,10 +8093,11 @@ class L0cKernelMutationRunner:
             "round_id": round_id,
             "kernel_source_path": str(kernel_source_path),
             "parity_fixture_path": str(fixture_path),
+            "repo_root": str(self.repo_root),
             "kernel_target": kernel_target,
             "harness_mode": harness,
             "iteration_dir": "{{iteration_dir}}",
-            "lumoserve_cmd": "lumoserve",
+            "lumoserve_cmd": str(self.repo_root / ".venv" / "bin" / "lumoserve"),
             "rtol_logit": rtol_logit,
             "atol_logit": atol_logit,
             "rtol_state": rtol_state,
