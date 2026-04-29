@@ -7598,6 +7598,7 @@ class L0cKernelMutationRunner:
             ),
             "- Do not add store hints or change store cache policy.",
             "- Do not make broad cache-policy edits spanning both `v` and `h0`/state paths.",
+            "- Do not add new gate-path cache-policy hints on `g`/`gk` loads.",
             (
                 "- Do not change `v` load eviction/cache policy; the last canary "
                 "`v` `evict_first` probe diverged immediately."
@@ -7617,22 +7618,16 @@ class L0cKernelMutationRunner:
             "",
             "## Ranked Likely-Safe Targets",
             "",
+            "1. Narrow scalar metadata loads such as sequence/chunk offsets, preserving types and control flow.",
             (
-                "1. A single auxiliary gate-load hint on non-dot-adjacent `g`/`gk` "
-                "reads, one line only."
-            ),
-            (
-                "2. Narrow scalar metadata loads such as sequence/chunk offsets, "
-                "preserving types and control flow."
-            ),
-            (
-                "3. Local address/mask expression cleanup that leaves arithmetic "
+                "2. Local address/mask expression cleanup that leaves arithmetic "
                 "order and tensor shapes unchanged."
             ),
             (
-                "4. One-load-only cache hint rollback or tightening where prior "
+                "3. One-load-only cache hint rollback or tightening where prior "
                 "comments already identify cache pressure."
             ),
+            "4. Comment-only hypothesis capture when no parity-neutral code edit is defensible.",
             "",
             "## Prior Rejections Carried Forward",
             "",
