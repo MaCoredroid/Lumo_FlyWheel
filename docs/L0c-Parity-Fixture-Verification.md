@@ -97,8 +97,9 @@ The 16 probes are deterministic (same row generator as the parity fixture), so t
 
 1. **L0b converges to a new kernel_selection.** Caught by the pre-flight check (verification 2). Fix: regenerate fixture against the new winner via `scripts/regenerate_deltanet_parity_fixture.py --reference-baseline-bundle <new bundle>`.
 2. **Model weight rotation.** `weight_version_id` in fixture metadata stops matching `model_registry.yaml`. Caught by verification 1. Fix: regenerate.
-3. **Kernel source edit.** Someone touched `output/auto_research/l0c_kernel_workdir/chunk_delta_h.py` between fixture build and L0c round; not caught by 1 or 2 (the bytes aren't bound to the fixture). Fix: snapshot kernel sha into fixture YAML at build time, check at probe time. *(Open follow-up; not yet implemented.)*
+3. **Kernel source edit.** Someone touched `output/auto_research/l0c_kernel_workdir/chunk_delta_h.py` between fixture build and L0c round; not caught by 1 or 2 (the bytes aren't bound to the fixture). This can make every mutation fail with the same first-probe logit overshoot, including a no-mutation/base smoke. Fix: restore the kernel bytes used at fixture capture or regenerate the fixture against the new base kernel. Snapshotting kernel sha into fixture YAML remains an open follow-up.
 4. **vLLM image rebuild.** New container brings new pristine kernel bytes; if the bind-mount points at a now-unrelated host file, vLLM imports the wrong kernel. Caught by verification 3 (large tolerance_overshoot). Fix: re-snapshot the bind-mount source from the new image and rebuild fixture.
+5. **Triton autotune cache drift.** The DeltaNet fixture was captured with `/tmp/lumo-fixture-rebuild-triton`; L0c must use that same cache root unless a no-mutation verifier has passed with another root. A different cache can produce first-token logit drift before any mutation is applied.
 
 ## What "pass" *cannot* tell you
 

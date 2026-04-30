@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import json
 import os
-import sys
 import subprocess
 import time
 from pathlib import Path
@@ -17,9 +16,6 @@ from .auto_research import (
     L0bKernelAutotuneRunner,
     L0C_DEFAULT_AGENT_TIMEOUT_S,
     L0cKernelMutationRunner,
-    OfflineAutoResearchRunner,
-    SyntheticWorkloadDistribution,
-    load_baseline_bundle,
 )
 from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
 from .model_server import DEFAULT_VLLM_DOCKERFILE, DEFAULT_VLLM_IMAGE, ModelServer, REPO_ROOT
@@ -1316,7 +1312,15 @@ def build_parser() -> argparse.ArgumentParser:
     auto_mutate_kernel.add_argument("--container-name", default="lumo-vllm-l0c")
     auto_mutate_kernel.add_argument("--image")
     auto_mutate_kernel.add_argument("--logs-root", default="/tmp/lumo-l0c-logs")
-    auto_mutate_kernel.add_argument("--triton-cache-root", default="/tmp/lumo-l0c-triton")
+    auto_mutate_kernel.add_argument(
+        "--triton-cache-root",
+        default="/tmp/lumo-fixture-rebuild-triton",
+        help=(
+            "Triton autotune cache root. Defaults to the parity-fixture rebuild "
+            "cache because DeltaNet parity is sensitive to Triton cache drift; "
+            "override only after a no-mutation parity verifier passes."
+        ),
+    )
     auto_mutate_kernel.add_argument("--state-root")
     auto_mutate_kernel.add_argument("--endpoint")
     auto_mutate_kernel.add_argument("--metrics-url")

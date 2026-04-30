@@ -15,10 +15,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-import requests
-import yaml
+import requests  # noqa: E402
 
-from lumo_flywheel_serving.model_server import ModelServer
+from lumo_flywheel_serving.model_server import ModelServer  # noqa: E402
 
 
 def main() -> int:
@@ -38,7 +37,14 @@ def main() -> int:
         default="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/chunk_delta_h.py",
     )
     parser.add_argument("--logs-root", default="/tmp/lumo-l0c-preflight-logs")
-    parser.add_argument("--triton-cache-root", default="/tmp/lumo-l0c-preflight-triton")
+    parser.add_argument(
+        "--triton-cache-root",
+        default="/tmp/lumo-fixture-rebuild-triton",
+        help=(
+            "Use the parity-fixture rebuild cache by default; DeltaNet parity "
+            "can drift when capture and L0c use different Triton autotune caches."
+        ),
+    )
     parser.add_argument("--ready-timeout-s", type=int, default=900)
     parser.add_argument("--keep-running", action="store_true")
     args = parser.parse_args()
