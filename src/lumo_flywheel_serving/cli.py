@@ -1012,6 +1012,48 @@ def cmd_auto_research_apply_and_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_auto_research_resume_candidate(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "round_id", "iteration", "kernel_target")
+    runner = L0cKernelMutationRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    payload = runner.resume_candidate(
+        round_id=args.round_id,
+        iteration=args.iteration,
+        kernel_target=args.kernel_target,
+        harness=args.harness,
+        round_root=args.round_root,
+        codex_session_id=args.codex_session_id,
+        per_iteration_wall_clock_s=args.per_iteration_wall_clock_s,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def cmd_auto_research_resume_round(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "round_id", "kernel_target")
+    runner = L0cKernelMutationRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    payload = runner.resume_round(
+        round_id=args.round_id,
+        kernel_target=args.kernel_target,
+        harness=args.harness,
+        round_root=args.round_root,
+        per_iteration_wall_clock_s=args.per_iteration_wall_clock_s,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def cmd_auto_research_tune_kernel_autotune(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
@@ -1355,6 +1397,38 @@ def build_parser() -> argparse.ArgumentParser:
         "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
     )
     auto_apply_and_test.set_defaults(func=cmd_auto_research_apply_and_test)
+
+    auto_resume_candidate = auto_research_subparsers.add_parser("resume-candidate")
+    auto_resume_candidate.add_argument("--help-only", action="store_true")
+    auto_resume_candidate.add_argument("--round-id")
+    auto_resume_candidate.add_argument("--iteration")
+    auto_resume_candidate.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
+    auto_resume_candidate.add_argument("--harness", choices=["real"], default="real")
+    auto_resume_candidate.add_argument(
+        "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
+    )
+    auto_resume_candidate.add_argument("--codex-session-id")
+    auto_resume_candidate.add_argument(
+        "--per-iteration-wall-clock-s",
+        type=int,
+        default=L0C_DEFAULT_AGENT_TIMEOUT_S,
+    )
+    auto_resume_candidate.set_defaults(func=cmd_auto_research_resume_candidate)
+
+    auto_resume_round = auto_research_subparsers.add_parser("resume-round")
+    auto_resume_round.add_argument("--help-only", action="store_true")
+    auto_resume_round.add_argument("--round-id")
+    auto_resume_round.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
+    auto_resume_round.add_argument("--harness", choices=["real"], default="real")
+    auto_resume_round.add_argument(
+        "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
+    )
+    auto_resume_round.add_argument(
+        "--per-iteration-wall-clock-s",
+        type=int,
+        default=L0C_DEFAULT_AGENT_TIMEOUT_S,
+    )
+    auto_resume_round.set_defaults(func=cmd_auto_research_resume_round)
 
     auto_research_run = auto_research_subparsers.add_parser("run")
     auto_research_run.add_argument("--help-only", action="store_true")
