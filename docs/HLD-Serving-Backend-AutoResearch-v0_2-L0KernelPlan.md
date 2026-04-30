@@ -985,7 +985,7 @@ For sampling (Triton sampler — only if P3a roofline shows >=3% Tpot share):
 
   Artifact: per-commit hash recompute + `git apply --check` dry-run.
 - **9.3.AR.48 Weight-sensitive flag honored.** Mutations whose proposer-annotated `weight_sensitive: true` are flagged in the bundle's `layer_0_*.l0c_mutation.weight_sensitive`. Artifact: bundle field check.
-- **9.3.AR.55 Two-tier preflight semantics enforced.** Every candidate's `parity_check.json` records exactly one of: (a) `tier: safety_critical, reason: forbidden_mutation_family_hard_rejected` — no compile / no measurement / no canary retry; OR (b) `tier: soft, reason: forbidden_mutation_family_demoted, demoted_to_canary_round: <future_id>` — no compile / no measurement / queued for canary; OR (c) `running_as_canary: true, original_demote_pattern: <id>` — full apply-and-test ran on a previously-demoted candidate; OR (d) the regular non-preflight outcomes from AR.43. The cost-bucket invariant: every Tier-2 hit has `mutations_rejected.tsv` row with `cost_bucket: preflight_hard_rejected`; every Tier-1 hit has `cost_bucket: preflight_demoted`. Verifier audits row counts vs preflight-match counts. Artifact: `mutations_rejected.tsv` cost-bucket census + per-candidate `parity_check.json` schema check.
+- **9.3.AR.55 Two-tier preflight semantics enforced.** Every candidate's `parity_check.json` records exactly one of: (a) `tier: safety_critical, reason: forbidden_mutation_family_hard_rejected` — no compile / no measurement / no canary retry; OR (b) `tier: soft, reason: forbidden_mutation_family_demoted, demoted_to_canary_round: <future_id>` — no compile / no measurement / queued for canary; OR (c) `running_as_canary: true, original_demote_pattern: <id>` — full apply-and-test ran on a previously-demoted candidate; OR (d) the regular non-preflight outcomes from AR.43. Verifier audits preflight-match row counts against `mutations_rejected.tsv` and `filter_hit_review.tsv`; the canary contract does not add columns to `mutations_rejected.tsv`. Artifact: preflight row-count census + per-candidate `parity_check.json` schema check.
 - **9.3.AR.56 Positive-memory artifact present and consumed.** `winning_diffs.md` exists in the round directory at bootstrap with up to 15 entries (3 most-recent rounds × 5 most-recent winners per round). The `iteration_brief.md` template's `{{positive_memory_winning_diffs_block}}` variable is populated (not empty unless this is the first L0c round ever). Verifier reads the iteration_brief and confirms the winning-diffs block is non-default. Artifact: file presence + template variable expansion check.
 - **9.3.AR.57 Calibration log integrity.** `filter_hit_review.tsv` exists, follows the §5.8.4 schema, and accumulates across rounds. Every Tier-1 hit produces exactly one row; every canary admission updates the matching row's `canary_outcome` column. The `pattern_id` field is non-null for every row. Optional: when `filter_hit_review.tsv` has ≥10 canary runs accumulated for any `pattern_id`, `output/preflight_calibration_<timestamp>.json` may be present with that pattern's TPR/FPR — but this is human-triggered analysis, not a round-level requirement. Artifact: TSV schema check + per-pattern row-count audit.
 - **9.3.AR.48b L0c three-cap structure recorded.** Bundle's `layer_0_*.l0c_mutation.terminal_condition` ∈ {`accepted_cap_reached`, `total_attempt_cap_reached`, `round_timeout`, `proposer_stuck`, `compile_failures_3x`, `intermittent_parity_observed`, `agent_rate_limited`, `agent_unavailable`}. Counter values `accepted_count`, `total_attempt_count`, `wall_clock_minutes` recorded. For kernel-level terminal conditions, accepted_count + (count of `mutations_rejected.tsv` rows) = total_attempt_count exactly. For agent-infrastructure terminal conditions, `mutations_rejected.tsv` includes only attempts that produced a real `mutation.patch` + controller-readable verdict artifact before the agent failed. Artifact: counter audit.
@@ -1054,23 +1054,23 @@ For sampling (Triton sampler — only if P3a roofline shows >=3% Tpot share):
 
 **Why not pure hard-rejection (the simpler fix).** Online-research of major published autoresearch systems (FunSearch, AlphaEvolve, Eureka, ELM, AlphaCode) found **none** use a pure hard-regex preflight guard. They lean on the evaluator (compile, parity, metric) as the filter, with at most prompt-side memory of past failures. Reflexion (Shinn et al., NeurIPS 2023) explicitly tested "turn every observed failure into a rule" vs. "natural-language episodic memory" and found rule-based over-constrained. Sui et al. (ICML 2015) on safe exploration formalized the **ratcheting-filter problem**: monotonically-growing safe sets can permanently exclude the optimum if the initial estimate is wrong. Pure hard-regex guards encode our uncalibrated beliefs about failure as if they were ground truth.
 
-**v0.3.4 architectural choice — hybrid two-tier with calibration.** Cost-driven enforcement is justified (30-min/candidate GPU time on GB10) but pure hard-rejection is too brittle. v0.3.4 splits preflight into two tiers with different enforcement semantics, plus positive-memory prompting and a calibration mechanism that turns filter hits into data instead of guesses.
+**v0.3.4 architectural choice — hybrid two-tier with calibration.** Prompt-only enforcement is too weak, but pure hard-rejection is too brittle. v0.3.4 splits preflight into two tiers with different enforcement semantics, plus positive-memory prompting and a calibration mechanism that turns filter hits into data instead of guesses.
 
 #### 5.8.1 Tier-1: SOFT demoter (priority queue with canary admission)
 
 For heuristic forbidden patterns — the 6–7 DeltaNet patterns from the gap analysis (g/gk pre-offset removal, inline `g + bos*H + …` rewrites, `t_start` removal, retained `.cg` hints on gate-load sites, etc.) — the controller **demotes** rather than **rejects**. Mechanism:
 
 1. Round maintains two queues: `main_queue` (unfiltered candidates) and `demoted_queue` (Tier-1 hits, FIFO-ordered).
-2. When a candidate's `mutation.patch` matches a Tier-1 pattern: write `parity_check.json` with `{pass: false, reason: forbidden_mutation_family_demoted, tier: soft, pattern_id: <id>, evidence_snippet: <patch lines>, demoted_to_canary_round: <future_canary_iteration>}`. Append to `mutations_rejected.tsv` with `cost_bucket: preflight_demoted`. Append to `filter_hit_review.tsv` (§5.8.4). The candidate is **not compiled or measured** at this point; expensive runtime is preserved.
+2. When a candidate's `mutation.patch` matches a Tier-1 pattern: write `parity_check.json` with `{pass: false, reason: forbidden_mutation_family_demoted, tier: soft, pattern_id: <id>, evidence_snippet: <patch lines>, demoted_to_canary_round: <future_canary_iteration>}`. Append to `mutations_rejected.tsv` using the existing rejection schema. Append to `filter_hit_review.tsv` (§5.8.4). The candidate is **not compiled or measured** at this point; it is queued for canary admission.
 3. Every **N=4** candidates in the round, the controller pulls the FIFO-oldest entry from `demoted_queue` and runs it as a **canary** through the full apply-and-test path. The canary's outcome (parity-passes-or-fails, throughput-improves-or-regresses) is recorded back in `filter_hit_review.tsv` so we accumulate per-pattern false-positive evidence.
 4. If the canary IMPROVES vs. baseline at `confidence: defensible`: the filter was **wrong on this case**. Record in `filter_hit_review.tsv` with `canary_outcome: improved`. The candidate is also accepted into `results.tsv` like any other winner — we don't penalize it for having matched a Tier-1 pattern.
 5. If the canary REGRESSES or fails parity: the filter was right on this case. `canary_outcome: regressed` or `canary_outcome: parity_failed`. Demoted-queue entry stays demoted; no further action.
 
-**Why N=4.** Empirical-research literature (Reflexion, AlphaEvolve) doesn't prescribe a number. N=4 is chosen so a 12-iteration round runs at most 3 canaries — bounded extra cost (~90 min) but enough samples to start calibrating.
+**Why N=4.** Empirical-research literature (Reflexion, AlphaEvolve) doesn't prescribe a number. N=4 is a conservative initial cadence: a 12-iteration round gets up to 3 calibration samples without letting demoted candidates dominate the main search loop.
 
 #### 5.8.2 Tier-2: HARD reject (safety-critical patterns only)
 
-Tier-2 is for patterns that risk **silently corrupting downstream measurements** — where the cost of letting a bad mutation through is unbounded (all subsequent measurements suspect), and the cost of being wrong about the filter is bounded (a candidate doesn't run). These are NEVER demoted — they're hard-rejected with no canary admission.
+Tier-2 is for patterns that risk **silently corrupting downstream measurements** — if these land, all subsequent measurements may become suspect. These are NEVER demoted — they're hard-rejected with no canary admission.
 
 **Tier-2 pattern set in v0.3.4 (intentionally minimal — start empty, expand only when justified):**
 
@@ -1081,7 +1081,7 @@ Tier-2 is for patterns that risk **silently corrupting downstream measurements**
 
 **v0.3.4 launch state:** the Tier-2 pattern set IS the above 4 entries. The DeltaNet kernel-shape patterns from the gap analysis are NOT in Tier-2 — they are Tier-1 (soft demote).
 
-When Tier-2 fires: write `parity_check.json` with `{pass: false, reason: forbidden_mutation_family_hard_rejected, tier: safety_critical, pattern_id: <id>}`. Append to `mutations_rejected.tsv` with `cost_bucket: preflight_hard_rejected`. The candidate is permanently rejected; never re-tested as a canary.
+When Tier-2 fires: write `parity_check.json` with `{pass: false, reason: forbidden_mutation_family_hard_rejected, tier: safety_critical, pattern_id: <id>}`. Append to `mutations_rejected.tsv` using the existing rejection schema. The candidate is permanently rejected; never re-tested as a canary.
 
 **Promotion rule from Tier-1 → Tier-2:** a pattern with TPR (true-positive rate) > 95% over ≥10 canary runs in `filter_hit_review.tsv` is **eligible** for promotion. The promotion is a code change reviewed by a human, not automatic — calibration data informs the decision but doesn't make it.
 
@@ -1153,15 +1153,15 @@ Variable `{{positive_memory_winning_diffs_block}}` is the latest contents of `wi
 3a-2. Tier-2 preflight check: for each safety-critical pattern, regex-match the unified
       diff text. On any match: write parity_check.json {pass:false, reason:
       forbidden_mutation_family_hard_rejected, tier:safety_critical, pattern_id:X};
-      append mutations_rejected.tsv (cost_bucket:preflight_hard_rejected); append
-      filter_hit_review.tsv. Skip to step 3a (next iteration); no compile, no measurement.
+      append mutations_rejected.tsv; append filter_hit_review.tsv. Skip to step 3a
+      (next iteration); no compile, no measurement.
 3a-3. Tier-1 preflight check: for each soft-demote pattern, regex-match. On any match:
       determine canary eligibility (current candidate index modulo N=4 == 0 AND
       demoted_queue is non-empty AND this is not itself a canary run).
       - If NOT canary-eligible: write parity_check.json {pass:false, reason:
         forbidden_mutation_family_demoted, tier:soft, pattern_id:X, demoted_to_canary_round:
-        <future_id>}; append mutations_rejected.tsv (cost_bucket:preflight_demoted);
-        append filter_hit_review.tsv (ran_as_canary:false, canary_outcome:null).
+        <future_id>}; append mutations_rejected.tsv; append filter_hit_review.tsv
+        (ran_as_canary:false, canary_outcome:null).
         Push to demoted_queue. Skip to step 3a (next iteration).
       - If canary-eligible: pop from demoted_queue (NOT this candidate — the FIFO-oldest
         previously-demoted one). Mark its parity_check.json with running_as_canary:true.

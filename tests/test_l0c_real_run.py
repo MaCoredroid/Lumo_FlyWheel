@@ -342,6 +342,26 @@ def _patch_for(iteration: str, suffix: str = "") -> str:
     )
 
 
+def _deltanet_forbidden_patch() -> str:
+    return (
+        "--- a/chunk_delta_h.py\n+++ b/chunk_delta_h.py\n"
+        "@@ -10,8 +10,7 @@\n"
+        "     bos = tl.load(offsets + i_n)\n"
+        "-    g = g + bos * H + i_h\n"
+        "     p_g = g + (i_t * BT + o_t) * H + i_h\n"
+        "     p_x = x + (i_t * BT + o_t) * H * K + i_h * K + o_k\n"
+    )
+
+
+def _hard_forbidden_patch() -> str:
+    return (
+        "--- a/tests/test_l0c_real_run.py\n+++ b/tests/test_l0c_real_run.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "-old\n"
+        "+new\n"
+    )
+
+
 def test_real_run_passes_round_and_mints_bundle_when_winner_beats_baseline(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -494,6 +514,74 @@ def test_real_run_preserves_parity_verdict_when_agent_exits_after_apply(
     assert "parity_logit_diverged" in rejected
     assert "0.358434" in rejected
     assert "agent_exit_1" not in rejected
+
+
+def test_spawn_recovers_rejected_artifacts_when_agent_cli_stalls(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    round_dir = repo / "output" / "auto_research" / "round-1"
+    iteration_dir = round_dir / "candidates" / "001"
+    iteration_dir.mkdir(parents=True)
+    (iteration_dir / "iteration_brief.md").write_text("brief", encoding="utf-8")
+    (iteration_dir / "mutation.patch").write_text("diff --git a/k b/k\n", encoding="utf-8")
+    (iteration_dir / "agent_last_message.txt").write_text("done", encoding="utf-8")
+    runner._write_parity_check(
+        iteration_dir,
+        pass_=False,
+        reason="parity_logit_diverged",
+        fixture_id="test-family-deltanet-v1",
+        kernel_target="deltanet",
+        first_diverging_probe=0,
+        tolerance_overshoot=0.25,
+    )
+
+    class _Stdin:
+        def write(self, data: bytes) -> int:
+            return len(data)
+
+        def close(self) -> None:
+            pass
+
+    popen_instances = []
+
+    class _FakePopen:
+        def __init__(self, *args, **kwargs) -> None:
+            self.pid = 4242
+            self.returncode = None
+            self.stdin = _Stdin()
+            popen_instances.append(self)
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+    def _fake_killpg(pid: int, sig: int) -> None:
+        assert pid == 4242
+        popen_instances[-1].returncode = -sig
+
+    monkeypatch.setattr(auto_research.subprocess, "Popen", _FakePopen)
+    monkeypatch.setattr(auto_research.os, "killpg", _fake_killpg)
+    monkeypatch.setattr(auto_research.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(auto_research, "L0C_AGENT_ARTIFACT_RECOVERY_GRACE_S", 0)
+
+    result = runner._spawn_l0c_agent_iteration(
+        spec={"agent_runtime": "codex", "per_iteration_codex_wall_clock_s": 3600},
+        round_dir=round_dir,
+        iteration_dir=iteration_dir,
+        iteration="001",
+    )
+
+    assert result == {"ok": False, "error": "agent_artifact_recovered_after_stall"}
+    assert (iteration_dir / "agent_session.jsonl").is_file()
 
 
 def test_real_run_rate_limit_blocks_without_burning_compile_failure_budget(
@@ -671,6 +759,8 @@ def test_real_run_writes_runtime_block_into_round_spec(tmp_path: Path, monkeypat
     assert f"cd {result.round_dir.parents[2]}" in brief
     assert f"{result.round_dir.parents[2] / '.venv' / 'bin' / 'lumoserve'} auto-research apply-and-test" in brief
     assert "patch --dry-run" in brief
+    assert "Recent winning diffs" in brief
+    assert "Controller-enforced preflight patterns" in brief
     # kernel_base snapshot must exist for apply_and_test (Slice 2) to read.
     base_bytes_dir = result.round_dir / "kernel_base"
     assert base_bytes_dir.is_dir()
@@ -789,6 +879,124 @@ def test_real_run_embeds_strategy_brief_and_prior_rejections(
     assert "strategy_brief.md" in brief
     assert "prior_mutations_rejected.tsv" in brief
     assert "DeltaNet-first L0c canary ordering remains allowed." in brief
+
+
+def test_real_run_soft_preflight_demotes_forbidden_deltanet_patch_without_apply(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    fixture_path = _write_parity_fixture(repo)
+    base_bundle = _write_base_bundle(repo, workload_path)
+    kernel_path = _make_kernel_source(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    _stub_baseline(monkeypatch, rows=1, mean_obj=1.0)
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_spawn_l0c_agent_iteration",
+        _make_agent_writer(patch_text_for=lambda iteration: _deltanet_forbidden_patch()),
+        raising=True,
+    )
+
+    def _apply_should_not_run(self, **kwargs):
+        raise AssertionError("preflight-demoted candidate should not run apply_and_test")
+
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "apply_and_test",
+        _apply_should_not_run,
+        raising=True,
+    )
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path=str(kernel_path),
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=1,
+        total_attempt_cap=1,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        runtime=_runtime_block(),
+    )
+    assert result.terminal_condition == "total_attempt_cap_reached"
+    assert result.accepted_count == 0
+    parity = json.loads(
+        (result.round_dir / "candidates" / "001" / "parity_check.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert parity["reason"] == "forbidden_mutation_family_demoted"
+    assert parity["tier"] == "soft"
+    assert parity["pattern_id"] == "deltanet_g_pre_offset_removed"
+    rejected = (result.round_dir / "mutations_rejected.tsv").read_text(encoding="utf-8")
+    assert "forbidden_mutation_family_demoted" in rejected
+    assert "cost_bucket" not in rejected
+    review = (result.round_dir / "filter_hit_review.tsv").read_text(encoding="utf-8")
+    assert "deltanet_g_pre_offset_removed" in review
+    assert "cost_bucket" not in review
+
+
+def test_real_run_hard_preflight_rejects_safety_critical_patch_without_apply(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_registry(repo)
+    workload_path = _write_workload(repo)
+    fixture_path = _write_parity_fixture(repo)
+    base_bundle = _write_base_bundle(repo, workload_path)
+    kernel_path = _make_kernel_source(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    _stub_baseline(monkeypatch, rows=1, mean_obj=1.0)
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_spawn_l0c_agent_iteration",
+        _make_agent_writer(patch_text_for=lambda iteration: _hard_forbidden_patch()),
+        raising=True,
+    )
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "apply_and_test",
+        lambda self, **kwargs: (_ for _ in ()).throw(
+            AssertionError("hard-rejected candidate should not run apply_and_test")
+        ),
+        raising=True,
+    )
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="deltanet",
+        kernel_source_path=str(kernel_path),
+        parity_fixture=fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=1,
+        total_attempt_cap=1,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        runtime=_runtime_block(),
+    )
+    parity = json.loads(
+        (result.round_dir / "candidates" / "001" / "parity_check.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert parity["reason"] == "forbidden_mutation_family_hard_rejected"
+    assert parity["tier"] == "safety_critical"
+    assert parity["pattern_id"] == "safety_mutates_l0c_tests"
 
 
 def test_real_paired_baseline_discards_first_cold_row(tmp_path: Path, monkeypatch) -> None:

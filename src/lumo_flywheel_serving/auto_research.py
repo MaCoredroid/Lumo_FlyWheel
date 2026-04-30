@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-import requests
 import yaml
 
 from .kernel_activation import KERNEL_SELECTION_RUNTIME_UNSUPPORTED, resolve_kernel_runtime_activation
@@ -39,6 +38,7 @@ MIN_LIVE_STARTUP_GPU_MEMORY_UTILIZATION = 0.30
 SIGNED_OFF_BY = "lumoserve-auto-research-cli <auto-research@lumo-flywheel>"
 MIN_CODEX_CLI_VERSION = (0, 120, 0)
 SERVING_THINKING_PROBE_MAX_AGE = timedelta(days=7)
+L0C_AGENT_ARTIFACT_RECOVERY_GRACE_S = 45
 REAL_MEASUREMENT_GENERATOR_PREFIX = "RealMeasurementHarness"
 SYNTHETIC_MEASUREMENT_GENERATOR_PREFIX = "SyntheticMeasurementFixture"
 ALLOWED_VLLM_CONFIG_KEYS = {
@@ -103,6 +103,9 @@ L0C_COMPILE_FAILURES_THRESHOLD = 3
 L0C_INTERMITTENT_PARITY_THRESHOLD = 2
 L0C_MEASUREMENTS_PER_ACCEPTED = 2
 L0C_PRIOR_REJECTION_LIMIT = 20
+L0C_CANARY_INTERVAL = 4
+L0C_POSITIVE_MEMORY_ROUND_LIMIT = 3
+L0C_POSITIVE_MEMORY_WINNERS_PER_ROUND = 5
 L0C_PRIOR_REJECTION_COLUMNS = [
     "source_round_id",
     "iteration",
@@ -120,6 +123,7 @@ L0C_TERMINAL_CONDITIONS = {
     "proposer_stuck",
     "compile_failures_3x",
     "intermittent_parity_observed",
+    "proposer_stuck_after_canary_round",
     "agent_rate_limited",
     "agent_unavailable",
 }
@@ -1866,7 +1870,6 @@ class L0bKernelAutotuneRunner:
         "autotune_params_ref",
     ]
     TRAILER_COLUMNS = ["candidate_uuid", "candidate_label", "trailer"]
-
     def __init__(
         self,
         *,
@@ -3891,8 +3894,6 @@ class AutoResearchRoundManager:
         round_dir = self._round_dir(round_id)
         spec = RoundSpecRecord.from_path(round_dir / "round_spec.yaml")
         spec = self._spec_with_harness(spec, harness)
-        if spec.harness_type == "synthetic":
-            allow_synthetic = True
         self._validate_iteration_id(iteration)
         candidate_dir = round_dir / "candidates" / iteration
         candidate_path = candidate_dir / "candidate.yaml"
@@ -4901,18 +4902,18 @@ class AutoResearchRoundManager:
         )
         if stray_advisory_values:
             raise RuntimeError(f"{context}: advisory field_values present without advisory_fields: {stray_advisory_values}")
-        for field in advisory_fields:
-            payload = field_values.get(field)
+        for advisory_field in advisory_fields:
+            payload = field_values.get(advisory_field)
             if not isinstance(payload, dict) or payload.get("enforcement") != "advisory" or "value" not in payload:
-                raise RuntimeError(f"{context}: advisory field {field} is not marked advisory")
-            if request_shaping is not None and payload.get("value") != request_shaping.get(field):
-                raise RuntimeError(f"{context}: advisory field {field} value mismatch")
-        for field in ENFORCED_REQUEST_SHAPING_FIELDS:
-            payload = field_values.get(field)
+                raise RuntimeError(f"{context}: advisory field {advisory_field} is not marked advisory")
+            if request_shaping is not None and payload.get("value") != request_shaping.get(advisory_field):
+                raise RuntimeError(f"{context}: advisory field {advisory_field} value mismatch")
+        for enforced_field in ENFORCED_REQUEST_SHAPING_FIELDS:
+            payload = field_values.get(enforced_field)
             if not isinstance(payload, dict) or payload.get("enforcement") != "enforced" or "value" not in payload:
-                raise RuntimeError(f"{context}: enforced field {field} is not marked enforced")
-            if request_shaping is not None and payload.get("value") != request_shaping.get(field):
-                raise RuntimeError(f"{context}: enforced field {field} value mismatch")
+                raise RuntimeError(f"{context}: enforced field {enforced_field} is not marked enforced")
+            if request_shaping is not None and payload.get("value") != request_shaping.get(enforced_field):
+                raise RuntimeError(f"{context}: enforced field {enforced_field} value mismatch")
         return record
 
     def _apply_request_shaping_trace(
@@ -5790,6 +5791,24 @@ inspecting prior iterations, trust `parity_check.json` over any other
 record. If a prior iteration is in `results.tsv`, it was accepted —
 period — even if its dir contains stale agent commentary.
 
+# Recent winning diffs (positive memory)
+The following diffs were accepted in recent L0c rounds with measured improvement.
+Use them for orientation about mutation shapes that have worked. They are not
+requirements.
+
+{{positive_memory_winning_diffs_block}}
+
+# Controller-enforced preflight patterns
+The round controller checks your patch before apply-and-test. Tier-1 patterns
+are soft-demoted into canary admission; Tier-2 patterns are hard-rejected.
+This is enforcement, not preference.
+
+Tier-1 soft-demote:
+{{tier_1_pattern_list_with_descriptions}}
+
+Tier-2 hard-reject:
+{{tier_2_pattern_list_with_descriptions}}
+
 # Procedure
 1. Read {{kernel_source_path}}, strategy_brief.md, prior_mutations_rejected.tsv,
    mutations_rejected.tsv, results.tsv (best_so_far).
@@ -5890,6 +5909,18 @@ class L0cKernelMutationRunner:
         "trace_ref",
     ]
     TRAILER_COLUMNS = ["candidate_uuid", "candidate_label", "trailer"]
+    FILTER_HIT_REVIEW_COLUMNS = [
+        "timestamp",
+        "round_id",
+        "candidate_id",
+        "tier",
+        "pattern_id",
+        "diff_excerpt",
+        "proposer_rationale_excerpt",
+        "ran_as_canary",
+        "canary_outcome",
+        "canary_round_id",
+    ]
 
     def __init__(
         self,
@@ -6003,6 +6034,21 @@ class L0cKernelMutationRunner:
             L0C_PRIOR_REJECTION_COLUMNS,
             prior_rejections,
         )
+        winning_diffs = self._collect_recent_l0c_winning_diffs(
+            round_root=root,
+            current_round_id=round_id,
+            kernel_target=kernel_target,
+        )
+        (round_dir / "winning_diffs.md").write_text(winning_diffs, encoding="utf-8")
+        filter_hit_rows = self._collect_prior_filter_hit_review_rows(
+            round_root=root,
+            current_round_id=round_id,
+        )
+        self._write_tsv(
+            round_dir / "filter_hit_review.tsv",
+            self.FILTER_HIT_REVIEW_COLUMNS,
+            filter_hit_rows,
+        )
         strategy_brief = self._build_l0c_strategy_brief(
             kernel_target=kernel_target,
             round_id=round_id,
@@ -6041,6 +6087,7 @@ class L0cKernelMutationRunner:
                 round_id=round_id,
                 harness=harness,
                 strategy_brief=strategy_brief,
+                positive_memory=winning_diffs,
             ),
             encoding="utf-8",
         )
@@ -6340,6 +6387,7 @@ class L0cKernelMutationRunner:
         )
         if terminal_condition in {
             "proposer_stuck",
+            "proposer_stuck_after_canary_round",
             "compile_failures_3x",
             "intermittent_parity_observed",
             "round_timeout",
@@ -6479,6 +6527,8 @@ class L0cKernelMutationRunner:
                 "round_spec": str(round_dir / "round_spec.yaml"),
                 "iteration_brief": str(round_dir / "iteration_brief.md"),
                 "strategy_brief": str(round_dir / "strategy_brief.md"),
+                "winning_diffs": str(round_dir / "winning_diffs.md"),
+                "filter_hit_review": str(round_dir / "filter_hit_review.tsv"),
                 "run_log": str(round_dir / "run_log.json"),
                 "measurement_trace_combined": str(round_dir / "measurement_trace_combined.json"),
                 "prior_mutations_rejected": str(round_dir / "prior_mutations_rejected.tsv"),
@@ -7169,6 +7219,9 @@ class L0cKernelMutationRunner:
         consecutive_compile_fails = 0
         intermittent_parity_seen = 0
         seen_hashes: set[str] = set()
+        demoted_queue: list[dict[str, Any]] = []
+        after_regressed_canary_demotions: int | None = None
+        filter_hit_rows = self._read_tsv(round_dir / "filter_hit_review.tsv")
         terminal_condition: str | None = None
         winner_uuid: str | None = None
         winner_mean: float | None = None
@@ -7285,28 +7338,145 @@ class L0cKernelMutationRunner:
                 continue
             seen_hashes.add(mutation_hash)
 
+            candidate_uuid = str(uuid4())
+            preflight = self._preflight_l0c_patch(
+                kernel_target=kernel_target,
+                patch_text=patch_text,
+            )
+            active_iteration = attempt_label
+            active_iteration_dir = iteration_dir
+            active_mutation_hash = mutation_hash
+            active_is_canary = False
+            active_canary_pattern_id = ""
+            if preflight is not None:
+                tier = preflight["tier"]
+                pattern_id = preflight["pattern_id"]
+                evidence_snippet = preflight.get("evidence_snippet", "")
+                if tier == "safety_critical":
+                    self._write_preflight_rejection(
+                        iteration_dir=iteration_dir,
+                        round_dir=round_dir,
+                        rejected_rows=rejected_rows,
+                        iteration=attempt_label,
+                        candidate_uuid=candidate_uuid,
+                        mutation_hash=mutation_hash,
+                        kernel_target=kernel_target,
+                        fixture_id=fixture_id,
+                        tier=tier,
+                        pattern_id=pattern_id,
+                        evidence_snippet=evidence_snippet,
+                    )
+                    self._record_filter_hit(
+                        round_dir=round_dir,
+                        filter_hit_rows=filter_hit_rows,
+                        round_id=round_id,
+                        iteration=attempt_label,
+                        tier=tier,
+                        pattern_id=pattern_id,
+                        evidence_snippet=evidence_snippet,
+                    )
+                    consecutive_compile_fails = 0
+                    consecutive_parity_fails = 0
+                    continue
+
+                canary_available = bool(demoted_queue)
+                demoted_to = (
+                    f"{attempt_index + (L0C_CANARY_INTERVAL - attempt_index % L0C_CANARY_INTERVAL):03d}"
+                    if attempt_index % L0C_CANARY_INTERVAL
+                    else f"{attempt_index:03d}"
+                )
+                self._write_preflight_rejection(
+                    iteration_dir=iteration_dir,
+                    round_dir=round_dir,
+                    rejected_rows=rejected_rows,
+                    iteration=attempt_label,
+                    candidate_uuid=candidate_uuid,
+                    mutation_hash=mutation_hash,
+                    kernel_target=kernel_target,
+                    fixture_id=fixture_id,
+                    tier=tier,
+                    pattern_id=pattern_id,
+                    evidence_snippet=evidence_snippet,
+                    demoted_to_canary_round=demoted_to,
+                )
+                self._record_filter_hit(
+                    round_dir=round_dir,
+                    filter_hit_rows=filter_hit_rows,
+                    round_id=round_id,
+                    iteration=attempt_label,
+                    tier=tier,
+                    pattern_id=pattern_id,
+                    evidence_snippet=evidence_snippet,
+                )
+                demoted_queue.append(
+                    {
+                        "iteration": attempt_label,
+                        "iteration_dir": iteration_dir,
+                        "mutation_hash": mutation_hash,
+                        "pattern_id": pattern_id,
+                    }
+                )
+                if after_regressed_canary_demotions is not None:
+                    after_regressed_canary_demotions += 1
+                    if after_regressed_canary_demotions >= L0C_PROPOSER_STUCK_THRESHOLD:
+                        terminal_condition = "proposer_stuck_after_canary_round"
+                        break
+                if not (
+                    attempt_index % L0C_CANARY_INTERVAL == 0
+                    and canary_available
+                ):
+                    consecutive_compile_fails = 0
+                    consecutive_parity_fails = 0
+                    continue
+                canary = demoted_queue.pop(0)
+                active_iteration = str(canary["iteration"])
+                active_iteration_dir = Path(canary["iteration_dir"])
+                active_mutation_hash = str(canary["mutation_hash"])
+                active_is_canary = True
+                active_canary_pattern_id = str(canary["pattern_id"])
+                self._mark_running_as_canary(
+                    iteration_dir=active_iteration_dir,
+                    pattern_id=active_canary_pattern_id,
+                )
+
             outcome = self.apply_and_test(
                 round_id=round_id,
-                iteration=attempt_label,
+                iteration=active_iteration,
                 kernel_target=kernel_target,
                 harness="real",
                 round_root=round_dir.parent,
             )
+            if active_is_canary:
+                self._annotate_canary_parity_check(
+                    iteration_dir=active_iteration_dir,
+                    pattern_id=active_canary_pattern_id,
+                )
 
             if outcome["outcome"] == "compile_failed":
                 consecutive_compile_fails += 1
                 consecutive_parity_fails = 0
-                parity = self._read_parity_check(iteration_dir)
-                self._record_l0c_rejection(
-                    round_dir,
-                    rejected_rows,
-                    self._make_rejection_row(
-                        iteration=attempt_label,
-                        candidate_uuid=str(uuid4()),
-                        mutation_hash=mutation_hash,
-                        reason=str(parity.get("reason", "compile_nvcc_error")),
+                parity = self._read_parity_check(active_iteration_dir)
+                if active_is_canary:
+                    self._update_filter_hit_canary_outcome(
+                        round_dir=round_dir,
+                        filter_hit_rows=filter_hit_rows,
+                        round_id=round_id,
+                        iteration=active_iteration,
+                        pattern_id=active_canary_pattern_id,
+                        canary_outcome="compile_failed",
                     )
-                )
+                    after_regressed_canary_demotions = 0
+                else:
+                    self._record_l0c_rejection(
+                        round_dir,
+                        rejected_rows,
+                        self._make_rejection_row(
+                            iteration=active_iteration,
+                            candidate_uuid=str(uuid4()),
+                            mutation_hash=active_mutation_hash,
+                            reason=str(parity.get("reason", "compile_nvcc_error")),
+                        )
+                    )
                 if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
                     terminal_condition = "compile_failures_3x"
                     break
@@ -7314,28 +7484,39 @@ class L0cKernelMutationRunner:
             if outcome["outcome"] == "parity_failed":
                 consecutive_parity_fails += 1
                 consecutive_compile_fails = 0
-                parity = self._read_parity_check(iteration_dir)
+                parity = self._read_parity_check(active_iteration_dir)
                 reason = str(parity.get("reason", "parity_logit_diverged"))
-                self._record_l0c_rejection(
-                    round_dir,
-                    rejected_rows,
-                    self._make_rejection_row(
-                        iteration=attempt_label,
-                        candidate_uuid=str(uuid4()),
-                        mutation_hash=mutation_hash,
-                        reason=reason,
-                        first_diverging_probe_index=(
-                            int(parity["first_diverging_probe"])
-                            if "first_diverging_probe" in parity
-                            else None
-                        ),
-                        tolerance_overshoot=(
-                            float(parity["tolerance_overshoot"])
-                            if "tolerance_overshoot" in parity
-                            else None
-                        ),
+                if active_is_canary:
+                    self._update_filter_hit_canary_outcome(
+                        round_dir=round_dir,
+                        filter_hit_rows=filter_hit_rows,
+                        round_id=round_id,
+                        iteration=active_iteration,
+                        pattern_id=active_canary_pattern_id,
+                        canary_outcome="parity_failed",
                     )
-                )
+                    after_regressed_canary_demotions = 0
+                else:
+                    self._record_l0c_rejection(
+                        round_dir,
+                        rejected_rows,
+                        self._make_rejection_row(
+                            iteration=active_iteration,
+                            candidate_uuid=str(uuid4()),
+                            mutation_hash=active_mutation_hash,
+                            reason=reason,
+                            first_diverging_probe_index=(
+                                int(parity["first_diverging_probe"])
+                                if "first_diverging_probe" in parity
+                                else None
+                            ),
+                            tolerance_overshoot=(
+                                float(parity["tolerance_overshoot"])
+                                if "tolerance_overshoot" in parity
+                                else None
+                            ),
+                        )
+                    )
                 if reason == "intermittent_parity":
                     intermittent_parity_seen += 1
                     if intermittent_parity_seen >= L0C_INTERMITTENT_PARITY_THRESHOLD:
@@ -7349,28 +7530,50 @@ class L0cKernelMutationRunner:
             # parity passed
             consecutive_parity_fails = 0
             consecutive_compile_fails = 0
-            measurement_trace_path = iteration_dir / "measurement_trace.json"
+            measurement_trace_path = active_iteration_dir / "measurement_trace.json"
             measurement_trace = json.loads(measurement_trace_path.read_text(encoding="utf-8"))
             measurement_rows = list(measurement_trace["measurements"])
             mean_objective = float(outcome["objective_mean"])
             candidate_uuid = str(outcome["candidate_uuid"])
             accepted_rows.extend(measurement_rows)
+            baseline_mean = self._mean_of(baseline_rows)
             results_rows.append(
                 {
-                    "iteration": attempt_label,
+                    "iteration": active_iteration,
                     "candidate_uuid": candidate_uuid,
                     "parent_candidate_uuid": baseline_uuid,
-                    "mutation_hash": mutation_hash,
-                    "status": "keep" if mean_objective > self._mean_of(baseline_rows) else "discard",
+                    "mutation_hash": active_mutation_hash,
+                    "status": "keep" if mean_objective > baseline_mean else "discard",
                     "objective_mean": f"{mean_objective:.6f}",
                     "measurement_count": str(len(measurement_rows)),
                 }
             )
+            if active_is_canary:
+                canary_outcome = "improved" if mean_objective > baseline_mean else "regressed"
+                self._update_filter_hit_canary_outcome(
+                    round_dir=round_dir,
+                    filter_hit_rows=filter_hit_rows,
+                    round_id=round_id,
+                    iteration=active_iteration,
+                    pattern_id=active_canary_pattern_id,
+                    canary_outcome=canary_outcome,
+                )
+                after_regressed_canary_demotions = 0 if canary_outcome == "regressed" else None
+            else:
+                after_regressed_canary_demotions = None
             accepted_count += 1
             if winner_mean is None or mean_objective > winner_mean:
                 winner_mean = mean_objective
                 winner_uuid = candidate_uuid
                 accepted_winner_rows = measurement_rows
+            if mean_objective > baseline_mean:
+                self._append_l0c_winning_diff(
+                    round_dir=round_dir,
+                    round_id=round_id,
+                    iteration=active_iteration,
+                    objective_mean=mean_objective,
+                    patch_path=active_iteration_dir / "mutation.patch",
+                )
         else:
             terminal_condition = terminal_condition or "total_attempt_cap_reached"
         terminal_condition = terminal_condition or "accepted_cap_reached"
@@ -7555,6 +7758,450 @@ class L0cKernelMutationRunner:
                 }
             )
         return rows
+
+    @staticmethod
+    def _sanitize_tsv_field(value: Any, *, limit: int = 400) -> str:
+        text = str(value).replace("\t", " ").replace("\r", " ").replace("\n", "\\n")
+        return text[:limit]
+
+    @classmethod
+    def _format_preflight_patterns(cls, *, tier: str) -> str:
+        patterns = cls._l0c_preflight_patterns(tier=tier)
+        if not patterns:
+            return "- None configured."
+        return "\n".join(f"- `{pattern_id}` — {description}" for pattern_id, description in patterns)
+
+    @staticmethod
+    def _l0c_preflight_patterns(*, tier: str) -> list[tuple[str, str]]:
+        if tier == "soft":
+            return [
+                (
+                    "deltanet_g_pre_offset_removed",
+                    "removes the shared `g = g + bos * H + i_h` gate offset",
+                ),
+                (
+                    "deltanet_gk_pre_offset_removed",
+                    "removes the shared `gk = gk + (bos * H + i_h) * K` gate-key offset",
+                ),
+                (
+                    "deltanet_inline_g_base_rewrite",
+                    "introduces inline `g + bos * H ...` addressing at gate-load sites",
+                ),
+                (
+                    "deltanet_inline_gk_base_rewrite",
+                    "introduces inline `gk + ... bos ... H ... K` addressing at gate-key loads",
+                ),
+                (
+                    "deltanet_t_start_removed_or_inlined",
+                    "removes shared `t_start = i_t * BT` or broadly inlines `i_t * BT` offsets",
+                ),
+                (
+                    "deltanet_gate_load_cg_hint",
+                    "adds or retains `.cg` cache hints on changed `g`/`gk` gate-load lines",
+                ),
+            ]
+        if tier == "safety_critical":
+            return [
+                (
+                    "safety_mutates_parity_fixture_code",
+                    "patch touches parity fixture builders or parity-check implementation",
+                ),
+                (
+                    "safety_mutates_l0c_measurement_controller",
+                    "patch touches the L0c controller or measurement-recording implementation",
+                ),
+                (
+                    "safety_mutates_l0c_tests",
+                    "patch touches `tests/test_l0c_*.py`",
+                ),
+                (
+                    "safety_mutates_rejection_or_filter_writer",
+                    "patch touches rejection-ledger or filter-hit-review writer code",
+                ),
+            ]
+        return []
+
+    def _preflight_l0c_patch(self, *, kernel_target: str, patch_text: str) -> dict[str, str] | None:
+        hard = self._match_l0c_hard_preflight(patch_text)
+        if hard is not None:
+            return {"tier": "safety_critical", **hard}
+        if kernel_target == "deltanet":
+            soft = self._match_deltanet_soft_preflight(patch_text)
+            if soft is not None:
+                return {"tier": "soft", **soft}
+        return None
+
+    @staticmethod
+    def _match_l0c_hard_preflight(patch_text: str) -> dict[str, str] | None:
+        diff_paths: list[str] = []
+        for line in patch_text.splitlines():
+            if line.startswith(("--- ", "+++ ")):
+                path = line[4:].strip()
+                if path == "/dev/null":
+                    continue
+                if path.startswith(("a/", "b/")):
+                    path = path[2:]
+                diff_paths.append(path)
+        path_blob = "\n".join(diff_paths)
+        if any(
+            path.endswith("scripts/build_parity_fixture.py")
+            or "kernels/parity_check_" in path
+            or path.endswith("parity_fixture.py")
+            for path in diff_paths
+        ):
+            return {
+                "pattern_id": "safety_mutates_parity_fixture_code",
+                "evidence_snippet": path_blob,
+            }
+        if any(path.endswith("src/lumo_flywheel_serving/auto_research.py") for path in diff_paths):
+            if any(
+                token in patch_text
+                for token in (
+                    "record_measurement",
+                    "_run_paired_l0c_measurements",
+                    "_record_l0c_rejection",
+                    "filter_hit_review.tsv",
+                    "mutations_rejected.tsv",
+                )
+            ):
+                pattern_id = (
+                    "safety_mutates_rejection_or_filter_writer"
+                    if "filter_hit_review.tsv" in patch_text
+                    or "mutations_rejected.tsv" in patch_text
+                    or "_record_l0c_rejection" in patch_text
+                    else "safety_mutates_l0c_measurement_controller"
+                )
+                return {"pattern_id": pattern_id, "evidence_snippet": path_blob}
+        if any(path.startswith("tests/test_l0c_") and path.endswith(".py") for path in diff_paths):
+            return {"pattern_id": "safety_mutates_l0c_tests", "evidence_snippet": path_blob}
+        return None
+
+    @staticmethod
+    def _match_deltanet_soft_preflight(patch_text: str) -> dict[str, str] | None:
+        removed: list[str] = []
+        added: list[str] = []
+        for line in patch_text.splitlines():
+            if line.startswith("--- ") or line.startswith("+++ "):
+                continue
+            if line.startswith("-"):
+                removed.append(line[1:].strip())
+            elif line.startswith("+"):
+                added.append(line[1:].strip())
+
+        def evidence(lines: list[str]) -> str:
+            return "\n".join(lines[:6])
+
+        g_offset = "g = g + bos * H + i_h"
+        gk_offset = "gk = gk + (bos * H + i_h) * K"
+        if any(g_offset in line for line in removed):
+            return {
+                "pattern_id": "deltanet_g_pre_offset_removed",
+                "evidence_snippet": evidence([line for line in removed if g_offset in line]),
+            }
+        if any(gk_offset in line for line in removed):
+            return {
+                "pattern_id": "deltanet_gk_pre_offset_removed",
+                "evidence_snippet": evidence([line for line in removed if gk_offset in line]),
+            }
+        inline_g = [
+            line
+            for line in added
+            if ("g + bos * H" in line or "g + (bos * H" in line) and g_offset not in line
+        ]
+        if inline_g:
+            return {
+                "pattern_id": "deltanet_inline_g_base_rewrite",
+                "evidence_snippet": evidence(inline_g),
+            }
+        inline_gk = [
+            line
+            for line in added
+            if "gk +" in line and "bos" in line and "H" in line and "K" in line and gk_offset not in line
+        ]
+        if inline_gk:
+            return {
+                "pattern_id": "deltanet_inline_gk_base_rewrite",
+                "evidence_snippet": evidence(inline_gk),
+            }
+        removed_t_start = any("t_start = i_t * BT" in line for line in removed)
+        inlined_t_start = sum(1 for line in added if "i_t * BT" in line) >= 2
+        if removed_t_start or inlined_t_start:
+            matched = [line for line in removed + added if "t_start = i_t * BT" in line or "i_t * BT" in line]
+            return {
+                "pattern_id": "deltanet_t_start_removed_or_inlined",
+                "evidence_snippet": evidence(matched),
+            }
+        gate_cg = [
+            line
+            for line in added
+            if ".cg" in line and ("g" in line or "gk" in line) and ("tl.load" in line or "cache_modifier" in line)
+        ]
+        if gate_cg:
+            return {
+                "pattern_id": "deltanet_gate_load_cg_hint",
+                "evidence_snippet": evidence(gate_cg),
+            }
+        return None
+
+    def _collect_prior_filter_hit_review_rows(
+        self,
+        *,
+        round_root: Path,
+        current_round_id: str,
+    ) -> list[dict[str, Any]]:
+        if not round_root.exists():
+            return []
+        rows: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for prior_round in sorted(
+            (path for path in round_root.iterdir() if path.is_dir() and path.name != current_round_id),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        ):
+            path = prior_round / "filter_hit_review.tsv"
+            if not path.is_file():
+                continue
+            for row in self._read_tsv(path):
+                key = (
+                    str(row.get("round_id", "")),
+                    str(row.get("candidate_id", "")),
+                    str(row.get("pattern_id", "")),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append({column: row.get(column, "") for column in self.FILTER_HIT_REVIEW_COLUMNS})
+        return rows
+
+    def _record_filter_hit(
+        self,
+        *,
+        round_dir: Path,
+        filter_hit_rows: list[dict[str, Any]],
+        round_id: str,
+        iteration: str,
+        tier: str,
+        pattern_id: str,
+        evidence_snippet: str,
+        ran_as_canary: bool = False,
+        canary_outcome: str = "",
+    ) -> None:
+        row = {
+            "timestamp": datetime.now(UTC).replace(microsecond=0).isoformat(),
+            "round_id": round_id,
+            "candidate_id": iteration,
+            "tier": tier,
+            "pattern_id": pattern_id,
+            "diff_excerpt": self._sanitize_tsv_field(evidence_snippet),
+            "proposer_rationale_excerpt": "",
+            "ran_as_canary": str(bool(ran_as_canary)).lower(),
+            "canary_outcome": canary_outcome,
+            "canary_round_id": round_id if ran_as_canary else "",
+        }
+        filter_hit_rows.append(row)
+        self._write_tsv(
+            round_dir / "filter_hit_review.tsv",
+            self.FILTER_HIT_REVIEW_COLUMNS,
+            filter_hit_rows,
+        )
+
+    def _update_filter_hit_canary_outcome(
+        self,
+        *,
+        round_dir: Path,
+        filter_hit_rows: list[dict[str, Any]],
+        round_id: str,
+        iteration: str,
+        pattern_id: str,
+        canary_outcome: str,
+    ) -> None:
+        for row in reversed(filter_hit_rows):
+            if (
+                str(row.get("round_id")) == round_id
+                and str(row.get("candidate_id")) == iteration
+                and str(row.get("pattern_id")) == pattern_id
+            ):
+                row["ran_as_canary"] = "true"
+                row["canary_outcome"] = canary_outcome
+                row["canary_round_id"] = round_id
+                break
+        self._write_tsv(
+            round_dir / "filter_hit_review.tsv",
+            self.FILTER_HIT_REVIEW_COLUMNS,
+            filter_hit_rows,
+        )
+
+    def _write_preflight_rejection(
+        self,
+        *,
+        iteration_dir: Path,
+        round_dir: Path,
+        rejected_rows: list[dict[str, Any]],
+        iteration: str,
+        candidate_uuid: str,
+        mutation_hash: str,
+        kernel_target: str,
+        fixture_id: str,
+        tier: str,
+        pattern_id: str,
+        evidence_snippet: str,
+        demoted_to_canary_round: str | None = None,
+    ) -> None:
+        reason = (
+            "forbidden_mutation_family_hard_rejected"
+            if tier == "safety_critical"
+            else "forbidden_mutation_family_demoted"
+        )
+        self._write_parity_check(
+            iteration_dir,
+            pass_=False,
+            reason=reason,
+            fixture_id=fixture_id,
+            kernel_target=kernel_target,
+            tier=tier,
+            pattern_id=pattern_id,
+            evidence_snippet=self._sanitize_tsv_field(evidence_snippet),
+            demoted_to_canary_round=demoted_to_canary_round,
+        )
+        (iteration_dir / "BLOCKED.md").write_text(
+            "\n".join(
+                [
+                    "iteration rejected by controller preflight",
+                    f"reason: {reason}",
+                    f"tier: {tier}",
+                    f"pattern_id: {pattern_id}",
+                    f"evidence: {self._sanitize_tsv_field(evidence_snippet)}",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self._record_l0c_rejection(
+            round_dir,
+            rejected_rows,
+            self._make_rejection_row(
+                iteration=iteration,
+                candidate_uuid=candidate_uuid,
+                mutation_hash=mutation_hash,
+                reason=reason,
+            ),
+        )
+
+    def _mark_running_as_canary(
+        self,
+        *,
+        iteration_dir: Path,
+        pattern_id: str,
+    ) -> None:
+        path = iteration_dir / "parity_check.json"
+        payload: dict[str, Any] = {}
+        if path.is_file():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    payload = loaded
+            except json.JSONDecodeError:
+                payload = {}
+        payload["running_as_canary"] = True
+        payload["original_demote_pattern"] = pattern_id
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _annotate_canary_parity_check(
+        self,
+        *,
+        iteration_dir: Path,
+        pattern_id: str,
+    ) -> None:
+        path = iteration_dir / "parity_check.json"
+        if not path.is_file():
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return
+        if not isinstance(payload, dict):
+            return
+        payload["running_as_canary"] = True
+        payload["original_demote_pattern"] = pattern_id
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _collect_recent_l0c_winning_diffs(
+        self,
+        *,
+        round_root: Path,
+        current_round_id: str,
+        kernel_target: str,
+    ) -> str:
+        if not round_root.exists():
+            return "No prior winning L0c diffs found for this kernel target.\n"
+        round_dirs = [
+            path
+            for path in round_root.iterdir()
+            if path.is_dir()
+            and path.name != current_round_id
+            and f"-l0c-mutation-{kernel_target}-" in path.name
+        ]
+        round_dirs.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        blocks: list[str] = []
+        for prior_round in round_dirs[:L0C_POSITIVE_MEMORY_ROUND_LIMIT]:
+            results_path = prior_round / "results.tsv"
+            if not results_path.is_file():
+                continue
+            keep_rows = [row for row in self._read_tsv(results_path) if row.get("status") == "keep"]
+            for row in keep_rows[-L0C_POSITIVE_MEMORY_WINNERS_PER_ROUND:]:
+                iteration = str(row.get("iteration", ""))
+                patch_path = prior_round / "candidates" / iteration / "mutation.patch"
+                if not patch_path.is_file():
+                    continue
+                patch_text = patch_path.read_text(encoding="utf-8", errors="replace").strip()
+                blocks.append(
+                    "\n".join(
+                        [
+                            (
+                                f"## Round {prior_round.name} candidate {iteration} "
+                                f"— accepted (objective_mean: {row.get('objective_mean', '')})"
+                            ),
+                            "",
+                            "```diff",
+                            patch_text[:6000],
+                            "```",
+                        ]
+                    )
+                )
+        if not blocks:
+            return "No prior winning L0c diffs found for this kernel target.\n"
+        return "\n\n----------\n\n".join(blocks[: L0C_POSITIVE_MEMORY_ROUND_LIMIT * L0C_POSITIVE_MEMORY_WINNERS_PER_ROUND]) + "\n"
+
+    def _append_l0c_winning_diff(
+        self,
+        *,
+        round_dir: Path,
+        round_id: str,
+        iteration: str,
+        objective_mean: float,
+        patch_path: Path,
+    ) -> None:
+        if not patch_path.is_file():
+            return
+        path = round_dir / "winning_diffs.md"
+        current = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if current.strip() == "No prior winning L0c diffs found for this kernel target.":
+            current = ""
+        patch_text = patch_path.read_text(encoding="utf-8", errors="replace").strip()
+        block = "\n".join(
+            [
+                (
+                    f"## Round {round_id} candidate {iteration} — accepted "
+                    f"(objective_mean: {objective_mean:.6f})"
+                ),
+                "",
+                "```diff",
+                patch_text[:6000],
+                "```",
+                "",
+            ]
+        )
+        path.write_text((current.rstrip() + "\n\n" + block).lstrip(), encoding="utf-8")
 
     def _build_l0c_strategy_brief(
         self,
@@ -7800,6 +8447,9 @@ class L0cKernelMutationRunner:
             strategy_brief=(iteration_dir.parent.parent / "strategy_brief.md").read_text(
                 encoding="utf-8"
             ),
+            positive_memory=(iteration_dir.parent.parent / "winning_diffs.md").read_text(
+                encoding="utf-8"
+            ),
         )
         brief = brief.replace("{{iteration}}", iteration)
         brief = brief.replace("{{iteration_dir}}", str(iteration_dir))
@@ -7980,31 +8630,77 @@ class L0cKernelMutationRunner:
                 "-",
             ]
         proc: subprocess.Popen[bytes] | None = None
-        try:
-            proc = subprocess.Popen(
-                argv,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=str(round_dir) if agent_runtime == "claude" else None,
-                start_new_session=True,
-            )
-            stdout_bytes, stderr_bytes = proc.communicate(
-                input=prompt.encode(),
-                timeout=subprocess_timeout,
-            )
-            transcript_path.write_bytes(stdout_bytes)
-        except subprocess.TimeoutExpired as exc:
-            if proc is not None:
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                stdout_bytes, stderr_bytes = proc.communicate()
-                transcript_path.write_bytes(stdout_bytes or b"")
-            return {"ok": False, "error": f"agent_timeout: {exc}"}
-        except FileNotFoundError as exc:
-            return {"ok": False, "error": f"agent_binary_missing: {exc}"}
+        artifact_recovered = False
+        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+            try:
+                proc = subprocess.Popen(
+                    argv,
+                    stdin=subprocess.PIPE,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    cwd=str(round_dir) if agent_runtime == "claude" else None,
+                    start_new_session=True,
+                )
+                assert proc.stdin is not None
+                proc.stdin.write(prompt.encode())
+                proc.stdin.close()
+                started = time.monotonic()
+                artifact_ready_since: float | None = None
+                while proc.poll() is None:
+                    elapsed = time.monotonic() - started
+                    if subprocess_timeout is not None and elapsed >= subprocess_timeout:
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        proc.wait()
+                        stdout_file.seek(0)
+                        transcript_path.write_bytes(stdout_file.read())
+                        return {
+                            "ok": False,
+                            "error": f"agent_timeout: {subprocess_timeout}s",
+                        }
+                    if (
+                        last_message_path.is_file()
+                        and (iteration_dir / "mutation.patch").is_file()
+                        and (iteration_dir / "parity_check.json").is_file()
+                    ):
+                        artifact_ready_since = artifact_ready_since or time.monotonic()
+                        if (
+                            time.monotonic() - artifact_ready_since
+                            >= L0C_AGENT_ARTIFACT_RECOVERY_GRACE_S
+                        ):
+                            artifact_recovered = True
+                            try:
+                                os.killpg(proc.pid, signal.SIGTERM)
+                            except ProcessLookupError:
+                                pass
+                            try:
+                                proc.wait(timeout=10)
+                            except subprocess.TimeoutExpired:
+                                try:
+                                    os.killpg(proc.pid, signal.SIGKILL)
+                                except ProcessLookupError:
+                                    pass
+                                proc.wait()
+                            break
+                    else:
+                        artifact_ready_since = None
+                    time.sleep(2.0)
+                stdout_file.seek(0)
+                stderr_file.seek(0)
+                stdout_bytes = stdout_file.read()
+                stderr_bytes = stderr_file.read()
+                transcript_path.write_bytes(stdout_bytes)
+            except FileNotFoundError as exc:
+                return {"ok": False, "error": f"agent_binary_missing: {exc}"}
+            except BrokenPipeError as exc:
+                return {"ok": False, "error": f"agent_stdin_broken_pipe: {exc}"}
+        if artifact_recovered:
+            parity = self._read_parity_check(iteration_dir)
+            if parity.get("pass") is False:
+                return {"ok": False, "error": "agent_artifact_recovered_after_stall"}
+            return {"ok": True, "transcript": str(transcript_path)}
         if proc.returncode != 0:
             stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
             if self._agent_error_is_rate_limit(stderr_text, transcript_path):
@@ -8099,6 +8795,7 @@ class L0cKernelMutationRunner:
         )
         if terminal_condition in {
             "proposer_stuck",
+            "proposer_stuck_after_canary_round",
             "compile_failures_3x",
             "intermittent_parity_observed",
             "round_timeout",
@@ -8241,6 +8938,8 @@ class L0cKernelMutationRunner:
                 "round_spec": str(round_dir / "round_spec.yaml"),
                 "iteration_brief": str(round_dir / "iteration_brief.md"),
                 "strategy_brief": str(round_dir / "strategy_brief.md"),
+                "winning_diffs": str(round_dir / "winning_diffs.md"),
+                "filter_hit_review": str(round_dir / "filter_hit_review.tsv"),
                 "results": str(round_dir / "results.tsv"),
                 "prior_mutations_rejected": str(round_dir / "prior_mutations_rejected.tsv"),
                 "mutations_rejected": str(round_dir / "mutations_rejected.tsv"),
@@ -8319,6 +9018,7 @@ class L0cKernelMutationRunner:
         first_diverging_probe: int | None = None,
         tolerance_overshoot: float | None = None,
         error_detail: str | None = None,
+        **extra_fields: Any,
     ) -> None:
         payload: dict[str, Any] = {
             "pass": pass_,
@@ -8334,6 +9034,9 @@ class L0cKernelMutationRunner:
             payload["tolerance_overshoot"] = float(tolerance_overshoot)
         if error_detail is not None:
             payload["error_detail"] = error_detail
+        for key, value in extra_fields.items():
+            if value is not None:
+                payload[key] = value
         (iteration_dir / "parity_check.json").write_text(
             json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
         )
@@ -8437,6 +9140,7 @@ class L0cKernelMutationRunner:
         round_id: str,
         harness: str,
         strategy_brief: str = "",
+        positive_memory: str = "",
     ) -> str:
         rtol_logit = ""
         atol_logit = ""
@@ -8469,6 +9173,15 @@ class L0cKernelMutationRunner:
             "atol_state": atol_state,
             "state_checkpoints_at_token": ", ".join(state_checkpoints),
             "strategy_brief": strategy_brief.strip(),
+            "positive_memory_winning_diffs_block": (
+                positive_memory.strip() or "No prior winning L0c diffs found for this kernel target."
+            ),
+            "tier_1_pattern_list_with_descriptions": self._format_preflight_patterns(
+                tier="soft"
+            ),
+            "tier_2_pattern_list_with_descriptions": self._format_preflight_patterns(
+                tier="safety_critical"
+            ),
         }
         rendered = L0C_ITERATION_BRIEF_TEMPLATE
         for key, value in substitutions.items():
