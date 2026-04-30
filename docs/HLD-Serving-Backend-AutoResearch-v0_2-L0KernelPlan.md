@@ -856,6 +856,36 @@ best on the workload, AND passes the parity gate at
    explaining what you'll try next. Do NOT propose the same edit again.
 5. Exit 0.
 
+# Recent winning diffs (positive memory — these mutations worked)  [v0.3.4]
+The following diffs were accepted in recent rounds with measured improvement
+on this kernel. Use them as orientation for what mutation shapes have worked.
+You are NOT required to imitate them — they're informational. Their existence
+means the search space is non-empty in the directions they explored.
+
+{{positive_memory_winning_diffs_block}}
+
+# Forbidden mutation families (controller-enforced — Tier-1 SOFT, Tier-2 HARD)  [v0.3.4]
+The controller has a deterministic preflight guard between your `mutation.patch`
+write and the apply-and-test step. Patches matching the patterns below are
+either DEMOTED (Tier-1 soft — you'll be queued for a later canary run, but
+you won't be measured this iteration) or HARD REJECTED (Tier-2 safety-critical
+— you'll never run). This is enforcement, not preference.
+
+Tier-1 soft (DEMOTED — saved for canary admission):
+{{tier_1_pattern_list_with_descriptions}}
+
+Tier-2 hard (REJECTED — never run):
+{{tier_2_pattern_list_with_descriptions}}
+
+If you propose a Tier-1 match, your candidate gets demoted; the next 3 main
+candidates run before any demoted one gets a canary slot. If you propose a
+Tier-2 match, your candidate is rejected with no future retry. In both cases,
+the round still counts your spawn against `total_attempt_cap`.
+
+Note: positive memory exists *for a reason* — the winning diffs above show
+shapes the search has actually validated. If your proposal contradicts both
+positive memory AND a forbidden pattern, that's a strong signal to reconsider.
+
 # What you do NOT do
 - You do not call finalize-round. Python does that.
 - You do not run measurement directly. The CLI does that.
@@ -955,6 +985,9 @@ For sampling (Triton sampler — only if P3a roofline shows >=3% Tpot share):
 
   Artifact: per-commit hash recompute + `git apply --check` dry-run.
 - **9.3.AR.48 Weight-sensitive flag honored.** Mutations whose proposer-annotated `weight_sensitive: true` are flagged in the bundle's `layer_0_*.l0c_mutation.weight_sensitive`. Artifact: bundle field check.
+- **9.3.AR.55 Two-tier preflight semantics enforced.** Every candidate's `parity_check.json` records exactly one of: (a) `tier: safety_critical, reason: forbidden_mutation_family_hard_rejected` — no compile / no measurement / no canary retry; OR (b) `tier: soft, reason: forbidden_mutation_family_demoted, demoted_to_canary_round: <future_id>` — no compile / no measurement / queued for canary; OR (c) `running_as_canary: true, original_demote_pattern: <id>` — full apply-and-test ran on a previously-demoted candidate; OR (d) the regular non-preflight outcomes from AR.43. The cost-bucket invariant: every Tier-2 hit has `mutations_rejected.tsv` row with `cost_bucket: preflight_hard_rejected`; every Tier-1 hit has `cost_bucket: preflight_demoted`. Verifier audits row counts vs preflight-match counts. Artifact: `mutations_rejected.tsv` cost-bucket census + per-candidate `parity_check.json` schema check.
+- **9.3.AR.56 Positive-memory artifact present and consumed.** `winning_diffs.md` exists in the round directory at bootstrap with up to 15 entries (3 most-recent rounds × 5 most-recent winners per round). The `iteration_brief.md` template's `{{positive_memory_winning_diffs_block}}` variable is populated (not empty unless this is the first L0c round ever). Verifier reads the iteration_brief and confirms the winning-diffs block is non-default. Artifact: file presence + template variable expansion check.
+- **9.3.AR.57 Calibration log integrity.** `filter_hit_review.tsv` exists, follows the §5.8.4 schema, and accumulates across rounds. Every Tier-1 hit produces exactly one row; every canary admission updates the matching row's `canary_outcome` column. The `pattern_id` field is non-null for every row. Optional: when `filter_hit_review.tsv` has ≥10 canary runs accumulated for any `pattern_id`, `output/preflight_calibration_<timestamp>.json` may be present with that pattern's TPR/FPR — but this is human-triggered analysis, not a round-level requirement. Artifact: TSV schema check + per-pattern row-count audit.
 - **9.3.AR.48b L0c three-cap structure recorded.** Bundle's `layer_0_*.l0c_mutation.terminal_condition` ∈ {`accepted_cap_reached`, `total_attempt_cap_reached`, `round_timeout`, `proposer_stuck`, `compile_failures_3x`, `intermittent_parity_observed`, `agent_rate_limited`, `agent_unavailable`}. Counter values `accepted_count`, `total_attempt_count`, `wall_clock_minutes` recorded. For kernel-level terminal conditions, accepted_count + (count of `mutations_rejected.tsv` rows) = total_attempt_count exactly. For agent-infrastructure terminal conditions, `mutations_rejected.tsv` includes only attempts that produced a real `mutation.patch` + controller-readable verdict artifact before the agent failed. Artifact: counter audit.
 - **9.3.AR.48c L0c paired-A/B baseline measured in same round.** Round commits include n=`--base-measurements` rows with `Measurement-Role: <stack>_baseline_remeasured` trailer where `<stack>` matches `--base-stack-resolution` (`vllm_default`, `reference_baseline`, or the bundle's `round_type` for `bundle`). Before those rows, the runner records one cold-start measurement at `baselines/cold_discard_00.json` with `discard_reason: cold_start_baseline`; it is excluded from `measurements.tsv` and Welch-t input. All accepted-mutation Welch-t comparisons use the contemporaneous non-discarded rows, NOT any prior round's `objective_mean`. v0.3.1/v0.3.2 L0c-first rounds use `vllm_default_baseline_remeasured`. Artifact: trailer grep + Welch-t input audit + cold-discard artifact check.
 - **9.3.AR.48c2 P9 paired sibling baselines.** For each parity-passing sibling family, the P9 round commits include n=5 measurements with `Measurement-Role: sibling_baseline` (running `vllm-default` resolution) AND n=5 measurements with `Measurement-Role: sibling_winner` (running the kernel-tuned bundle). Per-sibling Welch-t comparisons consume only contemporaneous (sibling_baseline, sibling_winner) pairs — never historical `objective_mean`. Total per round: up to 80 measurement commits (8 parity-passing siblings × 10), fewer if any sibling failed parity in step (b). Artifact: trailer grep + per-family pair audit.
@@ -1015,9 +1048,137 @@ For sampling (Triton sampler — only if P3a roofline shows >=3% Tpot share):
 | 3-in-a-row parity-failure halt | Round halts with `HALT_REASON: proposer_stuck` written; up to that point's results preserved | n/a | Round halts via this path → surface to human; not a bug, just a signal proposer brief or model needs adjustment |
 | Round finalize (L0c) | Bundle records winning mutation patch + parity_attestation + weight_sensitive flag; AR.43–48 pass | n/a | Any of AR.43–48 fail → bundle does NOT write; round halts; surface |
 
----
+### 5.8 Two-tier preflight constraint architecture (v0.3.4)
 
-## 6. Correctness substrate — the parity gate as a first-class primitive
+**Background — the gap.** The L0c canary round on 2026-04-29 (round directory `qwen3.5-27b-...-l0c-mutation-deltanet-20260429T223605Z`, gap analysis at `docs/reports/auto_research/l0c-canary-gap-analysis-20260429T2300Z.md`) confirmed that prompt-side guidance on forbidden mutation families is not sufficient. Candidate 001 received the strategy brief enumerating forbidden patterns AND the prior rejection ledger AND explicit "do not propose" instructions, then proposed a patch that violated 4 of the named families. The diagnosis: the controller had **no executable enforcement** between "agent wrote `mutation.patch`" and "controller spent runtime on apply-and-test". Constraints were natural-language only.
+
+**Why not pure hard-rejection (the simpler fix).** Online-research of major published autoresearch systems (FunSearch, AlphaEvolve, Eureka, ELM, AlphaCode) found **none** use a pure hard-regex preflight guard. They lean on the evaluator (compile, parity, metric) as the filter, with at most prompt-side memory of past failures. Reflexion (Shinn et al., NeurIPS 2023) explicitly tested "turn every observed failure into a rule" vs. "natural-language episodic memory" and found rule-based over-constrained. Sui et al. (ICML 2015) on safe exploration formalized the **ratcheting-filter problem**: monotonically-growing safe sets can permanently exclude the optimum if the initial estimate is wrong. Pure hard-regex guards encode our uncalibrated beliefs about failure as if they were ground truth.
+
+**v0.3.4 architectural choice — hybrid two-tier with calibration.** Cost-driven enforcement is justified (30-min/candidate GPU time on GB10) but pure hard-rejection is too brittle. v0.3.4 splits preflight into two tiers with different enforcement semantics, plus positive-memory prompting and a calibration mechanism that turns filter hits into data instead of guesses.
+
+#### 5.8.1 Tier-1: SOFT demoter (priority queue with canary admission)
+
+For heuristic forbidden patterns — the 6–7 DeltaNet patterns from the gap analysis (g/gk pre-offset removal, inline `g + bos*H + …` rewrites, `t_start` removal, retained `.cg` hints on gate-load sites, etc.) — the controller **demotes** rather than **rejects**. Mechanism:
+
+1. Round maintains two queues: `main_queue` (unfiltered candidates) and `demoted_queue` (Tier-1 hits, FIFO-ordered).
+2. When a candidate's `mutation.patch` matches a Tier-1 pattern: write `parity_check.json` with `{pass: false, reason: forbidden_mutation_family_demoted, tier: soft, pattern_id: <id>, evidence_snippet: <patch lines>, demoted_to_canary_round: <future_canary_iteration>}`. Append to `mutations_rejected.tsv` with `cost_bucket: preflight_demoted`. Append to `filter_hit_review.tsv` (§5.8.4). The candidate is **not compiled or measured** at this point; expensive runtime is preserved.
+3. Every **N=4** candidates in the round, the controller pulls the FIFO-oldest entry from `demoted_queue` and runs it as a **canary** through the full apply-and-test path. The canary's outcome (parity-passes-or-fails, throughput-improves-or-regresses) is recorded back in `filter_hit_review.tsv` so we accumulate per-pattern false-positive evidence.
+4. If the canary IMPROVES vs. baseline at `confidence: defensible`: the filter was **wrong on this case**. Record in `filter_hit_review.tsv` with `canary_outcome: improved`. The candidate is also accepted into `results.tsv` like any other winner — we don't penalize it for having matched a Tier-1 pattern.
+5. If the canary REGRESSES or fails parity: the filter was right on this case. `canary_outcome: regressed` or `canary_outcome: parity_failed`. Demoted-queue entry stays demoted; no further action.
+
+**Why N=4.** Empirical-research literature (Reflexion, AlphaEvolve) doesn't prescribe a number. N=4 is chosen so a 12-iteration round runs at most 3 canaries — bounded extra cost (~90 min) but enough samples to start calibrating.
+
+#### 5.8.2 Tier-2: HARD reject (safety-critical patterns only)
+
+Tier-2 is for patterns that risk **silently corrupting downstream measurements** — where the cost of letting a bad mutation through is unbounded (all subsequent measurements suspect), and the cost of being wrong about the filter is bounded (a candidate doesn't run). These are NEVER demoted — they're hard-rejected with no canary admission.
+
+**Tier-2 pattern set in v0.3.4 (intentionally minimal — start empty, expand only when justified):**
+
+- Mutations that modify the parity-fixture comparison code itself (`scripts/build_parity_fixture.py`, `kernels/parity_check_*.py`).
+- Mutations that modify the round's measurement-recording code (`auto_research.py::record_measurement` and adjacent).
+- Mutations that modify any `tests/test_l0c_*.py` file.
+- Mutations that modify the `mutations_rejected.tsv` writer or the `filter_hit_review.tsv` writer.
+
+**v0.3.4 launch state:** the Tier-2 pattern set IS the above 4 entries. The DeltaNet kernel-shape patterns from the gap analysis are NOT in Tier-2 — they are Tier-1 (soft demote).
+
+When Tier-2 fires: write `parity_check.json` with `{pass: false, reason: forbidden_mutation_family_hard_rejected, tier: safety_critical, pattern_id: <id>}`. Append to `mutations_rejected.tsv` with `cost_bucket: preflight_hard_rejected`. The candidate is permanently rejected; never re-tested as a canary.
+
+**Promotion rule from Tier-1 → Tier-2:** a pattern with TPR (true-positive rate) > 95% over ≥10 canary runs in `filter_hit_review.tsv` is **eligible** for promotion. The promotion is a code change reviewed by a human, not automatic — calibration data informs the decision but doesn't make it.
+
+**Demotion rule (remove from preflight entirely):** a pattern with FPR (false-positive rate) > 30% over ≥10 canary runs is removed. Calibration data justifies removing the pattern.
+
+#### 5.8.3 Positive memory in iteration_brief.md
+
+Recurring failure-mode in the gap analysis: the proposer received the **forbidden** list but no equivalent **positive** memory. Negation-in-prompts is documented to be unreliable across LLMs (cited in the AlphaEvolve paper, Voyager, Reflexion). v0.3.4 adds positive memory.
+
+**New artifact `winning_diffs.md`** in the round directory (carry-forward across rounds). After every accepted mutation, append:
+
+```markdown
+## Round <round_id> candidate <candidate_id> — accepted (objective improvement: +X.X%, parity: pass)
+
+```diff
+<the patch>
+```
+
+Why-it-worked rationale: <one-line summary if the proposer captured one in candidate metadata; otherwise empty>
+
+----------
+```
+
+Cap at the **3 most-recent rounds × 5 most-recent winners per round** (15 max) to avoid prompt bloat. Older entries roll off.
+
+The `iteration_brief.md` template (§5.5) gets a new section before the existing "What you do NOT do" block:
+
+```markdown
+# Recent winning diffs (positive memory — these mutations worked)
+
+The following diffs were accepted in recent rounds with measured improvement.
+Use them as an example of mutation shapes that have worked on this kernel.
+You are NOT required to imitate them — they're for orientation, not constraint.
+
+{{positive_memory_winning_diffs_block}}
+```
+
+Variable `{{positive_memory_winning_diffs_block}}` is the latest contents of `winning_diffs.md`.
+
+#### 5.8.4 Calibration log — `filter_hit_review.tsv`
+
+**Schema** (one row per filter hit, accumulated across all rounds):
+
+| column | type | notes |
+|---|---|---|
+| `timestamp` | iso8601 | when the hit was recorded |
+| `round_id` | string | the L0c round |
+| `candidate_id` | int | which candidate matched |
+| `tier` | enum | `soft` or `safety_critical` |
+| `pattern_id` | string | which pattern fired (e.g., `deltanet_g_pre_offset_removed`) |
+| `diff_excerpt` | string | the matched lines from the patch |
+| `proposer_rationale_excerpt` | string | first 200 chars of the proposer's comment, if any |
+| `ran_as_canary` | bool | whether this hit was eventually canary-admitted |
+| `canary_outcome` | enum or null | `improved`, `regressed`, `parity_failed`, `compile_failed`, `measurement_transient`, or null if not yet canary-run |
+| `canary_round_id` | string or null | which round ran the canary, if any |
+
+**Calibration script `scripts/calibrate_preflight_patterns.py`** runs on demand (NOT in the round path):
+- Reads `filter_hit_review.tsv`.
+- For each Tier-1 `pattern_id` with ≥10 canary runs: computes TPR (canary_outcome ∈ {regressed, parity_failed, compile_failed} / total) and FPR (canary_outcome ∈ {improved} / total).
+- Outputs `output/preflight_calibration_<timestamp>.json` summarizing per-pattern stats + recommendation: `{promote_to_tier_2, keep_in_tier_1, remove_from_preflight}`.
+- The recommendation is reviewed by a human; promotion/demotion is a code change.
+
+**No automatic feedback loop.** v0.3.4 explicitly does NOT auto-promote or auto-demote based on calibration data. The human reviews the calibration report and changes the pattern list. This avoids autoresearch literature's recurring "feedback loop on bad metric" failure mode.
+
+#### 5.8.5 New CLI step (slots into §5.3 Effects, between current step 3a and 3b)
+
+```
+3a-1. Read mutation.patch; compute sha256(mutation.patch).
+3a-2. Tier-2 preflight check: for each safety-critical pattern, regex-match the unified
+      diff text. On any match: write parity_check.json {pass:false, reason:
+      forbidden_mutation_family_hard_rejected, tier:safety_critical, pattern_id:X};
+      append mutations_rejected.tsv (cost_bucket:preflight_hard_rejected); append
+      filter_hit_review.tsv. Skip to step 3a (next iteration); no compile, no measurement.
+3a-3. Tier-1 preflight check: for each soft-demote pattern, regex-match. On any match:
+      determine canary eligibility (current candidate index modulo N=4 == 0 AND
+      demoted_queue is non-empty AND this is not itself a canary run).
+      - If NOT canary-eligible: write parity_check.json {pass:false, reason:
+        forbidden_mutation_family_demoted, tier:soft, pattern_id:X, demoted_to_canary_round:
+        <future_id>}; append mutations_rejected.tsv (cost_bucket:preflight_demoted);
+        append filter_hit_review.tsv (ran_as_canary:false, canary_outcome:null).
+        Push to demoted_queue. Skip to step 3a (next iteration).
+      - If canary-eligible: pop from demoted_queue (NOT this candidate — the FIFO-oldest
+        previously-demoted one). Mark its parity_check.json with running_as_canary:true.
+        Continue to step 3b (apply patch) using the canary patch, NOT the current
+        candidate's patch. The current candidate stays demoted for a future canary slot.
+      - Note: canary admission consumes one main-queue slot but does not increment the
+        accepted_iteration_cap counter. Canary outcome later updates filter_hit_review.tsv.
+```
+
+#### 5.8.6 Round-level interaction with the three-cap structure
+
+The v0.2.x `accepted_iteration_cap` / `total_attempt_cap` / `round_timeout_hours` caps interact with the new tiers as follows:
+
+- **`accepted_iteration_cap`** counts only candidates that passed parity AND were measured. Tier-1 demoted and Tier-2 rejected candidates do NOT count toward this cap.
+- **`total_attempt_cap`** counts every spawn (including those that produced Tier-1 / Tier-2 patches). This bounds runaway proposer behavior even if every candidate is a preflight match.
+- **Canary admissions** count as a separate increment in `canary_run_count` but do NOT count toward `accepted_iteration_cap` unless they're accepted as wins (in which case they double-count: as canary AND as accepted iteration).
+- **New halt condition `proposer_stuck_after_canary_round`**: if a canary round was eligible (demoted_queue non-empty) AND the canary regressed AND the next 3 candidates are all Tier-1 demoted, halt. Replaces the v0.3.3-sketched `forbidden_mutation_family_repeated_3x`.
 
 ### 6.1 Why this section exists
 
@@ -1462,7 +1623,7 @@ Key change from v0.2.1-plan (still applicable): the parity fixture (P2b) is buil
 | **P3a** roofline probe — v0.3.1 mandatory | P1 & P2 & P2b PASS | Run `vllm-default` resolution against the heavy workload at `target_concurrency=4` for 5 minutes; collect via Nsight Compute / Nsight Systems (or NVIDIA `nvbandwidth`/`ncu` equivalent on DGX Spark): per-category Tpot share (DeltaNet, GatedAttn, FFN/Linear, sampler, norm, KV write/read), DRAM read/write throughput (% of 273 GB/s peak), SM occupancy, tensor-core utilization, kernel launch count per token. Output: `output/p3a_roofline_<round_id>.json`. **Gates downstream:** (a) AR.54 priority enforcement activates if measured priority order matches §0.6 prediction; otherwise §0.6 is rewritten with measured order before AR.54 activates; (b) `sampling` L0c target is ungated only if measured sampler share ≥ 3% of Tpot. | Roofline run produces `Tpot_share` summing to <70% of decode time → unaccounted overhead is large; halt with `roofline_unaccounted_overhead`. Nsight tooling unavailable on DGX Spark → halt with `roofline_tooling_unavailable`; surface for human (alternative: nvprof, vLLM internal profiler) |
 | **P5** (parallel to P3a) L0c plumbing — `apply-and-test` + `mutate-kernel` CLIs (§5.3) | P2 & P2b PASS | Synthetic-fixture L0c round uses P2's discovered fanout, passes: no-op patch path PASS-PASS, broken patch path FAIL-recorded | No-op patch fails the synthetic fixture → halt |
 | **P5b** fp8_e5m2 KV purity attestation — v0.3.3 (impl-agent recommendation) | P2b PASS AND base stack uses `kv_cache_dtype: fp8_e5m2` (per `actually_resolved_kernel_selection`) | Run a small probe set: 16 short-prompt-short-output requests captured against fp8_e5m2 KV vs the same probes captured against bf16 KV. Verify divergence stays within fixture tolerances (`rtol_logit=1e-3`, `atol_logit=1e-3`) — i.e., fp8 KV does NOT introduce divergence beyond the parity-gate's normal noise floor. If it does, any L0c mutation against this base would be debugging quantization noise as if it were kernel divergence. ~10 minutes of vLLM time. Output: `output/p5b_fp8_kv_purity_<round_id>.json`. **Skipped if** base stack's `kv_cache_dtype` is bf16/fp16 (no FP8 noise risk to validate). | fp8_e5m2 KV introduces divergence beyond `rtol/atol` on >0 of 16 probes → halt with `fp8_kv_purity_violation`; kernel mutation work cannot proceed against this fixture set. Fix path: re-capture parity fixture against bf16 KV, OR loosen tolerance with explicit justification recorded in BLOCKED.md |
-| **P7a** L0c-DeltaNet real round (§5.2) — **v0.3.3 EXECUTABLE; baselined against L0b-empirical-winner (`4866bc3f`)** | P2b, P5, P5b (if applicable), P3a PASS | Bundle records winning mutation OR records `ROUND_NULL_RESULT` (no parity-passing mutation beat the paired-A/B baseline); AR.43–48c PASS. Paired baseline is the resolved values from `4866bc3f` (vllm-default routing pinned at `actually_resolved_kernel_selection`, fp8_e5m2 KV); `Measurement-Role: l0b_empirical_winner_baseline_remeasured`. **This is the only L0c target executable in v0.3.3.** | All L0c §5.7 escalation rows |
+| **P7a** L0c-DeltaNet real round (§5.2) — **v0.3.4 EXECUTABLE; baselined against L0b-empirical-winner (`4866bc3f`); two-tier preflight active** | P2b, P5, P5b (if applicable), P3a PASS; `winning_diffs.md` initialized; `filter_hit_review.tsv` schema-validated; Tier-1 + Tier-2 pattern lists loaded into round bootstrap commit | Bundle records winning mutation OR `ROUND_NULL_RESULT`; AR.43–48c PASS; AR.55–57 PASS (preflight semantics, positive-memory artifact, calibration-log integrity). Paired baseline is the resolved values from `4866bc3f` (vllm-default routing pinned at `actually_resolved_kernel_selection`, fp8_e5m2 KV); `Measurement-Role: l0b_empirical_winner_baseline_remeasured`. **This is the only L0c target executable in v0.3.4.** | All L0c §5.7 escalation rows + new halt codes from §5.8: `proposer_stuck_after_canary_round`, `tier_2_pattern_set_corrupted`, `filter_hit_review_schema_mismatch` |
 | **P7e** L0c-FusedEpilogue real round (§5.2) — **DEFERRED to v0.3.4+ pending wiring verification** | NOT executable in v0.3.3. Requires: (a) Triton sidecar `kernels/fused/attn_residual_norm_quant.py` exists in vLLM shipping path; (b) `epilogue_fusion_mode` knob is wired to actually toggle the sidecar at vLLM init time; (c) the §2.2.6 fixture re-captured against the L0b-empirical-base with sidecar enabled. | When executable: same shape as P7a but uses §2.2.6 fixture (4-checkpoint compare) and AR.51 verifier. Triton-sidecar mutation surface only. | n/a in v0.3.3 |
 | **P7d** L0c-Sampling real round (§5.2) — **DEFERRED to v0.3.4+ pending wiring verification** | NOT executable in v0.3.3. Requires: (a) `vllm-v1-triton-sampler` in the shipping path with mutable Triton source at known location; (b) `sampling_kernel` knob wired to vLLM init; (c) §2.2.4 fixture captured against the L0b-empirical-base with Triton sampler enabled; (d) P3a roofline measures sampler share ≥ 3% of Tpot. | When executable: same shape as P7a but uses §2.2.4 fixture (token-id determinism + KL divergence) and AR.50 verifier. | n/a in v0.3.3 |
 | ~~**P3** L0a real round~~ | DEFERRED to v0.3.2 | Not in v0.3.1 executable scope (operator note: prior L0a rounds showed no headroom against baseline) | n/a |
@@ -1552,6 +1713,7 @@ All new items are covered in §3.5, §4.4, §5.6 with full artifact specs. Items
 - **L0a determinism + parity-vs-reference + intermediate-bundle marking:** AR.38, AR.38b, AR.39, AR.40
 - **L0b autotune frozen + paired baseline + determinism + parity-vs-reference:** AR.41, AR.41b, AR.42
 - **L0c parity-gate properties + cap structure + paired baseline:** AR.43, AR.44, AR.45, AR.46, AR.47, AR.48, AR.48b, AR.48c (the load-bearing items — AR.43 is most important; the parity gate ran *before* measurement counted)
+- **L0c v0.3.4 two-tier preflight + positive memory + calibration:** AR.55, AR.56, AR.57
 - **P1 sibling holdout pre-capture (verified at P9):** AR.48c3
 - **P2b per-sibling parity fixtures:** AR.48c4b
 - **P9 cross-family paired baselines + per-(sibling × kernel) parity probe + composite exclusion:** AR.48c2, AR.48c4
@@ -1584,6 +1746,9 @@ Every escalation row in §2.4, §3.6, §4.5, §5.7 writes one of these named cod
 | `compile_failures_3x` | P7a–P7f | 3 consecutive compile failures on different patches — toolchain regression |
 | `intermittent_parity_observed` | P7a–P7f | Same mutation passes parity once and fails once — race condition leaking through gate |
 | `proposer_stuck` | P7a–P7f | 3-in-a-row parity failures — brief or proposer model needs adjustment (NOT a system bug) |
+| `proposer_stuck_after_canary_round` | P7a (v0.3.4+) | A canary round was eligible (demoted_queue non-empty) AND the canary regressed AND the next 3 main-queue candidates are all Tier-1 demoted — the proposer is stuck in the forbidden region even after a canary attempt. Halt and surface; replaces v0.3.3-sketched `forbidden_mutation_family_repeated_3x` |
+| `tier_2_pattern_set_corrupted` | P7a (v0.3.4+) | Tier-2 (safety-critical) pattern list is missing or has been mutated since round bootstrap. Halt — Tier-2 is meant to be code-reviewed, not modified at runtime |
+| `filter_hit_review_schema_mismatch` | P7a (v0.3.4+) | `filter_hit_review.tsv` does not conform to §5.8.4 schema (missing column, wrong column order). Halt — calibration log integrity is load-bearing for AR.57 |
 | `agent_rate_limited` | P7a–P7f | Agent provider refused the attempt due to rate/usage limits — infrastructure block, not a kernel rejection |
 | `agent_unavailable` | P7a–P7f | Agent binary/timeout/non-rate-limit exit prevented a valid proposal cycle — infrastructure block, not a compile failure |
 | `total_attempt_cap_reached` | P7a–P7f | L0c spawn count hit `--total-attempt-cap` before reaching `--accepted-iteration-cap` — too many rejected mutations relative to accepted; surface for human review |
@@ -1661,6 +1826,7 @@ GB10's SM count, register file size per SM, and shared memory per SM are not pub
 
 ## 11. Changelog
 
+- **v0.3.4-plan (2026-04-29)** — **Two-tier preflight constraint architecture (hybrid hard-reject / soft-demote / canary-admission / positive-memory / calibration-log).** Triggered by L0c canary gap analysis (`docs/reports/auto_research/l0c-canary-gap-analysis-20260429T2300Z.md`, commit 2760d58): candidate 001 received the strategy brief enumerating forbidden patterns AND prior rejection ledger AND explicit "do not propose" instructions, then proposed a patch violating 4 of the named families. Diagnosis: prompt-side guidance is not sufficient — controller needs executable enforcement. **Online research validated the concern:** no published autoresearch system (FunSearch, AlphaEvolve, Eureka, ELM, AlphaCode) uses pure hard-regex preflight guards; Reflexion (NeurIPS 2023) explicitly tested "rule-based memory" vs "natural-language episodic memory" and found rule-based over-constrained; Sui et al. (ICML 2015) on safe exploration formalized the "ratcheting filter" problem (monotonically-growing safe sets can permanently exclude the optimum). Pure hard-reject was rejected as too brittle. **v0.3.4 architectural choice: hybrid two-tier with calibration.** New §5.8 specifies: (1) **Tier-1 SOFT demoter** for heuristic forbids (the 6–7 DeltaNet patterns from gap analysis) — patches matching are queued in `demoted_queue` but not measured; every N=4 candidates a canary admission pulls the FIFO-oldest demoted candidate and runs full apply-and-test, accumulating per-pattern false-positive evidence. (2) **Tier-2 HARD reject** for safety-critical patterns ONLY (mutations that touch parity-fixture code, measurement-recording code, test files, or the rejection-ledger writer) — never demoted, never canary-admitted, never re-tested. v0.3.4 launch state: Tier-2 has 4 entries; the DeltaNet kernel-shape patterns are Tier-1, not Tier-2. (3) **Positive memory** via new `winning_diffs.md` artifact (15 max: 3 most-recent rounds × 5 winners each), surfaced in `iteration_brief.md` template's `{{positive_memory_winning_diffs_block}}` variable. AlphaEvolve / Voyager / Reflexion all consistent that LLMs respond better to positive examples than negation. (4) **Calibration log** `filter_hit_review.tsv` records every Tier-1 hit + canary outcome; on-demand `scripts/calibrate_preflight_patterns.py` computes per-pattern TPR/FPR; promotion (Tier-1 → Tier-2) requires TPR > 95% over ≥10 canaries; demotion (remove from preflight) requires FPR > 30% over ≥10 canaries. **No automatic feedback loop** — promotion/demotion is human code review informed by data, not autotuned. New AR items AR.55 (preflight semantics), AR.56 (positive memory), AR.57 (calibration log). New halt codes `proposer_stuck_after_canary_round`, `tier_2_pattern_set_corrupted`, `filter_hit_review_schema_mismatch`. v0.3.3-sketched `forbidden_mutation_family_repeated_3x` replaced with the canary-aware version. Three-cap structure (`accepted_iteration_cap` / `total_attempt_cap` / `round_timeout_hours`) interaction documented in §5.8.6: Tier-1 demoted and Tier-2 rejected do NOT count toward `accepted_iteration_cap`; both DO count toward `total_attempt_cap`. iteration_brief.md template gets new sections: positive memory + Tier-1/Tier-2 forbidden lists with explicit enforcement framing ("this is enforcement, not preference"). All v0.3.3 substance carries forward unchanged (L0b-empirical-winner anchor, fp8 KV purity attestation, single-target DeltaNet executable scope).
 - **v0.3.3-plan (2026-04-27)** — **Impl-agent amendment: anchor on L0b-empirical-winner, narrow v0.3.3 EXECUTABLE scope to single-target DeltaNet, preserve architectural intent for v0.3.4+.** Operator presented impl-agent analysis: 22 L0b winner bundles on disk; FA4 bundles all show synthetic-fingerprint identical objective values (1.18125); vllm-default bundles show real measured variance; the most-recent real-harness L0b winner is **`4866bc3f`** (obj=0.0171, ROUND_NULL_RESULT) with `vllm-default` routing + `fp8_e5m2` KV. Comparing to v0.3.2's hand-authored fixed stack (FA3 + bf16 KV + Triton sidecar + Triton sampler) found that the hand-authored stack diverges from `4866bc3f` on attention_backend, kv_cache_dtype, and epilogue_fusion_mode/sampling_kernel — all without measurement to back the divergence. Impl agent's argument: **empirical > architectural-coherence guess**, and ~14 GB of parity fixture data was already captured against the L0b-empirical-base — amending the doc preserves it. Three concrete amendments: (1) §5.2 base-stack table replaced with **L0b-empirical-winner anchor** (`base_bundle_path: 4866bc3f/bundle.yaml`, `actually_resolved_kernel_selection` recorded at fixture-build time so vllm-default's symbolic alias is pinned to concrete resolved values that don't drift across vLLM versions). (2) New phase **P5b fp8_e5m2 KV purity attestation**: 16-probe comparison vs bf16 KV before any L0c round, ensures kernel-mutation divergence ≠ FP8 quantization noise. New halt code `fp8_kv_purity_violation`. (3) **v0.3.3 executable L0c scope narrowed to `{deltanet}` only.** P7e (fused_epilogue) and P7d (sampling) deferred to v0.3.4+ pending verification that (a) the Triton sidecar / Triton sampler exist in vLLM shipping path with mutable source at known location, (b) the corresponding knob wires to vLLM init, (c) the §2.2.6 / §2.2.4 fixtures are re-captured against the L0b-empirical-base. The v0.3.2 architectural intent (composite multi-family workload, multi-target L0c, §0.5.2 bandwidth-bound thesis prioritizing fused_epilogue) is **preserved in the doc**, NOT demoted — only the executable gate moved. New §0.7a "v0.3.3 EXECUTABLE scope" table makes the architectural-intent-vs-executable-today distinction explicit. New halt code `actually_resolved_kernel_selection_drift` for vLLM-version-induced base-stack drift. **Net effect:** v0.3.3 ships single-target DeltaNet against the empirical L0b base, preserves the captured 14 GB fixture data, and explicitly carries multi-target / composite-workload / fused-epilogue work to v0.3.4 when wiring prerequisites are buildable.
 - **v0.3.2-plan (2026-04-27)** — Architectural reframe: composite-multi-family workload from start + reviewer P0/P1 fixes. (operator directive) Pivoted from v0.3.1's "heavy family + late-stage multi-family promotion at P10" to **composite multi-family workload from the start**: workload spans variants from multiple families with full-agent-flow trajectories (8–30 turns, captured via codex against each family's eval set, NOT v0.3.1's 4-turn thinking-only snippets). Bundle's `workload_distribution_id` IS the multi-family identity directly — no separate "heavy bundle → composite" promotion phase. Closes the L0c-target-vs-multi-family-promotion lock the reviewer flagged: any of `deltanet`, `fused_epilogue`, `sampling` can multi-family-promote because the bundle is for the composite workload from the start, not heavy-then-promoted. Each family's full-flow trajectory is split 3:1 seed:holdout at trajectory boundary; both slices included in `workload_distribution_id` via §6.6 canonical hash; per-family holdout slice is what P9 cross-family check uses (v0.1.5 stratified-split style). Adds §1.0 architectural shift, §1.1 composite workload definition with 9-family table + full-agent-flow capture criteria + per-family holdout slice contract. **Reviewer P0/P1 fixes also landed:** (P0.1 P9/P10 fused/sampling fixture gap) Resolved architecturally by composite-from-start — fixtures cover all per-family shapes natively. (P0.2 L0c-first baseline residue) `--base-bundle` renamed to `--base-stack-resolution {vllm_default, reference_baseline, bundle}` + `--base-bundle-path`; `Measurement-Role` becomes `vllm_default_baseline_remeasured` for L0c-first ordering; AR.48c reworded to match. (P0.3 fused/sampling depend on deferred L0a) v0.3.2 commits to a **fixed base stack** (FA3 + Triton DeltaNet v2 + Triton sidecar epilogue + Triton sampler + cuBLAS FP8 + bf16 KV) so P7e/P7d preconditions don't reference an unresolved L0a winner. v0.3.3 replaces the fixed stack with the actual L0a winner. (P0.4 fused_epilogue overclaim) Revised §0.6 row #2: Triton sidecar fuses `+residual → RMSNorm → FP8 quant` but cannot eliminate the GEMM-output write itself (that requires CUTLASS/CuTe epilogue integration deferred to v0.3.3+). Magnitude downgraded from "8–15% e2e" to "3–8% e2e" pending P3a. (P0.5 fixture content_hash schema-blind) `fixture_content_hash` rewritten as a schema-aware function: `REFERENCED_KEYS_BY_SCHEMA` map keyed by `parity_check_method`. Each schema declares its referenced-key list; unknown schemas raise. New schemas (sampling, fused_epilogue) bind their full referenced-blob set into bundle identity. (P1 cleanup) §2.2.3 RMSNorm, §2.2.5 KV cache, §2.2.7 FP8 GEMM Triton fixture sections marked REMOVED with archival `<details>` tags. §6.2 parity semantics gains §6.2.3 (sampling — token-id determinism + KL divergence) and §6.2.4 (fused-epilogue — four-checkpoint fail-on-first). §7.3 dependency rationale split into v0.3.1+ active (L0c-first) and v0.3.3+ deferred (L0a→L0b→L0c) sections. §8.1 and §8.2 marked DEFERRED to v0.3.3+. §9 verification group description updated to drop AR.49/AR.52. `multi_instance_insufficient_memory` halt code reworded for the `N ≥ 1` empirical-discovery semantics.
 - **v0.3.1-plan (2026-04-27)** — Reviewer P0/P1 pass on v0.3.0 + operator sequencing inversion. Six fixes + scope narrowing + L0c-first reordering: (P0.1 fp8_gemm_triton unreachable) Dropped P7f entirely. L0a action space's FP8 GEMM stays `{cutlass, cublas}` — no Triton path. AR.52 removed. Re-add deferred to v0.3.2 if a mutable Triton FP8 GEMM enters vLLM shipping. (P0.2 workload.yaml fixture map) `parity_fixture_refs` now a full map covering all v0.3.1 targets `{deltanet, gatedattn, fused_epilogue, sampling}`. (P0.3 sibling fixtures) Heavy-family-only for non-DeltaNet/GatedAttn targets in v0.3.1; sibling-fixture work for fused_epilogue / sampling deferred to v0.3.2. (P0.4 L0b autotune undefined) Dropped expanded L0b. v0.3.1 keeps L0b for DeltaNet only, and even that is deferred (see L0c-first below). (P0.5 fused_epilogue Triton-vs-CUTLASS contradiction) Picked **Triton sidecar** as the sole mutation surface in v0.3.1. P7e precondition no longer requires CUTLASS; only requires `epilogue_fusion_mode != none`. CUTLASS-side fused-epilogue mutation deferred to v0.3.2. (P0.6 4-instance claim) P2 phase changed from "4 instances required" to **empirical instance-count discovery**: try 4 → 3 → 2 → 1 at decreasing utilization; accept `N ≥ 1`; halt only if no instance starts. `output/p2_instance_capacity.json` consumed by all downstream phases. (P0.7 bandwidth thesis numeric claim) AR.54 priority-order enforcement gated on **new P3a roofline phase** that measures actual per-category Tpot share, DRAM throughput, SM occupancy, tensor-core utilization, kernel launch count via Nsight Compute / Nsight Systems. If measured priority differs from §0.6's prediction, §0.6 is rewritten before AR.54 activates. **Scope narrowing:** v0.3.1 has 3 executable L0c targets `{deltanet, fused_epilogue, sampling-gated}` + 1 schema-only (`gatedattn`). RMSNorm dropped (subsumed into fused_epilogue). FP8 GEMM Triton dropped (unreachable). KV cache dropped as L0c (stays as L0a config knobs). **Sequencing inversion (operator note):** v0.2 / v0.3.0 ran L0a → L0b → L0c. v0.3.1 inverts to **L0c first against `vllm-default` baseline** (L0a/L0b have already been shown empty against baseline; L0c is the unexplored surface). New phase order: P1/P2/P2b/P5 setup → **P3a mandatory roofline probe** → P7a/P7e/P7d L0c rounds → P9/P10. Original P3 (L0a) and P6 (L0b) deferred to v0.3.2 exploration only. **§5.5 iteration_brief.md** now embeds DGX Spark hardware notes + per-target speedup tips so the L0c agent does NOT do online research per iteration — facts are pre-researched and load-bearing. New halt codes `roofline_unaccounted_overhead`, `roofline_tooling_unavailable`. Removed halt code `rmsnorm_downstream_logit_diverges` (target dropped). HF model card correction: Qwen3.5-27B-FP8 padded vocab is **248,320**, NOT 152K. Hardware corrections from v0.3.0 (128 GB LPDDR5x at 273 GB/s, FA4 beta on Blackwell) carry forward unchanged.
@@ -1681,7 +1847,7 @@ GB10's SM count, register file size per SM, and shared memory per SM are not pub
 
 ---
 
-*End of v0.3 plan v0.3.3-plan.*
+*End of v0.3 plan v0.3.4-plan.*
 
 ---
 
