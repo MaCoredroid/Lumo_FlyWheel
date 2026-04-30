@@ -1,5 +1,5 @@
 fixture_id: responses-sdk-adapter-cutover-deltanet-v1
-generated_at: '2026-04-29T18:22:07.205273Z'
+generated_at: '2026-04-30T03:17:09.287652Z'
 generated_against:
   vllm_version: 0.19.0
   weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582

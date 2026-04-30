@@ -25,9 +25,9 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-import requests
+import requests  # noqa: E402
 
-from lumo_flywheel_serving.model_server import ModelServer
+from lumo_flywheel_serving.model_server import ModelServer  # noqa: E402
 
 
 def _wait_for_health(port: int, timeout_s: int) -> None:
@@ -147,7 +147,7 @@ def main() -> int:
 
     print("[fixture-rebuild] stopping any prior container...")
     server.stop(missing_ok=True)
-    print(f"[fixture-rebuild] starting vLLM (cold start ~6min)...")
+    print("[fixture-rebuild] starting vLLM (cold start ~6min)...")
     started = time.time()
     server.start(args.model_id, enable_request_logging=False)
     print(f"[fixture-rebuild] start() returned in {time.time() - started:.1f}s")

@@ -28,10 +28,10 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-import requests
+import requests  # noqa: E402
 
-from lumo_flywheel_serving.model_server import ModelServer
-from lumo_flywheel_serving.parity_probe import run_parity_probe
+from lumo_flywheel_serving.model_server import ModelServer  # noqa: E402
+from lumo_flywheel_serving.parity_probe import run_parity_probe  # noqa: E402
 
 
 def _wait_for_health(port: int, timeout_s: int) -> None:

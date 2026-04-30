@@ -144,11 +144,10 @@ def run_parity_probe(
         if not state_npz_path.is_file():
             raise FileNotFoundError(f"reference state NPZ missing: {state_npz_path}")
         state_ref = dict(np.load(state_npz_path, allow_pickle=False))
-        # Self-contained state schema records `state_storage` describing the
-        # digest convention (sha256 over flattened float32 state, with first-16
-        # sample alongside). Legacy state schema records `_source_path_by_probe`
-        # and full reference loads from a source .pt.
-        state_schema_self_contained = "state_storage" in state_ref
+        # Legacy converted fixtures also include `state_storage`; only the
+        # flattened-array digest convention is self-contained.
+        state_storage = str(state_ref.get("state_storage", [""])[0])
+        state_schema_self_contained = state_storage == "sha256_float32_flattened_with_sample"
         for token in state_checkpoints:
             if state_schema_self_contained:
                 key = f"state_token_{token}"
