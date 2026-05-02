@@ -98,6 +98,11 @@ L0B_DEFAULT_MIN_HEADROOM_PCT = 0.03
 L0C_MUTATION_ROUND_TYPE = "l0c_mutation"
 L0C_KERNEL_TARGETS = {"deltanet", "gatedattn", "fp8_gemm"}
 L0C_KERNEL_TARGETS_RENDERED = ", ".join(sorted(L0C_KERNEL_TARGETS))
+L0C_FP8_GEMM_REAL_HARNESS_HALT = (
+    "HALT_REASON: l0c_fp8_gemm_real_harness_out_of_scope; "
+    "Phase B fp8_gemm support is bootstrap-only until a Triton FP8 replay/capture "
+    "harness is implemented"
+)
 L0C_DEFAULT_ACCEPTED_CAP = 12
 L0C_DEFAULT_TOTAL_ATTEMPT_CAP = 36
 L0C_DEFAULT_ROUND_TIMEOUT_HOURS = 12.0
@@ -6096,6 +6101,8 @@ class L0cKernelMutationRunner:
             raise RuntimeError(f"Unsupported harness: {harness}")
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
+        if kernel_target == "fp8_gemm" and harness == "real":
+            raise RuntimeError(L0C_FP8_GEMM_REAL_HARNESS_HALT)
         if base_measurements < 1:
             raise RuntimeError("--base-measurements must be >= 1")
         if accepted_iteration_cap < 1:
@@ -6712,6 +6719,8 @@ class L0cKernelMutationRunner:
             raise RuntimeError(f"Unsupported harness: {harness}")
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
+        if kernel_target == "fp8_gemm" and harness == "real":
+            raise RuntimeError(L0C_FP8_GEMM_REAL_HARNESS_HALT)
         round_dir = Path(round_root).resolve() / round_id
         if not round_dir.is_dir():
             raise RuntimeError(f"L0c round directory not found: {round_dir}")
@@ -6848,6 +6857,8 @@ class L0cKernelMutationRunner:
             raise RuntimeError("resume-candidate currently supports --harness real only")
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
+        if kernel_target == "fp8_gemm":
+            raise RuntimeError(L0C_FP8_GEMM_REAL_HARNESS_HALT)
         round_dir = Path(round_root).resolve() / round_id
         if not round_dir.is_dir():
             raise RuntimeError(f"L0c round directory not found: {round_dir}")
@@ -7202,6 +7213,8 @@ class L0cKernelMutationRunner:
             raise RuntimeError("resume-round currently supports --harness real only")
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
+        if kernel_target == "fp8_gemm":
+            raise RuntimeError(L0C_FP8_GEMM_REAL_HARNESS_HALT)
 
         round_started = time.time()
         round_dir = Path(round_root).resolve() / round_id
@@ -9307,7 +9320,7 @@ class L0cKernelMutationRunner:
         hld_path: Path,
         prior_rejections: list[dict[str, Any]],
     ) -> str:
-        p3a_lines = self._latest_p3a_strategy_lines()
+        p3a_lines = self._latest_p3a_strategy_lines(kernel_target=kernel_target)
         prior_lines = ["- No prior cross-round rejections found for this kernel target."]
         if prior_rejections:
             prior_lines = []
@@ -9359,18 +9372,7 @@ class L0cKernelMutationRunner:
                 "list, the forbidden list wins."
             ),
             "",
-            "## Ranked Likely-Safe Targets",
-            "",
-            "1. Narrow scalar metadata loads such as sequence/chunk offsets, preserving types and control flow.",
-            (
-                "2. Local mask-only cleanup that leaves address arithmetic, "
-                "arithmetic order, and tensor shapes unchanged."
-            ),
-            (
-                "3. One-load-only cache hint rollback or tightening where prior "
-                "comments already identify cache pressure."
-            ),
-            "4. Comment-only hypothesis capture when no parity-neutral code edit is defensible.",
+            *self._l0c_ranked_likely_safe_target_lines(kernel_target),
             "",
             "## Prior Rejections Carried Forward",
             "",
@@ -9413,7 +9415,39 @@ class L0cKernelMutationRunner:
             ),
         ]
 
-    def _latest_p3a_strategy_lines(self) -> list[str]:
+    @staticmethod
+    def _l0c_ranked_likely_safe_target_lines(kernel_target: str) -> list[str]:
+        if kernel_target == "fp8_gemm":
+            return [
+                "## Ranked Likely-Safe Targets",
+                "",
+                (
+                    "1. Preserve the Triton FP8 GEMM call boundary and inspect only "
+                    "local metadata-load or guard simplifications."
+                ),
+                (
+                    "2. Keep `tl.dot` reduction order, scale application, tensor layout, "
+                    "and output dtype behavior unchanged."
+                ),
+                "3. Prefer comment-only hypothesis capture until a real FP8 replay/capture harness exists.",
+                "4. Do not infer safety from DeltaNet rejection or winner history.",
+            ]
+        return [
+            "## Ranked Likely-Safe Targets",
+            "",
+            "1. Narrow scalar metadata loads such as sequence/chunk offsets, preserving types and control flow.",
+            (
+                "2. Local mask-only cleanup that leaves address arithmetic, "
+                "arithmetic order, and tensor shapes unchanged."
+            ),
+            (
+                "3. One-load-only cache hint rollback or tightening where prior "
+                "comments already identify cache pressure."
+            ),
+            "4. Comment-only hypothesis capture when no parity-neutral code edit is defensible.",
+        ]
+
+    def _latest_p3a_strategy_lines(self, *, kernel_target: str) -> list[str]:
         output_root = self.repo_root / "output"
         if not output_root.is_dir():
             return [
@@ -9452,12 +9486,21 @@ class L0cKernelMutationRunner:
                 + str(
                     decision.get(
                         "basis",
-                        "no counter-evidence against DeltaNet-first ordering.",
+                        self._default_p3a_decision_basis(kernel_target),
                     )
                 )
             ),
             "- P3a limitation: no full Nsight kernel-category split; keep mutations conservative.",
         ]
+
+    @staticmethod
+    def _default_p3a_decision_basis(kernel_target: str) -> str:
+        if kernel_target == "fp8_gemm":
+            return (
+                "no target-specific P3a decision recorded for FP8 GEMM; use the "
+                "FFN GEMM pivot brief as the governing context."
+            )
+        return "no counter-evidence against DeltaNet-first ordering."
 
     def _read_parity_check(self, iteration_dir: Path) -> dict[str, Any]:
         path = iteration_dir / "parity_check.json"

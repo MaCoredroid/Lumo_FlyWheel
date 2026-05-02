@@ -4805,6 +4805,9 @@ def test_l0c_kernel_mutation_synthetic_fp8_gemm_bootstraps_and_populates_bundle(
     brief = (result.round_dir / "iteration_brief.md").read_text(encoding="utf-8")
     assert "Tier 3 GEMM-output tolerance" in brief
     assert "g`/`gk`" not in brief
+    strategy = (result.round_dir / "strategy_brief.md").read_text(encoding="utf-8")
+    assert "DeltaNet-first ordering" not in strategy
+    assert "Triton FP8 GEMM call boundary" in strategy
 
     assert result.bundle_path is not None
     bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
@@ -4856,6 +4859,63 @@ def test_l0c_kernel_mutation_fp8_gemm_validates_fixture_schema(tmp_path: Path) -
             round_root=repo / "output" / "auto_research",
             harness="synthetic",
         )
+
+
+@pytest.mark.parametrize("method", ["run", "apply_and_test", "resume_candidate", "resume_round"])
+def test_l0c_fp8_gemm_real_harness_explicitly_out_of_scope(
+    tmp_path: Path,
+    method: str,
+) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="HALT_REASON: l0c_fp8_gemm_real_harness_out_of_scope",
+    ):
+        if method == "run":
+            runner.run(
+                workload_file=repo / "missing_workload.yaml",
+                base_bundle=repo / "missing_bundle.yaml",
+                kernel_target="fp8_gemm",
+                kernel_source_path="kernels/fp8_gemm/triton_scaled_mm.py",
+                parity_fixture=repo / "missing_fixture.yaml",
+                base_measurements=1,
+                accepted_iteration_cap=1,
+                total_attempt_cap=1,
+                round_timeout_hours=1.0,
+                round_root=repo / "output" / "auto_research",
+                harness="real",
+            )
+        elif method == "apply_and_test":
+            runner.apply_and_test(
+                round_id="missing-round",
+                iteration="001",
+                kernel_target="fp8_gemm",
+                harness="real",
+                round_root=repo / "output" / "auto_research",
+            )
+        elif method == "resume_candidate":
+            runner.resume_candidate(
+                round_id="missing-round",
+                iteration="001",
+                kernel_target="fp8_gemm",
+                harness="real",
+                round_root=repo / "output" / "auto_research",
+            )
+        else:
+            runner.resume_round(
+                round_id="missing-round",
+                kernel_target="fp8_gemm",
+                harness="real",
+                round_root=repo / "output" / "auto_research",
+            )
+
+    assert not (repo / "output" / "auto_research").exists()
 
 
 def test_l0c_kernel_mutation_synthetic_halts_on_proposer_stuck(tmp_path: Path) -> None:
