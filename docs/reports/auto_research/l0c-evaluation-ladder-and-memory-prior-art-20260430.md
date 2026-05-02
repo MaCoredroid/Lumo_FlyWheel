@@ -16,7 +16,8 @@ Stage alignment:
 - HLD §0.7 and §7 place this work after P1/P2/P2b/P5/P5b/P3a setup and inside the P7 family of L0c real rounds.
 - The concrete stage is **P7a: L0c-DeltaNet real round**.
 - In the current HLD executable state, P7a is the only L0c target that is actually executable; P7e fused epilogue and P7d sampling are explicitly later/wiring-dependent targets.
-- The current P7a HLD text says "two-tier preflight active" and includes AR.55-AR.57 for preflight semantics, positive memory, and calibration-log integrity. This document proposes the next design correction to that stage: remove DeltaNet syntax soft-demotion, keep evaluator-corruption hard rejects, and add replay gates before vLLM parity.
+- The current P7a HLD text says "two-tier preflight active" and includes AR.55-AR.57 for preflight semantics, positive memory, and calibration-log integrity. This document proposes the next design correction to that stage: remove DeltaNet syntax soft-demotion, keep evaluator-corruption hard rejects, make isolated replay the primary fast correctness/throughput scorer, and reserve vLLM parity plus full serving measurement for top-ranked confirmation.
+- P3a roofline remains a prerequisite for spending a full 48-hour P7a budget. If `chunk_delta_h.py` is not a top-3 self-time contributor on the actual workload, P7a should retarget before additional L0c rounds.
 
 In HLD terms, this is not a new workstream. It is a refinement of the P7a execution contract and should eventually patch:
 
@@ -34,7 +35,9 @@ P7a v0.3.4 current:
   static hard reject + DeltaNet soft demote + vLLM parity + full measurement
 
 P7a next:
-  static hard reject + advisory memory tags + small replay + isolated kernel replay + vLLM parity + full measurement
+  static hard reject + advisory memory tags + small replay
+  + isolated kernel replay correctness/timing over all candidates
+  + vLLM parity / full serving confirmation for top-K survivors
 ```
 
 The active L0c surface is:
@@ -53,15 +56,16 @@ The L0c loop is intended to search for source-level kernel mutations that preser
 
 ## Stack Under Auto-Research
 
-The current stack has five relevant layers:
+The current stack has six relevant layers:
 
 1. **Agent/proposer layer.** A fresh Codex-backed candidate worker receives the round brief, strategy memory, prior rejection rows, winner diffs, and kernel source context. It proposes exactly one `mutation.patch` plus rationale for a single candidate.
 2. **Controller layer.** `L0cKernelMutationRunner` owns candidate orchestration, mutation hashing, ledgers, preflight, replay/parity/measurement routing, and final result accounting.
 3. **Kernel workdir layer.** The candidate patch is applied to the isolated host-side kernel file, then bind-mounted or imported into the runtime path used for evaluation.
-4. **Serving correctness layer.** vLLM parity compares logits and DeltaNet recurrent-state snapshots against the reference fixture. This layer catches integration, state, cache, dtype, and scheduler-sensitive failures.
-5. **Serving measurement layer.** Passing candidates are measured with the real serving harness against contemporaneous paired baseline rows. This is the only layer that can declare a throughput winner.
+4. **Kernel replay scoring layer.** The isolated replay harness calls captured DeltaNet kernel invocations outside vLLM, checks output/state correctness, and records baseline-relative kernel runtimes. This is the primary high-throughput candidate scorer for L0c.
+5. **Serving correctness layer.** vLLM parity compares logits and DeltaNet recurrent-state snapshots against the reference fixture. This layer catches integration, state, cache, dtype, and scheduler-sensitive failures that direct replay cannot prove away.
+6. **Serving measurement layer.** Top-ranked parity-passing candidates are measured with the real serving harness against contemporaneous paired baseline rows. This is the final confirmation layer, not the primary search evaluator.
 
-The design change in this document sits between layers 2 and 4. It adds cheaper controller-owned gates before full vLLM parity and removes syntax-based DeltaNet demotion from the controller.
+The design change in this document sits between layers 2 and 5. It adds a controller-owned replay scorer before full vLLM parity, removes syntax-based DeltaNet demotion from the controller, and changes full serving measurement from per-candidate default to top-K confirmation.
 
 ## Mutation Contract
 
@@ -106,7 +110,7 @@ Required candidate metadata:
 
 ## Observations From Current Runs
 
-The current design was motivated by four observations from the recent L0c canary/live rounds.
+The current design was motivated by six observations from the recent L0c canary/live rounds.
 
 ### Observation 1: Prompt-only Failure Memory Is Not Enough
 
@@ -132,6 +136,14 @@ The live loop currently pays for runtime restart, kernel activation, parity prob
 ### Observation 4: Safe Candidates Are Not Necessarily Useful Candidates
 
 The latest live status report observed mechanically healthy loop behavior: baseline measurement, candidate spawning, parity-clean candidates entering measurement, structured parity rejection, and continuation after rejection. The open problem was search quality: safe candidates were small metadata/cache/load-shape mutations that did not beat the paired baseline. Therefore evaluator-cost reduction must be paired with proposer-quality work. The ladder makes bad candidates cheaper; it does not by itself make good candidates more likely.
+
+### Observation 5: Full vLLM Measurement Is Too Expensive As The Primary Throughput Evaluator
+
+If every plausible candidate pays a 25-30 minute vLLM reload/parity/measurement cycle, a 72-attempt budget burns roughly 30-36 hours of wall-clock evaluation before search quality is even considered. That is the wrong cost structure for kernel autoresearch. The primary throughput signal should come from isolated kernel replay timing, where candidate cost is closer to seconds than tens of minutes. Full serving measurement should confirm the top replay-ranked survivors, not score the whole candidate population.
+
+### Observation 6: Target Choice Must Be Revalidated Before A Long Round
+
+The current target is justified only if P3a roofline/profile evidence shows DeltaNet `chunk_delta_h.py` is a top bottleneck for the actual heavy workload. If the dominant self-time is instead in GEMMs, MLP projections, prefix-cache overhead, or another serving/runtime component, then a clean L0c loop can still spend the budget on the wrong surface. P3a is therefore a go/no-go gate for another long P7a round, not a nice-to-have diagnostic.
 
 ## Decision
 
@@ -177,11 +189,11 @@ The controller should route each mutation through the cheapest sufficient check 
 
 1. static preflight,
 2. small recorded-output replay,
-3. isolated DeltaNet kernel replay,
-4. vLLM parity probe,
-5. full serving measurement.
+3. isolated DeltaNet kernel replay correctness and timing,
+4. top-K vLLM parity probe,
+5. top-K full serving measurement confirmation.
 
-The first tier protects evaluator integrity. The middle two tiers reduce GPU/vLLM cost. The last two tiers remain the authoritative integration and performance gates.
+The first tier protects evaluator integrity. Tier 2 catches cheap math/state mistakes. Tier 3 is the primary search evaluator: it rejects replay-incorrect candidates and ranks replay-correct candidates by baseline-relative kernel runtime. Tiers 4 and 5 remain authoritative integration and end-to-end confirmation gates, but they should run only on top-ranked survivors or explicit fallback cases.
 
 ## Tier 1: Static Preflight
 
@@ -252,13 +264,13 @@ Pass/fail:
 - fail with `small_replay_compile_failed` if the patched kernel cannot compile in the direct harness,
 - fail with `small_replay_entrypoint_missing` if the current target cannot yet be called outside vLLM.
 
-This tier should catch obvious indexing, dtype, layout, mask, and state-update mistakes before a full vLLM reload.
+This tier should catch obvious indexing, dtype, layout, mask, and state-update mistakes before isolated replay spends GPU time.
 
 ## Tier 3: Isolated DeltaNet Kernel Replay
 
-GPU allowed, but no full serving reload. This is the load-bearing cost-reduction tier.
+GPU allowed, but no full serving reload. This is the load-bearing fast evaluator for L0c.
 
-The goal is to replay real captured DeltaNet kernel calls outside vLLM's request scheduler, compare output/state against recorded reference outputs, and optionally collect per-kernel runtime/profiling data.
+The goal is to replay real captured DeltaNet kernel calls outside vLLM's request scheduler, compare output/state against recorded reference outputs, and collect per-kernel runtime/profiling data. For the search loop, this tier is not optional timing decoration: it is the primary throughput measurement used to rank candidates before vLLM confirmation.
 
 ### Entry Point
 
@@ -297,12 +309,20 @@ cases:
   - case_id: token_0001_small
     inputs_ref: kernel_replay_inputs/token_0001_small.npz
     expected_ref: kernel_replay_expected/token_0001_small.npz
+    baseline_runtime_ms:
+      median: <baseline median>
+      p20: <baseline p20>
+      p80: <baseline p80>
     tolerances:
       rtol: 5.0e-3
       atol: 5.0e-3
   - case_id: token_1024_state
     inputs_ref: kernel_replay_inputs/token_1024_state.npz
     expected_ref: kernel_replay_expected/token_1024_state.npz
+    baseline_runtime_ms:
+      median: <baseline median>
+      p20: <baseline p20>
+      p80: <baseline p80>
     tolerances:
       rtol: 5.0e-3
       atol: 5.0e-3
@@ -336,7 +356,8 @@ Each expected case must include:
 4. Capture direct kernel inputs and outputs for each selected call.
 5. Store them under `parity_fixture/kernel_replay_inputs/` and `parity_fixture/kernel_replay_expected/`.
 6. Run the replay harness against the unmutated kernel and require pass.
-7. Record fixture hash in the round spec.
+7. Measure unmutated replay runtime with warmup/repetition policy matching `triton.testing.do_bench` semantics, storing median plus dispersion per case.
+8. Record fixture hash in the round spec.
 
 ### Candidate Procedure
 
@@ -345,8 +366,9 @@ Each expected case must include:
 3. Run small replay.
 4. Run full isolated replay over all captured cases.
 5. Write `kernel_replay_check.json`.
-6. If isolated replay passes, continue to vLLM parity.
+6. If isolated replay passes, compute baseline-relative timing score and enqueue the candidate in the replay survivor queue.
 7. If isolated replay fails, reject without vLLM reload.
+8. Run vLLM parity only when the candidate is selected as a top-K replay survivor, the replay fixture is unavailable, or an operator marks the mutation as integration-sensitive.
 
 ### Replay Output
 
@@ -365,6 +387,11 @@ Each expected case must include:
 - `compile_time_s`
 - `replay_wall_s`
 - `per_case_runtime_ms`
+- `per_case_baseline_runtime_ms`
+- `per_case_speedup`
+- `aggregate_replay_speedup`
+- `replay_rank_score`
+- `speed_thesis_supported`
 - optional profiling counters when available
 - `mutation_hash`
 
@@ -376,6 +403,27 @@ Failure reasons:
 - `kernel_replay_state_diverged`
 - `kernel_replay_fixture_invalid`
 - `kernel_replay_runtime_fault`
+
+### Replay Timing Policy
+
+Replay timing should be conservative enough to avoid promoting noise:
+
+- warm up each mutated kernel before timing,
+- report median plus p20/p80 or another fixed dispersion summary,
+- compare against fixture-recorded baseline runtimes from the same hardware/runtime family,
+- use a robust aggregate across cases, such as geometric mean speedup with a worst-case guard,
+- require no case to exceed an allowed slowdown unless the candidate's speed thesis explicitly targets a narrower measured case,
+- record timing instability as `kernel_replay_timing_unstable` rather than pretending the candidate has a clean speedup.
+
+The default survivor selector should be configurable but concrete:
+
+```text
+confirmation_top_k = 5
+minimum_replay_speedup = 1.01
+max_allowed_case_slowdown = 0.99
+```
+
+These defaults mean the loop can evaluate many candidates cheaply, then spend vLLM wall-clock only on the few candidates with both replay correctness and a plausible kernel-level speed signal.
 
 ### What Still Requires vLLM Parity
 
@@ -390,11 +438,11 @@ Passing isolated replay is not enough to ship a mutation. vLLM parity is still r
 - scheduler/proxy behavior,
 - sequence-boundary behavior not represented in replay fixtures.
 
-The value of isolated replay is cost reduction, not replacement of integration parity.
+The value of isolated replay is search throughput and early correctness. It replaces full serving measurement as the primary candidate scorer, but it does not replace integration parity or final serving confirmation.
 
 ## Tier 4: vLLM Parity Probe
 
-Use full vLLM parity after replay passes, or immediately when replay fixture support is unavailable for the target mutation class.
+Use full vLLM parity for top-K replay survivors, or immediately when replay fixture support is unavailable for the target mutation class.
 
 Output:
 
@@ -403,20 +451,23 @@ Output:
 
 The controller should record why vLLM parity was needed:
 
-- `replay_passed`,
+- `top_k_replay_survivor`,
 - `replay_fixture_unavailable`,
 - `integration_sensitive_mutation`,
 - `manual_force_vllm_parity`.
 
+If vLLM is already warm for parity, add a small held-out perplexity or next-token-loss probe when fixture cost is low enough. This should not replace logit/state parity, but it can catch behavior drift outside the handpicked parity prompts.
+
 ## Tier 5: Full Serving Measurement
 
-Run only after parity passes and the mutation has a plausible speed thesis.
+Run only after vLLM parity passes and the mutation is selected from the replay-ranked top-K survivor set, unless an operator explicitly forces full measurement for diagnosis.
 
 Purpose:
 
 - measure actual end-to-end serving impact,
 - compare against contemporaneous paired baseline,
-- avoid spending GB10/vLLM wall-clock on candidates that failed cheaper checks.
+- confirm that replay-level speedups survive integration effects,
+- avoid spending GB10/vLLM wall-clock on the full candidate population.
 
 Output:
 
@@ -434,8 +485,15 @@ Per candidate:
 3. Controller runs static preflight.
 4. Controller runs small replay if fixture exists.
 5. Controller runs isolated kernel replay if fixture exists and static preflight passed.
-6. Controller runs vLLM parity if replay passed or replay is unavailable.
-7. Controller runs full serving measurement only if vLLM parity passes.
+6. Controller records replay correctness, replay timing, and replay rank score.
+7. Controller selects top-K replay survivors for vLLM parity.
+8. Controller runs full serving measurement only for parity-passing top-K survivors.
+
+Fallback:
+
+- if replay fixture support is unavailable, the controller may route to vLLM parity directly, but the round should be marked `replay_fixture_unavailable_high_cost_path`;
+- if P3a roofline does not show the target as top-3 self-time, the controller should require explicit operator override before launching a long P7a round;
+- if no replay-correct candidate clears `minimum_replay_speedup`, the round should stop early or request proposer retargeting instead of measuring low-signal patches in vLLM.
 
 The agent should not run full vLLM `apply-and-test` before the controller has run the cheaper gates. Agent-side work should stop at writing the patch, rationale, touched-surface tags, and expected speed mechanism.
 
@@ -468,11 +526,13 @@ Short-term prompt/ranking design:
 - require `expected_affected_path`: memory traffic, launch count, cache behavior, occupancy, register pressure, or instruction count,
 - require `why_not_prior_failure`: explanation if the patch resembles any prior rejected family,
 - rank mutation targets using P3a/roofline evidence plus prior winners,
+- distill profiler output into the top three stalls with operational interpretation before showing it to the proposer,
 - reject or halt after repeated candidates that are parity-safe but have no throughput-relevant thesis.
 
 Medium-term controller design:
 
 - maintain a mutation-family priority queue,
+- enforce mutation-family scheduling so the proposer spends a bounded number of attempts in each planned family before repeating low-value safe edits,
 - boost families with prior winners and profiler-supported speed thesis,
 - down-rank families with repeated replay/parity/measurement failures,
 - keep down-ranking advisory unless failures are evaluator-corrupting,
@@ -492,16 +552,33 @@ Longer-term training design:
 | Remove the six DeltaNet soft-demote patterns | Ready | Small code change; removes ratcheting-filter risk. |
 | Keep safety-critical hard rejects | Ready | Protects evaluator integrity. |
 | Keep cross-round rejection and winner memory | Ready | `prior_mutations_rejected.tsv` and `winning_diffs.md` are the right artifacts. |
+| Run/refresh P3a roofline before long P7a budget | Ready | Go/no-go check: `chunk_delta_h.py` should be top-3 self-time or L0c should retarget. |
 | Static preflight for file-touch safety | Ready | Keep it narrow and hard only for evaluator corruption. |
 | Small recorded-output replay | Designed here | Uses unmutated-kernel recorded outputs, not an assumed independent PyTorch reference. |
-| Isolated DeltaNet kernel replay | Designed here | Requires fixture schema upgrade and direct kernel-call harness. |
-| vLLM parity probe | Ready | Integration correctness gate after replay. |
-| Full serving measurement | Ready | Final performance truth. |
+| Isolated DeltaNet kernel replay | Designed here | Primary correctness/timing scorer; requires fixture schema upgrade and direct kernel-call harness. |
+| Replay-ranked top-K survivor queue | Designed here | Default `confirmation_top_k=5`; avoids measuring the whole candidate population in vLLM. |
+| vLLM parity probe | Ready | Integration correctness gate for top-K or fallback candidates. |
+| Held-out perplexity probe | Designed here | Optional Tier 4 add-on when vLLM is already warm. |
+| Full serving measurement | Ready | Final top-K performance confirmation, not primary search scoring. |
 | Proposer-quality mechanism | Designed here | Ranking and speed-thesis mechanism complements evaluator ladder. |
+| Mutation-family scheduling | Designed here | Proactive exploration coverage for proposer quality. |
 
 ## Prior-Art Support
 
-Citation verification status: the URLs below were checked on 2026-04-30 and resolved to the claimed repository, article, or arXiv paper.
+Citation verification status: the URLs below were browser-checked again on 2026-05-02. They resolved to the claimed repository, article, or arXiv paper. This section should still be treated as supporting context, not as the load-bearing proof of the design. The local evaluator economics are sufficient on their own: a 25-30 minute per-candidate serving cycle is too expensive to be the primary search scorer.
+
+| Reference | Verification status on 2026-05-02 | Main design signal |
+|---|---|---|
+| Karpathy `autoresearch` | Resolved | One-GPU autonomous loop with small mutable surface and measured keep/discard decisions. |
+| KernelEvolve | Resolved | Runtime diagnostics, historical signals, structured search, and persistent knowledge/memory. |
+| KernelFoundry | Resolved | Diversity-preserving evolutionary search and hardware-aware feedback. |
+| GPU Kernel Scientist | Resolved | Explicit hypotheses plus timing-feedback iteration. |
+| Record-Remix-Replay | Resolved | Fast replay-style evaluation to avoid full application cost on every candidate. |
+| Kernel-Smith | Resolved | Population/archive search with structured feedback on compile, correctness, and speed. |
+| KernelBench | Resolved | 250-kernel benchmark with correctness plus speedup metrics, showing kernel generation remains hard. |
+| Sakana AI CUDA Engineer / robust-kbench revision | Resolved | Evaluator robustness matters; weak correctness gates create misleading speedups. |
+| Flash Linear Attention / DeltaNet | Resolved | `chunk_delta_h.py` is inherited from an actively optimized Triton/FLA lineage, so expected wins may be small and target choice must be profiled. |
+| Triton autotune / `do_bench` | Resolved | Built-in timing/autotune APIs support replay-level benchmarking policy. |
 
 ### Karpathy Autoresearch
 
@@ -553,7 +630,7 @@ Record-Remix-Replay is the closest prior-art match for the reload-cost issue. It
 
 Relevance to L0c:
 
-- add isolated kernel replay before vLLM parity,
+- use isolated kernel replay timing as the primary search scorer,
 - amortize expensive runtime setup,
 - treat full serving reload as a late-stage gate, not the default first serious test.
 
@@ -566,6 +643,40 @@ Relevance to L0c:
 - archive both successful and diverse programs,
 - preserve structured execution feedback across rounds,
 - train or prompt the proposer as a local improver, not a one-shot generator.
+
+### KernelBench And Robust CUDA Evaluation
+
+KernelBench provides the most useful public benchmark frame for this work: correctness plus speedup across a suite of GPU-kernel tasks, not just compile success or one-off runtime wins. Source: https://arxiv.org/abs/2502.10517
+
+Sakana's CUDA work and later robust benchmarking write-up are useful mainly as a warning: evaluator weakness can produce misleading speedup claims. Source: https://pub.sakana.ai/static/paper.pdf
+
+Relevance to L0c:
+
+- keep logit plus recurrent-state snapshot parity; it is stronger than a single forward-output check,
+- keep the evaluator external to the proposer,
+- treat replay timing as a screen, not as proof that the serving stack is behavior-preserving,
+- add held-out behavior probes when the vLLM process is already warm.
+
+### Flash Linear Attention / DeltaNet
+
+The DeltaNet target comes from the Flash Linear Attention lineage, which already contains Triton implementations for efficient linear-attention and state-space-style operators. Source: https://github.com/fla-org/flash-linear-attention
+
+Relevance to L0c:
+
+- `chunk_delta_h.py` is not an untuned toy kernel,
+- expected per-candidate wins may be small,
+- P3a profile evidence must justify the target before another long P7a round,
+- replay cases must include stateful and boundary-sensitive shapes, not only tiny happy-path tensors.
+
+### Triton Autotune And Benchmarking
+
+Triton exposes `triton.autotune` for configuration search and `triton.testing.do_bench` for repeatable timing. Sources: https://triton-lang.org/main/python-api/generated/triton.autotune.html and https://triton-lang.org/main/python-api/generated/triton.testing.do_bench.html
+
+Relevance to L0c:
+
+- replay fixtures should store the timing policy, not just output tensors,
+- baseline and candidate timing should use the same warmup/repetition semantics,
+- cache/autotune state must be recorded enough to explain when replay results and vLLM results disagree.
 
 ## Answer: Does Prior Art Support Research-Round Memory?
 
@@ -590,6 +701,8 @@ The L0c direction should therefore be:
 1. preserve cross-round memory,
 2. remove DeltaNet soft-demote enforcement,
 3. implement small replay and isolated kernel replay as first-class evaluator tiers,
-4. use vLLM reload only when integration-level evidence is needed,
-5. keep full serving measurement for final performance truth,
-6. improve proposer quality in parallel with evaluator-cost reduction.
+4. make isolated replay the primary correctness/timing scorer for candidate ranking,
+5. use vLLM reload only for top-K survivors, fixture-unavailable fallbacks, or explicitly integration-sensitive mutations,
+6. keep full serving measurement for final top-K performance confirmation,
+7. refresh P3a roofline before another long P7a round,
+8. improve proposer quality through speed theses, distilled profiler hints, and mutation-family scheduling.
