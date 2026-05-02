@@ -3623,6 +3623,113 @@ def test_l0a_kernel_select_bundle_resolution_requires_bundle_path(tmp_path: Path
         )
 
 
+def test_l0a_kernel_select_real_bundle_resolution_uses_base_bundle_stack(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = repo / "kernel_search" / "phase_a_action_space.yaml"
+    action_space_path.parent.mkdir(parents=True, exist_ok=True)
+    action_space_path.write_text(
+        """
+axes:
+  attention_backend: [vllm-default]
+  deltanet_kernel: [triton-chunked-delta-v2]
+  fp8_gemm_kernel: [cutlass]
+  torch_compile_mode: [default]
+  cuda_graph_capture: ['off']
+""",
+        encoding="utf-8",
+    )
+    base_bundle = _write_l0a_bundle(
+        repo,
+        kernel_selection={
+            "combo_id": "combo_base",
+            "attention_backend": "vllm-default",
+            "deltanet_kernel": "triton-chunked-delta-v2",
+            "fp8_gemm_kernel": "cublas",
+            "torch_compile_mode": "default",
+            "cuda_graph_capture": "off",
+        },
+    )
+    payload = auto_research.load_yaml_file(base_bundle)
+    payload["tuned_config_bundle"]["vllm_config"]["max_num_batched_tokens"] = 4096
+    base_bundle.write_text(auto_research.yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    calls: list[dict[str, object]] = []
+
+    class _FakeRealMeasurementHarness:
+        VERSION = "RealMeasurementHarness v0.1.0"
+
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            calls.append({"candidate_vllm_config": candidate_vllm_config, **kwargs})
+            return {
+                "generator": self.VERSION,
+                "candidate_vllm_config": candidate_vllm_config,
+                "cache_isolation": {},
+                "windows": {"measurement_elapsed_s": 1.0},
+                "per_request_latencies": [],
+                "diagnostics": {},
+                "ttft_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "tpot_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "turn_latency_p95_ms": {"driver": 1.0, "promql": 1.0, "delta_pct": 0.0},
+                "eval_throughput": 1.25,
+                "rollout_throughput": 10.0,
+                "window_completed": True,
+                "reasoning_content_purity": 1.0,
+                "determinism_pass_rate": 1.0,
+                "no_oom_events": True,
+                "feasible": True,
+                "feasibility_failures": [],
+                "harness_health_warnings": [],
+            }
+
+        def restore_runtime(self) -> None:
+            return None
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeRealMeasurementHarness)
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        action_space_file=action_space_path,
+        baselines=1,
+        screen_measurements_per_combo=1,
+        rescreen_top_k=1,
+        rescreen_measurements_per_candidate=1,
+        parallel_instances="auto",
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        base_stack_resolution="bundle",
+        base_bundle_path=base_bundle,
+        proxy_port=8101,
+    )
+
+    assert len(calls) == 3
+    assert all(call["candidate_vllm_config"]["max_num_batched_tokens"] == 4096 for call in calls)
+    assert calls[0]["kernel_selection"]["fp8_gemm_kernel"] == "cublas"
+    assert calls[1]["kernel_selection"]["fp8_gemm_kernel"] == "cutlass"
+    round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
+    assert round_spec["base_stack_resolution"] == "bundle"
+    assert round_spec["base_bundle_id"] == payload["tuned_config_bundle"]["bundle_id"]
+    assert round_spec["baseline_vllm_config_source"] == "base_bundle"
+    output_bundle = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
+    assert output_bundle["vllm_config"]["max_num_batched_tokens"] == 4096
+    assert output_bundle["baseline_bundle_id"] == payload["tuned_config_bundle"]["bundle_id"]
+    assert output_bundle["round_provenance"]["base_stack_resolution"] == "bundle"
+    assert output_bundle["round_provenance"]["base_bundle_id"] == payload["tuned_config_bundle"]["bundle_id"]
+    assert output_bundle["round_provenance"]["phase_a_screen_method"] == "replay"
+
+
 def test_l0a_kernel_select_real_dispatches_live_smoke_with_runtime_activation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

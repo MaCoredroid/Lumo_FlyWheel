@@ -849,7 +849,32 @@ class L0aKernelSelectRunner:
         registry = load_registry(self.registry_path)
         if model_id not in registry:
             raise RuntimeError(f"Unknown model_id: {model_id}")
-        weight_version_id = default_weight_version_id(registry[model_id])
+        base_bundle = load_baseline_bundle(base_bundle_path) if base_stack_resolution == "bundle" else None
+        if base_bundle is not None:
+            if base_bundle.model_id != model_id:
+                raise RuntimeError(
+                    f"base bundle model_id {base_bundle.model_id!r} does not match {model_id!r}"
+                )
+            if base_bundle.family_id != str(descriptor.get("family_id", "")):
+                raise RuntimeError(
+                    f"base bundle family_id {base_bundle.family_id!r} does not match workload "
+                    f"family_id {descriptor.get('family_id')!r}"
+                )
+        baseline_vllm_config = (
+            dict(base_bundle.vllm_config)
+            if base_bundle is not None
+            else registry[model_id].vllm_config()
+        )
+        baseline_kernel_selection = (
+            dict(base_bundle.kernel_selection)
+            if base_bundle is not None
+            else {}
+        )
+        weight_version_id = (
+            base_bundle.weight_version_id
+            if base_bundle is not None
+            else default_weight_version_id(registry[model_id])
+        )
         combos = self._load_action_space(action_space_path)
         if not combos:
             raise RuntimeError("action space produced zero L0a combos")
@@ -911,6 +936,12 @@ class L0aKernelSelectRunner:
         }
         if base_bundle_path is not None:
             spec["base_bundle_path"] = str(Path(base_bundle_path).resolve())
+        if base_bundle is not None:
+            spec["base_bundle_id"] = base_bundle.bundle_id
+            spec["baseline_kernel_selection"] = baseline_kernel_selection
+            spec["baseline_vllm_config_source"] = "base_bundle"
+        else:
+            spec["baseline_vllm_config_source"] = "registry"
         self._write_yaml(round_dir / "round_spec.yaml", spec)
         self._write_yaml(round_dir / "action_space.normalized.yaml", [combo.as_dict() for combo in combos])
 
@@ -1087,14 +1118,15 @@ class L0aKernelSelectRunner:
                 baseline_rows = self._real_baseline_measurements(
                     real_harness,
                     baselines=baselines,
-                    baseline_vllm_config=registry[model_id].vllm_config(),
+                    baseline_vllm_config=baseline_vllm_config,
+                    baseline_kernel_selection=baseline_kernel_selection,
                     round_dir=round_dir,
                 )
                 screen_rows = self._real_combo_measurements(
                     real_harness,
                     combos=runtime_supported_survivors,
                     measurements_per_combo=screen_measurements_per_combo,
-                    baseline_vllm_config=registry[model_id].vllm_config(),
+                    baseline_vllm_config=baseline_vllm_config,
                     round_dir=round_dir,
                     role="screen",
                 )
@@ -1112,7 +1144,7 @@ class L0aKernelSelectRunner:
                     real_harness,
                     combos=top,
                     measurements_per_combo=rescreen_measurements_per_candidate,
-                    baseline_vllm_config=registry[model_id].vllm_config(),
+                    baseline_vllm_config=baseline_vllm_config,
                     round_dir=round_dir,
                     role="rescreen",
                 )
@@ -1189,7 +1221,7 @@ class L0aKernelSelectRunner:
             family_id=str(descriptor.get("family_id", "")),
             weight_version_id=weight_version_id,
             workload_distribution_id=str(descriptor["workload_distribution_id"]),
-            vllm_config=registry[model_id].vllm_config(),
+            vllm_config=baseline_vllm_config,
             kernel_selection=winner.as_dict(),
             objective={
                 "metric": "l0a_rescreen_objective_mean",
@@ -1198,7 +1230,7 @@ class L0aKernelSelectRunner:
             },
             measurement_trace_ref=_relative_to_repo(self.repo_root, round_dir / "measurement_trace_combined.json"),
             search_trace_ref=_relative_to_repo(self.repo_root, round_dir / "search_trace.json"),
-            baseline_bundle_id=None,
+            baseline_bundle_id=base_bundle.bundle_id if base_bundle is not None else None,
             regression_guard={
                 "baseline_measurements": baselines,
                 "screen_measurements_per_combo": screen_measurements_per_combo,
@@ -1225,6 +1257,15 @@ class L0aKernelSelectRunner:
                 "harness": harness,
                 "workload_descriptor_path": str(workload_path),
                 "action_space_file": str(action_space_path),
+                "base_stack_resolution": base_stack_resolution,
+                "base_bundle_path": (
+                    str(Path(base_bundle_path).resolve())
+                    if base_bundle_path is not None
+                    else None
+                ),
+                "base_bundle_id": base_bundle.bundle_id if base_bundle is not None else None,
+                "baseline_vllm_config_source": "base_bundle" if base_bundle is not None else "registry",
+                "phase_a_screen_method": phase_a_screen_method,
                 "parity_fixture_refs": spec["parity_fixture_refs"],
                 "parity_fixture_content_hashes": spec["parity_fixture_content_hashes"],
                 "parallel_instances": fanout,
@@ -1622,6 +1663,7 @@ class L0aKernelSelectRunner:
         *,
         baselines: int,
         baseline_vllm_config: dict[str, Any],
+        baseline_kernel_selection: dict[str, Any],
         round_dir: Path,
     ) -> list[dict[str, str]]:
         rows: list[dict[str, str]] = []
@@ -1632,6 +1674,7 @@ class L0aKernelSelectRunner:
                     combo=None,
                     measurement_index=index,
                     baseline_vllm_config=baseline_vllm_config,
+                    baseline_kernel_selection=baseline_kernel_selection,
                     round_dir=round_dir,
                     role="baseline",
                 )
@@ -1657,6 +1700,7 @@ class L0aKernelSelectRunner:
                         combo=combo,
                         measurement_index=index,
                         baseline_vllm_config=baseline_vllm_config,
+                        baseline_kernel_selection={},
                         round_dir=round_dir,
                         role=role,
                     )
@@ -1670,11 +1714,12 @@ class L0aKernelSelectRunner:
         combo: L0aKernelCombo | None,
         measurement_index: int,
         baseline_vllm_config: dict[str, Any],
+        baseline_kernel_selection: dict[str, Any],
         round_dir: Path,
         role: str,
     ) -> dict[str, str]:
         combo_id = combo.combo_id if combo is not None else "vllm-default"
-        kernel_selection = combo.as_dict() if combo is not None else {}
+        kernel_selection = combo.as_dict() if combo is not None else dict(baseline_kernel_selection)
         trace = harness.measure(
             dict(baseline_vllm_config),
             warmup_s=0,
