@@ -3668,6 +3668,24 @@ axes:
     assert round_spec["base_stack_resolution"] == "bundle"
     assert round_spec["base_bundle_path"] == str(base_bundle_path.resolve())
     assert round_spec["phase_a_screen_method"] == "replay"
+    assert round_spec["phase_a_backend_identities_ref"] == "phase_a_backend_identities.json"
+    identities = round_spec["phase_a_backend_identities"]
+    assert set(identities) == {"cublas"}
+    backend_identity = identities["cublas"]
+    assert backend_identity["repo_dispatch_hook_symbol"].endswith("._apply_fp8_gemm_kernel")
+    assert backend_identity["repo_dispatch_hook_source_path"] == "src/lumo_flywheel_serving/kernel_activation.py"
+    assert backend_identity["resolved_runtime_name"] == "torch_scaled_mm"
+    assert backend_identity["support_status"] == "supported"
+    assert len(backend_identity["content_hash"]) == 64
+
+    identity_manifest = json.loads(
+        (result.round_dir / "phase_a_backend_identities.json").read_text(encoding="utf-8")
+    )
+    assert identity_manifest["schema"] == "phase_a_backend_identity_manifest.v1"
+    assert identity_manifest["identities"] == identities
+    assert result.artifact_paths["phase_a_backend_identities"].endswith(
+        "phase_a_backend_identities.json"
+    )
 
 
 def test_l0a_kernel_select_records_optional_fp8_fixture_ref_and_hash(tmp_path: Path) -> None:
@@ -4147,6 +4165,60 @@ axes:
     assert calls == []
 
 
+def test_l0a_kernel_select_real_records_unsupported_fp8_backend_identity(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = repo / "kernel_search" / "phase_a_action_space.yaml"
+    action_space_path.parent.mkdir(parents=True, exist_ok=True)
+    action_space_path.write_text(
+        """
+axes:
+  attention_backend: [vllm-default]
+  deltanet_kernel: [triton-chunked-delta-v2]
+  fp8_gemm_kernel: [cublas, triton_fp8_scaled_mm]
+  torch_compile_mode: [default]
+  cuda_graph_capture: ['off']
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="HALT_REASON: l0a_kernel_selection_runtime_unsupported_knobs"):
+        runner.run(
+            workload_file=workload_path,
+            action_space_file=action_space_path,
+            baselines=1,
+            screen_measurements_per_combo=1,
+            rescreen_top_k=1,
+            rescreen_measurements_per_candidate=1,
+            parallel_instances="auto",
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            proxy_port=8101,
+            runtime_unsupported_policy="strict",
+        )
+
+    round_dir = next((repo / "output" / "auto_research").glob("*-l0a-select-*"))
+    activation_check = json.loads((round_dir / "runtime_activation_check.json").read_text(encoding="utf-8"))
+    unsupported = activation_check["unsupported_runtime_activation"]
+    assert len(unsupported) == 1
+    assert unsupported[0]["kernel_selection"]["fp8_gemm_kernel"] == "triton_fp8_scaled_mm"
+    assert unsupported[0]["unsupported_knobs"][0]["axis"] == "fp8_gemm_kernel"
+    identity = unsupported[0]["activation_plan"]["resolved"]["fp8_gemm_backend_identity"]
+    assert identity["support_status"] == "unsupported"
+    assert identity["supported"] is False
+    assert identity["resolved_runtime_name"] is None
+
+    round_spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
+    assert round_spec["phase_a_backend_identities"]["cublas"]["support_status"] == "supported"
+    assert round_spec["phase_a_backend_identities"]["triton_fp8_scaled_mm"]["support_status"] == "unsupported"
+
+
 def test_l0a_kernel_select_real_partitions_unsupported_runtime_knobs_before_dispatch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -4248,6 +4320,9 @@ axes:
         "combo_005",
         "combo_007",
     ]
+    assert activation_check["supported_runtime_activation"][0]["activation_plan"]["resolved"][
+        "fp8_gemm_backend_identity"
+    ]["support_status"] == "supported"
 
     audit = (result.round_dir / "unsupported_runtime_candidates.tsv").read_text(encoding="utf-8").splitlines()
     assert len(audit) == 10

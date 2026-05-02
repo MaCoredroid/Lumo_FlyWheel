@@ -13,7 +13,13 @@ from lumo_flywheel_serving.model_server import (
     MIN_GPU_MEMORY_UTILIZATION,
     ModelServer,
 )
-from lumo_flywheel_serving.kernel_activation import resolve_kernel_runtime_activation
+from lumo_flywheel_serving.kernel_activation import (
+    PHASE_A_BACKEND_DISPATCH_DRIFT,
+    PhaseABackendDispatchDriftError,
+    phase_a_fp8_gemm_backend_identity,
+    verify_phase_a_backend_identity_manifest,
+    resolve_kernel_runtime_activation,
+)
 from lumo_flywheel_serving.registry import ModelConfig, load_registry
 
 
@@ -275,6 +281,9 @@ models:
     assert "--enforce-eager" in command
     assert "VLLM_DISABLED_KERNELS=MarlinFP8ScaledMMLinearKernel,FlashInferFP8ScaledMMLinearKernel,CutlassFP8ScaledMMLinearKernel" in command
     assert "kernel_runtime_activation=" in command
+    assert plan.resolved["fp8_gemm_backend_identity"]["action_space_value"] == "cublas"
+    assert plan.resolved["fp8_gemm_backend_identity"]["resolved_runtime_name"] == "torch_scaled_mm"
+    assert len(plan.resolved["fp8_gemm_backend_identity"]["content_hash"]) == 64
 
 
 def test_build_run_command_applies_compile_and_cutlass_kernel_activation(tmp_path: Path) -> None:
@@ -329,6 +338,22 @@ models:
     assert "--enforce-eager" not in command
     assert "VLLM_DISABLED_KERNELS=MarlinFP8ScaledMMLinearKernel,FlashInferFP8ScaledMMLinearKernel,PerTensorTorchFP8ScaledMMLinearKernel,ChannelWiseTorchFP8ScaledMMLinearKernel,RowWiseTorchFP8ScaledMMLinearKernel" in command
     assert plan.resolved["fp8_gemm_kernel"] == "CutlassFP8ScaledMMLinearKernel"
+
+
+def test_phase_a_fp8_backend_identity_manifest_detects_dispatch_drift() -> None:
+    identity = phase_a_fp8_gemm_backend_identity("cutlass")
+
+    verified = verify_phase_a_backend_identity_manifest({"cutlass": identity})
+
+    assert verified["cutlass"]["resolved_runtime_name"] == "CutlassFP8ScaledMMLinearKernel"
+
+    drifted = dict(identity)
+    drifted["content_hash"] = "0" * 64
+    with pytest.raises(PhaseABackendDispatchDriftError) as exc_info:
+        verify_phase_a_backend_identity_manifest({"cutlass": drifted})
+
+    assert PHASE_A_BACKEND_DISPATCH_DRIFT in str(exc_info.value)
+    assert exc_info.value.mismatches[0]["field"] == "content_hash"
 
 
 def test_fp8_checkpoints_default_initial_kv_cache_dtype_to_auto(tmp_path: Path) -> None:

@@ -13,15 +13,15 @@ space values until explicit runtime hooks are added and verified.
 
 ## Backend Status
 
-| action-space name | runtime support | dispatch/resolved name | activation mechanism | isolated invocation status |
-|---|---|---|---|---|
-| `cublas` | supported | `torch_scaled_mm` | sets `VLLM_DISABLED_KERNELS` to disable Marlin, FlashInfer, and CUTLASS FP8 scaled-MM kernels | unknown / not yet implemented |
-| `cutlass` | supported | `CutlassFP8ScaledMMLinearKernel` | sets `VLLM_DISABLED_KERNELS` to disable Marlin, FlashInfer, per-tensor Torch, channel-wise Torch, and row-wise Torch FP8 scaled-MM kernels | unknown / not yet implemented |
-| `cutlass_blackwell_scaled_mm` | unsupported | not resolved | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
-| `triton_fp8_scaled_mm` | unsupported | not resolved | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
-| `marlin` | unsupported | not resolved | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
-| `machete` | unsupported | not resolved | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
-| `tensorrt_llm_fp8` | unsupported | not resolved | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
+| action-space name | runtime support | dispatch/resolved name | dispatch identity | activation mechanism | isolated invocation status |
+|---|---|---|---|---|---|
+| `cublas` | supported | `torch_scaled_mm` | `src/lumo_flywheel_serving/kernel_activation.py::lumo_flywheel_serving.kernel_activation._apply_fp8_gemm_kernel` sha256 `393754c04b9b38c56cb8bd5b1addbd3629f161a0fe6e79d517287d9371ed896b` | sets `VLLM_DISABLED_KERNELS` to disable Marlin, FlashInfer, and CUTLASS FP8 scaled-MM kernels | unknown / not yet implemented |
+| `cutlass` | supported | `CutlassFP8ScaledMMLinearKernel` | `src/lumo_flywheel_serving/kernel_activation.py::lumo_flywheel_serving.kernel_activation._apply_fp8_gemm_kernel` sha256 `393754c04b9b38c56cb8bd5b1addbd3629f161a0fe6e79d517287d9371ed896b` | sets `VLLM_DISABLED_KERNELS` to disable Marlin, FlashInfer, per-tensor Torch, channel-wise Torch, and row-wise Torch FP8 scaled-MM kernels | unknown / not yet implemented |
+| `cutlass_blackwell_scaled_mm` | unsupported | not resolved | unsupported by repo-owned dispatch hook | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
+| `triton_fp8_scaled_mm` | unsupported | not resolved | unsupported by repo-owned dispatch hook | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
+| `marlin` | unsupported | not resolved | unsupported by repo-owned dispatch hook | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
+| `machete` | unsupported | not resolved | unsupported by repo-owned dispatch hook | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
+| `tensorrt_llm_fp8` | unsupported | not resolved | unsupported by repo-owned dispatch hook | no repo-owned exact dense FP8 GEMM launch hook | unknown / not yet implemented |
 
 ## Notes
 
@@ -37,6 +37,14 @@ The current Phase A executable action space is therefore:
 fp8_gemm_kernel: [cublas, cutlass]
 ```
 
-Dispatch identity and standalone synthetic-tensor invocation are not yet
-implemented as separate audit artifacts. They remain required follow-up work
-before adding backend names beyond the two currently wired values.
+Dispatch identity is recorded in Phase A round artifacts as
+`phase_a_backend_identities.json` and repeated in `round_spec.yaml` /
+bundle provenance. The identity binds each scheduled action-space value to the
+repo-owned dispatch hook symbol, source path, support status, resolved runtime
+name, and source hash above. This is not an upstream vLLM symbol/source hash.
+If a later run compares against a stale manifest and the dispatch hook changed, it raises
+`HALT_REASON: phase_a_backend_dispatch_drift`.
+
+Standalone synthetic-tensor invocation remains unimplemented; do not add
+backend names beyond the two currently wired values until their exact dispatch
+identity and isolated invocation status are both verified.

@@ -21,7 +21,11 @@ from uuid import uuid4
 
 import yaml
 
-from .kernel_activation import KERNEL_SELECTION_RUNTIME_UNSUPPORTED, resolve_kernel_runtime_activation
+from .kernel_activation import (
+    KERNEL_SELECTION_RUNTIME_UNSUPPORTED,
+    phase_a_fp8_gemm_backend_identities,
+    resolve_kernel_runtime_activation,
+)
 from .measurement_harness import RealMeasurementHarness, SLO, WorkloadSpec
 from .parity_fixture import (
     ACTUALLY_RESOLVED_KEYS,
@@ -893,6 +897,9 @@ class L0aKernelSelectRunner:
             if max_combos < 1:
                 raise RuntimeError("--max-combos must be >= 1 when provided")
             combos = combos[:max_combos]
+        phase_a_backend_identities = phase_a_fp8_gemm_backend_identities(
+            [combo.fp8_gemm_kernel for combo in combos]
+        )
 
         fanout = self._resolve_parallel_instances(parallel_instances)
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -935,6 +942,8 @@ class L0aKernelSelectRunner:
                 for key, value in fixture_refs.items()
             },
             "parity_fixture_content_hashes": fixture_content_hashes,
+            "phase_a_backend_identities_ref": "phase_a_backend_identities.json",
+            "phase_a_backend_identities": phase_a_backend_identities,
             "weight_version_id": weight_version_id,
             "endpoint": f"http://127.0.0.1:{proxy_port}",
             "upstream_port": port,
@@ -950,6 +959,18 @@ class L0aKernelSelectRunner:
         else:
             spec["baseline_vllm_config_source"] = "registry"
         self._write_yaml(round_dir / "round_spec.yaml", spec)
+        (round_dir / "phase_a_backend_identities.json").write_text(
+            json.dumps(
+                {
+                    "schema": "phase_a_backend_identity_manifest.v1",
+                    "axis": "fp8_gemm_kernel",
+                    "identities": phase_a_backend_identities,
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
         self._write_yaml(round_dir / "action_space.normalized.yaml", [combo.as_dict() for combo in combos])
 
         eliminated, survivors, smoke_rows = self._run_smoke(combos)
@@ -1279,6 +1300,8 @@ class L0aKernelSelectRunner:
                 "phase_a_screen_method": phase_a_screen_method,
                 "parity_fixture_refs": spec["parity_fixture_refs"],
                 "parity_fixture_content_hashes": spec["parity_fixture_content_hashes"],
+                "phase_a_backend_identities_ref": spec["phase_a_backend_identities_ref"],
+                "phase_a_backend_identities": phase_a_backend_identities,
                 "parallel_instances": fanout,
                 "parallel_evidence": spec["parallel_evidence"],
                 "total_combos_available": total_combos_available,
@@ -1375,6 +1398,7 @@ class L0aKernelSelectRunner:
                 "eliminated_tsv": str(round_dir / "eliminated.tsv"),
                 "determinism_log": str(round_dir / "determinism_log.json"),
                 "parity_check": str(round_dir / "parity_check.json"),
+                "phase_a_backend_identities": str(round_dir / "phase_a_backend_identities.json"),
                 "run_log": str(round_dir / "run_log.json"),
                 "search_trace": str(round_dir / "search_trace.json"),
                 "measurement_trace": str(round_dir / "measurement_trace_combined.json"),

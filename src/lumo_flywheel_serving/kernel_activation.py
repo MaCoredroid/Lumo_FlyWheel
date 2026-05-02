@@ -1,12 +1,27 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from dataclasses import dataclass, field
 from typing import Any
 
 
 KERNEL_SELECTION_RUNTIME_UNSUPPORTED = "l0a_kernel_selection_runtime_unsupported_knobs"
+PHASE_A_BACKEND_DISPATCH_DRIFT = "phase_a_backend_dispatch_drift"
+PHASE_A_BACKEND_IDENTITY_SCHEMA = "phase_a_fp8_gemm_backend_identity.v1"
+_PHASE_A_DISPATCH_SOURCE_PATH = "src/lumo_flywheel_serving/kernel_activation.py"
+_PHASE_A_DISPATCH_SYMBOL = "lumo_flywheel_serving.kernel_activation._apply_fp8_gemm_kernel"
+_PHASE_A_FP8_GEMM_BACKENDS = {
+    "cublas": {
+        "resolved_runtime_name": "torch_scaled_mm",
+        "activation_mechanism": "VLLM_DISABLED_KERNELS disables non-Torch FP8 scaled-MM kernels",
+    },
+    "cutlass": {
+        "resolved_runtime_name": "CutlassFP8ScaledMMLinearKernel",
+        "activation_mechanism": "VLLM_DISABLED_KERNELS disables non-CUTLASS FP8 scaled-MM kernels",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -70,6 +85,110 @@ class KernelRuntimeActivationError(RuntimeError):
         super().__init__(
             f"HALT_REASON: {KERNEL_SELECTION_RUNTIME_UNSUPPORTED}; unsupported runtime kernel knob(s): {unsupported}"
         )
+
+
+class PhaseABackendDispatchDriftError(RuntimeError):
+    def __init__(self, mismatches: list[dict[str, Any]]) -> None:
+        self.mismatches = mismatches
+        values = ", ".join(str(item.get("action_space_value")) for item in mismatches)
+        super().__init__(
+            f"HALT_REASON: {PHASE_A_BACKEND_DISPATCH_DRIFT}; Phase A backend identity drift: {values}"
+        )
+
+
+def phase_a_fp8_gemm_backend_identity(value: Any) -> dict[str, Any]:
+    action_space_value = str(value)
+    backend = _PHASE_A_FP8_GEMM_BACKENDS.get(action_space_value)
+    supported = backend is not None
+    return {
+        "schema": PHASE_A_BACKEND_IDENTITY_SCHEMA,
+        "axis": "fp8_gemm_kernel",
+        "action_space_value": action_space_value,
+        "resolved_runtime_name": backend["resolved_runtime_name"] if backend else None,
+        "repo_dispatch_hook_source_path": _PHASE_A_DISPATCH_SOURCE_PATH,
+        "repo_dispatch_hook_symbol": _PHASE_A_DISPATCH_SYMBOL,
+        "content_hash_algorithm": "sha256",
+        "content_hash_scope": "repo_owned_runtime_activation_dispatch_hook",
+        "content_hash": _phase_a_fp8_gemm_dispatch_source_hash(),
+        "support_status": "supported" if supported else "unsupported",
+        "supported": supported,
+        "activation_mechanism": backend["activation_mechanism"] if backend else None,
+    }
+
+
+def phase_a_fp8_gemm_backend_identities(values: list[Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(value): phase_a_fp8_gemm_backend_identity(value)
+        for value in sorted({str(item) for item in values})
+    }
+
+
+def verify_phase_a_backend_identity_manifest(
+    expected_manifest: dict[str, Any],
+    *,
+    values: list[Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    expected_identities = _extract_phase_a_backend_identities(expected_manifest)
+    current_values = values if values is not None else list(expected_identities)
+    current = phase_a_fp8_gemm_backend_identities(current_values)
+    mismatches: list[dict[str, Any]] = []
+    keys_to_compare = (
+        "schema",
+        "axis",
+        "action_space_value",
+        "resolved_runtime_name",
+        "repo_dispatch_hook_source_path",
+        "repo_dispatch_hook_symbol",
+        "content_hash_algorithm",
+        "content_hash_scope",
+        "content_hash",
+        "support_status",
+        "supported",
+    )
+    for value in sorted(set(expected_identities) | set(current)):
+        expected = expected_identities.get(value)
+        observed = current.get(value)
+        if expected is None or observed is None:
+            mismatches.append(
+                {
+                    "action_space_value": value,
+                    "field": "manifest_entry",
+                    "expected": expected,
+                    "observed": observed,
+                }
+            )
+            continue
+        for key in keys_to_compare:
+            if expected.get(key) != observed.get(key):
+                mismatches.append(
+                    {
+                        "action_space_value": value,
+                        "field": key,
+                        "expected": expected.get(key),
+                        "observed": observed.get(key),
+                    }
+                )
+    if mismatches:
+        raise PhaseABackendDispatchDriftError(mismatches)
+    return current
+
+
+def _extract_phase_a_backend_identities(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    raw = manifest.get("phase_a_backend_identities", manifest.get("identities", manifest))
+    if not isinstance(raw, dict):
+        raise ValueError("Phase A backend identity manifest must be a mapping")
+    identities: dict[str, dict[str, Any]] = {}
+    for value, identity in raw.items():
+        if not isinstance(identity, dict):
+            raise ValueError(f"Phase A backend identity for {value!r} must be a mapping")
+        action_space_value = str(identity.get("action_space_value", value))
+        identities[action_space_value] = dict(identity)
+    return identities
+
+
+def _phase_a_fp8_gemm_dispatch_source_hash() -> str:
+    source = inspect.getsource(_apply_fp8_gemm_kernel).replace("\r\n", "\n")
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
 def resolve_kernel_runtime_activation(kernel_selection: dict[str, Any] | None) -> KernelRuntimeActivationPlan:
@@ -219,6 +338,7 @@ def _apply_fp8_gemm_kernel(
         resolved["fp8_gemm_kernel"] = "vllm-auto"
         return
     normalized = str(value)
+    resolved["fp8_gemm_backend_identity"] = phase_a_fp8_gemm_backend_identity(normalized)
     if normalized == "cublas":
         env["VLLM_DISABLED_KERNELS"] = ",".join(
             [
