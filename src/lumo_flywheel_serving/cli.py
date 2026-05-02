@@ -1304,7 +1304,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--phase-a-screen-method",
         choices=["replay", "full_vllm"],
         default="replay",
-        help="Metadata selector for Phase A screening method; current runner behavior is unchanged.",
+        help=(
+            "Phase A screening method. real+replay halts until the isolated replay "
+            "harness exists; synthetic treats this as metadata only."
+        ),
     )
     auto_tune_kernel_select.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_tune_kernel_select.add_argument("--harness", choices=["real", "synthetic"], default="real")

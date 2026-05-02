@@ -3668,6 +3668,8 @@ axes:
     assert round_spec["base_stack_resolution"] == "bundle"
     assert round_spec["base_bundle_path"] == str(base_bundle_path.resolve())
     assert round_spec["phase_a_screen_method"] == "replay"
+    assert round_spec["phase_a_screen_method_effective"] == "synthetic_fixture"
+    assert "metadata only" in round_spec["phase_a_screen_method_note"]
     assert round_spec["phase_a_backend_identities_ref"] == "phase_a_backend_identities.json"
     identities = round_spec["phase_a_backend_identities"]
     assert set(identities) == {"cublas"}
@@ -3686,6 +3688,62 @@ axes:
     assert result.artifact_paths["phase_a_backend_identities"].endswith(
         "phase_a_backend_identities.json"
     )
+
+
+def test_l0a_kernel_select_real_replay_screen_halts_before_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    harness_inits: list[dict[str, object]] = []
+
+    class _FakeRealMeasurementHarness:
+        def __init__(self, **kwargs: object) -> None:
+            harness_inits.append(kwargs)
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeRealMeasurementHarness)
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="HALT_REASON: phase_a_replay_harness_not_implemented"):
+        runner.run(
+            workload_file=workload_path,
+            action_space_file=action_space_path,
+            baselines=1,
+            screen_measurements_per_combo=1,
+            rescreen_top_k=1,
+            rescreen_measurements_per_candidate=1,
+            parallel_instances="auto",
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            phase_a_screen_method="replay",
+        )
+
+    round_dir = next((repo / "output" / "auto_research").glob("*-l0a-select-*"))
+    run_log = json.loads((round_dir / "run_log.json").read_text(encoding="utf-8"))
+    assert run_log["outcome"] == "ROUND_BLOCKED"
+    assert run_log["HALT_REASON"] == "phase_a_replay_harness_not_implemented"
+    assert run_log["phase_a_screen_method"] == "replay"
+    assert run_log["phase_a_screen_method_effective"] == "not_implemented"
+    assert run_log["smoke_attempted"] is False
+    assert run_log["live_dispatch"]["attempted"] is False
+    round_spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
+    assert round_spec["phase_a_screen_method"] == "replay"
+    assert round_spec["phase_a_screen_method_effective"] == "not_implemented"
+    measurement_trace = json.loads((round_dir / "measurement_trace_combined.json").read_text(encoding="utf-8"))
+    assert measurement_trace["HALT_REASON"] == "phase_a_replay_harness_not_implemented"
+    assert measurement_trace["measurements_attempted"] is False
+    assert not (round_dir / "smoke_trace.json").exists()
+    assert not (round_dir / "measurements.tsv").exists()
+    assert not (round_dir / "runtime_activation_check.json").exists()
+    assert not (round_dir / "live_traces").exists()
+    assert harness_inits == []
 
 
 def test_l0a_kernel_select_records_optional_fp8_fixture_ref_and_hash(tmp_path: Path) -> None:
@@ -3903,6 +3961,7 @@ axes:
         base_stack_resolution="bundle",
         base_bundle_path=base_bundle,
         proxy_port=8101,
+        phase_a_screen_method="full_vllm",
     )
 
     assert len(calls) == 3
@@ -3918,10 +3977,86 @@ axes:
     assert output_bundle["baseline_bundle_id"] == payload["tuned_config_bundle"]["bundle_id"]
     assert output_bundle["round_provenance"]["base_stack_resolution"] == "bundle"
     assert output_bundle["round_provenance"]["base_bundle_id"] == payload["tuned_config_bundle"]["bundle_id"]
-    assert output_bundle["round_provenance"]["phase_a_screen_method"] == "replay"
+    assert output_bundle["round_provenance"]["phase_a_screen_method"] == "full_vllm"
+    assert output_bundle["round_provenance"]["phase_a_screen_method_effective"] == "full_vllm"
 
 
-def test_l0a_kernel_select_real_dispatches_live_smoke_with_runtime_activation(
+def test_l0a_kernel_select_real_replay_blocks_before_live_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    harness_inits: list[dict[str, object]] = []
+    calls: list[dict[str, object]] = []
+
+    class _FakeRealMeasurementHarness:
+        def __init__(self, **kwargs: object) -> None:
+            harness_inits.append(kwargs)
+
+        def measure(self, candidate_vllm_config: dict, **kwargs: object) -> dict[str, object]:
+            calls.append({"candidate_vllm_config": candidate_vllm_config, **kwargs})
+            return {}
+
+    monkeypatch.setattr(auto_research, "RealMeasurementHarness", _FakeRealMeasurementHarness)
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="HALT_REASON: phase_a_replay_harness_not_implemented",
+    ):
+        runner.run(
+            workload_file=workload_path,
+            action_space_file=action_space_path,
+            baselines=1,
+            screen_measurements_per_combo=1,
+            rescreen_top_k=1,
+            rescreen_measurements_per_candidate=1,
+            parallel_instances="auto",
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            max_combos=1,
+            proxy_port=8101,
+            phase_a_screen_method="replay",
+        )
+
+    round_dir = next((repo / "output" / "auto_research").glob("*-l0a-select-*"))
+    run_log = json.loads((round_dir / "run_log.json").read_text(encoding="utf-8"))
+    trace = json.loads((round_dir / "measurement_trace_combined.json").read_text(encoding="utf-8"))
+    round_spec = auto_research.load_yaml_file(round_dir / "round_spec.yaml")
+
+    assert run_log["outcome"] == "ROUND_BLOCKED"
+    assert run_log["round_status"] == "blocked"
+    assert run_log["HALT_REASON"] == "phase_a_replay_harness_not_implemented"
+    assert run_log["halt_reason"] == "phase_a_replay_harness_not_implemented"
+    assert run_log["phase_a_screen_method"] == "replay"
+    assert run_log["phase_a_screen_method_requested"] == "replay"
+    assert run_log["phase_a_screen_method_effective"] == "not_implemented"
+    assert run_log["live_dispatch"]["attempted"] is False
+    assert run_log["smoke_attempted"] is False
+    assert trace["outcome"] == "ROUND_BLOCKED"
+    assert trace["round_status"] == "blocked"
+    assert trace["HALT_REASON"] == "phase_a_replay_harness_not_implemented"
+    assert trace["phase_a_screen_method_requested"] == "replay"
+    assert trace["phase_a_screen_method_effective"] == "not_implemented"
+    assert trace["baseline"] == []
+    assert trace["screen"] == []
+    assert trace["rescreen"] == []
+    assert trace["live_dispatch"]["attempted"] is False
+    assert round_spec["phase_a_screen_method"] == "replay"
+    assert round_spec["phase_a_screen_method_requested"] == "replay"
+    assert round_spec["phase_a_screen_method_effective"] == "not_implemented"
+    assert harness_inits == []
+    assert calls == []
+
+
+def test_l0a_kernel_select_real_full_vllm_dispatches_live_smoke_with_runtime_activation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3982,12 +4117,15 @@ def test_l0a_kernel_select_real_dispatches_live_smoke_with_runtime_activation(
         harness="real",
         max_combos=1,
         proxy_port=8101,
+        phase_a_screen_method="full_vllm",
     )
 
     round_dir = result.round_dir
     run_log = json.loads((round_dir / "run_log.json").read_text(encoding="utf-8"))
     assert run_log["outcome"] == "PASS"
     assert run_log["kernel_selection_runtime_activation"] == "runtime_applied"
+    assert run_log["phase_a_screen_method"] == "full_vllm"
+    assert run_log["phase_a_screen_method_effective"] == "full_vllm"
     assert run_log["limited_mode"] is True
     assert run_log["live_dispatch"]["baseline_rows"] == 1
     assert run_log["live_dispatch"]["screen_rows"] == 1
@@ -4068,6 +4206,7 @@ def test_l0a_kernel_select_real_reaches_reduce_overhead_runtime_activation(
         harness="real",
         max_combos=3,
         proxy_port=8101,
+        phase_a_screen_method="full_vllm",
     )
 
     assert result.survivor_count == 2
@@ -4143,6 +4282,7 @@ axes:
             max_combos=17,
             proxy_port=8101,
             runtime_unsupported_policy="strict",
+            phase_a_screen_method="full_vllm",
         )
 
     round_dir = next((repo / "output" / "auto_research").glob("*-l0a-select-*"))
@@ -4201,6 +4341,7 @@ axes:
             harness="real",
             proxy_port=8101,
             runtime_unsupported_policy="strict",
+            phase_a_screen_method="full_vllm",
         )
 
     round_dir = next((repo / "output" / "auto_research").glob("*-l0a-select-*"))
@@ -4294,6 +4435,7 @@ axes:
         harness="real",
         max_combos=17,
         proxy_port=8101,
+        phase_a_screen_method="full_vllm",
     )
 
     run_log = json.loads((result.round_dir / "run_log.json").read_text(encoding="utf-8"))

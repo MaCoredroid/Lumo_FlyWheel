@@ -94,6 +94,7 @@ AUTO_RESEARCH_HELP_SUBCOMMANDS = PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS + ("run",)
 L0A_ELIMINATION_REASONS = {"nondeterministic", "parity_diverges_from_reference"}
 L0A_DEFAULT_MODEL_ID = "qwen3.5-27b"
 L0A_SELECT_ROUND_TYPE = "l0a_select_only"
+L0A_PHASE_A_REPLAY_HARNESS_NOT_IMPLEMENTED = "phase_a_replay_harness_not_implemented"
 L0B_AUTOTUNE_ROUND_TYPE = "l0b_autotune"
 L0B_KERNEL_TARGETS = {"deltanet", "gatedattn", "fp8_gemm"}
 L0B_DEFAULT_STABLE_WINDOW_REPLAYS = 10
@@ -900,6 +901,14 @@ class L0aKernelSelectRunner:
         phase_a_backend_identities = phase_a_fp8_gemm_backend_identities(
             [combo.fp8_gemm_kernel for combo in combos]
         )
+        phase_a_screen_semantics = self._phase_a_screen_method_semantics(
+            harness=harness,
+            phase_a_screen_method=phase_a_screen_method,
+        )
+        phase_a_screen_semantics = {
+            "phase_a_screen_method_requested": phase_a_screen_method,
+            **phase_a_screen_semantics,
+        }
 
         fanout = self._resolve_parallel_instances(parallel_instances)
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -926,6 +935,7 @@ class L0aKernelSelectRunner:
             "runtime_unsupported_policy": runtime_unsupported_policy if harness == "real" else "not_applicable",
             "base_stack_resolution": base_stack_resolution,
             "phase_a_screen_method": phase_a_screen_method,
+            **phase_a_screen_semantics,
             "baselines": baselines,
             "screen_measurements_per_combo": screen_measurements_per_combo,
             "rescreen_top_k": rescreen_top_k,
@@ -972,6 +982,50 @@ class L0aKernelSelectRunner:
             encoding="utf-8",
         )
         self._write_yaml(round_dir / "action_space.normalized.yaml", [combo.as_dict() for combo in combos])
+
+        if harness == "real" and phase_a_screen_method == "replay":
+            run_log = {
+                "outcome": "ROUND_BLOCKED",
+                "round_status": "blocked",
+                "HALT_REASON": L0A_PHASE_A_REPLAY_HARNESS_NOT_IMPLEMENTED,
+                "halt_reason": L0A_PHASE_A_REPLAY_HARNESS_NOT_IMPLEMENTED,
+                "round_id": round_id,
+                "harness": harness,
+                "phase_a_screen_method": phase_a_screen_method,
+                **phase_a_screen_semantics,
+                "round_spec_ref": "round_spec.yaml",
+                "action_space_ref": "action_space.normalized.yaml",
+                "phase_a_backend_identities_ref": "phase_a_backend_identities.json",
+                "smoke_attempted": False,
+                "live_dispatch": {
+                    "attempted": False,
+                    "reason": "isolated Phase A replay screen harness is not implemented",
+                },
+            }
+            (round_dir / "run_log.json").write_text(json.dumps(run_log, indent=2), encoding="utf-8")
+            (round_dir / "measurement_trace_combined.json").write_text(
+                json.dumps(
+                    {
+                        "round_id": round_id,
+                        "harness": harness,
+                        "outcome": "ROUND_BLOCKED",
+                        "round_status": "blocked",
+                        "HALT_REASON": L0A_PHASE_A_REPLAY_HARNESS_NOT_IMPLEMENTED,
+                        "halt_reason": L0A_PHASE_A_REPLAY_HARNESS_NOT_IMPLEMENTED,
+                        "phase_a_screen_method": phase_a_screen_method,
+                        **phase_a_screen_semantics,
+                        "measurements_attempted": False,
+                        "baseline": [],
+                        "screen": [],
+                        "rescreen": [],
+                        "live_dispatch": run_log["live_dispatch"],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            raise RuntimeError(f"HALT_REASON: {L0A_PHASE_A_REPLAY_HARNESS_NOT_IMPLEMENTED}")
 
         eliminated, survivors, smoke_rows = self._run_smoke(combos)
         if not survivors:
@@ -1220,6 +1274,8 @@ class L0aKernelSelectRunner:
             "rescreen": rescreen_rows,
             "winner": winner.as_dict(),
             "harness": harness,
+            "phase_a_screen_method": phase_a_screen_method,
+            **phase_a_screen_semantics,
             "limited_mode": len(combos) != total_combos_available,
             "kernel_selection_runtime_activation": (
                 "runtime_applied" if harness == "real" else "synthetic_fixture"
@@ -1298,6 +1354,7 @@ class L0aKernelSelectRunner:
                 "base_bundle_id": base_bundle.bundle_id if base_bundle is not None else None,
                 "baseline_vllm_config_source": "base_bundle" if base_bundle is not None else "registry",
                 "phase_a_screen_method": phase_a_screen_method,
+                **phase_a_screen_semantics,
                 "parity_fixture_refs": spec["parity_fixture_refs"],
                 "parity_fixture_content_hashes": spec["parity_fixture_content_hashes"],
                 "phase_a_backend_identities_ref": spec["phase_a_backend_identities_ref"],
@@ -1359,6 +1416,8 @@ class L0aKernelSelectRunner:
             "full_action_space_sweep": len(combos) == total_combos_available,
             "limited_mode": len(combos) != total_combos_available,
             "kernel_selection_runtime_activation": "runtime_applied" if harness == "real" else "synthetic_fixture",
+            "phase_a_screen_method": phase_a_screen_method,
+            **phase_a_screen_semantics,
             "artifact_counts": {
                 "eliminated_rows": len(eliminated),
                 "survivor_rows": len(survivors),
@@ -1566,6 +1625,37 @@ class L0aKernelSelectRunner:
         if "/" in prefix or "\\" in prefix:
             raise RuntimeError("--round-prefix must not contain path separators")
         return prefix
+
+    @staticmethod
+    def _phase_a_screen_method_semantics(
+        *,
+        harness: str,
+        phase_a_screen_method: str,
+    ) -> dict[str, str]:
+        if harness == "synthetic":
+            return {
+                "phase_a_screen_method_effective": "synthetic_fixture",
+                "phase_a_screen_method_note": (
+                    "Synthetic harness measurements are deterministic fixture values; "
+                    f"requested screen method {phase_a_screen_method!r} is metadata only "
+                    "and is not a real replay measurement."
+                ),
+            }
+        if phase_a_screen_method == "full_vllm":
+            return {
+                "phase_a_screen_method_effective": "full_vllm",
+                "phase_a_screen_method_note": (
+                    "Real harness screen measurements use the existing full-vLLM live "
+                    "measurement path."
+                ),
+            }
+        return {
+            "phase_a_screen_method_effective": "not_implemented",
+            "phase_a_screen_method_note": (
+                "Real harness isolated Phase A replay screening is not implemented; "
+                "the runner halts before smoke, runtime activation, or live dispatch."
+            ),
+        }
 
     @staticmethod
     def _parallel_evidence(fanout: int) -> dict[str, Any]:
