@@ -4758,6 +4758,25 @@ def test_l0c_kernel_mutation_synthetic_fp8_gemm_bootstraps_and_populates_bundle(
     fp8_fixture_path = _write_l0a_fp8_fixture(repo)
     workload_path = _write_l0a_workload(repo)
     base_bundle = _write_l0a_bundle(repo)
+    p3a_dir = repo / "output" / "p3a_roofline_probe_20260429T193758Z"
+    p3a_dir.mkdir(parents=True)
+    (p3a_dir / "p3a_roofline_probe.json").write_text(
+        json.dumps(
+            {
+                "probe_count": 1,
+                "wall_clock_s": 1.0,
+                "derived": {},
+                "gpu_poll_stats": {},
+                "p3a_decision": {
+                    "basis": (
+                        "HLD prior plus live decode-dominant single probe; no counter "
+                        "evidence contradicts DeltaNet-first canary ordering."
+                    )
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     runner = auto_research.L0cKernelMutationRunner(
         repo_root=repo,
         registry_path=repo / "model_registry.yaml",
@@ -4808,6 +4827,7 @@ def test_l0c_kernel_mutation_synthetic_fp8_gemm_bootstraps_and_populates_bundle(
     strategy = (result.round_dir / "strategy_brief.md").read_text(encoding="utf-8")
     assert "DeltaNet-first ordering" not in strategy
     assert "Triton FP8 GEMM call boundary" in strategy
+    assert "FFN GEMM pivot brief" in strategy
 
     assert result.bundle_path is not None
     bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]

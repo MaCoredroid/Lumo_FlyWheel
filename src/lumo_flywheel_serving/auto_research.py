@@ -9471,6 +9471,9 @@ class L0cKernelMutationRunner:
         gpu = payload.get("gpu_poll_stats") if isinstance(payload, dict) else {}
         util = gpu.get("utilization_gpu_pct", {}) if isinstance(gpu, dict) else {}
         decision = payload.get("p3a_decision", {}) if isinstance(payload, dict) else {}
+        decision_basis = self._default_p3a_decision_basis(kernel_target)
+        if kernel_target != "fp8_gemm" and isinstance(decision, dict):
+            decision_basis = str(decision.get("basis", decision_basis))
         return [
             (
                 f"- P3a: `{_relative_to_repo(self.repo_root, path)}` "
@@ -9481,15 +9484,7 @@ class L0cKernelMutationRunner:
                 f"gen_tok_s={float(derived.get('observed_tokens_per_second_wall') or 0.0):.3f}, "
                 f"gpu_util_mean={float(util.get('mean') or 0.0):.1f}%."
             ),
-            (
-                "- P3a decision: "
-                + str(
-                    decision.get(
-                        "basis",
-                        self._default_p3a_decision_basis(kernel_target),
-                    )
-                )
-            ),
+            "- P3a decision: " + decision_basis,
             "- P3a limitation: no full Nsight kernel-category split; keep mutations conservative.",
         ]
 
