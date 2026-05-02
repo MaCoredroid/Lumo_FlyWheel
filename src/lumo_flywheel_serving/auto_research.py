@@ -784,6 +784,8 @@ class L0aKernelSelectRunner:
         "cuda_graph_capture",
         "unsupported_knobs_json",
     ]
+    REQUIRED_PARITY_FIXTURE_KEYS = ("deltanet", "gatedattn")
+    OPTIONAL_PARITY_FIXTURE_KEYS = ("fp8_gemm",)
 
     def __init__(
         self,
@@ -878,6 +880,7 @@ class L0aKernelSelectRunner:
         combos = self._load_action_space(action_space_path)
         if not combos:
             raise RuntimeError("action space produced zero L0a combos")
+        fixture_content_hashes = self._parity_fixture_content_hashes(fixture_refs)
         total_combos_available = len(combos)
         if max_combos is not None:
             if max_combos < 1:
@@ -924,10 +927,7 @@ class L0aKernelSelectRunner:
                 key: _relative_to_repo(self.repo_root, value)
                 for key, value in fixture_refs.items()
             },
-            "parity_fixture_content_hashes": {
-                key: fixture_content_hash(value)
-                for key, value in fixture_refs.items()
-            },
+            "parity_fixture_content_hashes": fixture_content_hashes,
             "weight_version_id": weight_version_id,
             "endpoint": f"http://127.0.0.1:{proxy_port}",
             "upstream_port": port,
@@ -1155,7 +1155,11 @@ class L0aKernelSelectRunner:
         self._write_yaml(round_dir / "winner_kernel_select.yaml", winner.as_dict())
 
         determinism_log = self._winner_determinism_log(winner)
-        parity_check = self._winner_parity_check(winner, fixture_refs=fixture_refs)
+        parity_check = self._winner_parity_check(
+            winner,
+            fixture_refs=fixture_refs,
+            fixture_content_hashes=fixture_content_hashes,
+        )
         (round_dir / "determinism_log.json").write_text(json.dumps(determinism_log, indent=2), encoding="utf-8")
         (round_dir / "parity_check.json").write_text(json.dumps(parity_check, indent=2), encoding="utf-8")
         if not determinism_log["pass"] or not parity_check["pass"]:
@@ -1393,24 +1397,32 @@ class L0aKernelSelectRunner:
         source_family = str(descriptor.get("source_family") or descriptor.get("family_id") or "")
         resolved: dict[str, Path] = {}
         missing: list[str] = []
-        for key in ("deltanet", "gatedattn"):
+        for key in self.REQUIRED_PARITY_FIXTURE_KEYS:
             value = refs.get(key)
             if not isinstance(value, str) or not value.strip():
                 missing.append(key)
                 continue
-            path = Path(value)
-            candidates = []
-            if path.is_absolute():
-                candidates.append(path)
-            else:
-                candidates.extend(
-                    [
-                        workload_path.parent / path,
-                        self.repo_root / path,
-                        self.repo_root / "benchmark_blueprints" / "families" / source_family / path,
-                    ]
-                )
-            found = next((candidate.resolve() for candidate in candidates if candidate.is_file()), None)
+            found = self._resolve_parity_fixture_ref_path(
+                workload_path=workload_path,
+                source_family=source_family,
+                value=value,
+            )
+            if found is None:
+                missing.append(f"{key}:{value}")
+                continue
+            resolved[key] = found
+        for key in self.OPTIONAL_PARITY_FIXTURE_KEYS:
+            if key not in refs:
+                continue
+            value = refs.get(key)
+            if not isinstance(value, str) or not value.strip():
+                missing.append(key)
+                continue
+            found = self._resolve_parity_fixture_ref_path(
+                workload_path=workload_path,
+                source_family=source_family,
+                value=value,
+            )
             if found is None:
                 missing.append(f"{key}:{value}")
                 continue
@@ -1421,6 +1433,42 @@ class L0aKernelSelectRunner:
                 + ", ".join(missing)
             )
         return resolved
+
+    def _resolve_parity_fixture_ref_path(
+        self,
+        *,
+        workload_path: Path,
+        source_family: str,
+        value: str,
+    ) -> Path | None:
+        path = Path(value)
+        candidates = []
+        if path.is_absolute():
+            candidates.append(path)
+        else:
+            candidates.extend(
+                [
+                    workload_path.parent / path,
+                    self.repo_root / path,
+                    self.repo_root / "benchmark_blueprints" / "families" / source_family / path,
+                ]
+            )
+        return next((candidate.resolve() for candidate in candidates if candidate.is_file()), None)
+
+    def _parity_fixture_content_hashes(self, fixture_refs: dict[str, Path]) -> dict[str, str]:
+        hashes: dict[str, str] = {}
+        invalid: list[str] = []
+        for key, path in fixture_refs.items():
+            try:
+                hashes[key] = fixture_content_hash(path)
+            except (FileNotFoundError, ValueError) as exc:
+                invalid.append(f"{key}:{exc}")
+        if invalid:
+            raise RuntimeError(
+                "HALT_REASON: l0a_precondition_missing_fixture; invalid parity fixture(s): "
+                + ", ".join(invalid)
+            )
+        return hashes
 
     def _load_action_space(self, path: Path) -> list[L0aKernelCombo]:
         raw = load_yaml_file(path)
@@ -1876,6 +1924,7 @@ class L0aKernelSelectRunner:
         winner: L0aKernelCombo,
         *,
         fixture_refs: dict[str, Path],
+        fixture_content_hashes: dict[str, str],
     ) -> dict[str, Any]:
         return {
             "pass": True,
@@ -1887,7 +1936,7 @@ class L0aKernelSelectRunner:
             "fixture_refs": {
                 key: {
                     "path": _relative_to_repo(self.repo_root, path),
-                    "content_hash": fixture_content_hash(path),
+                    "content_hash": fixture_content_hashes[key],
                 }
                 for key, path in fixture_refs.items()
             },

@@ -223,6 +223,73 @@ def _write_l0a_fixture_pair(repo: Path, source_family: str = "responses-sdk-adap
         )
 
 
+def _write_l0a_fp8_fixture(
+    repo: Path,
+    source_family: str = "responses-sdk-adapter-cutover",
+    *,
+    omit_companion_key: str | None = None,
+) -> Path:
+    fixture_dir = repo / "benchmark_blueprints" / "families" / source_family / "parity_fixture"
+    tier_3_dir = fixture_dir / "tier_3_inputs"
+    tier_4_dir = fixture_dir / "tier_4_vllm_parity"
+    tier_3_dir.mkdir(parents=True, exist_ok=True)
+    tier_4_dir.mkdir(parents=True, exist_ok=True)
+    refs = {
+        "tier_3_probe_input_a_ref": "tier_3_inputs/gemm_input_a.npz",
+        "tier_3_probe_input_b_ref": "tier_3_inputs/gemm_input_b.npz",
+        "tier_3_probe_input_scale_a_ref": "tier_3_inputs/gemm_input_scale_a.npz",
+        "tier_3_probe_input_scale_b_ref": "tier_3_inputs/gemm_input_scale_b.npz",
+        "tier_3_reference_gemm_output_ref": "tier_3_inputs/gemm_reference_output.npz",
+        "tier_4_probe_input_state_ref": "tier_4_vllm_parity/probe_state_snapshots.npz",
+        "tier_4_reference_downstream_logits_ref": "tier_4_vllm_parity/reference_downstream_logits.npz",
+    }
+    for key, ref in refs.items():
+        if key == omit_companion_key:
+            continue
+        (fixture_dir / ref).write_bytes(f"dummy {key}".encode("utf-8"))
+    payload = {
+        "fixture_id": f"{source_family}-fp8-gemm-v1",
+        "kernel_target": "fp8_gemm",
+        "generated_at": "2026-05-02T00:00:00Z",
+        "generated_against": {
+            "weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+            "reference_baseline": {
+                "attention_backend": "vllm-default",
+                "deltanet_kernel": "triton-chunked-delta-v2",
+                "fp8_gemm_kernel": "cublas",
+                "torch_compile_mode": "default",
+                "cuda_graph_capture": "off",
+            },
+            "reference_reproducibility_runs": 3,
+        },
+        "tier_3_probe_count": 2,
+        "tier_3_smoke_probe_count": 1,
+        "tier_3_probe_shapes": [{"M": 1, "N": 8, "K": 4}, {"M": 16, "N": 8, "K": 4}],
+        "tier_3_tolerances": {"rtol_gemm_output": 2.0e-3, "atol_gemm_output": 2.0e-3},
+        "tier_3_parity_check_method": "gemm_output_compare_only",
+        "tier_4_call_site_count": 2,
+        "tier_4_call_site_layer_indices": [0, 4],
+        "tier_4_tolerances": {"rtol_downstream_logit": 1.0e-3, "atol_downstream_logit": 1.0e-3},
+        "tier_4_parity_check_method": "vllm_parity_with_downstream_logit_compounding_guard",
+        **refs,
+    }
+    path = fixture_dir / "fp8_gemm_v1.yaml"
+    path.write_text(auto_research.yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    if omit_companion_key is None:
+        payload["content_hash"] = auto_research.fixture_content_hash(path)
+        path.write_text(auto_research.yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return path
+
+
+def _add_l0a_workload_fp8_ref(workload_path: Path) -> None:
+    payload = auto_research.load_yaml_file(workload_path)
+    assert isinstance(payload, dict)
+    payload["parity_fixture_refs"]["fp8_gemm"] = "parity_fixture/fp8_gemm_v1.yaml"
+    workload_path.write_text(auto_research.yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    payload["workload_distribution_id"] = auto_research.compute_workload_distribution_id(workload_path)
+    workload_path.write_text(auto_research.yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+
 def _write_l0a_workload(repo: Path) -> Path:
     workload_dir = repo / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy"
     workload_dir.mkdir(parents=True, exist_ok=True)
@@ -3537,6 +3604,10 @@ def test_l0a_kernel_select_synthetic_writes_p3_artifacts_and_refuses_production_
     run_log = json.loads((result.round_dir / "run_log.json").read_text(encoding="utf-8"))
     assert run_log["artifact_counts"]["baseline_rows"] == 5
     assert run_log["artifact_counts"]["rescreen_rows"] == 32
+    round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    assert set(round_spec["parity_fixture_refs"]) == {"deltanet", "gatedattn"}
+    assert set(round_spec["parity_fixture_content_hashes"]) == {"deltanet", "gatedattn"}
 
     bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
     assert bundle_payload["round_provenance"]["round_type"] == "l0a_select_only"
@@ -3595,6 +3666,106 @@ axes:
     assert round_spec["base_stack_resolution"] == "bundle"
     assert round_spec["base_bundle_path"] == str(base_bundle_path.resolve())
     assert round_spec["phase_a_screen_method"] == "replay"
+
+
+def test_l0a_kernel_select_records_optional_fp8_fixture_ref_and_hash(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    fp8_fixture_path = _write_l0a_fp8_fixture(repo)
+    workload_path = _write_l0a_workload(repo)
+    _add_l0a_workload_fp8_ref(workload_path)
+    action_space_path = repo / "kernel_search" / "phase_a_action_space.yaml"
+    action_space_path.parent.mkdir(parents=True, exist_ok=True)
+    action_space_path.write_text(
+        """
+axes:
+  attention_backend: [vllm-default]
+  deltanet_kernel: [triton-chunked-delta-v2]
+  fp8_gemm_kernel: [cublas]
+  torch_compile_mode: [default]
+  cuda_graph_capture: ['off']
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        action_space_file=action_space_path,
+        baselines=1,
+        screen_measurements_per_combo=1,
+        rescreen_top_k=1,
+        rescreen_measurements_per_candidate=1,
+        parallel_instances="auto",
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+    )
+
+    expected_hash = auto_research.fixture_content_hash(fp8_fixture_path)
+    expected_ref = "benchmark_blueprints/families/responses-sdk-adapter-cutover/parity_fixture/fp8_gemm_v1.yaml"
+    round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    assert round_spec["parity_fixture_refs"]["fp8_gemm"] == expected_ref
+    assert round_spec["parity_fixture_content_hashes"]["fp8_gemm"] == expected_hash
+    assert set(round_spec["parity_fixture_refs"]) == {"deltanet", "gatedattn", "fp8_gemm"}
+
+    parity_check = json.loads((result.round_dir / "parity_check.json").read_text(encoding="utf-8"))
+    assert parity_check["fixture_refs"]["fp8_gemm"] == {
+        "path": expected_ref,
+        "content_hash": expected_hash,
+    }
+    bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
+    assert bundle_payload["round_provenance"]["parity_fixture_refs"]["fp8_gemm"] == expected_ref
+    assert bundle_payload["round_provenance"]["parity_fixture_content_hashes"]["fp8_gemm"] == expected_hash
+
+
+def test_l0a_kernel_select_fp8_fixture_missing_companion_artifact_fails_clearly(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    _write_l0a_fp8_fixture(repo, omit_companion_key="tier_4_reference_downstream_logits_ref")
+    workload_path = _write_l0a_workload(repo)
+    _add_l0a_workload_fp8_ref(workload_path)
+    action_space_path = repo / "kernel_search" / "phase_a_action_space.yaml"
+    action_space_path.parent.mkdir(parents=True, exist_ok=True)
+    action_space_path.write_text(
+        """
+axes:
+  attention_backend: [vllm-default]
+  deltanet_kernel: [triton-chunked-delta-v2]
+  fp8_gemm_kernel: [cublas]
+  torch_compile_mode: [default]
+  cuda_graph_capture: ['off']
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "HALT_REASON: l0a_precondition_missing_fixture; invalid parity fixture\\(s\\): "
+            "fp8_gemm:.*tier_4_reference_downstream_logits_ref"
+        ),
+    ):
+        runner.run(
+            workload_file=workload_path,
+            action_space_file=action_space_path,
+            baselines=1,
+            screen_measurements_per_combo=1,
+            rescreen_top_k=1,
+            rescreen_measurements_per_candidate=1,
+            parallel_instances="auto",
+            round_root=repo / "output" / "auto_research",
+            harness="synthetic",
+        )
 
 
 def test_l0a_kernel_select_bundle_resolution_requires_bundle_path(tmp_path: Path) -> None:
