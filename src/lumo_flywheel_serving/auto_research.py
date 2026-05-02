@@ -1015,7 +1015,7 @@ class L0aKernelSelectRunner:
                         "phase_a_screen_method": phase_a_screen_method,
                         **phase_a_screen_semantics,
                         "measurements_attempted": False,
-                        "baseline": [],
+                        "baselines": [],
                         "screen": [],
                         "rescreen": [],
                         "live_dispatch": run_log["live_dispatch"],

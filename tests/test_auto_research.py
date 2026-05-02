@@ -4045,7 +4045,7 @@ def test_l0a_kernel_select_real_replay_blocks_before_live_dispatch(
     assert trace["HALT_REASON"] == "phase_a_replay_harness_not_implemented"
     assert trace["phase_a_screen_method_requested"] == "replay"
     assert trace["phase_a_screen_method_effective"] == "not_implemented"
-    assert trace["baseline"] == []
+    assert trace["baselines"] == []
     assert trace["screen"] == []
     assert trace["rescreen"] == []
     assert trace["live_dispatch"]["attempted"] is False
