@@ -15,6 +15,7 @@ from .auto_research import (
     L0aKernelSelectRunner,
     L0bKernelAutotuneRunner,
     L0C_DEFAULT_AGENT_TIMEOUT_S,
+    L0C_KERNEL_TARGETS,
     L0cKernelMutationRunner,
 )
 from .metrics import LatencyCapture, aggregate_by_model, load_telemetry
@@ -1353,7 +1354,8 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     auto_mutate_kernel.add_argument("--base-bundle")
-    auto_mutate_kernel.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
+    l0c_kernel_target_choices = sorted(L0C_KERNEL_TARGETS)
+    auto_mutate_kernel.add_argument("--kernel-target", choices=l0c_kernel_target_choices)
     auto_mutate_kernel.add_argument(
         "--kernel-source-path",
         help=(
@@ -1419,7 +1421,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_apply_and_test.add_argument("--help-only", action="store_true")
     auto_apply_and_test.add_argument("--round-id")
     auto_apply_and_test.add_argument("--iteration")
-    auto_apply_and_test.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
+    auto_apply_and_test.add_argument("--kernel-target", choices=l0c_kernel_target_choices)
     auto_apply_and_test.add_argument("--harness", choices=["real", "synthetic"], default="real")
     auto_apply_and_test.add_argument(
         "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
@@ -1430,7 +1432,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_resume_candidate.add_argument("--help-only", action="store_true")
     auto_resume_candidate.add_argument("--round-id")
     auto_resume_candidate.add_argument("--iteration")
-    auto_resume_candidate.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
+    auto_resume_candidate.add_argument("--kernel-target", choices=l0c_kernel_target_choices)
     auto_resume_candidate.add_argument("--harness", choices=["real"], default="real")
     auto_resume_candidate.add_argument(
         "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
@@ -1446,7 +1448,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_resume_round = auto_research_subparsers.add_parser("resume-round")
     auto_resume_round.add_argument("--help-only", action="store_true")
     auto_resume_round.add_argument("--round-id")
-    auto_resume_round.add_argument("--kernel-target", choices=["deltanet", "gatedattn"])
+    auto_resume_round.add_argument("--kernel-target", choices=l0c_kernel_target_choices)
     auto_resume_round.add_argument("--harness", choices=["real"], default="real")
     auto_resume_round.add_argument(
         "--round-root", default=str(REPO_ROOT / "output" / "auto_research")

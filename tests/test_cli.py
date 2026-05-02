@@ -962,6 +962,45 @@ def test_auto_research_mutate_kernel_registered(capsys: pytest.CaptureFixture[st
     }
 
 
+@pytest.mark.parametrize(
+    "subcommand,extra_args",
+    [
+        (
+            "mutate-kernel",
+            [
+                "--workload-file",
+                "x",
+                "--base-bundle",
+                "x",
+                "--kernel-source-path",
+                "x",
+                "--parity-fixture",
+                "x",
+            ],
+        ),
+        ("apply-and-test", ["--round-id", "r", "--iteration", "001"]),
+        ("resume-candidate", ["--round-id", "r", "--iteration", "001"]),
+        ("resume-round", ["--round-id", "r"]),
+    ],
+)
+def test_auto_research_l0c_cli_subcommands_accept_fp8_gemm_kernel_target(
+    subcommand: str,
+    extra_args: list[str],
+) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "auto-research",
+            subcommand,
+            "--help-only",
+            *extra_args,
+            "--kernel-target",
+            "fp8_gemm",
+        ]
+    )
+    assert args.kernel_target == "fp8_gemm"
+
+
 def test_auto_research_apply_and_test_registered(capsys: pytest.CaptureFixture[str]) -> None:
     parser = cli.build_parser()
     args = parser.parse_args(

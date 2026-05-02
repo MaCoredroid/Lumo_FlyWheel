@@ -27,6 +27,7 @@ from .parity_fixture import (
     ACTUALLY_RESOLVED_KEYS,
     fetch_actually_resolved_kernel_selection,
     fixture_content_hash,
+    validate_fixture,
 )
 from .parity_probe import ParityProbeResult, run_parity_probe
 from .registry import ModelConfig, load_registry
@@ -95,7 +96,8 @@ L0B_DEFAULT_STABLE_WINDOW_REPLAYS = 10
 L0B_DEFAULT_WARMUP_REPLAYS = 5
 L0B_DEFAULT_MIN_HEADROOM_PCT = 0.03
 L0C_MUTATION_ROUND_TYPE = "l0c_mutation"
-L0C_KERNEL_TARGETS = {"deltanet", "gatedattn"}
+L0C_KERNEL_TARGETS = {"deltanet", "gatedattn", "fp8_gemm"}
+L0C_KERNEL_TARGETS_RENDERED = ", ".join(sorted(L0C_KERNEL_TARGETS))
 L0C_DEFAULT_ACCEPTED_CAP = 12
 L0C_DEFAULT_TOTAL_ATTEMPT_CAP = 36
 L0C_DEFAULT_ROUND_TIMEOUT_HOURS = 12.0
@@ -5897,9 +5899,7 @@ not spend iteration budget on online research inside the agent loop.
 - Your mutation MUST pass parity. Latency is irrelevant if parity fails.
 
 # Parity contract
-- Logit-space tolerance: rtol={{rtol_logit}} / atol={{atol_logit}}
-- (DeltaNet only) State-snapshot tolerance: rtol={{rtol_state}} / atol={{atol_state}}
-- Recurrent-state checkpoints at: {{state_checkpoints_at_token}}
+{{parity_contract}}
 
 # Reading prior-iteration history
 The canonical per-iteration record is `candidates/<NNN>/parity_check.json`
@@ -6095,7 +6095,7 @@ class L0cKernelMutationRunner:
         if harness not in {"real", "synthetic"}:
             raise RuntimeError(f"Unsupported harness: {harness}")
         if kernel_target not in L0C_KERNEL_TARGETS:
-            raise RuntimeError("--kernel-target must be one of deltanet, gatedattn")
+            raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
         if base_measurements < 1:
             raise RuntimeError("--base-measurements must be >= 1")
         if accepted_iteration_cap < 1:
@@ -6144,6 +6144,13 @@ class L0cKernelMutationRunner:
         # captures logits from a specific runtime config, and any difference (e.g.
         # attention_backend) makes parity overshoot dominated by config drift instead
         # of kernel-mutation effects. Fail fast with a precise diff.
+        self._assert_l0c_fixture_schema(
+            fixture_payload,
+            fixture_path=fixture_path,
+            descriptor=descriptor,
+            kernel_target=kernel_target,
+            weight_version_id=weight_version_id,
+        )
         self._assert_fixture_matches_base(fixture_payload, base, fixture_path)
 
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -6606,7 +6613,19 @@ class L0cKernelMutationRunner:
                     rejected_count=len(rejected_rows),
                     parity_fixture_path=fixture_path,
                 ),
-                layer_0_fp8_gemm={},
+                layer_0_fp8_gemm=self._layer_payload(
+                    kernel_target=kernel_target,
+                    target="fp8_gemm",
+                    base=base,
+                    winning_row=winning_iteration,
+                    paired_baseline_mean=paired_baseline_mean,
+                    winner_mean=winner_mean,
+                    terminal_condition=terminal_condition,
+                    accepted_count=accepted_count,
+                    total_attempts=total_attempts,
+                    rejected_count=len(rejected_rows),
+                    parity_fixture_path=fixture_path,
+                ),
                 objective={
                     "metric": "l0c_mutation_eval_throughput",
                     "value": winner_mean,
@@ -6692,7 +6711,7 @@ class L0cKernelMutationRunner:
         if harness not in {"real", "synthetic"}:
             raise RuntimeError(f"Unsupported harness: {harness}")
         if kernel_target not in L0C_KERNEL_TARGETS:
-            raise RuntimeError("--kernel-target must be one of deltanet, gatedattn")
+            raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
         round_dir = Path(round_root).resolve() / round_id
         if not round_dir.is_dir():
             raise RuntimeError(f"L0c round directory not found: {round_dir}")
@@ -6828,7 +6847,7 @@ class L0cKernelMutationRunner:
         if harness != "real":
             raise RuntimeError("resume-candidate currently supports --harness real only")
         if kernel_target not in L0C_KERNEL_TARGETS:
-            raise RuntimeError("--kernel-target must be one of deltanet, gatedattn")
+            raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
         round_dir = Path(round_root).resolve() / round_id
         if not round_dir.is_dir():
             raise RuntimeError(f"L0c round directory not found: {round_dir}")
@@ -7182,7 +7201,7 @@ class L0cKernelMutationRunner:
         if harness != "real":
             raise RuntimeError("resume-round currently supports --harness real only")
         if kernel_target not in L0C_KERNEL_TARGETS:
-            raise RuntimeError("--kernel-target must be one of deltanet, gatedattn")
+            raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
 
         round_started = time.time()
         round_dir = Path(round_root).resolve() / round_id
@@ -7770,6 +7789,35 @@ class L0cKernelMutationRunner:
                 f"  fixture: {fixture_path}\n"
                 f"  endpoint: {endpoint}\n"
                 "  diffs:\n" + "\n".join(diffs)
+            )
+
+    def _assert_l0c_fixture_schema(
+        self,
+        fixture_payload: Any,
+        *,
+        fixture_path: Path,
+        descriptor: dict[str, Any],
+        kernel_target: str,
+        weight_version_id: str,
+    ) -> None:
+        if kernel_target != "fp8_gemm":
+            return
+        if not isinstance(fixture_payload, dict):
+            raise RuntimeError(f"parity fixture is not a mapping: {fixture_path}")
+        family_id = str(descriptor.get("source_family") or descriptor.get("family_id") or "")
+        tier_3_probe_count = fixture_payload.get("tier_3_probe_count")
+        validation = validate_fixture(
+            fixture_path,
+            repo_root=self.repo_root,
+            expected_family_id=family_id,
+            expected_kernel_target=kernel_target,
+            expected_probe_count=tier_3_probe_count if isinstance(tier_3_probe_count, int) else 0,
+            expected_weight_version_id=weight_version_id,
+        )
+        if validation.errors:
+            raise RuntimeError(
+                "HALT_REASON: l0c_precondition_missing_fixture; invalid parity fixture: "
+                f"{kernel_target}: " + ", ".join(validation.errors)
             )
 
     @staticmethod
@@ -8811,15 +8859,17 @@ class L0cKernelMutationRunner:
         return text[:limit]
 
     @classmethod
-    def _format_preflight_patterns(cls, *, tier: str) -> str:
-        patterns = cls._l0c_preflight_patterns(tier=tier)
+    def _format_preflight_patterns(cls, *, tier: str, kernel_target: str = "deltanet") -> str:
+        patterns = cls._l0c_preflight_patterns(tier=tier, kernel_target=kernel_target)
         if not patterns:
             return "- None configured."
         return "\n".join(f"- `{pattern_id}` — {description}" for pattern_id, description in patterns)
 
     @staticmethod
-    def _l0c_preflight_patterns(*, tier: str) -> list[tuple[str, str]]:
+    def _l0c_preflight_patterns(*, tier: str, kernel_target: str = "deltanet") -> list[tuple[str, str]]:
         if tier == "soft":
+            if kernel_target != "deltanet":
+                return []
             return [
                 (
                     "deltanet_g_pre_offset_removed",
@@ -9292,33 +9342,17 @@ class L0cKernelMutationRunner:
                 "or narrow one load/store behavior at a time."
             ),
             (
-                "- Do not trade numerical order or recurrent state semantics for speed; "
+                "- Do not trade numerical order or target-specific state semantics for speed; "
                 "parity dominates throughput."
             ),
             *p3a_lines,
             "",
             "## Forbidden Mutation Families",
             "",
+            *self._l0c_forbidden_mutation_lines(kernel_target),
             (
-                "- Do not add or expand `.cg`/cache modifiers on dot-adjacent "
-                "`w` or `k` load families."
-            ),
-            "- Do not add store hints or change store cache policy.",
-            "- Do not make broad cache-policy edits spanning both `v` and `h0`/state paths.",
-            "- Do not add new gate-path cache-policy hints on `g`/`gk` loads.",
-            "- Do not rebase `g`/`gk` pointers or rewrite their base/address arithmetic.",
-            "- Do not introduce shared `t_start` rewrites across dot-adjacent address paths.",
-            (
-                "- Do not change `v` load eviction/cache policy; the last canary "
-                "`v` `evict_first` probe diverged immediately."
-            ),
-            (
-                "- Do not change tile sizes, grid shape, signatures, recurrence order, "
-                "or `tl.dot` operand ordering."
-            ),
-            (
-            "- Do not retry a mutation hash listed in `mutations_rejected.tsv` "
-            "or `prior_mutations_rejected.tsv`."
+                "- Do not retry a mutation hash listed in `mutations_rejected.tsv` "
+                "or `prior_mutations_rejected.tsv`."
             ),
             (
                 "- If an older `BLOCKED.md` suggestion conflicts with this forbidden "
@@ -9350,6 +9384,34 @@ class L0cKernelMutationRunner:
             "",
         ]
         return "\n".join(lines)
+
+    @staticmethod
+    def _l0c_forbidden_mutation_lines(kernel_target: str) -> list[str]:
+        if kernel_target == "fp8_gemm":
+            return [
+                "- Do not change the GEMM call signature, tensor layout contract, dtype contract, or scale semantics.",
+                "- Do not change tile sizes, grid shape, launch metadata, or `tl.dot` operand ordering.",
+                "- Do not edit fixture capture, replay, parity, controller, or measurement code.",
+            ]
+        return [
+            (
+                "- Do not add or expand `.cg`/cache modifiers on dot-adjacent "
+                "`w` or `k` load families."
+            ),
+            "- Do not add store hints or change store cache policy.",
+            "- Do not make broad cache-policy edits spanning both `v` and `h0`/state paths.",
+            "- Do not add new gate-path cache-policy hints on `g`/`gk` loads.",
+            "- Do not rebase `g`/`gk` pointers or rewrite their base/address arithmetic.",
+            "- Do not introduce shared `t_start` rewrites across dot-adjacent address paths.",
+            (
+                "- Do not change `v` load eviction/cache policy; the last canary "
+                "`v` `evict_first` probe diverged immediately."
+            ),
+            (
+                "- Do not change tile sizes, grid shape, signatures, recurrence order, "
+                "or `tl.dot` operand ordering."
+            ),
+        ]
 
     def _latest_p3a_strategy_lines(self) -> list[str]:
         output_root = self.repo_root / "output"
@@ -9928,7 +9990,19 @@ class L0cKernelMutationRunner:
                     rejected_count=len(rejected_rows),
                     parity_fixture_path=fixture_path,
                 ),
-                layer_0_fp8_gemm={},
+                layer_0_fp8_gemm=self._layer_payload(
+                    kernel_target=kernel_target,
+                    target="fp8_gemm",
+                    base=base,
+                    winning_row=winning_iteration,
+                    paired_baseline_mean=paired_baseline_mean,
+                    winner_mean=winner_mean,
+                    terminal_condition=terminal_condition,
+                    accepted_count=accepted_count,
+                    total_attempts=total_attempts,
+                    rejected_count=len(rejected_rows),
+                    parity_fixture_path=fixture_path,
+                ),
                 objective={
                     "metric": "l0c_mutation_eval_throughput",
                     "value": winner_mean,
@@ -10066,13 +10140,14 @@ class L0cKernelMutationRunner:
         error_detail: str | None = None,
         **extra_fields: Any,
     ) -> None:
+        parity_metadata = self._l0c_parity_metadata(kernel_target)
         payload: dict[str, Any] = {
             "pass": pass_,
             "reason": reason,
             "fixture_id": fixture_id,
             "kernel_target": kernel_target,
             "probe_count": 64,
-            "checkpoints_checked": [1, 1024] if kernel_target == "deltanet" else [1],
+            **parity_metadata,
         }
         if first_diverging_probe is not None:
             payload["first_diverging_probe"] = int(first_diverging_probe)
@@ -10086,6 +10161,27 @@ class L0cKernelMutationRunner:
         (iteration_dir / "parity_check.json").write_text(
             json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
         )
+
+    @staticmethod
+    def _l0c_parity_metadata(kernel_target: str) -> dict[str, Any]:
+        if kernel_target == "deltanet":
+            return {
+                "checkpoints_checked": [1, 1024],
+                "parity_scope": "logit_plus_recurrent_state",
+            }
+        if kernel_target == "fp8_gemm":
+            return {
+                "checkpoints_checked": [],
+                "tiers_checked": [
+                    "tier_3_gemm_output_compare",
+                    "tier_4_downstream_logit_guard",
+                ],
+                "parity_scope": "fp8_gemm_phase_b_bootstrap_metadata",
+            }
+        return {
+            "checkpoints_checked": [1],
+            "parity_scope": "per_token_logit",
+        }
 
     def _layer_payload(
         self,
@@ -10102,13 +10198,17 @@ class L0cKernelMutationRunner:
         rejected_count: int,
         parity_fixture_path: Path,
     ) -> dict[str, Any]:
-        existing = (
-            dict(base.layer_0_deltanet) if target == "deltanet" else dict(base.layer_0_gatedattn)
-        )
+        existing_layers = {
+            "deltanet": dict(base.layer_0_deltanet),
+            "gatedattn": dict(base.layer_0_gatedattn),
+            "fp8_gemm": dict(base.layer_0_fp8_gemm),
+        }
+        existing = existing_layers.get(target, {})
         if kernel_target != target:
             return existing
         existing.setdefault("l0a_select", existing.get("l0a_select", {}))
         existing.setdefault("l0b_autotune", existing.get("l0b_autotune", {}))
+        parity_metadata = self._l0c_parity_metadata(kernel_target)
         existing["l0c_mutation"] = {
             "diff_ref": str(Path("candidates") / winning_row["iteration"] / "mutation.patch"),
             "mutation_hash": winning_row["mutation_hash"],
@@ -10122,7 +10222,7 @@ class L0cKernelMutationRunner:
             "parity_attestation": {
                 "fixture_path": _relative_to_repo(self.repo_root, parity_fixture_path),
                 "fixture_content_hash": fixture_content_hash(parity_fixture_path),
-                "checkpoints_checked": [1, 1024] if kernel_target == "deltanet" else [1],
+                **parity_metadata,
             },
         }
         return existing
@@ -10203,6 +10303,31 @@ class L0cKernelMutationRunner:
             checkpoints = fixture_payload.get("state_checkpoints_at_token")
             if isinstance(checkpoints, list):
                 state_checkpoints = [str(token) for token in checkpoints]
+            if kernel_target == "fp8_gemm":
+                tier_3_tolerances = fixture_payload.get("tier_3_tolerances") or {}
+                tier_4_tolerances = fixture_payload.get("tier_4_tolerances") or {}
+                if isinstance(tier_3_tolerances, dict):
+                    rtol_logit = str(tier_3_tolerances.get("rtol_gemm_output", ""))
+                    atol_logit = str(tier_3_tolerances.get("atol_gemm_output", ""))
+                if isinstance(tier_4_tolerances, dict):
+                    rtol_state = str(tier_4_tolerances.get("rtol_downstream_logit", ""))
+                    atol_state = str(tier_4_tolerances.get("atol_downstream_logit", ""))
+        if kernel_target == "fp8_gemm":
+            parity_contract = "\n".join(
+                [
+                    f"- Tier 3 GEMM-output tolerance: rtol={rtol_logit} / atol={atol_logit}",
+                    f"- Tier 4 downstream-logit guard tolerance: rtol={rtol_state} / atol={atol_state}",
+                    "- Phase B bootstrap only: the real Triton FP8 replay/capture harness must be supplied by a future Phase A Triton-source winner.",
+                ]
+            )
+        else:
+            parity_contract = "\n".join(
+                [
+                    f"- Logit-space tolerance: rtol={rtol_logit} / atol={atol_logit}",
+                    f"- (DeltaNet only) State-snapshot tolerance: rtol={rtol_state} / atol={atol_state}",
+                    f"- Recurrent-state checkpoints at: {', '.join(state_checkpoints)}",
+                ]
+            )
         substitutions = {
             "iteration": "{{iteration}}",
             "round_id": round_id,
@@ -10218,15 +10343,18 @@ class L0cKernelMutationRunner:
             "rtol_state": rtol_state,
             "atol_state": atol_state,
             "state_checkpoints_at_token": ", ".join(state_checkpoints),
+            "parity_contract": parity_contract,
             "strategy_brief": strategy_brief.strip(),
             "positive_memory_winning_diffs_block": (
                 positive_memory.strip() or "No prior winning L0c diffs found for this kernel target."
             ),
             "tier_1_pattern_list_with_descriptions": self._format_preflight_patterns(
-                tier="soft"
+                tier="soft",
+                kernel_target=kernel_target,
             ),
             "tier_2_pattern_list_with_descriptions": self._format_preflight_patterns(
-                tier="safety_critical"
+                tier="safety_critical",
+                kernel_target=kernel_target,
             ),
         }
         rendered = L0C_ITERATION_BRIEF_TEMPLATE

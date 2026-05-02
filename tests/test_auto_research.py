@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import sys
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -246,7 +247,8 @@ def _write_l0a_fp8_fixture(
     for key, ref in refs.items():
         if key == omit_companion_key:
             continue
-        (fixture_dir / ref).write_bytes(f"dummy {key}".encode("utf-8"))
+        with zipfile.ZipFile(fixture_dir / ref, mode="w") as archive:
+            archive.writestr(f"{key}.npy", b"dummy")
     payload = {
         "fixture_id": f"{source_family}-fp8-gemm-v1",
         "kernel_target": "fp8_gemm",
@@ -4740,11 +4742,120 @@ def test_l0c_kernel_mutation_synthetic_writes_p5_artifacts_and_passes(tmp_path: 
     assert l0c_block["total_attempt_count"] == 5
     assert l0c_block["rejected_count"] == 1
     assert l0c_block["parity_attestation"]["checkpoints_checked"] == [1, 1024]
+    assert bundle_payload["layer_0_fp8_gemm"] == {}
     # AR.48b counter audit: accepted + rejected == total.
     assert (
         l0c_block["accepted_count"] + l0c_block["rejected_count"]
         == l0c_block["total_attempt_count"]
     )
+
+
+def test_l0c_kernel_mutation_synthetic_fp8_gemm_bootstraps_and_populates_bundle(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    fp8_fixture_path = _write_l0a_fp8_fixture(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="fp8_gemm",
+        kernel_source_path="kernels/fp8_gemm/triton_scaled_mm.py",
+        parity_fixture=fp8_fixture_path,
+        base_measurements=2,
+        accepted_iteration_cap=2,
+        total_attempt_cap=4,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+    )
+
+    assert result.outcome == "ROUND_PASSED"
+    assert result.kernel_target == "fp8_gemm"
+    round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    assert round_spec["kernel_target"] == "fp8_gemm"
+    assert round_spec["parity_fixture_id"] == "responses-sdk-adapter-cutover-fp8-gemm-v1"
+    assert round_spec["parity_fixture_content_hash"] == auto_research.fixture_content_hash(
+        fp8_fixture_path
+    )
+
+    parity = json.loads(
+        (result.round_dir / "candidates" / "001" / "parity_check.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert parity["pass"] is True
+    assert parity["kernel_target"] == "fp8_gemm"
+    assert parity["fixture_id"] == "responses-sdk-adapter-cutover-fp8-gemm-v1"
+    assert parity["checkpoints_checked"] == []
+    assert parity["tiers_checked"] == [
+        "tier_3_gemm_output_compare",
+        "tier_4_downstream_logit_guard",
+    ]
+
+    brief = (result.round_dir / "iteration_brief.md").read_text(encoding="utf-8")
+    assert "Tier 3 GEMM-output tolerance" in brief
+    assert "g`/`gk`" not in brief
+
+    assert result.bundle_path is not None
+    bundle_payload = auto_research.load_yaml_file(result.bundle_path)["tuned_config_bundle"]
+    assert bundle_payload["layer_0_deltanet"] == {}
+    assert bundle_payload["layer_0_gatedattn"] == {}
+    fp8_l0c = bundle_payload["layer_0_fp8_gemm"]["l0c_mutation"]
+    assert fp8_l0c["accepted_count"] == 2
+    assert fp8_l0c["parity_attestation"]["fixture_content_hash"] == round_spec[
+        "parity_fixture_content_hash"
+    ]
+    assert fp8_l0c["parity_attestation"]["tiers_checked"] == [
+        "tier_3_gemm_output_compare",
+        "tier_4_downstream_logit_guard",
+    ]
+
+
+def test_l0c_kernel_mutation_fp8_gemm_validates_fixture_schema(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    fp8_fixture_path = _write_l0a_fp8_fixture(
+        repo,
+        omit_companion_key="tier_4_reference_downstream_logits_ref",
+    )
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(repo)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "HALT_REASON: l0c_precondition_missing_fixture; invalid parity fixture: "
+            "fp8_gemm:.*tier_4_reference_downstream_logits_ref"
+        ),
+    ):
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="fp8_gemm",
+            kernel_source_path="kernels/fp8_gemm/triton_scaled_mm.py",
+            parity_fixture=fp8_fixture_path,
+            base_measurements=1,
+            accepted_iteration_cap=1,
+            total_attempt_cap=1,
+            round_timeout_hours=1.0,
+            round_root=repo / "output" / "auto_research",
+            harness="synthetic",
+        )
 
 
 def test_l0c_kernel_mutation_synthetic_halts_on_proposer_stuck(tmp_path: Path) -> None:
