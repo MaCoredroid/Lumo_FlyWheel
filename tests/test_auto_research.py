@@ -3548,6 +3548,81 @@ def test_l0a_kernel_select_synthetic_writes_p3_artifacts_and_refuses_production_
         validate_bundle_load_policy(load_tuned_config_bundle(result.bundle_path), bundle_confidence_policy="passthrough")
 
 
+def test_l0a_kernel_select_phase_a_cli_prereq_metadata_and_round_prefix(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = repo / "kernel_search" / "phase_a_action_space.yaml"
+    action_space_path.parent.mkdir(parents=True, exist_ok=True)
+    action_space_path.write_text(
+        """
+axes:
+  attention_backend: [vllm-default]
+  deltanet_kernel: [triton-chunked-delta-v2]
+  fp8_gemm_kernel: [cublas]
+  torch_compile_mode: [default]
+  cuda_graph_capture: ['off']
+""",
+        encoding="utf-8",
+    )
+    base_bundle_path = _write_l0a_bundle(repo)
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    result = runner.run(
+        workload_file=workload_path,
+        action_space_file=action_space_path,
+        baselines=1,
+        screen_measurements_per_combo=1,
+        rescreen_top_k=1,
+        rescreen_measurements_per_candidate=1,
+        parallel_instances="auto",
+        round_root=repo / "output" / "auto_research",
+        harness="synthetic",
+        base_stack_resolution="bundle",
+        base_bundle_path=base_bundle_path,
+        round_prefix="qwen3.5-27b-fp8-gemm-phase-a",
+        phase_a_screen_method="replay",
+    )
+
+    assert result.round_id.startswith("qwen3.5-27b-fp8-gemm-phase-a-")
+    assert result.round_dir.name == result.round_id
+    round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    assert round_spec["base_stack_resolution"] == "bundle"
+    assert round_spec["base_bundle_path"] == str(base_bundle_path.resolve())
+    assert round_spec["phase_a_screen_method"] == "replay"
+
+
+def test_l0a_kernel_select_bundle_resolution_requires_bundle_path(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    action_space_path = _write_l0a_action_space(repo / "kernel_search" / "l0a_action_space.yaml")
+    runner = auto_research.L0aKernelSelectRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="--base-bundle-path is required"):
+        runner.run(
+            workload_file=workload_path,
+            action_space_file=action_space_path,
+            baselines=1,
+            screen_measurements_per_combo=1,
+            rescreen_top_k=1,
+            rescreen_measurements_per_candidate=1,
+            parallel_instances="auto",
+            round_root=repo / "output" / "auto_research",
+            harness="synthetic",
+            base_stack_resolution="bundle",
+        )
+
+
 def test_l0a_kernel_select_real_dispatches_live_smoke_with_runtime_activation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

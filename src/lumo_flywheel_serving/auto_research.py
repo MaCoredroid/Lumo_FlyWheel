@@ -818,11 +818,25 @@ class L0aKernelSelectRunner:
         triton_cache_root: str | Path = "/tmp/triton_cache",
         state_root: str | Path | None = None,
         runtime_unsupported_policy: str = "partition",
+        base_stack_resolution: str = "vllm_default",
+        base_bundle_path: str | Path | None = None,
+        round_prefix: str | None = None,
+        phase_a_screen_method: str = "replay",
     ) -> L0aKernelSelectResult:
         if harness not in {"real", "synthetic"}:
             raise RuntimeError(f"Unsupported harness: {harness}")
         if runtime_unsupported_policy not in {"partition", "strict"}:
             raise RuntimeError("--runtime-unsupported-policy must be 'partition' or 'strict'")
+        if base_stack_resolution not in {"vllm_default", "reference_baseline", "bundle"}:
+            raise RuntimeError(
+                "--base-stack-resolution must be one of: vllm_default, reference_baseline, bundle"
+            )
+        if base_stack_resolution == "bundle" and (
+            base_bundle_path is None or not str(base_bundle_path).strip()
+        ):
+            raise RuntimeError("--base-bundle-path is required when --base-stack-resolution=bundle")
+        if phase_a_screen_method not in {"replay", "full_vllm"}:
+            raise RuntimeError("--phase-a-screen-method must be one of: replay, full_vllm")
         if min(baselines, screen_measurements_per_combo, rescreen_top_k, rescreen_measurements_per_candidate) < 1:
             raise RuntimeError("L0a kernel selection counts must all be >= 1")
 
@@ -847,7 +861,10 @@ class L0aKernelSelectRunner:
 
         fanout = self._resolve_parallel_instances(parallel_instances)
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-        round_id = f"{model_id}-{descriptor.get('family_id', 'unknown')}-l0a-select-{timestamp}"
+        if round_prefix is not None and round_prefix.strip():
+            round_id = f"{self._sanitize_round_prefix(round_prefix)}-{timestamp}"
+        else:
+            round_id = f"{model_id}-{descriptor.get('family_id', 'unknown')}-l0a-select-{timestamp}"
         root = Path(round_root).resolve()
         round_dir = root / round_id
         if round_dir.exists():
@@ -865,6 +882,8 @@ class L0aKernelSelectRunner:
             "action_space_file": str(action_space_path),
             "harness": harness,
             "runtime_unsupported_policy": runtime_unsupported_policy if harness == "real" else "not_applicable",
+            "base_stack_resolution": base_stack_resolution,
+            "phase_a_screen_method": phase_a_screen_method,
             "baselines": baselines,
             "screen_measurements_per_combo": screen_measurements_per_combo,
             "rescreen_top_k": rescreen_top_k,
@@ -890,6 +909,8 @@ class L0aKernelSelectRunner:
             "proxy_port": proxy_port,
             "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
         }
+        if base_bundle_path is not None:
+            spec["base_bundle_path"] = str(Path(base_bundle_path).resolve())
         self._write_yaml(round_dir / "round_spec.yaml", spec)
         self._write_yaml(round_dir / "action_space.normalized.yaml", [combo.as_dict() for combo in combos])
 
@@ -1416,6 +1437,15 @@ class L0aKernelSelectRunner:
         if fanout < 1:
             raise RuntimeError("--parallel-instances must be >= 1")
         return fanout
+
+    @staticmethod
+    def _sanitize_round_prefix(value: str) -> str:
+        prefix = str(value).strip()
+        if not prefix:
+            raise RuntimeError("--round-prefix must not be empty when provided")
+        if "/" in prefix or "\\" in prefix:
+            raise RuntimeError("--round-prefix must not contain path separators")
+        return prefix
 
     @staticmethod
     def _parallel_evidence(fanout: int) -> dict[str, Any]:

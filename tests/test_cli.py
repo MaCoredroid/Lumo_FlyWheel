@@ -837,10 +837,58 @@ def test_auto_research_tune_kernel_select_registered(capsys: pytest.CaptureFixtu
     args = parser.parse_args(["auto-research", "tune-kernel-select", "--help-only"])
     assert args.func(args) == 0
     assert args.runtime_unsupported_policy == "partition"
+    assert args.base_stack_resolution == "vllm_default"
+    assert args.base_bundle_path is None
+    assert args.round_prefix is None
+    assert args.phase_a_screen_method == "replay"
     assert json.loads(capsys.readouterr().out) == {
         "subcommand": "tune-kernel-select",
         "status": "registered",
     }
+
+
+def test_auto_research_tune_kernel_select_phase_a_flags_parse() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "auto-research",
+            "tune-kernel-select",
+            "--workload-file",
+            "workload.yaml",
+            "--action-space-file",
+            "action_space.yaml",
+            "--base-stack-resolution",
+            "bundle",
+            "--base-bundle-path",
+            "bundle.yaml",
+            "--round-prefix",
+            "qwen3.5-27b-fp8-gemm-phase-a",
+            "--phase-a-screen-method",
+            "full_vllm",
+        ]
+    )
+    assert args.base_stack_resolution == "bundle"
+    assert args.base_bundle_path == "bundle.yaml"
+    assert args.round_prefix == "qwen3.5-27b-fp8-gemm-phase-a"
+    assert args.phase_a_screen_method == "full_vllm"
+
+
+def test_auto_research_tune_kernel_select_bundle_resolution_requires_bundle_path() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "auto-research",
+            "tune-kernel-select",
+            "--workload-file",
+            "workload.yaml",
+            "--action-space-file",
+            "action_space.yaml",
+            "--base-stack-resolution",
+            "bundle",
+        ]
+    )
+    with pytest.raises(SystemExit, match="--base-bundle-path is required"):
+        args.func(args)
 
 
 def test_auto_research_tune_kernel_autotune_registered(capsys: pytest.CaptureFixture[str]) -> None:

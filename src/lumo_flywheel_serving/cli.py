@@ -882,6 +882,8 @@ def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
     _require_auto_research_args(args, "workload_file", "action_space_file")
+    if args.base_stack_resolution == "bundle" and not args.base_bundle_path:
+        raise SystemExit("--base-bundle-path is required when --base-stack-resolution=bundle")
     runner = L0aKernelSelectRunner(
         repo_root=REPO_ROOT,
         registry_path=args.registry,
@@ -907,6 +909,10 @@ def cmd_auto_research_tune_kernel_select(args: argparse.Namespace) -> int:
         triton_cache_root=args.triton_cache_root,
         state_root=args.state_root,
         runtime_unsupported_policy=args.runtime_unsupported_policy,
+        base_stack_resolution=args.base_stack_resolution,
+        base_bundle_path=args.base_bundle_path,
+        round_prefix=args.round_prefix,
+        phase_a_screen_method=args.phase_a_screen_method,
     )
     print(json.dumps(result.as_dict(), indent=2))
     return 0
@@ -1276,6 +1282,28 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["partition", "strict"],
         default="partition",
         help="In real mode, either partition unsupported kernel candidates before live dispatch or halt strictly.",
+    )
+    auto_tune_kernel_select.add_argument(
+        "--base-stack-resolution",
+        choices=["vllm_default", "reference_baseline", "bundle"],
+        default="vllm_default",
+        help="How Phase A records the baseline stack source; bundle requires --base-bundle-path.",
+    )
+    auto_tune_kernel_select.add_argument(
+        "--base-bundle-path",
+        default=None,
+        help="Path to a baseline bundle; required only when --base-stack-resolution=bundle.",
+    )
+    auto_tune_kernel_select.add_argument(
+        "--round-prefix",
+        default=None,
+        help="Optional prefix for generated Phase A round ids; timestamp uniqueness is still appended.",
+    )
+    auto_tune_kernel_select.add_argument(
+        "--phase-a-screen-method",
+        choices=["replay", "full_vllm"],
+        default="replay",
+        help="Metadata selector for Phase A screening method; current runner behavior is unchanged.",
     )
     auto_tune_kernel_select.add_argument("--round-root", default=str(REPO_ROOT / "output" / "auto_research"))
     auto_tune_kernel_select.add_argument("--harness", choices=["real", "synthetic"], default="real")

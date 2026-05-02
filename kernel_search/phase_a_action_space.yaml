@@ -1,0 +1,8 @@
+# All five axes are specified for the existing tune-kernel-select loader.
+# Phase A varies only fp8_gemm_kernel; the other axes are pinned.
+axes:
+  attention_backend: [vllm-default]
+  deltanet_kernel: [triton-chunked-delta-v2]
+  fp8_gemm_kernel: [cublas, cutlass]
+  torch_compile_mode: [default]
+  cuda_graph_capture: ['off']
