@@ -10,7 +10,7 @@ from lumo_flywheel_serving.parity_fixture import (
     DEFAULT_WEIGHT_VERSION_ID,
     DELTANET_STATE_DEBUG_KIND,
     LOGITS_DEBUG_KIND,
-    KERNEL_TARGETS,
+    P2B_KERNEL_TARGETS,
     P2B_FAMILY_PROBE_COUNTS,
     validate_p2b_fixture_set,
 )
@@ -159,6 +159,6 @@ def test_convert_debug_artifacts_writes_full_p2b_fixture_set(tmp_path: Path) -> 
     assert result["validation_pass"], result["validation_errors"]
     assert result["source_counts"] == {"logits": 1, "state_token_1": 1, "state_token_1024": 1}
     yaml_paths = [path for path in result["written"] if path.endswith("_v1.yaml")]
-    assert len(yaml_paths) == len(P2B_FAMILY_PROBE_COUNTS) * len(KERNEL_TARGETS)
+    assert len(yaml_paths) == len(P2B_FAMILY_PROBE_COUNTS) * len(P2B_KERNEL_TARGETS)
     validation = validate_p2b_fixture_set(tmp_path, expected_weight_version_id=DEFAULT_WEIGHT_VERSION_ID)
     assert validation["pass"], validation["errors"]

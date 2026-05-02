@@ -26,7 +26,7 @@ if str(SRC_ROOT) not in sys.path:
 from lumo_flywheel_serving.parity_fixture import (  # noqa: E402
     ACTUALLY_RESOLVED_KEYS,
     DEFAULT_WEIGHT_VERSION_ID,
-    KERNEL_TARGETS,
+    P2B_KERNEL_TARGETS,
     LOGITS_DEBUG_KIND,
     DELTANET_STATE_DEBUG_KIND,
     P2B_FAMILY_PROBE_COUNTS,
@@ -105,7 +105,7 @@ def _write_synthetic_test_fixture(
     probes = deterministic_probe_rows(repo_root, family_id, probe_count)
     _write_jsonl(fixture_dir / "probes_input.jsonl", probes)
     written: list[str] = []
-    for kernel_target in KERNEL_TARGETS:
+    for kernel_target in P2B_KERNEL_TARGETS:
         payload = fixture_payload(
             family_id=family_id,
             kernel_target=kernel_target,
@@ -354,7 +354,7 @@ def _convert_debug_artifacts_to_p2b_fixture_set(
                 probe_count=probe_count,
                 weight_version_id=weight_version_id,
                 vllm_version=vllm_version,
-                kernel_targets=KERNEL_TARGETS,
+                kernel_targets=P2B_KERNEL_TARGETS,
                 generated_at=generated_at,
             )
         )
@@ -811,7 +811,7 @@ def main(argv: list[str] | None = None) -> int:
         "is safe. Speedup is bounded by vLLM's max_num_seqs and the per-probe token-cost.",
     )
     parser.add_argument("--override-output-tokens", type=int)
-    parser.add_argument("--kernel-target", choices=[*KERNEL_TARGETS, "both"], default="both")
+    parser.add_argument("--kernel-target", choices=[*P2B_KERNEL_TARGETS, "both"], default="both")
     parser.add_argument("--capture-only", action="store_true")
     parser.add_argument("--validate-p2b", action="store_true")
     parser.add_argument("--convert-debug-artifacts", action="store_true")
@@ -931,7 +931,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
-    kernel_targets = KERNEL_TARGETS if args.kernel_target == "both" else (args.kernel_target,)
+    kernel_targets = P2B_KERNEL_TARGETS if args.kernel_target == "both" else (args.kernel_target,)
     require_state = "deltanet" in kernel_targets
     probes = deterministic_probe_rows(repo_root, args.family_id, args.probe_count)
     probes = _override_output_tokens(probes, args.override_output_tokens)

@@ -13,6 +13,7 @@ from lumo_flywheel_serving.parity_fixture import (
     KERNEL_TARGETS,
     LOGITS_DEBUG_KIND,
     P2B_FAMILY_PROBE_COUNTS,
+    P2B_KERNEL_TARGETS,
     REFERENCE_BASELINE,
     SYNTHETIC_TEST_ARTIFACT_PURPOSE,
     DebugProbeArtifacts,
@@ -87,6 +88,73 @@ def _write_npz_like(path: Path, members: list[str]) -> None:
             archive.writestr(f"{member}.npy", b"npz-member-placeholder")
 
 
+def _write_tiny_npz(path: Path, **arrays: object) -> None:
+    import numpy as np
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not arrays:
+        arrays = {"values": np.zeros((1,), dtype=np.float32)}
+    np.savez(path, **arrays)
+
+
+def _write_fp8_gemm_fixture(tmp_path: Path) -> Path:
+    import numpy as np
+
+    family_id = "responses-sdk-adapter-cutover"
+    fixture_dir = tmp_path / "benchmark_blueprints" / "families" / family_id / "parity_fixture"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    _write_tiny_npz(fixture_dir / "tier_3_inputs" / "gemm_input_a.npz", probe_index=np.array([0, 1]))
+    _write_tiny_npz(fixture_dir / "tier_3_inputs" / "gemm_input_b.npz", probe_index=np.array([0, 1]))
+    _write_tiny_npz(fixture_dir / "tier_3_inputs" / "gemm_input_scale_a.npz", probe_index=np.array([0, 1]))
+    _write_tiny_npz(fixture_dir / "tier_3_inputs" / "gemm_input_scale_b.npz", probe_index=np.array([0, 1]))
+    _write_tiny_npz(fixture_dir / "tier_3_inputs" / "gemm_reference_output.npz", probe_index=np.array([0, 1]))
+    _write_tiny_npz(fixture_dir / "tier_4_vllm_parity" / "probe_state_snapshots.npz", call_site_index=np.array([0, 1]))
+    _write_tiny_npz(
+        fixture_dir / "tier_4_vllm_parity" / "reference_downstream_logits.npz",
+        call_site_index=np.array([0, 1]),
+    )
+    fp8_reference_baseline = {
+        "attention_backend": "vllm-default",
+        "deltanet_kernel": "triton-chunked-delta-v2",
+        "fp8_gemm_kernel": "cublas",
+        "kv_cache_dtype": "fp8_e5m2",
+        "torch_compile_mode": "default",
+        "cuda_graph_capture": "off",
+    }
+    payload = {
+        "fixture_id": "responses-sdk-adapter-cutover-fp8-gemm-v1",
+        "kernel_target": "fp8_gemm",
+        "generated_at": "2026-05-02T00:00:00Z",
+        "generated_against": {
+            "vllm_version": "0.19.0",
+            "weight_version_id": DEFAULT_WEIGHT_VERSION_ID,
+            "reference_baseline": fp8_reference_baseline,
+            "reference_reproducibility_runs": 3,
+        },
+        "tier_3_probe_count": 2,
+        "tier_3_smoke_probe_count": 1,
+        "tier_3_probe_shapes": [{"M": 1, "N": 8, "K": 4}, {"M": 16, "N": 8, "K": 4}],
+        "tier_3_probe_input_a_ref": "tier_3_inputs/gemm_input_a.npz",
+        "tier_3_probe_input_b_ref": "tier_3_inputs/gemm_input_b.npz",
+        "tier_3_probe_input_scale_a_ref": "tier_3_inputs/gemm_input_scale_a.npz",
+        "tier_3_probe_input_scale_b_ref": "tier_3_inputs/gemm_input_scale_b.npz",
+        "tier_3_reference_gemm_output_ref": "tier_3_inputs/gemm_reference_output.npz",
+        "tier_3_tolerances": {"rtol_gemm_output": 2.0e-3, "atol_gemm_output": 2.0e-3},
+        "tier_3_parity_check_method": "gemm_output_compare_only",
+        "tier_4_call_site_count": 2,
+        "tier_4_call_site_layer_indices": [0, 4],
+        "tier_4_probe_input_state_ref": "tier_4_vllm_parity/probe_state_snapshots.npz",
+        "tier_4_reference_downstream_logits_ref": "tier_4_vllm_parity/reference_downstream_logits.npz",
+        "tier_4_tolerances": {"rtol_downstream_logit": 1.0e-3, "atol_downstream_logit": 1.0e-3},
+        "tier_4_parity_check_method": "vllm_parity_with_downstream_logit_compounding_guard",
+    }
+    path = fixture_dir / "fp8_gemm_v1.yaml"
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    payload["content_hash"] = fixture_content_hash(path)
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return path
+
+
 def test_fixture_schema_and_weight_version_binding(tmp_path: Path) -> None:
     path = _write_fixture(tmp_path, "responses-sdk-adapter-cutover", "deltanet", 64)
 
@@ -144,6 +212,45 @@ def test_fixture_content_hash_binds_every_referenced_blob(tmp_path: Path) -> Non
     (path.parent / "deltanet_reference_state.npz").unlink()
     with pytest.raises(FileNotFoundError):
         fixture_content_hash(path)
+
+
+def test_fp8_gemm_fixture_schema_hash_and_validation(tmp_path: Path) -> None:
+    path = _write_fp8_gemm_fixture(tmp_path)
+
+    validation = validate_fixture(
+        path,
+        repo_root=tmp_path,
+        expected_family_id="responses-sdk-adapter-cutover",
+        expected_kernel_target="fp8_gemm",
+        expected_probe_count=2,
+        expected_weight_version_id=DEFAULT_WEIGHT_VERSION_ID,
+        expected_tier_3_smoke_probe_count=1,
+        expected_tier_4_call_site_count=2,
+    )
+
+    assert "fp8_gemm" in KERNEL_TARGETS
+    assert validation.pass_, validation.errors
+    assert validation.content_hash == fixture_content_hash(path)
+
+    original_hash = validation.content_hash
+    _write_tiny_npz(path.parent / "tier_3_inputs" / "gemm_input_a.npz", changed=[1.0])
+    assert fixture_content_hash(path) != original_hash
+
+
+def test_fp8_gemm_fixture_validation_reports_missing_tier_artifact(tmp_path: Path) -> None:
+    path = _write_fp8_gemm_fixture(tmp_path)
+    (path.parent / "tier_4_vllm_parity" / "reference_downstream_logits.npz").unlink()
+
+    validation = validate_fixture(
+        path,
+        repo_root=tmp_path,
+        expected_family_id="responses-sdk-adapter-cutover",
+        expected_kernel_target="fp8_gemm",
+        expected_probe_count=2,
+        expected_weight_version_id=DEFAULT_WEIGHT_VERSION_ID,
+    )
+
+    assert any(error.startswith("referenced_blob_missing:") for error in validation.errors)
 
 
 def test_validate_fixture_reports_missing_referenced_blob(tmp_path: Path) -> None:
@@ -255,11 +362,11 @@ def test_fetch_endpoint_capabilities_records_missing_full_logits_and_state(monke
 def test_p2b_presence_checks_all_families_and_kernels(tmp_path: Path) -> None:
     missing = validate_p2b_fixture_set(tmp_path, expected_weight_version_id=DEFAULT_WEIGHT_VERSION_ID)
     assert not missing["pass"]
-    assert len(missing["fixtures"]) == len(P2B_FAMILY_PROBE_COUNTS) * len(KERNEL_TARGETS)
+    assert len(missing["fixtures"]) == len(P2B_FAMILY_PROBE_COUNTS) * len(P2B_KERNEL_TARGETS)
 
     for family_id, probe_count in P2B_FAMILY_PROBE_COUNTS.items():
         _write_seed_trace(tmp_path, family_id)
-        for kernel_target in KERNEL_TARGETS:
+        for kernel_target in P2B_KERNEL_TARGETS:
             _write_fixture(tmp_path, family_id, kernel_target, probe_count)
 
     result = validate_p2b_fixture_set(tmp_path, expected_weight_version_id=DEFAULT_WEIGHT_VERSION_ID)

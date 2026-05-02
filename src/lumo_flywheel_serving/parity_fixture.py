@@ -31,8 +31,18 @@ SIBLING_FAMILY_IDS = (
     "sqlalchemy-2-session-modernization",
 )
 P2B_FAMILY_PROBE_COUNTS = {HEAVY_FAMILY_ID: 64, **{family_id: 16 for family_id in SIBLING_FAMILY_IDS}}
-KERNEL_TARGETS = ("deltanet", "gatedattn")
+P2B_KERNEL_TARGETS = ("deltanet", "gatedattn")
+KERNEL_TARGETS = (*P2B_KERNEL_TARGETS, "fp8_gemm")
 REFERENCED_KEYS = ("probe_input_ref", "reference_logits_ref", "reference_state_snapshots_ref")
+FP8_GEMM_REFERENCED_KEYS = (
+    "tier_3_probe_input_a_ref",
+    "tier_3_probe_input_b_ref",
+    "tier_3_probe_input_scale_a_ref",
+    "tier_3_probe_input_scale_b_ref",
+    "tier_3_reference_gemm_output_ref",
+    "tier_4_probe_input_state_ref",
+    "tier_4_reference_downstream_logits_ref",
+)
 DEFAULT_WEIGHT_VERSION_ID = "2e1b21350ce589fcaafbb3c7d7eac526a7aed582"
 SYNTHETIC_TEST_ARTIFACT_PURPOSE = "test_only_synthetic_placeholder"
 LOGITS_DEBUG_KIND = "full_vocab_logits_before_sampling"
@@ -96,6 +106,8 @@ def fixture_content_hash(fixture_yaml_path: str | Path) -> str:
     fixture = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))
     if not isinstance(fixture, dict):
         raise ValueError(f"fixture must be a mapping: {fixture_path}")
+    if _is_fp8_gemm_fixture(fixture, fixture_path):
+        return _fp8_gemm_fixture_content_hash(fixture_path, fixture)
     base_dir = fixture_path.parent
     digest = hashlib.sha256()
     digest.update(fixture_path.read_bytes())
@@ -108,6 +120,38 @@ def fixture_content_hash(fixture_yaml_path: str | Path) -> str:
                 )
             digest.update(b"\x00" + key.encode("ascii") + b"\x00")
             digest.update(ref_path.read_bytes())
+    return digest.hexdigest()
+
+
+def _is_fp8_gemm_fixture(fixture: dict[str, Any], fixture_path: Path) -> bool:
+    fixture_id = str(fixture.get("fixture_id", ""))
+    return (
+        fixture.get("kernel_target") == "fp8_gemm"
+        or fixture_path.name == "fp8_gemm_v1.yaml"
+        or fixture_id.endswith("-fp8-gemm-v1")
+    )
+
+
+def _fp8_gemm_fixture_content_hash(fixture_path: Path, fixture: dict[str, Any]) -> str:
+    base_dir = fixture_path.parent
+    canonical_fixture = dict(fixture)
+    canonical_fixture.pop("content_hash", None)
+    digest = hashlib.sha256()
+    digest.update(b"lumo-fp8-gemm-parity-fixture-v1\x00")
+    digest.update(yaml.safe_dump(canonical_fixture, sort_keys=True).encode("utf-8"))
+    for key in FP8_GEMM_REFERENCED_KEYS:
+        value = fixture.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"fp8_gemm fixture missing {key}")
+        ref_path = base_dir / value
+        if not ref_path.exists():
+            raise FileNotFoundError(
+                f"fixture {fixture_path} references {key}={value} which does not exist"
+            )
+        digest.update(b"\x00" + key.encode("ascii") + b"\x00")
+        digest.update(value.encode("utf-8"))
+        digest.update(b"\x00")
+        digest.update(ref_path.read_bytes())
     return digest.hexdigest()
 
 
@@ -242,7 +286,9 @@ def write_debug_export_npz_companions(
     This intentionally has no synthetic fallback. Missing or malformed debug exports
     raise before any production companion can be written.
     """
-    if kernel_target not in KERNEL_TARGETS:
+    if kernel_target not in P2B_KERNEL_TARGETS:
+        if kernel_target == "fp8_gemm":
+            raise ValueError("fp8_gemm fixture capture requires dedicated Tier-3/Tier-4 debug hooks")
         raise ValueError(f"unsupported kernel_target: {kernel_target}")
     if len(probe_artifacts) != expected_probe_count:
         raise ValueError(
@@ -465,6 +511,8 @@ def validate_fixture(
     expected_probe_count: int,
     expected_weight_version_id: str | None = None,
     expected_reference_baseline: dict[str, Any] | None = None,
+    expected_tier_3_smoke_probe_count: int | None = None,
+    expected_tier_4_call_site_count: int | None = None,
 ) -> FixtureValidation:
     path = Path(fixture_path)
     root = Path(repo_root)
@@ -482,26 +530,51 @@ def validate_fixture(
     if fixture.get("artifact_purpose") == SYNTHETIC_TEST_ARTIFACT_PURPOSE:
         errors.append("production_fixture_declares_synthetic_test_placeholder")
 
-    expected_fixture_id = f"{expected_family_id}-{expected_kernel_target}-v1"
+    if expected_kernel_target not in KERNEL_TARGETS:
+        errors.append("expected_kernel_target_unsupported")
+    is_fp8_gemm = expected_kernel_target == "fp8_gemm"
+
+    expected_kernel_target_id = expected_kernel_target.replace("_", "-")
+    expected_fixture_id = f"{expected_family_id}-{expected_kernel_target_id}-v1"
     if fixture.get("fixture_id") != expected_fixture_id:
         errors.append("fixture_id_mismatch")
-    if fixture.get("probe_count") != expected_probe_count:
+    if is_fp8_gemm:
+        if fixture.get("kernel_target") != "fp8_gemm":
+            errors.append("kernel_target_mismatch")
+        if fixture.get("tier_3_probe_count") != expected_probe_count:
+            errors.append("tier_3_probe_count_mismatch")
+    elif fixture.get("probe_count") != expected_probe_count:
         errors.append("probe_count_mismatch")
     generated_against = fixture.get("generated_against")
     if not isinstance(generated_against, dict):
         errors.append("generated_against_missing")
     else:
-        baseline = expected_reference_baseline if expected_reference_baseline is not None else REFERENCE_BASELINE
-        if generated_against.get("reference_baseline") != baseline:
-            errors.append("reference_baseline_mismatch")
+        if expected_reference_baseline is not None:
+            if generated_against.get("reference_baseline") != expected_reference_baseline:
+                errors.append("reference_baseline_mismatch")
+        elif is_fp8_gemm:
+            if not isinstance(generated_against.get("reference_baseline"), dict):
+                errors.append("reference_baseline_missing")
+        else:
+            if generated_against.get("reference_baseline") != REFERENCE_BASELINE:
+                errors.append("reference_baseline_mismatch")
         if generated_against.get("reference_reproducibility_runs") != REFERENCE_REPRODUCIBILITY_RUNS:
             errors.append("reference_reproducibility_runs_mismatch")
         if expected_weight_version_id is not None and generated_against.get("weight_version_id") != expected_weight_version_id:
             errors.append("weight_version_id_mismatch")
 
-    if fixture.get("probe_input_ref") != "probes_input.jsonl":
+    if is_fp8_gemm:
+        errors.extend(
+            _validate_fp8_gemm_fixture_schema(
+                fixture,
+                path=path,
+                expected_tier_3_smoke_probe_count=expected_tier_3_smoke_probe_count,
+                expected_tier_4_call_site_count=expected_tier_4_call_site_count,
+            )
+        )
+    elif fixture.get("probe_input_ref") != "probes_input.jsonl":
         errors.append("probe_input_ref_mismatch")
-    if fixture.get("reference_logits_ref") != f"{expected_kernel_target}_reference_logits.npz":
+    if not is_fp8_gemm and fixture.get("reference_logits_ref") != f"{expected_kernel_target}_reference_logits.npz":
         errors.append("reference_logits_ref_mismatch")
     if expected_kernel_target == "deltanet":
         if fixture.get("reference_state_snapshots_ref") != "deltanet_reference_state.npz":
@@ -510,22 +583,23 @@ def validate_fixture(
             errors.append("state_checkpoints_mismatch")
         if fixture.get("parity_check_method") != "logit_plus_state_compare":
             errors.append("parity_check_method_mismatch")
-    else:
+    elif expected_kernel_target == "gatedattn":
         if "reference_state_snapshots_ref" in fixture:
             errors.append("unexpected_state_snapshots_ref")
         if fixture.get("parity_check_method") != "per_token_logit_compare":
             errors.append("parity_check_method_mismatch")
 
-    probes_path = path.parent / str(fixture.get("probe_input_ref", ""))
-    if not probes_path.is_file():
-        errors.append("probe_input_blob_missing")
-    else:
-        probe_rows = [line for line in probes_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        if len(probe_rows) != expected_probe_count:
-            errors.append("probe_input_count_mismatch")
+    if not is_fp8_gemm:
+        probes_path = path.parent / str(fixture.get("probe_input_ref", ""))
+        if not probes_path.is_file():
+            errors.append("probe_input_blob_missing")
+        else:
+            probe_rows = [line for line in probes_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            if len(probe_rows) != expected_probe_count:
+                errors.append("probe_input_count_mismatch")
 
     logits_ref = fixture.get("reference_logits_ref")
-    if isinstance(logits_ref, str):
+    if not is_fp8_gemm and isinstance(logits_ref, str):
         errors.extend(_validate_npz_reference_blob(path.parent / logits_ref, required_members=("probe_index",)))
     if expected_kernel_target == "deltanet":
         state_ref = fixture.get("reference_state_snapshots_ref")
@@ -544,7 +618,79 @@ def validate_fixture(
         errors.append(f"referenced_blob_missing:{exc}")
     except ValueError as exc:
         errors.append(f"fixture_content_hash_invalid:{exc}")
+    if is_fp8_gemm:
+        declared_hash = fixture.get("content_hash")
+        if not isinstance(declared_hash, str) or not declared_hash.strip():
+            errors.append("content_hash_missing")
+        elif content_hash is not None and declared_hash != content_hash:
+            errors.append("content_hash_mismatch")
     return FixtureValidation(path=relative, exists=True, errors=tuple(errors), content_hash=content_hash)
+
+
+def _validate_fp8_gemm_fixture_schema(
+    fixture: dict[str, Any],
+    *,
+    path: Path,
+    expected_tier_3_smoke_probe_count: int | None,
+    expected_tier_4_call_site_count: int | None,
+) -> list[str]:
+    errors: list[str] = []
+    tier_3_probe_count = fixture.get("tier_3_probe_count")
+    smoke_count = fixture.get("tier_3_smoke_probe_count")
+    if not isinstance(tier_3_probe_count, int) or tier_3_probe_count <= 0:
+        errors.append("tier_3_probe_count_invalid")
+    if not isinstance(smoke_count, int) or smoke_count <= 0:
+        errors.append("tier_3_smoke_probe_count_invalid")
+    elif isinstance(tier_3_probe_count, int) and smoke_count > tier_3_probe_count:
+        errors.append("tier_3_smoke_probe_count_exceeds_probe_count")
+    if expected_tier_3_smoke_probe_count is not None and smoke_count != expected_tier_3_smoke_probe_count:
+        errors.append("tier_3_smoke_probe_count_mismatch")
+
+    shapes = fixture.get("tier_3_probe_shapes")
+    if not isinstance(shapes, list) or not shapes:
+        errors.append("tier_3_probe_shapes_missing")
+    else:
+        for index, shape in enumerate(shapes):
+            if not isinstance(shape, dict) or any(not isinstance(shape.get(dim), int) or shape[dim] <= 0 for dim in ("M", "N", "K")):
+                errors.append(f"tier_3_probe_shape_invalid:{index}")
+                break
+
+    tier_3_tolerances = fixture.get("tier_3_tolerances")
+    if not isinstance(tier_3_tolerances, dict):
+        errors.append("tier_3_tolerances_missing")
+    else:
+        for key in ("rtol_gemm_output", "atol_gemm_output"):
+            if not isinstance(tier_3_tolerances.get(key), (int, float)):
+                errors.append(f"tier_3_tolerance_missing:{key}")
+    if fixture.get("tier_3_parity_check_method") != "gemm_output_compare_only":
+        errors.append("tier_3_parity_check_method_mismatch")
+
+    call_site_count = fixture.get("tier_4_call_site_count")
+    if not isinstance(call_site_count, int) or call_site_count <= 0:
+        errors.append("tier_4_call_site_count_invalid")
+    if expected_tier_4_call_site_count is not None and call_site_count != expected_tier_4_call_site_count:
+        errors.append("tier_4_call_site_count_mismatch")
+    layer_indices = fixture.get("tier_4_call_site_layer_indices")
+    if not isinstance(layer_indices, list) or not layer_indices or not all(isinstance(item, int) and item >= 0 for item in layer_indices):
+        errors.append("tier_4_call_site_layer_indices_invalid")
+
+    tier_4_tolerances = fixture.get("tier_4_tolerances")
+    if not isinstance(tier_4_tolerances, dict):
+        errors.append("tier_4_tolerances_missing")
+    else:
+        for key in ("rtol_downstream_logit", "atol_downstream_logit"):
+            if not isinstance(tier_4_tolerances.get(key), (int, float)):
+                errors.append(f"tier_4_tolerance_missing:{key}")
+    if fixture.get("tier_4_parity_check_method") != "vllm_parity_with_downstream_logit_compounding_guard":
+        errors.append("tier_4_parity_check_method_mismatch")
+
+    for key in FP8_GEMM_REFERENCED_KEYS:
+        value = fixture.get(key)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"{key}_missing")
+            continue
+        errors.extend(_validate_npz_reference_blob(path.parent / value, required_members=()))
+    return errors
 
 
 def _validate_npz_reference_blob(path: Path, *, required_members: tuple[str, ...]) -> list[str]:
@@ -583,7 +729,7 @@ def validate_p2b_fixture_set(
     validations: dict[str, dict[str, Any]] = {}
     all_errors: list[str] = []
     for family_id, probe_count in P2B_FAMILY_PROBE_COUNTS.items():
-        for kernel_target in KERNEL_TARGETS:
+        for kernel_target in P2B_KERNEL_TARGETS:
             path = fixture_yaml_path(root, family_id, kernel_target)
             validation = validate_fixture(
                 path,
