@@ -394,6 +394,68 @@ def test_real_apply_and_test_materializes_runtime_wired_cutlass_overlay(
     assert kernel_path.read_text(encoding="utf-8") == overlay_source
 
 
+def test_real_apply_and_test_mounts_cutlass_source_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner, round_dir, kernel_path, iteration_dir, round_id = _seed_round(
+        tmp_path,
+        iteration="001",
+        patch_text="placeholder",
+        kernel_source_text="# bootstrap marker\n",
+    )
+    base_source = round_dir / "cutlass_source_base" / "scaled_mm"
+    workspace_source = round_dir / "cutlass_source_workspace" / "scaled_mm"
+    base_source.mkdir(parents=True)
+    workspace_source.mkdir(parents=True)
+    (base_source / "cutlass.py").write_text(
+        "def scaled_mm(A, B):\n    return A + B\n",
+        encoding="utf-8",
+    )
+    (workspace_source / "cutlass.py").write_text(
+        "def scaled_mm(A, B):\n    return A + B\n",
+        encoding="utf-8",
+    )
+    patch_text = (
+        "--- cutlass_source_workspace/scaled_mm/cutlass.py\n"
+        "+++ cutlass_source_workspace/scaled_mm/cutlass.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        " def scaled_mm(A, B):\n"
+        "-    return A + B\n"
+        "+    return A.contiguous() + B\n"
+    )
+    (iteration_dir / "mutation.patch").write_text(patch_text, encoding="utf-8")
+    spec_path = round_dir / "round_spec.yaml"
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    spec["kernel_target"] = "fp8_gemm"
+    spec["mutation_surface"] = {
+        "kind": "cutlass_source_workspace",
+        "backend": "cutlass",
+        "runtime_wired": True,
+        "workspace_base_source_path": str(base_source),
+        "workspace_source_path": str(workspace_source),
+        "container_source_dir": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm",
+    }
+    spec_path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+    calls = _stub_passing_helpers(monkeypatch, runner)
+
+    payload = runner.apply_and_test(
+        round_id=round_id,
+        iteration="001",
+        kernel_target="fp8_gemm",
+        harness="real",
+        round_root=round_dir.parent,
+    )
+
+    assert payload["outcome"] == "parity_passed", payload
+    assert calls["restart"] == 1
+    assert any("cutlass_source_workspace/scaled_mm" in mount for mount in calls["restart_mounts"])
+    parity = json.loads((iteration_dir / "parity_check.json").read_text(encoding="utf-8"))
+    assert parity["pass"] is True
+    assert workspace_source.joinpath("cutlass.py").read_text(encoding="utf-8") == (
+        "def scaled_mm(A, B):\n    return A + B\n"
+    )
+
+
 def test_real_apply_and_test_blocks_cutlass_overlay_without_runtime_effect(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

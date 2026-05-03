@@ -5155,7 +5155,7 @@ def test_l0c_fp8_gemm_real_cutlass_missing_fixture_halts_after_round_metadata(
     round_spec = auto_research.load_yaml_file(rounds[0] / "round_spec.yaml")
     assert isinstance(round_spec, dict)
     assert round_spec["kernel_target"] == "fp8_gemm"
-    assert round_spec["mutation_surface"]["kind"] == "cutlass_source_overlay_bootstrap"
+    assert round_spec["mutation_surface"]["kind"] == "cutlass_source_workspace"
     assert round_spec["mutation_surface"]["runtime_wired"] is True
 
 
@@ -5204,9 +5204,25 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     def _agent_unavailable(*, spec, round_dir, iteration_dir, iteration):
         return {"ok": False, "error": "agent_binary_missing: codex"}
 
+    def _stage_workspace(*, round_dir, spec):
+        surface = dict(spec["mutation_surface"])
+        workspace = round_dir / "cutlass_source_workspace"
+        source = workspace / "scaled_mm"
+        source.mkdir(parents=True)
+        (source / "cutlass.py").write_text("def scaled_mm():\n    return None\n", encoding="utf-8")
+        return {
+            **surface,
+            "workspace_path": str(workspace),
+            "workspace_source_path": str(source),
+            "workspace_base_path": str(round_dir / "cutlass_source_base"),
+            "workspace_base_source_path": str(round_dir / "cutlass_source_base" / "scaled_mm"),
+            "round_dir": str(round_dir),
+        }
+
     monkeypatch.setattr(runner, "_assert_actually_resolved_no_drift", _no_drift)
     monkeypatch.setattr(runner, "_run_real_paired_baseline", _baseline)
     monkeypatch.setattr(runner, "_spawn_l0c_agent_iteration", _agent_unavailable)
+    monkeypatch.setattr(runner, "_stage_fp8_cutlass_source_workspace", _stage_workspace)
 
     result = runner.run(
         workload_file=workload_path,
@@ -5236,8 +5252,9 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert (result.round_dir / "candidates" / "001" / "iteration_brief.md").is_file()
     round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
     assert isinstance(round_spec, dict)
-    assert round_spec["mutation_surface"]["kind"] == "cutlass_source_overlay_bootstrap"
+    assert round_spec["mutation_surface"]["kind"] == "cutlass_source_workspace"
     assert round_spec["mutation_surface"]["runtime_wired"] is True
+    assert "workspace_path" in round_spec["mutation_surface"]
     assert round_spec["parity_fixture_id"] == "responses-sdk-adapter-cutover-fp8-gemm-v1"
 
 
@@ -5291,14 +5308,12 @@ def test_l0c_fp8_gemm_real_non_cutlass_non_triton_backend_blocked(tmp_path: Path
         )
 
 
-def test_l0c_fp8_gemm_real_cutlass_rejects_arbitrary_source_path(tmp_path: Path) -> None:
+def test_l0c_fp8_gemm_real_cutlass_allows_explicit_source_path(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     _write_l0a_fixture_pair(repo)
-    fp8_fixture_path = _write_l0a_fp8_fixture(repo, reference_fp8_gemm_kernel="cutlass")
-    workload_path = _write_l0a_workload(repo)
-    _add_l0a_workload_fp8_ref(workload_path)
-    bad_source = repo / "vendor_cutlass_kernel.cu"
-    bad_source.write_text("// not a repo-owned overlay\n", encoding="utf-8")
+    _write_l0a_workload(repo)
+    explicit_source = repo / "vendor_cutlass_kernel.cu"
+    explicit_source.write_text("// local source marker\n", encoding="utf-8")
     base_bundle = _write_l0a_bundle(
         repo,
         kernel_selection={
@@ -5316,31 +5331,17 @@ def test_l0c_fp8_gemm_real_cutlass_rejects_arbitrary_source_path(tmp_path: Path)
         tuned_config_root=repo / "output" / "tuned_configs",
     )
 
-    with pytest.raises(
-        RuntimeError,
-        match="HALT_REASON: l0c_fp8_gemm_cutlass_source_overlay_unsupported",
-    ):
-        runner.run(
-            workload_file=workload_path,
-            base_bundle=base_bundle,
-            kernel_target="fp8_gemm",
-            kernel_source_path=bad_source,
-            parity_fixture=fp8_fixture_path,
-            base_measurements=1,
-            accepted_iteration_cap=1,
-            total_attempt_cap=1,
-            round_timeout_hours=1.0,
-            round_root=repo / "output" / "auto_research",
-            harness="real",
-            runtime={
-                "container_name": "test",
-                "port": 8100,
-                "proxy_port": 8101,
-                "endpoint": "http://127.0.0.1:8101/v1",
-                "metrics_url": "http://127.0.0.1:8100/metrics",
-                "admin_url": "http://127.0.0.1:8101/admin",
-            },
-        )
+    base = auto_research.load_baseline_bundle(base_bundle)
+    assert base is not None
+
+    surface = runner._resolve_fp8_gemm_real_mutation_surface(
+        base=base,
+        kernel_source_path=explicit_source,
+    )
+
+    assert surface["kind"] == "cutlass_source_workspace"
+    assert surface["kernel_source_path"] == str(explicit_source.resolve())
+    assert surface["source_mutability"] == "staged_vllm_cutlass_source_tree"
 
 
 def test_l0c_kernel_mutation_synthetic_halts_on_proposer_stuck(tmp_path: Path) -> None:
@@ -5600,29 +5601,38 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
         },
         round_id="round-fp8",
         harness="real",
+        mutation_surface={
+            "kind": "cutlass_source_workspace",
+            "workspace_path": str(repo / "round" / "cutlass_source_workspace"),
+            "workspace_source_path": str(repo / "round" / "cutlass_source_workspace" / "scaled_mm"),
+            "container_source_dir": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm",
+            "round_dir": str(repo / "round"),
+        },
     )
 
     assert "Do not run `auto-research apply-and-test`" in brief
+    assert "local CUTLASS source workspace" in brief
+    assert "cutlass_source_workspace" in brief
+    assert "patch --dry-run -p0" in brief
+    assert "python3 -m py_compile" in brief
     assert "auto-research preflight-patch" in brief
     assert "matching_rule" in brief
     assert "code_snippet" in brief
     assert "evidence_snippet" in brief
-    assert "exit nonzero" in brief
-    assert "fp8_gemm_cutlass_python_wrapper_rewrite" in brief
+    assert "nonzero exit is reserved for agent/tool infrastructure failure" in brief
+    assert "fp8_gemm_cutlass_python_wrapper_rewrite" not in brief
     assert "auto-research apply-and-test \\" not in brief
 
 
-def test_l0c_preflight_patch_reports_rule_snippet_for_fp8_cutlass(tmp_path: Path) -> None:
+def test_l0c_preflight_patch_allows_fp8_cutlass_source_edits(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     patch_path = repo / "candidate.patch"
     patch_path.write_text(
-        """--- src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
-+++ src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
-@@ -18,6 +18,12 @@
--        "source_replacements": [],
-+        "source_replacements": [
-+            {"label": "alias", "before": "ops.cutlass_scaled_mm(", "after": "_alias("},
-+        ],
+        """--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -1,2 +1,2 @@
+-output = ops.cutlass_scaled_mm(A, B)
++output = ops.cutlass_scaled_mm(A.contiguous(), B)
 """,
         encoding="utf-8",
     )
@@ -5634,15 +5644,13 @@ def test_l0c_preflight_patch_reports_rule_snippet_for_fp8_cutlass(tmp_path: Path
 
     payload = runner.preflight_patch(kernel_target="fp8_gemm", patch_path=patch_path)
 
-    assert payload["ok"] is False
-    assert payload["reason"] == "forbidden_mutation_family_demoted"
-    assert payload["pattern_id"] == "fp8_gemm_cutlass_python_wrapper_rewrite"
-    assert payload["matching_rule"]["checks"].startswith("changes the Python CUTLASS")
-    assert "touches_cutlass_overlay" in payload["matching_rule"]["code_snippet"]
-    assert "source_replacements" in payload["evidence_snippet"]
+    assert payload["ok"] is True
+    assert payload["reason"] == "preflight_passed"
+    assert payload["rules"]
+    assert all(rule["tier"] == "safety_critical" for rule in payload["rules"])
 
 
-def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_soft_preflight(tmp_path: Path) -> None:
+def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_not_file_forbidden(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     runner = auto_research.L0cKernelMutationRunner(
         repo_root=repo,
@@ -5660,14 +5668,10 @@ def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_soft_preflight(tmp_path: Path)
 
     preflight = runner._preflight_l0c_patch(kernel_target="fp8_gemm", patch_text=patch_text)
 
-    assert preflight == {
-        "tier": "soft",
-        "pattern_id": "fp8_gemm_cutlass_python_wrapper_rewrite",
-        "evidence_snippet": '"source_replacements": [],\n"source_replacements": [\n{"label": "alias", "before": "ops.cutlass_scaled_mm(", "after": "_alias("},',
-    }
+    assert preflight is None
 
 
-def test_l0c_fp8_cutlass_overlay_comment_patch_is_soft_preflight(tmp_path: Path) -> None:
+def test_l0c_fp8_cutlass_overlay_comment_patch_is_not_file_forbidden(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     runner = auto_research.L0cKernelMutationRunner(
         repo_root=repo,
@@ -5683,14 +5687,10 @@ def test_l0c_fp8_cutlass_overlay_comment_patch_is_soft_preflight(tmp_path: Path)
 
     preflight = runner._preflight_l0c_patch(kernel_target="fp8_gemm", patch_text=patch_text)
 
-    assert preflight == {
-        "tier": "soft",
-        "pattern_id": "fp8_gemm_cutlass_python_wrapper_rewrite",
-        "evidence_snippet": "# Candidate note",
-    }
+    assert preflight is None
 
 
-def test_l0c_fp8_cutlass_overlay_patch_with_timestamp_header_is_soft_preflight(
+def test_l0c_fp8_cutlass_overlay_patch_with_timestamp_header_is_not_file_forbidden(
     tmp_path: Path,
 ) -> None:
     repo = _init_repo(tmp_path)
@@ -5710,6 +5710,4 @@ def test_l0c_fp8_cutlass_overlay_patch_with_timestamp_header_is_soft_preflight(
 
     preflight = runner._preflight_l0c_patch(kernel_target="fp8_gemm", patch_text=patch_text)
 
-    assert preflight is not None
-    assert preflight["tier"] == "soft"
-    assert preflight["pattern_id"] == "fp8_gemm_cutlass_python_wrapper_rewrite"
+    assert preflight is None
