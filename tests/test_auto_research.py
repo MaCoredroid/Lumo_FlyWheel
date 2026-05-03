@@ -5620,6 +5620,9 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "code_snippet" in brief
     assert "evidence_snippet" in brief
     assert "nonzero exit is reserved for agent/tool infrastructure failure" in brief
+    assert "expected speed mechanism" in brief
+    assert "Do not replace `process_weights_after_loading` wholesale" in brief
+    assert "CUTLASS weight transposition" in brief
     assert "fp8_gemm_cutlass_python_wrapper_rewrite" not in brief
     assert "auto-research apply-and-test \\" not in brief
 

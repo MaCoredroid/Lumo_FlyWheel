@@ -6031,6 +6031,7 @@ not spend iteration budget on online research inside the agent loop.
   rejection reasons (first_diverging_probe, tolerance_overshoot) and
   propose something genuinely different.
 - Your mutation MUST pass parity. Latency is irrelevant if parity fails.
+{{mutation_quality_guidance}}
 
 # Parity contract
 {{parity_contract}}
@@ -11135,6 +11136,19 @@ class L0cKernelMutationRunner:
                     "   nonzero exit is reserved for agent/tool infrastructure failure.",
                 ]
             )
+            mutation_quality_guidance = "\n".join(
+                [
+                    "- Before writing a patch, state the expected speed mechanism in your",
+                    "  own notes and make the diff implement that mechanism directly.",
+                    "- Avoid reshape-only, variable-cache-only, and cosmetic control-flow",
+                    "  mutations; they have failed parity and are too small to be useful.",
+                    "- Do not replace `process_weights_after_loading` wholesale. If you",
+                    "  touch it, preserve CUTLASS weight transposition, fused scale",
+                    "  conversion, static input-scale handling, and AZP adjustment.",
+                    "- Prefer exact guarded fast paths or dispatch/shape/scale changes that",
+                    "  can affect actual CUTLASS kernel behavior.",
+                ]
+            )
         else:
             mutation_target_description = str(kernel_source_path)
             edit_scope_rule = f"- Edit ONLY {kernel_source_path}. No other file."
@@ -11184,6 +11198,7 @@ class L0cKernelMutationRunner:
                     "5. Exit 0.",
                 ]
             )
+            mutation_quality_guidance = ""
         substitutions = {
             "iteration": "{{iteration}}",
             "round_id": round_id,
@@ -11206,6 +11221,7 @@ class L0cKernelMutationRunner:
             "parity_contract": parity_contract,
             "agent_apply_and_test_context": agent_apply_and_test_context,
             "agent_validation_steps": agent_validation_steps,
+            "mutation_quality_guidance": mutation_quality_guidance,
             "strategy_brief": strategy_brief.strip(),
             "positive_memory_winning_diffs_block": (
                 positive_memory.strip() or "No prior winning L0c diffs found for this kernel target."
