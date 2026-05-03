@@ -68,6 +68,12 @@ P2B_DEBUG_EXPORT_VLLM_ENV_ALIASES = {
     "LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS": "VLLM_LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS",
     "LUMO_P2B_DEBUG_STRICT": "VLLM_LUMO_P2B_DEBUG_STRICT",
 }
+CUTLASS_OVERLAY_ENV_VARS = (
+    "LUMO_FP8_GEMM_CUTLASS_OVERLAY_CONFIG",
+    "LUMO_FP8_GEMM_CUTLASS_OVERLAY_SHA256",
+    "LUMO_FP8_GEMM_CUTLASS_OVERLAY_STRICT",
+)
+CUTLASS_OVERLAY_ENV_PREFIX = "LUMO_FP8_GEMM_CUTLASS_OVERLAY_"
 
 
 class ModelServer:
@@ -808,6 +814,7 @@ class ModelServer:
             *self._triton_debug_env_args(),
             *kernel_activation_env_args,
             *self._p2b_debug_export_env_args(),
+            *self._cutlass_overlay_env_args(),
             *volume_args,
             "--entrypoint",
             "bash",
@@ -857,15 +864,52 @@ class ModelServer:
                 args.extend(["-e", f"{name}={value}"])
                 args.extend(["-e", f"{P2B_DEBUG_EXPORT_VLLM_ENV_ALIASES[name]}={value}"])
         if p2b_debug_enabled:
-            prefixes = [
-                prefix.strip()
-                for prefix in os.environ.get("VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY", "").split(",")
-                if prefix.strip()
-            ]
-            if "LUMO_P2B_" not in prefixes:
-                prefixes.append("LUMO_P2B_")
-            args.extend(["-e", f"VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY={','.join(prefixes)}"])
+            args.extend(
+                [
+                    "-e",
+                    "VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="
+                    f"{ModelServer._ray_env_prefixes_to_copy('LUMO_P2B_')}",
+                ]
+            )
         return args
+
+    @staticmethod
+    def _cutlass_overlay_env_args() -> list[str]:
+        args: list[str] = []
+        overlay_enabled = False
+        for name in CUTLASS_OVERLAY_ENV_VARS:
+            value = os.environ.get(name)
+            if value is not None:
+                overlay_enabled = True
+                args.extend(["-e", f"{name}={value}"])
+                args.extend(["-e", f"VLLM_{name}={value}"])
+        pythonpath = os.environ.get("PYTHONPATH")
+        if overlay_enabled and pythonpath:
+            args.extend(["-e", f"PYTHONPATH={pythonpath}"])
+        if overlay_enabled:
+            prefixes = [CUTLASS_OVERLAY_ENV_PREFIX]
+            if any(os.environ.get(name) is not None for name in P2B_DEBUG_EXPORT_ENV_VARS):
+                prefixes.append("LUMO_P2B_")
+            args.extend(
+                [
+                    "-e",
+                    "VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="
+                    f"{ModelServer._ray_env_prefixes_to_copy(*prefixes)}",
+                ]
+            )
+        return args
+
+    @staticmethod
+    def _ray_env_prefixes_to_copy(*required_prefixes: str) -> str:
+        prefixes = [
+            prefix.strip()
+            for prefix in os.environ.get("VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY", "").split(",")
+            if prefix.strip()
+        ]
+        for prefix in required_prefixes:
+            if prefix not in prefixes:
+                prefixes.append(prefix)
+        return ",".join(prefixes)
 
     def _ensure_image_present(self) -> None:
         inspect = self._run(["docker", "image", "inspect", self.image], check=False)

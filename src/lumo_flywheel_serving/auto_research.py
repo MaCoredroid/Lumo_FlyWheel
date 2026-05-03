@@ -21,6 +21,13 @@ from uuid import uuid4
 
 import yaml
 
+from .cutlass_overlay_runtime import (
+    NO_RUNTIME_EFFECT_REASON,
+    effective_runtime_overlay_hash,
+    load_cutlass_overlay_bootstrap,
+    materialize_cutlass_overlay_runtime,
+    runtime_overlay_config,
+)
 from .kernel_activation import (
     KERNEL_SELECTION_RUNTIME_UNSUPPORTED,
     phase_a_fp8_gemm_backend_identities,
@@ -8054,16 +8061,20 @@ class L0cKernelMutationRunner:
             return {
                 "kind": "cutlass_source_overlay_bootstrap",
                 "backend": "cutlass",
-                "source_mutability": "repo_owned_overlay_metadata",
-                "runtime_wired": False,
+                "source_mutability": "repo_owned_runtime_overlay",
+                "runtime_wired": True,
                 "kernel_source_path_defaulted": kernel_source_path is None,
                 "kernel_source_path": str(source_path),
                 "safety_note": (
                     "This is a guarded CUTLASS overlay bootstrap. It does not mutate "
-                    "arbitrary vendor binaries and candidates are blocked from live "
-                    "measurement until runtime overlay wiring exists."
+                    "arbitrary vendor binaries; accepted candidates are materialized "
+                    "as runtime-consumed vLLM CUTLASS source import overlays."
                 ),
-                "blocked_candidate_reason": L0C_FP8_GEMM_CUTLASS_OVERLAY_NOT_WIRED,
+                "runtime_artifact_contract": (
+                    "candidate runtime_overlay.source_replacements are emitted as "
+                    "cutlass_fp8_gemm_overlay.json plus sitecustomize.py and consumed "
+                    "through PYTHONPATH during parity and measurement runtime restarts"
+                ),
             }
         if backend.startswith("triton"):
             if kernel_source_path is None:
@@ -8265,6 +8276,7 @@ class L0cKernelMutationRunner:
                 kernel_target == "fp8_gemm"
                 and isinstance(mutation_surface, dict)
                 and mutation_surface.get("kind") == "cutlass_source_overlay_bootstrap"
+                and mutation_surface.get("runtime_wired") is not True
             ):
                 reason = str(
                     mutation_surface.get(
@@ -8300,6 +8312,88 @@ class L0cKernelMutationRunner:
                 )
                 return {**common_outcome, "outcome": "parity_failed"}
 
+            cutlass_overlay_materialization: dict[str, Any] | None = None
+            cutlass_overlay_mounts: list[str] = []
+            cutlass_overlay_env_previous: dict[str, str | None] = {}
+            if (
+                kernel_target == "fp8_gemm"
+                and isinstance(mutation_surface, dict)
+                and mutation_surface.get("kind") == "cutlass_source_overlay_bootstrap"
+            ):
+                try:
+                    base_overlay_path = base_bytes_path
+                    candidate_bootstrap = load_cutlass_overlay_bootstrap(kernel_path)
+                    base_bootstrap = load_cutlass_overlay_bootstrap(base_overlay_path)
+                    candidate_hash = effective_runtime_overlay_hash(
+                        runtime_overlay_config(candidate_bootstrap)
+                    )
+                    base_hash = effective_runtime_overlay_hash(
+                        runtime_overlay_config(base_bootstrap)
+                    )
+                    if candidate_hash == base_hash:
+                        detail = (
+                            "CUTLASS fp8_gemm overlay patch applied, but its "
+                            "runtime_overlay has the same effective runtime hash "
+                            "as the round baseline. Measuring it would attest an "
+                            "unchanged runtime artifact."
+                        )
+                        self._write_parity_check(
+                            iteration_dir,
+                            pass_=False,
+                            reason=NO_RUNTIME_EFFECT_REASON,
+                            fixture_id=fixture_id,
+                            kernel_target=kernel_target,
+                            error_detail=detail,
+                            mutation_surface=mutation_surface,
+                        )
+                        (iteration_dir / "BLOCKED.md").write_text(
+                            "\n".join(
+                                [
+                                    "iteration blocked by CUTLASS overlay runtime-effect guard",
+                                    f"reason: {NO_RUNTIME_EFFECT_REASON}",
+                                    detail,
+                                ]
+                            )
+                            + "\n",
+                            encoding="utf-8",
+                        )
+                        return {**common_outcome, "outcome": "parity_failed"}
+                    materialized = materialize_cutlass_overlay_runtime(
+                        overlay_source_path=kernel_path,
+                        output_dir=iteration_dir / "cutlass_overlay_runtime",
+                    )
+                except Exception as exc:  # noqa: BLE001 - schema/materialization failure is compile-class
+                    self._write_parity_check(
+                        iteration_dir,
+                        pass_=False,
+                        reason="compile_nvcc_error",
+                        fixture_id=fixture_id,
+                        kernel_target=kernel_target,
+                        error_detail=f"cutlass_overlay_materialization_failed: {type(exc).__name__}: {exc}",
+                        mutation_surface=mutation_surface,
+                    )
+                    return {**common_outcome, "outcome": "compile_failed"}
+
+                cutlass_overlay_materialization = materialized.as_dict()
+                (iteration_dir / "cutlass_overlay_runtime_attestation.json").write_text(
+                    json.dumps(cutlass_overlay_materialization, indent=2, sort_keys=True),
+                    encoding="utf-8",
+                )
+                cutlass_overlay_mounts.append(f"{materialized.runtime_dir}:{materialized.runtime_dir}")
+                overlay_env = {
+                    "LUMO_FP8_GEMM_CUTLASS_OVERLAY_CONFIG": str(materialized.config_path),
+                    "LUMO_FP8_GEMM_CUTLASS_OVERLAY_SHA256": materialized.effective_hash,
+                    "LUMO_FP8_GEMM_CUTLASS_OVERLAY_STRICT": "1",
+                    "PYTHONPATH": (
+                        f"{materialized.runtime_dir}:{os.environ['PYTHONPATH']}"
+                        if os.environ.get("PYTHONPATH")
+                        else str(materialized.runtime_dir)
+                    ),
+                }
+                for key, value in overlay_env.items():
+                    cutlass_overlay_env_previous[key] = os.environ.get(key)
+                    os.environ[key] = value
+
             debug_export_dir = iteration_dir / "debug_export"
             staging_dir = debug_export_dir / "staging"
             staging_dir.mkdir(parents=True, exist_ok=True)
@@ -8318,7 +8412,10 @@ class L0cKernelMutationRunner:
             try:
                 self._restart_serving_runtime(
                     spec=spec,
-                    extra_volume_mounts=[f"{staging_dir}:{staging_dir}"],
+                    extra_volume_mounts=[
+                        f"{staging_dir}:{staging_dir}",
+                        *cutlass_overlay_mounts,
+                    ],
                 )
             except Exception as exc:  # noqa: BLE001 - any restart failure is compile-class
                 self._write_parity_check(
@@ -8366,6 +8463,7 @@ class L0cKernelMutationRunner:
                     else None
                 ),
                 error_detail=parity_result.error_detail,
+                cutlass_overlay_runtime=cutlass_overlay_materialization,
             )
             # The agent's per-iteration apply-and-test runs first and may write
             # BLOCKED.md based on its own parity_check.json (later overwritten
@@ -8426,6 +8524,11 @@ class L0cKernelMutationRunner:
                 "objective_mean": objective_mean,
             }
         finally:
+            for key, previous in locals().get("cutlass_overlay_env_previous", {}).items():
+                if previous is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = previous
             kernel_path.write_bytes(base_bytes)
 
     def _apply_kernel_patch(

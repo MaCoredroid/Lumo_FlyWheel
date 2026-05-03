@@ -1549,6 +1549,56 @@ models:
     assert "VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY=EXISTING_,LUMO_P2B_" in cmd
 
 
+def test_build_run_command_passes_cutlass_overlay_env_with_debug_prefixes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+"""
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    overlay_dir = tmp_path / "overlay"
+    overlay_dir.mkdir()
+    monkeypatch.setenv("LUMO_P2B_VLLM_DEBUG_EXPORT", "1")
+    monkeypatch.setenv("LUMO_FP8_GEMM_CUTLASS_OVERLAY_CONFIG", str(overlay_dir / "overlay.json"))
+    monkeypatch.setenv("LUMO_FP8_GEMM_CUTLASS_OVERLAY_SHA256", "abc123")
+    monkeypatch.setenv("LUMO_FP8_GEMM_CUTLASS_OVERLAY_STRICT", "1")
+    monkeypatch.setenv("PYTHONPATH", str(overlay_dir))
+
+    cmd = server._build_run_command(
+        "qwen3.5-27b",
+        server.registry["qwen3.5-27b"],
+        enable_request_logging=False,
+        kv_cache_dtype="auto",
+        gpu_memory_utilization=0.9,
+        enforce_eager=False,
+    )
+
+    assert f"LUMO_FP8_GEMM_CUTLASS_OVERLAY_CONFIG={overlay_dir / 'overlay.json'}" in cmd
+    assert "VLLM_LUMO_FP8_GEMM_CUTLASS_OVERLAY_SHA256=abc123" in cmd
+    assert f"PYTHONPATH={overlay_dir}" in cmd
+    assert (
+        "VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="
+        "LUMO_FP8_GEMM_CUTLASS_OVERLAY_,LUMO_P2B_"
+    ) in cmd
+
+
 def test_wait_ready_requires_target_model_in_v1_models(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

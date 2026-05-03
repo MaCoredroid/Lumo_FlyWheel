@@ -8,6 +8,7 @@ shell-out path itself is exercised.
 from __future__ import annotations
 
 import json
+import difflib
 import shutil
 from pathlib import Path
 from typing import Any
@@ -177,6 +178,17 @@ def _bad_patch(kernel_path: Path) -> str:
     )
 
 
+def _unified_patch(path: Path, before: str, after: str) -> str:
+    return "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=str(path),
+            tofile=str(path),
+        )
+    )
+
+
 def _stub_passing_helpers(monkeypatch, runner: auto_research.L0cKernelMutationRunner, *, objective: float = 1.05) -> dict[str, Any]:
     calls: dict[str, Any] = {"restart": 0, "probe": 0, "measure": 0}
 
@@ -313,6 +325,132 @@ def test_real_apply_and_test_blocks_cutlass_overlay_before_runtime_probe(
     assert parity["mutation_surface"]["kind"] == "cutlass_source_overlay_bootstrap"
     assert (iteration_dir / "BLOCKED.md").is_file()
     assert kernel_path.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n"
+
+
+def test_real_apply_and_test_materializes_runtime_wired_cutlass_overlay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overlay_source = '''CUTLASS_FP8_GEMM_OVERLAY_BOOTSTRAP = {
+    "schema": "l0c.fp8_gemm.cutlass_overlay_bootstrap.v1",
+    "runtime_wired": True,
+    "backend": "cutlass",
+    "runtime_overlay": {
+        "schema": "l0c.fp8_gemm.cutlass_runtime_overlay.v1",
+        "target_modules": ["vllm.model_executor.kernels.linear.scaled_mm.cutlass"],
+        "source_replacements": [],
+    },
+}
+'''
+    runner, round_dir, kernel_path, iteration_dir, round_id = _seed_round(
+        tmp_path,
+        iteration="001",
+        patch_text="placeholder",
+        kernel_source_text=overlay_source,
+    )
+    patched_overlay_source = overlay_source.replace(
+        '        "source_replacements": [],\n',
+        '        "source_replacements": [\n'
+        '            {\n'
+        '                "label": "contiguous_A_probe",\n'
+        '                "before": "output = ops.cutlass_scaled_mm(\\n            A, B,",\n'
+        '                "after": "output = ops.cutlass_scaled_mm(\\n            A.contiguous(), B,",\n'
+        '            }\n'
+        '        ],\n',
+    )
+    patch_text = _unified_patch(kernel_path, overlay_source, patched_overlay_source)
+    (iteration_dir / "mutation.patch").write_text(patch_text, encoding="utf-8")
+    spec_path = round_dir / "round_spec.yaml"
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    spec["kernel_target"] = "fp8_gemm"
+    spec["mutation_surface"] = {
+        "kind": "cutlass_source_overlay_bootstrap",
+        "backend": "cutlass",
+        "runtime_wired": True,
+    }
+    spec_path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+
+    calls = _stub_passing_helpers(monkeypatch, runner)
+
+    payload = runner.apply_and_test(
+        round_id=round_id,
+        iteration="001",
+        kernel_target="fp8_gemm",
+        harness="real",
+        round_root=round_dir.parent,
+    )
+
+    assert payload["outcome"] == "parity_passed", payload
+    assert calls["restart"] == 1
+    assert calls["probe"] == 1
+    assert calls["measure"] == 1
+    assert any("cutlass_overlay_runtime" in mount for mount in calls["restart_mounts"])
+    attestation = json.loads(
+        (iteration_dir / "cutlass_overlay_runtime_attestation.json").read_text(encoding="utf-8")
+    )
+    assert attestation["replacements_count"] == 1
+    parity = json.loads((iteration_dir / "parity_check.json").read_text(encoding="utf-8"))
+    assert parity["pass"] is True
+    assert parity["cutlass_overlay_runtime"]["effective_hash"] == attestation["effective_hash"]
+    assert kernel_path.read_text(encoding="utf-8") == overlay_source
+
+
+def test_real_apply_and_test_blocks_cutlass_overlay_without_runtime_effect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overlay_source = '''CUTLASS_FP8_GEMM_OVERLAY_BOOTSTRAP = {
+    "schema": "l0c.fp8_gemm.cutlass_overlay_bootstrap.v1",
+    "runtime_wired": True,
+    "backend": "cutlass",
+    "runtime_overlay": {
+        "schema": "l0c.fp8_gemm.cutlass_runtime_overlay.v1",
+        "target_modules": ["vllm.model_executor.kernels.linear.scaled_mm.cutlass"],
+        "source_replacements": [],
+    },
+}
+'''
+    runner, round_dir, kernel_path, iteration_dir, round_id = _seed_round(
+        tmp_path,
+        iteration="001",
+        patch_text="placeholder",
+        kernel_source_text=overlay_source,
+    )
+    (iteration_dir / "mutation.patch").write_text(
+        f"--- {kernel_path}\n+++ {kernel_path}\n"
+        "@@ -1,6 +1,7 @@\n"
+        " CUTLASS_FP8_GEMM_OVERLAY_BOOTSTRAP = {\n"
+        "     \"schema\": \"l0c.fp8_gemm.cutlass_overlay_bootstrap.v1\",\n"
+        "     \"runtime_wired\": True,\n"
+        "     \"backend\": \"cutlass\",\n"
+        "+    \"candidate_note\": \"metadata only\",\n"
+        "     \"runtime_overlay\": {\n"
+        "         \"schema\": \"l0c.fp8_gemm.cutlass_runtime_overlay.v1\",\n"
+        "         \"target_modules\": [\"vllm.model_executor.kernels.linear.scaled_mm.cutlass\"],\n",
+        encoding="utf-8",
+    )
+    spec_path = round_dir / "round_spec.yaml"
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    spec["kernel_target"] = "fp8_gemm"
+    spec["mutation_surface"] = {
+        "kind": "cutlass_source_overlay_bootstrap",
+        "backend": "cutlass",
+        "runtime_wired": True,
+    }
+    spec_path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+    calls = _stub_passing_helpers(monkeypatch, runner)
+
+    payload = runner.apply_and_test(
+        round_id=round_id,
+        iteration="001",
+        kernel_target="fp8_gemm",
+        harness="real",
+        round_root=round_dir.parent,
+    )
+
+    assert payload["outcome"] == "parity_failed"
+    assert calls["restart"] == 0
+    parity = json.loads((iteration_dir / "parity_check.json").read_text(encoding="utf-8"))
+    assert parity["reason"] == "l0c_fp8_gemm_cutlass_overlay_no_runtime_effect"
+    assert kernel_path.read_text(encoding="utf-8") == overlay_source
 
 
 def test_real_apply_and_test_returns_compile_failed_when_patch_does_not_apply(

@@ -1,5 +1,5 @@
 family_id: responses-sdk-adapter-cutover-heavy
-workload_distribution_id: 7ded76c7da429927f6d5312a9555723b2cfa0dedc696932f8ae253634ccefc6d
+workload_distribution_id: 632cac0c573c17b29328476ff8a9f4892fbad8ca2840fb13f62fcdd4533f56ad
 workload_distribution_id_hardening_version: v2-l0-kernel-heavy
 capture_date: '2026-04-25T22:44:14.034516Z'
 source_family: responses-sdk-adapter-cutover
@@ -16,4 +16,5 @@ thinking_probe_ref: reports/thinking-probe-20260424.md
 thinking_probe_outcome: row-3
 parity_fixture_refs:
   deltanet: parity_fixture/deltanet_v1.yaml
+  fp8_gemm: parity_fixture/fp8_gemm_v1.yaml
   gatedattn: parity_fixture/gatedattn_v1.yaml

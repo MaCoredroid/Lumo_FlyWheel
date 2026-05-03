@@ -954,6 +954,9 @@ def cmd_auto_research_mutate_kernel(args: argparse.Namespace) -> int:
         endpoint = args.endpoint or f"http://127.0.0.1:{args.proxy_port}/v1"
         metrics_url = args.metrics_url or f"http://127.0.0.1:{args.port}/metrics"
         admin_url = args.admin_url or f"http://127.0.0.1:{args.proxy_port}/admin"
+        kernel_container_path = args.kernel_container_path
+        if args.kernel_target == "fp8_gemm" and args.kernel_source_path is None:
+            kernel_container_path = None
         runtime = {
             "container_name": args.container_name,
             "model_id": args.model_id,
@@ -967,7 +970,7 @@ def cmd_auto_research_mutate_kernel(args: argparse.Namespace) -> int:
             "triton_cache_root": args.triton_cache_root,
             "warmup_s": args.warmup_s,
             "window_s": args.window_s,
-            "kernel_container_path": args.kernel_container_path,
+            "kernel_container_path": kernel_container_path,
         }
         if args.image is not None:
             runtime["image"] = args.image

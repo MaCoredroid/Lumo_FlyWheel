@@ -5156,7 +5156,7 @@ def test_l0c_fp8_gemm_real_cutlass_missing_fixture_halts_after_round_metadata(
     assert isinstance(round_spec, dict)
     assert round_spec["kernel_target"] == "fp8_gemm"
     assert round_spec["mutation_surface"]["kind"] == "cutlass_source_overlay_bootstrap"
-    assert round_spec["mutation_surface"]["runtime_wired"] is False
+    assert round_spec["mutation_surface"]["runtime_wired"] is True
 
 
 def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
@@ -5237,6 +5237,7 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
     assert isinstance(round_spec, dict)
     assert round_spec["mutation_surface"]["kind"] == "cutlass_source_overlay_bootstrap"
+    assert round_spec["mutation_surface"]["runtime_wired"] is True
     assert round_spec["parity_fixture_id"] == "responses-sdk-adapter-cutover-fp8-gemm-v1"
 
 

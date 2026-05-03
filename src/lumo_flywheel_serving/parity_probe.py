@@ -85,6 +85,18 @@ def run_parity_probe(
     quiet_timeout_s: float = 30.0,
     quiet_window_s: float = 0.5,
 ) -> ParityProbeResult:
+    if kernel_target == "fp8_gemm":
+        return _run_fp8_gemm_parity_probe(
+            repo_root=repo_root,
+            fixture_dir=fixture_dir,
+            endpoint=endpoint,
+            model=model,
+            api_key=api_key,
+            debug_export_dir=debug_export_dir,
+            request_timeout_s=request_timeout_s,
+            quiet_timeout_s=quiet_timeout_s,
+            quiet_window_s=quiet_window_s,
+        )
     if kernel_target not in {"deltanet", "gatedattn"}:
         raise ValueError(f"unsupported kernel_target: {kernel_target!r}")
 
@@ -105,7 +117,253 @@ def run_parity_probe(
         if kernel_target == "deltanet"
         else ()
     )
+    return _run_debug_export_parity_probe(
+        fixture_dir=fixture_dir,
+        kernel_target=kernel_target,
+        endpoint=endpoint,
+        model=model,
+        api_key=api_key,
+        debug_export_dir=debug_export_dir,
+        request_timeout_s=request_timeout_s,
+        quiet_timeout_s=quiet_timeout_s,
+        quiet_window_s=quiet_window_s,
+        fixture_id=fixture_id,
+        rtol_logit=rtol_logit,
+        atol_logit=atol_logit,
+        rtol_state=rtol_state,
+        atol_state=atol_state,
+        state_checkpoints=state_checkpoints,
+    )
 
+
+def _run_fp8_gemm_parity_probe(
+    *,
+    repo_root: Path,  # noqa: ARG001 - kept for API symmetry and future source-path references
+    fixture_dir: Path,
+    endpoint: str,
+    model: str,
+    api_key: str,
+    debug_export_dir: Path,
+    request_timeout_s: float,
+    quiet_timeout_s: float,
+    quiet_window_s: float,
+) -> ParityProbeResult:
+    fixture_yaml_path = fixture_dir / "fp8_gemm_v1.yaml"
+    if not fixture_yaml_path.is_file():
+        raise FileNotFoundError(f"parity fixture YAML missing: {fixture_yaml_path}")
+    fixture = yaml.safe_load(fixture_yaml_path.read_text(encoding="utf-8"))
+    if not isinstance(fixture, dict):
+        raise ValueError(f"parity fixture YAML is not a mapping: {fixture_yaml_path}")
+    fixture_id = str(fixture.get("fixture_id", ""))
+
+    try:
+        import numpy as np
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError("numpy is required for parity probe") from exc
+
+    tier3 = _compare_fp8_tier3_fixture(np, fixture_dir=fixture_dir, fixture=fixture)
+    if not tier3["pass"]:
+        return ParityProbeResult(
+            pass_=False,
+            fixture_id=fixture_id,
+            kernel_target="fp8_gemm",
+            probes_total=int(fixture.get("tier_3_probe_count") or 0),
+            probes_passed=int(tier3.get("probes_passed", 0)),
+            first_diverging_probe=tier3.get("first_diverging_probe"),
+            tolerance_overshoot=float(tier3.get("overshoot", 0.0)),
+            reason="parity_fp8_tier3_gemm_diverged",
+            error_detail=tier3.get("detail"),
+            checkpoints_checked=("tier_3_gemm_output_compare",),
+        )
+
+    probe_ref = fixture.get("tier_4_probe_input_ref", "probes_input.jsonl")
+    probes_path = fixture_dir / str(probe_ref)
+    if not probes_path.is_file():
+        raise FileNotFoundError(f"fp8_gemm tier-4 probe input missing: {probes_path}")
+    probes = [json.loads(line) for line in probes_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not probes:
+        raise ValueError(f"fp8_gemm tier-4 probe input is empty: {probes_path}")
+
+    logits_ref_path = fixture_dir / str(fixture["tier_4_reference_downstream_logits_ref"])
+    logits_ref = dict(np.load(logits_ref_path, allow_pickle=False))
+    schema_self_contained = "logits_member_names" in logits_ref
+    schema_legacy = "source_artifact_path_by_probe" in logits_ref
+    if not (schema_self_contained or schema_legacy):
+        raise ValueError(
+            "fp8_gemm tier-4 downstream logits fixture must use self-contained "
+            f"logits_member_names or legacy source_artifact_path_by_probe schema: {logits_ref_path}"
+        )
+    tolerances = fixture.get("tier_4_tolerances") or {}
+    rtol = float(tolerances.get("rtol_downstream_logit", 0.001))
+    atol = float(tolerances.get("atol_downstream_logit", 0.001))
+
+    debug_export_dir = Path(debug_export_dir).resolve()
+    staging_dir = debug_export_dir / "staging"
+    archive_root = debug_export_dir / "candidate"
+    archive_root.mkdir(parents=True, exist_ok=True)
+
+    per_probe: list[dict[str, Any]] = []
+    overshoot = 0.0
+    for probe_index, probe in enumerate(probes):
+        probe_index_int = int(probe.get("probe_index", probe_index))
+        if schema_self_contained:
+            tokens_arr = logits_ref[f"probe_{probe_index_int:06d}_logit_tokens"]
+            target_logit_token = int(tokens_arr[0])
+        else:
+            target_logit_token = int(logits_ref["source_generated_token_index_by_probe"][probe_index])
+        _clear_staging(staging_dir)
+        try:
+            _post_completion(
+                endpoint=endpoint,
+                api_key=api_key,
+                model=model,
+                probe=probe,
+                timeout_s=request_timeout_s,
+                minimum_completion_tokens=None,
+            )
+        except requests.RequestException as exc:
+            return ParityProbeResult(
+                pass_=False,
+                fixture_id=fixture_id,
+                kernel_target="fp8_gemm",
+                probes_total=len(probes),
+                probes_passed=probe_index,
+                first_diverging_probe=probe_index_int,
+                tolerance_overshoot=overshoot,
+                reason="endpoint_unreachable",
+                error_detail=f"{type(exc).__name__}: {exc}",
+                per_probe=tuple(per_probe),
+                checkpoints_checked=("tier_3_gemm_output_compare", "tier_4_downstream_logit_guard"),
+            )
+        try:
+            archive_dir = archive_root / f"probe_{probe_index_int:06d}"
+            artifact = _archive_probe_files(
+                staging_dir=staging_dir,
+                archive_dir=archive_dir,
+                expected_state_tokens=(),
+                require_state=False,
+                quiet_timeout_s=quiet_timeout_s,
+                quiet_window_s=quiet_window_s,
+            )
+            outcome = _compare_logits(
+                np_module=np,
+                candidate_paths=artifact["logits"],
+                target_token=target_logit_token,
+                fixture_logits=logits_ref,
+                fixture_index=probe_index_int,
+                rtol=rtol,
+                atol=atol,
+                schema_self_contained=schema_self_contained,
+            )
+        except (FileNotFoundError, RuntimeError, ValueError, KeyError) as exc:
+            return ParityProbeResult(
+                pass_=False,
+                fixture_id=fixture_id,
+                kernel_target="fp8_gemm",
+                probes_total=len(probes),
+                probes_passed=probe_index,
+                first_diverging_probe=probe_index_int,
+                tolerance_overshoot=overshoot,
+                reason="capture_failed" if isinstance(exc, (FileNotFoundError, RuntimeError)) else "comparison_failed",
+                error_detail=f"{type(exc).__name__}: {exc}",
+                per_probe=tuple(per_probe),
+                checkpoints_checked=("tier_3_gemm_output_compare", "tier_4_downstream_logit_guard"),
+            )
+        per_probe.append({"probe_index": probe_index_int, "logits": outcome})
+        overshoot = max(overshoot, float(outcome["overshoot"]))
+        if not outcome["pass"]:
+            return ParityProbeResult(
+                pass_=False,
+                fixture_id=fixture_id,
+                kernel_target="fp8_gemm",
+                probes_total=len(probes),
+                probes_passed=probe_index,
+                first_diverging_probe=probe_index_int,
+                tolerance_overshoot=overshoot,
+                reason="parity_fp8_tier4_downstream_logit_diverged",
+                error_detail=outcome.get("detail"),
+                per_probe=tuple(per_probe),
+                checkpoints_checked=("tier_3_gemm_output_compare", "tier_4_downstream_logit_guard"),
+            )
+
+    return ParityProbeResult(
+        pass_=True,
+        fixture_id=fixture_id,
+        kernel_target="fp8_gemm",
+        probes_total=len(probes),
+        probes_passed=len(probes),
+        first_diverging_probe=None,
+        tolerance_overshoot=overshoot,
+        reason="ran_passed",
+        error_detail=None,
+        per_probe=tuple(per_probe),
+        checkpoints_checked=("tier_3_gemm_output_compare", "tier_4_downstream_logit_guard"),
+    )
+
+
+def _compare_fp8_tier3_fixture(
+    np_module: Any,
+    *,
+    fixture_dir: Path,
+    fixture: dict[str, Any],
+) -> dict[str, Any]:
+    a_npz = dict(np_module.load(fixture_dir / fixture["tier_3_probe_input_a_ref"], allow_pickle=False))
+    b_npz = dict(np_module.load(fixture_dir / fixture["tier_3_probe_input_b_ref"], allow_pickle=False))
+    scale_a_npz = dict(np_module.load(fixture_dir / fixture["tier_3_probe_input_scale_a_ref"], allow_pickle=False))
+    scale_b_npz = dict(np_module.load(fixture_dir / fixture["tier_3_probe_input_scale_b_ref"], allow_pickle=False))
+    ref_npz = dict(np_module.load(fixture_dir / fixture["tier_3_reference_gemm_output_ref"], allow_pickle=False))
+    a_values = a_npz["values"]
+    b_values = b_npz["values"]
+    ref_values = ref_npz["values"]
+    m_values = a_npz["M"].astype(np_module.int32)
+    n_values = b_npz["N"].astype(np_module.int32)
+    k_values = a_npz["K"].astype(np_module.int32)
+    scale_a = scale_a_npz["values"].reshape(-1)
+    scale_b = scale_b_npz["values"].reshape(-1)
+    tolerances = fixture.get("tier_3_tolerances") or {}
+    rtol = float(tolerances.get("rtol_gemm_output", 0.002))
+    atol = float(tolerances.get("atol_gemm_output", 0.002))
+    overshoot = 0.0
+    for index in range(int(fixture.get("tier_3_probe_count") or len(m_values))):
+        m = int(m_values[index])
+        n = int(n_values[index])
+        k = int(k_values[index])
+        candidate = (
+            a_values[index, :m, :k].astype(np_module.float32)
+            @ b_values[index, :k, :n].astype(np_module.float32)
+        ) * float(scale_a[index]) * float(scale_b[index])
+        reference = ref_values[index, :m, :n].astype(np_module.float32)
+        current_overshoot = _compute_overshoot(np_module, candidate, reference, rtol=rtol, atol=atol)
+        overshoot = max(overshoot, current_overshoot)
+        if current_overshoot > 0.0:
+            return {
+                "pass": False,
+                "probes_passed": index,
+                "first_diverging_probe": index,
+                "overshoot": overshoot,
+                "detail": f"tier_3_probe_{index}_overshoot={current_overshoot}",
+            }
+    return {"pass": True, "probes_passed": int(fixture.get("tier_3_probe_count") or len(m_values)), "overshoot": overshoot}
+
+
+def _run_debug_export_parity_probe(
+    *,
+    fixture_dir: Path,
+    kernel_target: str,
+    endpoint: str,
+    model: str,
+    api_key: str,
+    debug_export_dir: Path,
+    request_timeout_s: float,
+    quiet_timeout_s: float,
+    quiet_window_s: float,
+    fixture_id: str,
+    rtol_logit: float,
+    atol_logit: float,
+    rtol_state: float,
+    atol_state: float,
+    state_checkpoints: tuple[int, ...],
+) -> ParityProbeResult:
     probes_path = fixture_dir / "probes_input.jsonl"
     if not probes_path.is_file():
         raise FileNotFoundError(f"probes_input.jsonl missing: {probes_path}")

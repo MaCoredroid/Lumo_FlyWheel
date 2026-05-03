@@ -1,0 +1,292 @@
+fixture_id: responses-sdk-adapter-cutover-fp8-gemm-v1
+kernel_target: fp8_gemm
+generated_at: '2026-05-03T00:00:00Z'
+generated_against:
+  vllm_version: 0.19.0
+  weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+  reference_baseline:
+    attention_backend: vllm-default
+    deltanet_kernel: triton-chunked-delta-v2
+    fp8_gemm_kernel: cutlass
+    torch_compile_mode: default
+    cuda_graph_capture: 'off'
+  reference_reproducibility_runs: 3
+  source_debug_export_root: output/p2b_fixture_verify_bi_shared/probe/candidate
+tier_3_probe_count: 64
+tier_3_smoke_probe_count: 8
+tier_3_probe_shapes:
+- M: 1
+  N: 8
+  K: 8
+- M: 2
+  N: 8
+  K: 8
+- M: 4
+  N: 8
+  K: 8
+- M: 8
+  N: 8
+  K: 8
+- M: 16
+  N: 8
+  K: 8
+- M: 1
+  N: 16
+  K: 8
+- M: 2
+  N: 16
+  K: 8
+- M: 4
+  N: 16
+  K: 8
+- M: 8
+  N: 16
+  K: 8
+- M: 16
+  N: 16
+  K: 8
+- M: 1
+  N: 24
+  K: 8
+- M: 2
+  N: 24
+  K: 8
+- M: 4
+  N: 24
+  K: 8
+- M: 8
+  N: 24
+  K: 8
+- M: 16
+  N: 24
+  K: 8
+- M: 1
+  N: 32
+  K: 8
+- M: 2
+  N: 32
+  K: 8
+- M: 4
+  N: 32
+  K: 8
+- M: 8
+  N: 32
+  K: 8
+- M: 16
+  N: 32
+  K: 8
+- M: 1
+  N: 8
+  K: 16
+- M: 2
+  N: 8
+  K: 16
+- M: 4
+  N: 8
+  K: 16
+- M: 8
+  N: 8
+  K: 16
+- M: 16
+  N: 8
+  K: 16
+- M: 1
+  N: 16
+  K: 16
+- M: 2
+  N: 16
+  K: 16
+- M: 4
+  N: 16
+  K: 16
+- M: 8
+  N: 16
+  K: 16
+- M: 16
+  N: 16
+  K: 16
+- M: 1
+  N: 24
+  K: 16
+- M: 2
+  N: 24
+  K: 16
+- M: 4
+  N: 24
+  K: 16
+- M: 8
+  N: 24
+  K: 16
+- M: 16
+  N: 24
+  K: 16
+- M: 1
+  N: 32
+  K: 16
+- M: 2
+  N: 32
+  K: 16
+- M: 4
+  N: 32
+  K: 16
+- M: 8
+  N: 32
+  K: 16
+- M: 16
+  N: 32
+  K: 16
+- M: 1
+  N: 8
+  K: 24
+- M: 2
+  N: 8
+  K: 24
+- M: 4
+  N: 8
+  K: 24
+- M: 8
+  N: 8
+  K: 24
+- M: 16
+  N: 8
+  K: 24
+- M: 1
+  N: 16
+  K: 24
+- M: 2
+  N: 16
+  K: 24
+- M: 4
+  N: 16
+  K: 24
+- M: 8
+  N: 16
+  K: 24
+- M: 16
+  N: 16
+  K: 24
+- M: 1
+  N: 24
+  K: 24
+- M: 2
+  N: 24
+  K: 24
+- M: 4
+  N: 24
+  K: 24
+- M: 8
+  N: 24
+  K: 24
+- M: 16
+  N: 24
+  K: 24
+- M: 1
+  N: 32
+  K: 24
+- M: 2
+  N: 32
+  K: 24
+- M: 4
+  N: 32
+  K: 24
+- M: 8
+  N: 32
+  K: 24
+- M: 16
+  N: 32
+  K: 24
+- M: 1
+  N: 8
+  K: 32
+- M: 2
+  N: 8
+  K: 32
+- M: 4
+  N: 8
+  K: 32
+- M: 8
+  N: 8
+  K: 32
+tier_3_probe_input_a_ref: tier_3_inputs/gemm_input_a.npz
+tier_3_probe_input_b_ref: tier_3_inputs/gemm_input_b.npz
+tier_3_probe_input_scale_a_ref: tier_3_inputs/gemm_input_scale_a.npz
+tier_3_probe_input_scale_b_ref: tier_3_inputs/gemm_input_scale_b.npz
+tier_3_reference_gemm_output_ref: tier_3_inputs/gemm_reference_output.npz
+tier_3_tolerances:
+  rtol_gemm_output: 0.002
+  atol_gemm_output: 0.002
+tier_3_parity_check_method: gemm_output_compare_only
+tier_4_call_site_count: 64
+tier_4_call_site_layer_indices:
+- 0
+- 1
+- 2
+- 3
+- 4
+- 5
+- 6
+- 7
+- 8
+- 9
+- 10
+- 11
+- 12
+- 13
+- 14
+- 15
+- 16
+- 17
+- 18
+- 19
+- 20
+- 21
+- 22
+- 23
+- 24
+- 25
+- 26
+- 27
+- 28
+- 29
+- 30
+- 31
+- 32
+- 33
+- 34
+- 35
+- 36
+- 37
+- 38
+- 39
+- 40
+- 41
+- 42
+- 43
+- 44
+- 45
+- 46
+- 47
+- 48
+- 49
+- 50
+- 51
+- 52
+- 53
+- 54
+- 55
+- 56
+- 57
+- 58
+- 59
+- 60
+- 61
+- 62
+- 63
+tier_4_probe_input_ref: fp8_gemm_probes_input.jsonl
+tier_4_probe_input_state_ref: tier_4_vllm_parity/probe_state_snapshots.npz
+tier_4_reference_downstream_logits_ref: tier_4_vllm_parity/reference_downstream_logits.npz
+tier_4_tolerances:
+  rtol_downstream_logit: 0.001
+  atol_downstream_logit: 0.001
+tier_4_parity_check_method: vllm_parity_with_downstream_logit_compounding_guard
+content_hash: 6c2c919e7aa3bd3df23c706f04459cff0951ad2c355035d37b3c5a16af1580ab
