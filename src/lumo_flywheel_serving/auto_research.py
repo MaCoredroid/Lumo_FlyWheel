@@ -11145,8 +11145,13 @@ class L0cKernelMutationRunner:
                     "- Do not replace `process_weights_after_loading` wholesale. If you",
                     "  touch it, preserve CUTLASS weight transposition, fused scale",
                     "  conversion, static input-scale handling, and AZP adjustment.",
-                    "- Prefer exact guarded fast paths or dispatch/shape/scale changes that",
-                    "  can affect actual CUTLASS kernel behavior.",
+                    "- Prefer exact guarded changes that affect actual CUTLASS dispatch,",
+                    "  shape, scale, or schedule behavior: backend selection predicates,",
+                    "  quantization scale shape/placement, FP8 input grouping/padding,",
+                    "  or calls into alternative CUTLASS-supported scaled-mm paths.",
+                    "- If your patch cannot plausibly change the launched CUTLASS op,",
+                    "  scale tensors, or GEMM problem shape, write BLOCKED.md instead",
+                    "  of submitting another Python-wrapper cosmetic mutation.",
                 ]
             )
         else:

@@ -5623,6 +5623,9 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "expected speed mechanism" in brief
     assert "Do not replace `process_weights_after_loading` wholesale" in brief
     assert "CUTLASS weight transposition" in brief
+    assert "CUTLASS dispatch" in brief
+    assert "scale tensors" in brief
+    assert "GEMM problem shape" in brief
     assert "fp8_gemm_cutlass_python_wrapper_rewrite" not in brief
     assert "auto-research apply-and-test \\" not in brief
 
