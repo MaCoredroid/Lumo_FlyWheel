@@ -103,10 +103,13 @@ L0B_DEFAULT_MIN_HEADROOM_PCT = 0.03
 L0C_MUTATION_ROUND_TYPE = "l0c_mutation"
 L0C_KERNEL_TARGETS = {"deltanet", "gatedattn", "fp8_gemm"}
 L0C_KERNEL_TARGETS_RENDERED = ", ".join(sorted(L0C_KERNEL_TARGETS))
-L0C_FP8_GEMM_REAL_HARNESS_HALT = (
-    "HALT_REASON: l0c_fp8_gemm_real_harness_out_of_scope; "
-    "Phase B fp8_gemm support is bootstrap-only until a Triton FP8 replay/capture "
-    "harness is implemented"
+L0C_FP8_GEMM_REAL_BACKEND_UNSUPPORTED = "l0c_fp8_gemm_real_backend_unsupported"
+L0C_FP8_GEMM_CUTLASS_SOURCE_UNSUPPORTED = "l0c_fp8_gemm_cutlass_source_overlay_unsupported"
+L0C_FP8_GEMM_CUTLASS_OVERLAY_NOT_WIRED = "l0c_fp8_gemm_cutlass_overlay_not_runtime_wired"
+L0C_FP8_GEMM_CUTLASS_OVERLAY_SOURCE = (
+    Path(__file__).resolve().parent
+    / "kernel_overlays"
+    / "fp8_gemm_cutlass_overlay_bootstrap.py"
 )
 L0C_DEFAULT_ACCEPTED_CAP = 12
 L0C_DEFAULT_TOTAL_ATTEMPT_CAP = 36
@@ -6194,8 +6197,8 @@ class L0cKernelMutationRunner:
         workload_file: str | Path,
         base_bundle: str | Path,
         kernel_target: str,
-        kernel_source_path: str | Path,
-        parity_fixture: str | Path,
+        kernel_source_path: str | Path | None,
+        parity_fixture: str | Path | None,
         base_measurements: int,
         accepted_iteration_cap: int,
         total_attempt_cap: int,
@@ -6215,8 +6218,6 @@ class L0cKernelMutationRunner:
             raise RuntimeError(f"Unsupported harness: {harness}")
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
-        if kernel_target == "fp8_gemm" and harness == "real":
-            raise RuntimeError(L0C_FP8_GEMM_REAL_HARNESS_HALT)
         if base_measurements < 1:
             raise RuntimeError("--base-measurements must be >= 1")
         if accepted_iteration_cap < 1:
@@ -6247,12 +6248,57 @@ class L0cKernelMutationRunner:
             )
         weight_version_id = base.weight_version_id or default_weight_version_id(registry[model_id])
 
+        fp8_real_surface: dict[str, Any] | None = None
+        if kernel_target == "fp8_gemm" and harness == "real":
+            fp8_real_surface = self._resolve_fp8_gemm_real_mutation_surface(
+                base=base,
+                kernel_source_path=kernel_source_path,
+            )
+
+        if kernel_source_path is None:
+            if fp8_real_surface is not None and fp8_real_surface.get("kind") == "cutlass_source_overlay_bootstrap":
+                kernel_source_path = str(L0C_FP8_GEMM_CUTLASS_OVERLAY_SOURCE)
+            else:
+                raise RuntimeError("--kernel-source-path is required")
         kernel_source = Path(kernel_source_path)
         if not kernel_source.is_absolute():
             kernel_source = self.repo_root / kernel_source
         kernel_source = kernel_source.resolve()
-        fixture_path = Path(parity_fixture).resolve()
+        fixture_path = self._resolve_l0c_parity_fixture_path(
+            parity_fixture=parity_fixture,
+            workload_path=workload_path,
+            descriptor=descriptor,
+            kernel_target=kernel_target,
+        )
         if not fixture_path.is_file():
+            if kernel_target == "fp8_gemm" and harness == "real":
+                self._write_l0c_precondition_halt_round(
+                    workload_path=workload_path,
+                    descriptor=descriptor,
+                    base=base,
+                    base_bundle=base_bundle,
+                    model_id=model_id,
+                    weight_version_id=weight_version_id,
+                    kernel_target=kernel_target,
+                    kernel_source=kernel_source,
+                    fixture_path=fixture_path,
+                    base_measurements=base_measurements,
+                    accepted_iteration_cap=accepted_iteration_cap,
+                    total_attempt_cap=total_attempt_cap,
+                    round_timeout_hours=round_timeout_hours,
+                    round_root=round_root,
+                    harness=harness,
+                    mutation_surface=fp8_real_surface,
+                    halt_reason="l0c_precondition_missing_fixture",
+                    halt_detail=(
+                        "fp8_gemm real mutation requires a Tier-3/Tier-4 parity fixture "
+                        f"before any CUTLASS overlay candidate can be evaluated: {fixture_path}"
+                    ),
+                )
+                raise RuntimeError(
+                    "HALT_REASON: l0c_precondition_missing_fixture; missing fp8_gemm "
+                    f"parity fixture: {fixture_path}"
+                )
             raise RuntimeError(f"Parity fixture missing: {fixture_path}")
         fixture_payload = load_yaml_file(fixture_path)
         fixture_id = (
@@ -6339,6 +6385,8 @@ class L0cKernelMutationRunner:
             "round_timeout_hours": round_timeout_hours,
             "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
         }
+        if fp8_real_surface is not None:
+            spec["mutation_surface"] = fp8_real_surface
         self._write_yaml(round_dir / "round_spec.yaml", spec)
         (round_dir / "iteration_brief.md").write_text(
             self._render_brief(
@@ -6833,8 +6881,6 @@ class L0cKernelMutationRunner:
             raise RuntimeError(f"Unsupported harness: {harness}")
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
-        if kernel_target == "fp8_gemm" and harness == "real":
-            raise RuntimeError(L0C_FP8_GEMM_REAL_HARNESS_HALT)
         round_dir = Path(round_root).resolve() / round_id
         if not round_dir.is_dir():
             raise RuntimeError(f"L0c round directory not found: {round_dir}")
@@ -6971,8 +7017,6 @@ class L0cKernelMutationRunner:
             raise RuntimeError("resume-candidate currently supports --harness real only")
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
-        if kernel_target == "fp8_gemm":
-            raise RuntimeError(L0C_FP8_GEMM_REAL_HARNESS_HALT)
         round_dir = Path(round_root).resolve() / round_id
         if not round_dir.is_dir():
             raise RuntimeError(f"L0c round directory not found: {round_dir}")
@@ -7327,8 +7371,6 @@ class L0cKernelMutationRunner:
             raise RuntimeError("resume-round currently supports --harness real only")
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
-        if kernel_target == "fp8_gemm":
-            raise RuntimeError(L0C_FP8_GEMM_REAL_HARNESS_HALT)
 
         round_started = time.time()
         round_dir = Path(round_root).resolve() / round_id
@@ -7947,6 +7989,181 @@ class L0cKernelMutationRunner:
                 f"{kernel_target}: " + ", ".join(validation.errors)
             )
 
+    def _resolve_l0c_parity_fixture_path(
+        self,
+        *,
+        parity_fixture: str | Path | None,
+        workload_path: Path,
+        descriptor: dict[str, Any],
+        kernel_target: str,
+    ) -> Path:
+        if parity_fixture is not None and str(parity_fixture).strip():
+            path = Path(parity_fixture)
+            if not path.is_absolute():
+                path = self.repo_root / path
+            return path.resolve()
+
+        refs = descriptor.get("parity_fixture_refs")
+        if not isinstance(refs, dict):
+            return (
+                self.repo_root
+                / "benchmark_blueprints"
+                / "families"
+                / str(descriptor.get("source_family") or descriptor.get("family_id") or "")
+                / "parity_fixture"
+                / f"{kernel_target}_v1.yaml"
+            ).resolve()
+        value = refs.get(kernel_target)
+        if not isinstance(value, str) or not value.strip():
+            return (
+                self.repo_root
+                / "benchmark_blueprints"
+                / "families"
+                / str(descriptor.get("source_family") or descriptor.get("family_id") or "")
+                / "parity_fixture"
+                / f"{kernel_target}_v1.yaml"
+            ).resolve()
+        source_family = str(descriptor.get("source_family") or descriptor.get("family_id") or "")
+        path = Path(value)
+        candidates = [path] if path.is_absolute() else [
+            workload_path.parent / path,
+            self.repo_root / path,
+            self.repo_root / "benchmark_blueprints" / "families" / source_family / path,
+        ]
+        return next((candidate.resolve() for candidate in candidates if candidate.is_file()), candidates[0].resolve())
+
+    def _resolve_fp8_gemm_real_mutation_surface(
+        self,
+        *,
+        base: TunedConfigBundle,
+        kernel_source_path: str | Path | None,
+    ) -> dict[str, Any]:
+        backend = str((base.kernel_selection or {}).get("fp8_gemm_kernel") or "").strip().lower()
+        if backend == "cutlass":
+            source_path = Path(kernel_source_path) if kernel_source_path else L0C_FP8_GEMM_CUTLASS_OVERLAY_SOURCE
+            if not source_path.is_absolute():
+                source_path = self.repo_root / source_path
+            source_path = source_path.resolve()
+            if source_path != L0C_FP8_GEMM_CUTLASS_OVERLAY_SOURCE:
+                raise RuntimeError(
+                    f"HALT_REASON: {L0C_FP8_GEMM_CUTLASS_SOURCE_UNSUPPORTED}; "
+                    "CUTLASS fp8_gemm real L0c only supports the repo-owned "
+                    f"overlay bootstrap at {L0C_FP8_GEMM_CUTLASS_OVERLAY_SOURCE}; "
+                    f"got {source_path}"
+                )
+            return {
+                "kind": "cutlass_source_overlay_bootstrap",
+                "backend": "cutlass",
+                "source_mutability": "repo_owned_overlay_metadata",
+                "runtime_wired": False,
+                "kernel_source_path_defaulted": kernel_source_path is None,
+                "kernel_source_path": str(source_path),
+                "safety_note": (
+                    "This is a guarded CUTLASS overlay bootstrap. It does not mutate "
+                    "arbitrary vendor binaries and candidates are blocked from live "
+                    "measurement until runtime overlay wiring exists."
+                ),
+                "blocked_candidate_reason": L0C_FP8_GEMM_CUTLASS_OVERLAY_NOT_WIRED,
+            }
+        if backend.startswith("triton"):
+            if kernel_source_path is None:
+                raise RuntimeError(
+                    "--kernel-source-path is required for real fp8_gemm Triton source mutation"
+                )
+            return {
+                "kind": "triton_source",
+                "backend": backend,
+                "source_mutability": "direct_source",
+                "runtime_wired": True,
+            }
+        raise RuntimeError(
+            f"HALT_REASON: {L0C_FP8_GEMM_REAL_BACKEND_UNSUPPORTED}; "
+            "real fp8_gemm L0c currently supports only the measured CUTLASS "
+            f"overlay bootstrap or a future Triton-source backend; got {backend or 'unknown'}"
+        )
+
+    def _write_l0c_precondition_halt_round(
+        self,
+        *,
+        workload_path: Path,
+        descriptor: dict[str, Any],
+        base: TunedConfigBundle,
+        base_bundle: str | Path,
+        model_id: str,
+        weight_version_id: str,
+        kernel_target: str,
+        kernel_source: Path,
+        fixture_path: Path,
+        base_measurements: int,
+        accepted_iteration_cap: int,
+        total_attempt_cap: int,
+        round_timeout_hours: float,
+        round_root: str | Path,
+        harness: str,
+        mutation_surface: dict[str, Any] | None,
+        halt_reason: str,
+        halt_detail: str,
+    ) -> Path:
+        timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        round_id = (
+            f"{model_id}-{descriptor.get('family_id', 'unknown')}-l0c-mutation-"
+            f"{kernel_target}-{timestamp}"
+        )
+        round_dir = Path(round_root).resolve() / round_id
+        if round_dir.exists():
+            raise RuntimeError(f"L0c round directory already exists: {round_dir}")
+        round_dir.mkdir(parents=True)
+        (round_dir / "candidates").mkdir()
+        (round_dir / "live_traces").mkdir()
+        self._write_tsv(round_dir / "prior_mutations_rejected.tsv", L0C_PRIOR_REJECTION_COLUMNS, [])
+        self._write_tsv(round_dir / "filter_hit_review.tsv", self.FILTER_HIT_REVIEW_COLUMNS, [])
+        (round_dir / "winning_diffs.md").write_text("", encoding="utf-8")
+        spec: dict[str, Any] = {
+            "round_id": round_id,
+            "round_type": L0C_MUTATION_ROUND_TYPE,
+            "model_id": model_id,
+            "family_id": str(descriptor.get("family_id", "")),
+            "workload_file": str(workload_path),
+            "base_bundle": str(Path(base_bundle).resolve()),
+            "base_bundle_id": base.bundle_id,
+            "kernel_target": kernel_target,
+            "kernel_source_path": str(kernel_source),
+            "parity_fixture": _relative_to_repo(self.repo_root, fixture_path),
+            "parity_fixture_required": True,
+            "harness": harness,
+            "base_measurements": base_measurements,
+            "accepted_iteration_cap": accepted_iteration_cap,
+            "total_attempt_cap": total_attempt_cap,
+            "round_timeout_hours": round_timeout_hours,
+            "started_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+            "precondition_status": "blocked",
+            "HALT_REASON": halt_reason,
+            "halt_detail": halt_detail,
+        }
+        if mutation_surface is not None:
+            spec["mutation_surface"] = mutation_surface
+        self._write_yaml(round_dir / "round_spec.yaml", spec)
+        run_log = {
+            "round_id": round_id,
+            "outcome": "ROUND_BLOCKED",
+            "terminal_condition": "precondition_failed",
+            "HALT_REASON": halt_reason,
+            "halt_detail": halt_detail,
+            "kernel_target": kernel_target,
+            "harness": harness,
+            "base_bundle_id": base.bundle_id,
+            "weight_version_id": weight_version_id,
+        }
+        if mutation_surface is not None:
+            run_log["mutation_surface"] = mutation_surface
+        (round_dir / "run_log.json").write_text(
+            json.dumps(run_log, indent=2, sort_keys=True), encoding="utf-8"
+        )
+        (round_dir / "precondition_halt.json").write_text(
+            json.dumps(run_log, indent=2, sort_keys=True), encoding="utf-8"
+        )
+        return round_dir
+
     @staticmethod
     def _assert_fixture_matches_base(
         fixture_payload: Any,
@@ -8042,6 +8259,46 @@ class L0cKernelMutationRunner:
                     error_detail=patch_outcome.error,
                 )
                 return {**common_outcome, "outcome": "compile_failed"}
+
+            mutation_surface = spec.get("mutation_surface") or {}
+            if (
+                kernel_target == "fp8_gemm"
+                and isinstance(mutation_surface, dict)
+                and mutation_surface.get("kind") == "cutlass_source_overlay_bootstrap"
+            ):
+                reason = str(
+                    mutation_surface.get(
+                        "blocked_candidate_reason",
+                        L0C_FP8_GEMM_CUTLASS_OVERLAY_NOT_WIRED,
+                    )
+                )
+                detail = (
+                    "CUTLASS fp8_gemm real L0c is running against a repo-owned "
+                    "overlay bootstrap. The overlay is not wired into vLLM runtime "
+                    "dispatch yet, so measuring it would compare the unchanged "
+                    "vendor CUTLASS binary and falsely attest a mutation."
+                )
+                self._write_parity_check(
+                    iteration_dir,
+                    pass_=False,
+                    reason=reason,
+                    fixture_id=fixture_id,
+                    kernel_target=kernel_target,
+                    error_detail=detail,
+                    mutation_surface=mutation_surface,
+                )
+                (iteration_dir / "BLOCKED.md").write_text(
+                    "\n".join(
+                        [
+                            "iteration blocked by CUTLASS overlay bootstrap guard",
+                            f"reason: {reason}",
+                            detail,
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return {**common_outcome, "outcome": "parity_failed"}
 
             debug_export_dir = iteration_dir / "debug_export"
             staging_dir = debug_export_dir / "staging"

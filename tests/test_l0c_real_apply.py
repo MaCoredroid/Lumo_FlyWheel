@@ -269,6 +269,52 @@ def test_real_apply_and_test_passes_when_patch_runtime_probe_and_measure_succeed
     assert kernel_path.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n"
 
 
+def test_real_apply_and_test_blocks_cutlass_overlay_before_runtime_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner, round_dir, kernel_path, iteration_dir, round_id = _seed_round(
+        tmp_path, iteration="001", patch_text="placeholder"
+    )
+    (iteration_dir / "mutation.patch").write_text(_good_patch(kernel_path), encoding="utf-8")
+    spec_path = round_dir / "round_spec.yaml"
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    spec["kernel_target"] = "fp8_gemm"
+    spec["mutation_surface"] = {
+        "kind": "cutlass_source_overlay_bootstrap",
+        "backend": "cutlass",
+        "runtime_wired": False,
+        "blocked_candidate_reason": auto_research.L0C_FP8_GEMM_CUTLASS_OVERLAY_NOT_WIRED,
+    }
+    spec_path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+
+    calls = {"restart": 0, "probe": 0}
+
+    def _restart(*args, **kwargs):
+        calls["restart"] += 1
+
+    def _probe(*args, **kwargs):
+        calls["probe"] += 1
+
+    monkeypatch.setattr(runner, "_restart_serving_runtime", _restart)
+    monkeypatch.setattr(runner, "_invoke_parity_probe", _probe)
+
+    payload = runner.apply_and_test(
+        round_id=round_id,
+        iteration="001",
+        kernel_target="fp8_gemm",
+        harness="real",
+        round_root=round_dir.parent,
+    )
+
+    assert payload["outcome"] == "parity_failed"
+    assert calls == {"restart": 0, "probe": 0}
+    parity = json.loads((iteration_dir / "parity_check.json").read_text(encoding="utf-8"))
+    assert parity["reason"] == auto_research.L0C_FP8_GEMM_CUTLASS_OVERLAY_NOT_WIRED
+    assert parity["mutation_surface"]["kind"] == "cutlass_source_overlay_bootstrap"
+    assert (iteration_dir / "BLOCKED.md").is_file()
+    assert kernel_path.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n"
+
+
 def test_real_apply_and_test_returns_compile_failed_when_patch_does_not_apply(
     tmp_path: Path, monkeypatch
 ) -> None:

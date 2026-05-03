@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -939,14 +940,10 @@ def cmd_auto_research_mutate_kernel(args: argparse.Namespace) -> int:
             "(or the legacy --base-bundle alias)."
         )
     args.base_bundle = base_bundle_path
-    _require_auto_research_args(
-        args,
-        "workload_file",
-        "base_bundle",
-        "kernel_target",
-        "kernel_source_path",
-        "parity_fixture",
-    )
+    required_args = ["workload_file", "base_bundle", "kernel_target"]
+    if not (args.kernel_target == "fp8_gemm" and args.harness == "real"):
+        required_args.extend(["kernel_source_path", "parity_fixture"])
+    _require_auto_research_args(args, *required_args)
     runner = L0cKernelMutationRunner(
         repo_root=REPO_ROOT,
         registry_path=args.registry,
@@ -1362,9 +1359,9 @@ def build_parser() -> argparse.ArgumentParser:
     auto_mutate_kernel.add_argument(
         "--kernel-source-path",
         help=(
-            "Host path that holds the editable kernel bytes. The runner bind-mounts "
-            "this file into the vLLM container at --kernel-container-path so /usr/bin/patch "
-            "applied here is visible to vLLM after restart."
+            "Host path that holds editable kernel bytes. Optional for "
+            "--kernel-target=fp8_gemm --harness=real when the base bundle selected "
+            "CUTLASS; that path uses the repo-owned CUTLASS overlay bootstrap."
         ),
     )
     auto_mutate_kernel.add_argument(
@@ -1372,7 +1369,14 @@ def build_parser() -> argparse.ArgumentParser:
         default="/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/chunk_delta_h.py",
         help="In-container target of the kernel bind-mount.",
     )
-    auto_mutate_kernel.add_argument("--parity-fixture")
+    auto_mutate_kernel.add_argument(
+        "--parity-fixture",
+        help=(
+            "Parity fixture YAML. For fp8_gemm real mode this may be omitted only "
+            "when the workload descriptor has parity_fixture_refs.fp8_gemm; if the "
+            "fixture is absent the runner writes a durable structured precondition halt."
+        ),
+    )
     auto_mutate_kernel.add_argument("--base-measurements", type=int, default=5)
     auto_mutate_kernel.add_argument("--accepted-iteration-cap", type=int, default=12)
     auto_mutate_kernel.add_argument("--total-attempt-cap", type=int, default=36)
@@ -1523,7 +1527,14 @@ def main() -> int:
     if args.func is None:
         parser.print_help()
         return 1
-    return args.func(args)
+    try:
+        return args.func(args)
+    except RuntimeError as exc:
+        message = str(exc)
+        if message.startswith("HALT_REASON:"):
+            print(message, file=sys.stderr)
+            return 2
+        raise
 
 
 if __name__ == "__main__":

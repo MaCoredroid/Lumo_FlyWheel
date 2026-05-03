@@ -229,6 +229,7 @@ def _write_l0a_fp8_fixture(
     source_family: str = "responses-sdk-adapter-cutover",
     *,
     omit_companion_key: str | None = None,
+    reference_fp8_gemm_kernel: str = "cublas",
 ) -> Path:
     fixture_dir = repo / "benchmark_blueprints" / "families" / source_family / "parity_fixture"
     tier_3_dir = fixture_dir / "tier_3_inputs"
@@ -258,7 +259,7 @@ def _write_l0a_fp8_fixture(
             "reference_baseline": {
                 "attention_backend": "vllm-default",
                 "deltanet_kernel": "triton-chunked-delta-v2",
-                "fp8_gemm_kernel": "cublas",
+                "fp8_gemm_kernel": reference_fp8_gemm_kernel,
                 "torch_compile_mode": "default",
                 "cuda_graph_capture": "off",
             },
@@ -5098,12 +5099,23 @@ def test_l0c_kernel_mutation_fp8_gemm_validates_fixture_schema(tmp_path: Path) -
         )
 
 
-@pytest.mark.parametrize("method", ["run", "apply_and_test", "resume_candidate", "resume_round"])
-def test_l0c_fp8_gemm_real_harness_explicitly_out_of_scope(
+def test_l0c_fp8_gemm_real_cutlass_missing_fixture_halts_after_round_metadata(
     tmp_path: Path,
-    method: str,
 ) -> None:
     repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    workload_path = _write_l0a_workload(repo)
+    base_bundle = _write_l0a_bundle(
+        repo,
+        kernel_selection={
+            "combo_id": "combo_002",
+            "attention_backend": "vllm-default",
+            "deltanet_kernel": "triton-chunked-delta-v2",
+            "fp8_gemm_kernel": "cutlass",
+            "torch_compile_mode": "default",
+            "cuda_graph_capture": "off",
+        },
+    )
     runner = auto_research.L0cKernelMutationRunner(
         repo_root=repo,
         registry_path=repo / "model_registry.yaml",
@@ -5112,47 +5124,222 @@ def test_l0c_fp8_gemm_real_harness_explicitly_out_of_scope(
 
     with pytest.raises(
         RuntimeError,
-        match="HALT_REASON: l0c_fp8_gemm_real_harness_out_of_scope",
+        match="HALT_REASON: l0c_precondition_missing_fixture; missing fp8_gemm parity fixture",
     ):
-        if method == "run":
-            runner.run(
-                workload_file=repo / "missing_workload.yaml",
-                base_bundle=repo / "missing_bundle.yaml",
-                kernel_target="fp8_gemm",
-                kernel_source_path="kernels/fp8_gemm/triton_scaled_mm.py",
-                parity_fixture=repo / "missing_fixture.yaml",
-                base_measurements=1,
-                accepted_iteration_cap=1,
-                total_attempt_cap=1,
-                round_timeout_hours=1.0,
-                round_root=repo / "output" / "auto_research",
-                harness="real",
-            )
-        elif method == "apply_and_test":
-            runner.apply_and_test(
-                round_id="missing-round",
-                iteration="001",
-                kernel_target="fp8_gemm",
-                harness="real",
-                round_root=repo / "output" / "auto_research",
-            )
-        elif method == "resume_candidate":
-            runner.resume_candidate(
-                round_id="missing-round",
-                iteration="001",
-                kernel_target="fp8_gemm",
-                harness="real",
-                round_root=repo / "output" / "auto_research",
-            )
-        else:
-            runner.resume_round(
-                round_id="missing-round",
-                kernel_target="fp8_gemm",
-                harness="real",
-                round_root=repo / "output" / "auto_research",
-            )
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="fp8_gemm",
+            kernel_source_path=None,
+            parity_fixture=None,
+            base_measurements=1,
+            accepted_iteration_cap=1,
+            total_attempt_cap=1,
+            round_timeout_hours=1.0,
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            runtime={
+                "container_name": "test",
+                "port": 8100,
+                "proxy_port": 8101,
+                "endpoint": "http://127.0.0.1:8101/v1",
+                "metrics_url": "http://127.0.0.1:8100/metrics",
+                "admin_url": "http://127.0.0.1:8101/admin",
+            },
+        )
 
-    assert not (repo / "output" / "auto_research").exists()
+    rounds = list((repo / "output" / "auto_research").iterdir())
+    assert len(rounds) == 1
+    run_log = json.loads((rounds[0] / "run_log.json").read_text(encoding="utf-8"))
+    assert run_log["HALT_REASON"] == "l0c_precondition_missing_fixture"
+    round_spec = auto_research.load_yaml_file(rounds[0] / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    assert round_spec["kernel_target"] == "fp8_gemm"
+    assert round_spec["mutation_surface"]["kind"] == "cutlass_source_overlay_bootstrap"
+    assert round_spec["mutation_surface"]["runtime_wired"] is False
+
+
+def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    fp8_fixture_path = _write_l0a_fp8_fixture(repo, reference_fp8_gemm_kernel="cutlass")
+    workload_path = _write_l0a_workload(repo)
+    _add_l0a_workload_fp8_ref(workload_path)
+    base_bundle = _write_l0a_bundle(
+        repo,
+        kernel_selection={
+            "combo_id": "combo_002",
+            "attention_backend": "vllm-default",
+            "deltanet_kernel": "triton-chunked-delta-v2",
+            "fp8_gemm_kernel": "cutlass",
+            "torch_compile_mode": "default",
+            "cuda_graph_capture": "off",
+        },
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    def _no_drift(*args, **kwargs):
+        return None
+
+    def _baseline(*, spec, baseline_dir, baseline_uuid, count):
+        return [
+            runner._make_measurement_row(
+                candidate_uuid=baseline_uuid,
+                candidate_label="l0b-empirical-winner-baseline-remeasured",
+                role="l0b_empirical_winner_baseline_remeasured",
+                measurement_index=1,
+                objective_value=1.0,
+                harness="real",
+                trace_ref="baselines/measurement_01.json",
+            )
+        ]
+
+    def _agent_unavailable(*, spec, round_dir, iteration_dir, iteration):
+        return {"ok": False, "error": "agent_binary_missing: codex"}
+
+    monkeypatch.setattr(runner, "_assert_actually_resolved_no_drift", _no_drift)
+    monkeypatch.setattr(runner, "_run_real_paired_baseline", _baseline)
+    monkeypatch.setattr(runner, "_spawn_l0c_agent_iteration", _agent_unavailable)
+
+    result = runner.run(
+        workload_file=workload_path,
+        base_bundle=base_bundle,
+        kernel_target="fp8_gemm",
+        kernel_source_path=None,
+        parity_fixture=fp8_fixture_path,
+        base_measurements=1,
+        accepted_iteration_cap=1,
+        total_attempt_cap=1,
+        round_timeout_hours=1.0,
+        round_root=repo / "output" / "auto_research",
+        harness="real",
+        runtime={
+            "container_name": "test",
+            "port": 8100,
+            "proxy_port": 8101,
+            "endpoint": "http://127.0.0.1:8101/v1",
+            "metrics_url": "http://127.0.0.1:8100/metrics",
+            "admin_url": "http://127.0.0.1:8101/admin",
+        },
+        per_iteration_wall_clock_s=1,
+    )
+
+    assert result.outcome == "ROUND_BLOCKED"
+    assert result.terminal_condition == "agent_unavailable"
+    assert (result.round_dir / "candidates" / "001" / "iteration_brief.md").is_file()
+    round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
+    assert isinstance(round_spec, dict)
+    assert round_spec["mutation_surface"]["kind"] == "cutlass_source_overlay_bootstrap"
+    assert round_spec["parity_fixture_id"] == "responses-sdk-adapter-cutover-fp8-gemm-v1"
+
+
+def test_l0c_fp8_gemm_real_non_cutlass_non_triton_backend_blocked(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    fp8_fixture_path = _write_l0a_fp8_fixture(repo, reference_fp8_gemm_kernel="machete")
+    workload_path = _write_l0a_workload(repo)
+    _add_l0a_workload_fp8_ref(workload_path)
+    base_bundle = _write_l0a_bundle(
+        repo,
+        kernel_selection={
+            "combo_id": "combo_003",
+            "attention_backend": "vllm-default",
+            "deltanet_kernel": "triton-chunked-delta-v2",
+            "fp8_gemm_kernel": "machete",
+            "torch_compile_mode": "default",
+            "cuda_graph_capture": "off",
+        },
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="HALT_REASON: l0c_fp8_gemm_real_backend_unsupported",
+    ):
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="fp8_gemm",
+            kernel_source_path=None,
+            parity_fixture=fp8_fixture_path,
+            base_measurements=1,
+            accepted_iteration_cap=1,
+            total_attempt_cap=1,
+            round_timeout_hours=1.0,
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            runtime={
+                "container_name": "test",
+                "port": 8100,
+                "proxy_port": 8101,
+                "endpoint": "http://127.0.0.1:8101/v1",
+                "metrics_url": "http://127.0.0.1:8100/metrics",
+                "admin_url": "http://127.0.0.1:8101/admin",
+            },
+        )
+
+
+def test_l0c_fp8_gemm_real_cutlass_rejects_arbitrary_source_path(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write_l0a_fixture_pair(repo)
+    fp8_fixture_path = _write_l0a_fp8_fixture(repo, reference_fp8_gemm_kernel="cutlass")
+    workload_path = _write_l0a_workload(repo)
+    _add_l0a_workload_fp8_ref(workload_path)
+    bad_source = repo / "vendor_cutlass_kernel.cu"
+    bad_source.write_text("// not a repo-owned overlay\n", encoding="utf-8")
+    base_bundle = _write_l0a_bundle(
+        repo,
+        kernel_selection={
+            "combo_id": "combo_002",
+            "attention_backend": "vllm-default",
+            "deltanet_kernel": "triton-chunked-delta-v2",
+            "fp8_gemm_kernel": "cutlass",
+            "torch_compile_mode": "default",
+            "cuda_graph_capture": "off",
+        },
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="HALT_REASON: l0c_fp8_gemm_cutlass_source_overlay_unsupported",
+    ):
+        runner.run(
+            workload_file=workload_path,
+            base_bundle=base_bundle,
+            kernel_target="fp8_gemm",
+            kernel_source_path=bad_source,
+            parity_fixture=fp8_fixture_path,
+            base_measurements=1,
+            accepted_iteration_cap=1,
+            total_attempt_cap=1,
+            round_timeout_hours=1.0,
+            round_root=repo / "output" / "auto_research",
+            harness="real",
+            runtime={
+                "container_name": "test",
+                "port": 8100,
+                "proxy_port": 8101,
+                "endpoint": "http://127.0.0.1:8101/v1",
+                "metrics_url": "http://127.0.0.1:8100/metrics",
+                "admin_url": "http://127.0.0.1:8101/admin",
+            },
+        )
 
 
 def test_l0c_kernel_mutation_synthetic_halts_on_proposer_stuck(tmp_path: Path) -> None:
