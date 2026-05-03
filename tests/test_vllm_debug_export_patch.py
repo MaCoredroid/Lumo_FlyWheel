@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import pickle
+import shutil
 import sys
 import types
 from pathlib import Path
@@ -10,11 +11,22 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PATCH_SCRIPT = REPO_ROOT / "docker" / "patches" / "apply_p2b_vllm_debug_export.py"
+BUILD_SURFACE_SCRIPT = REPO_ROOT / "docker" / "patches" / "verify_vllm_cutlass_build_surface.py"
 DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile.nvidia-vllm"
 
 
 def _load_patch_module():
     spec = importlib.util.spec_from_file_location("p2b_vllm_debug_patch", PATCH_SCRIPT)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_build_surface_module():
+    spec = importlib.util.spec_from_file_location("vllm_cutlass_build_surface", BUILD_SURFACE_SCRIPT)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -334,3 +346,70 @@ def test_nvidia_vllm_dockerfile_applies_repo_owned_patch() -> None:
 
     assert "COPY docker/patches/apply_p2b_vllm_debug_export.py" in dockerfile
     assert "RUN python3 /tmp/apply_p2b_vllm_debug_export.py" in dockerfile
+
+
+def test_nvidia_vllm_dockerfile_adds_cutlass_rebuild_surface() -> None:
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "build-essential" in dockerfile
+    assert "cmake" in dockerfile
+    assert "ninja-build" in dockerfile
+    assert "ccache" in dockerfile
+    assert "python3-dev" in dockerfile
+    assert "VLLM_SOURCE_REPO" in dockerfile
+    assert "git clone --depth 1 --branch" in dockerfile
+    assert "LUMO_VLLM_SOURCE_DIR=/opt/vllm-source" in dockerfile
+    assert "requirements/build.txt" in dockerfile
+    assert "vllm-build-requirements.txt" in dockerfile
+    assert "COPY docker/patches/verify_vllm_cutlass_build_surface.py" in dockerfile
+    assert "verify_vllm_cutlass_build_surface.py --source-dir" in dockerfile
+
+
+def test_cutlass_build_surface_verifier_accepts_source_and_binary_package(
+    monkeypatch, tmp_path: Path
+) -> None:
+    verifier = _load_build_surface_module()
+    source_dir = tmp_path / "vllm-source"
+    package_dir = tmp_path / "site-packages" / "vllm"
+    package_dir.mkdir(parents=True)
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "_C.abi3.so").write_bytes(b"binary-extension")
+    for rel_path in verifier.REQUIRED_SOURCE_FILES:
+        path = source_dir / rel_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("placeholder\n", encoding="utf-8")
+
+    monkeypatch.setattr(shutil, "which", lambda command: f"/usr/bin/{command}")
+
+    payload = verifier.verify_cutlass_build_surface(
+        source_dir=source_dir,
+        package_dir=package_dir,
+    )
+
+    assert payload["ok"] is True
+    assert payload["missing"] == []
+    assert "csrc/quantization/w8a8/cutlass/scaled_mm_entry.cu" in payload["required_source_files"]
+    assert payload["package_extension_files"] == ["_C.abi3.so"]
+
+
+def test_cutlass_build_surface_verifier_rejects_wheel_only_package(tmp_path: Path) -> None:
+    verifier = _load_build_surface_module()
+    source_dir = tmp_path / "missing-source"
+    package_dir = tmp_path / "site-packages" / "vllm"
+    package_dir.mkdir(parents=True)
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "_C.abi3.so").write_bytes(b"binary-extension")
+
+    try:
+        verifier.verify_cutlass_build_surface(
+            source_dir=source_dir,
+            package_dir=package_dir,
+            require_toolchain=False,
+        )
+    except RuntimeError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("expected missing CUTLASS source to fail verification")
+
+    assert "source:csrc/quantization/w8a8/cutlass/scaled_mm_entry.cu" in message
+    assert "source:csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8.cu" in message

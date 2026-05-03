@@ -2,14 +2,50 @@ FROM nvcr.io/nvidia/pytorch:26.01-py3
 
 ARG VLLM_VERSION=0.19.0
 ARG VLLM_CUDA_WHEEL_URL=""
+ARG VLLM_SOURCE_REPO="https://github.com/vllm-project/vllm.git"
+ARG VLLM_SOURCE_REF=""
+
+ENV LUMO_VLLM_SOURCE_DIR=/opt/vllm-source
+ENV LUMO_VLLM_CUTLASS_BUILD_SURFACE=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ccache \
+    cmake \
     git \
+    ninja-build \
+    pkg-config \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --upgrade pip setuptools wheel \
     && wheel_url="${VLLM_CUDA_WHEEL_URL:-https://github.com/vllm-project/vllm/releases/download/v${VLLM_VERSION}/vllm-${VLLM_VERSION}+cu130-cp38-abi3-manylinux_2_35_aarch64.whl}" \
     && python3 -m pip install --no-cache-dir --no-deps "${wheel_url}"
+
+RUN set -eux; \
+    source_ref="${VLLM_SOURCE_REF:-v${VLLM_VERSION}}"; \
+    git clone --depth 1 --branch "${source_ref}" "${VLLM_SOURCE_REPO}" "${LUMO_VLLM_SOURCE_DIR}"
+
+RUN python3 - <<'PY' > /tmp/vllm-build-requirements.txt
+from pathlib import Path
+
+from packaging.requirements import Requirement
+
+skip = {"torch", "torchaudio", "torchvision"}
+for raw_line in Path("/opt/vllm-source/requirements/build.txt").read_text(
+    encoding="utf-8"
+).splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith("#"):
+        continue
+    requirement = Requirement(line)
+    if requirement.name.lower() in skip:
+        continue
+    print(str(requirement))
+PY
+
+RUN python3 -m pip install --no-cache-dir -r /tmp/vllm-build-requirements.txt \
+    && rm -f /tmp/vllm-build-requirements.txt
 
 RUN python3 - <<'PY' > /tmp/vllm-requirements.txt
 from importlib.metadata import distribution
@@ -30,3 +66,7 @@ RUN python3 -m pip install --no-cache-dir -r /tmp/vllm-requirements.txt \
 COPY docker/patches/apply_p2b_vllm_debug_export.py /tmp/apply_p2b_vllm_debug_export.py
 RUN python3 /tmp/apply_p2b_vllm_debug_export.py \
     && rm -f /tmp/apply_p2b_vllm_debug_export.py
+
+COPY docker/patches/verify_vllm_cutlass_build_surface.py /tmp/verify_vllm_cutlass_build_surface.py
+RUN python3 /tmp/verify_vllm_cutlass_build_surface.py --source-dir "${LUMO_VLLM_SOURCE_DIR}" \
+    && rm -f /tmp/verify_vllm_cutlass_build_surface.py
