@@ -3353,7 +3353,7 @@ def test_agent_invocation_codex_argv_is_unchanged(tmp_path: Path) -> None:
     assert argv == [
         "codex",
         "-c",
-        'model="gpt-5.4"',
+        'model="gpt-5.5"',
         "-c",
         'model_reasoning_effort="high"',
         "exec",
@@ -5573,3 +5573,112 @@ def test_l0c_iteration_brief_substitutes_kernel_target_and_round_id(tmp_path: Pa
     assert result.round_id in brief
     assert "auto-research apply-and-test" in brief
     assert "{{kernel_target}}" not in brief
+
+
+def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    brief = runner._render_brief(
+        kernel_target="fp8_gemm",
+        kernel_source_path=repo
+        / "src"
+        / "lumo_flywheel_serving"
+        / "kernel_overlays"
+        / "fp8_gemm_cutlass_overlay_bootstrap.py",
+        fixture_path=repo / "parity_fixture" / "fp8_gemm_v1.yaml",
+        fixture_payload={
+            "tier_3_tolerances": {"rtol_gemm_output": 0.002, "atol_gemm_output": 0.002},
+            "tier_4_tolerances": {
+                "rtol_downstream_logit": 0.001,
+                "atol_downstream_logit": 0.001,
+            },
+        },
+        round_id="round-fp8",
+        harness="real",
+    )
+
+    assert "Do not run `auto-research apply-and-test`" in brief
+    assert "Run only the cheap patch submission check from step 2" in brief
+    assert "There is no cheap auto-research submission/preflight CLI in this checkout" in brief
+    assert "the controller owns preflight rejection" in brief
+    assert "exit nonzero" in brief
+    assert "fp8_gemm_cutlass_python_wrapper_rewrite" in brief
+    assert "auto-research apply-and-test \\" not in brief
+
+
+def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_soft_preflight(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    patch_text = """--- src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
++++ src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
+@@ -18,6 +18,12 @@
+-        "source_replacements": [],
++        "source_replacements": [
++            {"label": "alias", "before": "ops.cutlass_scaled_mm(", "after": "_alias("},
++        ],
+"""
+
+    preflight = runner._preflight_l0c_patch(kernel_target="fp8_gemm", patch_text=patch_text)
+
+    assert preflight == {
+        "tier": "soft",
+        "pattern_id": "fp8_gemm_cutlass_python_wrapper_rewrite",
+        "evidence_snippet": '"source_replacements": [],\n"source_replacements": [\n{"label": "alias", "before": "ops.cutlass_scaled_mm(", "after": "_alias("},',
+    }
+
+
+def test_l0c_fp8_cutlass_overlay_comment_patch_is_soft_preflight(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    patch_text = """--- src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
++++ src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
+@@ -1,3 +1,4 @@
+ # Existing comment
++# Candidate note
+ """
+
+    preflight = runner._preflight_l0c_patch(kernel_target="fp8_gemm", patch_text=patch_text)
+
+    assert preflight == {
+        "tier": "soft",
+        "pattern_id": "fp8_gemm_cutlass_python_wrapper_rewrite",
+        "evidence_snippet": "# Candidate note",
+    }
+
+
+def test_l0c_fp8_cutlass_overlay_patch_with_timestamp_header_is_soft_preflight(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    patch_text = """--- /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py\t2026-05-03 03:37:44.132445545 +0000
++++ /dev/fd/63\t2026-05-03 03:41:34.977865197 +0000
+@@ -18,6 +18,12 @@
+-        "source_replacements": [],
++        "source_replacements": [
++            {"label": "comment_only", "before": "# Fused GEMM_DQ", "after": "# Fused GEMM_DQ # note"},
++        ],
+"""
+
+    preflight = runner._preflight_l0c_patch(kernel_target="fp8_gemm", patch_text=patch_text)
+
+    assert preflight is not None
+    assert preflight["tier"] == "soft"
+    assert preflight["pattern_id"] == "fp8_gemm_cutlass_python_wrapper_rewrite"

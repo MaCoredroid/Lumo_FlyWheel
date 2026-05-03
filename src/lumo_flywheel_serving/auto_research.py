@@ -4643,7 +4643,7 @@ class AutoResearchRoundManager:
                 "workload_descriptor_path": spec.workload_descriptor_path,
                 "sub_spec_version": spec.sub_spec_version,
                 "agent_session_dir_ref": str((round_dir / "candidates").relative_to(self.repo_root)),
-                "agent_model_pin": {"model": "gpt-5.4", "reasoning_effort": "high"},
+                "agent_model_pin": {"model": "gpt-5.5", "reasoning_effort": "high"},
                 "results_tsv_ref": str((round_dir / "results.tsv").relative_to(self.repo_root)),
                 "holdout_validation": "skipped" if dry_run else "pass",
                 **(
@@ -6037,20 +6037,7 @@ when present in a candidate dir, means the controller REJECTED that
 mutation — its content is the controller's reason, NOT the agent's
 prior commentary.
 
-IMPORTANT: your own apply-and-test (step 3 below) runs in a Triton
-autotune state that may diverge from the controller's later re-run.
-The agent's apply-and-test parity verdict can therefore disagree with
-the controller's verdict on the SAME patch (autotune-cache flips the
-config selection, and that changes `tl.dot` reduction order). When
-inspecting prior iterations, trust `parity_check.json` over any other
-record. If a prior iteration is in `results.tsv`, it was accepted —
-period — even if its dir contains stale agent commentary.
-
-Real-harness apply-and-test is intentionally long-running. Once you start it,
-do not interrupt it, do not send Ctrl-C, and do not stop it just because it has
-not printed output for several minutes. Wait for the command to exit or for the
-outer round controller to terminate your session. A quiet foreground process is
-normal while vLLM cold-starts, runs parity, and gathers measurement windows.
+{{agent_apply_and_test_context}}
 
 # Recent winning diffs (positive memory)
 The following diffs were accepted in recent L0c rounds with measured improvement.
@@ -6078,18 +6065,7 @@ Tier-2 hard-reject:
    Generate the patch with a real diff tool; do not hand-write hunk counts.
    The patch must apply with:
      patch --dry-run {{kernel_source_path}} {{iteration_dir}}/mutation.patch
-3. Run from the repo root with the exact entrypoint:
-   cd {{repo_root}} && {{lumoserve_cmd}} auto-research apply-and-test \\
-     --round-id {{round_id}} --iteration {{iteration}} \\
-     --kernel-target {{kernel_target}} --harness {{harness_mode}}
-   This command owns parity and measurement. Do not interrupt it once started,
-   even if it is quiet for a long time; wait for its final exit status.
-4. Read the result. If parity fails, write a one-line note to BLOCKED.md
-   explaining what you'll try next. Do NOT propose the same edit again.
-   Note: the controller will overwrite or remove your BLOCKED.md after
-   its own re-run, so write it for your own bookkeeping; the canonical
-   record will be the controller's.
-5. Exit 0.
+{{agent_validation_steps}}
 
 # What you do NOT do
 - You do not call finalize-round. Python does that.
@@ -7072,7 +7048,7 @@ class L0cKernelMutationRunner:
         argv = [
             "codex",
             "-c",
-            'model="gpt-5.4"',
+            'model="gpt-5.5"',
             "-c",
             'model_reasoning_effort="high"',
             "exec",
@@ -7616,9 +7592,16 @@ class L0cKernelMutationRunner:
                         "pattern_id": pattern_id,
                     }
                 )
-                if not (attempt_index % L0C_CANARY_INTERVAL == 0 and canary_available):
+                if kernel_target == "fp8_gemm":
+                    consecutive_parity_fails += 1
                     consecutive_compile_fails = 0
-                    consecutive_parity_fails = 0
+                    if consecutive_parity_fails >= L0C_PROPOSER_STUCK_THRESHOLD:
+                        terminal_condition = "proposer_stuck"
+                        break
+                if not (attempt_index % L0C_CANARY_INTERVAL == 0 and canary_available):
+                    if kernel_target != "fp8_gemm":
+                        consecutive_compile_fails = 0
+                        consecutive_parity_fails = 0
                     continue
                 canary = demoted_queue.pop(0)
                 active_iteration = str(canary["iteration"])
@@ -8997,6 +8980,12 @@ class L0cKernelMutationRunner:
                         "pattern_id": pattern_id,
                     }
                 )
+                if kernel_target == "fp8_gemm":
+                    consecutive_parity_fails += 1
+                    consecutive_compile_fails = 0
+                    if consecutive_parity_fails >= L0C_PROPOSER_STUCK_THRESHOLD:
+                        terminal_condition = "proposer_stuck"
+                        break
                 if after_regressed_canary_demotions is not None:
                     after_regressed_canary_demotions += 1
                     if after_regressed_canary_demotions >= L0C_PROPOSER_STUCK_THRESHOLD:
@@ -9006,8 +8995,9 @@ class L0cKernelMutationRunner:
                     attempt_index % L0C_CANARY_INTERVAL == 0
                     and canary_available
                 ):
-                    consecutive_compile_fails = 0
-                    consecutive_parity_fails = 0
+                    if kernel_target != "fp8_gemm":
+                        consecutive_compile_fails = 0
+                        consecutive_parity_fails = 0
                     continue
                 canary = demoted_queue.pop(0)
                 active_iteration = str(canary["iteration"])
@@ -9355,6 +9345,13 @@ class L0cKernelMutationRunner:
     @staticmethod
     def _l0c_preflight_patterns(*, tier: str, kernel_target: str = "deltanet") -> list[tuple[str, str]]:
         if tier == "soft":
+            if kernel_target == "fp8_gemm":
+                return [
+                    (
+                        "fp8_gemm_cutlass_python_wrapper_rewrite",
+                        "changes the Python CUTLASS scaled-mm wrapper via overlay source replacements; demote until cheap isolated replay exists",
+                    ),
+                ]
             if kernel_target != "deltanet":
                 return []
             return [
@@ -9408,6 +9405,10 @@ class L0cKernelMutationRunner:
         hard = self._match_l0c_hard_preflight(patch_text)
         if hard is not None:
             return {"tier": "safety_critical", **hard}
+        if kernel_target == "fp8_gemm":
+            soft = self._match_fp8_gemm_soft_preflight(patch_text)
+            if soft is not None:
+                return {"tier": "soft", **soft}
         if kernel_target == "deltanet":
             soft = self._match_deltanet_soft_preflight(patch_text)
             if soft is not None:
@@ -9415,15 +9416,26 @@ class L0cKernelMutationRunner:
         return None
 
     @staticmethod
+    def _diff_header_path(line: str) -> str:
+        path = line[4:].strip()
+        if path == "/dev/null":
+            return path
+        if "\t" in path:
+            path = path.split("\t", 1)[0]
+        elif " " in path:
+            path = path.split(" ", 1)[0]
+        if path.startswith(("a/", "b/")):
+            path = path[2:]
+        return path
+
+    @staticmethod
     def _match_l0c_hard_preflight(patch_text: str) -> dict[str, str] | None:
         diff_paths: list[str] = []
         for line in patch_text.splitlines():
             if line.startswith(("--- ", "+++ ")):
-                path = line[4:].strip()
+                path = L0cKernelMutationRunner._diff_header_path(line)
                 if path == "/dev/null":
                     continue
-                if path.startswith(("a/", "b/")):
-                    path = path[2:]
                 diff_paths.append(path)
         path_blob = "\n".join(diff_paths)
         if any(
@@ -9458,6 +9470,37 @@ class L0cKernelMutationRunner:
         if any(path.startswith("tests/test_l0c_") and path.endswith(".py") for path in diff_paths):
             return {"pattern_id": "safety_mutates_l0c_tests", "evidence_snippet": path_blob}
         return None
+
+    @staticmethod
+    def _match_fp8_gemm_soft_preflight(patch_text: str) -> dict[str, str] | None:
+        diff_paths: list[str] = []
+        changed_lines: list[str] = []
+        for line in patch_text.splitlines():
+            if line.startswith(("--- ", "+++ ")):
+                path = L0cKernelMutationRunner._diff_header_path(line)
+                if path != "/dev/null":
+                    diff_paths.append(path)
+                continue
+            if line.startswith(("+", "-")):
+                changed_lines.append(line[1:].strip())
+
+        touches_cutlass_overlay = any(
+            path.endswith("fp8_gemm_cutlass_overlay_bootstrap.py")
+            for path in diff_paths
+        )
+        if not touches_cutlass_overlay:
+            return None
+
+        line_blob = "\n".join(changed_lines)
+        evidence_lines = [
+            line
+            for line in changed_lines
+            if "source_replacements" in line or "cutlass_scaled_mm" in line
+        ] or changed_lines[:8]
+        return {
+            "pattern_id": "fp8_gemm_cutlass_python_wrapper_rewrite",
+            "evidence_snippet": "\n".join(evidence_lines)[:1000],
+        }
 
     @staticmethod
     def _match_deltanet_soft_preflight(patch_text: str) -> dict[str, str] | None:
@@ -10237,7 +10280,7 @@ class L0cKernelMutationRunner:
             argv = [
                 "codex",
                 "-c",
-                'model="gpt-5.4"',
+                'model="gpt-5.5"',
                 "-c",
                 'model_reasoning_effort="high"',
                 "exec",
@@ -10832,12 +10875,65 @@ class L0cKernelMutationRunner:
                     "- Phase B bootstrap only: the real Triton FP8 replay/capture harness must be supplied by a future Phase A Triton-source winner.",
                 ]
             )
+            agent_apply_and_test_context = "\n".join(
+                [
+                    "For this FP8 GEMM CUTLASS overlay bootstrap, do NOT run apply-and-test from the agent.",
+                    "Full vLLM restart is the expensive Tier 4 path, so the controller must inspect",
+                    "mutation.patch first and decide whether the patch is preflight-demoted, canaried,",
+                    "or admitted to Tier 4. Your job is proposal plus cheap local patch validation only.",
+                ]
+            )
+            agent_validation_steps = "\n".join(
+                [
+                    "3. Run only the cheap patch submission check from step 2. If `patch --dry-run`",
+                    "   fails, fix or regenerate mutation.patch and run the dry-run again.",
+                    "4. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS overlay target.",
+                    "   There is no cheap auto-research submission/preflight CLI in this checkout;",
+                    "   the controller owns preflight rejection, canary admission, parity, and measurement after you exit.",
+                    "5. Exit 0 only after mutation.patch exists and the dry-run apply command above succeeds.",
+                    "   If you cannot make the dry-run apply cleanly, leave BLOCKED.md and exit nonzero.",
+                ]
+            )
         else:
             parity_contract = "\n".join(
                 [
                     f"- Logit-space tolerance: rtol={rtol_logit} / atol={atol_logit}",
                     f"- (DeltaNet only) State-snapshot tolerance: rtol={rtol_state} / atol={atol_state}",
                     f"- Recurrent-state checkpoints at: {', '.join(state_checkpoints)}",
+                ]
+            )
+            agent_apply_and_test_context = "\n".join(
+                [
+                    "IMPORTANT: your own apply-and-test (step 3 below) runs in a Triton",
+                    "autotune state that may diverge from the controller's later re-run.",
+                    "The agent's apply-and-test parity verdict can therefore disagree with",
+                    "the controller's verdict on the SAME patch (autotune-cache flips the",
+                    "config selection, and that changes `tl.dot` reduction order). When",
+                    "inspecting prior iterations, trust `parity_check.json` over any other",
+                    "record. If a prior iteration is in `results.tsv`, it was accepted -",
+                    "period - even if its dir contains stale agent commentary.",
+                    "",
+                    "Real-harness apply-and-test is intentionally long-running. Once you start it,",
+                    "do not interrupt it, do not send Ctrl-C, and do not stop it just because it has",
+                    "not printed output for several minutes. Wait for the command to exit or for the",
+                    "outer round controller to terminate your session. A quiet foreground process is",
+                    "normal while vLLM cold-starts, runs parity, and gathers measurement windows.",
+                ]
+            )
+            agent_validation_steps = "\n".join(
+                [
+                    "3. Run from the repo root with the exact entrypoint:",
+                    f"   cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research apply-and-test \\",
+                    f"     --round-id {round_id} --iteration {{{{iteration}}}} \\",
+                    f"     --kernel-target {kernel_target} --harness {harness}",
+                    "   This command owns parity and measurement. Do not interrupt it once started,",
+                    "   even if it is quiet for a long time; wait for its final exit status.",
+                    "4. Read the result. If parity fails, write a one-line note to BLOCKED.md",
+                    "   explaining what you'll try next. Do NOT propose the same edit again.",
+                    "   Note: the controller will overwrite or remove your BLOCKED.md after",
+                    "   its own re-run, so write it for your own bookkeeping; the canonical",
+                    "   record will be the controller's.",
+                    "5. Exit 0.",
                 ]
             )
         substitutions = {
@@ -10856,6 +10952,8 @@ class L0cKernelMutationRunner:
             "atol_state": atol_state,
             "state_checkpoints_at_token": ", ".join(state_checkpoints),
             "parity_contract": parity_contract,
+            "agent_apply_and_test_context": agent_apply_and_test_context,
+            "agent_validation_steps": agent_validation_steps,
             "strategy_brief": strategy_brief.strip(),
             "positive_memory_winning_diffs_block": (
                 positive_memory.strip() or "No prior winning L0c diffs found for this kernel target."

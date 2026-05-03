@@ -686,7 +686,7 @@ def _agent_invocation(
         argv = [
             "codex",
             "-c",
-            'model="gpt-5.4"',
+            'model="gpt-5.5"',
             "-c",
             'model_reasoning_effort="high"',
             "exec",
