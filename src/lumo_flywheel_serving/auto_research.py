@@ -9342,6 +9342,50 @@ class L0cKernelMutationRunner:
             return "- None configured."
         return "\n".join(f"- `{pattern_id}` — {description}" for pattern_id, description in patterns)
 
+    @classmethod
+    def _preflight_rule_snippets(cls, *, kernel_target: str) -> list[dict[str, str]]:
+        snippets: list[dict[str, str]] = []
+        for tier in ("soft", "safety_critical"):
+            for pattern_id, description in cls._l0c_preflight_patterns(
+                tier=tier,
+                kernel_target=kernel_target,
+            ):
+                code_snippet = cls._preflight_rule_code_snippet(
+                    pattern_id=pattern_id,
+                    kernel_target=kernel_target,
+                )
+                snippets.append(
+                    {
+                        "tier": tier,
+                        "pattern_id": pattern_id,
+                        "checks": description,
+                        "code_snippet": code_snippet,
+                    }
+                )
+        return snippets
+
+    @staticmethod
+    def _preflight_rule_code_snippet(*, pattern_id: str, kernel_target: str) -> str:
+        if pattern_id == "fp8_gemm_cutlass_python_wrapper_rewrite":
+            return "\n".join(
+                [
+                    'touches_cutlass_overlay = any(path.endswith("fp8_gemm_cutlass_overlay_bootstrap.py") for path in diff_paths)',
+                    "if touches_cutlass_overlay:",
+                    '    return {"pattern_id": "fp8_gemm_cutlass_python_wrapper_rewrite", "evidence_snippet": ...}',
+                ]
+            )
+        if pattern_id == "safety_mutates_parity_fixture_code":
+            return 'any(path.endswith("scripts/build_parity_fixture.py") or "kernels/parity_check_" in path or path.endswith("parity_fixture.py") for path in diff_paths)'
+        if pattern_id == "safety_mutates_l0c_measurement_controller":
+            return 'path.endswith("src/lumo_flywheel_serving/auto_research.py") and patch changes measurement-controller tokens'
+        if pattern_id == "safety_mutates_l0c_tests":
+            return 'any(path.startswith("tests/test_l0c_") and path.endswith(".py") for path in diff_paths)'
+        if pattern_id == "safety_mutates_rejection_or_filter_writer":
+            return 'path.endswith("src/lumo_flywheel_serving/auto_research.py") and patch changes rejection/filter writer tokens'
+        if kernel_target == "deltanet":
+            return "DeltaNet-specific regex over removed/added Triton address-expression lines."
+        return "See _preflight_l0c_patch for this pattern."
+
     @staticmethod
     def _l0c_preflight_patterns(*, tier: str, kernel_target: str = "deltanet") -> list[tuple[str, str]]:
         if tier == "soft":
@@ -9414,6 +9458,48 @@ class L0cKernelMutationRunner:
             if soft is not None:
                 return {"tier": "soft", **soft}
         return None
+
+    def preflight_patch(self, *, kernel_target: str, patch_path: str | Path) -> dict[str, Any]:
+        if kernel_target not in L0C_KERNEL_TARGETS:
+            raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
+        path = Path(patch_path)
+        if not path.is_absolute():
+            path = self.repo_root / path
+        path = path.resolve()
+        if not path.is_file():
+            raise RuntimeError(f"mutation patch not found: {path}")
+
+        patch_text = path.read_text(encoding="utf-8")
+        preflight = self._preflight_l0c_patch(
+            kernel_target=kernel_target,
+            patch_text=patch_text,
+        )
+        rules = self._preflight_rule_snippets(kernel_target=kernel_target)
+        payload: dict[str, Any] = {
+            "ok": preflight is None,
+            "kernel_target": kernel_target,
+            "patch_path": str(path),
+            "rules": rules,
+        }
+        if preflight is None:
+            payload["reason"] = "preflight_passed"
+            return payload
+
+        matching_rules = [
+            rule for rule in rules if rule["pattern_id"] == preflight["pattern_id"]
+        ]
+        payload.update(
+            {
+                "reason": (
+                    "forbidden_mutation_family_hard_rejected"
+                    if preflight["tier"] == "safety_critical"
+                    else "forbidden_mutation_family_demoted"
+                ),
+                **preflight,
+                "matching_rule": matching_rules[0] if matching_rules else {},
+            }
+        )
+        return payload
 
     @staticmethod
     def _diff_header_path(line: str) -> str:
@@ -10885,13 +10971,18 @@ class L0cKernelMutationRunner:
             )
             agent_validation_steps = "\n".join(
                 [
-                    "3. Run only the cheap patch submission check from step 2. If `patch --dry-run`",
+                    "3. Run the cheap patch apply check from step 2. If `patch --dry-run`",
                     "   fails, fix or regenerate mutation.patch and run the dry-run again.",
-                    "4. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS overlay target.",
-                    "   There is no cheap auto-research submission/preflight CLI in this checkout;",
-                    "   the controller owns preflight rejection, canary admission, parity, and measurement after you exit.",
-                    "5. Exit 0 only after mutation.patch exists and the dry-run apply command above succeeds.",
-                    "   If you cannot make the dry-run apply cleanly, leave BLOCKED.md and exit nonzero.",
+                    "4. Run the controller's cheap preflight check without starting vLLM:",
+                    f"   cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research preflight-patch \\",
+                    f"     --kernel-target {kernel_target} --patch-path {{{{iteration_dir}}}}/mutation.patch",
+                    "   If it exits nonzero, read the JSON `matching_rule`, `code_snippet`,",
+                    "   and `evidence_snippet`, then revise mutation.patch and rerun the cheap checks.",
+                    "5. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS overlay target.",
+                    "   The controller owns canary admission, parity, and measurement after you exit.",
+                    "6. Exit 0 after either mutation.patch passes both cheap checks or BLOCKED.md explains",
+                    "   why no patch can pass preflight. Do not exit nonzero for a cheap-check failure;",
+                    "   nonzero exit is reserved for agent/tool infrastructure failure.",
                 ]
             )
         else:

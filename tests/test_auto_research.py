@@ -5603,12 +5603,43 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     )
 
     assert "Do not run `auto-research apply-and-test`" in brief
-    assert "Run only the cheap patch submission check from step 2" in brief
-    assert "There is no cheap auto-research submission/preflight CLI in this checkout" in brief
-    assert "the controller owns preflight rejection" in brief
+    assert "auto-research preflight-patch" in brief
+    assert "matching_rule" in brief
+    assert "code_snippet" in brief
+    assert "evidence_snippet" in brief
     assert "exit nonzero" in brief
     assert "fp8_gemm_cutlass_python_wrapper_rewrite" in brief
     assert "auto-research apply-and-test \\" not in brief
+
+
+def test_l0c_preflight_patch_reports_rule_snippet_for_fp8_cutlass(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    patch_path = repo / "candidate.patch"
+    patch_path.write_text(
+        """--- src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
++++ src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
+@@ -18,6 +18,12 @@
+-        "source_replacements": [],
++        "source_replacements": [
++            {"label": "alias", "before": "ops.cutlass_scaled_mm(", "after": "_alias("},
++        ],
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    payload = runner.preflight_patch(kernel_target="fp8_gemm", patch_path=patch_path)
+
+    assert payload["ok"] is False
+    assert payload["reason"] == "forbidden_mutation_family_demoted"
+    assert payload["pattern_id"] == "fp8_gemm_cutlass_python_wrapper_rewrite"
+    assert payload["matching_rule"]["checks"].startswith("changes the Python CUTLASS")
+    assert "touches_cutlass_overlay" in payload["matching_rule"]["code_snippet"]
+    assert "source_replacements" in payload["evidence_snippet"]
 
 
 def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_soft_preflight(tmp_path: Path) -> None:

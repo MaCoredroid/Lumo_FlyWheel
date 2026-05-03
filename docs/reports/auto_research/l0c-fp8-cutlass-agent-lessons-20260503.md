@@ -11,9 +11,12 @@ round.
 - The proposal agent must not run `auto-research apply-and-test` for FP8/CUTLASS.
   That command owns the expensive vLLM restart, parity ladder, and measurement
   window, so it belongs to the controller after the candidate patch is submitted.
-- The agent still needs a cheap submission check. Before exit it should verify
-  that `mutation.patch` exists, applies cleanly with `patch --dry-run`, and does
-  not trip the controller's cheap preflight rules.
+- The agent still needs cheap submission checks. Before exit it should verify
+  that `mutation.patch` exists, applies cleanly with `patch --dry-run`, and
+  passes the controller's cheap `auto-research preflight-patch` command.
+- The preflight command must show the matching rule, the short code snippet that
+  implements the check, and the evidence snippet from the candidate patch. The
+  agent needs that local feedback so it can revise before submitting.
 - If the cheap check fails, the candidate is a submission failure, not an
   experiment. The agent should revise the patch before exiting when possible; if
   it exits anyway, the controller records the failure and the next attempt must
@@ -27,11 +30,15 @@ The FP8/CUTLASS agent should do exactly this:
 
 1. Read `iteration_brief.md`, `strategy_brief.md`, and prior rejected mutations.
 2. Produce `mutation.patch` in the assigned candidate directory.
-3. Run only cheap local submission checks. Do not start vLLM. Do not call
+3. Run only cheap local submission checks: `patch --dry-run`, then
+   `auto-research preflight-patch`. Do not start vLLM. Do not call
    `auto-research apply-and-test`.
-4. If the cheap check fails, revise `mutation.patch` and re-run the cheap check.
-5. Exit only after the patch is cheap-check clean, or write `NO_VALID_MUTATION.md`
-   if no valid CUTLASS mutation surface exists.
+4. If either cheap check fails, read the preflight `matching_rule`,
+   `code_snippet`, and `evidence_snippet`, revise `mutation.patch`, and re-run
+   the cheap checks.
+5. Exit `0` only after the patch is cheap-check clean, or after writing
+   `BLOCKED.md` if no valid CUTLASS mutation surface exists. Nonzero exit is for
+   agent/tool infrastructure failure, not for a rejected proposal.
 
 ## Controller Contract
 

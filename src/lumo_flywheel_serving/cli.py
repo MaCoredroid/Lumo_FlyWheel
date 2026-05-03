@@ -1019,6 +1019,23 @@ def cmd_auto_research_apply_and_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_auto_research_preflight_patch(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "kernel_target", "patch_path")
+    runner = L0cKernelMutationRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    payload = runner.preflight_patch(
+        kernel_target=args.kernel_target,
+        patch_path=args.patch_path,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["ok"] else 2
+
+
 def cmd_auto_research_resume_candidate(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
@@ -1437,6 +1454,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
     )
     auto_apply_and_test.set_defaults(func=cmd_auto_research_apply_and_test)
+
+    auto_preflight_patch = auto_research_subparsers.add_parser("preflight-patch")
+    auto_preflight_patch.add_argument("--help-only", action="store_true")
+    auto_preflight_patch.add_argument("--kernel-target", choices=l0c_kernel_target_choices)
+    auto_preflight_patch.add_argument("--patch-path")
+    auto_preflight_patch.set_defaults(func=cmd_auto_research_preflight_patch)
 
     auto_resume_candidate = auto_research_subparsers.add_parser("resume-candidate")
     auto_resume_candidate.add_argument("--help-only", action="store_true")
