@@ -5257,6 +5257,16 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert result.outcome == "ROUND_BLOCKED"
     assert result.terminal_condition == "agent_unavailable"
     assert (result.round_dir / "candidates" / "001" / "iteration_brief.md").is_file()
+    assert (result.round_dir / "prior_research_memory.tsv").is_file()
+    assert (result.round_dir / "research_memory.tsv").is_file()
+    assert (result.round_dir / "research_memory.md").is_file()
+    strategy_brief = (result.round_dir / "strategy_brief.md").read_text(encoding="utf-8")
+    assert "Prior-Art Memory Contract" in strategy_brief
+    assert "Prior Measured-Trial Memory" in strategy_brief
+    candidate_brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
+        encoding="utf-8"
+    )
+    assert "research_memory.tsv" in candidate_brief
     round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
     assert isinstance(round_spec, dict)
     assert round_spec["mutation_surface"]["kind"] == "cutlass_source_workspace"
@@ -5647,6 +5657,9 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "Do not run `auto-research apply-and-test`" in brief
     assert "local CUTLASS source workspace" in brief
     assert "cutlass_source_workspace" in brief
+    assert "prior_research_memory.tsv" in brief
+    assert "research_memory.tsv" in brief
+    assert "research_memory.md" in brief
     assert "/opt/vllm-source" in brief
     assert "patch --dry-run -p0" in brief
     assert "python3 -m py_compile" in brief

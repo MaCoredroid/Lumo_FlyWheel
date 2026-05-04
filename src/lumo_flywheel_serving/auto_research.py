@@ -145,6 +145,7 @@ L0C_PRIOR_REJECTION_LIMIT = 20
 L0C_CANARY_INTERVAL = 4
 L0C_POSITIVE_MEMORY_ROUND_LIMIT = 3
 L0C_POSITIVE_MEMORY_WINNERS_PER_ROUND = 5
+L0C_RESEARCH_MEMORY_LIMIT = 40
 L0C_PRIOR_REJECTION_COLUMNS = [
     "source_round_id",
     "iteration",
@@ -154,6 +155,22 @@ L0C_PRIOR_REJECTION_COLUMNS = [
     "tolerance_overshoot",
     "source_ref",
     "blocked_note",
+]
+L0C_RESEARCH_MEMORY_COLUMNS = [
+    "source_round_id",
+    "iteration",
+    "mutation_hash",
+    "surface",
+    "changed_region",
+    "expected_affected_path",
+    "controller_gate",
+    "outcome",
+    "objective_mean",
+    "rollout_measurements",
+    "tier4_overshoot",
+    "failure_relation",
+    "next_implication",
+    "artifact_refs",
 ]
 L0C_TERMINAL_CONDITIONS = {
     "accepted_cap_reached",
@@ -6076,7 +6093,8 @@ Tier-2 hard-reject:
 {{tier_2_pattern_list_with_descriptions}}
 
 # Procedure
-1. Read {{read_target_paths}}, strategy_brief.md, prior_mutations_rejected.tsv,
+1. Read {{read_target_paths}}, strategy_brief.md, prior_research_memory.tsv,
+   research_memory.tsv, research_memory.md, prior_mutations_rejected.tsv,
    mutations_rejected.tsv, results.tsv (best_so_far).
    For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
 2. Before editing, run cheap local diagnostics or source-level experiments that
@@ -6348,10 +6366,32 @@ class L0cKernelMutationRunner:
             current_round_id=round_id,
             kernel_target=kernel_target,
         )
+        prior_research_memory = self._collect_prior_l0c_research_memory(
+            round_root=root,
+            current_round_id=round_id,
+            kernel_target=kernel_target,
+        )
         self._write_tsv(
             round_dir / "prior_mutations_rejected.tsv",
             L0C_PRIOR_REJECTION_COLUMNS,
             prior_rejections,
+        )
+        self._write_tsv(
+            round_dir / "prior_research_memory.tsv",
+            L0C_RESEARCH_MEMORY_COLUMNS,
+            prior_research_memory,
+        )
+        self._write_tsv(
+            round_dir / "research_memory.tsv",
+            L0C_RESEARCH_MEMORY_COLUMNS,
+            [],
+        )
+        (round_dir / "research_memory.md").write_text(
+            self._render_l0c_research_memory_doc(
+                prior_rows=prior_research_memory,
+                current_rows=[],
+            ),
+            encoding="utf-8",
         )
         winning_diffs = self._collect_recent_l0c_winning_diffs(
             round_root=root,
@@ -6373,6 +6413,7 @@ class L0cKernelMutationRunner:
             round_id=round_id,
             hld_path=self.repo_root / "docs" / "HLD-Serving-Backend-AutoResearch-v0_2-L0KernelPlan.md",
             prior_rejections=prior_rejections,
+            prior_research_memory=prior_research_memory,
         )
         (round_dir / "strategy_brief.md").write_text(strategy_brief, encoding="utf-8")
 
@@ -7621,6 +7662,20 @@ class L0cKernelMutationRunner:
                         "pattern_id": pattern_id,
                     }
                 )
+                self._record_l0c_research_memory(
+                    round_dir,
+                    self._make_l0c_research_memory_row(
+                        round_id=round_id,
+                        iteration=attempt_label,
+                        mutation_hash=mutation_hash,
+                        patch_text=patch_text,
+                        controller_gate=f"preflight_soft_demote:{pattern_id}",
+                        outcome="preflight_demoted_to_canary",
+                        failure_relation=f"advisory_memory:{pattern_id}",
+                        next_implication="treat as risky but not forbidden; only revisit with concrete canary evidence",
+                        artifact_refs=self._artifact_refs_for_iteration(iteration_dir),
+                    ),
+                )
                 if kernel_target == "fp8_gemm":
                     consecutive_parity_fails += 1
                     consecutive_compile_fails = 0
@@ -7660,6 +7715,12 @@ class L0cKernelMutationRunner:
                 consecutive_compile_fails += 1
                 consecutive_parity_fails = 0
                 parity = self._read_parity_check(active_iteration_dir)
+                active_patch_path = active_iteration_dir / "mutation.patch"
+                active_patch_text = (
+                    active_patch_path.read_text(encoding="utf-8", errors="replace")
+                    if active_patch_path.is_file()
+                    else ""
+                )
                 if active_is_canary:
                     self._update_filter_hit_canary_outcome(
                         round_dir=round_dir,
@@ -9499,6 +9560,20 @@ class L0cKernelMutationRunner:
                         reason="agent_no_patch",
                     )
                 )
+                self._record_l0c_research_memory(
+                    round_dir,
+                    self._make_l0c_research_memory_row(
+                        round_id=round_id,
+                        iteration=attempt_label,
+                        mutation_hash="",
+                        patch_text="",
+                        controller_gate="agent_no_patch",
+                        outcome="agent_no_patch",
+                        failure_relation="authoring_failure:no_patch",
+                        next_implication="agent must submit mutation.patch or BLOCKED.md with a concrete source-surface reason",
+                        artifact_refs=self._artifact_refs_for_iteration(iteration_dir),
+                    ),
+                )
                 if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
                     terminal_condition = "compile_failures_3x"
                     break
@@ -9516,6 +9591,20 @@ class L0cKernelMutationRunner:
                         mutation_hash=mutation_hash,
                         reason="duplicate_mutation_hash",
                     )
+                )
+                self._record_l0c_research_memory(
+                    round_dir,
+                    self._make_l0c_research_memory_row(
+                        round_id=round_id,
+                        iteration=attempt_label,
+                        mutation_hash=mutation_hash,
+                        patch_text=patch_text,
+                        controller_gate="duplicate_mutation_hash",
+                        outcome="duplicate_rejected",
+                        failure_relation="exact_patch_hash_repeat",
+                        next_implication="do not retry exact mutation hash; propose a different dispatch, shape, scale, or schedule mechanism",
+                        artifact_refs=self._artifact_refs_for_iteration(iteration_dir),
+                    ),
                 )
                 # Duplicate doesn't reset compile/parity streak — agent's regress is mild.
                 continue
@@ -9557,6 +9646,20 @@ class L0cKernelMutationRunner:
                         tier=tier,
                         pattern_id=pattern_id,
                         evidence_snippet=evidence_snippet,
+                    )
+                    self._record_l0c_research_memory(
+                        round_dir,
+                        self._make_l0c_research_memory_row(
+                            round_id=round_id,
+                            iteration=attempt_label,
+                            mutation_hash=mutation_hash,
+                            patch_text=patch_text,
+                            controller_gate=f"preflight:{pattern_id}",
+                            outcome="preflight_rejected",
+                            failure_relation=f"safety_preflight:{pattern_id}",
+                            next_implication="revise the patch to preserve correctness-critical evaluator/controller boundaries",
+                            artifact_refs=self._artifact_refs_for_iteration(iteration_dir),
+                        ),
                     )
                     consecutive_compile_fails = 0
                     consecutive_parity_fails = 0
@@ -9667,6 +9770,25 @@ class L0cKernelMutationRunner:
                             reason=str(parity.get("reason", "compile_nvcc_error")),
                         )
                     )
+                surface, _, expected_path = self._classify_l0c_patch_memory(active_patch_text)
+                self._record_l0c_research_memory(
+                    round_dir,
+                    self._make_l0c_research_memory_row(
+                        round_id=round_id,
+                        iteration=active_iteration,
+                        mutation_hash=active_mutation_hash,
+                        patch_text=active_patch_text,
+                        controller_gate=str(parity.get("reason", "compile_nvcc_error")),
+                        outcome="compile_failed",
+                        failure_relation=self._failure_relation_for_outcome(
+                            outcome="compile_failed",
+                            surface=surface,
+                            expected_affected_path=expected_path,
+                        ),
+                        next_implication="agent must own compile/preflight repair before submitting adjacent C++ schedule mutations",
+                        artifact_refs=self._artifact_refs_for_iteration(active_iteration_dir),
+                    ),
+                )
                 if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
                     terminal_condition = "compile_failures_3x"
                     break
@@ -9676,6 +9798,12 @@ class L0cKernelMutationRunner:
                 consecutive_compile_fails = 0
                 parity = self._read_parity_check(active_iteration_dir)
                 reason = str(parity.get("reason", "parity_logit_diverged"))
+                active_patch_path = active_iteration_dir / "mutation.patch"
+                active_patch_text = (
+                    active_patch_path.read_text(encoding="utf-8", errors="replace")
+                    if active_patch_path.is_file()
+                    else ""
+                )
                 if active_is_canary:
                     self._update_filter_hit_canary_outcome(
                         round_dir=round_dir,
@@ -9707,6 +9835,30 @@ class L0cKernelMutationRunner:
                             ),
                         )
                     )
+                surface, _, expected_path = self._classify_l0c_patch_memory(active_patch_text)
+                self._record_l0c_research_memory(
+                    round_dir,
+                    self._make_l0c_research_memory_row(
+                        round_id=round_id,
+                        iteration=active_iteration,
+                        mutation_hash=active_mutation_hash,
+                        patch_text=active_patch_text,
+                        controller_gate=reason,
+                        outcome="parity_failed",
+                        tier4_overshoot=self._tier4_overshoot_from_parity(parity),
+                        failure_relation=self._failure_relation_for_outcome(
+                            outcome="parity_failed",
+                            surface=surface,
+                            expected_affected_path=expected_path,
+                        ),
+                        next_implication=self._next_implication_for_outcome(
+                            outcome="parity_failed",
+                            surface=surface,
+                            expected_affected_path=expected_path,
+                        ),
+                        artifact_refs=self._artifact_refs_for_iteration(active_iteration_dir),
+                    ),
+                )
                 if reason == "intermittent_parity":
                     intermittent_parity_seen += 1
                     if intermittent_parity_seen >= L0C_INTERMITTENT_PARITY_THRESHOLD:
@@ -9725,8 +9877,16 @@ class L0cKernelMutationRunner:
             measurement_rows = list(measurement_trace["measurements"])
             mean_objective = float(outcome["objective_mean"])
             candidate_uuid = str(outcome["candidate_uuid"])
-            accepted_rows.extend(measurement_rows)
+            active_patch_path = active_iteration_dir / "mutation.patch"
+            active_patch_text = (
+                active_patch_path.read_text(encoding="utf-8", errors="replace")
+                if active_patch_path.is_file()
+                else ""
+            )
             baseline_mean = self._mean_of(baseline_rows)
+            measured_outcome = "keep" if mean_objective > baseline_mean else "discard"
+            surface, _, expected_path = self._classify_l0c_patch_memory(active_patch_text)
+            accepted_rows.extend(measurement_rows)
             results_rows.append(
                 {
                     "iteration": active_iteration,
@@ -9737,6 +9897,32 @@ class L0cKernelMutationRunner:
                     "objective_mean": f"{mean_objective:.6f}",
                     "measurement_count": str(len(measurement_rows)),
                 }
+            )
+            parity = self._read_parity_check(active_iteration_dir)
+            self._record_l0c_research_memory(
+                round_dir,
+                self._make_l0c_research_memory_row(
+                    round_id=round_id,
+                    iteration=active_iteration,
+                    mutation_hash=active_mutation_hash,
+                    patch_text=active_patch_text,
+                    controller_gate=str(parity.get("reason", "parity_passed_then_measured")),
+                    outcome=measured_outcome,
+                    objective_mean=f"{mean_objective:.6f}",
+                    rollout_measurements=self._rollout_measurement_summary(active_iteration_dir),
+                    tier4_overshoot=self._tier4_overshoot_from_parity(parity),
+                    failure_relation=self._failure_relation_for_outcome(
+                        outcome=measured_outcome,
+                        surface=surface,
+                        expected_affected_path=expected_path,
+                    ),
+                    next_implication=self._next_implication_for_outcome(
+                        outcome=measured_outcome,
+                        surface=surface,
+                        expected_affected_path=expected_path,
+                    ),
+                    artifact_refs=self._artifact_refs_for_iteration(active_iteration_dir),
+                ),
             )
             if active_is_canary:
                 canary_outcome = "improved" if mean_objective > baseline_mean else "regressed"
@@ -9929,6 +10115,329 @@ class L0cKernelMutationRunner:
             if stripped:
                 return stripped
         return ""
+
+    def _collect_prior_l0c_research_memory(
+        self,
+        *,
+        round_root: Path,
+        current_round_id: str,
+        kernel_target: str,
+    ) -> list[dict[str, Any]]:
+        if not round_root.exists():
+            return []
+        round_dirs = [
+            path
+            for path in round_root.iterdir()
+            if path.is_dir()
+            and path.name != current_round_id
+            and f"-l0c-mutation-{kernel_target}-" in path.name
+        ]
+        round_dirs.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        rows: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for prior_round in round_dirs:
+            memory_path = prior_round / "research_memory.tsv"
+            if memory_path.is_file():
+                source_rows = self._read_tsv(memory_path)
+            else:
+                source_rows = self._synthesize_l0c_research_memory_rows(prior_round)
+            for row in source_rows:
+                normalized = {column: row.get(column, "") for column in L0C_RESEARCH_MEMORY_COLUMNS}
+                normalized["source_round_id"] = normalized.get("source_round_id") or prior_round.name
+                key = (
+                    str(normalized.get("source_round_id", "")),
+                    str(normalized.get("iteration", "")),
+                    str(normalized.get("mutation_hash", "")),
+                    str(normalized.get("outcome", "")),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append(normalized)
+                if len(rows) >= L0C_RESEARCH_MEMORY_LIMIT:
+                    return rows
+        return rows
+
+    def _synthesize_l0c_research_memory_rows(self, round_dir: Path) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        results_by_iteration = {
+            str(row.get("iteration", "")): row
+            for row in self._read_tsv(round_dir / "results.tsv")
+            if str(row.get("iteration", ""))
+        } if (round_dir / "results.tsv").is_file() else {}
+        candidate_dirs = round_dir / "candidates"
+        if not candidate_dirs.is_dir():
+            return rows
+        for iteration_dir in sorted(candidate_dirs.iterdir(), key=lambda path: path.name):
+            if not iteration_dir.is_dir():
+                continue
+            patch_path = iteration_dir / "mutation.patch"
+            patch_text = patch_path.read_text(encoding="utf-8", errors="replace") if patch_path.is_file() else ""
+            mutation_hash = (
+                hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
+                if patch_text
+                else ""
+            )
+            surface, changed_region, expected_path = self._classify_l0c_patch_memory(patch_text)
+            parity = self._read_parity_check(iteration_dir)
+            trace_path = iteration_dir / "measurement_trace.json"
+            result_row = results_by_iteration.get(iteration_dir.name, {})
+            outcome = str(result_row.get("status", "")) if result_row else ""
+            if not outcome:
+                if parity.get("pass") is True and trace_path.is_file():
+                    outcome = "measured"
+                elif parity.get("pass") is False:
+                    outcome = str(parity.get("reason") or "parity_failed")
+                elif patch_path.is_file():
+                    outcome = "submitted_without_controller_measurement"
+                else:
+                    outcome = "agent_no_patch"
+            objective_mean = str(result_row.get("objective_mean", ""))
+            rollout_measurements = self._rollout_measurement_summary(iteration_dir)
+            tier4_overshoot = self._tier4_overshoot_from_parity(parity)
+            rows.append(
+                self._make_l0c_research_memory_row(
+                    round_id=round_dir.name,
+                    iteration=iteration_dir.name,
+                    mutation_hash=mutation_hash,
+                    patch_text=patch_text,
+                    controller_gate=str(parity.get("reason", "")) or "artifact_synthesis",
+                    outcome=outcome,
+                    objective_mean=objective_mean,
+                    rollout_measurements=rollout_measurements,
+                    tier4_overshoot=tier4_overshoot,
+                    failure_relation=self._failure_relation_for_outcome(
+                        outcome=outcome,
+                        surface=surface,
+                        expected_affected_path=expected_path,
+                    ),
+                    next_implication=self._next_implication_for_outcome(
+                        outcome=outcome,
+                        surface=surface,
+                        expected_affected_path=expected_path,
+                    ),
+                    artifact_refs=self._artifact_refs_for_iteration(iteration_dir),
+                    surface=surface,
+                    changed_region=changed_region,
+                    expected_affected_path=expected_path,
+                )
+            )
+        return rows
+
+    def _record_l0c_research_memory(
+        self,
+        round_dir: Path,
+        row: dict[str, Any],
+    ) -> None:
+        current_rows = []
+        path = round_dir / "research_memory.tsv"
+        if path.is_file():
+            current_rows = self._read_tsv(path)
+        current_rows.append({column: row.get(column, "") for column in L0C_RESEARCH_MEMORY_COLUMNS})
+        self._write_tsv(path, L0C_RESEARCH_MEMORY_COLUMNS, current_rows)
+        prior_path = round_dir / "prior_research_memory.tsv"
+        prior_rows = self._read_tsv(prior_path) if prior_path.is_file() else []
+        (round_dir / "research_memory.md").write_text(
+            self._render_l0c_research_memory_doc(
+                prior_rows=prior_rows,
+                current_rows=current_rows,
+            ),
+            encoding="utf-8",
+        )
+
+    def _make_l0c_research_memory_row(
+        self,
+        *,
+        round_id: str,
+        iteration: str,
+        mutation_hash: str,
+        patch_text: str,
+        controller_gate: str,
+        outcome: str,
+        objective_mean: str | float = "",
+        rollout_measurements: str = "",
+        tier4_overshoot: str | float = "",
+        failure_relation: str = "",
+        next_implication: str = "",
+        artifact_refs: str = "",
+        surface: str | None = None,
+        changed_region: str | None = None,
+        expected_affected_path: str | None = None,
+    ) -> dict[str, str]:
+        if surface is None or changed_region is None or expected_affected_path is None:
+            surface, changed_region, expected_affected_path = self._classify_l0c_patch_memory(patch_text)
+        return {
+            "source_round_id": self._sanitize_tsv_field(round_id),
+            "iteration": self._sanitize_tsv_field(iteration),
+            "mutation_hash": self._sanitize_tsv_field(mutation_hash),
+            "surface": self._sanitize_tsv_field(surface),
+            "changed_region": self._sanitize_tsv_field(changed_region),
+            "expected_affected_path": self._sanitize_tsv_field(expected_affected_path),
+            "controller_gate": self._sanitize_tsv_field(controller_gate),
+            "outcome": self._sanitize_tsv_field(outcome),
+            "objective_mean": self._sanitize_tsv_field(objective_mean),
+            "rollout_measurements": self._sanitize_tsv_field(rollout_measurements),
+            "tier4_overshoot": self._sanitize_tsv_field(tier4_overshoot),
+            "failure_relation": self._sanitize_tsv_field(failure_relation),
+            "next_implication": self._sanitize_tsv_field(next_implication),
+            "artifact_refs": self._sanitize_tsv_field(artifact_refs, limit=800),
+        }
+
+    def _classify_l0c_patch_memory(self, patch_text: str) -> tuple[str, str, str]:
+        paths = self._patch_changed_paths(patch_text)
+        changed_region = ",".join(paths[:6]) if paths else "no_patch"
+        haystack = patch_text.lower()
+        path_blob = "\n".join(paths).lower()
+        if "scaled_mm_sm120_fp8_dispatch" in path_blob:
+            surface = "cutlass_sm120_dispatch"
+        elif "csrc/quantization/w8a8/cutlass" in path_blob:
+            surface = "cutlass_cxx_dispatch_or_schedule"
+        elif "cutlass.py" in path_blob:
+            surface = "python_cutlass_wrapper"
+        elif "kernelhardwareinfo" in haystack or "sm_count" in haystack:
+            surface = "cutlass_hardware_info"
+        else:
+            surface = "unknown_or_mixed"
+        if "gemmshape<" in haystack or "tile" in haystack or "epiloguetile" in haystack:
+            expected = "schedule_tile_or_cta_shape"
+        elif "enable_sm120" in haystack or "sm120" in haystack and "dispatch" in path_blob:
+            expected = "dispatch_predicate"
+        elif "scale" in haystack or "azp" in haystack:
+            expected = "scale_placement_or_quant_semantics"
+        elif "kernelhardwareinfo" in haystack or "sm_count" in haystack:
+            expected = "workspace_or_sm_count_behavior"
+        elif "process_weights_after_loading" in haystack:
+            expected = "weight_layout_or_preprocess_behavior"
+        else:
+            expected = "unclassified_low_level_mechanism"
+        return surface, changed_region, expected
+
+    def _rollout_measurement_summary(self, iteration_dir: Path) -> str:
+        trace_path = iteration_dir / "measurement_trace.json"
+        if not trace_path.is_file():
+            return ""
+        try:
+            payload = json.loads(trace_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return "measurement_trace_unreadable"
+        measurements = payload.get("measurements") if isinstance(payload, dict) else None
+        if not isinstance(measurements, list):
+            return ""
+        values = [
+            str(row.get("objective_value", ""))
+            for row in measurements
+            if isinstance(row, dict) and row.get("objective_value") is not None
+        ]
+        return ",".join(values)
+
+    @staticmethod
+    def _tier4_overshoot_from_parity(parity: dict[str, Any]) -> str:
+        if not parity:
+            return ""
+        diagnostic = parity.get("tier4_downstream_logit_diagnostic")
+        if isinstance(diagnostic, dict) and diagnostic.get("tolerance_overshoot") is not None:
+            return str(diagnostic["tolerance_overshoot"])
+        if parity.get("tolerance_overshoot") is not None:
+            return str(parity["tolerance_overshoot"])
+        return ""
+
+    @staticmethod
+    def _failure_relation_for_outcome(
+        *,
+        outcome: str,
+        surface: str,
+        expected_affected_path: str,
+    ) -> str:
+        if outcome in {"discard", "regressed"}:
+            return f"same_surface_or_path_failed:{surface}:{expected_affected_path}"
+        if "parity" in outcome:
+            return f"correctness_risk:{surface}:{expected_affected_path}"
+        if "compile" in outcome:
+            return f"build_risk:{surface}:{expected_affected_path}"
+        if outcome in {"keep", "measured"}:
+            return f"measured_trial:{surface}:{expected_affected_path}"
+        return f"search_context:{surface}:{expected_affected_path}"
+
+    @staticmethod
+    def _next_implication_for_outcome(
+        *,
+        outcome: str,
+        surface: str,
+        expected_affected_path: str,
+    ) -> str:
+        if outcome in {"discard", "regressed"}:
+            return (
+                "avoid repeating this surface/path unless a new dispatch, shape, scale, "
+                "or schedule fact changes the hypothesis"
+            )
+        if "parity" in outcome:
+            return "preserve tier3 semantics first; do not chase throughput on this shape blindly"
+        if "compile" in outcome:
+            return "agent must fix compile/preflight locally before controller validation"
+        if outcome in {"keep", "measured"}:
+            return "use as measured evidence; compare against baseline and warmer candidate windows"
+        return "read artifacts before proposing adjacent mutations"
+
+    def _artifact_refs_for_iteration(self, iteration_dir: Path) -> str:
+        refs = []
+        for name in ("mutation.patch", "parity_check.json", "measurement_trace.json", "BLOCKED.md"):
+            path = iteration_dir / name
+            if path.is_file():
+                refs.append(_relative_to_repo(self.repo_root, path))
+        return ",".join(refs)
+
+    def _render_l0c_research_memory_doc(
+        self,
+        *,
+        prior_rows: list[dict[str, Any]],
+        current_rows: list[dict[str, Any]],
+    ) -> str:
+        lines = [
+            "# L0c Research Memory",
+            "",
+            "This file is the agent-readable memory index for the L0c mutation loop.",
+            "",
+            "## Prior-Art Alignment",
+            "",
+            "- AutoTVM keeps measurement inputs/results and uses history-best records.",
+            "- Ansor and TVM MetaSchedule retain schedule traces plus measured run times, then use them to guide evolutionary search.",
+            "- OpenTuner shares a common results database across search techniques.",
+            "- Therefore this loop records measured and failed trials with surface tags and next-search implications instead of relying only on prose warnings or hard bans.",
+            "",
+            "## Schema",
+            "",
+            "- `surface`: mutated subsystem, such as CUTLASS SM120 dispatch, C++ schedule source, Python wrapper, or hardware-info path.",
+            "- `changed_region`: diff header paths or the closest available source region.",
+            "- `expected_affected_path`: low-level mechanism claimed by the patch.",
+            "- `controller_gate`: preflight, compile, parity, or measurement gate that produced the outcome.",
+            "- `outcome`: measured keep/discard, parity failure, compile failure, duplicate, or other terminal status.",
+            "- `next_implication`: how future agents should use the row.",
+            "",
+            "## Current Round Rows",
+            "",
+            *self._format_l0c_research_memory_rows(current_rows[-12:]),
+            "",
+            "## Prior Rows",
+            "",
+            *self._format_l0c_research_memory_rows(prior_rows[:12]),
+            "",
+        ]
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_l0c_research_memory_rows(rows: list[dict[str, Any]]) -> list[str]:
+        if not rows:
+            return ["- None."]
+        lines = []
+        for row in rows:
+            lines.append(
+                "- "
+                f"{row.get('source_round_id', '')} {row.get('iteration', '')}: "
+                f"{row.get('surface', '')} / {row.get('expected_affected_path', '')} "
+                f"=> {row.get('outcome', '')}, objective={row.get('objective_mean', '')}; "
+                f"next={row.get('next_implication', '')}"
+            )
+        return lines
 
     @staticmethod
     def _read_tsv(path: Path) -> list[dict[str, str]]:
@@ -10529,6 +11038,7 @@ class L0cKernelMutationRunner:
         round_id: str,
         hld_path: Path,
         prior_rejections: list[dict[str, Any]],
+        prior_research_memory: list[dict[str, Any]],
     ) -> str:
         p3a_lines = self._latest_p3a_strategy_lines(kernel_target=kernel_target)
         prior_lines = ["- No prior cross-round rejections found for this kernel target."]
@@ -10546,6 +11056,18 @@ class L0cKernelMutationRunner:
                 if row.get("blocked_note"):
                     detail += f"; note: {row['blocked_note']}"
                 prior_lines.append(detail)
+        memory_lines = ["- No prior measured research-memory rows found for this kernel target."]
+        if prior_research_memory:
+            memory_lines = []
+            for row in prior_research_memory[:10]:
+                memory_lines.append(
+                    "- "
+                    f"{row.get('source_round_id', '')} {row.get('iteration', '')}: "
+                    f"{row.get('surface', '')} / {row.get('expected_affected_path', '')} "
+                    f"=> {row.get('outcome', '')}"
+                    f" objective={row.get('objective_mean', '')}; "
+                    f"next={row.get('next_implication', '')}"
+                )
         lines = [
             "# L0c Strategy Brief",
             "",
@@ -10556,6 +11078,11 @@ class L0cKernelMutationRunner:
                 "- Prior rejection ledger: "
                 f"`prior_mutations_rejected.tsv` ({len(prior_rejections)} rows)"
             ),
+            (
+                "- Prior measured-trial memory: "
+                f"`prior_research_memory.tsv` ({len(prior_research_memory)} rows)"
+            ),
+            "- Current-round measured-trial memory: `research_memory.tsv` and `research_memory.md`.",
             "",
             "## Bottleneck Thesis",
             "",
@@ -10582,7 +11109,31 @@ class L0cKernelMutationRunner:
                 "list, the forbidden list wins."
             ),
             "",
+            "## Prior-Art Memory Contract",
+            "",
+            (
+                "- Follow AutoTVM/Ansor/TVM MetaSchedule/OpenTuner style memory: keep "
+                "measured trials, feature tags, build/parity/measurement outcomes, and "
+                "next-search implications. Use memory to bias search away from repeats, "
+                "not as a blind syntax ban."
+            ),
+            (
+                "- Every candidate must be materially different from poor prior rows in "
+                "`research_memory.tsv` or must explain why a new dispatch, shape, scale, "
+                "or schedule fact changes the expected outcome."
+            ),
+            (
+                "- Before mutating, classify the patch surface and expected affected path: "
+                "dispatch predicate, schedule tile/CTA shape, scale placement, workspace/"
+                "SM-count behavior, memory traffic, cache locality, occupancy, register "
+                "pressure, or instruction count."
+            ),
+            "",
             *self._l0c_ranked_likely_safe_target_lines(kernel_target),
+            "",
+            "## Prior Measured-Trial Memory",
+            "",
+            *memory_lines,
             "",
             "## Prior Rejections Carried Forward",
             "",
@@ -10639,6 +11190,10 @@ class L0cKernelMutationRunner:
                 (
                     "2. Investigate actual CUTLASS dispatch, scale layout, GEMM problem "
                     "shape, and schedule/source constraints before proposing a patch."
+                ),
+                (
+                    "   For synthetic FP8 GEMM rounds, keep the Triton FP8 GEMM call boundary "
+                    "as the analogous dispatch/shape contract."
                 ),
                 (
                     "3. Prefer mutations that are justified by a cheap local diagnostic "
