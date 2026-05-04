@@ -12081,8 +12081,11 @@ class L0cKernelMutationRunner:
             fixture_payload=fixture_payload,
             round_id=round_id,
             harness=harness,
-            strategy_brief=(round_dir / "strategy_brief.md").read_text(
-                encoding="utf-8"
+            strategy_brief=self._append_l0c_auto_research_memory(
+                (round_dir / "strategy_brief.md").read_text(encoding="utf-8"),
+                (round_dir / "research_memory.md").read_text(encoding="utf-8")
+                if (round_dir / "research_memory.md").is_file()
+                else "",
             ),
             positive_memory=(round_dir / "winning_diffs.md").read_text(
                 encoding="utf-8"
@@ -12092,6 +12095,24 @@ class L0cKernelMutationRunner:
         brief = brief.replace("{{iteration}}", iteration)
         brief = brief.replace("{{iteration_dir}}", str(iteration_dir))
         (iteration_dir / "iteration_brief.md").write_text(brief, encoding="utf-8")
+
+    @staticmethod
+    def _append_l0c_auto_research_memory(strategy_brief: str, memory_doc: str) -> str:
+        memory_doc = memory_doc.strip()
+        if not memory_doc:
+            return strategy_brief
+        return "\n\n".join(
+            [
+                strategy_brief.rstrip(),
+                "## Auto-Refreshed Candidate Memory",
+                (
+                    "This block is regenerated from candidate artifacts before each authoring "
+                    "spawn. Treat it as the canonical patch_diff/failure_class table for "
+                    "previous attempts in this round."
+                ),
+                memory_doc,
+            ]
+        )
 
     def _run_real_paired_baseline(
         self,

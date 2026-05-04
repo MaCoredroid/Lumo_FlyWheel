@@ -5493,6 +5493,12 @@ def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_pa
     memory_text = (round_dir / "research_memory.md").read_text(encoding="utf-8")
     assert "failure_class=performance" in memory_text
     assert "gate=ran_passed_with_tier4_downstream_logit_diagnostic" in memory_text
+    assert "patch_diff=" in memory_text
+    augmented_brief = runner._append_l0c_auto_research_memory("strategy", memory_text)
+    assert "Auto-Refreshed Candidate Memory" in augmented_brief
+    assert "canonical patch_diff/failure_class table" in augmented_brief
+    assert "failure_class=correctness" in augmented_brief
+    assert "using TileShape = Shape<_16, _128, _128>" in augmented_brief
 
 
 def test_l0c_fp8_gemm_real_non_cutlass_non_triton_backend_blocked(tmp_path: Path) -> None:
