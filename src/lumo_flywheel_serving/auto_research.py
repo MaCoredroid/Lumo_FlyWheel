@@ -10737,6 +10737,9 @@ class L0cKernelMutationRunner:
             return ["- None."]
         lines = []
         for row in rows:
+            patch_diff = str(row.get("patch_diff", ""))
+            if len(patch_diff) > 900:
+                patch_diff = patch_diff[:900] + "...[truncated]"
             lines.append(
                 "- "
                 f"{row.get('source_round_id', '')} {row.get('iteration', '')}: "
@@ -10745,6 +10748,7 @@ class L0cKernelMutationRunner:
                 f"failure_class={row.get('failure_class', '')}; "
                 f"gate={row.get('controller_gate', '')}; "
                 f"features={row.get('mutation_features', '')}; "
+                f"patch_diff={patch_diff}; "
                 f"bias={row.get('search_bias', '')}; "
                 f"next={row.get('next_implication', '')}"
             )
