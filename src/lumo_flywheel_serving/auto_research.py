@@ -169,8 +169,10 @@ L0C_RESEARCH_MEMORY_COLUMNS = [
     "expected_affected_path",
     "mutation_features",
     "schedule_trace",
+    "patch_diff",
     "controller_gate",
     "outcome",
+    "failure_class",
     "objective_mean",
     "rollout_measurements",
     "measurement_policy",
@@ -7773,6 +7775,7 @@ class L0cKernelMutationRunner:
                 if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
                     terminal_condition = "compile_failures_3x"
                     break
+                self._refresh_l0c_research_memory_from_artifacts(round_dir)
                 continue
             if outcome["outcome"] == "parity_failed":
                 consecutive_parity_fails += 1
@@ -7818,6 +7821,7 @@ class L0cKernelMutationRunner:
                 if consecutive_parity_fails >= L0C_PROPOSER_STUCK_THRESHOLD:
                     terminal_condition = "proposer_stuck"
                     break
+                self._refresh_l0c_research_memory_from_artifacts(round_dir)
                 continue
 
             consecutive_parity_fails = 0
@@ -7867,6 +7871,7 @@ class L0cKernelMutationRunner:
                     objective_mean=mean_objective,
                     patch_path=active_iteration_dir / "mutation.patch",
                 )
+            self._refresh_l0c_research_memory_from_artifacts(round_dir)
         else:
             terminal_condition = terminal_condition or "total_attempt_cap_reached"
 
@@ -10193,6 +10198,7 @@ class L0cKernelMutationRunner:
             for row in self._read_tsv(round_dir / "results.tsv")
             if str(row.get("iteration", ""))
         } if (round_dir / "results.tsv").is_file() else {}
+        baseline_mean = self._l0c_round_baseline_mean_from_artifacts(round_dir)
         candidate_dirs = round_dir / "candidates"
         if not candidate_dirs.is_dir():
             return rows
@@ -10213,7 +10219,15 @@ class L0cKernelMutationRunner:
             outcome = str(result_row.get("status", "")) if result_row else ""
             if not outcome:
                 if parity.get("pass") is True and trace_path.is_file():
-                    outcome = "measured"
+                    objective_from_trace = self._objective_mean_from_l0c_trace(trace_path)
+                    if baseline_mean is not None and objective_from_trace is not None:
+                        outcome = "keep" if objective_from_trace > baseline_mean else "discard"
+                    else:
+                        outcome = "measured"
+                elif parity.get("pass") is True and isinstance(
+                    parity.get("tier4_downstream_logit_diagnostic"), dict
+                ):
+                    outcome = "parity_diagnostic_only"
                 elif parity.get("pass") is False:
                     outcome = str(parity.get("reason") or "parity_failed")
                 elif patch_path.is_file():
@@ -10221,6 +10235,9 @@ class L0cKernelMutationRunner:
                 else:
                     outcome = "agent_no_patch"
             objective_mean = str(result_row.get("objective_mean", ""))
+            if not objective_mean:
+                trace_objective = self._objective_mean_from_l0c_trace(trace_path)
+                objective_mean = "" if trace_objective is None else f"{trace_objective:.6f}"
             rollout_measurements = self._rollout_measurement_summary(iteration_dir)
             tier4_overshoot = self._tier4_overshoot_from_parity(parity)
             rows.append(
@@ -10252,6 +10269,77 @@ class L0cKernelMutationRunner:
             )
         return rows
 
+    def _refresh_l0c_research_memory_from_artifacts(self, round_dir: Path) -> list[dict[str, Any]]:
+        rows = self._synthesize_l0c_research_memory_rows(round_dir)
+        self._write_tsv(round_dir / "research_memory.tsv", L0C_RESEARCH_MEMORY_COLUMNS, rows)
+        prior_path = round_dir / "prior_research_memory.tsv"
+        prior_rows = self._read_tsv(prior_path) if prior_path.is_file() else []
+        (round_dir / "research_memory.md").write_text(
+            self._render_l0c_research_memory_doc(
+                prior_rows=prior_rows,
+                current_rows=rows,
+            ),
+            encoding="utf-8",
+        )
+        return rows
+
+    def _l0c_round_baseline_mean_from_artifacts(self, round_dir: Path) -> float | None:
+        baseline_dir = round_dir / "baselines"
+        if not baseline_dir.is_dir():
+            return None
+        values = []
+        for path in sorted(baseline_dir.glob("measurement_*.json")):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            value = payload.get("eval_throughput")
+            if value is None:
+                value = payload.get("objective_value")
+            if value is None:
+                continue
+            try:
+                values.append(float(value))
+            except (TypeError, ValueError):
+                continue
+        if not values:
+            return None
+        return sum(values) / len(values)
+
+    @staticmethod
+    def _objective_mean_from_l0c_trace(trace_path: Path) -> float | None:
+        if not trace_path.is_file():
+            return None
+        try:
+            payload = json.loads(trace_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        value = payload.get("objective_mean")
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+        measurements = payload.get("measurements")
+        if not isinstance(measurements, list):
+            return None
+        values = []
+        for row in measurements:
+            if not isinstance(row, dict):
+                continue
+            raw = row.get("objective_value")
+            if raw is None:
+                continue
+            try:
+                values.append(float(raw))
+            except (TypeError, ValueError):
+                continue
+        if not values:
+            return None
+        return sum(values) / len(values)
+
     def _record_l0c_research_memory(
         self,
         round_dir: Path,
@@ -10261,7 +10349,17 @@ class L0cKernelMutationRunner:
         path = round_dir / "research_memory.tsv"
         if path.is_file():
             current_rows = self._read_tsv(path)
-        current_rows.append({column: row.get(column, "") for column in L0C_RESEARCH_MEMORY_COLUMNS})
+        normalized = {column: row.get(column, "") for column in L0C_RESEARCH_MEMORY_COLUMNS}
+        row_key = (normalized.get("source_round_id", ""), normalized.get("iteration", ""))
+        replaced = False
+        for index, existing in enumerate(current_rows):
+            existing_key = (existing.get("source_round_id", ""), existing.get("iteration", ""))
+            if existing_key == row_key:
+                current_rows[index] = normalized
+                replaced = True
+                break
+        if not replaced:
+            current_rows.append(normalized)
         self._write_tsv(path, L0C_RESEARCH_MEMORY_COLUMNS, current_rows)
         prior_path = round_dir / "prior_research_memory.tsv"
         prior_rows = self._read_tsv(prior_path) if prior_path.is_file() else []
@@ -10318,8 +10416,18 @@ class L0cKernelMutationRunner:
                 ),
                 limit=600,
             ),
+            "patch_diff": self._sanitize_tsv_field(
+                self._l0c_memory_patch_diff(patch_text),
+                limit=1600,
+            ),
             "controller_gate": self._sanitize_tsv_field(controller_gate),
             "outcome": self._sanitize_tsv_field(outcome),
+            "failure_class": self._sanitize_tsv_field(
+                self._l0c_memory_failure_class(
+                    outcome=outcome,
+                    controller_gate=controller_gate,
+                )
+            ),
             "objective_mean": self._sanitize_tsv_field(objective_mean),
             "rollout_measurements": self._sanitize_tsv_field(rollout_measurements),
             "measurement_policy": self._sanitize_tsv_field(
@@ -10410,6 +10518,41 @@ class L0cKernelMutationRunner:
         if features:
             trace_parts.append(f"features={features}")
         return ";".join(trace_parts) or "no_patch_trace"
+
+    @staticmethod
+    def _l0c_memory_patch_diff(patch_text: str) -> str:
+        if not patch_text.strip():
+            return ""
+        lines = []
+        for line in patch_text.splitlines():
+            if line.startswith(("--- ", "+++ ", "@@ ", "+", "-")):
+                lines.append(line)
+        return "\n".join(lines) if lines else patch_text
+
+    @staticmethod
+    def _l0c_memory_failure_class(
+        *,
+        outcome: str,
+        controller_gate: str,
+    ) -> str:
+        haystack = f"{outcome} {controller_gate}".lower()
+        if outcome == "keep":
+            return "success"
+        if outcome in {"discard", "regressed"}:
+            return "performance"
+        if "duplicate" in haystack:
+            return "duplicate"
+        if "preflight" in haystack or "safety" in haystack or "forbidden" in haystack:
+            return "preflight_safety"
+        if "compile" in haystack or "nvcc" in haystack or "build" in haystack:
+            return "build"
+        if "parity" in haystack or "logit" in haystack or "correctness" in haystack:
+            return "correctness"
+        if "agent" in haystack or "no_patch" in haystack:
+            return "authoring"
+        if "measured" in haystack:
+            return "measurement"
+        return "context"
 
     @staticmethod
     def _l0c_memory_measurement_policy(
@@ -10569,8 +10712,10 @@ class L0cKernelMutationRunner:
             "- `expected_affected_path`: low-level mechanism claimed by the patch.",
             "- `mutation_features`: compact knob/config features such as CTA shapes, M guards, scale changes, or SM120 guard changes.",
             "- `schedule_trace`: a short schedule/config trace for comparing trials without reading full patches.",
+            "- `patch_diff`: compact sanitized git diff excerpt from `mutation.patch`, enough to see the changed code shape.",
             "- `controller_gate`: preflight, compile, parity, or measurement gate that produced the outcome.",
             "- `outcome`: measured keep/discard, parity failure, compile failure, duplicate, or other terminal status.",
+            "- `failure_class`: success, performance, correctness, build, preflight_safety, duplicate, authoring, or context.",
             "- `measurement_policy`: whether the row reached controller vLLM measurement, parity-only, or author compile preflight.",
             "- `next_implication`: how future agents should use the row.",
             "- `search_bias`: explicit budget/search treatment for adjacent proposals.",
@@ -10597,6 +10742,8 @@ class L0cKernelMutationRunner:
                 f"{row.get('source_round_id', '')} {row.get('iteration', '')}: "
                 f"{row.get('surface', '')} / {row.get('expected_affected_path', '')} "
                 f"=> {row.get('outcome', '')}, objective={row.get('objective_mean', '')}; "
+                f"failure_class={row.get('failure_class', '')}; "
+                f"gate={row.get('controller_gate', '')}; "
                 f"features={row.get('mutation_features', '')}; "
                 f"bias={row.get('search_bias', '')}; "
                 f"next={row.get('next_implication', '')}"
@@ -11577,9 +11724,10 @@ class L0cKernelMutationRunner:
             "",
             (
                 "- Follow AutoTVM/Ansor/TVM MetaSchedule/OpenTuner style memory: keep "
-                "workload keys, compact config/schedule traces, feature tags, build/"
-                "parity/measurement outcomes, and next-search implications. Use memory "
-                "to bias search away from repeats, not as a blind syntax ban."
+                "workload keys, compact config/schedule traces, feature tags, git diff "
+                "excerpts, build/parity/measurement outcomes, failure class, and "
+                "next-search implications. Use memory to bias search away from repeats, "
+                "not as a blind syntax ban."
             ),
             (
                 "- Every candidate must be materially different from poor prior rows in "
@@ -11593,9 +11741,11 @@ class L0cKernelMutationRunner:
                 "pressure, or instruction count."
             ),
             (
-                "- Treat `mutation_features`, `schedule_trace`, and `search_bias` as the "
-                "trial database fields: a new patch must change a feature/trace that can "
-                "plausibly change the measured outcome."
+                "- Treat `patch_diff`, `failure_class`, `mutation_features`, "
+                "`schedule_trace`, and `search_bias` as the trial database fields: a "
+                "new patch must change a feature/trace that can plausibly change the "
+                "measured outcome and must account for whether the old failure was "
+                "correctness, build, preflight, or performance."
             ),
             "",
             *self._l0c_ranked_likely_safe_target_lines(kernel_target),
@@ -11900,6 +12050,9 @@ class L0cKernelMutationRunner:
         harness: str,
     ) -> None:
         round_spec_path = iteration_dir.parent.parent / "round_spec.yaml"
+        round_dir = iteration_dir.parent.parent
+        if (round_dir / "candidates").is_dir():
+            self._refresh_l0c_research_memory_from_artifacts(round_dir)
         round_spec = load_yaml_file(round_spec_path) if round_spec_path.is_file() else {}
         mutation_surface = (
             round_spec.get("mutation_surface")
@@ -11913,10 +12066,10 @@ class L0cKernelMutationRunner:
             fixture_payload=fixture_payload,
             round_id=round_id,
             harness=harness,
-            strategy_brief=(iteration_dir.parent.parent / "strategy_brief.md").read_text(
+            strategy_brief=(round_dir / "strategy_brief.md").read_text(
                 encoding="utf-8"
             ),
-            positive_memory=(iteration_dir.parent.parent / "winning_diffs.md").read_text(
+            positive_memory=(round_dir / "winning_diffs.md").read_text(
                 encoding="utf-8"
             ),
             mutation_surface=mutation_surface,

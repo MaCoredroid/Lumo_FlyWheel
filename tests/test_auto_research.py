@@ -5405,6 +5405,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     ).splitlines()[0]
     assert "workload_key" in research_memory_header
     assert "schedule_trace" in research_memory_header
+    assert "patch_diff" in research_memory_header
+    assert "failure_class" in research_memory_header
     assert "search_bias" in research_memory_header
     round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
     assert isinstance(round_spec, dict)
@@ -5418,6 +5420,79 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache" in round_spec["runtime"]["prelaunch_shell"]
     assert "/opt/vllm-source" in round_spec["runtime"]["prelaunch_shell"]
     assert round_spec["parity_fixture_id"] == "responses-sdk-adapter-cutover-fp8-gemm-v1"
+
+
+def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    round_dir = repo / "output" / "auto_research" / (
+        "qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T000000Z"
+    )
+    (round_dir / "baselines").mkdir(parents=True)
+    (round_dir / "candidates" / "001").mkdir(parents=True)
+    (round_dir / "candidates" / "002").mkdir(parents=True)
+    runner._write_tsv(round_dir / "prior_research_memory.tsv", auto_research.L0C_RESEARCH_MEMORY_COLUMNS, [])
+    (round_dir / "baselines" / "measurement_01.json").write_text(
+        json.dumps({"eval_throughput": 0.056}, indent=2),
+        encoding="utf-8",
+    )
+    patch_text = "\n".join(
+        [
+            "--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh",
+            "+++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh",
+            "@@ -1,1 +1,1 @@",
+            "-  using TileShape = Shape<_16, _64, _128>;",
+            "+  using TileShape = Shape<_16, _128, _128>;",
+            "",
+        ]
+    )
+    candidate_001 = round_dir / "candidates" / "001"
+    candidate_002 = round_dir / "candidates" / "002"
+    (candidate_001 / "mutation.patch").write_text(patch_text, encoding="utf-8")
+    (candidate_001 / "parity_check.json").write_text(
+        json.dumps({"pass": True, "reason": "ran_passed_with_tier4_downstream_logit_diagnostic"}),
+        encoding="utf-8",
+    )
+    (candidate_001 / "measurement_trace.json").write_text(
+        json.dumps(
+            {
+                "measurements": [
+                    {"objective_value": "0.034"},
+                    {"objective_value": "0.045"},
+                ],
+                "objective_mean": 0.0395,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (candidate_002 / "mutation.patch").write_text(patch_text, encoding="utf-8")
+    (candidate_002 / "parity_check.json").write_text(
+        json.dumps(
+            {
+                "pass": False,
+                "reason": "parity_fp8_tier4_downstream_logit_diverged",
+                "tolerance_overshoot": 0.35,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    rows = runner._refresh_l0c_research_memory_from_artifacts(round_dir)
+
+    assert rows[0]["outcome"] == "discard"
+    assert rows[0]["failure_class"] == "performance"
+    assert "using TileShape = Shape<_16, _128, _128>" in rows[0]["patch_diff"]
+    assert rows[1]["outcome"] == "parity_fp8_tier4_downstream_logit_diverged"
+    assert rows[1]["failure_class"] == "correctness"
+    memory_text = (round_dir / "research_memory.md").read_text(encoding="utf-8")
+    assert "failure_class=performance" in memory_text
+    assert "gate=ran_passed_with_tier4_downstream_logit_diagnostic" in memory_text
 
 
 def test_l0c_fp8_gemm_real_non_cutlass_non_triton_backend_blocked(tmp_path: Path) -> None:
