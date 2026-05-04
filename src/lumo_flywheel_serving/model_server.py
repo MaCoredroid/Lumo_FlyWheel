@@ -90,6 +90,7 @@ class ModelServer:
         state_root: str | Path = DEFAULT_STATE_ROOT,
         extra_volume_mounts: list[str] | None = None,
         prelaunch_shell: str | None = None,
+        ready_timeout_s: int = 900,
     ) -> None:
         self.registry_path = Path(registry_path).resolve()
         self._load_local_runtime_env()
@@ -107,6 +108,7 @@ class ModelServer:
         # list of strings — caller controls :ro and other docker mount flags.
         self.extra_volume_mounts: list[str] = list(extra_volume_mounts or [])
         self.prelaunch_shell = prelaunch_shell or ""
+        self.ready_timeout_s = ready_timeout_s
 
     def ensure_runtime_scaffolding(self) -> None:
         for path in (Path("/models"), self.logs_root, self.triton_cache_root):
@@ -364,7 +366,7 @@ class ModelServer:
             if container_id:
                 self._append_log_text(model_id, f"[VLLM-CONTAINER] id={container_id}\n")
             try:
-                self._wait_ready(model_id=model_id)
+                self._wait_ready(model_id=model_id, timeout_s=self.ready_timeout_s)
                 break
             except RuntimeError as exc:
                 self.stop(missing_ok=True)

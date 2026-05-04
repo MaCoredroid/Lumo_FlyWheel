@@ -9029,6 +9029,7 @@ class L0cKernelMutationRunner:
             "logs_root": logs_root,
             "triton_cache_root": triton_cache_root,
             "extra_volume_mounts": extra_mounts,
+            "ready_timeout_s": int(runtime.get("ready_timeout_s", 2400)),
         }
         if runtime.get("prelaunch_shell"):
             kwargs["prelaunch_shell"] = str(runtime["prelaunch_shell"])
