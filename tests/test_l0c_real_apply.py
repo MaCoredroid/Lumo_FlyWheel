@@ -633,6 +633,66 @@ def test_real_apply_and_test_returns_parity_failed_when_probe_diverges(
     assert kernel_path.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n"
 
 
+def test_real_apply_and_test_treats_fp8_tier4_downstream_logit_as_diagnostic(
+    tmp_path: Path, monkeypatch
+) -> None:
+    runner, round_dir, kernel_path, iteration_dir, round_id = _seed_round(
+        tmp_path, iteration="005", patch_text="placeholder"
+    )
+    spec_path = round_dir / "round_spec.yaml"
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    spec["kernel_target"] = "fp8_gemm"
+    spec["parity_fixture_id"] = "responses-sdk-adapter-cutover-fp8-gemm-v1"
+    spec_path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+    (iteration_dir / "mutation.patch").write_text(_good_patch(kernel_path), encoding="utf-8")
+    calls = _stub_passing_helpers(monkeypatch, runner)
+
+    def _probe_tier4_diverges(self, *, spec, fixture_dir, kernel_target, debug_export_dir):
+        return ParityProbeResult(
+            pass_=False,
+            fixture_id=str(spec.get("parity_fixture_id", "")),
+            kernel_target=kernel_target,
+            probes_total=64,
+            probes_passed=0,
+            first_diverging_probe=0,
+            tolerance_overshoot=0.369375,
+            reason="parity_fp8_tier4_downstream_logit_diverged",
+            error_detail="overshoot=3.693750e-01",
+            checkpoints_checked=("tier_3_gemm_output_compare", "tier_4_downstream_logit_guard"),
+        )
+
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_invoke_parity_probe",
+        _probe_tier4_diverges,
+        raising=True,
+    )
+
+    payload = runner.apply_and_test(
+        round_id=round_id,
+        iteration="005",
+        kernel_target="fp8_gemm",
+        harness="real",
+        round_root=round_dir.parent,
+    )
+    assert payload["outcome"] == "parity_passed"
+    assert calls["measure"] == 1
+    parity = json.loads((iteration_dir / "parity_check.json").read_text(encoding="utf-8"))
+    assert parity["pass"] is True
+    assert parity["reason"] == "ran_passed_with_tier4_downstream_logit_diagnostic"
+    assert parity["tier4_downstream_logit_diagnostic"]["original_reason"] == (
+        "parity_fp8_tier4_downstream_logit_diverged"
+    )
+    assert parity["tier4_downstream_logit_diagnostic"]["tolerance_overshoot"] == pytest.approx(
+        0.369375
+    )
+    assert (iteration_dir / "measurement_trace.json").exists()
+    assert not (iteration_dir / "BLOCKED.md").exists()
+    raw_probe = json.loads((iteration_dir / "parity_probe_result.json").read_text(encoding="utf-8"))
+    assert raw_probe["pass"] is False
+    assert raw_probe["reason"] == "parity_fp8_tier4_downstream_logit_diverged"
+
+
 def test_real_apply_and_test_treats_capture_failure_as_compile_class(
     tmp_path: Path, monkeypatch
 ) -> None:

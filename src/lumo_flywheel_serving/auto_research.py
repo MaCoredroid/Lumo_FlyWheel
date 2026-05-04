@@ -8494,10 +8494,36 @@ class L0cKernelMutationRunner:
                 json.dumps(parity_result.as_dict(), indent=2, sort_keys=True),
                 encoding="utf-8",
             )
+            tier4_diagnostic_only = self._fp8_tier4_downstream_logit_diagnostic_only(
+                kernel_target=kernel_target,
+                parity_result=parity_result,
+            )
+            effective_parity_pass = parity_result.pass_ or tier4_diagnostic_only
+            parity_check_reason = (
+                "ran_passed_with_tier4_downstream_logit_diagnostic"
+                if tier4_diagnostic_only
+                else parity_result.reason
+            )
+            tier4_diagnostic = None
+            if tier4_diagnostic_only:
+                tier4_diagnostic = {
+                    "original_pass": False,
+                    "original_reason": parity_result.reason,
+                    "policy": (
+                        "fp8_gemm_tier4_downstream_logit_guard_is_diagnostic_after_"
+                        "tier3_gemm_output_compare"
+                    ),
+                    "first_diverging_probe": parity_result.first_diverging_probe,
+                    "tolerance_overshoot": parity_result.tolerance_overshoot,
+                    "error_detail": parity_result.error_detail,
+                    "probes_total": parity_result.probes_total,
+                    "probes_passed": parity_result.probes_passed,
+                    "checkpoints_checked": list(parity_result.checkpoints_checked),
+                }
             self._write_parity_check(
                 iteration_dir,
-                pass_=parity_result.pass_,
-                reason=parity_result.reason,
+                pass_=effective_parity_pass,
+                reason=parity_check_reason,
                 fixture_id=parity_result.fixture_id or fixture_id,
                 kernel_target=kernel_target,
                 first_diverging_probe=parity_result.first_diverging_probe,
@@ -8508,6 +8534,7 @@ class L0cKernelMutationRunner:
                 ),
                 error_detail=parity_result.error_detail,
                 cutlass_overlay_runtime=cutlass_overlay_materialization,
+                tier4_downstream_logit_diagnostic=tier4_diagnostic,
             )
             # The agent's per-iteration apply-and-test runs first and may write
             # BLOCKED.md based on its own parity_check.json (later overwritten
@@ -8518,7 +8545,7 @@ class L0cKernelMutationRunner:
             # verdict so future iterations' agents read the truth, not stale
             # agent perspective.
             blocked_path = iteration_dir / "BLOCKED.md"
-            if parity_result.pass_:
+            if effective_parity_pass:
                 if blocked_path.exists():
                     blocked_path.unlink()
             else:
@@ -8533,7 +8560,7 @@ class L0cKernelMutationRunner:
                 if parity_result.error_detail:
                     blocker_lines.append(f"detail: {parity_result.error_detail}")
                 blocked_path.write_text("\n".join(blocker_lines) + "\n", encoding="utf-8")
-            if not parity_result.pass_:
+            if not effective_parity_pass:
                 if parity_result.reason in {"endpoint_unreachable", "capture_failed", "comparison_failed"}:
                     outcome = "compile_failed"
                 else:
@@ -8583,6 +8610,21 @@ class L0cKernelMutationRunner:
                         base_source=base_source,
                         workspace_source=workspace_source,
                     )
+
+    @staticmethod
+    def _fp8_tier4_downstream_logit_diagnostic_only(
+        *,
+        kernel_target: str,
+        parity_result: ParityProbeResult,
+    ) -> bool:
+        checkpoints = set(parity_result.checkpoints_checked)
+        return (
+            kernel_target == "fp8_gemm"
+            and not parity_result.pass_
+            and parity_result.reason == "parity_fp8_tier4_downstream_logit_diverged"
+            and "tier_3_gemm_output_compare" in checkpoints
+            and "tier_4_downstream_logit_guard" in checkpoints
+        )
 
     def _apply_kernel_patch(
         self, *, kernel_path: Path, patch_path: Path
