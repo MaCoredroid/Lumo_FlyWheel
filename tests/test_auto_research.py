@@ -5805,8 +5805,9 @@ def test_cutlass_compile_preflight_shell_defaults_to_single_job() -> None:
     assert "set(SCALED_MM_2X_ARCHS \"\")" in shell
     assert "set(FP4_ARCHS \"\")" in shell
     assert "set(MLA_ARCHS \"\")" in shell
+    assert "set(CUTLASS_MOE_DATA_ARCHS \"\")" in shell
     assert "missing expected non-FP8 CMake fragment(s)" in shell
-    assert "[LUMO-CUTLASS-REBUILD] disabled non-FP8 Marlin, C2X, NVFP4, and MLA CMake sources" in shell
+    assert "[LUMO-CUTLASS-REBUILD] disabled non-FP8 Marlin, C2X, NVFP4, MLA, and MoE data CMake sources" in shell
 
 
 def test_cutlass_targeted_compile_targets_sm120_dispatch_header() -> None:
@@ -5834,7 +5835,8 @@ def test_cutlass_rebuild_prelaunch_defaults_to_single_job() -> None:
     assert "set(SCALED_MM_2X_ARCHS \"\")" in shell
     assert "set(FP4_ARCHS \"\")" in shell
     assert "set(MLA_ARCHS \"\")" in shell
-    assert "[LUMO-CUTLASS-REBUILD] disabled non-FP8 Marlin, C2X, NVFP4, and MLA CMake sources" in shell
+    assert "set(CUTLASS_MOE_DATA_ARCHS \"\")" in shell
+    assert "[LUMO-CUTLASS-REBUILD] disabled non-FP8 Marlin, C2X, NVFP4, MLA, and MoE data CMake sources" in shell
 
 
 def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_not_file_forbidden(tmp_path: Path) -> None:
