@@ -388,6 +388,7 @@ def test_cutlass_build_surface_verifier_accepts_source_and_binary_package(
 
     assert payload["ok"] is True
     assert payload["missing"] == []
+    assert "ccache" in payload["required_commands"]
     assert "csrc/quantization/w8a8/cutlass/scaled_mm_entry.cu" in payload["required_source_files"]
     assert payload["package_extension_files"] == ["_C.abi3.so"]
 

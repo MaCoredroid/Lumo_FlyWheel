@@ -5207,15 +5207,22 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     def _stage_workspace(*, round_dir, spec):
         surface = dict(spec["mutation_surface"])
         workspace = round_dir / "cutlass_source_workspace"
-        source = workspace / "scaled_mm"
-        source.mkdir(parents=True)
-        (source / "cutlass.py").write_text("def scaled_mm():\n    return None\n", encoding="utf-8")
+        source = workspace / "vllm-source"
+        python_source = source / "vllm" / "model_executor" / "kernels" / "linear" / "scaled_mm"
+        cxx_source = source / "csrc" / "quantization" / "w8a8" / "cutlass"
+        python_source.mkdir(parents=True)
+        cxx_source.mkdir(parents=True)
+        (python_source / "cutlass.py").write_text("def scaled_mm():\n    return None\n", encoding="utf-8")
+        (cxx_source / "scaled_mm_entry.cu").write_text("// entry\n", encoding="utf-8")
         return {
             **surface,
             "workspace_path": str(workspace),
             "workspace_source_path": str(source),
+            "workspace_python_source_path": str(python_source),
+            "workspace_cxx_source_path": str(cxx_source),
             "workspace_base_path": str(round_dir / "cutlass_source_base"),
-            "workspace_base_source_path": str(round_dir / "cutlass_source_base" / "scaled_mm"),
+            "workspace_base_source_path": str(round_dir / "cutlass_source_base" / "vllm-source"),
+            "container_vllm_source_dir": "/opt/vllm-source",
             "round_dir": str(round_dir),
         }
 
@@ -5255,6 +5262,12 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert round_spec["mutation_surface"]["kind"] == "cutlass_source_workspace"
     assert round_spec["mutation_surface"]["runtime_wired"] is True
     assert "workspace_path" in round_spec["mutation_surface"]
+    assert "prelaunch_shell" in round_spec["runtime"]
+    assert "cmake --build /opt/vllm-source/build/lumo_cutlass_research --target _C" in round_spec[
+        "runtime"
+    ]["prelaunch_shell"]
+    assert "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache" in round_spec["runtime"]["prelaunch_shell"]
+    assert "/opt/vllm-source" in round_spec["runtime"]["prelaunch_shell"]
     assert round_spec["parity_fixture_id"] == "responses-sdk-adapter-cutover-fp8-gemm-v1"
 
 
@@ -5604,8 +5617,29 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
         mutation_surface={
             "kind": "cutlass_source_workspace",
             "workspace_path": str(repo / "round" / "cutlass_source_workspace"),
-            "workspace_source_path": str(repo / "round" / "cutlass_source_workspace" / "scaled_mm"),
-            "container_source_dir": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm",
+            "workspace_source_path": str(repo / "round" / "cutlass_source_workspace" / "vllm-source"),
+            "workspace_python_source_path": str(
+                repo
+                / "round"
+                / "cutlass_source_workspace"
+                / "vllm-source"
+                / "vllm"
+                / "model_executor"
+                / "kernels"
+                / "linear"
+                / "scaled_mm"
+            ),
+            "workspace_cxx_source_path": str(
+                repo
+                / "round"
+                / "cutlass_source_workspace"
+                / "vllm-source"
+                / "csrc"
+                / "quantization"
+                / "w8a8"
+                / "cutlass"
+            ),
+            "container_vllm_source_dir": "/opt/vllm-source",
             "round_dir": str(repo / "round"),
         },
     )
@@ -5613,13 +5647,25 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "Do not run `auto-research apply-and-test`" in brief
     assert "local CUTLASS source workspace" in brief
     assert "cutlass_source_workspace" in brief
+    assert "/opt/vllm-source" in brief
     assert "patch --dry-run -p0" in brief
     assert "python3 -m py_compile" in brief
     assert "auto-research preflight-patch" in brief
+    assert "--workspace-source" in brief
+    assert "--compile-mode full" in brief
+    assert "--compile-jobs 1" in brief
+    assert "You own authoring-time compile failures" in brief
+    assert "A compiled-file mutation is not ready to submit" in brief
+    assert "compile_preflight.output_tail" in brief
     assert "matching_rule" in brief
     assert "code_snippet" in brief
     assert "evidence_snippet" in brief
     assert "nonzero exit is reserved for agent/tool infrastructure failure" in brief
+    assert "short targeted research pass" in brief
+    assert "primary docs/source" in brief
+    assert "cheap local diagnostics" in brief
+    assert "Do not start vLLM and do not run apply-and-test" in brief
+    assert "do not spend iteration budget on online research" not in brief
     assert "expected speed mechanism" in brief
     assert "Do not replace `process_weights_after_loading` wholesale" in brief
     assert "CUTLASS weight transposition" in brief
@@ -5654,6 +5700,103 @@ def test_l0c_preflight_patch_allows_fp8_cutlass_source_edits(tmp_path: Path) -> 
     assert payload["reason"] == "preflight_passed"
     assert payload["rules"]
     assert all(rule["tier"] == "safety_critical" for rule in payload["rules"])
+
+
+def test_l0c_preflight_patch_compiles_workspace_copy_without_mutating_source(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    workspace_source = repo / "round" / "cutlass_source_workspace" / "vllm-source"
+    python_source = (
+        workspace_source
+        / "vllm"
+        / "model_executor"
+        / "kernels"
+        / "linear"
+        / "scaled_mm"
+    )
+    python_source.mkdir(parents=True)
+    target = python_source / "cutlass.py"
+    target.write_text("def scaled_mm(a, b):\n    return a + b\n", encoding="utf-8")
+    patch_path = repo / "round" / "candidates" / "001" / "mutation.patch"
+    patch_path.parent.mkdir(parents=True)
+    patch_path.write_text(
+        """--- cutlass_source_workspace/vllm-source/vllm/model_executor/kernels/linear/scaled_mm/cutlass.py
++++ cutlass_source_workspace/vllm-source/vllm/model_executor/kernels/linear/scaled_mm/cutlass.py
+@@ -1,2 +1,2 @@
+ def scaled_mm(a, b):
+-    return a + b
++    return a - b
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    payload = runner.preflight_patch(
+        kernel_target="fp8_gemm",
+        patch_path=patch_path,
+        workspace_source=workspace_source,
+        compile_mode="python",
+    )
+
+    assert payload["ok"] is True
+    assert payload["compile_preflight"]["reason"] == "compile_preflight_passed"
+    assert target.read_text(encoding="utf-8") == "def scaled_mm(a, b):\n    return a + b\n"
+
+
+def test_l0c_preflight_patch_reports_compile_failure_for_authoring_agent(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    workspace_source = repo / "round" / "cutlass_source_workspace" / "vllm-source"
+    python_source = (
+        workspace_source
+        / "vllm"
+        / "model_executor"
+        / "kernels"
+        / "linear"
+        / "scaled_mm"
+    )
+    python_source.mkdir(parents=True)
+    (python_source / "cutlass.py").write_text("def scaled_mm(a, b):\n    return a + b\n", encoding="utf-8")
+    patch_path = repo / "round" / "candidates" / "001" / "mutation.patch"
+    patch_path.parent.mkdir(parents=True)
+    patch_path.write_text(
+        """--- cutlass_source_workspace/vllm-source/vllm/model_executor/kernels/linear/scaled_mm/cutlass.py
++++ cutlass_source_workspace/vllm-source/vllm/model_executor/kernels/linear/scaled_mm/cutlass.py
+@@ -1,2 +1,2 @@
+ def scaled_mm(a, b):
+-    return a + b
++    return (
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    payload = runner.preflight_patch(
+        kernel_target="fp8_gemm",
+        patch_path=patch_path,
+        workspace_source=workspace_source,
+        compile_mode="python",
+    )
+
+    assert payload["ok"] is False
+    assert payload["reason"] == "python_compile_failed"
+    assert "py_compile_failed" in payload["compile_preflight"]["error"]
+
+
+def test_cutlass_compile_preflight_shell_defaults_to_single_job() -> None:
+    shell = auto_research.L0cKernelMutationRunner._cutlass_cmake_rebuild_shell(
+        install=False,
+        default_jobs=1,
+    )
+
+    assert "export MAX_JOBS=${MAX_JOBS:-1}" in shell
+    assert "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache" in shell
 
 
 def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_not_file_forbidden(tmp_path: Path) -> None:

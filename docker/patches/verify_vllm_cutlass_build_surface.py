@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 
-REQUIRED_COMMANDS = ("nvcc", "cmake", "ninja", "gcc", "g++")
+REQUIRED_COMMANDS = ("nvcc", "cmake", "ninja", "ccache", "gcc", "g++")
 REQUIRED_SOURCE_FILES = (
     "CMakeLists.txt",
     "setup.py",

@@ -89,6 +89,7 @@ class ModelServer:
         proxy_port: int = DEFAULT_INFERENCE_PROXY_PORT,
         state_root: str | Path = DEFAULT_STATE_ROOT,
         extra_volume_mounts: list[str] | None = None,
+        prelaunch_shell: str | None = None,
     ) -> None:
         self.registry_path = Path(registry_path).resolve()
         self._load_local_runtime_env()
@@ -105,6 +106,7 @@ class ModelServer:
         # Each entry is one ["-v", "host:container"] pair already split as a flat
         # list of strings — caller controls :ro and other docker mount flags.
         self.extra_volume_mounts: list[str] = list(extra_volume_mounts or [])
+        self.prelaunch_shell = prelaunch_shell or ""
 
     def ensure_runtime_scaffolding(self) -> None:
         for path in (Path("/models"), self.logs_root, self.triton_cache_root):
@@ -760,8 +762,12 @@ class ModelServer:
             weight_version_id=weight_version_id,
             kernel_activation=kernel_activation,
         )
+        prelaunch_shell = self.prelaunch_shell.rstrip()
+        if prelaunch_shell:
+            prelaunch_shell = prelaunch_shell.replace("{{log_path}}", shlex.quote(str(log_path)))
         shell_cmd = (
             "set -euo pipefail\n"
+            + (prelaunch_shell + "\n" if prelaunch_shell else "")
             + header
             + "\n"
             + shlex.join(vllm_args)

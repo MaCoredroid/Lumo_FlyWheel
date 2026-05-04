@@ -85,6 +85,44 @@ models:
     assert "VLLM_ENABLE_RESPONSES_API_STORE=1" in command
 
 
+def test_build_run_command_runs_prelaunch_before_vllm_import(tmp_path: Path) -> None:
+    registry = tmp_path / "model_registry.yaml"
+    registry.write_text(
+        """
+models:
+  qwen3.5-27b:
+    hf_repo: Qwen/Qwen3.5-27B-FP8
+    local_path: /models/qwen3.5-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.9
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+""",
+        encoding="utf-8",
+    )
+    server = ModelServer(
+        registry_path=registry,
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+        prelaunch_shell="echo rebuild >> {{log_path}}",
+    )
+    cmd = server._build_run_command(
+        "qwen3.5-27b",
+        server.registry["qwen3.5-27b"],
+        enable_request_logging=False,
+        kv_cache_dtype="auto",
+        gpu_memory_utilization=0.9,
+        enforce_eager=False,
+    )
+    shell = cmd[-1]
+    assert "echo rebuild >> " in shell
+    assert shell.index("echo rebuild") < shell.index("import vllm")
+    assert "{{log_path}}" not in shell
+
+
 def test_build_run_command_resolves_relative_runtime_mounts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     registry = tmp_path / "model_registry.yaml"
     registry.write_text(

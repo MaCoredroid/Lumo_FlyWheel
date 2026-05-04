@@ -6,6 +6,7 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -121,8 +122,17 @@ L0C_FP8_GEMM_CUTLASS_OVERLAY_SOURCE = (
 L0C_FP8_GEMM_CUTLASS_CONTAINER_SOURCE_DIR = (
     "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm"
 )
+L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR = "/opt/vllm-source"
+L0C_FP8_GEMM_CUTLASS_PYTHON_SOURCE_RELATIVE = Path(
+    "vllm/model_executor/kernels/linear/scaled_mm"
+)
+L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE = Path(
+    "csrc/quantization/w8a8/cutlass"
+)
 L0C_FP8_GEMM_CUTLASS_WORKSPACE_DIRNAME = "cutlass_source_workspace"
 L0C_FP8_GEMM_CUTLASS_BASE_DIRNAME = "cutlass_source_base"
+L0C_FP8_GEMM_CUTLASS_CONTAINER_CCACHE_DIR = "/opt/lumo-ccache"
+L0C_FP8_GEMM_CUTLASS_CCACHE_DIRNAME = "cutlass_compile_cache/ccache"
 L0C_DEFAULT_ACCEPTED_CAP = 12
 L0C_DEFAULT_TOTAL_ATTEMPT_CAP = 36
 L0C_DEFAULT_ROUND_TIMEOUT_HOURS = 12.0
@@ -6018,14 +6028,16 @@ to matter than compute-only micro-optimizations.
 
 {{strategy_brief}}
 
-Use the context already in this brief and the local rejection history. Do
-not spend iteration budget on online research inside the agent loop.
+Use the context already in this brief and the local rejection history, then
+do a short targeted research pass before choosing the mutation. Prefer primary
+sources such as vLLM source/docs, NVIDIA CUTLASS docs, CUDA docs, and local
+container source over generic advice. Keep this bounded: extract the dispatch,
+scale, shape, or schedule fact that changes your mutation choice, then move on.
 
 # Hard rules
 {{edit_scope_rule}}
 - Do not change the kernel's input/output signature.
-- Do not change tile or grid sizes outside the autotune surface (those
-  belong to L0b, not L0c).
+{{schedule_boundary_rule}}
 - Read mutations_rejected.tsv. Mutations identical to a prior rejection
   by patch hash are immediately rejected without re-running. Read the
   rejection reasons (first_diverging_probe, tolerance_overshoot) and
@@ -6067,7 +6079,14 @@ Tier-2 hard-reject:
 1. Read {{read_target_paths}}, strategy_brief.md, prior_mutations_rejected.tsv,
    mutations_rejected.tsv, results.tsv (best_so_far).
    For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
-2. Write your proposal to {{iteration_dir}}/mutation.patch.
+2. Before editing, run cheap local diagnostics or source-level experiments that
+   test the exact dispatch/shape/scale/schedule assumption behind your idea.
+   Examples: inspect registered op schemas, grep the mounted vLLM/CUTLASS source,
+   compile the touched Python/C++ file if applicable, or run a tiny non-vLLM
+   import/shape probe. Do not start vLLM and do not run apply-and-test.
+3. Do a short online/source research pass only if it can inform the mutation:
+   use primary docs/source and record the specific fact in your notes/transcript.
+4. Write your proposal to {{iteration_dir}}/mutation.patch.
    Generate the patch with a real diff tool; do not hand-write hunk counts.
    The patch must apply with:
      {{patch_dry_run_command}}
@@ -8052,17 +8071,21 @@ class L0cKernelMutationRunner:
                 "kernel_source_path_defaulted": kernel_source_path is None,
                 "kernel_source_path": str(source_path),
                 "container_source_dir": L0C_FP8_GEMM_CUTLASS_CONTAINER_SOURCE_DIR,
+                "container_vllm_source_dir": L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR,
+                "python_source_relative_path": str(L0C_FP8_GEMM_CUTLASS_PYTHON_SOURCE_RELATIVE),
+                "cxx_source_relative_path": str(L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE),
+                "requires_rebuild": True,
                 "safety_note": (
                     "The controller stages a local copy of the live vLLM CUTLASS "
-                    "scaled-mm source tree for agents. Candidate patches may edit "
-                    "any file in that staged CUTLASS tree; the controller mounts the "
-                    "patched tree over the corresponding container source directory "
-                    "for parity and measurement."
+                    "Python and C++/CUDA source tree for agents. Candidate patches may "
+                    "edit the staged Python dispatch files and CUTLASS C++ schedule "
+                    "files; the controller mounts the patched tree over /opt/vllm-source "
+                    "and rebuilds/installs vLLM before parity and measurement."
                 ),
                 "runtime_artifact_contract": (
                     "candidate mutation.patch applies to cutlass_source_workspace; "
-                    "the patched workspace is bind-mounted over the vLLM CUTLASS "
-                    "source directory during controller validation"
+                    "the patched /opt/vllm-source workspace is bind-mounted and rebuilt "
+                    "before controller validation"
                 ),
             }
         if backend.startswith("triton"):
@@ -8255,23 +8278,27 @@ class L0cKernelMutationRunner:
             ):
                 base_source = Path(str(mutation_surface.get("workspace_base_source_path") or ""))
                 workspace_source = Path(str(mutation_surface.get("workspace_source_path") or ""))
-                container_source_dir = str(
-                    mutation_surface.get("container_source_dir")
-                    or L0C_FP8_GEMM_CUTLASS_CONTAINER_SOURCE_DIR
+                workspace_python_source = Path(
+                    str(mutation_surface.get("workspace_python_source_path") or workspace_source)
                 )
-                if not base_source.is_dir():
-                    raise RuntimeError(f"CUTLASS workspace base missing: {base_source}")
-                if workspace_source.exists():
-                    shutil.rmtree(workspace_source)
-                shutil.copytree(base_source, workspace_source)
+                container_vllm_source_dir = str(
+                    mutation_surface.get("container_vllm_source_dir")
+                    or L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR
+                )
+                self._reset_cutlass_workspace_source(
+                    base_source=base_source,
+                    workspace_source=workspace_source,
+                )
                 patch_outcome = self._apply_workspace_patch(
                     round_dir=round_dir,
                     patch_path=patch_path,
                 )
                 if patch_outcome.ok:
-                    patch_outcome = self._py_compile_workspace(workspace_source=workspace_source)
+                    patch_outcome = self._py_compile_workspace(
+                        workspace_source=workspace_python_source
+                    )
                 cutlass_source_workspace_mounts.append(
-                    f"{workspace_source.resolve()}:{container_source_dir}"
+                    f"{workspace_source.resolve()}:{container_vllm_source_dir}"
                 )
             else:
                 patch_outcome = self._apply_kernel_patch(
@@ -8552,8 +8579,10 @@ class L0cKernelMutationRunner:
                 base_source = Path(str(mutation_surface.get("workspace_base_source_path") or ""))
                 workspace_source = Path(str(mutation_surface.get("workspace_source_path") or ""))
                 if base_source.is_dir():
-                    shutil.rmtree(workspace_source, ignore_errors=True)
-                    shutil.copytree(base_source, workspace_source)
+                    self._reset_cutlass_workspace_source(
+                        base_source=base_source,
+                        workspace_source=workspace_source,
+                    )
 
     def _apply_kernel_patch(
         self, *, kernel_path: Path, patch_path: Path
@@ -8595,6 +8624,224 @@ class L0cKernelMutationRunner:
             detail = stderr or stdout or f"patch exit {result.returncode}"
             return _L0cPatchOutcome(ok=False, error=f"patch_apply_failed: {detail}")
         return _L0cPatchOutcome(ok=True, error=None)
+
+    @staticmethod
+    def _chmod_tree_writable(path: Path) -> None:
+        if path.is_symlink():
+            return
+        if path.is_dir():
+            for root, dirs, files in os.walk(path):
+                for name in dirs:
+                    try:
+                        os.chmod(Path(root) / name, 0o755)
+                    except OSError:
+                        pass
+                for name in files:
+                    try:
+                        os.chmod(Path(root) / name, 0o644)
+                    except OSError:
+                        pass
+        try:
+            os.chmod(path, 0o755 if path.is_dir() else 0o644)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _docker_chmod_tree_writable(path: Path, *, image: str | None = None) -> None:
+        if not path.exists():
+            return
+        from .model_server import DEFAULT_VLLM_IMAGE  # local import: keeps test surface minimal
+
+        chmod_image = image or DEFAULT_VLLM_IMAGE
+        subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{path.resolve()}:/mnt",
+                chmod_image,
+                "bash",
+                "-lc",
+                "chmod -R a+rwX /mnt >/dev/null 2>&1 || true",
+            ],
+            capture_output=True,
+            timeout=300,
+            check=False,
+        )
+
+    @classmethod
+    def _reset_cutlass_workspace_source(cls, *, base_source: Path, workspace_source: Path) -> None:
+        if not base_source.is_dir():
+            raise RuntimeError(f"CUTLASS workspace base missing: {base_source}")
+        if workspace_source.exists() or workspace_source.is_symlink():
+            cls._chmod_tree_writable(workspace_source)
+            try:
+                shutil.rmtree(workspace_source)
+            except PermissionError:
+                cls._docker_chmod_tree_writable(workspace_source)
+                shutil.rmtree(workspace_source)
+        shutil.copytree(base_source, workspace_source)
+
+    @staticmethod
+    def _clip_preflight_output(stdout: str, stderr: str, *, limit: int = 12000) -> str:
+        text = "\n".join(part for part in (stdout.strip(), stderr.strip()) if part)
+        if len(text) <= limit:
+            return text
+        return text[-limit:]
+
+    @staticmethod
+    def _cutlass_cmake_rebuild_shell(*, install: bool, default_jobs: int = 8) -> str:
+        if default_jobs < 1:
+            raise RuntimeError("default_jobs must be >= 1")
+        source_dir = shlex.quote(L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR)
+        build_dir = f"{source_dir}/build/lumo_cutlass_research"
+        lines = [
+            f"trap 'chmod -R a+rwX {source_dir} >/dev/null 2>&1 || true' EXIT",
+            f"cd {source_dir}",
+            f"git config --global --add safe.directory {source_dir} || true",
+            f"export MAX_JOBS=${{MAX_JOBS:-{default_jobs}}}",
+            "export VLLM_USE_PRECOMPILED=0",
+            f"export CCACHE_DIR={shlex.quote(L0C_FP8_GEMM_CUTLASS_CONTAINER_CCACHE_DIR)}",
+            f"export CCACHE_BASEDIR={source_dir}",
+            "cmake_launcher_args=()",
+            "if command -v ccache >/dev/null 2>&1; then",
+            "  cmake_launcher_args=(-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)",
+            "fi",
+            f"cmake -S . -B {build_dir} -G Ninja "
+            "-DCMAKE_BUILD_TYPE=RelWithDebInfo "
+            "-DVLLM_TARGET_DEVICE=cuda "
+            "-DVLLM_PYTHON_EXECUTABLE=$(command -v python3) "
+            f"-DCMAKE_INSTALL_PREFIX={source_dir} "
+            '"${cmake_launcher_args[@]}"',
+            f"cmake --build {build_dir} --target _C -j $MAX_JOBS",
+        ]
+        if install:
+            lines.extend(
+                [
+                    f"cmake --install {build_dir} --component _C",
+                    f"export PYTHONPATH={source_dir}:${{PYTHONPATH:-}}",
+                    "python3 - <<'PY'",
+                    "import pathlib",
+                    "import vllm",
+                    "root = pathlib.Path(vllm.__file__).resolve().parent",
+                    "exts = sorted(str(path) for path in root.glob('_C*.so'))",
+                    "print('[LUMO-CUTLASS-REBUILD] vllm_file=' + str(vllm.__file__))",
+                    "print('[LUMO-CUTLASS-REBUILD] extensions=' + ','.join(exts))",
+                    "if not exts:",
+                    "    raise SystemExit('no rebuilt vLLM _C*.so extension found')",
+                    "PY",
+                ]
+            )
+        return "\n".join(lines)
+
+    def _cutlass_workspace_compile_preflight(
+        self,
+        *,
+        patch_path: Path,
+        workspace_source: Path,
+        compile_mode: str,
+        image: str | None,
+        compile_jobs: int | None = None,
+    ) -> dict[str, Any]:
+        if compile_mode not in {"python", "metadata", "full"}:
+            raise RuntimeError("--compile-mode must be one of: none, python, metadata, full")
+        if compile_jobs is not None and compile_jobs < 1:
+            raise RuntimeError("--compile-jobs must be >= 1")
+        if not workspace_source.is_dir():
+            return {
+                "ok": False,
+                "reason": "workspace_source_missing",
+                "workspace_source": str(workspace_source),
+            }
+
+        temp_root = Path(tempfile.mkdtemp(prefix="lumo-cutlass-preflight-"))
+        try:
+            temp_round = temp_root / "round"
+            temp_source = temp_round / L0C_FP8_GEMM_CUTLASS_WORKSPACE_DIRNAME / workspace_source.name
+            temp_source.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(workspace_source, temp_source, symlinks=True)
+
+            patch_outcome = self._apply_workspace_patch(round_dir=temp_round, patch_path=patch_path)
+            if not patch_outcome.ok:
+                return {
+                    "ok": False,
+                    "reason": "patch_apply_failed_in_compile_preflight",
+                    "error": patch_outcome.error,
+                }
+
+            python_source = temp_source / L0C_FP8_GEMM_CUTLASS_PYTHON_SOURCE_RELATIVE
+            py_outcome = self._py_compile_workspace(workspace_source=python_source)
+            if not py_outcome.ok:
+                return {
+                    "ok": False,
+                    "reason": "python_compile_failed",
+                    "error": py_outcome.error,
+                }
+
+            payload: dict[str, Any] = {
+                "ok": True,
+                "reason": "compile_preflight_passed",
+                "compile_mode": compile_mode,
+            }
+            if compile_mode == "python":
+                return payload
+
+            from .model_server import DEFAULT_VLLM_IMAGE  # local import: keeps test surface minimal
+
+            compile_image = image or DEFAULT_VLLM_IMAGE
+            cache_dir = workspace_source.parent.parent / L0C_FP8_GEMM_CUTLASS_CCACHE_DIRNAME
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            timeout = 7200
+            effective_compile_jobs = compile_jobs or (1 if compile_mode == "full" else 8)
+            shell = self._cutlass_cmake_rebuild_shell(install=False, default_jobs=effective_compile_jobs)
+            if compile_mode == "metadata":
+                timeout = 900
+                shell = "set -euo pipefail\npython3 - <<'PY'\nimport setuptools, vllm\nprint('metadata_import_ok')\nPY"
+            else:
+                shell = "set -euo pipefail\n" + shell
+            try:
+                result = subprocess.run(
+                    [
+                        "docker",
+                        "run",
+                        "--rm",
+                        "-v",
+                        f"{temp_source.resolve()}:{L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR}",
+                        "-v",
+                        f"{cache_dir.resolve()}:{L0C_FP8_GEMM_CUTLASS_CONTAINER_CCACHE_DIR}",
+                        "-w",
+                        L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR,
+                        compile_image,
+                        "bash",
+                        "-lc",
+                        shell,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    check=False,
+                )
+            except FileNotFoundError as exc:
+                return {"ok": False, "reason": "docker_missing", "error": str(exc)}
+            except subprocess.TimeoutExpired as exc:
+                return {"ok": False, "reason": "compile_preflight_timeout", "error": str(exc)}
+
+            payload["docker_image"] = compile_image
+            payload["compile_jobs"] = effective_compile_jobs
+            payload["output_tail"] = self._clip_preflight_output(result.stdout, result.stderr)
+            if result.returncode != 0:
+                payload["ok"] = False
+                payload["reason"] = "compile_preflight_failed"
+                payload["returncode"] = result.returncode
+            return payload
+        finally:
+            self._chmod_tree_writable(temp_root)
+            try:
+                shutil.rmtree(temp_root)
+            except PermissionError:
+                self._docker_chmod_tree_writable(temp_root, image=image)
+                shutil.rmtree(temp_root, ignore_errors=True)
 
     def _py_compile_workspace(self, *, workspace_source: Path) -> _L0cPatchOutcome:
         py_files = [str(path) for path in workspace_source.rglob("*.py")]
@@ -8665,6 +8912,8 @@ class L0cKernelMutationRunner:
             "triton_cache_root": triton_cache_root,
             "extra_volume_mounts": extra_mounts,
         }
+        if runtime.get("prelaunch_shell"):
+            kwargs["prelaunch_shell"] = str(runtime["prelaunch_shell"])
         if image is not None:
             kwargs["image"] = image
         if state_root is not None:
@@ -8814,30 +9063,38 @@ class L0cKernelMutationRunner:
         container_name = str(runtime.get("container_name") or "")
         if not container_name:
             raise RuntimeError("CUTLASS source workspace staging requires runtime.container_name")
-        container_source_dir = str(
-            mutation_surface.get("container_source_dir")
-            or L0C_FP8_GEMM_CUTLASS_CONTAINER_SOURCE_DIR
+        container_vllm_source_dir = str(
+            mutation_surface.get("container_vllm_source_dir")
+            or L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR
         )
         base_root = round_dir / L0C_FP8_GEMM_CUTLASS_BASE_DIRNAME
         workspace_root = round_dir / L0C_FP8_GEMM_CUTLASS_WORKSPACE_DIRNAME
-        source_leaf = Path(container_source_dir).name
+        source_leaf = Path(container_vllm_source_dir).name
         base_source = base_root / source_leaf
         workspace_source = workspace_root / source_leaf
+        base_python_source = base_source / L0C_FP8_GEMM_CUTLASS_PYTHON_SOURCE_RELATIVE
+        base_cxx_source = base_source / L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE
 
         shutil.rmtree(base_root, ignore_errors=True)
         shutil.rmtree(workspace_root, ignore_errors=True)
         base_root.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
-            ["docker", "cp", f"{container_name}:{container_source_dir}", str(base_source)],
+            ["docker", "cp", f"{container_name}:{container_vllm_source_dir}", str(base_source)],
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300,
             check=False,
         )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or f"docker cp exit {result.returncode}").strip()
             raise RuntimeError(f"cutlass_source_workspace_stage_failed: {detail}")
+        if not base_python_source.exists():
+            raise RuntimeError(f"cutlass_python_source_missing_after_stage: {base_python_source}")
+        if not base_cxx_source.exists():
+            raise RuntimeError(f"cutlass_cxx_source_missing_after_stage: {base_cxx_source}")
         shutil.copytree(base_source, workspace_source)
+        python_source = workspace_source / L0C_FP8_GEMM_CUTLASS_PYTHON_SOURCE_RELATIVE
+        cxx_source = workspace_source / L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE
 
         readme = workspace_root / "README_L0C_CUTLASS.md"
         readme.write_text(
@@ -8845,23 +9102,36 @@ class L0cKernelMutationRunner:
                 [
                     "# L0c CUTLASS Source Workspace",
                     "",
-                    f"Container source: `{container_source_dir}`",
-                    f"Editable local tree: `{workspace_source}`",
+                    f"Container vLLM source: `{container_vllm_source_dir}`",
+                    f"Editable local vLLM source tree: `{workspace_source}`",
+                    f"Editable Python scaled-mm tree: `{python_source}`",
+                    f"Editable CUTLASS C++ tree: `{cxx_source}`",
                     "",
                     "Create `candidates/<NNN>/mutation.patch` as a unified diff against this workspace.",
                     "Use paths relative to the round directory, for example:",
-                    f"`{L0C_FP8_GEMM_CUTLASS_WORKSPACE_DIRNAME}/{source_leaf}/cutlass.py`.",
+                    f"`{L0C_FP8_GEMM_CUTLASS_WORKSPACE_DIRNAME}/{source_leaf}/"
+                    f"{L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE}/c3x/scaled_mm_sm120_fp8_dispatch.cuh`.",
                     "",
                     "Cheap checks before submitting:",
                     "",
                     "```bash",
                     "patch --dry-run -p0 < candidates/<NNN>/mutation.patch",
-                    f"cd {workspace_source} && python3 -m py_compile $(find . -name '*.py' -print)",
+                    f"cd {python_source} && python3 -m py_compile $(find . -name '*.py' -print)",
+                    f"cd {workspace_source} && test -f {L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE}/c3x/scaled_mm_sm120_fp8_dispatch.cuh",
+                    f"cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research preflight-patch \\",
+                    "  --kernel-target fp8_gemm --patch-path candidates/<NNN>/mutation.patch \\",
+                    f"  --workspace-source {workspace_source} --compile-mode full --compile-jobs 1",
                     "```",
                     "",
+                    "Agents own these cheap authoring-time checks. If patch apply, Python",
+                    "compile, C++/CUDA compile, or safety preflight fails, revise the patch",
+                    "and rerun the checks before submitting. Agents must still not run",
+                    "`auto-research apply-and-test` or start vLLM.",
+                    "",
                     "The controller resets this workspace from the immutable base copy before",
-                    "applying each candidate patch, then bind-mounts the patched workspace over",
-                    "the container source directory for parity and measurement.",
+                    "applying each candidate patch, then bind-mounts the patched full vLLM",
+                    "source over /opt/vllm-source and rebuilds/installs the `_C` extension",
+                    "before parity and measurement.",
                 ]
             )
             + "\n",
@@ -8871,11 +9141,28 @@ class L0cKernelMutationRunner:
             **mutation_surface,
             "workspace_path": str(workspace_root),
             "workspace_source_path": str(workspace_source),
+            "workspace_python_source_path": str(python_source),
+            "workspace_cxx_source_path": str(cxx_source),
             "workspace_base_path": str(base_root),
             "workspace_base_source_path": str(base_source),
+            "workspace_base_python_source_path": str(base_source / L0C_FP8_GEMM_CUTLASS_PYTHON_SOURCE_RELATIVE),
+            "workspace_base_cxx_source_path": str(base_source / L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE),
             "workspace_readme": str(readme),
             "round_dir": str(round_dir),
         }
+
+    @staticmethod
+    def _cutlass_rebuild_prelaunch_shell() -> str:
+        rebuild_shell = L0cKernelMutationRunner._cutlass_cmake_rebuild_shell(install=True)
+        return "\n".join(
+            [
+                "{",
+                "  echo '[LUMO-CUTLASS-REBUILD] start' $(date -Iseconds)",
+                *rebuild_shell.splitlines(),
+                "  echo '[LUMO-CUTLASS-REBUILD] done' $(date -Iseconds)",
+                "} 2>&1 | tee -a {{log_path}}",
+            ]
+        )
 
     # --- real round driver --------------------------------------------------
 
@@ -8928,6 +9215,16 @@ class L0cKernelMutationRunner:
         staged_surface = self._stage_fp8_cutlass_source_workspace(round_dir=round_dir, spec=spec)
         if staged_surface is not None:
             spec["mutation_surface"] = staged_surface
+            runtime_for_candidates = dict(spec.get("runtime") or {})
+            runtime_for_candidates["prelaunch_shell"] = self._cutlass_rebuild_prelaunch_shell()
+            cache_dir = round_dir / L0C_FP8_GEMM_CUTLASS_CCACHE_DIRNAME
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            extra_mounts = list(runtime_for_candidates.get("extra_volume_mounts") or [])
+            extra_mounts.append(
+                f"{cache_dir.resolve()}:{L0C_FP8_GEMM_CUTLASS_CONTAINER_CCACHE_DIR}"
+            )
+            runtime_for_candidates["extra_volume_mounts"] = extra_mounts
+            spec["runtime"] = runtime_for_candidates
             self._write_yaml(round_dir / "round_spec.yaml", spec)
 
         round_started = time.time()
@@ -9600,9 +9897,22 @@ class L0cKernelMutationRunner:
                 return {"tier": "soft", **soft}
         return None
 
-    def preflight_patch(self, *, kernel_target: str, patch_path: str | Path) -> dict[str, Any]:
+    def preflight_patch(
+        self,
+        *,
+        kernel_target: str,
+        patch_path: str | Path,
+        workspace_source: str | Path | None = None,
+        compile_mode: str = "none",
+        image: str | None = None,
+        compile_jobs: int | None = None,
+    ) -> dict[str, Any]:
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
+        if compile_mode not in {"none", "python", "metadata", "full"}:
+            raise RuntimeError("--compile-mode must be one of: none, python, metadata, full")
+        if compile_jobs is not None and compile_jobs < 1:
+            raise RuntimeError("--compile-jobs must be >= 1")
         path = Path(patch_path)
         if not path.is_absolute():
             path = self.repo_root / path
@@ -9624,6 +9934,29 @@ class L0cKernelMutationRunner:
         }
         if preflight is None:
             payload["reason"] = "preflight_passed"
+            if workspace_source is not None or compile_mode != "none":
+                if workspace_source is None:
+                    payload["ok"] = False
+                    payload["reason"] = "workspace_source_required_for_compile_preflight"
+                    payload["compile_preflight"] = {
+                        "ok": False,
+                        "reason": "workspace_source_required_for_compile_preflight",
+                    }
+                    return payload
+                source_path = Path(workspace_source)
+                if not source_path.is_absolute():
+                    source_path = self.repo_root / source_path
+                compile_payload = self._cutlass_workspace_compile_preflight(
+                    patch_path=path,
+                    workspace_source=source_path.resolve(),
+                    compile_mode="python" if compile_mode == "none" else compile_mode,
+                    image=image,
+                    compile_jobs=compile_jobs,
+                )
+                payload["compile_preflight"] = compile_payload
+                if not compile_payload["ok"]:
+                    payload["ok"] = False
+                    payload["reason"] = str(compile_payload.get("reason") or "compile_preflight_failed")
             return payload
 
         matching_rules = [
@@ -10105,7 +10438,7 @@ class L0cKernelMutationRunner:
         if kernel_target == "fp8_gemm":
             return [
                 "- Do not change the GEMM call signature, tensor layout contract, dtype contract, or scale semantics.",
-                "- Do not change tile sizes, grid shape, launch metadata, or `tl.dot` operand ordering.",
+                "- Do not change public operator signatures or unguarded architecture dispatch behavior.",
                 "- Do not edit fixture capture, replay, parity, controller, or measurement code.",
             ]
         return [
@@ -10135,15 +10468,24 @@ class L0cKernelMutationRunner:
                 "## Ranked Likely-Safe Targets",
                 "",
                 (
-                    "1. Preserve the Triton FP8 GEMM call boundary and inspect only "
-                    "local metadata-load or guard simplifications."
+                    "1. Use prior parity failures to avoid wrapper-only dispatch, "
+                    "reshape-only, or padding-only mutations that do not change a "
+                    "defensible CUTLASS behavior."
                 ),
                 (
-                    "2. Keep `tl.dot` reduction order, scale application, tensor layout, "
-                    "and output dtype behavior unchanged."
+                    "2. Investigate actual CUTLASS dispatch, scale layout, GEMM problem "
+                    "shape, and schedule/source constraints before proposing a patch."
                 ),
-                "3. Prefer comment-only hypothesis capture until a real FP8 replay/capture harness exists.",
-                "4. Do not infer safety from DeltaNet rejection or winner history.",
+                (
+                    "3. Prefer mutations that are justified by a cheap local diagnostic "
+                    "or primary-source finding, then preserve scale semantics and output "
+                    "dtype behavior exactly."
+                ),
+                (
+                    "4. If the staged source cannot reach the needed compiled CUTLASS "
+                    "schedule, write BLOCKED.md with the missing C++/rebuild surface "
+                    "instead of submitting another cosmetic Python patch."
+                ),
             ]
         return [
             "## Ranked Likely-Safe Targets",
@@ -11075,9 +11417,16 @@ class L0cKernelMutationRunner:
         mutation_surface = mutation_surface or {}
         if kernel_target == "fp8_gemm":
             workspace_path = str(mutation_surface.get("workspace_path") or "").strip()
+            workspace_python_path = str(
+                mutation_surface.get("workspace_python_source_path") or workspace_path
+            ).strip()
+            workspace_source_path = str(
+                mutation_surface.get("workspace_source_path") or workspace_path
+            ).strip()
             container_source_dir = str(
-                mutation_surface.get("container_source_dir")
-                or L0C_FP8_GEMM_CUTLASS_CONTAINER_SOURCE_DIR
+                mutation_surface.get("container_vllm_source_dir")
+                or mutation_surface.get("container_source_dir")
+                or L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR
             )
             if workspace_path:
                 mutation_target_description = (
@@ -11116,22 +11465,32 @@ class L0cKernelMutationRunner:
                     "Full vLLM restart is the expensive Tier 4 path, so the controller must inspect",
                     "mutation.patch first and decide whether the patch is safety-rejected or admitted",
                     "to Tier 4. Your job is proposal plus cheap local patch/compile validation only.",
+                    "You own authoring-time compile failures: if the patch does not compile in the",
+                    "cheap preflight surface, revise mutation.patch and rerun the cheap checks before",
+                    "submitting. Do not leave obvious compile failures for the controller.",
                 ]
             )
             agent_validation_steps = "\n".join(
                 [
-                    "3. Run the cheap patch apply check from step 2. If `patch --dry-run`",
+                    "5. Run the cheap patch apply check from step 4. If `patch --dry-run`",
                     "   fails, fix or regenerate mutation.patch and run the dry-run again.",
-                    "4. Run local syntax/compile checks on any changed Python files, for example:",
-                    f"   cd {workspace_path or self.repo_root} && python3 -m py_compile $(find . -name '*.py' -print)",
-                    "5. Run the controller's cheap safety preflight without starting vLLM:",
+                    "6. Run local syntax/compile checks on any changed Python files, for example:",
+                    f"   cd {workspace_python_path or workspace_path or self.repo_root} && python3 -m py_compile $(find . -name '*.py' -print)",
+                    "7. If you changed C++/CUDA, run a compile-level preflight on a temporary copy.",
+                    "   Start with metadata mode while iterating, then run full mode before final submit",
+                    "   when the change touches compiled CUTLASS files:",
                     f"   cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research preflight-patch \\",
-                    f"     --kernel-target {kernel_target} --patch-path {{{{iteration_dir}}}}/mutation.patch",
-                    "   If it exits nonzero, read the JSON `matching_rule`, `code_snippet`,",
+                    f"     --kernel-target {kernel_target} --patch-path {{{{iteration_dir}}}}/mutation.patch \\",
+                    f"     --workspace-source {workspace_source_path or workspace_path} --compile-mode full --compile-jobs 1",
+                    "   If this compile/preflight exits nonzero, read the JSON `reason`,",
+                    "   `compile_preflight.output_tail`, `matching_rule`, `code_snippet`,",
                     "   and `evidence_snippet`, then revise mutation.patch and rerun the cheap checks.",
-                    "6. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS source target.",
+                    "   A compiled-file mutation is not ready to submit until this authoring-side",
+                    "   full compile preflight passes; fix compile errors in the patch before exiting.",
+                    "8. For Python-only mutations, run the same command with `--compile-mode python`.",
+                    "9. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS source target.",
                     "   The controller owns canary admission, parity, and measurement after you exit.",
-                    "7. Exit 0 after either mutation.patch passes the cheap checks or BLOCKED.md explains",
+                    "10. Exit 0 after either mutation.patch passes the cheap checks or BLOCKED.md explains",
                     "   why no patch can pass preflight. Do not exit nonzero for a cheap-check failure;",
                     "   nonzero exit is reserved for agent/tool infrastructure failure.",
                 ]
@@ -11153,6 +11512,11 @@ class L0cKernelMutationRunner:
                     "  scale tensors, or GEMM problem shape, write BLOCKED.md instead",
                     "  of submitting another Python-wrapper cosmetic mutation.",
                 ]
+            )
+            schedule_boundary_rule = (
+                "- CUTLASS dispatch, shape, scale-placement, and schedule-source edits are in scope "
+                "inside the staged vLLM/CUTLASS source tree, but preserve the public GEMM "
+                "signature, tensor layout, output dtype, and scale semantics exactly."
             )
         else:
             mutation_target_description = str(kernel_source_path)
@@ -11189,21 +11553,25 @@ class L0cKernelMutationRunner:
             )
             agent_validation_steps = "\n".join(
                 [
-                    "3. Run from the repo root with the exact entrypoint:",
+                    "5. Run from the repo root with the exact entrypoint:",
                     f"   cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research apply-and-test \\",
                     f"     --round-id {round_id} --iteration {{{{iteration}}}} \\",
                     f"     --kernel-target {kernel_target} --harness {harness}",
                     "   This command owns parity and measurement. Do not interrupt it once started,",
                     "   even if it is quiet for a long time; wait for its final exit status.",
-                    "4. Read the result. If parity fails, write a one-line note to BLOCKED.md",
+                    "6. Read the result. If parity fails, write a one-line note to BLOCKED.md",
                     "   explaining what you'll try next. Do NOT propose the same edit again.",
                     "   Note: the controller will overwrite or remove your BLOCKED.md after",
                     "   its own re-run, so write it for your own bookkeeping; the canonical",
                     "   record will be the controller's.",
-                    "5. Exit 0.",
+                    "7. Exit 0.",
                 ]
             )
             mutation_quality_guidance = ""
+            schedule_boundary_rule = (
+                "- Do not change tile or grid sizes outside the autotune surface (those "
+                "belong to L0b, not L0c)."
+            )
         substitutions = {
             "iteration": "{{iteration}}",
             "round_id": round_id,
@@ -11227,6 +11595,7 @@ class L0cKernelMutationRunner:
             "agent_apply_and_test_context": agent_apply_and_test_context,
             "agent_validation_steps": agent_validation_steps,
             "mutation_quality_guidance": mutation_quality_guidance,
+            "schedule_boundary_rule": schedule_boundary_rule,
             "strategy_brief": strategy_brief.strip(),
             "positive_memory_winning_diffs_block": (
                 positive_memory.strip() or "No prior winning L0c diffs found for this kernel target."

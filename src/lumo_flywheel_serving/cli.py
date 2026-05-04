@@ -1031,6 +1031,10 @@ def cmd_auto_research_preflight_patch(args: argparse.Namespace) -> int:
     payload = runner.preflight_patch(
         kernel_target=args.kernel_target,
         patch_path=args.patch_path,
+        workspace_source=args.workspace_source,
+        compile_mode=args.compile_mode,
+        image=args.image,
+        compile_jobs=args.compile_jobs,
     )
     print(json.dumps(payload, indent=2))
     return 0 if payload["ok"] else 2
@@ -1459,6 +1463,10 @@ def build_parser() -> argparse.ArgumentParser:
     auto_preflight_patch.add_argument("--help-only", action="store_true")
     auto_preflight_patch.add_argument("--kernel-target", choices=l0c_kernel_target_choices)
     auto_preflight_patch.add_argument("--patch-path")
+    auto_preflight_patch.add_argument("--workspace-source")
+    auto_preflight_patch.add_argument("--compile-mode", choices=["none", "python", "metadata", "full"], default="none")
+    auto_preflight_patch.add_argument("--image")
+    auto_preflight_patch.add_argument("--compile-jobs", type=int)
     auto_preflight_patch.set_defaults(func=cmd_auto_research_preflight_patch)
 
     auto_resume_candidate = auto_research_subparsers.add_parser("resume-candidate")

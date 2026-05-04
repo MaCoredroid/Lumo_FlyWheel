@@ -403,21 +403,26 @@ def test_real_apply_and_test_mounts_cutlass_source_workspace(
         patch_text="placeholder",
         kernel_source_text="# bootstrap marker\n",
     )
-    base_source = round_dir / "cutlass_source_base" / "scaled_mm"
-    workspace_source = round_dir / "cutlass_source_workspace" / "scaled_mm"
-    base_source.mkdir(parents=True)
-    workspace_source.mkdir(parents=True)
-    (base_source / "cutlass.py").write_text(
+    base_source = round_dir / "cutlass_source_base" / "vllm-source"
+    workspace_source = round_dir / "cutlass_source_workspace" / "vllm-source"
+    base_python = base_source / "vllm" / "model_executor" / "kernels" / "linear" / "scaled_mm"
+    workspace_python = workspace_source / "vllm" / "model_executor" / "kernels" / "linear" / "scaled_mm"
+    base_python.mkdir(parents=True)
+    workspace_python.mkdir(parents=True)
+    stale_build_artifact = workspace_source / "build" / "stale.o"
+    stale_build_artifact.parent.mkdir(parents=True)
+    stale_build_artifact.write_text("from previous rebuild\n", encoding="utf-8")
+    (base_python / "cutlass.py").write_text(
         "def scaled_mm(A, B):\n    return A + B\n",
         encoding="utf-8",
     )
-    (workspace_source / "cutlass.py").write_text(
+    (workspace_python / "cutlass.py").write_text(
         "def scaled_mm(A, B):\n    return A + B\n",
         encoding="utf-8",
     )
     patch_text = (
-        "--- cutlass_source_workspace/scaled_mm/cutlass.py\n"
-        "+++ cutlass_source_workspace/scaled_mm/cutlass.py\n"
+        "--- cutlass_source_workspace/vllm-source/vllm/model_executor/kernels/linear/scaled_mm/cutlass.py\n"
+        "+++ cutlass_source_workspace/vllm-source/vllm/model_executor/kernels/linear/scaled_mm/cutlass.py\n"
         "@@ -1,2 +1,2 @@\n"
         " def scaled_mm(A, B):\n"
         "-    return A + B\n"
@@ -433,7 +438,8 @@ def test_real_apply_and_test_mounts_cutlass_source_workspace(
         "runtime_wired": True,
         "workspace_base_source_path": str(base_source),
         "workspace_source_path": str(workspace_source),
-        "container_source_dir": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm",
+        "workspace_python_source_path": str(workspace_python),
+        "container_vllm_source_dir": "/opt/vllm-source",
     }
     spec_path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
     calls = _stub_passing_helpers(monkeypatch, runner)
@@ -448,12 +454,25 @@ def test_real_apply_and_test_mounts_cutlass_source_workspace(
 
     assert payload["outcome"] == "parity_passed", payload
     assert calls["restart"] == 1
-    assert any("cutlass_source_workspace/scaled_mm" in mount for mount in calls["restart_mounts"])
+    assert any("cutlass_source_workspace/vllm-source:/opt/vllm-source" in mount for mount in calls["restart_mounts"])
     parity = json.loads((iteration_dir / "parity_check.json").read_text(encoding="utf-8"))
     assert parity["pass"] is True
-    assert workspace_source.joinpath("cutlass.py").read_text(encoding="utf-8") == (
+    assert workspace_python.joinpath("cutlass.py").read_text(encoding="utf-8") == (
         "def scaled_mm(A, B):\n    return A + B\n"
     )
+    assert not stale_build_artifact.exists()
+
+
+def test_cutlass_rebuild_prelaunch_makes_bind_mount_writable_again() -> None:
+    shell = auto_research.L0cKernelMutationRunner._cutlass_rebuild_prelaunch_shell()
+
+    assert "trap 'chmod -R a+rwX /opt/vllm-source" in shell
+    assert "git config --global --add safe.directory /opt/vllm-source" in shell
+    assert "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache" in shell
+    assert "cmake --build /opt/vllm-source/build/lumo_cutlass_research --target _C" in shell
+    assert "cmake --install /opt/vllm-source/build/lumo_cutlass_research --component _C" in shell
+    assert "export PYTHONPATH=/opt/vllm-source:${PYTHONPATH:-}" in shell
+    assert "[LUMO-CUTLASS-REBUILD] done" in shell
 
 
 def test_real_apply_and_test_blocks_cutlass_overlay_without_runtime_effect(
