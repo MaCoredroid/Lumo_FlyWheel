@@ -5797,7 +5797,8 @@ def test_cutlass_compile_preflight_shell_defaults_to_single_job() -> None:
     )
 
     assert "export MAX_JOBS=${MAX_JOBS:-1}" in shell
-    assert "export TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST:-12.0}" in shell
+    assert "export TORCH_CUDA_ARCH_LIST=${LUMO_CUTLASS_TORCH_CUDA_ARCH_LIST:-12.0}" in shell
+    assert '-DTORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"' in shell
     assert "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache" in shell
 
 

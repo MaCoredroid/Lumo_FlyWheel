@@ -8708,7 +8708,7 @@ class L0cKernelMutationRunner:
             f"cd {source_dir}",
             f"git config --global --add safe.directory {source_dir} || true",
             f"export MAX_JOBS=${{MAX_JOBS:-{default_jobs}}}",
-            "export TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST:-12.0}",
+            "export TORCH_CUDA_ARCH_LIST=${LUMO_CUTLASS_TORCH_CUDA_ARCH_LIST:-12.0}",
             "export VLLM_USE_PRECOMPILED=0",
             f"export CCACHE_DIR={shlex.quote(L0C_FP8_GEMM_CUTLASS_CONTAINER_CCACHE_DIR)}",
             f"export CCACHE_BASEDIR={source_dir}",
@@ -8719,6 +8719,7 @@ class L0cKernelMutationRunner:
             f"cmake -S . -B {build_dir} -G Ninja "
             "-DCMAKE_BUILD_TYPE=RelWithDebInfo "
             "-DVLLM_TARGET_DEVICE=cuda "
+            "-DTORCH_CUDA_ARCH_LIST=\"$TORCH_CUDA_ARCH_LIST\" "
             "-DVLLM_PYTHON_EXECUTABLE=$(command -v python3) "
             f"-DCMAKE_INSTALL_PREFIX={source_dir} "
             '"${cmake_launcher_args[@]}"',
