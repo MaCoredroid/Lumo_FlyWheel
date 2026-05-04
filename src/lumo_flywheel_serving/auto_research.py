@@ -6047,6 +6047,8 @@ This kernel runs on a **DGX Spark GB10**. Treat it as bandwidth-bound:
 128 GB LPDDR5x unified memory at roughly 273 GB/s, not an HBM3e server GPU.
 Mutations that reduce memory traffic or improve cache reuse are more likely
 to matter than compute-only micro-optimizations.
+Do not treat this like H100/H200: GB10 has a unified LPDDR memory pool and
+the known workload profile is decode-heavy.
 
 {{strategy_brief}}
 
@@ -6102,14 +6104,18 @@ Tier-2 hard-reject:
    research_memory.tsv, research_memory.md, prior_mutations_rejected.tsv,
    mutations_rejected.tsv, results.tsv (best_so_far).
    For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
-2. Before editing, run cheap local diagnostics or source-level experiments that
+2. Before editing, write down the baseline timing breakdown you are using:
+   GB10 hardware fact, current round measurement rows, and the local P3a
+   CUTLASS/FFN timing artifact from strategy_brief.md when present. State which CUTLASS time component your patch should reduce
+   before you edit.
+3. Before editing, run cheap local diagnostics or source-level experiments that
    test the exact dispatch/shape/scale/schedule assumption behind your idea.
    Examples: inspect registered op schemas, grep the mounted vLLM/CUTLASS source,
    compile the touched Python/C++ file if applicable, or run a tiny non-vLLM
    import/shape probe. Do not start vLLM and do not run apply-and-test.
-3. Do a short online/source research pass only if it can inform the mutation:
+4. Do a short online/source research pass only if it can inform the mutation:
    use primary docs/source and record the specific fact in your notes/transcript.
-4. Write your proposal to {{iteration_dir}}/mutation.patch.
+5. Write your proposal to {{iteration_dir}}/mutation.patch.
    Generate the patch with a real diff tool; do not hand-write hunk counts.
    The patch must apply with:
      {{patch_dry_run_command}}
@@ -11182,6 +11188,7 @@ class L0cKernelMutationRunner:
         prior_research_memory: list[dict[str, Any]],
     ) -> str:
         p3a_lines = self._latest_p3a_strategy_lines(kernel_target=kernel_target)
+        timing_lines = self._latest_p3a_timing_breakdown_lines(kernel_target=kernel_target)
         prior_lines = ["- No prior cross-round rejections found for this kernel target."]
         if prior_rejections:
             prior_lines = []
@@ -11237,6 +11244,20 @@ class L0cKernelMutationRunner:
                 "parity dominates throughput."
             ),
             *p3a_lines,
+            "",
+            "## GB10 CUTLASS Timing Breakdown",
+            "",
+            *timing_lines,
+            (
+                "- Before proposing a CUTLASS patch, the authoring agent must state "
+                "which timing component it expects to reduce and why the changed "
+                "dispatch/shape/scale/schedule should affect that component on GB10."
+            ),
+            (
+                "- After writing the patch, the authoring agent must compare the patch "
+                "against this same breakdown in its final message. The controller owns "
+                "the expensive after-change vLLM measurement."
+            ),
             "",
             "## Forbidden Mutation Families",
             "",
@@ -11407,6 +11428,79 @@ class L0cKernelMutationRunner:
             "- P3a decision: " + decision_basis,
             "- P3a limitation: no full Nsight kernel-category split; keep mutations conservative.",
         ]
+
+    def _latest_p3a_timing_breakdown_lines(self, *, kernel_target: str) -> list[str]:
+        if kernel_target != "fp8_gemm":
+            return [
+                "- No FP8 GEMM/CUTLASS timing breakdown is required for this kernel target."
+            ]
+        output_root = self.repo_root / "output"
+        if not output_root.is_dir():
+            return [
+                "- No P3a agent-flow timing artifact found; use the GB10 bandwidth thesis and current round measurements."
+            ]
+        summary_paths = list(
+            output_root.glob("p3a_agent_flow_roofline_*/p3a_agent_flow_roofline_full10_summary.json")
+        )
+        summary_paths.extend(
+            output_root.glob("p3a_agent_flow_roofline_*/p3a_agent_flow_roofline_summary.json")
+        )
+        if not summary_paths:
+            return [
+                "- No P3a agent-flow timing artifact found; use the GB10 bandwidth thesis and current round measurements."
+            ]
+        summary_paths.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        path = summary_paths[0]
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return [
+                f"- Latest timing artifact `{_relative_to_repo(self.repo_root, path)}` is unreadable."
+            ]
+        aggregate = payload.get("aggregate_timing") if isinstance(payload, dict) else {}
+        categories = aggregate.get("categories") if isinstance(aggregate, dict) else None
+        if not isinstance(categories, list) or not categories:
+            return [
+                f"- Timing artifact `{_relative_to_repo(self.repo_root, path)}` has no category rows."
+            ]
+        lines = [
+            (
+                f"- Timing source: `{_relative_to_repo(self.repo_root, path)}`. "
+                "These are CUDA-event elapsed times around vLLM call sites, not "
+                "mutually exclusive low-level kernel self-time."
+            )
+        ]
+        for row in categories[:6]:
+            if not isinstance(row, dict):
+                continue
+            category = str(row.get("category", "unknown"))
+            share = float(row.get("leaf_share") or 0.0) * 100.0
+            self_ms = float(row.get("self_time_ms") or 0.0)
+            ms_per_token = float(row.get("ms_per_requested_output_token") or 0.0)
+            lines.append(
+                f"- P3a timing: {category} share={share:.1f}%, "
+                f"self_time_ms={self_ms:.1f}, ms_per_requested_output_token={ms_per_token:.3f}."
+            )
+        ffn = next(
+            (
+                row
+                for row in categories
+                if isinstance(row, dict) and str(row.get("category", "")) == "ffn_linear"
+            ),
+            None,
+        )
+        if isinstance(ffn, dict):
+            lines.append(
+                "- CUTLASS-relevant baseline: `ffn_linear` is the current FP8 GEMM/CUTLASS "
+                f"proxy at {float(ffn.get('leaf_share') or 0.0) * 100.0:.1f}% leaf share; "
+                "schedule/shape/scale mutations must explain how they reduce this slice "
+                "or why a narrower sub-slice is still worth measuring."
+            )
+        lines.append(
+            "- If a proposed mutation cannot plausibly affect `ffn_linear`/CUTLASS timing "
+            "or a measured long-tail request path, do not submit it."
+        )
+        return lines
 
     @staticmethod
     def _default_p3a_decision_basis(kernel_target: str) -> str:
@@ -12337,11 +12431,11 @@ class L0cKernelMutationRunner:
             )
             agent_validation_steps = "\n".join(
                 [
-                    "5. Run the cheap patch apply check from step 4. If `patch --dry-run`",
+                    "6. Run the cheap patch apply check from step 5. If `patch --dry-run`",
                     "   fails, fix or regenerate mutation.patch and run the dry-run again.",
-                    "6. Run local syntax/compile checks on any changed Python files, for example:",
+                    "7. Run local syntax/compile checks on any changed Python files, for example:",
                     f"   cd {workspace_python_path or workspace_path or self.repo_root} && python3 -m py_compile $(find . -name '*.py' -print)",
-                    "7. If you changed C++/CUDA, run a compile-level preflight on a temporary copy.",
+                    "8. If you changed C++/CUDA, run a compile-level preflight on a temporary copy.",
                     "   Start with metadata mode while iterating, then run targeted mode before final submit",
                     "   when the change touches compiled CUTLASS files. Targeted mode builds only",
                     "   the CUTLASS FP8/SM120 objects inferred from mutation.patch:",
@@ -12354,10 +12448,10 @@ class L0cKernelMutationRunner:
                     "   A compiled-file mutation is not ready to submit until this authoring-side",
                     "   targeted compile preflight passes or explicitly reports no CUTLASS C++ targets;",
                     "   fix compile errors in the patch before exiting.",
-                    "8. For Python-only mutations, run the same command with `--compile-mode python`.",
-                    "9. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS source target.",
+                    "9. For Python-only mutations, run the same command with `--compile-mode python`.",
+                    "10. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS source target.",
                     "   The controller owns canary admission, parity, and measurement after you exit.",
-                    "10. Exit 0 after either mutation.patch passes the cheap checks or BLOCKED.md explains",
+                    "11. Exit 0 after either mutation.patch passes the cheap checks or BLOCKED.md explains",
                     "   why no patch can pass preflight. Do not exit nonzero for a cheap-check failure;",
                     "   nonzero exit is reserved for agent/tool infrastructure failure.",
                 ]
@@ -12420,18 +12514,18 @@ class L0cKernelMutationRunner:
             )
             agent_validation_steps = "\n".join(
                 [
-                    "5. Run from the repo root with the exact entrypoint:",
+                    "6. Run from the repo root with the exact entrypoint:",
                     f"   cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research apply-and-test \\",
                     f"     --round-id {round_id} --iteration {{{{iteration}}}} \\",
                     f"     --kernel-target {kernel_target} --harness {harness}",
                     "   This command owns parity and measurement. Do not interrupt it once started,",
                     "   even if it is quiet for a long time; wait for its final exit status.",
-                    "6. Read the result. If parity fails, write a one-line note to BLOCKED.md",
+                    "7. Read the result. If parity fails, write a one-line note to BLOCKED.md",
                     "   explaining what you'll try next. Do NOT propose the same edit again.",
                     "   Note: the controller will overwrite or remove your BLOCKED.md after",
                     "   its own re-run, so write it for your own bookkeeping; the canonical",
                     "   record will be the controller's.",
-                    "7. Exit 0.",
+                    "8. Exit 0.",
                 ]
             )
             mutation_quality_guidance = ""

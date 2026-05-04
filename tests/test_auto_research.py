@@ -5179,6 +5179,31 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
             "cuda_graph_capture": "off",
         },
     )
+    timing_dir = repo / "output" / "p3a_agent_flow_roofline_20260501T192001Z"
+    timing_dir.mkdir(parents=True)
+    (timing_dir / "p3a_agent_flow_roofline_full10_summary.json").write_text(
+        json.dumps(
+            {
+                "aggregate_timing": {
+                    "categories": [
+                        {
+                            "category": "gatedattn_attention_with_kv_read",
+                            "leaf_share": 0.67,
+                            "self_time_ms": 100.0,
+                            "ms_per_requested_output_token": 10.0,
+                        },
+                        {
+                            "category": "ffn_linear",
+                            "leaf_share": 0.20,
+                            "self_time_ms": 30.0,
+                            "ms_per_requested_output_token": 3.0,
+                        },
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     runner = auto_research.L0cKernelMutationRunner(
         repo_root=repo,
         registry_path=repo / "model_registry.yaml",
@@ -5265,10 +5290,16 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "Prior Measured-Trial Memory" in strategy_brief
     assert "compact config/schedule traces" in strategy_brief
     assert "mutation_features" in strategy_brief
+    assert "GB10 CUTLASS Timing Breakdown" in strategy_brief
+    assert "ffn_linear" in strategy_brief
+    assert "which timing component it expects to reduce" in strategy_brief
     candidate_brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
         encoding="utf-8"
     )
     assert "research_memory.tsv" in candidate_brief
+    assert "DGX Spark GB10" in candidate_brief
+    assert "baseline timing breakdown" in candidate_brief
+    assert "which CUTLASS time component" in candidate_brief
     research_memory_header = (result.round_dir / "research_memory.tsv").read_text(
         encoding="utf-8"
     ).splitlines()[0]
@@ -5686,6 +5717,9 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "short targeted research pass" in brief
     assert "primary docs/source" in brief
     assert "cheap local diagnostics" in brief
+    assert "DGX Spark GB10" in brief
+    assert "baseline timing breakdown" in brief
+    assert "which CUTLASS time component" in brief
     assert "Do not start vLLM and do not run apply-and-test" in brief
     assert "do not spend iteration budget on online research" not in brief
     assert "expected speed mechanism" in brief
