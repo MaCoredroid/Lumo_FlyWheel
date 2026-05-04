@@ -10233,6 +10233,11 @@ class L0cKernelMutationRunner:
                 elif patch_path.is_file():
                     outcome = "submitted_without_controller_measurement"
                 else:
+                    if not (
+                        (iteration_dir / "agent_last_message.txt").is_file()
+                        or (iteration_dir / "BLOCKED.md").is_file()
+                    ):
+                        continue
                     outcome = "agent_no_patch"
             objective_mean = str(result_row.get("objective_mean", ""))
             if not objective_mean:
