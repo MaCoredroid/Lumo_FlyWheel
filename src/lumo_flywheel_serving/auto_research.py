@@ -7095,7 +7095,7 @@ class L0cKernelMutationRunner:
         codex_session_id: str | None = None,
         per_iteration_wall_clock_s: int = L0C_DEFAULT_AGENT_TIMEOUT_S,
     ) -> dict[str, Any]:
-        """Resume one L0c candidate through Codex CLI's native resume path."""
+        """Resume one L0c candidate through controller-owned validation."""
         if harness != "real":
             raise RuntimeError("resume-candidate currently supports --harness real only")
         if kernel_target not in L0C_KERNEL_TARGETS:
@@ -7125,76 +7125,41 @@ class L0cKernelMutationRunner:
         if not (iteration_dir / "mutation.patch").is_file():
             raise RuntimeError(f"mutation.patch missing for iteration {iteration}")
 
-        session_id = codex_session_id or self._extract_codex_thread_id(
-            iteration_dir / "agent_session.jsonl"
-        )
-        if not session_id:
-            raise RuntimeError(
-                "Could not find Codex thread_id in agent_session.jsonl; pass "
-                "--codex-session-id explicitly"
-            )
-
+        patch_text = (iteration_dir / "mutation.patch").read_text(encoding="utf-8")
+        mutation_hash = hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
         resume_index = self._next_resume_index(iteration_dir)
-        transcript_path = iteration_dir / f"agent_session_resume_{resume_index:03d}.jsonl"
-        stderr_path = iteration_dir / f"agent_session_resume_{resume_index:03d}.stderr"
-        last_message_path = iteration_dir / f"agent_last_message_resume_{resume_index:03d}.txt"
-        prompt = self._build_l0c_codex_resume_prompt(
-            round_id=round_id,
-            iteration=iteration,
-            kernel_target=kernel_target,
-            round_dir=round_dir,
-            iteration_dir=iteration_dir,
-        )
-        argv = [
-            "codex",
-            "-c",
-            'model="gpt-5.5"',
-            "-c",
-            'model_reasoning_effort="high"',
-            "exec",
-            "resume",
-            "--json",
-            "--output-last-message",
-            str(last_message_path),
-            "--skip-git-repo-check",
-            session_id,
-            "-",
-        ]
+        controller_resume_path = iteration_dir / f"controller_resume_{resume_index:03d}.json"
         started = time.monotonic()
-        with transcript_path.open("wb") as stdout_file, stderr_path.open("wb") as stderr_file:
-            try:
-                proc = subprocess.run(
-                    argv,
-                    input=prompt.encode("utf-8"),
-                    stdout=stdout_file,
-                    stderr=stderr_file,
-                    timeout=(
-                        per_iteration_wall_clock_s
-                        if per_iteration_wall_clock_s > 0
-                        else None
-                    ),
-                    check=False,
-                )
-                returncode = proc.returncode
-            except subprocess.TimeoutExpired as exc:
-                stderr_path.write_text(
-                    f"codex_resume_timeout: {exc}\n",
-                    encoding="utf-8",
-                )
-                returncode = 124
-            except FileNotFoundError as exc:
-                raise RuntimeError(f"codex binary missing: {exc}") from exc
+        if (iteration_dir / "measurement_trace.json").is_file():
+            outcome = {
+                "round_id": round_id,
+                "iteration": iteration,
+                "kernel_target": kernel_target,
+                "harness": harness,
+                "mutation_hash": mutation_hash,
+                "outcome": "measurement_trace_already_present",
+            }
+        else:
+            outcome = self.apply_and_test(
+                round_id=round_id,
+                iteration=iteration,
+                kernel_target=kernel_target,
+                harness=harness,
+                round_root=round_dir.parent,
+            )
+        controller_resume_path.write_text(
+            json.dumps(outcome, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
 
         payload: dict[str, Any] = {
             "round_id": round_id,
             "iteration": iteration,
             "kernel_target": kernel_target,
             "harness": harness,
-            "codex_session_id": session_id,
-            "resume_transcript": str(transcript_path),
-            "resume_stderr": str(stderr_path),
-            "resume_last_message": str(last_message_path),
-            "returncode": returncode,
+            "codex_session_id": codex_session_id,
+            "controller_resume": str(controller_resume_path),
+            "outcome": outcome.get("outcome"),
             "wall_clock_minutes": (time.monotonic() - started) / 60.0,
             "measurement_trace": str(iteration_dir / "measurement_trace.json")
             if (iteration_dir / "measurement_trace.json").is_file()
@@ -7212,13 +7177,31 @@ class L0cKernelMutationRunner:
                 kernel_target=kernel_target,
                 spec=spec,
             )
-        elif returncode != 0 and self._agent_error_is_rate_limit("", transcript_path):
-            payload["error"] = "agent_rate_limited"
-        elif returncode != 0:
-            stderr_text = stderr_path.read_text(
-                encoding="utf-8", errors="replace"
-            ).strip()
-            payload["error"] = f"codex_resume_exit_{returncode}: {stderr_text}"
+        elif outcome.get("outcome") in {"compile_failed", "parity_failed"}:
+            parity = self._read_parity_check(iteration_dir)
+            self._record_l0c_rejection(
+                round_dir,
+                self._read_tsv(round_dir / "mutations_rejected.tsv")
+                if (round_dir / "mutations_rejected.tsv").is_file()
+                else [],
+                self._make_rejection_row(
+                    iteration=iteration,
+                    candidate_uuid=str(uuid4()),
+                    mutation_hash=mutation_hash,
+                    reason=str(parity.get("reason") or outcome.get("outcome")),
+                    first_diverging_probe_index=(
+                        int(parity["first_diverging_probe"])
+                        if "first_diverging_probe" in parity
+                        else None
+                    ),
+                    tolerance_overshoot=(
+                        float(parity["tolerance_overshoot"])
+                        if "tolerance_overshoot" in parity
+                        else None
+                    ),
+                ),
+            )
+            self._refresh_l0c_research_memory_from_artifacts(round_dir)
         return payload
 
     @staticmethod
@@ -7240,7 +7223,12 @@ class L0cKernelMutationRunner:
 
     @staticmethod
     def _next_resume_index(iteration_dir: Path) -> int:
-        existing = sorted(iteration_dir.glob("agent_session_resume_*.jsonl"))
+        existing = sorted(
+            [
+                *iteration_dir.glob("agent_session_resume_*.jsonl"),
+                *iteration_dir.glob("controller_resume_*.json"),
+            ]
+        )
         return len(existing) + 1
 
     def _build_l0c_codex_resume_prompt(
@@ -7252,9 +7240,6 @@ class L0cKernelMutationRunner:
         round_dir: Path,
         iteration_dir: Path,
     ) -> str:
-        lumoserve = self.repo_root / ".venv" / "bin" / "lumoserve"
-        if not lumoserve.is_file():
-            lumoserve = self.repo_root / ".venv" / "bin" / "python"
         return (
             "Resume the existing L0c candidate exactly where this Codex session "
             "stopped.\n\n"
@@ -7263,20 +7248,14 @@ class L0cKernelMutationRunner:
             f"- Kernel target: {kernel_target}\n"
             f"- Round directory: {round_dir}\n"
             f"- Candidate directory: {iteration_dir}\n\n"
-            "Do not create a new candidate and do not rewrite mutation.patch unless "
-            "it is missing or corrupt. Keep the existing candidate history and "
-            "state. If measurement_trace.json is missing, run the existing "
-            "controller command to finish this candidate:\n\n"
-            f"cd {self.repo_root} && PYTHONPATH=src {lumoserve} auto-research "
-            f"apply-and-test --round-id {round_id} --iteration {iteration} "
-            f"--kernel-target {kernel_target} --harness real\n\n"
-            "This command is expected to run quietly for many minutes while vLLM "
-            "cold-starts, runs parity, and gathers measurement windows. Do not "
-            "interrupt it, do not send Ctrl-C, and do not stop the foreground "
-            "session because no output is appearing; wait for the command to "
-            "exit or for the outer round controller to terminate the session.\n\n"
-            "When it finishes, report only the parity_check.json and "
-            "measurement_trace.json status. Do not start another L0c round."
+            "Do not create a new candidate, do not rewrite mutation.patch unless "
+            "it is missing or corrupt, and do not run apply-and-test. The Python "
+            "round controller owns rebuild, parity, and measurement validation "
+            "for unfinished FP8 GEMM CUTLASS candidates.\n\n"
+            f"If the patch is missing or corrupt, report that status in "
+            f"{iteration_dir / 'agent_last_message_resume_status.txt'}. "
+            "Otherwise report that the candidate is ready for controller "
+            "validation. Do not start another L0c round."
         )
 
     def _record_resumed_l0c_candidate(
@@ -7306,18 +7285,10 @@ class L0cKernelMutationRunner:
         mutation_hash = hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
 
         measurement_path = round_dir / "measurements.tsv"
-        existing_measurements = (
-            self._read_tsv(measurement_path) if measurement_path.is_file() else []
-        )
-        baseline_rows = [
-            row
-            for row in existing_measurements
-            if row.get("measurement_role")
-            == "l0b_empirical_winner_baseline_remeasured"
-        ]
+        baseline_rows, accepted_rows, _, results_rows = self._load_l0c_resume_ledgers(round_dir)
         accepted_rows = [
             row
-            for row in existing_measurements
+            for row in accepted_rows
             if row.get("measurement_role") == "l0c_candidate"
             and row.get("candidate_uuid") != candidate_uuid
         ]
@@ -7325,8 +7296,6 @@ class L0cKernelMutationRunner:
         baseline_uuid = baseline_rows[0]["candidate_uuid"] if baseline_rows else ""
         baseline_mean = self._mean_of(baseline_rows)
 
-        results_path = round_dir / "results.tsv"
-        results_rows = self._read_tsv(results_path) if results_path.is_file() else []
         results_rows = [
             row for row in results_rows if row.get("iteration") != iteration
         ]
@@ -7969,7 +7938,129 @@ class L0cKernelMutationRunner:
             if (round_dir / "results.tsv").is_file()
             else []
         )
+        if not baseline_rows:
+            baseline_rows = self._l0c_baseline_measurement_rows_from_artifacts(round_dir)
+        if not accepted_rows or not results_rows:
+            artifact_accepted_rows, artifact_results_rows = self._l0c_candidate_result_rows_from_artifacts(
+                round_dir=round_dir,
+                baseline_mean=self._mean_of(baseline_rows) if baseline_rows else None,
+            )
+            if not accepted_rows:
+                accepted_rows = artifact_accepted_rows
+            if not results_rows:
+                results_rows = artifact_results_rows
         return baseline_rows, accepted_rows, rejected_rows, results_rows
+
+    def _l0c_baseline_measurement_rows_from_artifacts(
+        self,
+        round_dir: Path,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        baseline_dir = round_dir / "baselines"
+        if not baseline_dir.is_dir():
+            return rows
+        baseline_uuid = "l0b-empirical-winner-baseline-remeasured"
+        for index, trace_path in enumerate(sorted(baseline_dir.glob("measurement_*.json")), start=1):
+            try:
+                payload = json.loads(trace_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            objective = payload.get("eval_throughput", payload.get("objective_value"))
+            if objective is None:
+                continue
+            try:
+                objective_value = float(objective)
+            except (TypeError, ValueError):
+                continue
+            rows.append(
+                self._make_measurement_row(
+                    candidate_uuid=baseline_uuid,
+                    candidate_label="l0b-empirical-winner-baseline-remeasured",
+                    role="l0b_empirical_winner_baseline_remeasured",
+                    measurement_index=index,
+                    objective_value=objective_value,
+                    harness="real",
+                    trace_ref=f"baselines/{trace_path.name}",
+                )
+            )
+        return rows
+
+    def _l0c_candidate_result_rows_from_artifacts(
+        self,
+        *,
+        round_dir: Path,
+        baseline_mean: float | None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        accepted_rows: list[dict[str, Any]] = []
+        results_rows: list[dict[str, Any]] = []
+        candidates_dir = round_dir / "candidates"
+        if not candidates_dir.is_dir():
+            return accepted_rows, results_rows
+        for iteration_dir in sorted(candidates_dir.iterdir(), key=lambda path: path.name):
+            if not iteration_dir.is_dir() or not iteration_dir.name.isdigit():
+                continue
+            trace_path = iteration_dir / "measurement_trace.json"
+            if not trace_path.is_file():
+                continue
+            try:
+                trace = json.loads(trace_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(trace, dict):
+                continue
+            measurement_rows = list(trace.get("measurements") or [])
+            if not measurement_rows:
+                continue
+            candidate_uuid = str(
+                trace.get("candidate_uuid")
+                or measurement_rows[0].get("candidate_uuid")
+                or uuid4()
+            )
+            normalized_rows: list[dict[str, Any]] = []
+            for index, row in enumerate(measurement_rows, start=1):
+                if not isinstance(row, dict):
+                    continue
+                try:
+                    objective_value = float(row.get("objective_value"))
+                except (TypeError, ValueError):
+                    continue
+                normalized_rows.append(
+                    self._make_measurement_row(
+                        candidate_uuid=candidate_uuid,
+                        candidate_label=str(row.get("candidate_label") or f"l0c-attempt-{iteration_dir.name}"),
+                        role="l0c_candidate",
+                        measurement_index=index,
+                        objective_value=objective_value,
+                        harness=str(row.get("harness") or "real"),
+                        trace_ref=str(row.get("trace_ref") or f"candidates/{iteration_dir.name}/measurement_{index:02d}.json"),
+                    )
+                )
+            if not normalized_rows:
+                continue
+            objective_mean = self._objective_mean_from_l0c_trace(trace_path)
+            if objective_mean is None:
+                objective_mean = self._mean_of(normalized_rows)
+            patch_path = iteration_dir / "mutation.patch"
+            patch_text = patch_path.read_text(encoding="utf-8", errors="replace") if patch_path.is_file() else ""
+            mutation_hash = hashlib.sha256(patch_text.encode("utf-8")).hexdigest() if patch_text else ""
+            accepted_rows.extend(normalized_rows)
+            status = (
+                "keep"
+                if baseline_mean is not None and objective_mean > baseline_mean
+                else "discard"
+            )
+            results_rows.append(
+                {
+                    "iteration": iteration_dir.name,
+                    "candidate_uuid": candidate_uuid,
+                    "parent_candidate_uuid": "l0b-empirical-winner-baseline-remeasured",
+                    "mutation_hash": mutation_hash,
+                    "status": status,
+                    "objective_mean": f"{objective_mean:.6f}",
+                    "measurement_count": str(len(normalized_rows)),
+                }
+            )
+        return accepted_rows, results_rows
 
     def _load_l0c_demoted_queue(
         self,

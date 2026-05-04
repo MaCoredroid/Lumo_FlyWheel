@@ -5499,6 +5499,12 @@ def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_pa
     assert "canonical patch_diff/failure_class table" in augmented_brief
     assert "failure_class=correctness" in augmented_brief
     assert "using TileShape = Shape<_16, _128, _128>" in augmented_brief
+    baseline_rows, accepted_rows, _, results_rows = runner._load_l0c_resume_ledgers(round_dir)
+    assert [row["objective_value"] for row in baseline_rows] == ["0.056000"]
+    assert [row["objective_value"] for row in accepted_rows] == ["0.034000", "0.045000"]
+    assert results_rows[0]["iteration"] == "001"
+    assert results_rows[0]["status"] == "discard"
+    assert results_rows[0]["objective_mean"] == "0.039500"
 
 
 def test_l0c_fp8_gemm_real_non_cutlass_non_triton_backend_blocked(tmp_path: Path) -> None:
