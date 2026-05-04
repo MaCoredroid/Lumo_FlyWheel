@@ -6107,7 +6107,9 @@ Tier-2 hard-reject:
 2. Before editing, write down the baseline timing breakdown you are using:
    GB10 hardware fact, current round measurement rows, and the local P3a
    CUTLASS/FFN timing artifact from strategy_brief.md when present. State which CUTLASS time component your patch should reduce
-   before you edit.
+   before you edit. If you can cheaply produce a CUTLASS-internal timing/proxy,
+   include before-change and after-change values; otherwise state that only the
+   `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
 3. Before editing, run cheap local diagnostics or source-level experiments that
    test the exact dispatch/shape/scale/schedule assumption behind your idea.
    Examples: inspect registered op schemas, grep the mounted vLLM/CUTLASS source,
@@ -11252,6 +11254,13 @@ class L0cKernelMutationRunner:
                 "- Before proposing a CUTLASS patch, the authoring agent must state "
                 "which timing component it expects to reduce and why the changed "
                 "dispatch/shape/scale/schedule should affect that component on GB10."
+            ),
+            (
+                "- Treat this section as the pre-change CUTLASS timing baseline. "
+                "If a cheap CUTLASS-internal timing/proxy is available, record it "
+                "before and after patching; if not, explicitly say no low-level "
+                "CUTLASS sub-kernel timing is available and use `ffn_linear` as "
+                "the controller-owned proxy."
             ),
             (
                 "- After writing the patch, the authoring agent must compare the patch "

@@ -5293,6 +5293,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "GB10 CUTLASS Timing Breakdown" in strategy_brief
     assert "ffn_linear" in strategy_brief
     assert "which timing component it expects to reduce" in strategy_brief
+    assert "pre-change CUTLASS timing baseline" in strategy_brief
+    assert "low-level CUTLASS sub-kernel timing" in strategy_brief
     candidate_brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
         encoding="utf-8"
     )
@@ -5300,6 +5302,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "DGX Spark GB10" in candidate_brief
     assert "baseline timing breakdown" in candidate_brief
     assert "which CUTLASS time component" in candidate_brief
+    assert "CUTLASS-internal timing/proxy" in candidate_brief
+    assert "`ffn_linear` proxy" in candidate_brief
     research_memory_header = (result.round_dir / "research_memory.tsv").read_text(
         encoding="utf-8"
     ).splitlines()[0]
@@ -5720,6 +5724,8 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "DGX Spark GB10" in brief
     assert "baseline timing breakdown" in brief
     assert "which CUTLASS time component" in brief
+    assert "CUTLASS-internal timing/proxy" in brief
+    assert "`ffn_linear` proxy" in brief
     assert "Do not start vLLM and do not run apply-and-test" in brief
     assert "do not spend iteration budget on online research" not in brief
     assert "expected speed mechanism" in brief
