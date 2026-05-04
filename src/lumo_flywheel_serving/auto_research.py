@@ -10994,11 +10994,17 @@ class L0cKernelMutationRunner:
         endpoint = str(runtime.get("endpoint") or f"http://127.0.0.1:{port + 1}/v1").rstrip("/")
         metrics_url = str(runtime.get("metrics_url") or f"http://127.0.0.1:{port}/metrics")
         model_id = str(runtime.get("model_id") or spec.get("model_id") or "qwen3.5-27b")
-        served_model_name = str(
-            (runtime.get("vllm_config") or {}).get("served_model_name")
-            if isinstance(runtime.get("vllm_config"), dict)
-            else ""
-        ) or model_id
+        runtime_vllm_config = runtime.get("vllm_config")
+        served_model_value = (
+            runtime_vllm_config.get("served_model_name")
+            if isinstance(runtime_vllm_config, dict)
+            else None
+        )
+        served_model_name = (
+            str(served_model_value).strip()
+            if served_model_value is not None and str(served_model_value).strip()
+            else model_id
+        )
         workload_file = Path(str(spec.get("workload_file") or ""))
         if not workload_file.is_absolute():
             workload_file = self.repo_root / workload_file

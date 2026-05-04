@@ -5933,7 +5933,7 @@ def test_l0c_warm_diagnostic_records_step_consumption(
                 "endpoint": "http://127.0.0.1:8101/v1",
                 "metrics_url": "http://127.0.0.1:8100/metrics",
                 "model_id": "qwen3.5-27b",
-                "vllm_config": {"served_model_name": "qwen3.5-27b"},
+                "vllm_config": {},
             },
         },
     )
@@ -5974,6 +5974,7 @@ def test_l0c_warm_diagnostic_records_step_consumption(
     def fake_post(url: str, **kwargs):
         assert url == "http://127.0.0.1:8101/v1/responses"
         payload = kwargs.get("json") or {}
+        assert payload.get("model") == "qwen3.5-27b"
         prompt_tokens = len(str(payload.get("input", "")).split())
         gen_tokens = int(payload.get("max_output_tokens") or 1)
         counters["prompt"] += prompt_tokens
