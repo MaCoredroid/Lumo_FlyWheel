@@ -6113,11 +6113,14 @@ Tier-2 hard-reject:
    before you edit. If you can cheaply produce a CUTLASS-internal timing/proxy,
    include before-change and after-change values; otherwise state that only the
    `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
-3. Run a cheap warm-request diagnostic against the already-running live server
-   before editing, then read the artifact for per-step token/time/cache consumption,
+3. You MUST run a cheap warm-request diagnostic against the already-running
+   live server before editing, then read the artifact for per-step token/time/cache consumption,
    bottleneck_hint, and GB10 bandwidth roofline context:
      {{warm_diagnostic_command}}
    This measures the current warm live stack; it does not apply your patch.
+   If the live endpoint is down, write {{iteration_dir}}/warm_diagnostic_skipped.json
+   with the command, error, and reason, then use the last baseline/candidate
+   measurement traces instead.
    After writing the patch, only run another warm request diagnostic if your
    mutation can be exercised without a vLLM restart. For compiled CUTLASS
    changes, say the post-patch warm request is controller-owned.
@@ -6137,7 +6140,8 @@ Tier-2 hard-reject:
 # What you do NOT do
 - You do not call finalize-round. Python does that.
 - You do not run measurement directly. The CLI does that.
-- You do not write any file except mutation.patch and BLOCKED.md.
+- You do not write any file except mutation.patch, BLOCKED.md, and the
+  warm diagnostic artifact/skipped note from step 3.
 """
 
 

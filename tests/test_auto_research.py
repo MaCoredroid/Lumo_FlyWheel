@@ -5396,6 +5396,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "CUTLASS-internal timing/proxy" in candidate_brief
     assert "`ffn_linear` proxy" in candidate_brief
     assert "auto-research warm-diagnostic" in candidate_brief
+    assert "MUST run a cheap warm-request diagnostic" in candidate_brief
+    assert "warm_diagnostic_skipped.json" in candidate_brief
     assert "per-step token/time/cache consumption" in candidate_brief
     assert "GB10 bandwidth roofline context" in candidate_brief
     research_memory_header = (result.round_dir / "research_memory.tsv").read_text(
@@ -5821,6 +5823,8 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "CUTLASS-internal timing/proxy" in brief
     assert "`ffn_linear` proxy" in brief
     assert "auto-research warm-diagnostic" in brief
+    assert "MUST run a cheap warm-request diagnostic" in brief
+    assert "warm_diagnostic_skipped.json" in brief
     assert "per-step token/time/cache consumption" in brief
     assert "GB10 bandwidth roofline context" in brief
     assert "Do not start vLLM and do not run apply-and-test" in brief
