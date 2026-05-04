@@ -5263,10 +5263,18 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     strategy_brief = (result.round_dir / "strategy_brief.md").read_text(encoding="utf-8")
     assert "Prior-Art Memory Contract" in strategy_brief
     assert "Prior Measured-Trial Memory" in strategy_brief
+    assert "compact config/schedule traces" in strategy_brief
+    assert "mutation_features" in strategy_brief
     candidate_brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
         encoding="utf-8"
     )
     assert "research_memory.tsv" in candidate_brief
+    research_memory_header = (result.round_dir / "research_memory.tsv").read_text(
+        encoding="utf-8"
+    ).splitlines()[0]
+    assert "workload_key" in research_memory_header
+    assert "schedule_trace" in research_memory_header
+    assert "search_bias" in research_memory_header
     round_spec = auto_research.load_yaml_file(result.round_dir / "round_spec.yaml")
     assert isinstance(round_spec, dict)
     assert round_spec["mutation_surface"]["kind"] == "cutlass_source_workspace"

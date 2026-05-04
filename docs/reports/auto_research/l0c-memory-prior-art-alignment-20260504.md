@@ -13,15 +13,18 @@ Date: 2026-05-04
 
 The L0c loop should not remember only rejected mutation hashes. It should maintain a measured-trial memory that records:
 
+- workload/kernel identity,
 - changed surface and source region,
+- compact mutation features and schedule/config trace,
 - expected low-level mechanism,
 - preflight/compile/parity/measurement gate,
 - objective measurements,
+- measurement policy and cold/warm context,
 - parity diagnostic overshoot where present,
 - relation to prior failure families,
-- next-search implication.
+- next-search implication and explicit search-budget bias.
 
-This matches the common prior-art pattern: preserve hardware-measured records and feature tags, then bias later search using those records. It intentionally avoids turning history into blind syntax bans.
+This matches the common prior-art pattern: preserve workload/config identity, hardware-measured records, feature tags, and compact traces, then bias later search using those records. It intentionally avoids turning history into blind syntax bans.
 
 ## Implemented Structure
 
@@ -30,6 +33,8 @@ This matches the common prior-art pattern: preserve hardware-measured records an
 - `research_memory.md`: agent-readable explanation and compact recent/prior row summary.
 - `strategy_brief.md`: now names the prior-art memory contract and tells agents to compare new candidates against the measured-trial ledger.
 - `iteration_brief.md`: now instructs agents to read `prior_research_memory.tsv`, `research_memory.tsv`, and `research_memory.md` before proposing mutations.
+
+The TSV schema now includes `workload_key`, `mutation_features`, `schedule_trace`, `measurement_policy`, and `search_bias` in addition to the outcome/objective/parity fields. This makes the memory closer to AutoTVM/MetaSchedule-style tuning records: future candidates can compare the actual tried configuration and decide whether to exploit, avoid, repair, or treat a row as context-only.
 
 ## CUTLASS-Specific Guidance
 

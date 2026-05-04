@@ -160,16 +160,21 @@ L0C_RESEARCH_MEMORY_COLUMNS = [
     "source_round_id",
     "iteration",
     "mutation_hash",
+    "workload_key",
     "surface",
     "changed_region",
     "expected_affected_path",
+    "mutation_features",
+    "schedule_trace",
     "controller_gate",
     "outcome",
     "objective_mean",
     "rollout_measurements",
+    "measurement_policy",
     "tier4_overshoot",
     "failure_relation",
     "next_implication",
+    "search_bias",
     "artifact_refs",
 ]
 L0C_TERMINAL_CONDITIONS = {
@@ -10270,18 +10275,147 @@ class L0cKernelMutationRunner:
             "source_round_id": self._sanitize_tsv_field(round_id),
             "iteration": self._sanitize_tsv_field(iteration),
             "mutation_hash": self._sanitize_tsv_field(mutation_hash),
+            "workload_key": self._sanitize_tsv_field(
+                self._l0c_memory_workload_key(round_id)
+            ),
             "surface": self._sanitize_tsv_field(surface),
             "changed_region": self._sanitize_tsv_field(changed_region),
             "expected_affected_path": self._sanitize_tsv_field(expected_affected_path),
+            "mutation_features": self._sanitize_tsv_field(
+                self._l0c_memory_mutation_features(
+                    patch_text=patch_text,
+                    expected_affected_path=expected_affected_path,
+                ),
+                limit=600,
+            ),
+            "schedule_trace": self._sanitize_tsv_field(
+                self._l0c_memory_schedule_trace(
+                    patch_text=patch_text,
+                    changed_region=changed_region,
+                ),
+                limit=600,
+            ),
             "controller_gate": self._sanitize_tsv_field(controller_gate),
             "outcome": self._sanitize_tsv_field(outcome),
             "objective_mean": self._sanitize_tsv_field(objective_mean),
             "rollout_measurements": self._sanitize_tsv_field(rollout_measurements),
+            "measurement_policy": self._sanitize_tsv_field(
+                self._l0c_memory_measurement_policy(
+                    outcome=outcome,
+                    rollout_measurements=rollout_measurements,
+                )
+            ),
             "tier4_overshoot": self._sanitize_tsv_field(tier4_overshoot),
             "failure_relation": self._sanitize_tsv_field(failure_relation),
             "next_implication": self._sanitize_tsv_field(next_implication),
+            "search_bias": self._sanitize_tsv_field(
+                self._l0c_memory_search_bias(outcome)
+            ),
             "artifact_refs": self._sanitize_tsv_field(artifact_refs, limit=800),
         }
+
+    @staticmethod
+    def _l0c_memory_workload_key(round_id: str) -> str:
+        match = re.match(
+            r"^(?P<workload>.+)-l0c-mutation-(?P<kernel_target>[^-]+)-\d{8}T\d{6}Z$",
+            round_id,
+        )
+        if not match:
+            return f"{round_id}|round_type=l0c_mutation"
+        return (
+            f"{match.group('workload')}|kernel={match.group('kernel_target')}"
+            "|round_type=l0c_mutation"
+        )
+
+    @staticmethod
+    def _l0c_memory_mutation_features(
+        *,
+        patch_text: str,
+        expected_affected_path: str,
+    ) -> str:
+        haystack = patch_text.lower()
+        features: list[str] = []
+        for shape in re.findall(
+            r"(?:GemmShape|Shape)\s*<\s*([^;\n>{}]+?)\s*>",
+            patch_text,
+        ):
+            compact = re.sub(r"\s+", "", shape)
+            if compact:
+                features.append(f"shape={compact}")
+        for guard in re.findall(r"\bM\s*(?:<=|<|==)\s*\d+", patch_text):
+            guard_compact = re.sub(r"\s+", "", guard)
+            features.append(f"m_guard={guard_compact}")
+        for token in (
+            "enable_sm120_family",
+            "enable_sm120_only",
+            "swap_ab",
+            "KernelHardwareInfo",
+            "sm_count",
+            "EpilogueTile",
+        ):
+            if token.lower() in haystack:
+                features.append(token)
+        if "scale" in haystack:
+            features.append("scale_related")
+        if not features:
+            features.append(expected_affected_path)
+        seen: set[str] = set()
+        deduped = []
+        for feature in features:
+            if feature in seen:
+                continue
+            seen.add(feature)
+            deduped.append(feature)
+        return ",".join(deduped[:12])
+
+    def _l0c_memory_schedule_trace(
+        self,
+        *,
+        patch_text: str,
+        changed_region: str,
+    ) -> str:
+        paths = self._patch_changed_paths(patch_text)
+        trace_parts = []
+        if paths:
+            trace_parts.append("paths=" + ",".join(Path(path).name for path in paths[:3]))
+        elif changed_region:
+            trace_parts.append(f"region={changed_region}")
+        features = self._l0c_memory_mutation_features(
+            patch_text=patch_text,
+            expected_affected_path="unclassified_low_level_mechanism",
+        )
+        if features:
+            trace_parts.append(f"features={features}")
+        return ";".join(trace_parts) or "no_patch_trace"
+
+    @staticmethod
+    def _l0c_memory_measurement_policy(
+        *,
+        outcome: str,
+        rollout_measurements: str,
+    ) -> str:
+        if rollout_measurements:
+            count = len([value for value in rollout_measurements.split(",") if value])
+            return f"controller_real_vllm_restart;candidate_windows={count}"
+        if "compile" in outcome:
+            return "author_compile_preflight_only"
+        if "parity" in outcome:
+            return "controller_parity_before_measurement"
+        return "not_measured_or_controller_preflight"
+
+    @staticmethod
+    def _l0c_memory_search_bias(outcome: str) -> str:
+        if outcome == "keep":
+            return "exploit_as_seed"
+        if outcome in {"discard", "regressed"}:
+            return "deprioritize_adjacent_without_new_evidence"
+        if "parity" in outcome:
+            return "correctness_first_do_not_measure_adjacent_until_explained"
+        if "compile" in outcome:
+            return "repair_compile_surface_before_resubmit"
+        if "duplicate" in outcome:
+            return "skip_exact_hash"
+        return "context_only"
 
     def _classify_l0c_patch_memory(self, patch_text: str) -> tuple[str, str, str]:
         paths = self._patch_changed_paths(patch_text)
@@ -10406,12 +10540,17 @@ class L0cKernelMutationRunner:
             "",
             "## Schema",
             "",
+            "- `workload_key`: workload/kernel identity for cross-round reuse, mirroring AutoTVM/MetaSchedule workload records.",
             "- `surface`: mutated subsystem, such as CUTLASS SM120 dispatch, C++ schedule source, Python wrapper, or hardware-info path.",
             "- `changed_region`: diff header paths or the closest available source region.",
             "- `expected_affected_path`: low-level mechanism claimed by the patch.",
+            "- `mutation_features`: compact knob/config features such as CTA shapes, M guards, scale changes, or SM120 guard changes.",
+            "- `schedule_trace`: a short schedule/config trace for comparing trials without reading full patches.",
             "- `controller_gate`: preflight, compile, parity, or measurement gate that produced the outcome.",
             "- `outcome`: measured keep/discard, parity failure, compile failure, duplicate, or other terminal status.",
+            "- `measurement_policy`: whether the row reached controller vLLM measurement, parity-only, or author compile preflight.",
             "- `next_implication`: how future agents should use the row.",
+            "- `search_bias`: explicit budget/search treatment for adjacent proposals.",
             "",
             "## Current Round Rows",
             "",
@@ -10435,6 +10574,8 @@ class L0cKernelMutationRunner:
                 f"{row.get('source_round_id', '')} {row.get('iteration', '')}: "
                 f"{row.get('surface', '')} / {row.get('expected_affected_path', '')} "
                 f"=> {row.get('outcome', '')}, objective={row.get('objective_mean', '')}; "
+                f"features={row.get('mutation_features', '')}; "
+                f"bias={row.get('search_bias', '')}; "
                 f"next={row.get('next_implication', '')}"
             )
         return lines
@@ -11113,9 +11254,9 @@ class L0cKernelMutationRunner:
             "",
             (
                 "- Follow AutoTVM/Ansor/TVM MetaSchedule/OpenTuner style memory: keep "
-                "measured trials, feature tags, build/parity/measurement outcomes, and "
-                "next-search implications. Use memory to bias search away from repeats, "
-                "not as a blind syntax ban."
+                "workload keys, compact config/schedule traces, feature tags, build/"
+                "parity/measurement outcomes, and next-search implications. Use memory "
+                "to bias search away from repeats, not as a blind syntax ban."
             ),
             (
                 "- Every candidate must be materially different from poor prior rows in "
@@ -11127,6 +11268,11 @@ class L0cKernelMutationRunner:
                 "dispatch predicate, schedule tile/CTA shape, scale placement, workspace/"
                 "SM-count behavior, memory traffic, cache locality, occupancy, register "
                 "pressure, or instruction count."
+            ),
+            (
+                "- Treat `mutation_features`, `schedule_trace`, and `search_bias` as the "
+                "trial database fields: a new patch must change a feature/trace that can "
+                "plausibly change the measured outcome."
             ),
             "",
             *self._l0c_ranked_likely_safe_target_lines(kernel_target),
