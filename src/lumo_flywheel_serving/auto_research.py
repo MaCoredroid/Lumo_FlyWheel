@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
+import requests
 import yaml
 
 from .cutlass_overlay_runtime import (
@@ -35,6 +36,7 @@ from .kernel_activation import (
     resolve_kernel_runtime_activation,
 )
 from .measurement_harness import RealMeasurementHarness, SLO, WorkloadSpec
+from .metrics import compute_task_metrics, parse_prometheus_text, resolve_metric_schema
 from .parity_fixture import (
     ACTUALLY_RESOLVED_KEYS,
     fetch_actually_resolved_kernel_selection,
@@ -95,6 +97,7 @@ PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "tune-kernel-autotune",
     "mutate-kernel",
     "apply-and-test",
+    "warm-diagnostic",
     "resume-candidate",
     "resume-round",
 )
@@ -6110,14 +6113,22 @@ Tier-2 hard-reject:
    before you edit. If you can cheaply produce a CUTLASS-internal timing/proxy,
    include before-change and after-change values; otherwise state that only the
    `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
-3. Before editing, run cheap local diagnostics or source-level experiments that
+3. Run a cheap warm-request diagnostic against the already-running live server
+   before editing, then read the artifact for per-step token/time/cache consumption,
+   bottleneck_hint, and GB10 bandwidth roofline context:
+     {{warm_diagnostic_command}}
+   This measures the current warm live stack; it does not apply your patch.
+   After writing the patch, only run another warm request diagnostic if your
+   mutation can be exercised without a vLLM restart. For compiled CUTLASS
+   changes, say the post-patch warm request is controller-owned.
+4. Before editing, run cheap local diagnostics or source-level experiments that
    test the exact dispatch/shape/scale/schedule assumption behind your idea.
    Examples: inspect registered op schemas, grep the mounted vLLM/CUTLASS source,
    compile the touched Python/C++ file if applicable, or run a tiny non-vLLM
    import/shape probe. Do not start vLLM and do not run apply-and-test.
-4. Do a short online/source research pass only if it can inform the mutation:
+5. Do a short online/source research pass only if it can inform the mutation:
    use primary docs/source and record the specific fact in your notes/transcript.
-5. Write your proposal to {{iteration_dir}}/mutation.patch.
+6. Write your proposal to {{iteration_dir}}/mutation.patch.
    Generate the patch with a real diff tool; do not hand-write hunk counts.
    The patch must apply with:
      {{patch_dry_run_command}}
@@ -10797,6 +10808,284 @@ class L0cKernelMutationRunner:
         )
         return payload
 
+    def warm_diagnostic(
+        self,
+        *,
+        round_id: str,
+        iteration: str,
+        round_root: str | Path,
+        phase: str,
+        request_count: int = 2,
+        warmup_requests: int = 1,
+        target_concurrency: int = 1,
+        max_output_tokens: int = 64,
+        prompt_token_cap: int = 2048,
+    ) -> dict[str, Any]:
+        if request_count < 1:
+            raise RuntimeError("--request-count must be >= 1")
+        if warmup_requests < 0:
+            raise RuntimeError("--warmup-requests must be >= 0")
+        if target_concurrency < 1:
+            raise RuntimeError("--target-concurrency must be >= 1")
+        if max_output_tokens < 1:
+            raise RuntimeError("--max-output-tokens must be >= 1")
+        if prompt_token_cap < 1:
+            raise RuntimeError("--prompt-token-cap must be >= 1")
+        round_dir = Path(round_root).resolve() / round_id
+        spec_path = round_dir / "round_spec.yaml"
+        if not spec_path.is_file():
+            raise RuntimeError(f"L0c round_spec.yaml missing: {spec_path}")
+        spec = load_yaml_file(spec_path)
+        if not isinstance(spec, dict):
+            raise RuntimeError(f"Invalid round_spec.yaml: {spec_path}")
+        runtime = spec.get("runtime") if isinstance(spec.get("runtime"), dict) else {}
+        port = int(runtime.get("port", 8000))
+        endpoint = str(runtime.get("endpoint") or f"http://127.0.0.1:{port + 1}/v1").rstrip("/")
+        metrics_url = str(runtime.get("metrics_url") or f"http://127.0.0.1:{port}/metrics")
+        model_id = str(runtime.get("model_id") or spec.get("model_id") or "qwen3.5-27b")
+        served_model_name = str(
+            (runtime.get("vllm_config") or {}).get("served_model_name")
+            if isinstance(runtime.get("vllm_config"), dict)
+            else ""
+        ) or model_id
+        workload_file = Path(str(spec.get("workload_file") or ""))
+        if not workload_file.is_absolute():
+            workload_file = self.repo_root / workload_file
+        workload = load_yaml_file(workload_file)
+        if not isinstance(workload, dict):
+            raise RuntimeError(f"Invalid workload file: {workload_file}")
+        seed_ref = str(workload.get("seed_trace_ref") or "")
+        if not seed_ref:
+            raise RuntimeError(f"Workload file is missing seed_trace_ref: {workload_file}")
+        seed_path = Path(seed_ref)
+        if not seed_path.is_absolute():
+            seed_path = workload_file.parent / seed_path
+        seed_entries = self._read_l0c_seed_entries(seed_path)
+        iteration_dir = round_dir / "candidates" / iteration
+        iteration_dir.mkdir(parents=True, exist_ok=True)
+        started = time.time()
+        warmup_latencies: list[dict[str, Any]] = []
+        for index in range(warmup_requests):
+            entry = seed_entries[index % len(seed_entries)]
+            warmup_latencies.append(
+                self._run_l0c_warm_request(
+                    endpoint=endpoint,
+                    model_name=served_model_name,
+                    entry=entry,
+                    index=index + 1,
+                    phase="warmup",
+                    max_output_tokens=max_output_tokens,
+                    prompt_token_cap=prompt_token_cap,
+                )
+            )
+        before = self._l0c_metrics_snapshot(metrics_url)
+        measured_latencies: list[dict[str, Any]] = []
+        per_step: list[dict[str, Any]] = []
+        for index in range(request_count):
+            before_step = self._l0c_metrics_snapshot(metrics_url)
+            entry = seed_entries[(warmup_requests + index) % len(seed_entries)]
+            latency = self._run_l0c_warm_request(
+                endpoint=endpoint,
+                model_name=served_model_name,
+                entry=entry,
+                index=index + 1,
+                phase="measured",
+                max_output_tokens=max_output_tokens,
+                prompt_token_cap=prompt_token_cap,
+            )
+            after_step = self._l0c_metrics_snapshot(metrics_url)
+            measured_latencies.append(latency)
+            per_step.append(
+                {
+                    "request_index": index + 1,
+                    "latency": latency,
+                    "metrics_consumption": self._l0c_metrics_consumption_summary(
+                        before=before_step,
+                        after=after_step,
+                        request_count=1,
+                        elapsed_s=float(latency["turn_latency_ms"]) / 1000.0,
+                    ),
+                }
+            )
+        after = self._l0c_metrics_snapshot(metrics_url)
+        elapsed_s = max(time.time() - started, 1e-9)
+        payload = {
+            "schema": "l0c_warm_request_diagnostic.v1",
+            "round_id": round_id,
+            "iteration": iteration,
+            "phase": phase,
+            "endpoint": endpoint,
+            "metrics_url": metrics_url,
+            "model": served_model_name,
+            "policy": {
+                "controller_owns_patched_vllm_restart": True,
+                "agent_may_measure_live_warm_baseline_without_restart": True,
+                "requested_target_concurrency": target_concurrency,
+                "actual_measurement_concurrency": 1,
+                "max_output_tokens": max_output_tokens,
+                "prompt_token_cap": prompt_token_cap,
+            },
+            "warmup_requests": warmup_latencies,
+            "measured_requests": measured_latencies,
+            "per_step_consumption": per_step,
+            "aggregate_consumption": self._l0c_metrics_consumption_summary(
+                before=before,
+                after=after,
+                request_count=len(measured_latencies),
+                elapsed_s=elapsed_s,
+            ),
+            "gb10_reference": self._l0c_gb10_reference(),
+        }
+        output_path = iteration_dir / f"warm_{self._sanitize_filename_fragment(phase)}.json"
+        output_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        payload["artifact_path"] = str(output_path)
+        return payload
+
+    @staticmethod
+    def _sanitize_filename_fragment(value: str) -> str:
+        return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("._") or "diagnostic"
+
+    @staticmethod
+    def _read_l0c_seed_entries(path: Path) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            if not isinstance(payload, dict):
+                raise RuntimeError(f"Seed trace entry must be a JSON object: {line}")
+            entries.append(payload)
+        if not entries:
+            raise RuntimeError(f"Seed trace is empty: {path}")
+        return entries
+
+    @staticmethod
+    def _l0c_metrics_snapshot(metrics_url: str) -> dict[str, float]:
+        response = requests.get(metrics_url, timeout=10)
+        response.raise_for_status()
+        return parse_prometheus_text(response.text)
+
+    @staticmethod
+    def _run_l0c_warm_request(
+        *,
+        endpoint: str,
+        model_name: str,
+        entry: dict[str, Any],
+        index: int,
+        phase: str,
+        max_output_tokens: int,
+        prompt_token_cap: int,
+    ) -> dict[str, Any]:
+        prompt_tokens = min(int(entry.get("prompt_tokens", 1)), prompt_token_cap)
+        requested_output_tokens = int(
+            entry.get("request_max_output_tokens")
+            or entry.get("output_tokens")
+            or entry.get("thinking_tokens")
+            or 1
+        )
+        output_tokens = max(1, min(requested_output_tokens, max_output_tokens))
+        prompt = " ".join(["token"] * max(prompt_tokens, 1))
+        started = time.monotonic()
+        response = requests.post(
+            f"{endpoint}/responses",
+            headers={
+                "Authorization": f"Bearer {os.environ.get('VLLM_API_KEY') or 'EMPTY'}",
+                "X-Lumo-Request-Class": str(entry.get("class") or entry.get("request_class") or "eval"),
+            },
+            json={
+                "model": model_name,
+                "input": prompt,
+                "max_output_tokens": output_tokens,
+            },
+            timeout=max(30, output_tokens * 2),
+        )
+        response.raise_for_status()
+        wall_ms = (time.monotonic() - started) * 1000.0
+        return {
+            "request_index": index,
+            "phase": phase,
+            "prompt_tokens_requested": prompt_tokens,
+            "max_output_tokens": output_tokens,
+            "turn_latency_ms": round(wall_ms, 3),
+        }
+
+    @staticmethod
+    def _l0c_metrics_consumption_summary(
+        *,
+        before: dict[str, float],
+        after: dict[str, float],
+        request_count: int,
+        elapsed_s: float,
+    ) -> dict[str, Any]:
+        try:
+            schema = resolve_metric_schema(after)
+            metrics = compute_task_metrics(before=before, after=after, schema=schema)
+        except Exception as exc:
+            return {
+                "available": False,
+                "reason": f"metrics_consumption_unavailable: {exc}",
+                "request_count": request_count,
+                "elapsed_s": round(elapsed_s, 6),
+                "gb10_reference": L0cKernelMutationRunner._l0c_gb10_reference(),
+            }
+        prompt_tokens = float(metrics.get("prompt_tokens") or 0.0)
+        kv_tokens = float(metrics.get("kv_computed_tokens") or 0.0)
+        gen_tokens = float(metrics.get("gen_tokens") or 0.0)
+        prefill_sum_s = float(metrics.get("prefill_sum_s") or 0.0)
+        decode_sum_s = float(metrics.get("decode_sum_s") or 0.0)
+        request_denominator = max(request_count, 1)
+        gb10_reference = L0cKernelMutationRunner._l0c_gb10_reference()
+        if gen_tokens > 0 and decode_sum_s > 0:
+            gb10_reference["bandwidth_budget_bytes_per_generated_token_at_observed_decode_time"] = round(
+                273.0e9 * decode_sum_s / gen_tokens,
+                3,
+            )
+        return {
+            "available": True,
+            "request_count": request_count,
+            "elapsed_s": round(elapsed_s, 6),
+            "metrics_delta": {
+                "prompt_tokens": prompt_tokens,
+                "kv_computed_tokens": kv_tokens,
+                "generation_tokens": gen_tokens,
+                "prefill_sum_s": prefill_sum_s,
+                "decode_sum_s": decode_sum_s,
+                "cache_queries": float(metrics.get("cache_queries") or 0.0),
+                "cache_hits": float(metrics.get("cache_hits") or 0.0),
+            },
+            "step_consumption": {
+                "prompt_tokens_per_request": round(prompt_tokens / request_denominator, 3),
+                "generation_tokens_per_request": round(gen_tokens / request_denominator, 3),
+                "prefill_ms_per_kv_token": round(prefill_sum_s * 1000.0 / kv_tokens, 6)
+                if kv_tokens > 0
+                else None,
+                "decode_ms_per_generated_token": round(decode_sum_s * 1000.0 / gen_tokens, 6)
+                if gen_tokens > 0
+                else None,
+                "decode_tokens_per_s": round(gen_tokens / decode_sum_s, 3)
+                if decode_sum_s > 0
+                else None,
+                "cache_hit_rate_pct": metrics.get("cache_hit_rate_pct"),
+            },
+            "bottleneck_hint": "decode" if decode_sum_s >= prefill_sum_s else "prefill",
+            "gb10_reference": gb10_reference,
+        }
+
+    @staticmethod
+    def _l0c_gb10_reference() -> dict[str, Any]:
+        return {
+            "chip": "NVIDIA GB10 / DGX Spark",
+            "memory": "128 GB unified LPDDR5x",
+            "theoretical_bandwidth_gb_s": 273.0,
+            "theoretical_stream_bytes_per_ms": 273.0e6,
+            "full_model_fp8_stream_ceiling_tps_assuming_27b_params": round(273.0 / 27.0, 3),
+            "note": (
+                "These are roofline context numbers for bottleneck reasoning, "
+                "not proof of achieved memory bandwidth."
+            ),
+        }
+
     @staticmethod
     def _diff_header_path(line: str) -> str:
         path = line[4:].strip()
@@ -12383,6 +12672,19 @@ class L0cKernelMutationRunner:
                     rtol_state = str(tier_4_tolerances.get("rtol_downstream_logit", ""))
                     atol_state = str(tier_4_tolerances.get("atol_downstream_logit", ""))
         mutation_surface = mutation_surface or {}
+        round_dir_for_commands = Path(str(mutation_surface.get("round_dir") or self.repo_root))
+        round_root_for_commands = (
+            round_dir_for_commands.parent
+            if round_dir_for_commands.name == round_id
+            else self.repo_root / "output" / "auto_research"
+        )
+        warm_diagnostic_command = (
+            f"cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} "
+            "auto-research warm-diagnostic "
+            f"--round-id {round_id} --iteration {{{{iteration}}}} "
+            f"--round-root {round_root_for_commands} --phase pre_mutation "
+            "--warmup-requests 1 --request-count 2 --max-output-tokens 64"
+        )
         if kernel_target == "fp8_gemm":
             workspace_path = str(mutation_surface.get("workspace_path") or "").strip()
             workspace_python_path = str(
@@ -12440,11 +12742,11 @@ class L0cKernelMutationRunner:
             )
             agent_validation_steps = "\n".join(
                 [
-                    "6. Run the cheap patch apply check from step 5. If `patch --dry-run`",
+                    "7. Run the cheap patch apply check from step 6. If `patch --dry-run`",
                     "   fails, fix or regenerate mutation.patch and run the dry-run again.",
-                    "7. Run local syntax/compile checks on any changed Python files, for example:",
+                    "8. Run local syntax/compile checks on any changed Python files, for example:",
                     f"   cd {workspace_python_path or workspace_path or self.repo_root} && python3 -m py_compile $(find . -name '*.py' -print)",
-                    "8. If you changed C++/CUDA, run a compile-level preflight on a temporary copy.",
+                    "9. If you changed C++/CUDA, run a compile-level preflight on a temporary copy.",
                     "   Start with metadata mode while iterating, then run targeted mode before final submit",
                     "   when the change touches compiled CUTLASS files. Targeted mode builds only",
                     "   the CUTLASS FP8/SM120 objects inferred from mutation.patch:",
@@ -12457,10 +12759,10 @@ class L0cKernelMutationRunner:
                     "   A compiled-file mutation is not ready to submit until this authoring-side",
                     "   targeted compile preflight passes or explicitly reports no CUTLASS C++ targets;",
                     "   fix compile errors in the patch before exiting.",
-                    "9. For Python-only mutations, run the same command with `--compile-mode python`.",
-                    "10. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS source target.",
+                    "10. For Python-only mutations, run the same command with `--compile-mode python`.",
+                    "11. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS source target.",
                     "   The controller owns canary admission, parity, and measurement after you exit.",
-                    "11. Exit 0 after either mutation.patch passes the cheap checks or BLOCKED.md explains",
+                    "12. Exit 0 after either mutation.patch passes the cheap checks or BLOCKED.md explains",
                     "   why no patch can pass preflight. Do not exit nonzero for a cheap-check failure;",
                     "   nonzero exit is reserved for agent/tool infrastructure failure.",
                 ]
@@ -12523,18 +12825,18 @@ class L0cKernelMutationRunner:
             )
             agent_validation_steps = "\n".join(
                 [
-                    "6. Run from the repo root with the exact entrypoint:",
+                    "7. Run from the repo root with the exact entrypoint:",
                     f"   cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research apply-and-test \\",
                     f"     --round-id {round_id} --iteration {{{{iteration}}}} \\",
                     f"     --kernel-target {kernel_target} --harness {harness}",
                     "   This command owns parity and measurement. Do not interrupt it once started,",
                     "   even if it is quiet for a long time; wait for its final exit status.",
-                    "7. Read the result. If parity fails, write a one-line note to BLOCKED.md",
+                    "8. Read the result. If parity fails, write a one-line note to BLOCKED.md",
                     "   explaining what you'll try next. Do NOT propose the same edit again.",
                     "   Note: the controller will overwrite or remove your BLOCKED.md after",
                     "   its own re-run, so write it for your own bookkeeping; the canonical",
                     "   record will be the controller's.",
-                    "8. Exit 0.",
+                    "9. Exit 0.",
                 ]
             )
             mutation_quality_guidance = ""
@@ -12550,6 +12852,7 @@ class L0cKernelMutationRunner:
             "edit_scope_rule": edit_scope_rule,
             "read_target_paths": read_target_paths,
             "patch_dry_run_command": patch_dry_run_command,
+            "warm_diagnostic_command": warm_diagnostic_command,
             "parity_fixture_path": str(fixture_path),
             "repo_root": str(self.repo_root),
             "kernel_target": kernel_target,

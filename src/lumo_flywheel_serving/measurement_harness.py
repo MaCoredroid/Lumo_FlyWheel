@@ -12,8 +12,11 @@ import requests
 import yaml
 
 from .kernel_activation import require_supported_kernel_runtime_activation
-from .metrics import parse_prometheus_text
+from .metrics import compute_task_metrics, parse_prometheus_text, resolve_metric_schema
 from .tuned_config import make_tuned_config_bundle
+
+GB10_MEMORY_BANDWIDTH_GB_S = 273.0
+QWEN35_27B_FP8_MODEL_BYTES = 27_000_000_000.0
 
 
 @dataclass(frozen=True)
@@ -156,6 +159,12 @@ class RealMeasurementHarness:
             feasible_failures.append("purity")
 
         driver_prom = self._promql_cross_check(before_metrics, after_metrics, ttft_p95, tpot_p95, turn_p95)
+        metrics_consumption = self._metrics_consumption_summary(
+            before=before_metrics,
+            after=after_metrics,
+            per_request_latencies=per_request_latencies,
+            elapsed_s=measurement_elapsed_s,
+        )
         return {
             "generator": self.VERSION,
             "candidate_vllm_config": dict(candidate_vllm_config),
@@ -182,6 +191,7 @@ class RealMeasurementHarness:
                 "rollout_throughput": round(rollout_throughput, 3),
                 "target_concurrency": int(target_concurrency),
             },
+            "metrics_consumption": metrics_consumption,
             "ttft_p95_ms": driver_prom["ttft_p95_ms"],
             "tpot_p95_ms": driver_prom["tpot_p95_ms"],
             "turn_latency_p95_ms": driver_prom["turn_latency_p95_ms"],
@@ -201,6 +211,90 @@ class RealMeasurementHarness:
                 for key, payload in driver_prom.items()
                 if isinstance(payload, dict) and float(payload.get("delta_pct", 0.0)) > 10.0
             ],
+        }
+
+    def _metrics_consumption_summary(
+        self,
+        *,
+        before: dict[str, float],
+        after: dict[str, float],
+        per_request_latencies: list[dict[str, Any]],
+        elapsed_s: float,
+    ) -> dict[str, Any]:
+        try:
+            schema = resolve_metric_schema(after)
+            metrics = compute_task_metrics(before=before, after=after, schema=schema)
+        except Exception as exc:  # pragma: no cover - exercised by legacy/fake metrics tests
+            return {
+                "available": False,
+                "reason": f"metrics_consumption_unavailable: {exc}",
+                "request_count": len(per_request_latencies),
+                "gb10_reference": self._gb10_bandwidth_reference(),
+            }
+        prompt_tokens = float(metrics.get("prompt_tokens") or 0.0)
+        kv_tokens = float(metrics.get("kv_computed_tokens") or 0.0)
+        gen_tokens = float(metrics.get("gen_tokens") or 0.0)
+        prefill_sum_s = float(metrics.get("prefill_sum_s") or 0.0)
+        decode_sum_s = float(metrics.get("decode_sum_s") or 0.0)
+        request_count = max(len(per_request_latencies), 1)
+        decode_tokens_per_s = gen_tokens / decode_sum_s if decode_sum_s > 0 else None
+        gb10_reference = self._gb10_bandwidth_reference()
+        if gen_tokens > 0 and decode_sum_s > 0:
+            gb10_reference["bandwidth_budget_bytes_per_generated_token_at_observed_decode_time"] = round(
+                GB10_MEMORY_BANDWIDTH_GB_S * 1e9 * decode_sum_s / gen_tokens,
+                3,
+            )
+        bottleneck_hint = "decode" if decode_sum_s >= prefill_sum_s else "prefill"
+        if decode_sum_s <= 0 and prefill_sum_s <= 0:
+            bottleneck_hint = "unknown"
+        return {
+            "available": True,
+            "request_count": len(per_request_latencies),
+            "elapsed_s": round(elapsed_s, 6),
+            "metrics_delta": {
+                "prompt_tokens": prompt_tokens,
+                "kv_computed_tokens": kv_tokens,
+                "generation_tokens": gen_tokens,
+                "prefill_sum_s": prefill_sum_s,
+                "decode_sum_s": decode_sum_s,
+                "ttft_sum_s": float(metrics.get("ttft_sum_s") or 0.0),
+                "ttft_count": int(metrics.get("ttft_count") or 0),
+                "cache_queries": float(metrics.get("cache_queries") or 0.0),
+                "cache_hits": float(metrics.get("cache_hits") or 0.0),
+            },
+            "step_consumption": {
+                "prompt_tokens_per_request": round(prompt_tokens / request_count, 3),
+                "generation_tokens_per_request": round(gen_tokens / request_count, 3),
+                "prefill_ms_per_kv_token": round(prefill_sum_s * 1000.0 / kv_tokens, 6)
+                if kv_tokens > 0
+                else None,
+                "decode_ms_per_generated_token": round(decode_sum_s * 1000.0 / gen_tokens, 6)
+                if gen_tokens > 0
+                else None,
+                "decode_tokens_per_s": round(decode_tokens_per_s, 3)
+                if decode_tokens_per_s is not None
+                else None,
+                "cache_hit_rate_pct": metrics.get("cache_hit_rate_pct"),
+            },
+            "bottleneck_hint": bottleneck_hint,
+            "gb10_reference": gb10_reference,
+        }
+
+    @staticmethod
+    def _gb10_bandwidth_reference() -> dict[str, Any]:
+        return {
+            "chip": "NVIDIA GB10 / DGX Spark",
+            "memory": "128 GB unified LPDDR5x",
+            "theoretical_bandwidth_gb_s": GB10_MEMORY_BANDWIDTH_GB_S,
+            "theoretical_stream_bytes_per_ms": GB10_MEMORY_BANDWIDTH_GB_S * 1e6,
+            "full_model_fp8_stream_ceiling_tps_assuming_27b_params": round(
+                GB10_MEMORY_BANDWIDTH_GB_S * 1e9 / QWEN35_27B_FP8_MODEL_BYTES,
+                3,
+            ),
+            "note": (
+                "Bandwidth figures are roofline context, not proof of achieved bandwidth; "
+                "use them to reason about whether prefill/decode time is plausibly memory-bound."
+            ),
         }
 
     def _activate_candidate(

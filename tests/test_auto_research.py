@@ -2348,6 +2348,97 @@ def test_real_measurement_harness_throughput_uses_elapsed_replay_time(
     assert full["diagnostics"]["rollout_throughput"] == 100.0
 
 
+def test_real_measurement_harness_records_metrics_consumption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_trace = tmp_path / "seed_trace.jsonl"
+    _write_trace(seed_trace, prompt_tokens=64, output_tokens=32)
+    workload_spec = measurement_harness.WorkloadSpec(
+        family_id="proposal-ranking-manager-judgment",
+        workload_distribution_id="prmj-v1-live",
+        seed_trace_ref=seed_trace,
+        holdout_trace_ref=None,
+        latency_ceiling_ms=35000,
+        tpot_ceiling_ms=80,
+        turn_latency_ceiling_ms=35000,
+        avg_prompt_tokens=64,
+        avg_output_tokens=32,
+        measurement_window_minutes=1,
+        rollout_baseline=0.01,
+    )
+    harness = measurement_harness.RealMeasurementHarness(
+        workload_spec=workload_spec,
+        seed_trace_path=seed_trace,
+        slo=measurement_harness.SLO(ttft_ms=35000, tpot_ms=80, turn_ms=35000),
+        endpoint="http://127.0.0.1:8001/v1",
+        metrics_scrape_url="http://127.0.0.1:8000/metrics",
+        admin_url="http://127.0.0.1:8001/admin",
+        model_id="qwen3.5-27b",
+        weight_version_id="rev-123",
+        bundle_staging_dir=tmp_path / "measure-staging",
+        round_id="round-123",
+    )
+    counters = {
+        "prompt": 0.0,
+        "gen": 0.0,
+        "kv": 0.0,
+        "ttft_sum": 0.0,
+        "ttft_count": 0.0,
+        "prefill": 0.0,
+        "decode": 0.0,
+        "itl": 0.0,
+        "queries": 0.0,
+        "hits": 0.0,
+    }
+
+    def prom() -> str:
+        return "\n".join(
+            [
+                f"vllm:prompt_tokens_total {counters['prompt']}",
+                f"vllm:generation_tokens_total {counters['gen']}",
+                f"vllm:request_prefill_kv_computed_tokens_sum {counters['kv']}",
+                f"vllm:time_to_first_token_seconds_sum {counters['ttft_sum']}",
+                f"vllm:time_to_first_token_seconds_count {counters['ttft_count']}",
+                f"vllm:request_prefill_time_seconds_sum {counters['prefill']}",
+                f"vllm:request_decode_time_seconds_sum {counters['decode']}",
+                f"vllm:inter_token_latency_seconds_sum {counters['itl']}",
+                f"vllm:prefix_cache_queries_total {counters['queries']}",
+                f"vllm:prefix_cache_hits_total {counters['hits']}",
+            ]
+        )
+
+    def fake_post(url: str, **kwargs):
+        payload = kwargs.get("json") or {}
+        if url.endswith("/responses"):
+            prompt_tokens = len(str(payload.get("input", "")).split())
+            gen_tokens = int(payload.get("max_output_tokens") or 1)
+            counters["prompt"] += prompt_tokens
+            counters["gen"] += gen_tokens
+            counters["kv"] += prompt_tokens
+            counters["ttft_sum"] += 0.2
+            counters["ttft_count"] += 1
+            counters["prefill"] += 0.01
+            counters["decode"] += 0.04
+            counters["itl"] += 0.04
+            counters["queries"] += 1
+            counters["hits"] += 0.5
+        return _HTTPResponse()
+
+    def fake_get(url: str, **kwargs):
+        del url, kwargs
+        return _HTTPResponse(text=prom())
+
+    monkeypatch.setattr(measurement_harness.requests, "post", fake_post)
+    monkeypatch.setattr(measurement_harness.requests, "get", fake_get)
+
+    trace = harness.measure({}, warmup_s=0, window_s=0, target_concurrency=1)
+
+    consumption = trace["metrics_consumption"]
+    assert consumption["available"] is True
+    assert consumption["step_consumption"]["decode_ms_per_generated_token"] is not None
+    assert consumption["gb10_reference"]["theoretical_bandwidth_gb_s"] == 273.0
+
+
 def test_measure_uses_round_target_concurrency_not_candidate_max_num_seqs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -5304,6 +5395,9 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "which CUTLASS time component" in candidate_brief
     assert "CUTLASS-internal timing/proxy" in candidate_brief
     assert "`ffn_linear` proxy" in candidate_brief
+    assert "auto-research warm-diagnostic" in candidate_brief
+    assert "per-step token/time/cache consumption" in candidate_brief
+    assert "GB10 bandwidth roofline context" in candidate_brief
     research_memory_header = (result.round_dir / "research_memory.tsv").read_text(
         encoding="utf-8"
     ).splitlines()[0]
@@ -5726,6 +5820,9 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "which CUTLASS time component" in brief
     assert "CUTLASS-internal timing/proxy" in brief
     assert "`ffn_linear` proxy" in brief
+    assert "auto-research warm-diagnostic" in brief
+    assert "per-step token/time/cache consumption" in brief
+    assert "GB10 bandwidth roofline context" in brief
     assert "Do not start vLLM and do not run apply-and-test" in brief
     assert "do not spend iteration budget on online research" not in brief
     assert "expected speed mechanism" in brief
@@ -5736,6 +5833,107 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "GEMM problem shape" in brief
     assert "fp8_gemm_cutlass_python_wrapper_rewrite" not in brief
     assert "auto-research apply-and-test \\" not in brief
+
+
+def test_l0c_warm_diagnostic_records_step_consumption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    workload_path = _write_l0a_workload(repo)
+    round_root = repo / "output" / "auto_research"
+    round_id = "round-warm"
+    round_dir = round_root / round_id
+    round_dir.mkdir(parents=True)
+    auto_research.L0cKernelMutationRunner._write_yaml(
+        round_dir / "round_spec.yaml",
+        {
+            "round_id": round_id,
+            "workload_file": str(workload_path),
+            "kernel_target": "fp8_gemm",
+            "runtime": {
+                "endpoint": "http://127.0.0.1:8101/v1",
+                "metrics_url": "http://127.0.0.1:8100/metrics",
+                "model_id": "qwen3.5-27b",
+                "vllm_config": {"served_model_name": "qwen3.5-27b"},
+            },
+        },
+    )
+    counters = {
+        "prompt": 0.0,
+        "gen": 0.0,
+        "kv": 0.0,
+        "ttft_sum": 0.0,
+        "ttft_count": 0.0,
+        "prefill": 0.0,
+        "decode": 0.0,
+        "itl": 0.0,
+        "queries": 0.0,
+        "hits": 0.0,
+    }
+
+    def prom() -> str:
+        return "\n".join(
+            [
+                f"vllm:prompt_tokens_total {counters['prompt']}",
+                f"vllm:generation_tokens_total {counters['gen']}",
+                f"vllm:request_prefill_kv_computed_tokens_sum {counters['kv']}",
+                f"vllm:time_to_first_token_seconds_sum {counters['ttft_sum']}",
+                f"vllm:time_to_first_token_seconds_count {counters['ttft_count']}",
+                f"vllm:request_prefill_time_seconds_sum {counters['prefill']}",
+                f"vllm:request_decode_time_seconds_sum {counters['decode']}",
+                f"vllm:inter_token_latency_seconds_sum {counters['itl']}",
+                f"vllm:prefix_cache_queries_total {counters['queries']}",
+                f"vllm:prefix_cache_hits_total {counters['hits']}",
+            ]
+        )
+
+    def fake_get(url: str, **kwargs):
+        assert url == "http://127.0.0.1:8100/metrics"
+        del kwargs
+        return _HTTPResponse(text=prom())
+
+    def fake_post(url: str, **kwargs):
+        assert url == "http://127.0.0.1:8101/v1/responses"
+        payload = kwargs.get("json") or {}
+        prompt_tokens = len(str(payload.get("input", "")).split())
+        gen_tokens = int(payload.get("max_output_tokens") or 1)
+        counters["prompt"] += prompt_tokens
+        counters["gen"] += gen_tokens
+        counters["kv"] += prompt_tokens
+        counters["ttft_sum"] += 0.1
+        counters["ttft_count"] += 1
+        counters["prefill"] += 0.01
+        counters["decode"] += 0.02
+        counters["itl"] += 0.02
+        counters["queries"] += 1
+        counters["hits"] += 1
+        return _HTTPResponse(payload={"id": "resp"})
+
+    monkeypatch.setattr(auto_research.requests, "get", fake_get)
+    monkeypatch.setattr(auto_research.requests, "post", fake_post)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    payload = runner.warm_diagnostic(
+        round_id=round_id,
+        iteration="001",
+        round_root=round_root,
+        phase="pre_mutation",
+        request_count=2,
+        warmup_requests=1,
+        max_output_tokens=8,
+        prompt_token_cap=16,
+    )
+
+    artifact = Path(payload["artifact_path"])
+    assert artifact.is_file()
+    assert payload["aggregate_consumption"]["available"] is True
+    assert len(payload["per_step_consumption"]) == 2
+    assert payload["gb10_reference"]["theoretical_bandwidth_gb_s"] == 273.0
+    assert payload["policy"]["controller_owns_patched_vllm_restart"] is True
 
 
 def test_l0c_preflight_patch_allows_fp8_cutlass_source_edits(tmp_path: Path) -> None:

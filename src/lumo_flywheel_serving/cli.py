@@ -1040,6 +1040,30 @@ def cmd_auto_research_preflight_patch(args: argparse.Namespace) -> int:
     return 0 if payload["ok"] else 2
 
 
+def cmd_auto_research_warm_diagnostic(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "round_id", "iteration", "phase")
+    runner = L0cKernelMutationRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    payload = runner.warm_diagnostic(
+        round_id=args.round_id,
+        iteration=args.iteration,
+        round_root=args.round_root,
+        phase=args.phase,
+        request_count=args.request_count,
+        warmup_requests=args.warmup_requests,
+        target_concurrency=args.target_concurrency,
+        max_output_tokens=args.max_output_tokens,
+        prompt_token_cap=args.prompt_token_cap,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def cmd_auto_research_resume_candidate(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
@@ -1472,6 +1496,21 @@ def build_parser() -> argparse.ArgumentParser:
     auto_preflight_patch.add_argument("--image")
     auto_preflight_patch.add_argument("--compile-jobs", type=int)
     auto_preflight_patch.set_defaults(func=cmd_auto_research_preflight_patch)
+
+    auto_warm_diagnostic = auto_research_subparsers.add_parser("warm-diagnostic")
+    auto_warm_diagnostic.add_argument("--help-only", action="store_true")
+    auto_warm_diagnostic.add_argument("--round-id")
+    auto_warm_diagnostic.add_argument("--iteration")
+    auto_warm_diagnostic.add_argument("--phase")
+    auto_warm_diagnostic.add_argument(
+        "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
+    )
+    auto_warm_diagnostic.add_argument("--request-count", type=int, default=2)
+    auto_warm_diagnostic.add_argument("--warmup-requests", type=int, default=1)
+    auto_warm_diagnostic.add_argument("--target-concurrency", type=int, default=1)
+    auto_warm_diagnostic.add_argument("--max-output-tokens", type=int, default=64)
+    auto_warm_diagnostic.add_argument("--prompt-token-cap", type=int, default=2048)
+    auto_warm_diagnostic.set_defaults(func=cmd_auto_research_warm_diagnostic)
 
     auto_resume_candidate = auto_research_subparsers.add_parser("resume-candidate")
     auto_resume_candidate.add_argument("--help-only", action="store_true")
