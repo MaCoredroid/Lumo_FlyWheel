@@ -5800,6 +5800,10 @@ def test_cutlass_compile_preflight_shell_defaults_to_single_job() -> None:
     assert "export TORCH_CUDA_ARCH_LIST=${LUMO_CUTLASS_TORCH_CUDA_ARCH_LIST:-12.0}" in shell
     assert '-DTORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"' in shell
     assert "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache" in shell
+    assert "set(MARLIN_ARCHS \"\")" in shell
+    assert "set(MARLIN_MOE_OTHER_ARCHS \"\")" in shell
+    assert "missing expected Marlin CMake fragment(s)" in shell
+    assert "[LUMO-CUTLASS-REBUILD] disabled non-CUTLASS Marlin CMake sources" in shell
 
 
 def test_cutlass_targeted_compile_targets_sm120_dispatch_header() -> None:
@@ -5823,6 +5827,8 @@ def test_cutlass_rebuild_prelaunch_defaults_to_single_job() -> None:
     shell = auto_research.L0cKernelMutationRunner._cutlass_rebuild_prelaunch_shell()
 
     assert "export MAX_JOBS=${MAX_JOBS:-1}" in shell
+    assert "set(MARLIN_ARCHS \"\")" in shell
+    assert "[LUMO-CUTLASS-REBUILD] disabled non-CUTLASS Marlin CMake sources" in shell
 
 
 def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_not_file_forbidden(tmp_path: Path) -> None:
