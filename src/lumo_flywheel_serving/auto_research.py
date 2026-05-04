@@ -8691,11 +8691,18 @@ class L0cKernelMutationRunner:
         return text[-limit:]
 
     @staticmethod
-    def _cutlass_cmake_rebuild_shell(*, install: bool, default_jobs: int = 8) -> str:
+    def _cutlass_cmake_rebuild_shell(
+        *,
+        install: bool,
+        default_jobs: int = 8,
+        build_targets: list[str] | None = None,
+    ) -> str:
         if default_jobs < 1:
             raise RuntimeError("default_jobs must be >= 1")
         source_dir = shlex.quote(L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR)
         build_dir = f"{source_dir}/build/lumo_cutlass_research"
+        targets = build_targets or ["_C"]
+        build_target_args = " ".join(shlex.quote(target) for target in targets)
         lines = [
             f"trap 'chmod -R a+rwX {source_dir} >/dev/null 2>&1 || true' EXIT",
             f"cd {source_dir}",
@@ -8714,7 +8721,7 @@ class L0cKernelMutationRunner:
             "-DVLLM_PYTHON_EXECUTABLE=$(command -v python3) "
             f"-DCMAKE_INSTALL_PREFIX={source_dir} "
             '"${cmake_launcher_args[@]}"',
-            f"cmake --build {build_dir} --target _C -j $MAX_JOBS",
+            f"cmake --build {build_dir} --target {build_target_args} -j $MAX_JOBS",
         ]
         if install:
             lines.extend(
@@ -8735,6 +8742,57 @@ class L0cKernelMutationRunner:
             )
         return "\n".join(lines)
 
+    @staticmethod
+    def _patch_changed_paths(patch_text: str) -> list[str]:
+        paths: list[str] = []
+        for line in patch_text.splitlines():
+            if not (line.startswith("--- ") or line.startswith("+++ ")):
+                continue
+            raw = line[4:].strip().split("\t", 1)[0]
+            if raw == "/dev/null":
+                continue
+            if raw.startswith("a/") or raw.startswith("b/"):
+                raw = raw[2:]
+            paths.append(raw)
+        return sorted(set(paths))
+
+    @staticmethod
+    def _cutlass_source_relative_path(path: str) -> str | None:
+        normalized = path.replace("\\", "/")
+        marker = f"{L0C_FP8_GEMM_CUTLASS_WORKSPACE_DIRNAME}/"
+        if marker in normalized:
+            tail = normalized.split(marker, 1)[1]
+            parts = tail.split("/", 1)
+            if len(parts) == 2:
+                normalized = parts[1]
+        elif normalized.startswith("vllm-source/"):
+            normalized = normalized.split("/", 1)[1]
+        return normalized if normalized.startswith("csrc/") or normalized.startswith("vllm/") else None
+
+    @classmethod
+    def _cutlass_targeted_compile_targets(cls, patch_text: str) -> tuple[list[str], list[str]]:
+        changed_paths = cls._patch_changed_paths(patch_text)
+        targets: set[str] = set()
+        cutlass_prefix = L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE.as_posix()
+        for path in changed_paths:
+            source_rel = cls._cutlass_source_relative_path(path)
+            if source_rel is None or not source_rel.startswith(f"{cutlass_prefix}/"):
+                continue
+            if not source_rel.endswith((".cu", ".cuh", ".h", ".hpp", ".cpp")):
+                continue
+            if source_rel.endswith((".cu", ".cpp")):
+                targets.add(f"CMakeFiles/_C.dir/{source_rel}.o")
+            if "sm120" in source_rel or "/c3x/" in source_rel or "scaled_mm" in source_rel:
+                targets.update(
+                    {
+                        "CMakeFiles/_C.dir/csrc/quantization/w8a8/cutlass/scaled_mm_entry.cu.o",
+                        "CMakeFiles/_C.dir/csrc/quantization/w8a8/cutlass/scaled_mm_c3x_sm120.cu.o",
+                        "CMakeFiles/_C.dir/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8.cu.o",
+                        "CMakeFiles/_C.dir/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8.cu.o",
+                    }
+                )
+        return sorted(targets), changed_paths
+
     def _cutlass_workspace_compile_preflight(
         self,
         *,
@@ -8744,8 +8802,8 @@ class L0cKernelMutationRunner:
         image: str | None,
         compile_jobs: int | None = None,
     ) -> dict[str, Any]:
-        if compile_mode not in {"python", "metadata", "full"}:
-            raise RuntimeError("--compile-mode must be one of: none, python, metadata, full")
+        if compile_mode not in {"python", "metadata", "targeted", "full"}:
+            raise RuntimeError("--compile-mode must be one of: none, python, metadata, targeted, full")
         if compile_jobs is not None and compile_jobs < 1:
             raise RuntimeError("--compile-jobs must be >= 1")
         if not workspace_source.is_dir():
@@ -8793,12 +8851,26 @@ class L0cKernelMutationRunner:
             cache_dir = workspace_source.parent.parent / L0C_FP8_GEMM_CUTLASS_CCACHE_DIRNAME
             cache_dir.mkdir(parents=True, exist_ok=True)
             timeout = 7200
-            effective_compile_jobs = compile_jobs or (1 if compile_mode == "full" else 8)
-            shell = self._cutlass_cmake_rebuild_shell(install=False, default_jobs=effective_compile_jobs)
+            effective_compile_jobs = compile_jobs or (1 if compile_mode in {"targeted", "full"} else 8)
+            build_targets: list[str] | None = None
             if compile_mode == "metadata":
                 timeout = 900
                 shell = "set -euo pipefail\npython3 - <<'PY'\nimport setuptools, vllm\nprint('metadata_import_ok')\nPY"
             else:
+                if compile_mode == "targeted":
+                    patch_text = patch_path.read_text(encoding="utf-8")
+                    build_targets, changed_paths = self._cutlass_targeted_compile_targets(patch_text)
+                    payload["changed_paths"] = changed_paths
+                    payload["build_targets"] = build_targets
+                    if not build_targets:
+                        payload["reason"] = "targeted_compile_skipped_no_cutlass_cxx_targets"
+                        return payload
+                    timeout = 1800
+                shell = self._cutlass_cmake_rebuild_shell(
+                    install=False,
+                    default_jobs=effective_compile_jobs,
+                    build_targets=build_targets,
+                )
                 shell = "set -euo pipefail\n" + shell
             try:
                 result = subprocess.run(
@@ -9120,7 +9192,7 @@ class L0cKernelMutationRunner:
                     f"cd {workspace_source} && test -f {L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE}/c3x/scaled_mm_sm120_fp8_dispatch.cuh",
                     f"cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research preflight-patch \\",
                     "  --kernel-target fp8_gemm --patch-path candidates/<NNN>/mutation.patch \\",
-                    f"  --workspace-source {workspace_source} --compile-mode full --compile-jobs 1",
+                    f"  --workspace-source {workspace_source} --compile-mode targeted --compile-jobs 1",
                     "```",
                     "",
                     "Agents own these cheap authoring-time checks. If patch apply, Python",
@@ -9153,7 +9225,10 @@ class L0cKernelMutationRunner:
 
     @staticmethod
     def _cutlass_rebuild_prelaunch_shell() -> str:
-        rebuild_shell = L0cKernelMutationRunner._cutlass_cmake_rebuild_shell(install=True)
+        rebuild_shell = L0cKernelMutationRunner._cutlass_cmake_rebuild_shell(
+            install=True,
+            default_jobs=1,
+        )
         return "\n".join(
             [
                 "{",
@@ -9909,8 +9984,8 @@ class L0cKernelMutationRunner:
     ) -> dict[str, Any]:
         if kernel_target not in L0C_KERNEL_TARGETS:
             raise RuntimeError(f"--kernel-target must be one of {L0C_KERNEL_TARGETS_RENDERED}")
-        if compile_mode not in {"none", "python", "metadata", "full"}:
-            raise RuntimeError("--compile-mode must be one of: none, python, metadata, full")
+        if compile_mode not in {"none", "python", "metadata", "targeted", "full"}:
+            raise RuntimeError("--compile-mode must be one of: none, python, metadata, targeted, full")
         if compile_jobs is not None and compile_jobs < 1:
             raise RuntimeError("--compile-jobs must be >= 1")
         path = Path(patch_path)
@@ -11477,16 +11552,18 @@ class L0cKernelMutationRunner:
                     "6. Run local syntax/compile checks on any changed Python files, for example:",
                     f"   cd {workspace_python_path or workspace_path or self.repo_root} && python3 -m py_compile $(find . -name '*.py' -print)",
                     "7. If you changed C++/CUDA, run a compile-level preflight on a temporary copy.",
-                    "   Start with metadata mode while iterating, then run full mode before final submit",
-                    "   when the change touches compiled CUTLASS files:",
+                    "   Start with metadata mode while iterating, then run targeted mode before final submit",
+                    "   when the change touches compiled CUTLASS files. Targeted mode builds only",
+                    "   the CUTLASS FP8/SM120 objects inferred from mutation.patch:",
                     f"   cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} auto-research preflight-patch \\",
                     f"     --kernel-target {kernel_target} --patch-path {{{{iteration_dir}}}}/mutation.patch \\",
-                    f"     --workspace-source {workspace_source_path or workspace_path} --compile-mode full --compile-jobs 1",
+                    f"     --workspace-source {workspace_source_path or workspace_path} --compile-mode targeted --compile-jobs 1",
                     "   If this compile/preflight exits nonzero, read the JSON `reason`,",
                     "   `compile_preflight.output_tail`, `matching_rule`, `code_snippet`,",
                     "   and `evidence_snippet`, then revise mutation.patch and rerun the cheap checks.",
                     "   A compiled-file mutation is not ready to submit until this authoring-side",
-                    "   full compile preflight passes; fix compile errors in the patch before exiting.",
+                    "   targeted compile preflight passes or explicitly reports no CUTLASS C++ targets;",
+                    "   fix compile errors in the patch before exiting.",
                     "8. For Python-only mutations, run the same command with `--compile-mode python`.",
                     "9. Do not run `auto-research apply-and-test` for this FP8 GEMM CUTLASS source target.",
                     "   The controller owns canary admission, parity, and measurement after you exit.",

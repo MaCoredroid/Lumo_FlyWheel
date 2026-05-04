@@ -5652,10 +5652,11 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "python3 -m py_compile" in brief
     assert "auto-research preflight-patch" in brief
     assert "--workspace-source" in brief
-    assert "--compile-mode full" in brief
+    assert "--compile-mode targeted" in brief
     assert "--compile-jobs 1" in brief
     assert "You own authoring-time compile failures" in brief
     assert "A compiled-file mutation is not ready to submit" in brief
+    assert "CUTLASS FP8/SM120 objects" in brief
     assert "compile_preflight.output_tail" in brief
     assert "matching_rule" in brief
     assert "code_snippet" in brief
@@ -5797,6 +5798,29 @@ def test_cutlass_compile_preflight_shell_defaults_to_single_job() -> None:
 
     assert "export MAX_JOBS=${MAX_JOBS:-1}" in shell
     assert "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache" in shell
+
+
+def test_cutlass_targeted_compile_targets_sm120_dispatch_header() -> None:
+    patch_text = """--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
+@@ -1,2 +1,2 @@
+-using TileShape = Shape<_32, _64, _128>;
++using TileShape = Shape<_32, _128, _128>;
+"""
+
+    targets, changed_paths = auto_research.L0cKernelMutationRunner._cutlass_targeted_compile_targets(
+        patch_text
+    )
+
+    assert "cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh" in changed_paths
+    assert "CMakeFiles/_C.dir/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8.cu.o" in targets
+    assert "CMakeFiles/_C.dir/csrc/quantization/w8a8/cutlass/scaled_mm_c3x_sm120.cu.o" in targets
+
+
+def test_cutlass_rebuild_prelaunch_defaults_to_single_job() -> None:
+    shell = auto_research.L0cKernelMutationRunner._cutlass_rebuild_prelaunch_shell()
+
+    assert "export MAX_JOBS=${MAX_JOBS:-1}" in shell
 
 
 def test_l0c_fp8_cutlass_overlay_wrapper_patch_is_not_file_forbidden(tmp_path: Path) -> None:

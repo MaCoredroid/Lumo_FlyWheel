@@ -1464,7 +1464,11 @@ def build_parser() -> argparse.ArgumentParser:
     auto_preflight_patch.add_argument("--kernel-target", choices=l0c_kernel_target_choices)
     auto_preflight_patch.add_argument("--patch-path")
     auto_preflight_patch.add_argument("--workspace-source")
-    auto_preflight_patch.add_argument("--compile-mode", choices=["none", "python", "metadata", "full"], default="none")
+    auto_preflight_patch.add_argument(
+        "--compile-mode",
+        choices=["none", "python", "metadata", "targeted", "full"],
+        default="none",
+    )
     auto_preflight_patch.add_argument("--image")
     auto_preflight_patch.add_argument("--compile-jobs", type=int)
     auto_preflight_patch.set_defaults(func=cmd_auto_research_preflight_patch)
