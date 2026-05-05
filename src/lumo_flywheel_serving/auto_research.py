@@ -6144,6 +6144,11 @@ Tier-2 hard-reject:
      class you are changing, even if approximate,
    - the exact mechanism by which your mutation should lift the observed warm
      decode rate materially above the recent ~7.5 generated tok/s level.
+   Also include a compact structured table or bullet block with these exact
+   fields: representative shape(s) as M/N/K, FLOPs per token or per GEMM,
+   estimated bytes moved, arithmetic intensity, GB10 roofline/ceiling comparison,
+   current `ffn_linear` ms/token proxy, expected changed bytes/FLOPs/overhead,
+   and the expected end-to-end tok/s delta if the hypothesis is right.
    If you can cheaply produce a CUTLASS-internal timing/proxy, include
    before-change and after-change values; otherwise state that only the
    `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
@@ -7644,7 +7649,9 @@ class L0cKernelMutationRunner:
                             "reason: missing_compute_bandwidth_analysis",
                             f"detail: {analysis_error}",
                             "fix: write candidate_analysis.md with warm decode, GB10 bandwidth,",
-                            "     CUTLASS/FFN timing, FLOP/arithmetic-intensity, and mutation mechanism.",
+                            "     CUTLASS/FFN timing, M/N/K shape, FLOPs, bytes moved,",
+                            "     arithmetic intensity, roofline/ceiling, expected tok/s delta,",
+                            "     and mutation mechanism.",
                         ]
                     )
                     + "\n",
@@ -11071,11 +11078,18 @@ class L0cKernelMutationRunner:
                     "bytes_per_generated_token",
                     "gb/token",
                     "gb per token",
+                    "gb/generated token",
+                    "gb per generated token",
+                    "gb/requested output token",
+                    "gb per requested output token",
                     "gb of lpddr traffic per requested output token",
                 ),
             ),
             ("cutlass_or_ffn_component", ("cutlass", "ffn_linear", "fp8 gemm")),
             ("compute_sanity_check", ("flop", "arithmetic intensity", "compute-bound", "memory-bound")),
+            ("representative_shape", ("m/n/k", "m=", "n=", "k=", "gemm shape")),
+            ("roofline_ceiling", ("roofline", "ceiling", "theoretical limit", "theoretical stream")),
+            ("expected_delta", ("tok/s delta", "expected delta", "expected speedup", "end-to-end tok/s")),
             ("mutation_mechanism", ("mechanism", "should reduce", "expected reduction", "lift")),
         ]
         missing = [
@@ -11906,6 +11920,13 @@ class L0cKernelMutationRunner:
                 "- Before proposing a CUTLASS patch, the authoring agent must state "
                 "which timing component it expects to reduce and why the changed "
                 "dispatch/shape/scale/schedule should affect that component on GB10."
+            ),
+            (
+                "- Candidate analysis must contain a structured compute/bandwidth "
+                "accounting block, not only prose: representative M/N/K shape(s), "
+                "FLOPs, estimated bytes moved, arithmetic intensity, GB10 roofline/"
+                "ceiling comparison, current `ffn_linear` ms/token proxy, expected "
+                "changed bytes/FLOPs/overhead, and expected end-to-end tok/s delta."
             ),
             (
                 "- Treat this section as the pre-change CUTLASS timing baseline. "

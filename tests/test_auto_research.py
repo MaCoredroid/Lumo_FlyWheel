@@ -5384,6 +5384,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "GB10 CUTLASS Timing Breakdown" in strategy_brief
     assert "ffn_linear" in strategy_brief
     assert "which timing component it expects to reduce" in strategy_brief
+    assert "structured compute/bandwidth accounting block" in strategy_brief
+    assert "expected end-to-end tok/s delta" in strategy_brief
     assert "pre-change CUTLASS timing baseline" in strategy_brief
     assert "low-level CUTLASS sub-kernel timing" in strategy_brief
     candidate_brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
@@ -5395,6 +5397,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "candidate_analysis.md" in candidate_brief
     assert "compute/bandwidth breakdown" in candidate_brief
     assert "FLOP or arithmetic-intensity sanity check" in candidate_brief
+    assert "representative shape(s) as M/N/K" in candidate_brief
+    assert "expected end-to-end tok/s delta" in candidate_brief
     assert "which CUTLASS time component" in candidate_brief
     assert "CUTLASS-internal timing/proxy" in candidate_brief
     assert "`ffn_linear` proxy" in candidate_brief
@@ -5912,6 +5916,8 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "candidate_analysis.md" in brief
     assert "compute/bandwidth breakdown" in brief
     assert "FLOP or arithmetic-intensity sanity check" in brief
+    assert "representative shape(s) as M/N/K" in brief
+    assert "expected end-to-end tok/s delta" in brief
     assert "which CUTLASS time component" in brief
     assert "CUTLASS-internal timing/proxy" in brief
     assert "`ffn_linear` proxy" in brief
@@ -5930,6 +5936,61 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "GEMM problem shape" in brief
     assert "fp8_gemm_cutlass_python_wrapper_rewrite" not in brief
     assert "auto-research apply-and-test \\" not in brief
+
+
+def test_l0c_candidate_analysis_requires_structured_roofline_accounting(tmp_path: Path) -> None:
+    candidate_dir = tmp_path / "candidate"
+    candidate_dir.mkdir()
+    (candidate_dir / "candidate_analysis.md").write_text(
+        """
+# Candidate Analysis
+
+Warm decode rate: 7.37 generated tokens/s, 135.6 ms/generated token.
+GB10 bandwidth: 273 GB/s, with a warm roofline context of 37.0 GB/token.
+The CUTLASS/FP8 GEMM proxy is ffn_linear at 80.6 ms/token, so this is the
+component the mutation must reduce.
+
+Structured compute/bandwidth accounting:
+
+| representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| M=1, N=8192, K=8192 | 134M FLOP | 67 MB plus scales/output | about 2 FLOP/byte, memory-bound | below the theoretical stream ceiling | 80.6 | less epilogue scale overhead, unchanged bytes/FLOPs | +0.2 tok/s delta if the changed visitor is visible |
+
+Mechanism: the mutation should reduce scalar-scale epilogue overhead without
+changing the GEMM signature or scale semantics. The expected reduction is not a
+weight-byte reduction, so the analysis explicitly treats the roofline as context
+rather than proof. Current measurement rows are baseline_a/b and recent
+candidates around 0.034/0.056 objective; the patch must lift observed warm
+decode materially over the recent 7.5 tok/s level to matter.
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert auto_research.L0cKernelMutationRunner._validate_l0c_candidate_analysis(candidate_dir) is None
+
+
+def test_l0c_candidate_analysis_rejects_missing_shape_accounting(tmp_path: Path) -> None:
+    candidate_dir = tmp_path / "candidate"
+    candidate_dir.mkdir()
+    (candidate_dir / "candidate_analysis.md").write_text(
+        (
+            "Warm decode rate 7.37 generated tokens/s and 135.6 ms/generated token. "
+            "GB10 bandwidth is 273 GB/s and warm roofline budget is 37 GB/token. "
+            "CUTLASS ffn_linear FP8 GEMM proxy is 80.6 ms/token. "
+            "This compute sanity check says FLOPs and arithmetic intensity are important, "
+            "but omits the actual representative dimensions. "
+            "The mutation mechanism should reduce expected reduction overhead and lift "
+            "warm decode; expected end-to-end tok/s delta is measurable. "
+        )
+        * 8,
+        encoding="utf-8",
+    )
+
+    error = auto_research.L0cKernelMutationRunner._validate_l0c_candidate_analysis(candidate_dir)
+
+    assert error is not None
+    assert "representative_shape" in error
 
 
 def test_l0c_warm_diagnostic_records_step_consumption(
