@@ -6030,7 +6030,7 @@ Structured compute/bandwidth accounting:
 | M=1, N=8192, K=8192 | 134M FLOP | 67 MB plus scales/output | about 2 FLOP/byte, memory-bound | below the theoretical stream ceiling | 80.6 | less epilogue scale overhead, unchanged bytes/FLOPs | +0.2 tok/s delta if the changed visitor is visible |
 
 7.5 tok/s breakdown: 37.0 GB/token at 7.37 tok/s implies about 273 GB/s
-effective bandwidth, roughly 100% of the 273 GB/s ceiling. ffn_linear share is
+effective bandwidth, roughly 100% of the 273 GB/s ceiling. `ffn_linear` share is
 80.6 / 135.6 ms/token = 59% share of ms/token, leaving a non-FFN residual
 ms/token of about 55.0. This patch attacks schedule/epilogue overhead, not
 B-weight traffic.

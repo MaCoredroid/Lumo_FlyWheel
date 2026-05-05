@@ -11262,6 +11262,8 @@ class L0cKernelMutationRunner:
                 "ffn_share",
                 (
                     "ffn_linear share",
+                    "`ffn_linear` share",
+                    "ffn_linear` share",
                     "ffn share",
                     "ffn_linear percent",
                     "ffn_linear %",
