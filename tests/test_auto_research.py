@@ -5388,6 +5388,10 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "expected end-to-end tok/s delta" in strategy_brief
     assert "pre-change CUTLASS timing baseline" in strategy_brief
     assert "low-level CUTLASS sub-kernel timing" in strategy_brief
+    assert "low-level evidence block" in strategy_brief
+    assert "live warm shape dispatch hits that path" in strategy_brief
+    assert "B-weight bytes change" in strategy_brief
+    assert "3% end-to-end warm decode lift" in strategy_brief
     candidate_brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
         encoding="utf-8"
     )
@@ -5402,6 +5406,10 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "which CUTLASS time component" in candidate_brief
     assert "CUTLASS-internal timing/proxy" in candidate_brief
     assert "`ffn_linear` proxy" in candidate_brief
+    assert "low-level evidence table" in candidate_brief
+    assert "live-shape dispatch-hit proof" in candidate_brief
+    assert "byte-component split" in candidate_brief
+    assert "at least 3%" in candidate_brief
     assert "auto-research warm-diagnostic" in candidate_brief
     assert "MUST run a cheap warm-request diagnostic" in candidate_brief
     assert "warm_diagnostic_skipped.json" in candidate_brief
@@ -5921,6 +5929,10 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "which CUTLASS time component" in brief
     assert "CUTLASS-internal timing/proxy" in brief
     assert "`ffn_linear` proxy" in brief
+    assert "low-level evidence table" in brief
+    assert "live-shape dispatch-hit proof" in brief
+    assert "byte-component split" in brief
+    assert "at least 3%" in brief
     assert "auto-research warm-diagnostic" in brief
     assert "MUST run a cheap warm-request diagnostic" in brief
     assert "warm_diagnostic_skipped.json" in brief
@@ -5955,6 +5967,12 @@ Structured compute/bandwidth accounting:
 | representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | M=1, N=8192, K=8192 | 134M FLOP | 67 MB plus scales/output | about 2 FLOP/byte, memory-bound | below the theoretical stream ceiling | 80.6 | less epilogue scale overhead, unchanged bytes/FLOPs | +0.2 tok/s delta if the changed visitor is visible |
+
+Low-level evidence:
+
+| source file/symbol | live-shape dispatch-hit proof | before-mutation observation | byte-component split for A/B weights/scales/output/epilogue | B-weight bytes change? | material lift gate |
+| --- | --- | --- | --- | --- | --- |
+| source file csrc/quantization/w8a8/cutlass/scaled_mm_sm120_fp8.cu, symbol cutlass_scaled_mm_sm120_fp8 | dispatch-hit proof from live shape M=1,N=8192,K=8192: path is hit by CutlassFP8ScaledMMLinearKernel | warm diagnostic shows 7.37 tok/s and targeted compile/preflight passes | A bytes tiny, B-weight bytes dominate, scale bytes scalar, output store small, epilogue overhead candidate | weight bytes unchanged; B-weight bytes do not change | at least 3% end-to-end only if epilogue overhead is a measured long-tail bottleneck |
 
 Mechanism: the mutation should reduce scalar-scale epilogue overhead without
 changing the GEMM signature or scale semantics. The expected reduction is not a
@@ -5991,6 +6009,39 @@ def test_l0c_candidate_analysis_rejects_missing_shape_accounting(tmp_path: Path)
 
     assert error is not None
     assert "representative_shape" in error
+
+
+def test_l0c_candidate_analysis_rejects_missing_low_level_evidence(tmp_path: Path) -> None:
+    candidate_dir = tmp_path / "candidate"
+    candidate_dir.mkdir()
+    (candidate_dir / "candidate_analysis.md").write_text(
+        """
+# Candidate Analysis
+
+Warm decode rate: 7.37 generated tokens/s, 135.6 ms/generated token.
+GB10 bandwidth: 273 GB/s, with a warm roofline context of 37.0 GB/token.
+The CUTLASS/FP8 GEMM proxy is ffn_linear at 80.6 ms/token.
+
+Structured compute/bandwidth accounting:
+
+| representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| M=1, N=8192, K=8192 | 134M FLOP | 67 MB plus scales/output | about 2 FLOP/byte, memory-bound | below the theoretical stream ceiling | 80.6 | less overhead | +0.3 tok/s delta |
+
+Mechanism: the mutation should reduce overhead and lift warm decode. This has
+the old high-level analysis shape but omits the edited file identity, dispatch
+proof, byte split, B-byte statement, and before-mutation low-level observation.
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    error = auto_research.L0cKernelMutationRunner._validate_l0c_candidate_analysis(candidate_dir)
+
+    assert error is not None
+    assert "source_symbol" in error
+    assert "dispatch_hit_proof" in error
+    assert "byte_component_split" in error
 
 
 def test_l0c_warm_diagnostic_records_step_consumption(

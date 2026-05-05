@@ -6149,6 +6149,12 @@ Tier-2 hard-reject:
    estimated bytes moved, arithmetic intensity, GB10 roofline/ceiling comparison,
    current `ffn_linear` ms/token proxy, expected changed bytes/FLOPs/overhead,
    and the expected end-to-end tok/s delta if the hypothesis is right.
+   Also include a low-level evidence table or bullet block with these exact
+   fields: source file/symbol, live-shape dispatch-hit proof, before-mutation
+   observation, byte-component split for A/B weights/scales/output/epilogue,
+   whether B-weight bytes change, and why the expected lift is at least 3%
+   end-to-end. If you cannot defend the 3% lift from those facts, write
+   BLOCKED.md instead of mutation.patch.
    If you can cheaply produce a CUTLASS-internal timing/proxy, include
    before-change and after-change values; otherwise state that only the
    `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
@@ -11149,6 +11155,63 @@ class L0cKernelMutationRunner:
                 ),
             ),
             ("mutation_mechanism", ("mechanism", "should reduce", "expected reduction", "lift")),
+            ("source_symbol", ("source file", "source path", "symbol", "function")),
+            (
+                "dispatch_hit_proof",
+                (
+                    "dispatch-hit",
+                    "dispatch hit",
+                    "live-shape",
+                    "live shape",
+                    "path is hit",
+                    "route hit",
+                ),
+            ),
+            (
+                "byte_component_split",
+                (
+                    "b-weight",
+                    "b weight",
+                    "weights/scales/output/epilogue",
+                    "a/b",
+                    "scale bytes",
+                    "output store",
+                ),
+            ),
+            (
+                "b_weight_change_statement",
+                (
+                    "b-weight bytes",
+                    "b weight bytes",
+                    "b bytes",
+                    "weight bytes unchanged",
+                    "changes b-weight",
+                ),
+            ),
+            (
+                "low_level_observation",
+                (
+                    "before-mutation observation",
+                    "warm diagnostic",
+                    "source-level experiment",
+                    "microbench",
+                    "profiler",
+                    "ncu",
+                    "targeted compile",
+                    "preflight",
+                ),
+            ),
+            (
+                "material_lift_gate",
+                (
+                    "3% end-to-end",
+                    ">=3%",
+                    "at least 3%",
+                    "three percent",
+                    "0.225 tok/s",
+                    "0.23 tok/s",
+                ),
+            ),
         ]
         missing = [
             label
@@ -11985,6 +12048,16 @@ class L0cKernelMutationRunner:
                 "FLOPs, estimated bytes moved, arithmetic intensity, GB10 roofline/"
                 "ceiling comparison, current `ffn_linear` ms/token proxy, expected "
                 "changed bytes/FLOPs/overhead, and expected end-to-end tok/s delta."
+            ),
+            (
+                "- Candidate analysis must also contain a low-level evidence block: "
+                "exact source file/symbol being changed, proof that the live warm "
+                "shape dispatch hits that path, A/B/scale/output/epilogue byte split "
+                "with an explicit statement about whether B-weight bytes change, and "
+                "a before-mutation observation from warm-diagnostic, source-level "
+                "experiment, microbench, profiler, or targeted compile/preflight. "
+                "If the evidence does not support at least a 3% end-to-end warm decode "
+                "lift, write BLOCKED.md instead of submitting another low-upside patch."
             ),
             (
                 "- Treat this section as the pre-change CUTLASS timing baseline. "
