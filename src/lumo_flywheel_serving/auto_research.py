@@ -11419,6 +11419,25 @@ class L0cKernelMutationRunner:
         }
         if preflight is None:
             payload["reason"] = "preflight_passed"
+            iteration_dir = path.parent
+            if (
+                path.name == "mutation.patch"
+                and (iteration_dir / "iteration_brief.md").is_file()
+            ):
+                analysis_error = self._validate_l0c_candidate_analysis(iteration_dir)
+                payload["analysis_preflight"] = {
+                    "ok": analysis_error is None,
+                    "reason": (
+                        "candidate_analysis_passed"
+                        if analysis_error is None
+                        else "missing_compute_bandwidth_analysis"
+                    ),
+                    "error": analysis_error,
+                }
+                if analysis_error is not None:
+                    payload["ok"] = False
+                    payload["reason"] = "missing_compute_bandwidth_analysis"
+                    return payload
             if workspace_source is not None or compile_mode != "none":
                 if workspace_source is None:
                     payload["ok"] = False

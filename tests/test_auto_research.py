@@ -6252,6 +6252,39 @@ def test_l0c_preflight_patch_allows_fp8_cutlass_source_edits(tmp_path: Path) -> 
     assert all(rule["tier"] == "safety_critical" for rule in payload["rules"])
 
 
+def test_l0c_preflight_patch_reports_analysis_failure_to_authoring_agent(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    candidate_dir = repo / "round" / "candidates" / "001"
+    candidate_dir.mkdir(parents=True)
+    (candidate_dir / "iteration_brief.md").write_text("brief\n", encoding="utf-8")
+    (candidate_dir / "candidate_analysis.md").write_text(
+        "Warm decode rate is 7.4 tok/s, but this analysis is not a full breakdown.\n",
+        encoding="utf-8",
+    )
+    patch_path = candidate_dir / "mutation.patch"
+    patch_path.write_text(
+        """--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -1,2 +1,2 @@
+-output = ops.cutlass_scaled_mm(A, B)
++output = ops.cutlass_scaled_mm(A.contiguous(), B)
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    payload = runner.preflight_patch(kernel_target="fp8_gemm", patch_path=patch_path)
+
+    assert payload["ok"] is False
+    assert payload["reason"] == "missing_compute_bandwidth_analysis"
+    assert payload["analysis_preflight"]["ok"] is False
+    assert "candidate_analysis.md" in payload["analysis_preflight"]["error"]
+
+
 def test_l0c_preflight_patch_compiles_workspace_copy_without_mutating_source(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     workspace_source = repo / "round" / "cutlass_source_workspace" / "vllm-source"
