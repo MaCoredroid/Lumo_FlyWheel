@@ -1,0 +1,16 @@
+--- /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py	2026-05-03 03:51:21.401583927 +0000
++++ /dev/fd/63	2026-05-03 05:22:08.297618684 +0000
+@@ -18,6 +18,12 @@
+             "vllm.model_executor.kernels.linear.scaled_mm.cutlass",
+             "vllm.model_executor.layers.quantization.kernels.scaled_mm.cutlass",
+         ],
+-        "source_replacements": [],
++        "source_replacements": [
++            {
++                "label": "blank_fused_gemm_comment_line",
++                "before": "        # Fused GEMM_DQ\n",
++                "after": "\n",
++            }
++        ],
+     },
+ }

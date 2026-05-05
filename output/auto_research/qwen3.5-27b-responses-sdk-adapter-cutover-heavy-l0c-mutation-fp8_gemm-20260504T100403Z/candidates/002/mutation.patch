@@ -1,0 +1,11 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
+@@ -129,7 +129,7 @@
+   // M in [1, 256]: use 64x128x128 tile with Pingpong schedule
+   using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+   using EpilogueSchedule = cutlass::epilogue::collective::EpilogueScheduleAuto;
+-  using TileShape = Shape<_64, _128, _128>;
++  using TileShape = Shape<_64, _256, _128>;
+   using ClusterShape = Shape<_1, _1, _1>;
+   // ScaleGranularity stays (1, 128, 128) to match actual quantization data
+   using Gemm = cutlass_3x_gemm_fp8_blockwise<

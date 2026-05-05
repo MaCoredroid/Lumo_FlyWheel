@@ -1,0 +1,37 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
+@@ -122,6 +122,20 @@
+ 
+ template <typename InType, typename OutType,
+           template <typename, typename, typename> typename Epilogue>
++struct sm120_fp8_config_M8 {
++  static_assert(std::is_same<InType, cutlass::float_e4m3_t>());
++  using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecializedPingpong;
++  using EpilogueSchedule = cutlass::epilogue::collective::EpilogueScheduleAuto;
++  using TileShape = Shape<_8, _64, _128>;
++  using ClusterShape = Shape<_1, _1, _1>;
++  using Cutlass3xGemm =
++      cutlass_3x_gemm_sm120_custom<InType, OutType, Epilogue, TileShape,
++                                   ClusterShape, KernelSchedule,
++                                   EpilogueSchedule, Shape<_8, _32>>;
++};
++
++template <typename InType, typename OutType,
++          template <typename, typename, typename> typename Epilogue>
+ struct sm120_fp8_config_M16 {
+   static_assert(std::is_same<InType, cutlass::float_e4m3_t>());
+   using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecializedPingpong;
+@@ -148,6 +162,13 @@
+ 
+   int M = a.size(0);
+ 
++  if (M <= 8) {
++    using Cutlass3xGemmM8 =
++        typename sm120_fp8_config_M8<InType, OutType, Epilogue>::Cutlass3xGemm;
++    return cutlass_gemm_caller<Cutlass3xGemmM8>(
++        out, a, b, std::forward<EpilogueArgs>(args)...);
++  }
++
+   if (M <= 16) {
+     using Cutlass3xGemmM16 =
+         typename sm120_fp8_config_M16<InType, OutType, Epilogue>::Cutlass3xGemm;

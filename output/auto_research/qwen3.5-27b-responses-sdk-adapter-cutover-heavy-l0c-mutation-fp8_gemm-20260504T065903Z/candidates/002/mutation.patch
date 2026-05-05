@@ -1,0 +1,11 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
+@@ -96,7 +96,7 @@
+   // tiles.
+   using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecializedPingpong;
+   using EpilogueSchedule = cutlass::epilogue::collective::EpilogueScheduleAuto;
+-  using TileShape = Shape<_64, _64, _128>;
++  using TileShape = Shape<_64, _128, _128>;
+   // CUTLASS 3.x on SM120 currently restricts programmatic multicast (Cluster >
+   // 1) for certain schedules/types. Reverting to 1x1x1 to ensure compilation.
+   using ClusterShape = Shape<_1, _1, _1>;

@@ -1,0 +1,20 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
+@@ -111,7 +111,7 @@
+   static_assert(std::is_same<InType, cutlass::float_e4m3_t>());
+   using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecializedPingpong;
+   using EpilogueSchedule = cutlass::epilogue::collective::EpilogueScheduleAuto;
+-  using TileShape = Shape<_32, _64, _128>;
++  using TileShape = Shape<_32, _64, _256>;
+   using ClusterShape = Shape<_1, _1, _1>;
+   // Use custom gemm to specify EpilogueTile M=32
+   using Cutlass3xGemm =
+@@ -126,7 +126,7 @@
+   static_assert(std::is_same<InType, cutlass::float_e4m3_t>());
+   using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecializedPingpong;
+   using EpilogueSchedule = cutlass::epilogue::collective::EpilogueScheduleAuto;
+-  using TileShape = Shape<_16, _64, _128>;
++  using TileShape = Shape<_16, _64, _256>;
+   using ClusterShape = Shape<_1, _1, _1>;
+   // Use custom gemm to specify EpilogueTile M=16
+   using Cutlass3xGemm =

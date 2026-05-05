@@ -1,0 +1,11 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
+@@ -99,7 +99,7 @@
+           ElementAccumulator,
+           MmaTileShape,
+           ClusterShape,
+-          cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>,
++          cutlass::gemm::collective::StageCount<2>,
+           MainloopScheduler
+       >::CollectiveOp;
+ 

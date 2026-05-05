@@ -1,0 +1,63 @@
+--- cutlass_source_workspace/vllm-source/csrc/cutlass_extensions/epilogue/scaled_mm_epilogues_c3x.hpp
++++ cutlass_source_workspace/vllm-source/csrc/cutlass_extensions/epilogue/scaled_mm_epilogues_c3x.hpp
+@@ -169,6 +169,47 @@
+ };
+ 
+ /*
++   Variant for the common dynamic-activation/per-channel-weight case. The
++   runtime dispatcher only selects this when scale_a has one value per GEMM row
++   and scale_b has one value per GEMM column, so fixed broadcasts preserve the
++   same scale semantics while avoiding the generic scalar-or-vector descriptors.
++*/
++template <typename ElementAcc, typename ElementD, typename TileShape>
++struct ScaledEpilogueRowColumn
++    : private ScaledEpilogueBase<ElementAcc, ElementD, TileShape> {
++ private:
++  using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, TileShape>;
++  using Accum = typename SUPER::Accum;
++  using ScaleA = typename SUPER::template ColLoad<float>;
++  using ScaleB = typename SUPER::template RowLoad<float>;
++
++  using Compute0 = cutlass::epilogue::fusion::Sm90Compute<
++      cutlass::multiplies, float, float,
++      cutlass::FloatRoundStyle::round_to_nearest>;
++
++  using EVTCompute0 =
++      cutlass::epilogue::fusion::Sm90EVT<Compute0, ScaleB, Accum>;
++
++  using Compute1 = cutlass::epilogue::fusion::Sm90Compute<
++      cutlass::multiplies, ElementD, float,
++      cutlass::FloatRoundStyle::round_to_nearest>;
++
++ public:
++  using EVTCompute =
++      cutlass::epilogue::fusion::Sm90EVT<Compute1, ScaleA, EVTCompute0>;
++  using ArgumentType = typename EVTCompute::Arguments;
++
++  static ArgumentType prepare_args(torch::Tensor const& a_scales,
++                                   torch::Tensor const& b_scales) {
++    auto a_args = SUPER::template args_from_tensor<ScaleA, float>(a_scales);
++    auto b_args = SUPER::template args_from_tensor<ScaleB, float>(b_scales);
++
++    typename EVTCompute0::Arguments evt0_args{b_args, {}, {}};
++    return ArgumentType{a_args, evt0_args, {}};
++  }
++};
++
++/*
+  * This epilogue performs the same operation as ScaledEpilogue, but adds a bias.
+  * This bias can also be used in the per-tensor azp case, where the activation
+  * zero point (azp) is used to compute an azp correction term,
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8.cu
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8.cu
+@@ -16,6 +16,10 @@
+     return cutlass_scaled_mm_sm120_fp8_epilogue<c3x::ScaledEpilogueBias>(
+         out, a, b, a_scales, b_scales, *bias);
+   } else {
++    if (a_scales.numel() == a.size(0) && b_scales.numel() == b.size(1)) {
++      return cutlass_scaled_mm_sm120_fp8_epilogue<
++          c3x::ScaledEpilogueRowColumn>(out, a, b, a_scales, b_scales);
++    }
+     return cutlass_scaled_mm_sm120_fp8_epilogue<c3x::ScaledEpilogue>(
+         out, a, b, a_scales, b_scales);
+   }

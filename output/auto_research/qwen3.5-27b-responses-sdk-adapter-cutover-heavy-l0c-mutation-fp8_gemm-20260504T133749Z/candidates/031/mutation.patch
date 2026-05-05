@@ -1,0 +1,116 @@
+--- cutlass_source_workspace/vllm-source/csrc/cutlass_extensions/epilogue/scaled_mm_epilogues_c3x.hpp
++++ cutlass_source_workspace/vllm-source/csrc/cutlass_extensions/epilogue/scaled_mm_epilogues_c3x.hpp
+@@ -169,6 +169,46 @@
+ };
+ 
+ /*
++   Same math as ScaledEpilogue, specialized for the common dense FP8 case where
++   the weight scale has already been collapsed to one scalar during loading.
++*/
++template <typename ElementAcc, typename ElementD, typename TileShape>
++struct ScaledEpilogueBScalar
++    : private ScaledEpilogueBase<ElementAcc, ElementD, TileShape> {
++ private:
++  using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, TileShape>;
++  using Accum = typename SUPER::Accum;
++  using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
++  using ScaleB = cutlass::epilogue::fusion::Sm90ScalarBroadcast<float>;
++
++  using Compute0 = cutlass::epilogue::fusion::Sm90Compute<
++      cutlass::multiplies, float, float,
++      cutlass::FloatRoundStyle::round_to_nearest>;
++
++  using EVTCompute0 =
++      cutlass::epilogue::fusion::Sm90EVT<Compute0, ScaleB, Accum>;
++
++  using Compute1 = cutlass::epilogue::fusion::Sm90Compute<
++      cutlass::multiplies, ElementD, float,
++      cutlass::FloatRoundStyle::round_to_nearest>;
++
++ public:
++  using EVTCompute =
++      cutlass::epilogue::fusion::Sm90EVT<Compute1, ScaleA, EVTCompute0>;
++  using ArgumentType = typename EVTCompute::Arguments;
++
++  static ArgumentType prepare_args(torch::Tensor const& a_scales,
++                                   torch::Tensor const& b_scales) {
++    auto a_args = SUPER::template args_from_tensor<ScaleA, float>(a_scales);
++    typename ScaleB::Arguments b_args{};
++    b_args.scalar_ptrs[0] = static_cast<float const*>(b_scales.data_ptr());
++
++    typename EVTCompute0::Arguments evt0_args{b_args, {}, {}};
++    return ArgumentType{a_args, evt0_args, {}};
++  }
++};
++
++/*
+  * This epilogue performs the same operation as ScaledEpilogue, but adds a bias.
+  * This bias can also be used in the per-tensor azp case, where the activation
+  * zero point (azp) is used to compute an azp correction term,
+@@ -211,6 +251,45 @@
+     auto bias_args = SUPER::template args_from_tensor<Bias, ElementD>(bias);
+ 
+     typename EVTCompute0::Arguments evt0_args{b_args, {}, {}};
++    return ArgumentType{a_args, evt0_args, bias_args, {}};
++  }
++};
++
++template <typename ElementAcc, typename ElementD, typename TileShape>
++struct ScaledEpilogueBiasBScalar
++    : private ScaledEpilogueBase<ElementAcc, ElementD, TileShape> {
++ private:
++  using SUPER = ScaledEpilogueBase<ElementAcc, ElementD, TileShape>;
++  using Accum = typename SUPER::Accum;
++  using ScaleA = typename SUPER::template ColOrScalarLoad<float>;
++  using ScaleB = cutlass::epilogue::fusion::Sm90ScalarBroadcast<float>;
++  using Bias = typename SUPER::template RowLoad<ElementD>;
++
++  using Compute0 = cutlass::epilogue::fusion::Sm90Compute<
++      cutlass::multiplies, float, float,
++      cutlass::FloatRoundStyle::round_to_nearest>;
++
++  using EVTCompute0 =
++      cutlass::epilogue::fusion::Sm90EVT<Compute0, ScaleB, Accum>;
++
++  using Compute1 = cutlass::epilogue::fusion::Sm90Compute<
++      cutlass::homogeneous_multiply_add, ElementD, float,
++      cutlass::FloatRoundStyle::round_to_nearest>;
++
++ public:
++  using EVTCompute =
++      cutlass::epilogue::fusion::Sm90EVT<Compute1, ScaleA, EVTCompute0, Bias>;
++
++  using ArgumentType = typename EVTCompute::Arguments;
++  static ArgumentType prepare_args(torch::Tensor const& a_scales,
++                                   torch::Tensor const& b_scales,
++                                   torch::Tensor const& bias) {
++    auto a_args = SUPER::template args_from_tensor<ScaleA, float>(a_scales);
++    typename ScaleB::Arguments b_args{};
++    b_args.scalar_ptrs[0] = static_cast<float const*>(b_scales.data_ptr());
++    auto bias_args = SUPER::template args_from_tensor<Bias, ElementD>(bias);
++
++    typename EVTCompute0::Arguments evt0_args{b_args, {}, {}};
+     return ArgumentType{a_args, evt0_args, bias_args, {}};
+   }
+ };
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8.cu
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8.cu
+@@ -13,9 +13,18 @@
+   if (bias) {
+     TORCH_CHECK(bias->dtype() == out.dtype(),
+                 "currently bias dtype must match output dtype ", out.dtype());
++    if (b_scales.numel() == 1) {
++      return cutlass_scaled_mm_sm120_fp8_epilogue<
++          c3x::ScaledEpilogueBiasBScalar>(out, a, b, a_scales, b_scales,
++                                          *bias);
++    }
+     return cutlass_scaled_mm_sm120_fp8_epilogue<c3x::ScaledEpilogueBias>(
+         out, a, b, a_scales, b_scales, *bias);
+   } else {
++    if (b_scales.numel() == 1) {
++      return cutlass_scaled_mm_sm120_fp8_epilogue<c3x::ScaledEpilogueBScalar>(
++          out, a, b, a_scales, b_scales);
++    }
+     return cutlass_scaled_mm_sm120_fp8_epilogue<c3x::ScaledEpilogue>(
+         out, a, b, a_scales, b_scales);
+   }

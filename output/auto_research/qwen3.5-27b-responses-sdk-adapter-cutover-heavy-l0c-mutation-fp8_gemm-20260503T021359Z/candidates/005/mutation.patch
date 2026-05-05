@@ -1,0 +1,16 @@
+--- /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
++++ /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
+@@ -18,6 +18,12 @@
+             "vllm.model_executor.kernels.linear.scaled_mm.cutlass",
+             "vllm.model_executor.layers.quantization.kernels.scaled_mm.cutlass",
+         ],
+-        "source_replacements": [],
++        "source_replacements": [
++            {
++                "label": "comment_only_fp8_cutlass_decode_locality_marker",
++                "before": "        # Fused GEMM_DQ\n",
++                "after": "        # Fused GEMM_DQ  # L0c: bytecode-stable locality probe\n",
++            }
++        ],
+     },
+ }

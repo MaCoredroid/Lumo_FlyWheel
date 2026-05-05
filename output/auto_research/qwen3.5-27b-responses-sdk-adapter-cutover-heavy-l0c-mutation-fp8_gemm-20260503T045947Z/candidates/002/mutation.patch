@@ -1,0 +1,16 @@
+--- /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py	2026-05-03 03:51:21.401583927 +0000
++++ /dev/fd/63	2026-05-03 05:19:49.460762514 +0000
+@@ -18,6 +18,12 @@
+             "vllm.model_executor.kernels.linear.scaled_mm.cutlass",
+             "vllm.model_executor.layers.quantization.kernels.scaled_mm.cutlass",
+         ],
+-        "source_replacements": [],
++        "source_replacements": [
++            {
++                "label": "skip_matching_2d_output_view",
++                "before": "        # Fused GEMM_DQ\n        output = ops.cutlass_scaled_mm(\n            A, B, out_dtype=out_dtype, scale_a=As, scale_b=Bs, bias=bias\n        )\n        return output.view(*output_shape)\n",
++                "after": "        # Fused GEMM_DQ\n        output = ops.cutlass_scaled_mm(\n            A, B, out_dtype=out_dtype, scale_a=As, scale_b=Bs, bias=bias\n        )\n        if len(output_shape) == 2 and output_shape[0] == output.shape[0] and output_shape[1] == output.shape[1]:\n            return output\n        return output.view(*output_shape)\n",
++            }
++        ],
+     },
+ }

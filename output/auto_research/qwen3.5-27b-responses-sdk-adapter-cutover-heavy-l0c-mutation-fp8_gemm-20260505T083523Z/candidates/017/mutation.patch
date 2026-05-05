@@ -1,0 +1,87 @@
+diff --git cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py
+index 9568d13..9d4b609 100644
+--- cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py
++++ cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py
+@@ -393,0 +394,4 @@ class W8A8BlockFp8LinearOp:
++        self._cutlass_m1_quant_cache: dict[
++            tuple[torch.device, torch.dtype, int],
++            tuple[torch.Tensor, torch.Tensor],
++        ] = {}
+@@ -456 +460,4 @@ class W8A8BlockFp8LinearOp:
+-        q_input, input_scale = self.input_quant_op(input_2d)
++        if input_2d.size(0) == 1 and self.act_quant_group_shape.row == 1:
++            q_input, input_scale = self._quantize_cutlass_m1_cached(input_2d)
++        else:
++            q_input, input_scale = self.input_quant_op(input_2d)
+@@ -475,0 +483,32 @@ class W8A8BlockFp8LinearOp:
++    def _quantize_cutlass_m1_cached(
++        self,
++        input_2d: torch.Tensor,
++    ) -> tuple[torch.Tensor, torch.Tensor]:
++        group_size = self.act_quant_group_shape.col
++        K = input_2d.size(1)
++        fp8_dtype = current_platform.fp8_dtype()
++        cache_key = (input_2d.device, fp8_dtype, K)
++        cached = self._cutlass_m1_quant_cache.get(cache_key)
++        scale_shape = (1, K // group_size)
++
++        if cached is None:
++            q_input = torch.empty(
++                input_2d.shape, device=input_2d.device, dtype=fp8_dtype
++            )
++            input_scale = torch.empty_strided(
++                scale_shape, (1, 1), device=input_2d.device, dtype=torch.float32
++            )
++            cached = (q_input, input_scale)
++            self._cutlass_m1_quant_cache[cache_key] = cached
++
++        q_input, input_scale = cached
++        return per_token_group_quant_fp8(
++            input_2d,
++            group_size=group_size,
++            column_major_scales=True,
++            dtype=fp8_dtype,
++            out_q=q_input,
++            out_s=input_scale,
++            use_ue8m0=False,
++        )
++
+@@ -875,0 +915 @@ def per_token_group_quant_fp8(
++    out_s: torch.Tensor | None = None,
+@@ -889,0 +930 @@ def per_token_group_quant_fp8(
++        out_s: Optional output scale tensor. If not provided, function will create.
+@@ -922,3 +963,8 @@ def per_token_group_quant_fp8(
+-            x_s = torch.empty_strided(
+-                shape, stride, device=x.device, dtype=torch.float32
+-            )
++            if out_s is None:
++                x_s = torch.empty_strided(
++                    shape, stride, device=x.device, dtype=torch.float32
++                )
++            else:
++                assert out_s.shape == shape
++                assert out_s.stride() == stride
++                x_s = out_s
+@@ -927,3 +973,11 @@ def per_token_group_quant_fp8(
+-            x_s = torch.empty(shape, device=x.device, dtype=torch.float32).permute(
+-                -1, -2
+-            )
++            if out_s is None:
++                x_s = torch.empty(shape, device=x.device, dtype=torch.float32).permute(
++                    -1, -2
++                )
++            else:
++                expected_shape = x.shape[:-2] + (x.shape[-2],
++                                                 x.shape[-1] // group_size)
++                assert out_s.shape == expected_shape
++                assert out_s.stride(-2) == 1
++                assert out_s.stride(-1) == x.shape[-2]
++                x_s = out_s
+@@ -932 +986,6 @@ def per_token_group_quant_fp8(
+-        x_s = torch.empty(shape, device=x.device, dtype=torch.float32)
++        if out_s is None:
++            x_s = torch.empty(shape, device=x.device, dtype=torch.float32)
++        else:
++            assert out_s.shape == shape
++            assert out_s.is_contiguous()
++            x_s = out_s

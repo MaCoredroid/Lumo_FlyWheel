@@ -1,0 +1,14 @@
+--- /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py	2026-05-03 03:41:49.262092262 +0000
++++ /dev/fd/63	2026-05-03 03:45:11.627030751 +0000
+@@ -20,9 +20,9 @@
+         ],
+         "source_replacements": [
+             {
+-                "label": "comment_only_fp8_cutlass_decode_bandwidth_marker",
++                "label": "comment_only_fp8_cutlass_decode_cache_marker",
+                 "before": "        # Fused GEMM_DQ\n",
+-                "after": "        # Fused GEMM_DQ  # L0c: preserve wrapper bytecode for parity\n",
++                "after": "        # Fused GEMM_DQ  # L0c: bytecode-stable decode cache probe\n",
+             }
+         ],
+     },

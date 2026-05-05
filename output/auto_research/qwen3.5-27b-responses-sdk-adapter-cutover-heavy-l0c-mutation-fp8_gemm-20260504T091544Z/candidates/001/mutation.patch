@@ -1,0 +1,12 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
+@@ -37,6 +37,9 @@
+     typename GemmKernel::EpilogueArguments epilogue_args,
+     typename GemmKernel::TileSchedulerArguments scheduler = {}) {
+   cutlass::KernelHardwareInfo hw_info;
++  hw_info.device_id = device.index();
++  hw_info.sm_count =
++      at::cuda::getCurrentDeviceProperties()->multiProcessorCount;
+   typename GemmKernel::Arguments args{cutlass::gemm::GemmUniversalMode::kGemm,
+                                       prob_shape,
+                                       mainloop_args,

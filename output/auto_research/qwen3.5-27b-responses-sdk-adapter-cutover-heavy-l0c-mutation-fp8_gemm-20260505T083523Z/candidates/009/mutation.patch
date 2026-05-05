@@ -1,0 +1,230 @@
+diff --git cutlass_source_workspace/vllm-source/vllm/model_executor/layers/linear.py cutlass_source_workspace/vllm-source/vllm/model_executor/layers/linear.py
+index 44fd516..36272cc 100644
+--- cutlass_source_workspace/vllm-source/vllm/model_executor/layers/linear.py
++++ cutlass_source_workspace/vllm-source/vllm/model_executor/layers/linear.py
+@@ -1538,6 +1538,54 @@ class RowParallelLinear(LinearBase):
+         output_bias = self.bias if self.skip_bias_add else None
+         return output, output_bias
+ 
++    def can_apply_pre_quantized_cutlass_block_fp8(
++        self,
++        input_: torch.Tensor,
++        output_dtype: torch.dtype,
++    ) -> bool:
++        if not self.input_is_parallel:
++            return False
++
++        can_apply_pre_quantized = getattr(
++            self.quant_method, "can_apply_pre_quantized_cutlass_block_fp8", None
++        )
++        if can_apply_pre_quantized is None:
++            return False
++
++        return can_apply_pre_quantized(self, input_, output_dtype)
++
++    def apply_pre_quantized_cutlass_block_fp8(
++        self,
++        input_q: torch.Tensor,
++        input_scale: torch.Tensor,
++        output_dtype: torch.dtype,
++    ) -> torch.Tensor | tuple[torch.Tensor, Parameter | None] | None:
++        if not self.input_is_parallel:
++            return None
++
++        apply_pre_quantized = getattr(
++            self.quant_method, "apply_pre_quantized_cutlass_block_fp8", None
++        )
++        if apply_pre_quantized is None:
++            return None
++
++        bias_ = None if (self.tp_rank > 0 or self.skip_bias_add) else self.bias
++        output_parallel = apply_pre_quantized(
++            self, input_q, input_scale, output_dtype, bias_
++        )
++        if output_parallel is None:
++            return None
++
++        if self.reduce_results and self.tp_size > 1:
++            output = tensor_model_parallel_all_reduce(output_parallel)
++        else:
++            output = output_parallel
++
++        if not self.return_bias:
++            return output
++        output_bias = self.bias if self.skip_bias_add else None
++        return output, output_bias
++
+     def extra_repr(self) -> str:
+         s = f"in_features={self.input_size_per_partition}"
+         s += f", output_features={self.output_size}"
+diff --git cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/fp8.py cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/fp8.py
+index fffcfa5..60139e7 100644
+--- cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/fp8.py
++++ cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/fp8.py
+@@ -46,6 +46,7 @@ from vllm.model_executor.layers.quantization.base_config import (
+ from vllm.model_executor.layers.quantization.kv_cache import BaseKVCacheMethod
+ from vllm.model_executor.layers.quantization.utils.fp8_utils import (
+     W8A8BlockFp8LinearOp,
++    cutlass_scaled_mm,
+     create_fp8_input_scale,
+     create_fp8_scale_parameter,
+     create_fp8_weight_parameter,
+@@ -496,6 +497,51 @@ class Fp8LinearMethod(LinearMethodBase):
+ 
+         return self.fp8_linear.apply_weights(layer, x, bias)
+ 
++    def can_apply_pre_quantized_cutlass_block_fp8(
++        self,
++        layer: torch.nn.Module,
++        input_2d: torch.Tensor,
++        output_dtype: torch.dtype,
++    ) -> bool:
++        return (
++            not self.use_marlin
++            and self.block_quant
++            and getattr(
++                self.w8a8_block_fp8_linear.w8a8_blockscale_op,
++                "__func__",
++                None,
++            )
++            is W8A8BlockFp8LinearOp._run_cutlass
++        )
++
++    def apply_pre_quantized_cutlass_block_fp8(
++        self,
++        layer: torch.nn.Module,
++        x_q: torch.Tensor,
++        x_s: torch.Tensor,
++        output_dtype: torch.dtype,
++        bias: torch.Tensor | None = None,
++    ) -> torch.Tensor | None:
++        if self.use_marlin or not self.block_quant:
++            return None
++
++        if not self.can_apply_pre_quantized_cutlass_block_fp8(
++            layer, x_q, output_dtype
++        ):
++            return None
++
++        output = cutlass_scaled_mm(
++            x_q,
++            layer.weight,
++            x_s,
++            layer.weight_scale_inv,
++            list(self.weight_block_size),
++            output_dtype,
++        )
++        if bias is not None:
++            output = output + bias
++        return output
++
+ 
+ class Fp8OnlineLinearMethod(Fp8LinearMethod):
+     """Online version of Fp8LinearMethod which loads a full precision checkpoint
+diff --git cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py
+index 9568d13..0e59682 100644
+--- cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py
++++ cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py
+@@ -706,8 +706,11 @@ def _silu_mul_per_token_group_quant_fp8_colmajor(
+ 
+     act_in_ptrs = base_y_ptr + offs_m[:, None] * N + offs_n[None, :]
+ 
+-    act_in = tl.load(act_in_ptrs)
+-    mul_in = tl.load(act_in_ptrs + N_2)
++    valid_m = m_offset + offs_m < M
++    valid_n = n_offset + offs_n < N_2
++    mask = valid_m[:, None] & valid_n[None, :]
++    act_in = tl.load(act_in_ptrs, mask=mask, other=0.0)
++    mul_in = tl.load(act_in_ptrs + N_2, mask=mask, other=0.0)
+ 
+     # silu & mul
+     act_in = act_in.to(tl.float32)
+@@ -725,14 +728,14 @@ def _silu_mul_per_token_group_quant_fp8_colmajor(
+     # store y_q
+     base_y_q_ptr = y_q_ptr + m_offset * N_2 + n_offset
+     y_q_ptrs = base_y_q_ptr + offs_m[:, None] * N_2 + offs_n[None, :]
+-    tl.store(y_q_ptrs, y_q)
++    tl.store(y_q_ptrs, y_q, mask=mask)
+ 
+     # store y_s
+     group_id = n_offset // GROUP_SIZE
+     base_y_s_ptr = y_s_ptr + group_id * y_s_col_stride + m_offset
+     y_s_ptrs = base_y_s_ptr + offs_m
+     y_s = tl.reshape(y_s, (BLOCK_M,))
+-    tl.store(y_s_ptrs, y_s)
++    tl.store(y_s_ptrs, y_s, mask=valid_m)
+ 
+ 
+ def silu_mul_per_token_group_quant_fp8_colmajor(
+@@ -767,7 +770,6 @@ def silu_mul_per_token_group_quant_fp8_colmajor(
+ 
+     BLOCK_M = 8
+     BLOCK_N = GROUP_SIZE
+-    assert M % BLOCK_M == 0
+     assert N_2 % BLOCK_N == 0
+ 
+     # Using the default value (240.0) from pytorch will cause accuracy
+@@ -777,10 +779,8 @@ def silu_mul_per_token_group_quant_fp8_colmajor(
+     fp8_min = -224.0 if current_platform.is_fp8_fnuz() else finfo.min
+     fp8_max = 224.0 if current_platform.is_fp8_fnuz() else finfo.max
+ 
+-    # Force even division so we can avoid edgecases within the kernel.
+-    assert M % BLOCK_M == 0
+     assert N_2 % BLOCK_N == 0
+-    grid = (M // BLOCK_M, N_2 // BLOCK_N)
++    grid = (triton.cdiv(M, BLOCK_M), N_2 // BLOCK_N)
+ 
+     _silu_mul_per_token_group_quant_fp8_colmajor[grid](
+         input,
+diff --git cutlass_source_workspace/vllm-source/vllm/model_executor/models/qwen2_moe.py cutlass_source_workspace/vllm-source/vllm/model_executor/models/qwen2_moe.py
+index 4b0c756..b714872 100644
+--- cutlass_source_workspace/vllm-source/vllm/model_executor/models/qwen2_moe.py
++++ cutlass_source_workspace/vllm-source/vllm/model_executor/models/qwen2_moe.py
+@@ -50,6 +50,9 @@ from vllm.model_executor.layers.linear import (
+ )
+ from vllm.model_executor.layers.logits_processor import LogitsProcessor
+ from vllm.model_executor.layers.quantization import QuantizationConfig
++from vllm.model_executor.layers.quantization.utils.fp8_utils import (
++    silu_mul_per_token_group_quant_fp8_colmajor,
++)
+ from vllm.model_executor.layers.rotary_embedding import get_rope
+ from vllm.model_executor.layers.vocab_parallel_embedding import (
+     ParallelLMHead,
+@@ -107,8 +110,35 @@ class Qwen2MoeMLP(nn.Module):
+ 
+     def forward(self, x):
+         gate_up, _ = self.gate_up_proj(x)
+-        out = self.act_fn(gate_up)
+-        out, _ = self.down_proj(out)
++        fused_down = None
++        if (
++            gate_up.dim() == 2
++            and gate_up.shape[0] > 0
++            and gate_up.shape[1] % 256 == 0
++        ):
++            can_apply_pre_quantized = getattr(
++                self.down_proj, "can_apply_pre_quantized_cutlass_block_fp8", None
++            )
++            apply_pre_quantized = getattr(
++                self.down_proj, "apply_pre_quantized_cutlass_block_fp8", None
++            )
++            if (
++                can_apply_pre_quantized is not None
++                and apply_pre_quantized is not None
++                and can_apply_pre_quantized(gate_up, gate_up.dtype)
++            ):
++                out_q, out_scale = silu_mul_per_token_group_quant_fp8_colmajor(
++                    gate_up
++                )
++                fused_down = apply_pre_quantized(out_q, out_scale, gate_up.dtype)
++
++        if fused_down is None:
++            out = self.act_fn(gate_up)
++            out, _ = self.down_proj(out)
++        elif isinstance(fused_down, tuple):
++            out, _ = fused_down
++        else:
++            out = fused_down
+ 
+         if self.expert_gate is not None:
+             out = F.sigmoid(self.expert_gate(x)[0]) * out

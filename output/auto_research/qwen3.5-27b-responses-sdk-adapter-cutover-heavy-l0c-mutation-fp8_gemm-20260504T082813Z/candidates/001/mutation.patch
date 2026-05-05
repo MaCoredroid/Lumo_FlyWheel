@@ -1,0 +1,11 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
+@@ -161,7 +161,7 @@
+         out, a, b, std::forward<EpilogueArgs>(args)...);
+   }
+ 
+-  if (M <= 256) {
++  if (M <= 64) {
+     using Cutlass3xGemmM64 =
+         typename sm120_fp8_config_M64<InType, OutType, Epilogue>::Cutlass3xGemm;
+     return cutlass_gemm_caller<Cutlass3xGemmM64>(

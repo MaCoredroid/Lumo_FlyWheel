@@ -1,0 +1,28 @@
+diff --git cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm.cuh cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm.cuh
+index 546e1ee..052fd9c 100644
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm.cuh
+@@ -203,7 +203,8 @@ struct cutlass_3x_gemm_sm120 {
+           KernelSchedule>::CollectiveOp;
+ 
+   using GemmKernel = enable_sm120_only<cutlass::gemm::kernel::GemmUniversal<
+-      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue, void>>;
++      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
++      cutlass::gemm::PersistentScheduler>>;
+ };
+ 
+ }  // namespace vllm
+diff --git cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
+index 37846a8..4fe29e1 100644
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
+@@ -71,7 +71,8 @@ struct cutlass_3x_gemm_sm120_custom {
+           KernelSchedule, void>::CollectiveOp;
+ 
+   using GemmKernel = enable_sm120_only<cutlass::gemm::kernel::GemmUniversal<
+-      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue, void>>;
++      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
++      cutlass::gemm::PersistentScheduler>>;
+ };
+ 
+ template <typename InType, typename OutType,

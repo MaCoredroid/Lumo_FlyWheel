@@ -1,0 +1,74 @@
+diff --git csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
+index 26de32c..d0e0542 100644
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
+@@ -6,6 +6,9 @@
+ 
+ #include <ATen/cuda/CUDAContext.h>
+ 
++#include <cstdint>
++#include <unordered_map>
++
+ #include "cutlass/cutlass.h"
+ 
+ #include "cute/tensor.hpp"
+@@ -30,6 +33,34 @@ static inline cute::Shape<int, int, int, int> get_problem_shape(
+   return {m, n, k, 1};
+ }
+ 
++static inline void* get_cutlass_workspace_ptr(torch::Device device,
++                                              cudaStream_t stream,
++                                              size_t workspace_size) {
++  if (workspace_size == 0) {
++    return nullptr;
++  }
++
++  int device_id = static_cast<int>(device.index());
++  if (device_id < 0) {
++    device_id = 0;
++  }
++
++  uintptr_t stream_bits = reinterpret_cast<uintptr_t>(stream);
++  uint64_t cache_key =
++      (static_cast<uint64_t>(device_id) << 48) ^ static_cast<uint64_t>(stream_bits);
++
++  thread_local std::unordered_map<uint64_t, torch::Tensor> workspace_cache;
++  torch::Tensor& workspace = workspace_cache[cache_key];
++  if (!workspace.defined() ||
++      workspace.numel() < static_cast<int64_t>(workspace_size)) {
++    auto const workspace_options =
++        torch::TensorOptions().dtype(torch::kUInt8).device(device);
++    workspace = torch::empty(workspace_size, workspace_options);
++  }
++
++  return workspace.data_ptr();
++}
++
+ template <typename GemmKernel>
+ void cutlass_gemm_caller(
+     torch::Device device, cute::Shape<int, int, int, int> prob_shape,
+@@ -50,13 +81,12 @@ void cutlass_gemm_caller(
+   CUTLASS_CHECK(gemm_op.can_implement(args));
+ 
+   size_t workspace_size = gemm_op.get_workspace_size(args);
+-  auto const workspace_options =
+-      torch::TensorOptions().dtype(torch::kUInt8).device(device);
+-  auto workspace = torch::empty(workspace_size, workspace_options);
+-
+   auto stream = at::cuda::getCurrentCUDAStream(device.index());
++  cudaStream_t raw_stream = stream.stream();
++  void* workspace_ptr =
++      get_cutlass_workspace_ptr(device, raw_stream, workspace_size);
+ 
+-  cutlass::Status status = gemm_op.run(args, workspace.data_ptr(), stream);
++  cutlass::Status status = gemm_op.run(args, workspace_ptr, raw_stream);
+   CUTLASS_CHECK(status);
+ }
+ 
+@@ -104,4 +134,4 @@ void cutlass_gemm_caller(torch::Tensor& out, torch::Tensor const& a,
+                                   epilogue_args);
+ }
+ 
+-}  // namespace vllm::c3x
+\ No newline at end of file
++}  // namespace vllm::c3x

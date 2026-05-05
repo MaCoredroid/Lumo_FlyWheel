@@ -1,0 +1,21 @@
+--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -155,6 +155,9 @@
+     def can_implement(cls, c: FP8ScaledMMLinearLayerConfig) -> tuple[bool, str | None]:
+         return True, None
+ 
++    def get_output_padding(self) -> int | None:
++        return 17
++
+     def apply_scaled_mm(
+         self,
+         *,
+@@ -170,4 +173,7 @@
+         output = ops.cutlass_scaled_mm(
+             A, B, out_dtype=out_dtype, scale_a=As, scale_b=Bs, bias=bias
+         )
+-        return output.view(*output_shape)
++        output_rows = 1
++        for dim in output_shape[:-1]:
++            output_rows *= dim
++        return torch.narrow(output, 0, 0, output_rows).view(*output_shape)

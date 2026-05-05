@@ -1,0 +1,10 @@
+--- /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
++++ /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
+@@ -16,7 +16,6 @@
+         "schema": "l0c.fp8_gemm.cutlass_runtime_overlay.v1",
+         "target_modules": [
+             "vllm.model_executor.kernels.linear.scaled_mm.cutlass",
+-            "vllm.model_executor.layers.quantization.kernels.scaled_mm.cutlass",
+         ],
+         "source_replacements": [],
+     },

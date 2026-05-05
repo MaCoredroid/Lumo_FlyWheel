@@ -1,0 +1,9 @@
+--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -170,4 +170,6 @@
+         output = ops.cutlass_scaled_mm(
+             A, B, out_dtype=out_dtype, scale_a=As, scale_b=Bs, bias=bias
+         )
++        if len(output_shape) == 2:
++            return output
+         return output.view(*output_shape)

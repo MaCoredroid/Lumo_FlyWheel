@@ -1,0 +1,23 @@
+diff --git a/vllm/model_executor/layers/quantization/utils/fp8_utils.py b/vllm/model_executor/layers/quantization/utils/fp8_utils.py
+index 9568d13..b9a329e 100644
+--- cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py
++++ cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py
+@@ -372,0 +373,8 @@ class W8A8BlockFp8LinearOp:
++        capability = current_platform.get_device_capability()
++        capability_int = -1 if capability is None else capability.to_int()
++        self.use_sm120_m1_padded_cutlass = (
++            cutlass_block_fp8_supported
++            and 120 <= capability_int < 130
++            and self.act_quant_group_shape == GroupShape(1, 128)
++            and self.weight_group_shape == GroupShape(128, 128)
++        )
+@@ -456,0 +465,9 @@ class W8A8BlockFp8LinearOp:
++        if self.use_sm120_m1_padded_cutlass and q_input.size(0) == 1:
++            return torch.ops.vllm.padded_cutlass(
++                q_input,
++                weight,
++                input_scale,
++                weight_scale,
++                list(self.weight_group_shape),
++                input_2d.dtype,
++            )

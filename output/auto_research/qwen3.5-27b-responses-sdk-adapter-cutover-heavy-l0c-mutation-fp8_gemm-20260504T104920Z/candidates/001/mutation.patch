@@ -1,0 +1,14 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
+@@ -36,7 +36,10 @@
+     typename GemmKernel::MainloopArguments mainloop_args,
+     typename GemmKernel::EpilogueArguments epilogue_args,
+     typename GemmKernel::TileSchedulerArguments scheduler = {}) {
+-  cutlass::KernelHardwareInfo hw_info;
++  int device_id = static_cast<int>(device.index());
++  cutlass::KernelHardwareInfo hw_info{
++      device_id, cutlass::KernelHardwareInfo::query_device_multiprocessor_count(
++                     device_id)};
+   typename GemmKernel::Arguments args{cutlass::gemm::GemmUniversalMode::kGemm,
+                                       prob_shape,
+                                       mainloop_args,

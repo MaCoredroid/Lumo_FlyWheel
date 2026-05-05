@@ -1,0 +1,30 @@
+--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -155,6 +155,27 @@
+     def can_implement(cls, c: FP8ScaledMMLinearLayerConfig) -> tuple[bool, str | None]:
+         return True, None
+ 
++    def process_weights_after_loading(self, layer: torch.nn.Module) -> None:
++        w_name, w_s_name, _, _ = self.layer_param_names
++
++        weight = getattr(layer, w_name)
++        if not weight.is_contiguous():
++            replace_parameter(
++                layer,
++                w_name,
++                torch.nn.Parameter(weight.contiguous().data, requires_grad=False),
++            )
++
++        weight_scale = getattr(layer, w_s_name)
++        if not weight_scale.is_contiguous():
++            replace_parameter(
++                layer,
++                w_s_name,
++                torch.nn.Parameter(
++                    weight_scale.contiguous().data, requires_grad=False
++                ),
++            )
++
+     def apply_scaled_mm(
+         self,
+         *,

@@ -1,0 +1,35 @@
+diff --git cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
+index 0701cb5..65422d1 100644
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
+@@ -137,6 +137,18 @@ struct sm120_blockwise_fp8_config_M64 {
+       EpilogueSchedule, KernelSchedule>;
+ };
+ 
++template <typename OutType>
++struct sm120_blockwise_fp8_config_M32 {
++  // Decode-dominant batches often have very small M; avoid a 64-row tile there.
++  using KernelSchedule = cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
++  using EpilogueSchedule = cutlass::epilogue::collective::EpilogueScheduleAuto;
++  using TileShape = Shape<_32, _128, _128>;
++  using ClusterShape = Shape<_1, _1, _1>;
++  using Gemm = cutlass_3x_gemm_fp8_blockwise<
++      OutType, 1, 128, 128, TileShape, ClusterShape,
++      EpilogueSchedule, KernelSchedule>;
++};
++
+ template <typename Gemm>
+ void cutlass_gemm_caller_blockwise(torch::Tensor& out, torch::Tensor const& a,
+                                    torch::Tensor const& b,
+@@ -202,6 +214,11 @@ void cutlass_gemm_blockwise_sm120_fp8_dispatch(torch::Tensor& out,
+                                                torch::Tensor const& a_scales,
+                                                torch::Tensor const& b_scales) {
+   int M = a.size(0);
++  if (M <= 32) {
++    using Gemm = typename sm120_blockwise_fp8_config_M32<OutType>::Gemm;
++    return cutlass_gemm_caller_blockwise<Gemm>(
++        out, a, b, a_scales, b_scales);
++  }
+   if (M <= 256) {
+     using Gemm = typename sm120_blockwise_fp8_config_M64<OutType>::Gemm;
+     return cutlass_gemm_caller_blockwise<Gemm>(

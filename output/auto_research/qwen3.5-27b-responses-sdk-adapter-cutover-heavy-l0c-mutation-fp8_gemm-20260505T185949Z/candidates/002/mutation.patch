@@ -1,0 +1,88 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
+@@ -6,6 +6,8 @@
+ 
+ #include <ATen/cuda/CUDAContext.h>
+ 
++#include <vector>
++
+ #include "cutlass/cutlass.h"
+ 
+ #include "cute/tensor.hpp"
+@@ -24,12 +26,50 @@
+ 
+ namespace vllm::c3x {
+ 
++struct CutlassWorkspaceCacheEntry {
++  int device_id;
++  cudaStream_t stream;
++  torch::Tensor buffer;
++};
++
+ static inline cute::Shape<int, int, int, int> get_problem_shape(
+     torch::Tensor const& a, torch::Tensor const& b) {
+   int32_t m = a.size(0), n = b.size(1), k = a.size(1);
+   return {m, n, k, 1};
+ }
+ 
++static inline void* get_cutlass_workspace_ptr(torch::Device device,
++                                              cudaStream_t stream,
++                                              size_t workspace_size) {
++  if (workspace_size == 0) {
++    return nullptr;
++  }
++
++  int device_id = static_cast<int>(device.index());
++  if (device_id < 0) {
++    device_id = 0;
++  }
++
++  thread_local std::vector<CutlassWorkspaceCacheEntry> workspace_cache;
++  for (auto& entry : workspace_cache) {
++    if (entry.device_id == device_id && entry.stream == stream) {
++      if (!entry.buffer.defined() ||
++          static_cast<size_t>(entry.buffer.numel()) < workspace_size) {
++        auto const workspace_options =
++            torch::TensorOptions().dtype(torch::kUInt8).device(device);
++        entry.buffer = torch::empty(workspace_size, workspace_options);
++      }
++      return entry.buffer.data_ptr();
++    }
++  }
++
++  auto const workspace_options =
++      torch::TensorOptions().dtype(torch::kUInt8).device(device);
++  workspace_cache.push_back(
++      {device_id, stream, torch::empty(workspace_size, workspace_options)});
++  return workspace_cache.back().buffer.data_ptr();
++}
++
+ template <typename GemmKernel>
+ void cutlass_gemm_caller(
+     torch::Device device, cute::Shape<int, int, int, int> prob_shape,
+@@ -49,14 +89,12 @@
+   GemmOp gemm_op;
+   CUTLASS_CHECK(gemm_op.can_implement(args));
+ 
+-  size_t workspace_size = gemm_op.get_workspace_size(args);
+-  auto const workspace_options =
+-      torch::TensorOptions().dtype(torch::kUInt8).device(device);
+-  auto workspace = torch::empty(workspace_size, workspace_options);
+-
+   auto stream = at::cuda::getCurrentCUDAStream(device.index());
++  size_t workspace_size = gemm_op.get_workspace_size(args);
++  void* workspace_ptr =
++      get_cutlass_workspace_ptr(device, stream.stream(), workspace_size);
+ 
+-  cutlass::Status status = gemm_op.run(args, workspace.data_ptr(), stream);
++  cutlass::Status status = gemm_op.run(args, workspace_ptr, stream);
+   CUTLASS_CHECK(status);
+ }
+ 
+@@ -104,4 +142,4 @@
+                                   epilogue_args);
+ }
+ 
+-}  // namespace vllm::c3x
+\ No newline at end of file
++}  // namespace vllm::c3x

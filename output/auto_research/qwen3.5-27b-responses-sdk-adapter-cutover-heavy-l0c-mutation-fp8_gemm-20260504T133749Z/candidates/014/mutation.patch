@@ -1,0 +1,20 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
+@@ -100,8 +100,14 @@
+           std::forward<EpilogueArgs>(epilogue_params)...),
+       c_ptr, c_stride, c_ptr, d_stride};
+ 
++  typename GemmKernel::TileSchedulerArguments scheduler{};
++  if (M <= 16 && N >= 64) {
++    scheduler.raster_order =
++        cutlass::gemm::kernel::detail::RasterOrderOptions::AlongN;
++  }
++
+   cutlass_gemm_caller<GemmKernel>(a.device(), prob_shape, mainloop_args,
+-                                  epilogue_args);
++                                  epilogue_args, scheduler);
+ }
+ 
+-}  // namespace vllm::c3x
+\ No newline at end of file
++}  // namespace vllm::c3x

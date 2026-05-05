@@ -1,0 +1,53 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh
+@@ -30,13 +30,30 @@
+   return {m, n, k, 1};
+ }
+ 
++static inline cutlass::KernelHardwareInfo get_cached_kernel_hardware_info(
++    torch::Device device) {
++  int device_id = static_cast<int>(device.index());
++  thread_local int cached_device_id = -1;
++  thread_local int cached_sm_count = 0;
++
++  if (cached_device_id != device_id || cached_sm_count <= 0) {
++    cached_device_id = device_id;
++    cached_sm_count =
++        cutlass::KernelHardwareInfo::query_device_multiprocessor_count(
++            device_id);
++  }
++
++  return cutlass::KernelHardwareInfo{device_id, cached_sm_count};
++}
++
+ template <typename GemmKernel>
+ void cutlass_gemm_caller(
+     torch::Device device, cute::Shape<int, int, int, int> prob_shape,
+     typename GemmKernel::MainloopArguments mainloop_args,
+     typename GemmKernel::EpilogueArguments epilogue_args,
+     typename GemmKernel::TileSchedulerArguments scheduler = {}) {
+-  cutlass::KernelHardwareInfo hw_info;
++  cutlass::KernelHardwareInfo hw_info =
++      get_cached_kernel_hardware_info(device);
+   typename GemmKernel::Arguments args{cutlass::gemm::GemmUniversalMode::kGemm,
+                                       prob_shape,
+                                       mainloop_args,
+@@ -104,4 +121,4 @@
+                                   epilogue_args);
+ }
+ 
+-}  // namespace vllm::c3x
+\ No newline at end of file
++}  // namespace vllm::c3x
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
+@@ -105,7 +105,8 @@
+ 
+   // SM12x family to support both SM120 (RTX 5090) and SM121 (DGX Spark)
+   using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
+-      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue>>;
++      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
++      cutlass::gemm::PersistentScheduler>>;
+ 
+   struct GemmKernel : public KernelType {};
+ };

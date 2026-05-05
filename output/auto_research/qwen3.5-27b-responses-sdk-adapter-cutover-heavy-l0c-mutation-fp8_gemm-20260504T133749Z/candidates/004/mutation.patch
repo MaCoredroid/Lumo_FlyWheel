@@ -1,0 +1,22 @@
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm.cuh
+@@ -202,7 +202,7 @@
+               sizeof(typename CollectiveEpilogue::SharedStorage))>,
+           KernelSchedule>::CollectiveOp;
+ 
+-  using GemmKernel = enable_sm120_only<cutlass::gemm::kernel::GemmUniversal<
++  using GemmKernel = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
+       Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue, void>>;
+ };
+ 
+--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_sm120_fp8_dispatch.cuh
+@@ -70,7 +70,7 @@
+               sizeof(typename CollectiveEpilogue::SharedStorage))>,
+           KernelSchedule, void>::CollectiveOp;
+ 
+-  using GemmKernel = enable_sm120_only<cutlass::gemm::kernel::GemmUniversal<
++  using GemmKernel = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
+       Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue, void>>;
+ };
+ 

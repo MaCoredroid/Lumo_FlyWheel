@@ -1,0 +1,22 @@
+--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -166,8 +166,15 @@
+         bias: torch.Tensor | None,
+         output_shape: list,
+     ) -> torch.Tensor:
+-        # Fused GEMM_DQ
+-        output = ops.cutlass_scaled_mm(
+-            A, B, out_dtype=out_dtype, scale_a=As, scale_b=Bs, bias=bias
+-        )
++        # Fused GEMM_DQ. For the common CUTLASS-compatible case, avoid the
++        # Python helper's shape massage and dispatch directly to the C++ op.
++        if B.shape[0] % 16 == 0 and B.shape[1] % 16 == 0:
++            output = torch.empty(
++                (A.shape[0], B.shape[1]), dtype=out_dtype, device=A.device
++            )
++            torch.ops._C.cutlass_scaled_mm(output, A, B, As, Bs, bias)
++        else:
++            output = ops.cutlass_scaled_mm(
++                A, B, out_dtype=out_dtype, scale_a=As, scale_b=Bs, bias=bias
++            )
+         return output.view(*output_shape)
