@@ -9079,7 +9079,7 @@ class L0cKernelMutationRunner:
         if baseline_tok_s is None or baseline_tok_s <= 0.0:
             gate.update(
                 {
-                    "pass": True,
+                    "pass": False,
                     "reason": "baseline_warm_decode_rate_unavailable",
                     "error_detail": "warm_pre_mutation.json is missing or lacks aggregate decode_tokens_per_s",
                 }
@@ -11880,6 +11880,16 @@ class L0cKernelMutationRunner:
                 path.name == "mutation.patch"
                 and (iteration_dir / "iteration_brief.md").is_file()
             ):
+                if (
+                    speed_gate_preflight is not None
+                    and not speed_gate_preflight.get("ready", False)
+                ):
+                    payload["ok"] = False
+                    payload["reason"] = str(
+                        speed_gate_preflight.get("reason")
+                        or "baseline_warm_decode_rate_unavailable"
+                    )
+                    return payload
                 analysis_error = self._validate_l0c_candidate_analysis(iteration_dir)
                 payload["analysis_preflight"] = {
                     "ok": analysis_error is None,

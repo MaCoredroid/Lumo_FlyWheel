@@ -5659,6 +5659,37 @@ def test_l0c_parity_generation_speed_gate_rejects_below_margin(
     )
 
 
+def test_l0c_parity_generation_speed_gate_rejects_missing_baseline(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    round_dir = repo / "output" / "auto_research" / (
+        "qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T000000Z"
+    )
+    iteration_dir = round_dir / "candidates" / "001"
+    iteration_dir.mkdir(parents=True)
+
+    gate = runner._run_l0c_parity_generation_speed_gate(
+        round_id=round_dir.name,
+        round_dir=round_dir,
+        iteration="001",
+        iteration_dir=iteration_dir,
+        kernel_target="fp8_gemm",
+        fixture_id="responses-sdk-adapter-cutover-fp8-gemm-v1",
+    )
+
+    assert gate["pass"] is False
+    assert gate["reason"] == "baseline_warm_decode_rate_unavailable"
+    persisted = json.loads((iteration_dir / "speed_gate.json").read_text(encoding="utf-8"))
+    assert persisted["pass"] is False
+    assert persisted["reason"] == "baseline_warm_decode_rate_unavailable"
+
+
 def test_l0c_fp8_gemm_real_non_cutlass_non_triton_backend_blocked(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     _write_l0a_fixture_pair(repo)
@@ -6518,6 +6549,34 @@ def test_l0c_preflight_patch_reports_speed_gate_threshold(tmp_path: Path) -> Non
     assert speed_gate["baseline_decode_tokens_per_s"] == 7.5
     assert speed_gate["required_decode_tokens_per_s"] == 7.725
     assert "BLOCKED.md" in speed_gate["agent_action"]
+
+
+def test_l0c_preflight_patch_rejects_missing_speed_gate_baseline(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    candidate_dir = repo / "round" / "candidates" / "001"
+    candidate_dir.mkdir(parents=True)
+    (candidate_dir / "iteration_brief.md").write_text("brief\n", encoding="utf-8")
+    patch_path = candidate_dir / "mutation.patch"
+    patch_path.write_text(
+        """--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -1,2 +1,2 @@
+-output = ops.cutlass_scaled_mm(A, B)
++output = ops.cutlass_scaled_mm(A.contiguous(), B)
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    payload = runner.preflight_patch(kernel_target="fp8_gemm", patch_path=patch_path)
+
+    assert payload["ok"] is False
+    assert payload["reason"] == "baseline_warm_decode_rate_unavailable"
+    assert payload["speed_gate_preflight"]["ready"] is False
 
 
 def test_l0c_preflight_patch_rejects_analysis_below_speed_gate_margin(tmp_path: Path) -> None:
