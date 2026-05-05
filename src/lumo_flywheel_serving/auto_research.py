@@ -11063,7 +11063,17 @@ class L0cKernelMutationRunner:
             ("warm_decode_rate", ("tok/s", "tokens/s", "generated tokens/s")),
             ("decode_latency", ("ms/generated", "decode_ms", "ms per generated")),
             ("gb10_bandwidth", ("gb10", "273 gb/s", "bandwidth")),
-            ("bytes_per_token", ("bytes/token", "bytes per token", "bytes_per_generated_token")),
+            (
+                "bytes_per_token",
+                (
+                    "bytes/token",
+                    "bytes per token",
+                    "bytes_per_generated_token",
+                    "gb/token",
+                    "gb per token",
+                    "gb of lpddr traffic per requested output token",
+                ),
+            ),
             ("cutlass_or_ffn_component", ("cutlass", "ffn_linear", "fp8 gemm")),
             ("compute_sanity_check", ("flop", "arithmetic intensity", "compute-bound", "memory-bound")),
             ("mutation_mechanism", ("mechanism", "should reduce", "expected reduction", "lift")),
