@@ -6063,6 +6063,13 @@ fixed-budget keep/discard search. Tiny one-line nudges are fine only when the
 local evidence says that exact knob is the bottleneck. Otherwise prefer a larger
 coherent mutation that changes an actual performance mechanism enough to be
 measurable, while keeping the diff reviewable and the parity contract intact.
+After repeated byte-traffic blocks, do not stop at "schedule edits cannot clear
+20%" unless you have also considered a broader CUTLASS-backed byte mechanism:
+for example caller-level fusion, persistent/reuse staging, paired-projection
+reuse, or a new specialized CUTLASS route that reduces launches or B-weight
+streaming while preserving the public dtype/layout/scale/parity contract. If
+such a mechanism is impossible, name the exact contract or source boundary that
+prevents it.
 
 # Hardware context (MATTERS for what mutations are worth proposing)
 This kernel runs on a **DGX Spark GB10**. Treat it as bandwidth-bound:
@@ -12976,6 +12983,16 @@ class L0cKernelMutationRunner:
                 "may write a whole new CUTLASS kernel, dispatch route, or scale/shape "
                 "specialization if it has a credible local compile/preflight path and "
                 "a parity-preserving hypothesis."
+            ),
+            (
+                "- After repeated byte-traffic BLOCKED rows, do not repeat the same "
+                "local-schedule impossibility argument unless you have first checked "
+                "a broader CUTLASS-backed byte mechanism: caller-level fusion, "
+                "persistent/reuse staging, paired-projection reuse, launch reduction, "
+                "or a new specialized CUTLASS route that reduces B-weight streaming "
+                "or repeated memory traffic while preserving public dtype/layout/"
+                "scale/parity semantics. If blocked, cite the exact source or "
+                "operator contract that prevents that mechanism."
             ),
             (
                 "- Treat this section as the pre-change CUTLASS timing baseline. "
