@@ -7739,7 +7739,10 @@ class L0cKernelMutationRunner:
 
             patch_path = iteration_dir / "mutation.patch"
             if not patch_path.is_file():
-                consecutive_compile_fails += 1
+                # No-patch/BLOCKED authoring outcomes are search information, not
+                # compile failures. Record them, then continue spending the
+                # configured attempt budget.
+                consecutive_compile_fails = 0
                 consecutive_parity_fails = 0
                 self._record_l0c_rejection(
                     round_dir,
@@ -7751,9 +7754,6 @@ class L0cKernelMutationRunner:
                         reason="agent_no_patch",
                     ),
                 )
-                if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
-                    terminal_condition = "compile_failures_3x"
-                    break
                 continue
 
             patch_text = patch_path.read_text(encoding="utf-8")
@@ -10288,7 +10288,10 @@ class L0cKernelMutationRunner:
 
             patch_path = iteration_dir / "mutation.patch"
             if not patch_path.is_file():
-                consecutive_compile_fails += 1
+                # No-patch/BLOCKED authoring outcomes are search information, not
+                # compile failures. Record them, then continue spending the
+                # configured attempt budget.
+                consecutive_compile_fails = 0
                 consecutive_parity_fails = 0
                 self._record_l0c_rejection(
                     round_dir,
@@ -10314,9 +10317,6 @@ class L0cKernelMutationRunner:
                         artifact_refs=self._artifact_refs_for_iteration(iteration_dir),
                     ),
                 )
-                if consecutive_compile_fails >= L0C_COMPILE_FAILURES_THRESHOLD:
-                    terminal_condition = "compile_failures_3x"
-                    break
                 continue
 
             patch_text = patch_path.read_text(encoding="utf-8")
