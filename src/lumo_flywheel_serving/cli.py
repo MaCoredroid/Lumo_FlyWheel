@@ -1064,6 +1064,29 @@ def cmd_auto_research_warm_diagnostic(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_auto_research_cutlass_microbench(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    _require_auto_research_args(args, "workspace_source")
+    runner = L0cKernelMutationRunner(
+        repo_root=REPO_ROOT,
+        registry_path=args.registry,
+        tuned_config_root=args.tuned_config_root,
+    )
+    payload = runner.cutlass_microbench(
+        workspace_source=args.workspace_source,
+        patch_path=args.patch_path,
+        shapes=args.shape,
+        warmup_iters=args.warmup_iters,
+        benchmark_iters=args.benchmark_iters,
+        image=args.image,
+        compile_jobs=args.compile_jobs,
+        output_path=args.output_path,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["ok"] else 2
+
+
 def cmd_auto_research_resume_candidate(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
@@ -1511,6 +1534,22 @@ def build_parser() -> argparse.ArgumentParser:
     auto_warm_diagnostic.add_argument("--max-output-tokens", type=int, default=64)
     auto_warm_diagnostic.add_argument("--prompt-token-cap", type=int, default=2048)
     auto_warm_diagnostic.set_defaults(func=cmd_auto_research_warm_diagnostic)
+
+    auto_cutlass_microbench = auto_research_subparsers.add_parser("cutlass-microbench")
+    auto_cutlass_microbench.add_argument("--help-only", action="store_true")
+    auto_cutlass_microbench.add_argument("--workspace-source")
+    auto_cutlass_microbench.add_argument("--patch-path")
+    auto_cutlass_microbench.add_argument(
+        "--shape",
+        action="append",
+        help="Representative MxNxK shape to benchmark; repeatable.",
+    )
+    auto_cutlass_microbench.add_argument("--warmup-iters", type=int, default=5)
+    auto_cutlass_microbench.add_argument("--benchmark-iters", type=int, default=20)
+    auto_cutlass_microbench.add_argument("--image")
+    auto_cutlass_microbench.add_argument("--compile-jobs", type=int)
+    auto_cutlass_microbench.add_argument("--output-path")
+    auto_cutlass_microbench.set_defaults(func=cmd_auto_research_cutlass_microbench)
 
     auto_resume_candidate = auto_research_subparsers.add_parser("resume-candidate")
     auto_resume_candidate.add_argument("--help-only", action="store_true")

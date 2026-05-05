@@ -98,6 +98,7 @@ PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "mutate-kernel",
     "apply-and-test",
     "warm-diagnostic",
+    "cutlass-microbench",
     "resume-candidate",
     "resume-round",
 )
@@ -6195,6 +6196,12 @@ Tier-2 hard-reject:
    Examples: inspect registered op schemas, grep the mounted vLLM/CUTLASS source,
    compile the touched Python/C++ file if applicable, or run a tiny non-vLLM
    import/shape probe. Do not start vLLM and do not run apply-and-test.
+   For FP8 CUTLASS source changes, prefer the shape-level CUTLASS microbench
+   when the live-shape hypothesis depends on in-kernel schedule/shape behavior:
+     {{cutlass_microbench_command}}
+   Save the output as {{iteration_dir}}/cutlass_microbench_pre.json and cite
+   event_ms_mean, estimated_effective_bandwidth_gb_s, and arithmetic_intensity
+   in candidate_analysis.md. If the microbench is unavailable, explain why.
 5. Do a short online/source research pass only if it can inform the mutation:
    use Codex online research/search tools when available, prefer primary
    docs/source, and record the specific source-derived fact in your
@@ -6210,7 +6217,8 @@ Tier-2 hard-reject:
 - You do not call finalize-round. Python does that.
 - You do not run measurement directly. The CLI does that.
 - You do not write any file except mutation.patch, candidate_analysis.md,
-  BLOCKED.md, and the warm diagnostic artifact/skipped note from step 2.
+  BLOCKED.md, cutlass_microbench_pre.json, and the warm diagnostic
+  artifact/skipped note from step 2.
 """
 
 
@@ -9543,6 +9551,246 @@ class L0cKernelMutationRunner:
                 self._docker_chmod_tree_writable(temp_root, image=image)
                 shutil.rmtree(temp_root, ignore_errors=True)
 
+    @staticmethod
+    def _parse_cutlass_microbench_shapes(shapes: list[str] | None) -> list[dict[str, int]]:
+        raw_shapes = shapes or [
+            "1x34816x5120",
+            "1x5120x17408",
+            "4x34816x5120",
+            "4x5120x17408",
+        ]
+        parsed: list[dict[str, int]] = []
+        for raw in raw_shapes:
+            text = raw.strip().lower().replace(",", "x").replace(" ", "")
+            parts = [part for part in text.split("x") if part]
+            if len(parts) != 3:
+                raise RuntimeError("--shape must be MxNxK, for example 1x34816x5120")
+            try:
+                m, n, k = (int(part) for part in parts)
+            except ValueError as exc:
+                raise RuntimeError(f"--shape must contain integer M/N/K values: {raw}") from exc
+            if m < 1 or n < 1 or k < 1:
+                raise RuntimeError(f"--shape dimensions must be positive: {raw}")
+            if n % 128 != 0 or k % 128 != 0:
+                raise RuntimeError(
+                    f"--shape N and K must be multiples of 128 for block-FP8 scales: {raw}"
+                )
+            parsed.append({"M": m, "N": n, "K": k})
+        return parsed
+
+    def cutlass_microbench(
+        self,
+        *,
+        workspace_source: str | Path,
+        patch_path: str | Path | None = None,
+        shapes: list[str] | None = None,
+        warmup_iters: int = 5,
+        benchmark_iters: int = 20,
+        image: str | None = None,
+        compile_jobs: int | None = None,
+        output_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        if warmup_iters < 0:
+            raise RuntimeError("--warmup-iters must be >= 0")
+        if benchmark_iters < 1:
+            raise RuntimeError("--benchmark-iters must be >= 1")
+        if compile_jobs is not None and compile_jobs < 1:
+            raise RuntimeError("--compile-jobs must be >= 1")
+        source_path = Path(workspace_source)
+        if not source_path.is_absolute():
+            source_path = self.repo_root / source_path
+        source_path = source_path.resolve()
+        if not source_path.is_dir():
+            raise RuntimeError(f"CUTLASS workspace source missing: {source_path}")
+        patch: Path | None = None
+        if patch_path is not None:
+            patch = Path(patch_path)
+            if not patch.is_absolute():
+                patch = self.repo_root / patch
+            patch = patch.resolve()
+            if not patch.is_file():
+                raise RuntimeError(f"mutation patch not found: {patch}")
+        shape_payload = self._parse_cutlass_microbench_shapes(shapes)
+
+        from .model_server import DEFAULT_VLLM_IMAGE  # local import keeps tests light
+
+        bench_image = image or DEFAULT_VLLM_IMAGE
+        temp_root = Path(tempfile.mkdtemp(prefix="lumo-cutlass-microbench-"))
+        try:
+            temp_source = temp_root / "vllm-source"
+            shutil.copytree(source_path, temp_source, symlinks=True)
+            if patch is not None:
+                temp_round = temp_root / "round"
+                workspace_dir = temp_round / L0C_FP8_GEMM_CUTLASS_WORKSPACE_DIRNAME
+                workspace_dir.mkdir(parents=True, exist_ok=True)
+                staged_source = workspace_dir / "vllm-source"
+                shutil.move(str(temp_source), str(staged_source))
+                patch_outcome = self._apply_workspace_patch(round_dir=temp_round, patch_path=patch)
+                if not patch_outcome.ok:
+                    return {
+                        "ok": False,
+                        "reason": "patch_apply_failed_in_microbench",
+                        "error": patch_outcome.error,
+                        "patch_path": str(patch),
+                    }
+                temp_source = staged_source
+
+            cache_dir = source_path.parent.parent / L0C_FP8_GEMM_CUTLASS_CCACHE_DIRNAME
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            shell = "\n".join(
+                [
+                    "set -euo pipefail",
+                    self._cutlass_cmake_rebuild_shell(
+                        install=True,
+                        default_jobs=compile_jobs or 1,
+                        build_targets=["_C"],
+                    ),
+                    "python3 - <<'PY'",
+                    "import json",
+                    "import statistics",
+                    "import torch",
+                    "import vllm._C  # noqa: F401 - registers torch.ops._C",
+                    f"SHAPES = {json.dumps(shape_payload, sort_keys=True)}",
+                    f"WARMUP_ITERS = {int(warmup_iters)}",
+                    f"BENCHMARK_ITERS = {int(benchmark_iters)}",
+                    "if not torch.cuda.is_available():",
+                    "    raise SystemExit('CUDA is required for CUTLASS microbench')",
+                    "torch.cuda.set_device(0)",
+                    "device = torch.device('cuda')",
+                    "fp8_dtype = torch.float8_e4m3fn",
+                    "results = []",
+                    "for shape in SHAPES:",
+                    "    M, N, K = shape['M'], shape['N'], shape['K']",
+                    "    torch.manual_seed(17 + M + N + K)",
+                    "    a = torch.randn((M, K), device=device, dtype=torch.float16).to(fp8_dtype)",
+                    "    b_row = torch.randn((N, K), device=device, dtype=torch.float16).to(fp8_dtype)",
+                    "    b = b_row.t()",
+                    "    a_scales = torch.ones((M, K // 128), device=device, dtype=torch.float32)",
+                    "    b_scales = torch.ones((K // 128, N // 128), device=device, dtype=torch.float32)",
+                    "    out = torch.empty((M, N), device=device, dtype=torch.bfloat16)",
+                    "    for _ in range(WARMUP_ITERS):",
+                    "        torch.ops._C.cutlass_scaled_mm(out, a, b, a_scales, b_scales, None)",
+                    "    torch.cuda.synchronize()",
+                    "    samples = []",
+                    "    for _ in range(BENCHMARK_ITERS):",
+                    "        start = torch.cuda.Event(enable_timing=True)",
+                    "        end = torch.cuda.Event(enable_timing=True)",
+                    "        start.record()",
+                    "        torch.ops._C.cutlass_scaled_mm(out, a, b, a_scales, b_scales, None)",
+                    "        end.record()",
+                    "        torch.cuda.synchronize()",
+                    "        samples.append(float(start.elapsed_time(end)))",
+                    "    mean_ms = statistics.fmean(samples)",
+                    "    sorted_samples = sorted(samples)",
+                    "    p50_ms = sorted_samples[len(sorted_samples) // 2]",
+                    "    p90_ms = sorted_samples[min(len(sorted_samples) - 1, int(0.9 * (len(sorted_samples) - 1)))]",
+                    "    flops = 2.0 * M * N * K",
+                    "    bytes_moved = (M * K) + (K * N) + (M * (K // 128) * 4) + ((K // 128) * (N // 128) * 4) + (M * N * 2)",
+                    "    results.append({",
+                    "        'M': M, 'N': N, 'K': K,",
+                    "        'branch': 'M<=256' if M <= 256 else 'M>256',",
+                    "        'warmup_iters': WARMUP_ITERS,",
+                    "        'benchmark_iters': BENCHMARK_ITERS,",
+                    "        'event_ms_mean': round(mean_ms, 6),",
+                    "        'event_ms_p50': round(p50_ms, 6),",
+                    "        'event_ms_p90': round(p90_ms, 6),",
+                    "        'tflops_per_s_mean': round((flops / (mean_ms / 1000.0)) / 1.0e12, 6) if mean_ms > 0 else None,",
+                    "        'estimated_bytes_moved': int(bytes_moved),",
+                    "        'estimated_effective_bandwidth_gb_s': round((bytes_moved / (mean_ms / 1000.0)) / 1.0e9, 6) if mean_ms > 0 else None,",
+                    "        'arithmetic_intensity_flop_per_byte': round(flops / bytes_moved, 6) if bytes_moved > 0 else None,",
+                    "    })",
+                    "payload = {",
+                    "    'schema': 'l0c_cutlass_shape_microbench.v1',",
+                    "    'ok': True,",
+                    "    'device_name': torch.cuda.get_device_name(0),",
+                    "    'device_capability': list(torch.cuda.get_device_capability(0)),",
+                    "    'torch_version': torch.__version__,",
+                    "    'gb10_reference': {",
+                    "        'chip': 'NVIDIA GB10 / DGX Spark',",
+                    "        'theoretical_bandwidth_gb_s': 273.0,",
+                    "        'note': 'Shape microbench uses CUDA events around torch.ops._C.cutlass_scaled_mm; bandwidth is estimated bytes/event time, not profiler DRAM throughput.',",
+                    "    },",
+                    "    'results': results,",
+                    "}",
+                    "print('LUMO_CUTLASS_MICROBENCH_JSON_BEGIN')",
+                    "print(json.dumps(payload, indent=2, sort_keys=True))",
+                    "print('LUMO_CUTLASS_MICROBENCH_JSON_END')",
+                    "PY",
+                ]
+            )
+            try:
+                result = subprocess.run(
+                    [
+                        "docker",
+                        "run",
+                        "--rm",
+                        "--gpus",
+                        "all",
+                        "-v",
+                        f"{temp_source.resolve()}:{L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR}",
+                        "-v",
+                        f"{cache_dir.resolve()}:{L0C_FP8_GEMM_CUTLASS_CONTAINER_CCACHE_DIR}",
+                        "-w",
+                        L0C_FP8_GEMM_CUTLASS_CONTAINER_VLLM_SOURCE_DIR,
+                        bench_image,
+                        "bash",
+                        "-lc",
+                        shell,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=7200,
+                    check=False,
+                )
+            except FileNotFoundError as exc:
+                return {"ok": False, "reason": "docker_missing", "error": str(exc)}
+            except subprocess.TimeoutExpired as exc:
+                return {"ok": False, "reason": "cutlass_microbench_timeout", "error": str(exc)}
+
+            output_tail = self._clip_preflight_output(result.stdout, result.stderr, limit=20000)
+            begin = result.stdout.find("LUMO_CUTLASS_MICROBENCH_JSON_BEGIN")
+            end = result.stdout.find("LUMO_CUTLASS_MICROBENCH_JSON_END")
+            if result.returncode != 0 or begin < 0 or end < 0 or end <= begin:
+                payload = {
+                    "ok": False,
+                    "reason": "cutlass_microbench_failed"
+                    if result.returncode != 0
+                    else "cutlass_microbench_json_missing",
+                    "returncode": result.returncode,
+                    "docker_image": bench_image,
+                    "workspace_source": str(source_path),
+                    "patch_path": str(patch) if patch is not None else None,
+                    "output_tail": output_tail,
+                }
+            else:
+                json_text = result.stdout[
+                    begin + len("LUMO_CUTLASS_MICROBENCH_JSON_BEGIN") : end
+                ].strip()
+                payload = json.loads(json_text)
+                payload.update(
+                    {
+                        "docker_image": bench_image,
+                        "workspace_source": str(source_path),
+                        "patch_path": str(patch) if patch is not None else None,
+                        "compile_jobs": compile_jobs or 1,
+                    }
+                )
+            if output_path is not None:
+                out_path = Path(output_path)
+                if not out_path.is_absolute():
+                    out_path = self.repo_root / out_path
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+                payload["artifact_path"] = str(out_path)
+            return payload
+        finally:
+            self._chmod_tree_writable(temp_root)
+            try:
+                shutil.rmtree(temp_root)
+            except PermissionError:
+                self._docker_chmod_tree_writable(temp_root, image=image)
+                shutil.rmtree(temp_root, ignore_errors=True)
+
     def _py_compile_workspace(self, *, workspace_source: Path) -> _L0cPatchOutcome:
         py_files = [str(path) for path in workspace_source.rglob("*.py")]
         if not py_files:
@@ -11646,6 +11894,16 @@ class L0cKernelMutationRunner:
                     payload["ok"] = False
                     payload["reason"] = "missing_compute_bandwidth_analysis"
                     return payload
+                speed_gate_analysis = self._l0c_speed_gate_candidate_analysis_preflight(
+                    iteration_dir=iteration_dir,
+                    speed_gate_preflight=speed_gate_preflight,
+                )
+                if speed_gate_analysis is not None:
+                    payload["speed_gate_analysis_preflight"] = speed_gate_analysis
+                    if not speed_gate_analysis["ok"]:
+                        payload["ok"] = False
+                        payload["reason"] = str(speed_gate_analysis["reason"])
+                        return payload
             if workspace_source is not None or compile_mode != "none":
                 if workspace_source is None:
                     payload["ok"] = False
@@ -11687,6 +11945,179 @@ class L0cKernelMutationRunner:
         )
         return payload
 
+    @classmethod
+    def _l0c_speed_gate_candidate_analysis_preflight(
+        cls,
+        *,
+        iteration_dir: Path,
+        speed_gate_preflight: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if not speed_gate_preflight or not speed_gate_preflight.get("ready"):
+            return None
+        analysis_path = iteration_dir / "candidate_analysis.md"
+        if not analysis_path.is_file():
+            return None
+        try:
+            baseline_tok_s = float(speed_gate_preflight.get("baseline_decode_tokens_per_s"))
+            required_tok_s = float(speed_gate_preflight.get("required_decode_tokens_per_s"))
+            margin_fraction = float(speed_gate_preflight.get("controller_gate_margin"))
+        except (TypeError, ValueError):
+            return None
+
+        forecasts = cls._extract_l0c_candidate_analysis_speed_forecasts(
+            analysis_path.read_text(encoding="utf-8", errors="replace"),
+            baseline_tok_s=baseline_tok_s,
+        )
+        payload: dict[str, Any] = {
+            "schema": "l0c_speed_gate_analysis_preflight.v1",
+            "baseline_decode_tokens_per_s": baseline_tok_s,
+            "required_decode_tokens_per_s": required_tok_s,
+            "controller_gate_margin": margin_fraction,
+            "analysis_artifact": str(analysis_path),
+            "policy": (
+                "candidate_analysis.md must make a numeric end-to-end generated tok/s "
+                "forecast that clears the same speed margin used by the controller's "
+                "post-parity generation gate"
+            ),
+        }
+        if not forecasts:
+            payload.update(
+                {
+                    "ok": False,
+                    "reason": "candidate_analysis_missing_speed_gate_forecast",
+                    "error": (
+                        "candidate_analysis.md needs a parseable expected generated tok/s "
+                        "delta, absolute generated tok/s, or percent speedup"
+                    ),
+                }
+            )
+            return payload
+
+        best = max(forecasts, key=lambda item: item["expected_decode_tokens_per_s"])
+        expected_tok_s = float(best["expected_decode_tokens_per_s"])
+        passed = expected_tok_s >= required_tok_s
+        payload.update(
+            {
+                "ok": passed,
+                "reason": (
+                    "speed_gate_analysis_preflight_passed"
+                    if passed
+                    else "candidate_analysis_speed_forecast_below_preflight_gate"
+                ),
+                "best_forecast": best,
+                "all_forecasts": forecasts[:8],
+                "expected_over_baseline_pct": round(
+                    ((expected_tok_s / baseline_tok_s) - 1.0) * 100.0, 6
+                ),
+                "shortfall_decode_tokens_per_s": round(max(0.0, required_tok_s - expected_tok_s), 6),
+            }
+        )
+        return payload
+
+    @staticmethod
+    def _extract_l0c_candidate_analysis_speed_forecasts(
+        text: str,
+        *,
+        baseline_tok_s: float,
+    ) -> list[dict[str, Any]]:
+        forecasts: list[dict[str, Any]] = []
+        if baseline_tok_s <= 0.0:
+            return forecasts
+        relevant_terms = (
+            "expected",
+            "delta",
+            "speedup",
+            "lift",
+            "impact",
+            "end-to-end",
+            "end to end",
+            "tok/s",
+            "tokens/s",
+        )
+        for raw_segment in re.split(r"[\n|;]+", text):
+            segment = " ".join(raw_segment.strip().split())
+            lowered = segment.lower()
+            if not segment or not any(term in lowered for term in relevant_terms):
+                continue
+            threshold_context = (
+                "needs at least" in lowered
+                or "required" in lowered
+                or "must clear" in lowered
+            )
+            forecast_context = any(
+                term in lowered
+                for term in (
+                    "expected",
+                    "delta",
+                    "speedup",
+                    "lift",
+                    "impact",
+                    "increase",
+                    "gain",
+                    "improvement",
+                )
+            )
+            for match in re.finditer(r"([+\-]?\s*\d+(?:\.\d+)?)\s*%", segment):
+                value = float(match.group(1).replace(" ", ""))
+                if threshold_context and "expected" not in lowered:
+                    continue
+                if not forecast_context:
+                    continue
+                expected = baseline_tok_s * (1.0 + (value / 100.0))
+                forecasts.append(
+                    {
+                        "kind": "percent_speedup",
+                        "value": value,
+                        "expected_decode_tokens_per_s": round(expected, 6),
+                        "evidence": segment[:240],
+                    }
+                )
+            token_pattern = (
+                r"(?<![\d.])([+\-]?\s*\d+(?:\.\d+)?)\s*"
+                r"(?:generated\s+)?tok(?:ens)?/s"
+            )
+            for match in re.finditer(token_pattern, segment, flags=re.IGNORECASE):
+                raw_value = match.group(1).replace(" ", "")
+                value = float(raw_value)
+                prefix = segment[: match.start(1)].rstrip()
+                signed = raw_value.startswith(("+", "-"))
+                if not forecast_context and not signed:
+                    continue
+                if threshold_context and not signed and "expected" not in lowered:
+                    continue
+                delta_context = any(
+                    term in lowered
+                    for term in ("delta", "increase", "lift", "gain", "improvement", "impact")
+                )
+                if signed or (delta_context and abs(value) < baseline_tok_s * 0.5):
+                    expected = baseline_tok_s + value
+                    kind = "decode_tokens_per_s_delta"
+                else:
+                    expected = value
+                    kind = "absolute_decode_tokens_per_s"
+                forecasts.append(
+                    {
+                        "kind": kind,
+                        "value": value,
+                        "expected_decode_tokens_per_s": round(expected, 6),
+                        "evidence": segment[:240],
+                        "prefix": prefix[-80:],
+                    }
+                )
+        unique: list[dict[str, Any]] = []
+        seen: set[tuple[str, float, str]] = set()
+        for forecast in forecasts:
+            key = (
+                str(forecast["kind"]),
+                float(forecast["expected_decode_tokens_per_s"]),
+                str(forecast["evidence"]),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(forecast)
+        return unique
+
     def _l0c_speed_gate_preflight(
         self,
         *,
@@ -11708,9 +12139,10 @@ class L0cKernelMutationRunner:
             "baseline_artifact": str(baseline_path),
             "baseline_decode_tokens_per_s": baseline_tok_s,
             "agent_action": (
-                "Use this threshold before submission: if the mutation cannot plausibly "
-                "beat required_decode_tokens_per_s after controller restart, write BLOCKED.md "
-                "instead of mutation.patch."
+                "Use this threshold before submission: candidate_analysis.md must forecast "
+                "a generated tok/s delta or speedup that clears required_decode_tokens_per_s. "
+                "If the mutation cannot plausibly beat that threshold after controller "
+                "restart, write BLOCKED.md instead of mutation.patch."
             ),
             "controller_action": (
                 "After correctness parity, the controller runs warm_post_parity_speed_gate "
@@ -13698,6 +14130,7 @@ class L0cKernelMutationRunner:
             f"--round-root {round_root_for_commands} --phase pre_mutation "
             "--warmup-requests 1 --request-count 2 --max-output-tokens 64"
         )
+        cutlass_microbench_command = "not applicable for this kernel target"
         if kernel_target == "fp8_gemm":
             workspace_path = str(mutation_surface.get("workspace_path") or "").strip()
             workspace_python_path = str(
@@ -13726,6 +14159,15 @@ class L0cKernelMutationRunner:
                 patch_dry_run_command = (
                     f"cd {mutation_surface.get('round_dir') or self.repo_root} && "
                     f"patch --dry-run -p0 < {{{{iteration_dir}}}}/mutation.patch"
+                )
+                cutlass_microbench_command = (
+                    f"cd {self.repo_root} && {self.repo_root / '.venv' / 'bin' / 'lumoserve'} "
+                    "auto-research cutlass-microbench "
+                    f"--workspace-source {workspace_source_path or workspace_path} "
+                    "--shape 1x34816x5120 --shape 1x5120x17408 "
+                    "--shape 4x34816x5120 --shape 4x5120x17408 "
+                    "--warmup-iters 3 --benchmark-iters 10 --compile-jobs 1 "
+                    "--output-path {{iteration_dir}}/cutlass_microbench_pre.json"
                 )
             else:
                 mutation_target_description = str(kernel_source_path)
@@ -13773,6 +14215,9 @@ class L0cKernelMutationRunner:
                     "   generation-speed threshold from `warm_pre_mutation.json`. If your patch cannot",
                     "   plausibly beat `required_decode_tokens_per_s`, write BLOCKED.md instead of",
                     "   spending controller validation on a baseline-speed candidate.",
+                    "   `speed_gate_analysis_preflight` is enforced here: if candidate_analysis.md",
+                    "   forecasts less than the required generated tok/s threshold, preflight fails",
+                    "   and you must revise the hypothesis or write BLOCKED.md.",
                     "   A compiled-file mutation is not ready to submit until this authoring-side",
                     "   targeted compile preflight passes or explicitly reports no CUTLASS C++ targets;",
                     "   fix compile errors in the patch before exiting.",
@@ -13874,6 +14319,7 @@ class L0cKernelMutationRunner:
             "read_target_paths": read_target_paths,
             "patch_dry_run_command": patch_dry_run_command,
             "warm_diagnostic_command": warm_diagnostic_command,
+            "cutlass_microbench_command": cutlass_microbench_command,
             "parity_fixture_path": str(fixture_path),
             "repo_root": str(self.repo_root),
             "kernel_target": kernel_target,

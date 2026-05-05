@@ -6071,6 +6071,8 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "byte-component split" in brief
     assert "at least 3%" in brief
     assert "auto-research warm-diagnostic" in brief
+    assert "auto-research cutlass-microbench" in brief
+    assert "cutlass_microbench_pre.json" in brief
     assert "MUST run a cheap warm-request diagnostic" in brief
     assert "warm_pre_mutation.json" in brief
     assert "aggregate_consumption.step_consumption" in brief
@@ -6096,6 +6098,84 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "GEMM problem shape" in brief
     assert "fp8_gemm_cutlass_python_wrapper_rewrite" not in brief
     assert "auto-research apply-and-test \\" not in brief
+
+
+def test_cutlass_microbench_builds_docker_benchmark_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _init_repo(tmp_path)
+    workspace = repo / "round" / "cutlass_source_workspace" / "vllm-source"
+    workspace.mkdir(parents=True)
+    (workspace / "CMakeLists.txt").write_text("# placeholder\n", encoding="utf-8")
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    monkeypatch.setattr(
+        auto_research.L0cKernelMutationRunner,
+        "_cutlass_cmake_rebuild_shell",
+        staticmethod(lambda **_: "echo rebuild"),
+    )
+
+    def fake_run(cmd, **kwargs):
+        shell = cmd[-1]
+        assert "--gpus" in cmd
+        assert "torch.ops._C.cutlass_scaled_mm" in shell
+        assert "SHAPES = [{\"K\": 5120, \"M\": 1, \"N\": 5120}]" in shell
+        payload = {
+            "schema": "l0c_cutlass_shape_microbench.v1",
+            "ok": True,
+            "results": [
+                {
+                    "M": 1,
+                    "N": 5120,
+                    "K": 5120,
+                    "event_ms_mean": 0.1,
+                    "estimated_effective_bandwidth_gb_s": 260.0,
+                    "arithmetic_intensity_flop_per_byte": 2.0,
+                }
+            ],
+        }
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout=(
+                "build log\nLUMO_CUTLASS_MICROBENCH_JSON_BEGIN\n"
+                + json.dumps(payload)
+                + "\nLUMO_CUTLASS_MICROBENCH_JSON_END\n"
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(auto_research.subprocess, "run", fake_run)
+
+    output_path = repo / "bench.json"
+    result = runner.cutlass_microbench(
+        workspace_source=workspace,
+        shapes=["1x5120x5120"],
+        warmup_iters=1,
+        benchmark_iters=2,
+        image="bench-image",
+        output_path=output_path,
+    )
+
+    assert result["ok"] is True
+    assert result["docker_image"] == "bench-image"
+    assert result["results"][0]["estimated_effective_bandwidth_gb_s"] == 260.0
+    assert json.loads(output_path.read_text(encoding="utf-8"))["ok"] is True
+
+
+def test_cutlass_microbench_rejects_non_block_scaled_shape(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    with pytest.raises(RuntimeError, match="multiples of 128"):
+        runner._parse_cutlass_microbench_shapes(["1x5130x5120"])
 
 
 def test_l0c_fp8_cutlass_preflight_rejects_non_cutlass_backend_route(tmp_path: Path) -> None:
@@ -6438,6 +6518,166 @@ def test_l0c_preflight_patch_reports_speed_gate_threshold(tmp_path: Path) -> Non
     assert speed_gate["baseline_decode_tokens_per_s"] == 7.5
     assert speed_gate["required_decode_tokens_per_s"] == 7.725
     assert "BLOCKED.md" in speed_gate["agent_action"]
+
+
+def test_l0c_preflight_patch_rejects_analysis_below_speed_gate_margin(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    candidate_dir = repo / "round" / "candidates" / "001"
+    candidate_dir.mkdir(parents=True)
+    (candidate_dir / "iteration_brief.md").write_text("brief\n", encoding="utf-8")
+    (candidate_dir / "warm_pre_mutation.json").write_text(
+        json.dumps(
+            {
+                "aggregate_consumption": {
+                    "step_consumption": {
+                        "decode_tokens_per_s": 7.5,
+                    }
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (candidate_dir / "candidate_analysis.md").write_text(
+        """
+# Candidate Analysis
+
+Warm decode rate: 7.50 generated tokens/s, 133.3 ms/generated token.
+GB10 bandwidth: 273 GB/s, with 36.4 GB/token bytes per token. The 10.1 tok/s
+full-model FP8 stream ceiling is a roofline context number, not proof of
+achieved memory bandwidth.
+The CUTLASS/FP8 GEMM proxy is ffn_linear at 80.0 ms/token, so this mutation
+must reduce that component. This reads warm_pre_mutation.json,
+aggregate_consumption, per_step_consumption, metrics_consumption, and
+bottleneck_hint.
+
+Structured compute/bandwidth accounting:
+
+| representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| M=1, N=34816, K=5120 | 356M FLOP | 178 MB plus scales/output | 2 FLOP/byte | under the theoretical stream ceiling | 80.0 | less schedule overhead, same FLOPs | +0.20 tok/s delta |
+
+7.5 tok/s breakdown: 36.4 GB/token at 7.50 tok/s implies about 273 GB/s
+effective bandwidth, roughly 100% of the 273 GB/s ceiling. ffn_linear share is
+80.0 / 133.3 ms/token = 60% share of ms/token, leaving non-FFN residual
+ms/token of 53.3. This is roofline context rather than proof of achieved memory
+bandwidth.
+
+Low-level evidence:
+
+| source file/symbol | live-shape dispatch-hit proof | before-mutation observation | byte-component split for A/B weights/scales/output/epilogue | B-weight bytes change? | material lift gate |
+| --- | --- | --- | --- | --- | --- |
+| source file csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8.cu, symbol cutlass_scaled_mm | dispatch-hit proof from live shape M=1,N=34816,K=5120: path is hit | before-mutation observation from microbench and targeted compile/preflight | A/B weights/scales/output/epilogue split says B-weight bytes dominate | B-weight bytes unchanged | needs at least 0.225 tok/s lift |
+
+Mechanism: expected reduction is schedule overhead. The expected speedup is
+below the configured gate, so this should be rejected by preflight.
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    patch_path = candidate_dir / "mutation.patch"
+    patch_path.write_text(
+        """--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -1,2 +1,2 @@
+-output = ops.cutlass_scaled_mm(A, B)
++output = ops.cutlass_scaled_mm(A.contiguous(), B)
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    payload = runner.preflight_patch(kernel_target="fp8_gemm", patch_path=patch_path)
+
+    assert payload["ok"] is False
+    assert payload["reason"] == "candidate_analysis_speed_forecast_below_preflight_gate"
+    speed_analysis = payload["speed_gate_analysis_preflight"]
+    assert speed_analysis["required_decode_tokens_per_s"] == 7.725
+    assert speed_analysis["best_forecast"]["expected_decode_tokens_per_s"] == 7.7
+    assert speed_analysis["shortfall_decode_tokens_per_s"] == 0.025
+
+
+def test_l0c_preflight_patch_accepts_analysis_above_speed_gate_margin(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    candidate_dir = repo / "round" / "candidates" / "001"
+    candidate_dir.mkdir(parents=True)
+    (candidate_dir / "iteration_brief.md").write_text("brief\n", encoding="utf-8")
+    (candidate_dir / "warm_pre_mutation.json").write_text(
+        json.dumps(
+            {
+                "aggregate_consumption": {
+                    "step_consumption": {
+                        "decode_tokens_per_s": 7.5,
+                    }
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (candidate_dir / "candidate_analysis.md").write_text(
+        """
+# Candidate Analysis
+
+Warm decode rate: 7.50 generated tokens/s, 133.3 ms/generated token.
+GB10 bandwidth: 273 GB/s, with 36.4 GB/token bytes per token. The 10.1 tok/s
+full-model FP8 stream ceiling is a roofline context number, not proof of
+achieved memory bandwidth.
+The CUTLASS/FP8 GEMM proxy is ffn_linear at 80.0 ms/token, so this mutation
+must reduce that component. This reads warm_pre_mutation.json,
+aggregate_consumption, per_step_consumption, metrics_consumption, and
+bottleneck_hint.
+
+Structured compute/bandwidth accounting:
+
+| representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| M=1, N=34816, K=5120 | 356M FLOP | 178 MB plus scales/output | 2 FLOP/byte | under the theoretical stream ceiling | 80.0 | less schedule overhead, same FLOPs | +0.30 tok/s delta |
+
+7.5 tok/s breakdown: 36.4 GB/token at 7.50 tok/s implies about 273 GB/s
+effective bandwidth, roughly 100% of the 273 GB/s ceiling. ffn_linear share is
+80.0 / 133.3 ms/token = 60% share of ms/token, leaving non-FFN residual
+ms/token of 53.3. This is roofline context rather than proof of achieved memory
+bandwidth.
+
+Low-level evidence:
+
+| source file/symbol | live-shape dispatch-hit proof | before-mutation observation | byte-component split for A/B weights/scales/output/epilogue | B-weight bytes change? | material lift gate |
+| --- | --- | --- | --- | --- | --- |
+| source file csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8.cu, symbol cutlass_scaled_mm | dispatch-hit proof from live shape M=1,N=34816,K=5120: path is hit | before-mutation observation from microbench and targeted compile/preflight | A/B weights/scales/output/epilogue split says B-weight bytes dominate | B-weight bytes unchanged | needs at least 0.225 tok/s lift |
+
+Mechanism: expected reduction is schedule overhead. The expected speedup clears
+the configured gate.
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    patch_path = candidate_dir / "mutation.patch"
+    patch_path.write_text(
+        """--- cutlass_source_workspace/scaled_mm/cutlass.py
++++ cutlass_source_workspace/scaled_mm/cutlass.py
+@@ -1,2 +1,2 @@
+-output = ops.cutlass_scaled_mm(A, B)
++output = ops.cutlass_scaled_mm(A.contiguous(), B)
+""",
+        encoding="utf-8",
+    )
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+
+    payload = runner.preflight_patch(kernel_target="fp8_gemm", patch_path=patch_path)
+
+    assert payload["ok"] is True
+    speed_analysis = payload["speed_gate_analysis_preflight"]
+    assert speed_analysis["reason"] == "speed_gate_analysis_preflight_passed"
+    assert speed_analysis["best_forecast"]["expected_decode_tokens_per_s"] == 7.8
 
 
 def test_l0c_preflight_patch_compiles_workspace_copy_without_mutating_source(tmp_path: Path) -> None:

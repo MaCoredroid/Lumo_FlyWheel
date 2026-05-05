@@ -822,6 +822,16 @@ def test_auto_research_help_only_registered_without_required_args(capsys: pytest
     assert json.loads(capsys.readouterr().out) == {"subcommand": "measure", "status": "registered"}
 
 
+def test_auto_research_cutlass_microbench_registered(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(["auto-research", "cutlass-microbench", "--help-only"])
+    assert args.func(args) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "subcommand": "cutlass-microbench",
+        "status": "registered",
+    }
+
+
 def test_auto_research_validate_p1_workload_registered(capsys: pytest.CaptureFixture[str]) -> None:
     parser = cli.build_parser()
     args = parser.parse_args(["auto-research", "validate-p1-workload", "--help-only"])
