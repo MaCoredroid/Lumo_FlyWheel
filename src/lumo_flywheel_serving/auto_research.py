@@ -11610,6 +11610,12 @@ class L0cKernelMutationRunner:
             "patch_path": str(path),
             "rules": rules,
         }
+        speed_gate_preflight = self._l0c_speed_gate_preflight(
+            kernel_target=kernel_target,
+            patch_path=path,
+        )
+        if speed_gate_preflight is not None:
+            payload["speed_gate_preflight"] = speed_gate_preflight
         if preflight is None:
             payload["reason"] = "preflight_passed"
             iteration_dir = path.parent
@@ -11670,6 +11676,55 @@ class L0cKernelMutationRunner:
                 "matching_rule": matching_rules[0] if matching_rules else {},
             }
         )
+        return payload
+
+    def _l0c_speed_gate_preflight(
+        self,
+        *,
+        kernel_target: str,
+        patch_path: Path,
+    ) -> dict[str, Any] | None:
+        if kernel_target != "fp8_gemm":
+            return None
+        margin = L0C_FP8_GEMM_PARITY_GENERATION_SPEED_GATE_MARGIN
+        iteration_dir = patch_path.parent
+        baseline_path = iteration_dir / "warm_pre_mutation.json"
+        baseline_payload = self._read_json_object(baseline_path)
+        baseline_tok_s = self._l0c_warm_decode_tokens_per_s(baseline_payload)
+        payload: dict[str, Any] = {
+            "schema": "l0c_speed_gate_preflight.v1",
+            "informational": True,
+            "controller_gate": "parity_generation_speed_gate",
+            "controller_gate_margin": margin,
+            "baseline_artifact": str(baseline_path),
+            "baseline_decode_tokens_per_s": baseline_tok_s,
+            "agent_action": (
+                "Use this threshold before submission: if the mutation cannot plausibly "
+                "beat required_decode_tokens_per_s after controller restart, write BLOCKED.md "
+                "instead of mutation.patch."
+            ),
+            "controller_action": (
+                "After correctness parity, the controller runs warm_post_parity_speed_gate "
+                "and discards before paired measurement unless candidate decode tok/s exceeds "
+                "the baseline by this margin."
+            ),
+        }
+        if baseline_tok_s is None or baseline_tok_s <= 0.0:
+            payload.update(
+                {
+                    "ready": False,
+                    "reason": "baseline_warm_decode_rate_unavailable",
+                    "required_decode_tokens_per_s": None,
+                }
+            )
+        else:
+            payload.update(
+                {
+                    "ready": True,
+                    "reason": "speed_gate_threshold_available",
+                    "required_decode_tokens_per_s": round(baseline_tok_s * (1.0 + margin), 6),
+                }
+            )
         return payload
 
     def warm_diagnostic(
@@ -13705,6 +13760,10 @@ class L0cKernelMutationRunner:
                     "   If this compile/preflight exits nonzero, read the JSON `reason`,",
                     "   `compile_preflight.output_tail`, `matching_rule`, `code_snippet`,",
                     "   and `evidence_snippet`, then revise mutation.patch and rerun the cheap checks.",
+                    "   Also read `speed_gate_preflight`: it reports the controller's post-parity",
+                    "   generation-speed threshold from `warm_pre_mutation.json`. If your patch cannot",
+                    "   plausibly beat `required_decode_tokens_per_s`, write BLOCKED.md instead of",
+                    "   spending controller validation on a baseline-speed candidate.",
                     "   A compiled-file mutation is not ready to submit until this authoring-side",
                     "   targeted compile preflight passes or explicitly reports no CUTLASS C++ targets;",
                     "   fix compile errors in the patch before exiting.",
