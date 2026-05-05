@@ -7180,13 +7180,61 @@ class L0cKernelMutationRunner:
                 "outcome": "measurement_trace_already_present",
             }
         else:
-            outcome = self.apply_and_test(
-                round_id=round_id,
-                iteration=iteration,
-                kernel_target=kernel_target,
-                harness=harness,
-                round_root=round_dir.parent,
-            )
+            analysis_error = self._validate_l0c_candidate_analysis(iteration_dir)
+            if analysis_error is not None:
+                fixture_id = str(spec.get("parity_fixture_id") or "")
+                self._write_parity_check(
+                    iteration_dir,
+                    pass_=False,
+                    reason="missing_compute_bandwidth_analysis",
+                    error_detail=analysis_error,
+                    fixture_id=fixture_id,
+                    kernel_target=kernel_target,
+                )
+                (iteration_dir / "BLOCKED.md").write_text(
+                    "\n".join(
+                        [
+                            "iteration rejected by controller cheap preflight",
+                            "reason: missing_compute_bandwidth_analysis",
+                            f"detail: {analysis_error}",
+                            "fix: write candidate_analysis.md with warm decode, GB10 bandwidth,",
+                            "     CUTLASS/FFN timing, M/N/K shape, FLOPs, bytes moved,",
+                            "     arithmetic intensity, roofline/ceiling, expected tok/s delta,",
+                            "     and mutation mechanism.",
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                _, _, rejected_rows, _ = self._load_l0c_resume_ledgers(round_dir)
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
+                    self._make_rejection_row(
+                        iteration=iteration,
+                        candidate_uuid=str(uuid4()),
+                        mutation_hash=mutation_hash,
+                        reason="missing_compute_bandwidth_analysis",
+                    ),
+                )
+                outcome = {
+                    "round_id": round_id,
+                    "iteration": iteration,
+                    "kernel_target": kernel_target,
+                    "harness": harness,
+                    "mutation_hash": mutation_hash,
+                    "outcome": "preflight_rejected",
+                    "reason": "missing_compute_bandwidth_analysis",
+                    "error_detail": analysis_error,
+                }
+            else:
+                outcome = self.apply_and_test(
+                    round_id=round_id,
+                    iteration=iteration,
+                    kernel_target=kernel_target,
+                    harness=harness,
+                    round_root=round_dir.parent,
+                )
         controller_resume_path.write_text(
             json.dumps(outcome, indent=2, sort_keys=True),
             encoding="utf-8",
@@ -11089,7 +11137,17 @@ class L0cKernelMutationRunner:
             ("compute_sanity_check", ("flop", "arithmetic intensity", "compute-bound", "memory-bound")),
             ("representative_shape", ("m/n/k", "m=", "n=", "k=", "gemm shape")),
             ("roofline_ceiling", ("roofline", "ceiling", "theoretical limit", "theoretical stream")),
-            ("expected_delta", ("tok/s delta", "expected delta", "expected speedup", "end-to-end tok/s")),
+            (
+                "expected_delta",
+                (
+                    "tok/s delta",
+                    "expected delta",
+                    "expected speedup",
+                    "expected end-to-end impact",
+                    "end-to-end impact",
+                    "end-to-end tok/s",
+                ),
+            ),
             ("mutation_mechanism", ("mechanism", "should reduce", "expected reduction", "lift")),
         ]
         missing = [
