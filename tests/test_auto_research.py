@@ -5453,6 +5453,7 @@ def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_pa
     (round_dir / "baselines").mkdir(parents=True)
     (round_dir / "candidates" / "001").mkdir(parents=True)
     (round_dir / "candidates" / "002").mkdir(parents=True)
+    (round_dir / "candidates" / "003").mkdir(parents=True)
     runner._write_tsv(round_dir / "prior_research_memory.tsv", auto_research.L0C_RESEARCH_MEMORY_COLUMNS, [])
     (round_dir / "baselines" / "measurement_01.json").write_text(
         json.dumps({"eval_throughput": 0.056}, indent=2),
@@ -5470,6 +5471,7 @@ def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_pa
     )
     candidate_001 = round_dir / "candidates" / "001"
     candidate_002 = round_dir / "candidates" / "002"
+    candidate_003 = round_dir / "candidates" / "003"
     (candidate_001 / "mutation.patch").write_text(patch_text, encoding="utf-8")
     (candidate_001 / "parity_check.json").write_text(
         json.dumps({"pass": True, "reason": "ran_passed_with_tier4_downstream_logit_diagnostic"}),
@@ -5500,6 +5502,21 @@ def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_pa
         ),
         encoding="utf-8",
     )
+    (candidate_003 / "BLOCKED.md").write_text(
+        "\n".join(
+            [
+                "# Candidate 003 Blocked",
+                "",
+                "Tried a compile preflight mutation in",
+                "`csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh`:",
+                "change `TileShape = Shape<_64, _128, _128>` to `Shape<_64, _128, _256>`.",
+                "Targeted compile preflight failed before submission, so no mutation.patch remains.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (candidate_003 / "agent_last_message.txt").write_text("blocked\n", encoding="utf-8")
 
     rows = runner._refresh_l0c_research_memory_from_artifacts(round_dir)
 
@@ -5508,6 +5525,10 @@ def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_pa
     assert "using TileShape = Shape<_16, _128, _128>" in rows[0]["patch_diff"]
     assert rows[1]["outcome"] == "parity_fp8_tier4_downstream_logit_diverged"
     assert rows[1]["failure_class"] == "correctness"
+    assert rows[2]["outcome"] == "agent_blocked_compile_preflight"
+    assert rows[2]["failure_class"] == "build"
+    assert rows[2]["surface"] == "cutlass_sm120_dispatch"
+    assert "Shape<_64, _128, _256>" in rows[2]["patch_diff"]
     memory_text = (round_dir / "research_memory.md").read_text(encoding="utf-8")
     assert "failure_class=performance" in memory_text
     assert "gate=ran_passed_with_tier4_downstream_logit_diagnostic" in memory_text
@@ -5944,16 +5965,47 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "warm_diagnostic_skipped.json" in brief
     assert "per-step token/time/cache consumption" in brief
     assert "GB10 bandwidth roofline context" in brief
+    assert "effective bandwidth in GB/s" in brief
+    assert "percent of the 273 GB/s GB10 ceiling" in brief
+    assert "`ffn_linear` share of ms/token" in brief
+    assert "non-FFN residual ms/token" in brief
     assert "Do not start vLLM and do not run apply-and-test" in brief
     assert "do not spend iteration budget on online research" not in brief
     assert "expected speed mechanism" in brief
     assert "Do not replace `process_weights_after_loading` wholesale" in brief
     assert "CUTLASS weight transposition" in brief
+    assert "This round is CUTLASS-only" in brief
+    assert "w8a8_triton_block_scaled_mm_func" in brief
     assert "CUTLASS dispatch" in brief
     assert "scale tensors" in brief
     assert "GEMM problem shape" in brief
     assert "fp8_gemm_cutlass_python_wrapper_rewrite" not in brief
     assert "auto-research apply-and-test \\" not in brief
+
+
+def test_l0c_fp8_cutlass_preflight_rejects_non_cutlass_backend_route(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    patch_text = "\n".join(
+        [
+            "--- cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py",
+            "+++ cutlass_source_workspace/vllm-source/vllm/model_executor/layers/quantization/utils/fp8_utils.py",
+            "@@ -1,1 +1,1 @@",
+            "+        return torch.ops.vllm.w8a8_triton_block_scaled_mm_func(",
+            "+            q_input, weight, input_scale, weight_scale, list(self.weight_group_shape), input_2d.dtype)",
+            "",
+        ]
+    )
+
+    preflight = runner._preflight_l0c_patch(kernel_target="fp8_gemm", patch_text=patch_text)
+
+    assert preflight is not None
+    assert preflight["tier"] == "safety_critical"
+    assert preflight["pattern_id"] == "safety_routes_cutlass_round_to_non_cutlass_backend"
 
 
 def test_l0c_candidate_analysis_requires_structured_roofline_accounting(tmp_path: Path) -> None:
@@ -5976,6 +6028,12 @@ Structured compute/bandwidth accounting:
 | representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | M=1, N=8192, K=8192 | 134M FLOP | 67 MB plus scales/output | about 2 FLOP/byte, memory-bound | below the theoretical stream ceiling | 80.6 | less epilogue scale overhead, unchanged bytes/FLOPs | +0.2 tok/s delta if the changed visitor is visible |
+
+7.5 tok/s breakdown: 37.0 GB/token at 7.37 tok/s implies about 273 GB/s
+effective bandwidth, roughly 100% of the 273 GB/s ceiling. ffn_linear share is
+80.6 / 135.6 ms/token = 59% share of ms/token, leaving a non-FFN residual
+ms/token of about 55.0. This patch attacks schedule/epilogue overhead, not
+B-weight traffic.
 
 Low-level evidence:
 
@@ -6036,6 +6094,10 @@ Structured compute/bandwidth accounting:
 | representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | M=1, N=8192, K=8192 | 134M FLOP | 67 MB plus scales/output | about 2 FLOP/byte, memory-bound | below the theoretical stream ceiling | 80.6 | less overhead | +0.3 tok/s delta |
+
+7.5 tok/s breakdown: effective bandwidth is 273 GB/s observed, 100% of the
+273 GB/s ceiling. ffn_linear share is 59% share of ms/token, non-FFN residual
+ms/token is 55.
 
 Mechanism: the mutation should reduce overhead and lift warm decode. This has
 the old high-level analysis shape but omits the edited file identity, dispatch

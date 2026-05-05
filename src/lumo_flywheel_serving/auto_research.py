@@ -6162,6 +6162,11 @@ Tier-2 hard-reject:
    estimated bytes moved, arithmetic intensity, GB10 roofline/ceiling comparison,
    current `ffn_linear` ms/token proxy, expected changed bytes/FLOPs/overhead,
    and the expected end-to-end tok/s delta if the hypothesis is right.
+   Include a separate 7.5 tok/s breakdown line that computes observed/implied
+   effective bandwidth in GB/s, percent of the 273 GB/s GB10 ceiling,
+   `ffn_linear` share of ms/token, and non-FFN residual ms/token. This can be
+   approximate, but it must be numeric and it must explain whether the patch
+   attacks bandwidth traffic, launch/schedule overhead, or another residual.
    Also include a low-level evidence table or bullet block with these exact
    fields: source file/symbol, live-shape dispatch-hit proof, before-mutation
    observation, byte-component split for A/B weights/scales/output/epilogue,
@@ -7239,13 +7244,43 @@ class L0cKernelMutationRunner:
                     "error_detail": analysis_error,
                 }
             else:
-                outcome = self.apply_and_test(
-                    round_id=round_id,
-                    iteration=iteration,
+                preflight = self._preflight_l0c_patch(
                     kernel_target=kernel_target,
-                    harness=harness,
-                    round_root=round_dir.parent,
+                    patch_text=patch_text,
                 )
+                if preflight is not None and preflight["tier"] == "safety_critical":
+                    self._write_preflight_rejection(
+                        iteration_dir=iteration_dir,
+                        round_dir=round_dir,
+                        rejected_rows=self._read_tsv(round_dir / "mutations_rejected.tsv")
+                        if (round_dir / "mutations_rejected.tsv").is_file()
+                        else [],
+                        iteration=iteration,
+                        candidate_uuid=str(uuid4()),
+                        mutation_hash=mutation_hash,
+                        kernel_target=kernel_target,
+                        fixture_id=str(spec.get("parity_fixture_id") or ""),
+                        tier=str(preflight["tier"]),
+                        pattern_id=str(preflight["pattern_id"]),
+                        evidence_snippet=str(preflight.get("evidence_snippet", "")),
+                    )
+                    outcome = {
+                        "round_id": round_id,
+                        "iteration": iteration,
+                        "kernel_target": kernel_target,
+                        "harness": harness,
+                        "mutation_hash": mutation_hash,
+                        "outcome": "preflight_rejected",
+                        "reason": preflight["pattern_id"],
+                    }
+                else:
+                    outcome = self.apply_and_test(
+                        round_id=round_id,
+                        iteration=iteration,
+                        kernel_target=kernel_target,
+                        harness=harness,
+                        round_root=round_dir.parent,
+                    )
         controller_resume_path.write_text(
             json.dumps(outcome, indent=2, sort_keys=True),
             encoding="utf-8",
@@ -10008,6 +10043,12 @@ class L0cKernelMutationRunner:
                 consecutive_compile_fails += 1
                 consecutive_parity_fails = 0
                 parity = self._read_parity_check(active_iteration_dir)
+                active_patch_path = active_iteration_dir / "mutation.patch"
+                active_patch_text = (
+                    active_patch_path.read_text(encoding="utf-8", errors="replace")
+                    if active_patch_path.is_file()
+                    else ""
+                )
                 if active_is_canary:
                     self._update_filter_hit_canary_outcome(
                         round_dir=round_dir,
@@ -10433,12 +10474,19 @@ class L0cKernelMutationRunner:
                 continue
             patch_path = iteration_dir / "mutation.patch"
             patch_text = patch_path.read_text(encoding="utf-8", errors="replace") if patch_path.is_file() else ""
+            blocked_path = iteration_dir / "BLOCKED.md"
+            blocked_text = (
+                blocked_path.read_text(encoding="utf-8", errors="replace")
+                if blocked_path.is_file()
+                else ""
+            )
+            memory_text = patch_text or blocked_text
             mutation_hash = (
                 hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
                 if patch_text
                 else ""
             )
-            surface, changed_region, expected_path = self._classify_l0c_patch_memory(patch_text)
+            surface, changed_region, expected_path = self._classify_l0c_patch_memory(memory_text)
             parity = self._read_parity_check(iteration_dir)
             trace_path = iteration_dir / "measurement_trace.json"
             result_row = results_by_iteration.get(iteration_dir.name, {})
@@ -10464,7 +10512,14 @@ class L0cKernelMutationRunner:
                         or (iteration_dir / "BLOCKED.md").is_file()
                     ):
                         continue
-                    outcome = "agent_no_patch"
+                    blocked_lower = blocked_text.lower()
+                    outcome = (
+                        "agent_blocked_compile_preflight"
+                        if "compile preflight" in blocked_lower
+                        or "targeted compile" in blocked_lower
+                        or "non-compiling" in blocked_lower
+                        else "agent_blocked_no_mutation"
+                    )
             objective_mean = str(result_row.get("objective_mean", ""))
             if not objective_mean:
                 trace_objective = self._objective_mean_from_l0c_trace(trace_path)
@@ -10476,8 +10531,12 @@ class L0cKernelMutationRunner:
                     round_id=round_dir.name,
                     iteration=iteration_dir.name,
                     mutation_hash=mutation_hash,
-                    patch_text=patch_text,
-                    controller_gate=str(parity.get("reason", "")) or "artifact_synthesis",
+                    patch_text=memory_text,
+                    controller_gate=(
+                        outcome
+                        if not patch_text and blocked_text
+                        else str(parity.get("reason", "")) or "artifact_synthesis"
+                    ),
                     outcome=outcome,
                     objective_mean=objective_mean,
                     rollout_measurements=rollout_measurements,
@@ -10773,10 +10832,10 @@ class L0cKernelMutationRunner:
             return "performance"
         if "duplicate" in haystack:
             return "duplicate"
-        if "preflight" in haystack or "safety" in haystack or "forbidden" in haystack:
-            return "preflight_safety"
         if "compile" in haystack or "nvcc" in haystack or "build" in haystack:
             return "build"
+        if "preflight" in haystack or "safety" in haystack or "forbidden" in haystack:
+            return "preflight_safety"
         if "parity" in haystack or "logit" in haystack or "correctness" in haystack:
             return "correctness"
         if "agent" in haystack or "no_patch" in haystack:
@@ -10819,11 +10878,16 @@ class L0cKernelMutationRunner:
         changed_region = ",".join(paths[:6]) if paths else "no_patch"
         haystack = patch_text.lower()
         path_blob = "\n".join(paths).lower()
-        if "scaled_mm_sm120_fp8_dispatch" in path_blob:
+        if (
+            "scaled_mm_sm120_fp8_dispatch" in path_blob
+            or "scaled_mm_sm120_fp8_dispatch" in haystack
+            or "scaled_mm_blockwise_sm120_fp8_dispatch" in path_blob
+            or "scaled_mm_blockwise_sm120_fp8_dispatch" in haystack
+        ):
             surface = "cutlass_sm120_dispatch"
-        elif "csrc/quantization/w8a8/cutlass" in path_blob:
+        elif "csrc/quantization/w8a8/cutlass" in path_blob or "csrc/quantization/w8a8/cutlass" in haystack:
             surface = "cutlass_cxx_dispatch_or_schedule"
-        elif "cutlass.py" in path_blob:
+        elif "cutlass.py" in path_blob or "cutlass.py" in haystack:
             surface = "python_cutlass_wrapper"
         elif "kernelhardwareinfo" in haystack or "sm_count" in haystack:
             surface = "cutlass_hardware_info"
@@ -11110,6 +11174,10 @@ class L0cKernelMutationRunner:
         hard = self._match_l0c_hard_preflight(patch_text)
         if hard is not None:
             return {"tier": "safety_critical", **hard}
+        if kernel_target == "fp8_gemm":
+            cutlass_hard = self._match_fp8_cutlass_only_hard_preflight(patch_text)
+            if cutlass_hard is not None:
+                return {"tier": "safety_critical", **cutlass_hard}
         if kernel_target == "deltanet":
             soft = self._match_deltanet_soft_preflight(patch_text)
             if soft is not None:
@@ -11170,6 +11238,46 @@ class L0cKernelMutationRunner:
                 ),
             ),
             ("mutation_mechanism", ("mechanism", "should reduce", "expected reduction", "lift")),
+            (
+                "effective_bandwidth",
+                (
+                    "effective bandwidth",
+                    "implied bandwidth",
+                    "observed bandwidth",
+                    "gb/s effective",
+                    "gb/s observed",
+                ),
+            ),
+            (
+                "bandwidth_ceiling_percent",
+                (
+                    "% of 273",
+                    "percent of 273",
+                    "of the 273 gb/s",
+                    "273 gb/s ceiling",
+                    "bandwidth ceiling",
+                ),
+            ),
+            (
+                "ffn_share",
+                (
+                    "ffn_linear share",
+                    "ffn share",
+                    "ffn_linear percent",
+                    "ffn_linear %",
+                    "share of ms/token",
+                ),
+            ),
+            (
+                "non_ffn_residual",
+                (
+                    "non-ffn residual",
+                    "non ffn residual",
+                    "residual ms/token",
+                    "non-ffn ms/token",
+                    "non ffn ms/token",
+                ),
+            ),
             ("source_symbol", ("source file", "source path", "symbol", "function")),
             (
                 "dispatch_hit_proof",
@@ -11653,6 +11761,30 @@ class L0cKernelMutationRunner:
                 return {"pattern_id": pattern_id, "evidence_snippet": path_blob}
         if any(path.startswith("tests/test_l0c_") and path.endswith(".py") for path in diff_paths):
             return {"pattern_id": "safety_mutates_l0c_tests", "evidence_snippet": path_blob}
+        return None
+
+    @staticmethod
+    def _match_fp8_cutlass_only_hard_preflight(patch_text: str) -> dict[str, str] | None:
+        lowered = patch_text.lower()
+        non_cutlass_needles = (
+            "w8a8_triton_block_scaled_mm_func",
+            "use_triton_gb10_decode",
+            "triton_decode_input_quant",
+            "is_deep_gemm_supported",
+            "_run_deepgemm",
+            "flashinfer",
+            "aiter",
+        )
+        if any(needle in lowered for needle in non_cutlass_needles):
+            evidence = [
+                line
+                for line in patch_text.splitlines()
+                if any(needle in line.lower() for needle in non_cutlass_needles)
+            ]
+            return {
+                "pattern_id": "safety_routes_cutlass_round_to_non_cutlass_backend",
+                "evidence_snippet": "\n".join(evidence[:8]),
+            }
         return None
 
     @staticmethod
@@ -13346,6 +13478,10 @@ class L0cKernelMutationRunner:
                     "  shape, scale, or schedule behavior: backend selection predicates,",
                     "  quantization scale shape/placement, FP8 input grouping/padding,",
                     "  or calls into alternative CUTLASS-supported scaled-mm paths.",
+                    "- This round is CUTLASS-only. Do not route warm decode to Triton,",
+                    "  DeepGEMM, FlashInfer, cuBLAS, AITER, or another non-CUTLASS backend.",
+                    "  A patch that calls `w8a8_triton_block_scaled_mm_func` or otherwise",
+                    "  bypasses `CutlassFP8ScaledMMLinearKernel` is a hard preflight reject.",
                     "- If your patch cannot plausibly change the launched CUTLASS op,",
                     "  scale tensors, or GEMM problem shape, write BLOCKED.md instead",
                     "  of submitting another Python-wrapper cosmetic mutation.",
