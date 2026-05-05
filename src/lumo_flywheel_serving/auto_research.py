@@ -6052,6 +6052,12 @@ For this GB10 run, "faster" means a material increase in warm decode throughput
 on this machine. Recent live runs are around 7.5 generated tokens/s; mutations
 that only move a tiny subcomponent without a plausible path to raising that
 end-to-end number are not worth submitting.
+Aim for step-change performance, not local polishing: the search ambition is
+over 100% warm decode throughput improvement. The 3% speed gate is only the
+minimum spend-control threshold. Think out of the box when evidence supports
+it, including writing a whole new CUTLASS kernel, dispatch path, or scale/shape
+specialization, as long as the hypothesis is one reviewable mutation with a
+local compile/preflight story and the parity contract is preserved.
 Use the Karpathy/autoresearch lesson correctly: the loop is a same-machine,
 fixed-budget keep/discard search. Tiny one-line nudges are fine only when the
 local evidence says that exact knob is the bottleneck. Otherwise prefer a larger
@@ -12962,6 +12968,14 @@ class L0cKernelMutationRunner:
                 "experiment, microbench, profiler, or targeted compile/preflight. "
                 "If the evidence does not support at least a 3% end-to-end warm decode "
                 "lift, write BLOCKED.md instead of submitting another low-upside patch."
+            ),
+            (
+                "- Think out of the box when the evidence supports it. The search "
+                "ambition is over 100% warm decode throughput improvement; the 3% "
+                "speed gate is only the minimum spend-control threshold. A candidate "
+                "may write a whole new CUTLASS kernel, dispatch route, or scale/shape "
+                "specialization if it has a credible local compile/preflight path and "
+                "a parity-preserving hypothesis."
             ),
             (
                 "- Treat this section as the pre-change CUTLASS timing baseline. "

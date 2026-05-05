@@ -5392,6 +5392,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "live warm shape dispatch hits that path" in strategy_brief
     assert "B-weight bytes change" in strategy_brief
     assert "3% end-to-end warm decode lift" in strategy_brief
+    assert "over 100% warm decode throughput improvement" in strategy_brief
+    assert "whole new CUTLASS kernel" in strategy_brief
     assert "10.1 tok/s full-model stream ceiling" in strategy_brief
     assert "not proof of achieved memory bandwidth" in strategy_brief
     candidate_brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
@@ -5412,6 +5414,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "live-shape dispatch-hit proof" in candidate_brief
     assert "byte-component split" in candidate_brief
     assert "at least 3%" in candidate_brief
+    assert "over 100% warm decode throughput improvement" in candidate_brief
+    assert "whole new CUTLASS kernel" in candidate_brief
     assert "post-parity generation speed gate" in candidate_brief
     assert "auto-research warm-diagnostic" in candidate_brief
     assert "MUST run a cheap warm-request diagnostic" in candidate_brief
@@ -6101,6 +6105,8 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "live-shape dispatch-hit proof" in brief
     assert "byte-component split" in brief
     assert "at least 3%" in brief
+    assert "over 100% warm decode throughput improvement" in brief
+    assert "whole new CUTLASS kernel" in brief
     assert "auto-research warm-diagnostic" in brief
     assert "auto-research cutlass-microbench" in brief
     assert "cutlass_microbench_pre.json" in brief
