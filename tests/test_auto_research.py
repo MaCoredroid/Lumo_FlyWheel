@@ -5549,6 +5549,47 @@ def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_pa
     assert results_rows[0]["objective_mean"] == "0.039500"
 
 
+def test_l0c_research_memory_treats_speed_gate_as_performance(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    round_dir = repo / "output" / "auto_research" / (
+        "qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T000000Z"
+    )
+    candidate_dir = round_dir / "candidates" / "020"
+    candidate_dir.mkdir(parents=True)
+    runner._write_tsv(round_dir / "prior_research_memory.tsv", auto_research.L0C_RESEARCH_MEMORY_COLUMNS, [])
+    (candidate_dir / "mutation.patch").write_text(
+        """--- cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
++++ cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
+@@ -1,2 +1,2 @@
+-using TileShape = Shape<_64, _128, _128>;
++using TileShape = Shape<_64, _128, _128>;
+""",
+        encoding="utf-8",
+    )
+    (candidate_dir / "parity_check.json").write_text(
+        json.dumps(
+            {
+                "pass": False,
+                "reason": "parity_generation_speed_below_baseline",
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    rows = runner._refresh_l0c_research_memory_from_artifacts(round_dir)
+
+    assert rows[0]["failure_class"] == "performance"
+    assert rows[0]["failure_relation"].startswith("performance_gate_failed:")
+    assert rows[0]["search_bias"] == "deprioritize_until_speed_gate_hypothesis_changes"
+    assert "post-parity speed threshold" in rows[0]["next_implication"]
+
+
 def test_l0c_parity_generation_speed_gate_rejects_below_margin(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

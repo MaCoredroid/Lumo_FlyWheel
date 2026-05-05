@@ -11055,6 +11055,8 @@ class L0cKernelMutationRunner:
     def _l0c_memory_search_bias(outcome: str) -> str:
         if outcome == "keep":
             return "exploit_as_seed"
+        if "speed" in outcome and ("below_baseline" in outcome or "generation" in outcome):
+            return "deprioritize_until_speed_gate_hypothesis_changes"
         if outcome in {"discard", "regressed"}:
             return "deprioritize_adjacent_without_new_evidence"
         if "parity" in outcome:
@@ -11135,6 +11137,8 @@ class L0cKernelMutationRunner:
         surface: str,
         expected_affected_path: str,
     ) -> str:
+        if "speed" in outcome and ("below_baseline" in outcome or "generation" in outcome):
+            return f"performance_gate_failed:{surface}:{expected_affected_path}"
         if outcome in {"discard", "regressed"}:
             return f"same_surface_or_path_failed:{surface}:{expected_affected_path}"
         if "parity" in outcome:
@@ -11152,6 +11156,11 @@ class L0cKernelMutationRunner:
         surface: str,
         expected_affected_path: str,
     ) -> str:
+        if "speed" in outcome and ("below_baseline" in outcome or "generation" in outcome):
+            return (
+                "do not spend controller validation on adjacent candidates unless preflight "
+                "analysis explains how they clear the post-parity speed threshold"
+            )
         if outcome in {"discard", "regressed"}:
             return (
                 "avoid repeating this surface/path unless a new dispatch, shape, scale, "
