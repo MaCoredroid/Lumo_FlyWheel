@@ -144,6 +144,7 @@ L0C_PROPOSER_STUCK_THRESHOLD = 3
 L0C_COMPILE_FAILURES_THRESHOLD = 3
 L0C_INTERMITTENT_PARITY_THRESHOLD = 2
 L0C_MEASUREMENTS_PER_ACCEPTED = 2
+L0C_FP8_GEMM_PARITY_GENERATION_SPEED_GATE_MARGIN = 0.03
 L0C_PRIOR_REJECTION_LIMIT = 20
 L0C_CANARY_INTERVAL = 4
 L0C_POSITIVE_MEMORY_ROUND_LIMIT = 3
@@ -6179,6 +6180,10 @@ Tier-2 hard-reject:
    whether B-weight bytes change, and why the expected lift is at least 3%
    end-to-end. If you cannot defend the 3% lift from those facts, write
    BLOCKED.md instead of mutation.patch.
+   The controller will also run a cheap post-parity generation speed gate:
+   if the patched runtime does not exceed `warm_pre_mutation.json` decode
+   tok/s by at least 3%, it is discarded before the expensive paired
+   measurement windows.
    If you can cheaply produce a CUTLASS-internal timing/proxy, include
    before-change and after-change values; otherwise state that only the
    `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
@@ -8928,6 +8933,45 @@ class L0cKernelMutationRunner:
                     outcome = "parity_failed"
                 return {**common_outcome, "outcome": outcome}
 
+            speed_gate = self._run_l0c_parity_generation_speed_gate(
+                round_id=round_id,
+                round_dir=round_dir,
+                iteration=iteration,
+                iteration_dir=iteration_dir,
+                kernel_target=kernel_target,
+                fixture_id=parity_result.fixture_id or fixture_id,
+            )
+            if not speed_gate.get("pass", True):
+                original_parity = self._read_parity_check(iteration_dir)
+                self._write_parity_check(
+                    iteration_dir,
+                    pass_=False,
+                    reason=str(speed_gate.get("reason") or "parity_generation_speed_below_baseline"),
+                    fixture_id=parity_result.fixture_id or fixture_id,
+                    kernel_target=kernel_target,
+                    correctness_pass=True,
+                    original_parity_check=original_parity,
+                    speed_gate=speed_gate,
+                    cutlass_overlay_runtime=cutlass_overlay_materialization,
+                    tier4_downstream_logit_diagnostic=tier4_diagnostic,
+                )
+                blocked_lines = [
+                    "iteration rejected by controller's parity/generation speed gate",
+                    f"reason: {speed_gate.get('reason')}",
+                    f"baseline_decode_tokens_per_s: {speed_gate.get('baseline_decode_tokens_per_s')}",
+                    f"candidate_decode_tokens_per_s: {speed_gate.get('candidate_decode_tokens_per_s')}",
+                    f"required_decode_tokens_per_s: {speed_gate.get('required_decode_tokens_per_s')}",
+                    f"margin: {speed_gate.get('margin')}",
+                ]
+                if speed_gate.get("error_detail"):
+                    blocked_lines.append(f"detail: {speed_gate.get('error_detail')}")
+                blocked_path.write_text("\n".join(blocked_lines) + "\n", encoding="utf-8")
+                return {
+                    **common_outcome,
+                    "outcome": "parity_failed",
+                    "speed_gate": speed_gate,
+                }
+
             measurement_rows, candidate_uuid, objective_mean = self._run_paired_l0c_measurements(
                 spec=spec,
                 iteration=iteration,
@@ -8986,6 +9030,141 @@ class L0cKernelMutationRunner:
             and "tier_3_gemm_output_compare" in checkpoints
             and "tier_4_downstream_logit_guard" in checkpoints
         )
+
+    def _run_l0c_parity_generation_speed_gate(
+        self,
+        *,
+        round_id: str,
+        round_dir: Path,
+        iteration: str,
+        iteration_dir: Path,
+        kernel_target: str,
+        fixture_id: str,
+    ) -> dict[str, Any]:
+        if kernel_target != "fp8_gemm":
+            return {
+                "schema": "l0c_parity_generation_speed_gate.v1",
+                "enabled": False,
+                "pass": True,
+                "reason": "kernel_target_not_gated",
+            }
+        margin = L0C_FP8_GEMM_PARITY_GENERATION_SPEED_GATE_MARGIN
+        baseline_path = iteration_dir / "warm_pre_mutation.json"
+        baseline_payload = self._read_json_object(baseline_path)
+        baseline_tok_s = self._l0c_warm_decode_tokens_per_s(baseline_payload)
+        gate: dict[str, Any] = {
+            "schema": "l0c_parity_generation_speed_gate.v1",
+            "enabled": True,
+            "kernel_target": kernel_target,
+            "fixture_id": fixture_id,
+            "round_id": round_id,
+            "iteration": iteration,
+            "margin": margin,
+            "baseline_artifact": _relative_to_repo(self.repo_root, baseline_path),
+            "baseline_decode_tokens_per_s": baseline_tok_s,
+            "policy": (
+                "after correctness parity, run a cheap warm generation diagnostic on the "
+                "patched runtime and discard before paired measurement unless decode tok/s "
+                "exceeds warm_pre_mutation baseline by the configured margin"
+            ),
+        }
+        if baseline_tok_s is None or baseline_tok_s <= 0.0:
+            gate.update(
+                {
+                    "pass": True,
+                    "reason": "baseline_warm_decode_rate_unavailable",
+                    "error_detail": "warm_pre_mutation.json is missing or lacks aggregate decode_tokens_per_s",
+                }
+            )
+            (iteration_dir / "speed_gate.json").write_text(
+                json.dumps(gate, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            return gate
+        try:
+            diagnostic = self.warm_diagnostic(
+                round_id=round_id,
+                iteration=iteration,
+                round_root=round_dir.parent,
+                phase="post_parity_speed_gate",
+                request_count=2,
+                warmup_requests=0,
+                target_concurrency=1,
+                max_output_tokens=64,
+                prompt_token_cap=2048,
+            )
+        except Exception as exc:  # noqa: BLE001 - a broken post-parity request is a failed gate
+            gate.update(
+                {
+                    "pass": False,
+                    "reason": "parity_generation_speed_gate_unavailable",
+                    "required_decode_tokens_per_s": round(baseline_tok_s * (1.0 + margin), 6),
+                    "error_detail": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            (iteration_dir / "speed_gate.json").write_text(
+                json.dumps(gate, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            return gate
+
+        candidate_tok_s = self._l0c_warm_decode_tokens_per_s(diagnostic)
+        required_tok_s = baseline_tok_s * (1.0 + margin)
+        passed = candidate_tok_s is not None and candidate_tok_s > required_tok_s
+        gate.update(
+            {
+                "pass": passed,
+                "reason": "parity_generation_speed_gate_passed"
+                if passed
+                else "parity_generation_speed_below_baseline",
+                "candidate_artifact": diagnostic.get("artifact_path"),
+                "candidate_decode_tokens_per_s": candidate_tok_s,
+                "required_decode_tokens_per_s": round(required_tok_s, 6),
+                "delta_decode_tokens_per_s": round((candidate_tok_s or 0.0) - baseline_tok_s, 6),
+                "candidate_over_baseline_pct": round(
+                    (((candidate_tok_s or 0.0) / baseline_tok_s) - 1.0) * 100.0, 6
+                ),
+            }
+        )
+        if candidate_tok_s is None:
+            gate["error_detail"] = "post-parity warm diagnostic lacks aggregate decode_tokens_per_s"
+        (iteration_dir / "speed_gate.json").write_text(
+            json.dumps(gate, indent=2, sort_keys=True), encoding="utf-8"
+        )
+        return gate
+
+    @staticmethod
+    def _read_json_object(path: Path) -> dict[str, Any]:
+        if not path.is_file():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _l0c_warm_decode_tokens_per_s(payload: dict[str, Any]) -> float | None:
+        aggregate = payload.get("aggregate_consumption") if isinstance(payload, dict) else None
+        if not isinstance(aggregate, dict):
+            return None
+        step = aggregate.get("step_consumption")
+        if isinstance(step, dict):
+            raw = step.get("decode_tokens_per_s")
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                value = 0.0
+            if value > 0.0:
+                return value
+        metrics = aggregate.get("metrics_delta")
+        if isinstance(metrics, dict):
+            try:
+                gen_tokens = float(metrics.get("generation_tokens") or 0.0)
+                decode_sum_s = float(metrics.get("decode_sum_s") or 0.0)
+            except (TypeError, ValueError):
+                return None
+            if gen_tokens > 0.0 and decode_sum_s > 0.0:
+                return gen_tokens / decode_sum_s
+        return None
 
     def _apply_kernel_patch(
         self, *, kernel_path: Path, patch_path: Path
@@ -10836,6 +11015,13 @@ class L0cKernelMutationRunner:
             return "success"
         if outcome in {"discard", "regressed"}:
             return "performance"
+        if "speed" in haystack and (
+            "below_baseline" in haystack
+            or "generation" in haystack
+            or "tok/s" in haystack
+            or "tokens_per_s" in haystack
+        ):
+            return "performance"
         if "duplicate" in haystack:
             return "duplicate"
         if "compile" in haystack or "nvcc" in haystack or "build" in haystack:
@@ -10981,7 +11167,14 @@ class L0cKernelMutationRunner:
 
     def _artifact_refs_for_iteration(self, iteration_dir: Path) -> str:
         refs = []
-        for name in ("mutation.patch", "parity_check.json", "measurement_trace.json", "BLOCKED.md"):
+        for name in (
+            "mutation.patch",
+            "parity_check.json",
+            "speed_gate.json",
+            "warm_post_parity_speed_gate.json",
+            "measurement_trace.json",
+            "BLOCKED.md",
+        ):
             path = iteration_dir / name
             if path.is_file():
                 refs.append(_relative_to_repo(self.repo_root, path))

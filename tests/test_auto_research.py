@@ -5412,6 +5412,7 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "live-shape dispatch-hit proof" in candidate_brief
     assert "byte-component split" in candidate_brief
     assert "at least 3%" in candidate_brief
+    assert "post-parity generation speed gate" in candidate_brief
     assert "auto-research warm-diagnostic" in candidate_brief
     assert "MUST run a cheap warm-request diagnostic" in candidate_brief
     assert "warm_pre_mutation.json" in candidate_brief
@@ -5546,6 +5547,75 @@ def test_l0c_research_memory_refresh_records_patch_diff_and_failure_class(tmp_pa
     assert results_rows[0]["iteration"] == "001"
     assert results_rows[0]["status"] == "discard"
     assert results_rows[0]["objective_mean"] == "0.039500"
+
+
+def test_l0c_parity_generation_speed_gate_rejects_below_margin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _init_repo(tmp_path)
+    runner = auto_research.L0cKernelMutationRunner(
+        repo_root=repo,
+        registry_path=repo / "model_registry.yaml",
+        tuned_config_root=repo / "output" / "tuned_configs",
+    )
+    round_dir = repo / "output" / "auto_research" / (
+        "qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T000000Z"
+    )
+    iteration_dir = round_dir / "candidates" / "001"
+    iteration_dir.mkdir(parents=True)
+    (iteration_dir / "warm_pre_mutation.json").write_text(
+        json.dumps(
+            {
+                "aggregate_consumption": {
+                    "step_consumption": {
+                        "decode_tokens_per_s": 7.5,
+                    }
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    def _warm_diagnostic(**kwargs):
+        assert kwargs["phase"] == "post_parity_speed_gate"
+        assert kwargs["request_count"] == 2
+        assert kwargs["warmup_requests"] == 0
+        return {
+            "artifact_path": str(iteration_dir / "warm_post_parity_speed_gate.json"),
+            "aggregate_consumption": {
+                "step_consumption": {
+                    "decode_tokens_per_s": 7.6,
+                }
+            },
+        }
+
+    monkeypatch.setattr(runner, "warm_diagnostic", _warm_diagnostic)
+
+    gate = runner._run_l0c_parity_generation_speed_gate(
+        round_id=round_dir.name,
+        round_dir=round_dir,
+        iteration="001",
+        iteration_dir=iteration_dir,
+        kernel_target="fp8_gemm",
+        fixture_id="responses-sdk-adapter-cutover-fp8-gemm-v1",
+    )
+
+    assert gate["pass"] is False
+    assert gate["reason"] == "parity_generation_speed_below_baseline"
+    assert gate["baseline_decode_tokens_per_s"] == 7.5
+    assert gate["candidate_decode_tokens_per_s"] == 7.6
+    assert gate["required_decode_tokens_per_s"] == 7.725
+    persisted = json.loads((iteration_dir / "speed_gate.json").read_text(encoding="utf-8"))
+    assert persisted["reason"] == "parity_generation_speed_below_baseline"
+    assert (
+        runner._l0c_memory_failure_class(
+            outcome="parity_generation_speed_below_baseline",
+            controller_gate="parity_generation_speed_below_baseline",
+        )
+        == "performance"
+    )
 
 
 def test_l0c_fp8_gemm_real_non_cutlass_non_triton_backend_blocked(tmp_path: Path) -> None:
