@@ -6130,12 +6130,22 @@ Tier-2 hard-reject:
    research_memory.tsv, research_memory.md, prior_mutations_rejected.tsv,
    mutations_rejected.tsv, results.tsv (best_so_far).
    For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
-2. Before editing, write down the baseline timing breakdown you are using:
-   GB10 hardware fact, current round measurement rows, and the local P3a
-   CUTLASS/FFN timing artifact from strategy_brief.md when present. State which CUTLASS time component your patch should reduce
-   before you edit, and how that reduction can lift the observed warm decode
-   rate materially above the recent ~7.5 generated tok/s level. If you can cheaply produce a CUTLASS-internal timing/proxy,
-   include before-change and after-change values; otherwise state that only the
+2. Before editing, write {{iteration_dir}}/candidate_analysis.md with the
+   baseline timing breakdown and compute/bandwidth breakdown you are using.
+   This is a required cheap preflight artifact, not optional commentary. Include:
+   - the current warm decode rate in generated tok/s and ms/generated token,
+   - current round measurement rows or the nearest baseline/candidate traces,
+   - the GB10 bandwidth fact and the bytes/token roofline context from the warm
+     diagnostic or measurement trace,
+   - which CUTLASS time component you believe is limiting decode, including the
+     CUTLASS/FFN timing component and the `ffn_linear` proxy from
+     strategy_brief.md when no lower-level CUTLASS timer is available,
+   - an estimated FLOP or arithmetic-intensity sanity check for the GEMM shape
+     class you are changing, even if approximate,
+   - the exact mechanism by which your mutation should lift the observed warm
+     decode rate materially above the recent ~7.5 generated tok/s level.
+   If you can cheaply produce a CUTLASS-internal timing/proxy, include
+   before-change and after-change values; otherwise state that only the
    `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
 3. You MUST run a cheap warm-request diagnostic against the already-running
    live server before editing, then read the artifact for per-step token/time/cache consumption,
@@ -6167,8 +6177,8 @@ Tier-2 hard-reject:
 # What you do NOT do
 - You do not call finalize-round. Python does that.
 - You do not run measurement directly. The CLI does that.
-- You do not write any file except mutation.patch, BLOCKED.md, and the
-  warm diagnostic artifact/skipped note from step 3.
+- You do not write any file except mutation.patch, candidate_analysis.md,
+  BLOCKED.md, and the warm diagnostic artifact/skipped note from step 3.
 """
 
 
@@ -7617,6 +7627,40 @@ class L0cKernelMutationRunner:
 
             patch_text = patch_path.read_text(encoding="utf-8")
             mutation_hash = hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
+            analysis_error = self._validate_l0c_candidate_analysis(iteration_dir)
+            if analysis_error is not None:
+                self._write_parity_check(
+                    iteration_dir,
+                    pass_=False,
+                    reason="missing_compute_bandwidth_analysis",
+                    error_detail=analysis_error,
+                    fixture_id=fixture_id,
+                    kernel_target=kernel_target,
+                )
+                (iteration_dir / "BLOCKED.md").write_text(
+                    "\n".join(
+                        [
+                            "iteration rejected by controller cheap preflight",
+                            "reason: missing_compute_bandwidth_analysis",
+                            f"detail: {analysis_error}",
+                            "fix: write candidate_analysis.md with warm decode, GB10 bandwidth,",
+                            "     CUTLASS/FFN timing, FLOP/arithmetic-intensity, and mutation mechanism.",
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                self._record_l0c_rejection(
+                    round_dir,
+                    rejected_rows,
+                    self._make_rejection_row(
+                        iteration=attempt_label,
+                        candidate_uuid=str(uuid4()),
+                        mutation_hash=mutation_hash,
+                        reason="missing_compute_bandwidth_analysis",
+                    ),
+                )
+                continue
             if mutation_hash in seen_hashes:
                 self._record_l0c_rejection(
                     round_dir,
@@ -11004,6 +11048,33 @@ class L0cKernelMutationRunner:
             soft = self._match_deltanet_soft_preflight(patch_text)
             if soft is not None:
                 return {"tier": "soft", **soft}
+        return None
+
+    @staticmethod
+    def _validate_l0c_candidate_analysis(iteration_dir: Path) -> str | None:
+        path = iteration_dir / "candidate_analysis.md"
+        if not path.is_file():
+            return "candidate_analysis.md missing"
+        text = path.read_text(encoding="utf-8", errors="replace")
+        lowered = text.lower()
+        if len(lowered.strip()) < 700:
+            return "candidate_analysis.md too short for a defensible breakdown"
+        required_groups: list[tuple[str, tuple[str, ...]]] = [
+            ("warm_decode_rate", ("tok/s", "tokens/s", "generated tokens/s")),
+            ("decode_latency", ("ms/generated", "decode_ms", "ms per generated")),
+            ("gb10_bandwidth", ("gb10", "273 gb/s", "bandwidth")),
+            ("bytes_per_token", ("bytes/token", "bytes per token", "bytes_per_generated_token")),
+            ("cutlass_or_ffn_component", ("cutlass", "ffn_linear", "fp8 gemm")),
+            ("compute_sanity_check", ("flop", "arithmetic intensity", "compute-bound", "memory-bound")),
+            ("mutation_mechanism", ("mechanism", "should reduce", "expected reduction", "lift")),
+        ]
+        missing = [
+            label
+            for label, needles in required_groups
+            if not any(needle in lowered for needle in needles)
+        ]
+        if missing:
+            return "candidate_analysis.md missing required section(s): " + ", ".join(missing)
         return None
 
     def preflight_patch(
