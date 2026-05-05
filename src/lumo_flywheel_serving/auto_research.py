@@ -6046,6 +6046,10 @@ You are an autonomous kernel-research agent for iteration {{iteration}} of round
 # Your one job
 Propose ONE mutation to {{mutation_target_description}} that is faster than the current
 best on the workload, AND passes the parity gate at {{parity_fixture_path}}.
+For this GB10 run, "faster" means a material increase in warm decode throughput
+on this machine. Recent live runs are around 7.5 generated tokens/s; mutations
+that only move a tiny subcomponent without a plausible path to raising that
+end-to-end number are not worth submitting.
 
 # Hardware context (MATTERS for what mutations are worth proposing)
 This kernel runs on a **DGX Spark GB10**. Treat it as bandwidth-bound:
@@ -6058,10 +6062,12 @@ the known workload profile is decode-heavy.
 {{strategy_brief}}
 
 Use the context already in this brief and the local rejection history, then
-do a short targeted research pass before choosing the mutation. Prefer primary
-sources such as vLLM source/docs, NVIDIA CUTLASS docs, CUDA docs, and local
-container source over generic advice. Keep this bounded: extract the dispatch,
-scale, shape, or schedule fact that changes your mutation choice, then move on.
+do a short targeted research pass before choosing the mutation. Use Codex's
+online research/search tools when available, and prefer primary docs/source:
+vLLM source/docs, NVIDIA CUTLASS docs, CUDA docs, and local container source
+over generic advice. Keep this bounded: extract the dispatch, scale, shape, or
+schedule fact that changes your mutation choice, record the source/fact in your
+notes or final message, then move on.
 
 # Hard rules
 {{edit_scope_rule}}
@@ -6112,7 +6118,8 @@ Tier-2 hard-reject:
 2. Before editing, write down the baseline timing breakdown you are using:
    GB10 hardware fact, current round measurement rows, and the local P3a
    CUTLASS/FFN timing artifact from strategy_brief.md when present. State which CUTLASS time component your patch should reduce
-   before you edit. If you can cheaply produce a CUTLASS-internal timing/proxy,
+   before you edit, and how that reduction can lift the observed warm decode
+   rate materially above the recent ~7.5 generated tok/s level. If you can cheaply produce a CUTLASS-internal timing/proxy,
    include before-change and after-change values; otherwise state that only the
    `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
 3. You MUST run a cheap warm-request diagnostic against the already-running
@@ -6132,7 +6139,10 @@ Tier-2 hard-reject:
    compile the touched Python/C++ file if applicable, or run a tiny non-vLLM
    import/shape probe. Do not start vLLM and do not run apply-and-test.
 5. Do a short online/source research pass only if it can inform the mutation:
-   use primary docs/source and record the specific fact in your notes/transcript.
+   use Codex online research/search tools when available, prefer primary
+   docs/source, and record the specific source-derived fact in your
+   notes/transcript. If online tools are unavailable, state that and use local
+   vLLM/CUTLASS/CUDA source instead.
 6. Write your proposal to {{iteration_dir}}/mutation.patch.
    Generate the patch with a real diff tool; do not hand-write hunk counts.
    The patch must apply with:
