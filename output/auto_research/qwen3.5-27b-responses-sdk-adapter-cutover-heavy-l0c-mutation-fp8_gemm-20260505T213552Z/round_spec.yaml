@@ -1,0 +1,141 @@
+round_id: qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z
+round_type: l0c_mutation
+model_id: qwen3.5-27b
+family_id: responses-sdk-adapter-cutover-heavy
+workload_file: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/workload.yaml
+base_bundle: /home/mark/shared/lumoFlyWheel/output/tuned_configs/responses-sdk-adapter-cutover-heavy/2e1b21350ce589fcaafbb3c7d7eac526a7aed582/20260503T0120560000_30eb69ce.yaml
+base_bundle_id: 30eb69ce-bedd-4969-a44c-c2cf965fb8e8
+kernel_target: fp8_gemm
+kernel_source_path: /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
+parity_fixture: benchmark_blueprints/families/responses-sdk-adapter-cutover/parity_fixture/fp8_gemm_v1.yaml
+parity_fixture_id: responses-sdk-adapter-cutover-fp8-gemm-v1
+parity_fixture_content_hash: 6c2c919e7aa3bd3df23c706f04459cff0951ad2c355035d37b3c5a16af1580ab
+harness: real
+base_measurements: 5
+accepted_iteration_cap: 32
+total_attempt_cap: 64
+round_timeout_hours: 72.0
+started_at: '2026-05-05T21:35:52+00:00'
+mutation_surface:
+  kind: cutlass_source_workspace
+  backend: cutlass
+  source_mutability: staged_vllm_cutlass_source_tree
+  runtime_wired: true
+  kernel_source_path_defaulted: true
+  kernel_source_path: /home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/kernel_overlays/fp8_gemm_cutlass_overlay_bootstrap.py
+  container_source_dir: /usr/local/lib/python3.12/dist-packages/vllm/model_executor/kernels/linear/scaled_mm
+  container_vllm_source_dir: /opt/vllm-source
+  python_source_relative_path: vllm/model_executor/kernels/linear/scaled_mm
+  cxx_source_relative_path: csrc/quantization/w8a8/cutlass
+  requires_rebuild: true
+  safety_note: The controller stages a local copy of the live vLLM CUTLASS Python
+    and C++/CUDA source tree for agents. Candidate patches may edit the staged Python
+    dispatch files and CUTLASS C++ schedule files; the controller mounts the patched
+    tree over /opt/vllm-source and rebuilds/installs vLLM before parity and measurement.
+  runtime_artifact_contract: candidate mutation.patch applies to cutlass_source_workspace;
+    the patched /opt/vllm-source workspace is bind-mounted and rebuilt before controller
+    validation
+  workspace_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_workspace
+  workspace_source_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_workspace/vllm-source
+  workspace_python_source_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_workspace/vllm-source/vllm/model_executor/kernels/linear/scaled_mm
+  workspace_cxx_source_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_workspace/vllm-source/csrc/quantization/w8a8/cutlass
+  workspace_base_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_base
+  workspace_base_source_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_base/vllm-source
+  workspace_base_python_source_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_base/vllm-source/vllm/model_executor/kernels/linear/scaled_mm
+  workspace_base_cxx_source_path: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_base/vllm-source/csrc/quantization/w8a8/cutlass
+  workspace_readme: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_workspace/README_L0C_CUTLASS.md
+  round_dir: /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z
+runtime:
+  container_name: lumo-vllm-l0c-fp8-cutlass-run30
+  model_id: qwen3.5-27b
+  port: 9950
+  proxy_port: 9951
+  endpoint: http://127.0.0.1:9951/v1
+  metrics_url: http://127.0.0.1:9950/metrics
+  admin_url: http://127.0.0.1:9951/admin
+  api_key: EMPTY
+  logs_root: /tmp/lumo-l0c-fp8-cutlass-run30-logs
+  triton_cache_root: /tmp/lumo-l0c-fp8-cutlass-run30-triton
+  warmup_s: 5
+  window_s: 30
+  kernel_container_path: null
+  image: lumo-flywheel-vllm:26.01-py3-v0.19.0
+  state_root: /tmp/lumo-l0c-fp8-cutlass-run30-state
+  vllm_config:
+    max_num_seqs: 4
+    max_num_batched_tokens: 8192
+    enable_chunked_prefill: true
+    enable_prefix_caching: true
+    gpu_memory_utilization: 0.9
+    max_model_len: 131072
+    kv_cache_dtype: fp8_e5m2
+  kernel_selection:
+    combo_id: combo_002
+    attention_backend: vllm-default
+    deltanet_kernel: triton-chunked-delta-v2
+    fp8_gemm_kernel: cutlass
+    torch_compile_mode: default
+    cuda_graph_capture: 'off'
+  request_shaping: {}
+  weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+  prelaunch_shell: "{\n  echo '[LUMO-CUTLASS-REBUILD] start' $(date -Iseconds)\ntrap\
+    \ 'chmod -R a+rwX /opt/vllm-source >/dev/null 2>&1 || true' EXIT\ncd /opt/vllm-source\n\
+    git config --global --add safe.directory /opt/vllm-source || true\nexport MAX_JOBS=${MAX_JOBS:-1}\n\
+    export TORCH_CUDA_ARCH_LIST=${LUMO_CUTLASS_TORCH_CUDA_ARCH_LIST:-12.0}\nexport\
+    \ VLLM_USE_PRECOMPILED=0\nexport CCACHE_DIR=/opt/lumo-ccache\nexport CCACHE_BASEDIR=/opt/vllm-source\n\
+    python3 - <<'PY'\nfrom pathlib import Path\npath = Path('CMakeLists.txt')\ntext\
+    \ = path.read_text()\nreplacements = {\n    'cuda_archs_loose_intersection(MARLIN_ARCHS\
+    \ \"8.0+PTX\" \"${CUDA_ARCHS}\")': 'set(MARLIN_ARCHS \"\")',\n    'cuda_archs_loose_intersection(MARLIN_SM75_ARCHS\
+    \ \"7.5\" \"${CUDA_ARCHS}\")': 'set(MARLIN_SM75_ARCHS \"\")',\n    'cuda_archs_loose_intersection(MARLIN_BF16_ARCHS\
+    \ \"8.0+PTX;9.0+PTX\" \"${CUDA_ARCHS}\")': 'set(MARLIN_BF16_ARCHS \"\")',\n  \
+    \  'cuda_archs_loose_intersection(MARLIN_FP8_ARCHS \"8.9;12.0;12.1\" \"${CUDA_ARCHS}\"\
+    )': 'set(MARLIN_FP8_ARCHS \"\")',\n    'cuda_archs_loose_intersection(MARLIN_OTHER_ARCHS\
+    \ \"7.5;8.0+PTX\" \"${CUDA_ARCHS}\")': 'set(MARLIN_OTHER_ARCHS \"\")',\n    'cuda_archs_loose_intersection(MARLIN_MOE_ARCHS\
+    \ \"8.0+PTX\" \"${CUDA_ARCHS}\")': 'set(MARLIN_MOE_ARCHS \"\")',\n    'cuda_archs_loose_intersection(MARLIN_MOE_SM75_ARCHS\
+    \ \"7.5\" \"${CUDA_ARCHS}\")': 'set(MARLIN_MOE_SM75_ARCHS \"\")',\n    'cuda_archs_loose_intersection(MARLIN_MOE_FP8_ARCHS\
+    \ \"8.9;12.0;12.1\" \"${CUDA_ARCHS}\")': 'set(MARLIN_MOE_FP8_ARCHS \"\")',\n \
+    \   'cuda_archs_loose_intersection(MARLIN_MOE_OTHER_ARCHS \"7.5;8.0+PTX\" \"${CUDA_ARCHS}\"\
+    )': 'set(MARLIN_MOE_OTHER_ARCHS \"\")',\n    'cuda_archs_loose_intersection(SCALED_MM_2X_ARCHS\\\
+    n    \"7.5;8.0;8.7;8.9+PTX\" \"${CUDA_ARCHS}\")': 'set(SCALED_MM_2X_ARCHS \"\"\
+    )',\n    'cuda_archs_loose_intersection(FP4_ARCHS \"12.0f\" \"${CUDA_ARCHS}\"\
+    )': 'set(FP4_ARCHS \"\")',\n    'cuda_archs_loose_intersection(FP4_ARCHS \"12.0a;12.1a\"\
+    \ \"${CUDA_ARCHS}\")': 'set(FP4_ARCHS \"\")',\n    'cuda_archs_loose_intersection(FP4_ARCHS\
+    \ \"10.0f;11.0f\" \"${CUDA_ARCHS}\")': 'set(FP4_ARCHS \"\")',\n    'cuda_archs_loose_intersection(FP4_ARCHS\
+    \ \"10.0a;10.1a;10.3a\" \"${CUDA_ARCHS}\")': 'set(FP4_ARCHS \"\")',\n    'cuda_archs_loose_intersection(MLA_ARCHS\
+    \ \"10.0f;11.0f;12.0f\" \"${CUDA_ARCHS}\")': 'set(MLA_ARCHS \"\")',\n    'cuda_archs_loose_intersection(MLA_ARCHS\
+    \ \"10.0a;10.1a;10.3a;12.0a;12.1a\" \"${CUDA_ARCHS}\")': 'set(MLA_ARCHS \"\")',\n\
+    \    'cuda_archs_loose_intersection(CUTLASS_MOE_DATA_ARCHS \"9.0a;10.0f;11.0f;12.0f\"\
+    \ \"${CUDA_ARCHS}\")': 'set(CUTLASS_MOE_DATA_ARCHS \"\")',\n    'cuda_archs_loose_intersection(CUTLASS_MOE_DATA_ARCHS\
+    \ \"9.0a;10.0a;10.1a;10.3a;12.0a;12.1a\" \"${CUDA_ARCHS}\")': 'set(CUTLASS_MOE_DATA_ARCHS\
+    \ \"\")',\n}\nmissing = [needle for needle in replacements if needle not in text]\n\
+    if missing:\n    raise SystemExit('missing expected non-FP8 CMake fragment(s):\
+    \ ' + ', '.join(missing))\nfor needle, replacement in replacements.items():\n\
+    \    text = text.replace(needle, replacement)\npath.write_text(text)\nqutlass_path\
+    \ = Path('cmake/external_projects/qutlass.cmake')\nqutlass_text = qutlass_path.read_text()\n\
+    qutlass_replacements = {\n    'cuda_archs_loose_intersection(QUTLASS_ARCHS \"\
+    10.0f;12.0f\" \"${CUDA_ARCHS}\")': 'set(QUTLASS_ARCHS \"\")',\n    'cuda_archs_loose_intersection(QUTLASS_ARCHS\
+    \ \"12.0a;12.1a;10.0a;10.3a\" \"${CUDA_ARCHS}\")': 'set(QUTLASS_ARCHS \"\")',\n\
+    }\nmissing = [needle for needle in qutlass_replacements if needle not in qutlass_text]\n\
+    if missing:\n    raise SystemExit('missing expected QuTLASS CMake fragment(s):\
+    \ ' + ', '.join(missing))\nfor needle, replacement in qutlass_replacements.items():\n\
+    \    qutlass_text = qutlass_text.replace(needle, replacement)\nqutlass_path.write_text(qutlass_text)\n\
+    print('[LUMO-CUTLASS-REBUILD] disabled non-FP8 Marlin, C2X, NVFP4, MLA, MoE data,\
+    \ and QuTLASS CMake sources')\nPY\ncmake_launcher_args=()\nif command -v ccache\
+    \ >/dev/null 2>&1; then\n  cmake_launcher_args=(-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache\
+    \ -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)\nfi\ncmake -S . -B /opt/vllm-source/build/lumo_cutlass_research\
+    \ -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DVLLM_TARGET_DEVICE=cuda -DTORCH_CUDA_ARCH_LIST=\"\
+    $TORCH_CUDA_ARCH_LIST\" -DVLLM_PYTHON_EXECUTABLE=$(command -v python3) -DCMAKE_INSTALL_PREFIX=/opt/vllm-source\
+    \ \"${cmake_launcher_args[@]}\"\ncmake --build /opt/vllm-source/build/lumo_cutlass_research\
+    \ --target _C -j $MAX_JOBS\ncmake --install /opt/vllm-source/build/lumo_cutlass_research\
+    \ --component _C\nexport PYTHONPATH=/opt/vllm-source:${PYTHONPATH:-}\npython3\
+    \ - <<'PY'\nimport pathlib\nimport vllm\nroot = pathlib.Path(vllm.__file__).resolve().parent\n\
+    exts = sorted(str(path) for path in root.glob('_C*.so'))\nprint('[LUMO-CUTLASS-REBUILD]\
+    \ vllm_file=' + str(vllm.__file__))\nprint('[LUMO-CUTLASS-REBUILD] extensions='\
+    \ + ','.join(exts))\nif not exts:\n    raise SystemExit('no rebuilt vLLM _C*.so\
+    \ extension found')\nPY\n  echo '[LUMO-CUTLASS-REBUILD] done' $(date -Iseconds)\n\
+    } 2>&1 | tee -a {{log_path}}"
+  extra_volume_mounts:
+  - /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_compile_cache/ccache:/opt/lumo-ccache
+agent_runtime: codex
+per_iteration_claude_wall_clock_s: 14400
+per_iteration_codex_wall_clock_s: 14400

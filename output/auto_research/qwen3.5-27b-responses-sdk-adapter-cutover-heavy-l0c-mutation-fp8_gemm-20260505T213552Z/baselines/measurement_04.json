@@ -1,0 +1,213 @@
+{
+  "cache_isolation": {
+    "cache_salt": "",
+    "first_10_req_prefix_cache_hit_rate": 0.0,
+    "last_10_req_prefix_cache_hit_rate": 0.0,
+    "prefix_cache_reset_at_bootstrap": true
+  },
+  "candidate_vllm_config": {
+    "enable_chunked_prefill": true,
+    "enable_prefix_caching": true,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "fp8_e5m2",
+    "max_model_len": 131072,
+    "max_num_batched_tokens": 8192,
+    "max_num_seqs": 4
+  },
+  "determinism_pass_rate": 1.0,
+  "diagnostics": {
+    "rollout_throughput": 112.284,
+    "target_concurrency": 4,
+    "tpot_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 44.615,
+      "promql": 44.615
+    },
+    "ttft_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 24599.836,
+      "promql": 24599.836
+    },
+    "turn_latency_p95_ms": {
+      "delta_pct": 0.0,
+      "driver": 70285.246,
+      "promql": 70285.246
+    }
+  },
+  "eval_throughput": 0.056903,
+  "feasibility_failures": [],
+  "feasible": true,
+  "generator": "RealMeasurementHarness v0.1.0",
+  "harness_health_warnings": [],
+  "metrics_consumption": {
+    "available": true,
+    "bottleneck_hint": "decode",
+    "elapsed_s": 70.295143,
+    "gb10_reference": {
+      "bandwidth_budget_bytes_per_generated_token_at_observed_decode_time": 37082380856.799,
+      "chip": "NVIDIA GB10 / DGX Spark",
+      "full_model_fp8_stream_ceiling_tps_assuming_27b_params": 10.111,
+      "memory": "128 GB unified LPDDR5x",
+      "note": "Bandwidth figures are roofline context, not proof of achieved bandwidth; use them to reason about whether prefill/decode time is plausibly memory-bound.",
+      "theoretical_bandwidth_gb_s": 273.0,
+      "theoretical_stream_bytes_per_ms": 273000000.0
+    },
+    "metrics_delta": {
+      "cache_hits": 784.0,
+      "cache_queries": 2643.0,
+      "decode_sum_s": 236.4850735226646,
+      "generation_tokens": 1741.0,
+      "kv_computed_tokens": 1859.0,
+      "prefill_sum_s": 2.4150733714923263,
+      "prompt_tokens": 2643.0,
+      "ttft_count": 4,
+      "ttft_sum_s": 3.3190014362335205
+    },
+    "request_count": 4,
+    "step_consumption": {
+      "cache_hit_rate_pct": 29.663261445327276,
+      "decode_ms_per_generated_token": 135.832897,
+      "decode_tokens_per_s": 7.362,
+      "generation_tokens_per_request": 435.25,
+      "prefill_ms_per_kv_token": 1.299125,
+      "prompt_tokens_per_request": 660.75
+    }
+  },
+  "no_oom_events": true,
+  "per_request_latencies": [
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0001",
+      "response_tokens": 2773,
+      "thinking_tokens": 2773,
+      "tpot_ms": 6.833,
+      "ttft_ms": 20405.456,
+      "turn_latency_ms": 58301.304
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0002",
+      "response_tokens": 512,
+      "thinking_tokens": 512,
+      "tpot_ms": 44.615,
+      "ttft_ms": 24599.972,
+      "turn_latency_ms": 70285.633
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0003",
+      "response_tokens": 512,
+      "thinking_tokens": 512,
+      "tpot_ms": 44.615,
+      "ttft_ms": 24599.836,
+      "turn_latency_ms": 70285.246
+    },
+    {
+      "concurrency_when_dispatched": 4,
+      "req_id": "req-0004",
+      "response_tokens": 4096,
+      "thinking_tokens": 4096,
+      "tpot_ms": 3.253,
+      "ttft_ms": 14347.478,
+      "turn_latency_ms": 40992.795
+    }
+  ],
+  "reasoning_content_purity": 1.0,
+  "resolved": {
+    "attention_backend": "vllm-auto",
+    "cuda_graph_capture": "off",
+    "deltanet_kernel": "triton",
+    "fp8_gemm_backend_identity": {
+      "action_space_value": "cutlass",
+      "activation_mechanism": "VLLM_DISABLED_KERNELS disables non-CUTLASS FP8 scaled-MM kernels",
+      "axis": "fp8_gemm_kernel",
+      "content_hash": "393754c04b9b38c56cb8bd5b1addbd3629f161a0fe6e79d517287d9371ed896b",
+      "content_hash_algorithm": "sha256",
+      "content_hash_scope": "repo_owned_runtime_activation_dispatch_hook",
+      "repo_dispatch_hook_source_path": "src/lumo_flywheel_serving/kernel_activation.py",
+      "repo_dispatch_hook_symbol": "lumo_flywheel_serving.kernel_activation._apply_fp8_gemm_kernel",
+      "resolved_runtime_name": "CutlassFP8ScaledMMLinearKernel",
+      "schema": "phase_a_fp8_gemm_backend_identity.v1",
+      "support_status": "supported",
+      "supported": true
+    },
+    "fp8_gemm_kernel": "CutlassFP8ScaledMMLinearKernel",
+    "fp8_gemm_kernel_activation": "disabled non-CUTLASS FP8 scaled-mm kernels",
+    "torch_compile_mode": "vllm-default"
+  },
+  "rollout_throughput": 112.284,
+  "runtime_activation": {
+    "activation_id": "a394b572ca731527",
+    "activation_status": "runtime_applied",
+    "bundle_path": "/home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/baselines/bundle_staging/candidate-1778017613794384703.yaml",
+    "env": {
+      "VLLM_DISABLED_KERNELS": "MarlinFP8ScaledMMLinearKernel,FlashInferFP8ScaledMMLinearKernel,PerTensorTorchFP8ScaledMMLinearKernel,ChannelWiseTorchFP8ScaledMMLinearKernel,RowWiseTorchFP8ScaledMMLinearKernel"
+    },
+    "kernel_selection": {
+      "attention_backend": "vllm-default",
+      "combo_id": "combo_002",
+      "cuda_graph_capture": "off",
+      "deltanet_kernel": "triton-chunked-delta-v2",
+      "fp8_gemm_kernel": "cutlass",
+      "torch_compile_mode": "default"
+    },
+    "launch_args": [
+      "--gdn-prefill-backend",
+      "triton",
+      "--enforce-eager"
+    ],
+    "mode": "model_server_restart",
+    "resolved": {
+      "attention_backend": "vllm-auto",
+      "cuda_graph_capture": "off",
+      "deltanet_kernel": "triton",
+      "fp8_gemm_backend_identity": {
+        "action_space_value": "cutlass",
+        "activation_mechanism": "VLLM_DISABLED_KERNELS disables non-CUTLASS FP8 scaled-MM kernels",
+        "axis": "fp8_gemm_kernel",
+        "content_hash": "393754c04b9b38c56cb8bd5b1addbd3629f161a0fe6e79d517287d9371ed896b",
+        "content_hash_algorithm": "sha256",
+        "content_hash_scope": "repo_owned_runtime_activation_dispatch_hook",
+        "repo_dispatch_hook_source_path": "src/lumo_flywheel_serving/kernel_activation.py",
+        "repo_dispatch_hook_symbol": "lumo_flywheel_serving.kernel_activation._apply_fp8_gemm_kernel",
+        "resolved_runtime_name": "CutlassFP8ScaledMMLinearKernel",
+        "schema": "phase_a_fp8_gemm_backend_identity.v1",
+        "support_status": "supported",
+        "supported": true
+      },
+      "fp8_gemm_kernel": "CutlassFP8ScaledMMLinearKernel",
+      "fp8_gemm_kernel_activation": "disabled non-CUTLASS FP8 scaled-mm kernels",
+      "torch_compile_mode": "vllm-default"
+    },
+    "restart_required": true,
+    "restarted": false,
+    "supported": true,
+    "unsupported_knobs": []
+  },
+  "seed_trace_replay_ref": "",
+  "sustained_concurrency": 4,
+  "tpot_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 44.615,
+    "promql": 44.615
+  },
+  "ttft_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 24599.836,
+    "promql": 24599.836
+  },
+  "turn_latency_p95_ms": {
+    "delta_pct": 0.0,
+    "driver": 70285.246,
+    "promql": 70285.246
+  },
+  "vllm_metrics_snapshot_ref": "",
+  "window_completed": true,
+  "windows": {
+    "measurement_elapsed_s": 70.295,
+    "measurement_end_wallclock": "2026-05-05T21:48:04Z",
+    "measurement_s": 30,
+    "measurement_start_wallclock": "2026-05-05T21:46:53Z",
+    "warmup_s": 5
+  }
+}

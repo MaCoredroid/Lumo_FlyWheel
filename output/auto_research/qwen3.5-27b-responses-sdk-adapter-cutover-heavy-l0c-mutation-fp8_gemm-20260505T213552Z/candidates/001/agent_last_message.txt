@@ -1,0 +1,19 @@
+Blocked this iteration rather than submitting a low-upside `mutation.patch`.
+
+Artifacts written:
+
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/candidates/001/candidate_analysis.md)
+- [BLOCKED.md](/home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/candidates/001/BLOCKED.md)
+- [cutlass_microbench_pre.json](/home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/candidates/001/cutlass_microbench_pre.json)
+
+Key reason: current warm decode is `7.624 tok/s` / `131.16 ms/token`, so the 20% gate needs about `21.86 ms/token` saved. The CUTLASS-relevant `ffn_linear` proxy is only about `26.23 ms/token`, and the representative GEMMs are dominated by compulsory B-weight streams that legal CUTLASS schedule/dispatch edits do not reduce.
+
+I verified:
+
+- Warm diagnostic completed and wrote `warm_pre_mutation.json`.
+- Microbench was attempted, but the rebuild was still compiling after 8+ minutes; recorded as skipped.
+- No `mutation.patch` exists.
+- Candidate JSON validates.
+- CUTLASS source workspace remains clean.
+
+Source facts used include local vLLM/CUTLASS dispatch files plus NVIDIA CUTLASS docs on GEMM tiling and persistent scheduling: https://docs.nvidia.com/cutlass/latest/media/docs/cpp/efficient_gemm.html

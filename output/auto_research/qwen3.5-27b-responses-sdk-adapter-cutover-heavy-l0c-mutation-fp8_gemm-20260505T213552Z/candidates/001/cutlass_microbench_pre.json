@@ -1,0 +1,37 @@
+{
+  "schema": "l0c_cutlass_shape_microbench.v1",
+  "ok": false,
+  "skipped": true,
+  "reason": "The requested CUTLASS microbench was started, but the targeted rebuild was still compiling after more than eight minutes and had not reached the shape timing loop. I stopped it to keep the authoring pass bounded and used the current warm diagnostic plus prior same-machine microbench records for the decision.",
+  "command": "cd /home/mark/shared/lumoFlyWheel && /home/mark/shared/lumoFlyWheel/.venv/bin/lumoserve auto-research cutlass-microbench --workspace-source /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_workspace/vllm-source --shape 1x34816x5120 --shape 1x5120x17408 --shape 4x34816x5120 --shape 4x5120x17408 --warmup-iters 3 --benchmark-iters 10 --compile-jobs 1 --output-path /home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/candidates/001/cutlass_microbench_pre.json",
+  "nearest_prior_same_machine_observations": [
+    {
+      "shape": "1x34816x5120",
+      "event_ms_mean": 0.833901,
+      "estimated_effective_bandwidth_gb_s": 213.906,
+      "arithmetic_intensity_flop_per_byte": 1.998672,
+      "source": "prior_research_memory.tsv row qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T204655Z candidate 003"
+    },
+    {
+      "shape": "1x5120x17408",
+      "event_ms_mean": 0.685587,
+      "estimated_effective_bandwidth_gb_s": 130.077,
+      "arithmetic_intensity_flop_per_byte": 1.99888,
+      "source": "prior_research_memory.tsv row qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T204655Z candidate 003"
+    },
+    {
+      "shape": "4x34816x5120",
+      "event_ms_mean": 0.886848,
+      "estimated_effective_bandwidth_gb_s": 201.389,
+      "arithmetic_intensity_flop_per_byte": 7.984629,
+      "source": "prior_research_memory.tsv row qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T204655Z candidate 003"
+    },
+    {
+      "shape": "4x5120x17408",
+      "event_ms_mean": 0.766227,
+      "estimated_effective_bandwidth_gb_s": 116.497,
+      "arithmetic_intensity_flop_per_byte": 7.987943,
+      "source": "prior_research_memory.tsv row qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T204655Z candidate 003"
+    }
+  ]
+}

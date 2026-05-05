@@ -1,0 +1,4 @@
+iteration	candidate_uuid	mutation_hash	rejection_reason	first_diverging_probe_index	tolerance_overshoot
+001	37624fea-7450-4473-b499-535c1cf7f3f5		agent_no_patch		
+002	4414b666-dbf9-41bd-ba31-6935c9d3b9a8		agent_no_patch		
+004	f5004942-867c-4157-858d-fa6e7ccca842		agent_no_patch		

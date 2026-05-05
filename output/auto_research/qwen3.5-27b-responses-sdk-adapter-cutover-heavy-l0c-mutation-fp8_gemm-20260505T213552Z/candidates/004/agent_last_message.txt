@@ -1,0 +1,10 @@
+Submitted no mutation for iteration 004 and wrote the required block artifacts:
+
+- `candidates/004/candidate_analysis.md`
+- `candidates/004/BLOCKED.md`
+- `candidates/004/warm_pre_mutation.json`
+- `candidates/004/cutlass_microbench_pre.json`
+
+Key result: warm baseline is `7.599 tok/s`; the 20% gate requires `9.119 tok/s`. Fresh CUTLASS microbench shows the live M1 FFN shapes are already near `216-224 GB/s` estimated bandwidth, and M4 padding is slightly slower, so the remaining legal CUTLASS edits cannot credibly save the required `21.932 ms/token` without changing the operator boundary or B-weight stream semantics.
+
+No compile/preflight was run because no `mutation.patch` was produced. Source research note used: NVIDIA CUTLASS Blackwell docs on block-scaled GEMMs and SM120 constraints: https://docs.nvidia.com/cutlass/4.2.1/media/docs/cpp/blackwell_functionality.html

@@ -1,0 +1,81 @@
+{
+  "compile_jobs": 1,
+  "device_capability": [
+    12,
+    1
+  ],
+  "device_name": "NVIDIA GB10",
+  "docker_image": "lumo-flywheel-vllm:26.01-py3-v0.19.0",
+  "gb10_reference": {
+    "chip": "NVIDIA GB10 / DGX Spark",
+    "note": "Shape microbench uses CUDA events around torch.ops._C.cutlass_scaled_mm; bandwidth is estimated bytes/event time, not profiler DRAM throughput.",
+    "theoretical_bandwidth_gb_s": 273.0
+  },
+  "ok": true,
+  "patch_path": null,
+  "results": [
+    {
+      "K": 5120,
+      "M": 1,
+      "N": 34816,
+      "arithmetic_intensity_flop_per_byte": 1.998672,
+      "benchmark_iters": 10,
+      "branch": "M<=256",
+      "estimated_bytes_moved": 178376352,
+      "estimated_effective_bandwidth_gb_s": 223.88748,
+      "event_ms_mean": 0.796723,
+      "event_ms_p50": 0.776928,
+      "event_ms_p90": 0.863488,
+      "tflops_per_s_mean": 0.447478,
+      "warmup_iters": 3
+    },
+    {
+      "K": 17408,
+      "M": 1,
+      "N": 5120,
+      "arithmetic_intensity_flop_per_byte": 1.99888,
+      "benchmark_iters": 10,
+      "branch": "M<=256",
+      "estimated_bytes_moved": 89178912,
+      "estimated_effective_bandwidth_gb_s": 216.009066,
+      "event_ms_mean": 0.412848,
+      "event_ms_p50": 0.401216,
+      "event_ms_p90": 0.41696,
+      "tflops_per_s_mean": 0.431776,
+      "warmup_iters": 3
+    },
+    {
+      "K": 5120,
+      "M": 4,
+      "N": 34816,
+      "arithmetic_intensity_flop_per_byte": 7.984629,
+      "benchmark_iters": 10,
+      "branch": "M<=256",
+      "estimated_bytes_moved": 178601088,
+      "estimated_effective_bandwidth_gb_s": 222.186644,
+      "event_ms_mean": 0.803834,
+      "event_ms_p50": 0.79616,
+      "event_ms_p90": 0.8328,
+      "tflops_per_s_mean": 1.774078,
+      "warmup_iters": 3
+    },
+    {
+      "K": 17408,
+      "M": 4,
+      "N": 5120,
+      "arithmetic_intensity_flop_per_byte": 7.987943,
+      "benchmark_iters": 10,
+      "branch": "M<=256",
+      "estimated_bytes_moved": 89263488,
+      "estimated_effective_bandwidth_gb_s": 215.312723,
+      "event_ms_mean": 0.414576,
+      "event_ms_p50": 0.408896,
+      "event_ms_p90": 0.428736,
+      "tflops_per_s_mean": 1.719906,
+      "warmup_iters": 3
+    }
+  ],
+  "schema": "l0c_cutlass_shape_microbench.v1",
+  "torch_version": "2.10.0a0+a36e1d39eb.nv26.01.42222806",
+  "workspace_source": "/home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/cutlass_source_workspace/vllm-source"
+}

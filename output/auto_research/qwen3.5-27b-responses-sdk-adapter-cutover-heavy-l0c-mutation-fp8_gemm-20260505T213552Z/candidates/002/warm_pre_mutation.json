@@ -1,0 +1,168 @@
+{
+  "aggregate_consumption": {
+    "available": true,
+    "bottleneck_hint": "decode",
+    "elapsed_s": 26.523577,
+    "gb10_reference": {
+      "bandwidth_budget_bytes_per_generated_token_at_observed_decode_time": 36225919139.411,
+      "chip": "NVIDIA GB10 / DGX Spark",
+      "full_model_fp8_stream_ceiling_tps_assuming_27b_params": 10.111,
+      "memory": "128 GB unified LPDDR5x",
+      "note": "These are roofline context numbers for bottleneck reasoning, not proof of achieved memory bandwidth.",
+      "theoretical_bandwidth_gb_s": 273.0,
+      "theoretical_stream_bytes_per_ms": 273000000.0
+    },
+    "metrics_delta": {
+      "cache_hits": 1568.0,
+      "cache_queries": 2507.0,
+      "decode_sum_s": 16.98504633642733,
+      "generation_tokens": 128.0,
+      "kv_computed_tokens": 939.0,
+      "prefill_sum_s": 0.5450887409970164,
+      "prompt_tokens": 2507.0
+    },
+    "request_count": 2,
+    "step_consumption": {
+      "cache_hit_rate_pct": 62.54487435181492,
+      "decode_ms_per_generated_token": 132.695675,
+      "decode_tokens_per_s": 7.536,
+      "generation_tokens_per_request": 64.0,
+      "prefill_ms_per_kv_token": 0.580499,
+      "prompt_tokens_per_request": 1253.5
+    }
+  },
+  "endpoint": "http://127.0.0.1:9951/v1",
+  "gb10_reference": {
+    "chip": "NVIDIA GB10 / DGX Spark",
+    "full_model_fp8_stream_ceiling_tps_assuming_27b_params": 10.111,
+    "memory": "128 GB unified LPDDR5x",
+    "note": "These are roofline context numbers for bottleneck reasoning, not proof of achieved memory bandwidth.",
+    "theoretical_bandwidth_gb_s": 273.0,
+    "theoretical_stream_bytes_per_ms": 273000000.0
+  },
+  "iteration": "002",
+  "measured_requests": [
+    {
+      "max_output_tokens": 64,
+      "phase": "measured",
+      "prompt_tokens_requested": 1245,
+      "request_index": 1,
+      "turn_latency_ms": 8791.306
+    },
+    {
+      "max_output_tokens": 64,
+      "phase": "measured",
+      "prompt_tokens_requested": 1242,
+      "request_index": 2,
+      "turn_latency_ms": 8772.382
+    }
+  ],
+  "metrics_url": "http://127.0.0.1:9950/metrics",
+  "model": "qwen3.5-27b",
+  "per_step_consumption": [
+    {
+      "latency": {
+        "max_output_tokens": 64,
+        "phase": "measured",
+        "prompt_tokens_requested": 1245,
+        "request_index": 1,
+        "turn_latency_ms": 8791.306
+      },
+      "metrics_consumption": {
+        "available": true,
+        "bottleneck_hint": "decode",
+        "elapsed_s": 8.791306,
+        "gb10_reference": {
+          "bandwidth_budget_bytes_per_generated_token_at_observed_decode_time": 36249513824.761,
+          "chip": "NVIDIA GB10 / DGX Spark",
+          "full_model_fp8_stream_ceiling_tps_assuming_27b_params": 10.111,
+          "memory": "128 GB unified LPDDR5x",
+          "note": "These are roofline context numbers for bottleneck reasoning, not proof of achieved memory bandwidth.",
+          "theoretical_bandwidth_gb_s": 273.0,
+          "theoretical_stream_bytes_per_ms": 273000000.0
+        },
+        "metrics_delta": {
+          "cache_hits": 784.0,
+          "cache_queries": 1255.0,
+          "decode_sum_s": 8.498054523020983,
+          "generation_tokens": 64.0,
+          "kv_computed_tokens": 471.0,
+          "prefill_sum_s": 0.272928643040359,
+          "prompt_tokens": 1255.0
+        },
+        "request_count": 1,
+        "step_consumption": {
+          "cache_hit_rate_pct": 62.47011952191235,
+          "decode_ms_per_generated_token": 132.782102,
+          "decode_tokens_per_s": 7.531,
+          "generation_tokens_per_request": 64.0,
+          "prefill_ms_per_kv_token": 0.579466,
+          "prompt_tokens_per_request": 1255.0
+        }
+      },
+      "request_index": 1
+    },
+    {
+      "latency": {
+        "max_output_tokens": 64,
+        "phase": "measured",
+        "prompt_tokens_requested": 1242,
+        "request_index": 2,
+        "turn_latency_ms": 8772.382
+      },
+      "metrics_consumption": {
+        "available": true,
+        "bottleneck_hint": "decode",
+        "elapsed_s": 8.772382,
+        "gb10_reference": {
+          "bandwidth_budget_bytes_per_generated_token_at_observed_decode_time": 36202324454.061,
+          "chip": "NVIDIA GB10 / DGX Spark",
+          "full_model_fp8_stream_ceiling_tps_assuming_27b_params": 10.111,
+          "memory": "128 GB unified LPDDR5x",
+          "note": "These are roofline context numbers for bottleneck reasoning, not proof of achieved memory bandwidth.",
+          "theoretical_bandwidth_gb_s": 273.0,
+          "theoretical_stream_bytes_per_ms": 273000000.0
+        },
+        "metrics_delta": {
+          "cache_hits": 784.0,
+          "cache_queries": 1252.0,
+          "decode_sum_s": 8.486991813406348,
+          "generation_tokens": 64.0,
+          "kv_computed_tokens": 468.0,
+          "prefill_sum_s": 0.2721600979566574,
+          "prompt_tokens": 1252.0
+        },
+        "request_count": 1,
+        "step_consumption": {
+          "cache_hit_rate_pct": 62.61980830670927,
+          "decode_ms_per_generated_token": 132.609247,
+          "decode_tokens_per_s": 7.541,
+          "generation_tokens_per_request": 64.0,
+          "prefill_ms_per_kv_token": 0.581539,
+          "prompt_tokens_per_request": 1252.0
+        }
+      },
+      "request_index": 2
+    }
+  ],
+  "phase": "pre_mutation",
+  "policy": {
+    "actual_measurement_concurrency": 1,
+    "agent_may_measure_live_warm_baseline_without_restart": true,
+    "controller_owns_patched_vllm_restart": true,
+    "max_output_tokens": 64,
+    "prompt_token_cap": 2048,
+    "requested_target_concurrency": 1
+  },
+  "round_id": "qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z",
+  "schema": "l0c_warm_request_diagnostic.v1",
+  "warmup_requests": [
+    {
+      "max_output_tokens": 64,
+      "phase": "warmup",
+      "prompt_tokens_requested": 58,
+      "request_index": 1,
+      "turn_latency_ms": 8913.104
+    }
+  ]
+}

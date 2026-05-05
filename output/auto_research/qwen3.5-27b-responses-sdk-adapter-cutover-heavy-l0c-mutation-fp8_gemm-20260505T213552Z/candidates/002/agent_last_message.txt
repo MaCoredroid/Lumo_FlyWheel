@@ -1,0 +1,19 @@
+Blocked candidate 002 rather than submitting a weak patch.
+
+I wrote:
+
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/candidates/002/candidate_analysis.md)
+- [BLOCKED.md](/home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/candidates/002/BLOCKED.md)
+- [cutlass_microbench_pre.json](/home/mark/shared/lumoFlyWheel/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260505T213552Z/candidates/002/cutlass_microbench_pre.json)
+
+No `mutation.patch` was submitted.
+
+Key reason: the refreshed warm diagnostic is `7.536 generated tok/s` / `132.696 ms/token`, so the 20% gate requires `9.043 tok/s` or about `22.116 ms/token` saved. The `ffn_linear` proxy is only `26.539 ms/token`, and all listed linear slices are about `38.482 ms/token`. The live CUTLASS decode shapes are dominated by compulsory B-weight streams: `178.258 MB` and `89.129 MB` of B bytes for the representative M1 GEMMs. Remaining legal CUTLASS changes do not reduce those B bytes.
+
+I also checked the broader non-schedule mechanism: fusing `SiluAndMul` with down-projection input quantization. It would preserve the subsequent CUTLASS GEMM, but it only removes small activation/quant traffic and launches, not the `89.129 MB` down-projection B stream, so it cannot defensibly clear the speed gate.
+
+The requested microbench rebuild was started but stopped after about five minutes while still compiling `_C`; the skip artifact records that and cites the nearest same-machine shape timings. I also verified no microbench/compile process was left running.
+
+Sources used: NVIDIA CUTLASS efficient GEMM docs and Blackwell/SM120 docs:
+https://docs.nvidia.com/cutlass/latest/media/docs/cpp/efficient_gemm.html
+https://docs.nvidia.com/cutlass/latest/media/docs/cpp/blackwell_functionality.html
