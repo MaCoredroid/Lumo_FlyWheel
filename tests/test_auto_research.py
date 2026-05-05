@@ -5392,6 +5392,8 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "live warm shape dispatch hits that path" in strategy_brief
     assert "B-weight bytes change" in strategy_brief
     assert "3% end-to-end warm decode lift" in strategy_brief
+    assert "10.1 tok/s full-model stream ceiling" in strategy_brief
+    assert "not proof of achieved memory bandwidth" in strategy_brief
     candidate_brief = (result.round_dir / "candidates" / "001" / "iteration_brief.md").read_text(
         encoding="utf-8"
     )
@@ -5967,6 +5969,8 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "GB10 bandwidth roofline context" in brief
     assert "effective bandwidth in GB/s" in brief
     assert "percent of the 273 GB/s GB10 ceiling" in brief
+    assert "10.1 tok/s full-model FP8 stream ceiling" in brief
+    assert "roofline as context, not proof of achieved memory bandwidth" in brief
     assert "`ffn_linear` share of ms/token" in brief
     assert "non-FFN residual ms/token" in brief
     assert "Do not start vLLM and do not run apply-and-test" in brief
@@ -6017,6 +6021,8 @@ def test_l0c_candidate_analysis_requires_structured_roofline_accounting(tmp_path
 
 Warm decode rate: 7.37 generated tokens/s, 135.6 ms/generated token.
 GB10 bandwidth: 273 GB/s, with a warm roofline context of 37.0 GB/token.
+The 10.1 tok/s full-model FP8 stream ceiling is a roofline context number, not
+proof of achieved memory bandwidth.
 The CUTLASS/FP8 GEMM proxy is ffn_linear at 80.6 ms/token, so this is the
 component the mutation must reduce.
 The analysis reads warm_pre_mutation.json and uses aggregate_consumption,
@@ -6033,7 +6039,8 @@ Structured compute/bandwidth accounting:
 effective bandwidth, roughly 100% of the 273 GB/s ceiling. `ffn_linear` share is
 80.6 / 135.6 ms/token = 59% share of ms/token, leaving a non-FFN residual
 ms/token of about 55.0. This patch attacks schedule/epilogue overhead, not
-B-weight traffic.
+B-weight traffic. This is roofline context rather than proof of measured memory
+bandwidth.
 
 Low-level evidence:
 
@@ -6087,6 +6094,8 @@ def test_l0c_candidate_analysis_rejects_missing_low_level_evidence(tmp_path: Pat
 
 Warm decode rate: 7.37 generated tokens/s, 135.6 ms/generated token.
 GB10 bandwidth: 273 GB/s, with a warm roofline context of 37.0 GB/token.
+The 10.1 tok/s full-model FP8 stream ceiling is roofline context, not proof of
+achieved memory bandwidth.
 The CUTLASS/FP8 GEMM proxy is ffn_linear at 80.6 ms/token.
 
 Structured compute/bandwidth accounting:
@@ -6097,7 +6106,7 @@ Structured compute/bandwidth accounting:
 
 7.5 tok/s breakdown: effective bandwidth is 273 GB/s observed, 100% of the
 273 GB/s ceiling. ffn_linear share is 59% share of ms/token, non-FFN residual
-ms/token is 55.
+ms/token is 55. This is not measured memory bandwidth.
 
 Mechanism: the mutation should reduce overhead and lift warm decode. This has
 the old high-level analysis shape but omits the edited file identity, dispatch

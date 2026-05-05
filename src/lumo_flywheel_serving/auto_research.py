@@ -6164,9 +6164,15 @@ Tier-2 hard-reject:
    and the expected end-to-end tok/s delta if the hypothesis is right.
    Include a separate 7.5 tok/s breakdown line that computes observed/implied
    effective bandwidth in GB/s, percent of the 273 GB/s GB10 ceiling,
-   `ffn_linear` share of ms/token, and non-FFN residual ms/token. This can be
-   approximate, but it must be numeric and it must explain whether the patch
-   attacks bandwidth traffic, launch/schedule overhead, or another residual.
+   the 10.1 tok/s full-model FP8 stream ceiling, `ffn_linear` share of
+   ms/token, and non-FFN residual ms/token. This can be approximate, but it
+   must be numeric and it must explain whether the patch attacks bandwidth
+   traffic, launch/schedule overhead, or another residual. Treat the GB10
+   roofline as context, not proof of achieved memory bandwidth, unless you
+   have a profiler measurement.
+   Report `ffn_linear` share of ms/token and non-FFN residual ms/token
+   explicitly, since those two numbers are the controller's current proxy for
+   the CUTLASS-vs-rest split.
    Also include a low-level evidence table or bullet block with these exact
    fields: source file/symbol, live-shape dispatch-hit proof, before-mutation
    observation, byte-component split for A/B weights/scales/output/epilogue,
@@ -11249,6 +11255,15 @@ class L0cKernelMutationRunner:
                 ),
             ),
             (
+                "roofline_context_caveat",
+                (
+                    "not proof of achieved memory bandwidth",
+                    "not measured memory bandwidth",
+                    "roofline context, not proof",
+                    "roofline context rather than proof",
+                ),
+            ),
+            (
                 "bandwidth_ceiling_percent",
                 (
                     "% of 273",
@@ -11345,6 +11360,26 @@ class L0cKernelMutationRunner:
         ]
         if missing:
             return "candidate_analysis.md missing required section(s): " + ", ".join(missing)
+        numeric_requirements: list[tuple[str, str]] = [
+            ("numeric_warm_decode_tok_s", r"\b\d+(?:\.\d+)?\s*(?:generated\s+)?tok(?:ens)?/s\b"),
+            ("numeric_decode_ms_per_token", r"\b\d+(?:\.\d+)?\s*ms/(?:generated\s*)?token\b"),
+            ("numeric_representative_mnk", r"\bm\s*=\s*\d+[^.\n|]*(?:[,/ ]+\s*)n\s*=\s*\d+[^.\n|]*(?:[,/ ]+\s*)k\s*=\s*\d+"),
+            ("numeric_flops", r"\b\d+(?:\.\d+)?\s*(?:t|g|m|k)?\s*flops?\b"),
+            ("numeric_bytes_moved", r"\b\d+(?:\.\d+)?\s*(?:gb|mb|kb|bytes?)\b"),
+            ("numeric_arithmetic_intensity", r"\b\d+(?:\.\d+)?\s*(?:flops?/byte|f/b)\b"),
+            ("numeric_gb10_ceiling", r"\b273(?:\.0)?\s*gb/s\b"),
+            ("numeric_model_stream_ceiling", r"\b10(?:\.\d+)?\s*(?:generated\s+)?tok(?:ens)?/s\b"),
+            ("numeric_expected_delta", r"(?:[+\-]\s*)?\d+(?:\.\d+)?\s*(?:tok(?:ens)?/s|%)\b[^.\n]*(?:delta|speedup|lift|impact)|(?:delta|speedup|lift|impact)[^.\n]*(?:[+\-]\s*)?\d+(?:\.\d+)?\s*(?:tok(?:ens)?/s|%)\b"),
+            ("numeric_ffn_share", r"ffn_linear[^.\n]*(?:\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*ms)|ffn[^.\n]*share[^.\n]*(?:\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*ms)"),
+            ("numeric_non_ffn_residual", r"non[-\s]ffn[\s\S]{0,160}(?:\d+(?:\.\d+)?\s*ms(?:/token)?|ms/token[\s\S]{0,80}\d+(?:\.\d+)?)|residual[\s\S]{0,160}(?:\d+(?:\.\d+)?\s*ms(?:/token)?|ms/token[\s\S]{0,80}\d+(?:\.\d+)?)"),
+        ]
+        numeric_missing = [
+            label
+            for label, pattern in numeric_requirements
+            if re.search(pattern, lowered, flags=re.MULTILINE) is None
+        ]
+        if numeric_missing:
+            return "candidate_analysis.md missing numeric breakdown item(s): " + ", ".join(numeric_missing)
         return None
 
     def preflight_patch(
@@ -12196,7 +12231,9 @@ class L0cKernelMutationRunner:
                 "accounting block, not only prose: representative M/N/K shape(s), "
                 "FLOPs, estimated bytes moved, arithmetic intensity, GB10 roofline/"
                 "ceiling comparison, current `ffn_linear` ms/token proxy, expected "
-                "changed bytes/FLOPs/overhead, and expected end-to-end tok/s delta."
+                "changed bytes/FLOPs/overhead, and expected end-to-end tok/s delta. "
+                "The 273 GB/s LPDDR roofline and 10.1 tok/s full-model stream ceiling "
+                "are context numbers, not proof of achieved memory bandwidth."
             ),
             (
                 "- Candidate analysis must also contain a low-level evidence block: "
