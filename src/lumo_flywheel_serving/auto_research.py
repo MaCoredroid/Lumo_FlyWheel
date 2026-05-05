@@ -6050,6 +6050,11 @@ For this GB10 run, "faster" means a material increase in warm decode throughput
 on this machine. Recent live runs are around 7.5 generated tokens/s; mutations
 that only move a tiny subcomponent without a plausible path to raising that
 end-to-end number are not worth submitting.
+Use the Karpathy/autoresearch lesson correctly: the loop is a same-machine,
+fixed-budget keep/discard search. Tiny one-line nudges are fine only when the
+local evidence says that exact knob is the bottleneck. Otherwise prefer a larger
+coherent mutation that changes an actual performance mechanism enough to be
+measurable, while keeping the diff reviewable and the parity contract intact.
 
 # Hardware context (MATTERS for what mutations are worth proposing)
 This kernel runs on a **DGX Spark GB10**. Treat it as bandwidth-bound:
@@ -6068,6 +6073,16 @@ vLLM source/docs, NVIDIA CUTLASS docs, CUDA docs, and local container source
 over generic advice. Keep this bounded: extract the dispatch, scale, shape, or
 schedule fact that changes your mutation choice, record the source/fact in your
 notes or final message, then move on.
+
+# Mutation size guidance
+The previous round history is dominated by small single-knob CUTLASS changes
+that did not move warm decode throughput materially. Your candidate may be
+larger than those attempts if it remains one coherent mechanism. Good larger
+mutations can coordinate 2-4 related edits across dispatch predicates, SM120
+schedule/stage/tile choices, scale placement, or caller launch behavior. Bad
+larger mutations are grab bags, signature/layout/scale semantic changes, or
+unreviewable rewrites. Before patching, state the single mechanism and why its
+combined edits should move the same-machine warm throughput objective.
 
 # Hard rules
 {{edit_scope_rule}}
@@ -11844,6 +11859,15 @@ class L0cKernelMutationRunner:
                 "excerpts, build/parity/measurement outcomes, failure class, and "
                 "next-search implications. Use memory to bias search away from repeats, "
                 "not as a blind syntax ban."
+            ),
+            (
+                "- Follow the Karpathy/autoresearch fixed-budget lesson: on this same "
+                "GB10 machine, score is the measured objective under a fixed controller "
+                "window. After many tiny schedule/tile nudges have failed, prefer a "
+                "larger coherent mechanism when the evidence supports it. A candidate "
+                "may coordinate related dispatch, schedule/stage/tile, scale-placement, "
+                "or caller-launch edits, but it must still be one reviewable hypothesis "
+                "with a plausible path to raising warm decode tok/s."
             ),
             (
                 "- Every candidate must be materially different from poor prior rows in "
