@@ -145,7 +145,7 @@ L0C_PROPOSER_STUCK_THRESHOLD = 3
 L0C_COMPILE_FAILURES_THRESHOLD = 3
 L0C_INTERMITTENT_PARITY_THRESHOLD = 2
 L0C_MEASUREMENTS_PER_ACCEPTED = 2
-L0C_FP8_GEMM_PARITY_GENERATION_SPEED_GATE_MARGIN = 0.03
+L0C_FP8_GEMM_PARITY_GENERATION_SPEED_GATE_MARGIN = 0.20
 L0C_PRIOR_REJECTION_LIMIT = 20
 L0C_CANARY_INTERVAL = 4
 L0C_POSITIVE_MEMORY_ROUND_LIMIT = 3
@@ -6053,7 +6053,7 @@ on this machine. Recent live runs are around 7.5 generated tokens/s; mutations
 that only move a tiny subcomponent without a plausible path to raising that
 end-to-end number are not worth submitting.
 Aim for step-change performance, not local polishing: the search ambition is
-over 100% warm decode throughput improvement. The 3% speed gate is only the
+over 100% warm decode throughput improvement. The 20% speed gate is the
 minimum spend-control threshold. Think out of the box when evidence supports
 it, including writing a whole new CUTLASS kernel, dispatch path, or scale/shape
 specialization, as long as the hypothesis is one reviewable mutation with a
@@ -6184,12 +6184,12 @@ Tier-2 hard-reject:
    Also include a low-level evidence table or bullet block with these exact
    fields: source file/symbol, live-shape dispatch-hit proof, before-mutation
    observation, byte-component split for A/B weights/scales/output/epilogue,
-   whether B-weight bytes change, and why the expected lift is at least 3%
-   end-to-end. If you cannot defend the 3% lift from those facts, write
+   whether B-weight bytes change, and why the expected lift is at least 20%
+   end-to-end. If you cannot defend the 20% lift from those facts, write
    BLOCKED.md instead of mutation.patch.
    The controller will also run a cheap post-parity generation speed gate:
    if the patched runtime does not exceed `warm_pre_mutation.json` decode
-   tok/s by at least 3%, it is discarded before the expensive paired
+   tok/s by at least 20%, it is discarded before the expensive paired
    measurement windows.
    If you can cheaply produce a CUTLASS-internal timing/proxy, include
    before-change and after-change values; otherwise state that only the
@@ -11800,12 +11800,12 @@ class L0cKernelMutationRunner:
             (
                 "material_lift_gate",
                 (
-                    "3% end-to-end",
-                    ">=3%",
-                    "at least 3%",
-                    "three percent",
-                    "0.225 tok/s",
-                    "0.23 tok/s",
+                    "20% end-to-end",
+                    ">=20%",
+                    "at least 20%",
+                    "twenty percent",
+                    "1.5 tok/s",
+                    "1.50 tok/s",
                 ),
             ),
         ]
@@ -12966,12 +12966,12 @@ class L0cKernelMutationRunner:
                 "with an explicit statement about whether B-weight bytes change, and "
                 "a before-mutation observation from warm-diagnostic, source-level "
                 "experiment, microbench, profiler, or targeted compile/preflight. "
-                "If the evidence does not support at least a 3% end-to-end warm decode "
+                "If the evidence does not support at least a 20% end-to-end warm decode "
                 "lift, write BLOCKED.md instead of submitting another low-upside patch."
             ),
             (
                 "- Think out of the box when the evidence supports it. The search "
-                "ambition is over 100% warm decode throughput improvement; the 3% "
+                "ambition is over 100% warm decode throughput improvement; the 20% "
                 "speed gate is only the minimum spend-control threshold. A candidate "
                 "may write a whole new CUTLASS kernel, dispatch route, or scale/shape "
                 "specialization if it has a credible local compile/preflight path and "

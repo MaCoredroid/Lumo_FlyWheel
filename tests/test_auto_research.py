@@ -5391,7 +5391,7 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "low-level evidence block" in strategy_brief
     assert "live warm shape dispatch hits that path" in strategy_brief
     assert "B-weight bytes change" in strategy_brief
-    assert "3% end-to-end warm decode lift" in strategy_brief
+    assert "20% end-to-end warm decode lift" in strategy_brief
     assert "over 100% warm decode throughput improvement" in strategy_brief
     assert "whole new CUTLASS kernel" in strategy_brief
     assert "10.1 tok/s full-model stream ceiling" in strategy_brief
@@ -5413,7 +5413,7 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "low-level evidence table" in candidate_brief
     assert "live-shape dispatch-hit proof" in candidate_brief
     assert "byte-component split" in candidate_brief
-    assert "at least 3%" in candidate_brief
+    assert "at least 20%" in candidate_brief
     assert "over 100% warm decode throughput improvement" in candidate_brief
     assert "whole new CUTLASS kernel" in candidate_brief
     assert "post-parity generation speed gate" in candidate_brief
@@ -5651,7 +5651,7 @@ def test_l0c_parity_generation_speed_gate_rejects_below_margin(
     assert gate["reason"] == "parity_generation_speed_below_baseline"
     assert gate["baseline_decode_tokens_per_s"] == 7.5
     assert gate["candidate_decode_tokens_per_s"] == 7.6
-    assert gate["required_decode_tokens_per_s"] == 7.725
+    assert gate["required_decode_tokens_per_s"] == 9.0
     persisted = json.loads((iteration_dir / "speed_gate.json").read_text(encoding="utf-8"))
     assert persisted["reason"] == "parity_generation_speed_below_baseline"
     assert (
@@ -6104,7 +6104,7 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "low-level evidence table" in brief
     assert "live-shape dispatch-hit proof" in brief
     assert "byte-component split" in brief
-    assert "at least 3%" in brief
+    assert "at least 20%" in brief
     assert "over 100% warm decode throughput improvement" in brief
     assert "whole new CUTLASS kernel" in brief
     assert "auto-research warm-diagnostic" in brief
@@ -6274,7 +6274,7 @@ Low-level evidence:
 
 | source file/symbol | live-shape dispatch-hit proof | before-mutation observation | byte-component split for A/B weights/scales/output/epilogue | B-weight bytes change? | material lift gate |
 | --- | --- | --- | --- | --- | --- |
-| source file csrc/quantization/w8a8/cutlass/scaled_mm_sm120_fp8.cu, symbol cutlass_scaled_mm_sm120_fp8 | dispatch-hit proof from live shape M=1,N=8192,K=8192: path is hit by CutlassFP8ScaledMMLinearKernel | warm diagnostic shows 7.37 tok/s and targeted compile/preflight passes | A bytes tiny, B-weight bytes dominate, scale bytes scalar, output store small, epilogue overhead candidate | weight bytes unchanged; B-weight bytes do not change | at least 3% end-to-end only if epilogue overhead is a measured long-tail bottleneck |
+| source file csrc/quantization/w8a8/cutlass/scaled_mm_sm120_fp8.cu, symbol cutlass_scaled_mm_sm120_fp8 | dispatch-hit proof from live shape M=1,N=8192,K=8192: path is hit by CutlassFP8ScaledMMLinearKernel | warm diagnostic shows 7.37 tok/s and targeted compile/preflight passes | A bytes tiny, B-weight bytes dominate, scale bytes scalar, output store small, epilogue overhead candidate | weight bytes unchanged; B-weight bytes do not change | at least 20% end-to-end only if epilogue overhead is a measured long-tail bottleneck |
 
 Mechanism: the mutation should reduce scalar-scale epilogue overhead without
 changing the GEMM signature or scale semantics. The expected reduction is not a
@@ -6553,7 +6553,7 @@ def test_l0c_preflight_patch_reports_speed_gate_threshold(tmp_path: Path) -> Non
     assert speed_gate["ready"] is True
     assert speed_gate["controller_gate"] == "parity_generation_speed_gate"
     assert speed_gate["baseline_decode_tokens_per_s"] == 7.5
-    assert speed_gate["required_decode_tokens_per_s"] == 7.725
+    assert speed_gate["required_decode_tokens_per_s"] == 9.0
     assert "BLOCKED.md" in speed_gate["agent_action"]
 
 
@@ -6620,7 +6620,7 @@ Structured compute/bandwidth accounting:
 
 | representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| M=1, N=34816, K=5120 | 356M FLOP | 178 MB plus scales/output | 2 FLOP/byte | under the theoretical stream ceiling | 80.0 | less schedule overhead, same FLOPs | +0.20 tok/s delta |
+| M=1, N=34816, K=5120 | 356M FLOP | 178 MB plus scales/output | 2 FLOP/byte | under the theoretical stream ceiling | 80.0 | less schedule overhead, same FLOPs | +1.00 tok/s delta |
 
 7.5 tok/s breakdown: 36.4 GB/token at 7.50 tok/s implies about 273 GB/s
 effective bandwidth, roughly 100% of the 273 GB/s ceiling. ffn_linear share is
@@ -6632,7 +6632,7 @@ Low-level evidence:
 
 | source file/symbol | live-shape dispatch-hit proof | before-mutation observation | byte-component split for A/B weights/scales/output/epilogue | B-weight bytes change? | material lift gate |
 | --- | --- | --- | --- | --- | --- |
-| source file csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8.cu, symbol cutlass_scaled_mm | dispatch-hit proof from live shape M=1,N=34816,K=5120: path is hit | before-mutation observation from microbench and targeted compile/preflight | A/B weights/scales/output/epilogue split says B-weight bytes dominate | B-weight bytes unchanged | needs at least 0.225 tok/s lift |
+| source file csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8.cu, symbol cutlass_scaled_mm | dispatch-hit proof from live shape M=1,N=34816,K=5120: path is hit | before-mutation observation from microbench and targeted compile/preflight | A/B weights/scales/output/epilogue split says B-weight bytes dominate | B-weight bytes unchanged | needs at least 1.5 tok/s lift |
 
 Mechanism: expected reduction is schedule overhead. The expected speedup is
 below the configured gate, so this should be rejected by preflight.
@@ -6661,9 +6661,9 @@ below the configured gate, so this should be rejected by preflight.
     assert payload["ok"] is False
     assert payload["reason"] == "candidate_analysis_speed_forecast_below_preflight_gate"
     speed_analysis = payload["speed_gate_analysis_preflight"]
-    assert speed_analysis["required_decode_tokens_per_s"] == 7.725
-    assert speed_analysis["best_forecast"]["expected_decode_tokens_per_s"] == 7.7
-    assert speed_analysis["shortfall_decode_tokens_per_s"] == 0.025
+    assert speed_analysis["required_decode_tokens_per_s"] == 9.0
+    assert speed_analysis["best_forecast"]["expected_decode_tokens_per_s"] == 8.5
+    assert speed_analysis["shortfall_decode_tokens_per_s"] == 0.5
 
 
 def test_l0c_preflight_patch_accepts_analysis_above_speed_gate_margin(tmp_path: Path) -> None:
@@ -6701,7 +6701,7 @@ Structured compute/bandwidth accounting:
 
 | representative shape M/N/K | FLOPs per GEMM | estimated bytes moved | arithmetic intensity | roofline/ceiling | ffn_linear ms/token | expected changed bytes/FLOPs/overhead | expected end-to-end tok/s delta |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| M=1, N=34816, K=5120 | 356M FLOP | 178 MB plus scales/output | 2 FLOP/byte | under the theoretical stream ceiling | 80.0 | less schedule overhead, same FLOPs | +0.30 tok/s delta |
+| M=1, N=34816, K=5120 | 356M FLOP | 178 MB plus scales/output | 2 FLOP/byte | under the theoretical stream ceiling | 80.0 | less schedule overhead, same FLOPs | +1.60 tok/s delta |
 
 7.5 tok/s breakdown: 36.4 GB/token at 7.50 tok/s implies about 273 GB/s
 effective bandwidth, roughly 100% of the 273 GB/s ceiling. ffn_linear share is
@@ -6713,7 +6713,7 @@ Low-level evidence:
 
 | source file/symbol | live-shape dispatch-hit proof | before-mutation observation | byte-component split for A/B weights/scales/output/epilogue | B-weight bytes change? | material lift gate |
 | --- | --- | --- | --- | --- | --- |
-| source file csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8.cu, symbol cutlass_scaled_mm | dispatch-hit proof from live shape M=1,N=34816,K=5120: path is hit | before-mutation observation from microbench and targeted compile/preflight | A/B weights/scales/output/epilogue split says B-weight bytes dominate | B-weight bytes unchanged | needs at least 0.225 tok/s lift |
+| source file csrc/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8.cu, symbol cutlass_scaled_mm | dispatch-hit proof from live shape M=1,N=34816,K=5120: path is hit | before-mutation observation from microbench and targeted compile/preflight | A/B weights/scales/output/epilogue split says B-weight bytes dominate | B-weight bytes unchanged | needs at least 1.5 tok/s lift |
 
 Mechanism: expected reduction is schedule overhead. The expected speedup clears
 the configured gate.
@@ -6742,7 +6742,7 @@ the configured gate.
     assert payload["ok"] is True
     speed_analysis = payload["speed_gate_analysis_preflight"]
     assert speed_analysis["reason"] == "speed_gate_analysis_preflight_passed"
-    assert speed_analysis["best_forecast"]["expected_decode_tokens_per_s"] == 7.8
+    assert speed_analysis["best_forecast"]["expected_decode_tokens_per_s"] == 9.1
 
 
 def test_l0c_preflight_patch_compiles_workspace_copy_without_mutating_source(tmp_path: Path) -> None:
