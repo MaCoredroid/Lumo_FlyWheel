@@ -6130,7 +6130,20 @@ Tier-2 hard-reject:
    research_memory.tsv, research_memory.md, prior_mutations_rejected.tsv,
    mutations_rejected.tsv, results.tsv (best_so_far).
    For prior iters' parity status, prefer `candidates/<NNN>/parity_check.json`.
-2. Before editing, write {{iteration_dir}}/candidate_analysis.md with the
+2. Before editing, you MUST run a cheap warm-request diagnostic or read the
+   existing cheap warm-request diagnostic against the
+   already-running live server, then use its concrete fields in your analysis:
+     {{warm_diagnostic_command}}
+   This measures the current warm live stack; it does not apply your patch.
+   Read `warm_pre_mutation.json` and quote the relevant
+   `aggregate_consumption.step_consumption`, `aggregate_consumption.gb10_reference`,
+   and `per_step_consumption` fields for per-step token/time/cache consumption,
+   bottleneck_hint, and GB10 bandwidth roofline context. If the file already
+   exists, read it before deciding whether to rerun the command. If the live
+   endpoint is down, write {{iteration_dir}}/warm_diagnostic_skipped.json with
+   the command, error, and reason, then use the last baseline/candidate
+   measurement traces instead.
+3. Before editing, write {{iteration_dir}}/candidate_analysis.md with the
    baseline timing breakdown and compute/bandwidth breakdown you are using.
    This is a required cheap preflight artifact, not optional commentary. Include:
    - the current warm decode rate in generated tok/s and ms/generated token,
@@ -6158,14 +6171,6 @@ Tier-2 hard-reject:
    If you can cheaply produce a CUTLASS-internal timing/proxy, include
    before-change and after-change values; otherwise state that only the
    `ffn_linear` proxy is available and do not invent lower-level CUTLASS times.
-3. You MUST run a cheap warm-request diagnostic against the already-running
-   live server before editing, then read the artifact for per-step token/time/cache consumption,
-   bottleneck_hint, and GB10 bandwidth roofline context:
-     {{warm_diagnostic_command}}
-   This measures the current warm live stack; it does not apply your patch.
-   If the live endpoint is down, write {{iteration_dir}}/warm_diagnostic_skipped.json
-   with the command, error, and reason, then use the last baseline/candidate
-   measurement traces instead.
    After writing the patch, only run another warm request diagnostic if your
    mutation can be exercised without a vLLM restart. For compiled CUTLASS
    changes, say the post-patch warm request is controller-owned.
@@ -6189,7 +6194,7 @@ Tier-2 hard-reject:
 - You do not call finalize-round. Python does that.
 - You do not run measurement directly. The CLI does that.
 - You do not write any file except mutation.patch, candidate_analysis.md,
-  BLOCKED.md, and the warm diagnostic artifact/skipped note from step 3.
+  BLOCKED.md, and the warm diagnostic artifact/skipped note from step 2.
 """
 
 
@@ -11137,6 +11142,16 @@ class L0cKernelMutationRunner:
                     "gb/requested output token",
                     "gb per requested output token",
                     "gb of lpddr traffic per requested output token",
+                ),
+            ),
+            (
+                "warm_diagnostic_fields",
+                (
+                    "warm_pre_mutation.json",
+                    "aggregate_consumption",
+                    "per_step_consumption",
+                    "bottleneck_hint",
+                    "metrics_consumption",
                 ),
             ),
             ("cutlass_or_ffn_component", ("cutlass", "ffn_linear", "fp8 gemm")),

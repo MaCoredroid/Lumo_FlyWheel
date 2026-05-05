@@ -5412,6 +5412,9 @@ def test_l0c_fp8_gemm_real_cutlass_bootstrap_reaches_candidate_loop(
     assert "at least 3%" in candidate_brief
     assert "auto-research warm-diagnostic" in candidate_brief
     assert "MUST run a cheap warm-request diagnostic" in candidate_brief
+    assert "warm_pre_mutation.json" in candidate_brief
+    assert "aggregate_consumption.step_consumption" in candidate_brief
+    assert "per_step_consumption" in candidate_brief
     assert "warm_diagnostic_skipped.json" in candidate_brief
     assert "per-step token/time/cache consumption" in candidate_brief
     assert "GB10 bandwidth roofline context" in candidate_brief
@@ -5935,6 +5938,9 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "at least 3%" in brief
     assert "auto-research warm-diagnostic" in brief
     assert "MUST run a cheap warm-request diagnostic" in brief
+    assert "warm_pre_mutation.json" in brief
+    assert "aggregate_consumption.step_consumption" in brief
+    assert "per_step_consumption" in brief
     assert "warm_diagnostic_skipped.json" in brief
     assert "per-step token/time/cache consumption" in brief
     assert "GB10 bandwidth roofline context" in brief
@@ -5961,6 +5967,9 @@ Warm decode rate: 7.37 generated tokens/s, 135.6 ms/generated token.
 GB10 bandwidth: 273 GB/s, with a warm roofline context of 37.0 GB/token.
 The CUTLASS/FP8 GEMM proxy is ffn_linear at 80.6 ms/token, so this is the
 component the mutation must reduce.
+The analysis reads warm_pre_mutation.json and uses aggregate_consumption,
+per_step_consumption, and bottleneck_hint from the authoring-time warm
+diagnostic rather than inventing a timing source.
 
 Structured compute/bandwidth accounting:
 
