@@ -14192,7 +14192,12 @@ class L0cKernelMutationRunner:
                 )
                 edit_scope_rule = (
                     f"- Edit ONLY files under {workspace_path}. No parity fixture, "
-                    "controller, test, or non-CUTLASS files."
+                    "controller, tests, or files outside this staged vLLM source workspace. "
+                    "C++ CUTLASS schedule/dispatch files are in scope. Python/model/runtime "
+                    "files inside the workspace are also in scope only when the diff directly "
+                    "changes how the existing CUTLASS FP8 GEMM path is reached, shaped, scaled, "
+                    "or fused, and the candidate_analysis.md proves that `CutlassFP8ScaledMMLinearKernel` "
+                    "still handles the affected FP8 GEMM calls."
                 )
                 read_target_paths = (
                     f"{workspace_path}, {workspace_path}/README_L0C_CUTLASS.md"
@@ -14283,6 +14288,15 @@ class L0cKernelMutationRunner:
                     "  shape, scale, or schedule behavior: backend selection predicates,",
                     "  quantization scale shape/placement, FP8 input grouping/padding,",
                     "  or calls into alternative CUTLASS-supported scaled-mm paths.",
+                    "- Do not self-block merely because the best mechanism is not a C++",
+                    "  schedule tweak. CUTLASS-backed Python/model/runtime mutations are",
+                    "  valid when they preserve the CUTLASS FP8 backend and change the",
+                    "  GEMM problem shape, call grouping, launch count, activation/scale",
+                    "  placement, or fused caller path enough to plausibly clear the speed gate.",
+                    "- In particular, investigate mechanisms that amortize compulsory B-weight",
+                    "  streaming by making CUTLASS verify or compute more useful tokens per",
+                    "  target forward, or by fusing adjacent activation/quant/caller work into",
+                    "  the CUTLASS-backed path without changing public dtype/layout/scale semantics.",
                     "- This round is CUTLASS-only. Do not route warm decode to Triton,",
                     "  DeepGEMM, FlashInfer, cuBLAS, AITER, or another non-CUTLASS backend.",
                     "  A patch that calls `w8a8_triton_block_scaled_mm_func` or otherwise",
@@ -14293,9 +14307,10 @@ class L0cKernelMutationRunner:
                 ]
             )
             schedule_boundary_rule = (
-                "- CUTLASS dispatch, shape, scale-placement, and schedule-source edits are in scope "
-                "inside the staged vLLM/CUTLASS source tree, but preserve the public GEMM "
-                "signature, tensor layout, output dtype, and scale semantics exactly."
+                "- CUTLASS dispatch, shape, scale-placement, schedule-source, and CUTLASS-backed "
+                "caller/model/runtime shape-lift edits are in scope inside the staged vLLM/CUTLASS "
+                "source tree, but preserve the public GEMM signature, tensor layout, output dtype, "
+                "scale semantics, and CUTLASS FP8 backend identity exactly."
             )
         else:
             mutation_target_description = str(kernel_source_path)

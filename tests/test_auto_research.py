@@ -6129,6 +6129,10 @@ def test_l0c_fp8_cutlass_brief_defers_apply_and_test_to_controller(tmp_path: Pat
     assert "Do not replace `process_weights_after_loading` wholesale" in brief
     assert "CUTLASS weight transposition" in brief
     assert "This round is CUTLASS-only" in brief
+    assert "Python/model/runtime files inside the workspace are also in scope" in brief
+    assert "CutlassFP8ScaledMMLinearKernel" in brief
+    assert "CUTLASS-backed Python/model/runtime mutations are" in brief
+    assert "amortize compulsory B-weight" in brief
     assert "w8a8_triton_block_scaled_mm_func" in brief
     assert "CUTLASS dispatch" in brief
     assert "scale tensors" in brief
