@@ -1,0 +1,17 @@
+Authored candidate `038` in `candidates/038`.
+
+Created:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+
+Serving surface selected:
+
+```yaml
+spec_decode:
+  method: ngram
+  num_speculative_tokens: 3
+  prompt_lookup_min: 3
+  prompt_lookup_max: 8
+```
+
+I did not run live benchmarks or edit anything outside the candidate directory.

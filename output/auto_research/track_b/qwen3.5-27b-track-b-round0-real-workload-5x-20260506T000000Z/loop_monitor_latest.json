@@ -1,24 +1,13 @@
 {
   "attempts": [
     {
-      "candidate_accept_decode_tps": 18.9047064,
-      "candidate_id": "037",
-      "decode_tps": 7.522407,
-      "kernel_selection": {
-        "attention_backend": "triton"
-      },
-      "previous_best_decode_tps": 15.753922,
-      "reason": "speed_below_candidate_acceptance",
-      "runtime_config_id": "82a7a229-b155-45bd-b774-260e9448b62c",
-      "runtime_config_ref": "candidates/037/tuned_config_bundle.yaml",
-      "runtime_restore_ref": "candidates/037/runtime_restore_result.json",
-      "spec_decode": null,
+      "candidate_id": "038",
+      "reason": "duplicate_serving_surface",
       "status": "rejected",
-      "target_decode_tps": 37.5,
-      "vllm_config": null
+      "surface_signature": "{\"spec_decode\":{\"method\":\"ngram\",\"num_speculative_tokens\":3,\"prompt_lookup_max\":8,\"prompt_lookup_min\":3}}"
     }
   ],
-  "completed_at": "2026-05-06T13:52:57Z",
+  "completed_at": "2026-05-06T13:56:27Z",
   "round_dir": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
   "schema": "lumo.track_b.loop_run.v1"
 }

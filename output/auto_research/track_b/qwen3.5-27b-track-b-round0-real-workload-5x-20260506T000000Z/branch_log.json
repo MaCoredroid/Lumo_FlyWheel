@@ -639,5 +639,12 @@
     "status": "rejected",
     "target_decode_tps": 37.5,
     "vllm_config": null
+  },
+  {
+    "candidate_id": "038",
+    "reason": "duplicate_serving_surface",
+    "recorded_at": "2026-05-06T13:56:27Z",
+    "status": "rejected",
+    "surface_signature": "{\"spec_decode\":{\"method\":\"ngram\",\"num_speculative_tokens\":3,\"prompt_lookup_max\":8,\"prompt_lookup_min\":3}}"
   }
 ]

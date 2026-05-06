@@ -36,3 +36,4 @@ candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
 035	controller	duplicate_serving_surface	duplicate_serving_surface	controller	2026-05-06T13:27:17Z
 036	controller	duplicate_serving_surface	duplicate_serving_surface	controller	2026-05-06T13:31:13Z
 037	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T13:52:57Z
+038	controller	duplicate_serving_surface	duplicate_serving_surface	controller	2026-05-06T13:56:27Z
