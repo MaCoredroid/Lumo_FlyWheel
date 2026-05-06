@@ -1,0 +1,18 @@
+Authored candidate `014` under `candidates/014` only.
+
+Created:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+Surface chosen:
+
+```yaml
+vllm_config:
+  max_num_seqs: 5
+  max_num_batched_tokens: 2048
+  gpu_memory_utilization: 0.88
+  enable_prefix_caching: true
+```
+
+I only performed file/content checks and did not run benchmarks or controller gates.

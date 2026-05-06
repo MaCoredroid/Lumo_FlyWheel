@@ -1,0 +1,1 @@
+Measurement caveat: this candidate is intended to isolate native vLLM prefix caching on top of the last successfully applied capacity surface. If the controller's decode counter excludes all prefill and prefix-cache overhead, the measured lift may be small even though warm completion latency improves.

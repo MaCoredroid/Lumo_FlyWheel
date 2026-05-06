@@ -202,12 +202,37 @@ def _canonical_surface(value: Any) -> Any:
     return value
 
 
+def _surface_payload(config: dict[str, Any]) -> dict[str, Any]:
+    surface: dict[str, Any] = {}
+    if "request_shaping" in config:
+        surface["request_shaping"] = config["request_shaping"]
+    if "prefix_cache" in config:
+        surface["prefix_cache"] = config["prefix_cache"]
+    if "vllm_config" in config:
+        vllm_config = config["vllm_config"]
+        if isinstance(vllm_config, dict):
+            effective_vllm_config = dict(vllm_config)
+            effective_vllm_config.setdefault("enable_prefix_caching", True)
+            effective_vllm_config.setdefault("enable_chunked_prefill", True)
+            surface["vllm_config"] = effective_vllm_config
+        else:
+            surface["vllm_config"] = vllm_config
+    if "spec_decode" in config:
+        spec_decode = config["spec_decode"]
+        if isinstance(spec_decode, dict):
+            effective_spec_decode = dict(spec_decode)
+            effective_spec_decode.setdefault("method", "ngram")
+            effective_spec_decode.setdefault("num_speculative_tokens", 4)
+            effective_spec_decode.setdefault("prompt_lookup_min", 2)
+            effective_spec_decode.setdefault("prompt_lookup_max", 6)
+            surface["spec_decode"] = effective_spec_decode
+        else:
+            surface["spec_decode"] = spec_decode
+    return surface
+
+
 def _surface_signature(config: dict[str, Any]) -> str:
-    surface = {
-        key: _canonical_surface(config[key])
-        for key in ("request_shaping", "prefix_cache", "vllm_config", "spec_decode")
-        if key in config
-    }
+    surface = _canonical_surface(_surface_payload(config))
     if not surface:
         return "unsupported:{}"
     return json.dumps(surface, sort_keys=True, separators=(",", ":"))

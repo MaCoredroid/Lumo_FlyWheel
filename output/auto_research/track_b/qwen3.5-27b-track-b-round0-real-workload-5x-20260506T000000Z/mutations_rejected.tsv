@@ -12,3 +12,4 @@ candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
 011	controller	unsupported_or_missing_serve_config	unsupported_or_missing_serve_config	vllm_config_concurrency	2026-05-06T06:26:10Z
 012	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T06:50:44Z
 013	controller	throughput_measure_failed	throughput_measure_failed	real_workload_measurement	2026-05-06T07:14:13Z
+014	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T07:34:35Z

@@ -25,6 +25,17 @@ def _now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _raise_for_status_with_body(response: requests.Response) -> None:
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        body = response.text.strip().replace("\n", "\\n")
+        if len(body) > 1200:
+            body = body[:1200] + "...<truncated>"
+        detail = f"{exc}; response_body={body or '<empty>'}"
+        raise requests.HTTPError(detail, response=response) from exc
+
+
 def _load_workload(path: Path) -> tuple[dict[str, Any], Path]:
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -57,7 +68,7 @@ def _load_seed(path: Path) -> list[dict[str, Any]]:
 
 def _metrics(metrics_url: str) -> dict[str, float]:
     response = requests.get(metrics_url, timeout=20)
-    response.raise_for_status()
+    _raise_for_status_with_body(response)
     return parse_prometheus_text(response.text)
 
 
@@ -187,7 +198,7 @@ def _post_response(
         timeout=max(60, output_tokens * 3),
     )
     wall_s = time.monotonic() - started
-    response.raise_for_status()
+    _raise_for_status_with_body(response)
     payload = response.json()
     usage = payload.get("usage") if isinstance(payload, dict) else {}
     if not isinstance(usage, dict):
@@ -240,10 +251,10 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
     workload, seed_path = _load_workload(args.workload_file)
     seed_rows = _load_seed(seed_path)
     health = requests.get(args.health_url, timeout=20)
-    health.raise_for_status()
+    _raise_for_status_with_body(health)
     if args.reset_prefix_cache:
         reset = requests.post(args.reset_prefix_cache_url, headers={"Authorization": f"Bearer {args.api_key}"}, timeout=30)
-        reset.raise_for_status()
+        _raise_for_status_with_body(reset)
     max_output_cap = args.max_output_token_cap if args.max_output_token_cap > 0 else None
     warm_per_window = args.completions_per_task - args.cold_completions
     if warm_per_window < 1:

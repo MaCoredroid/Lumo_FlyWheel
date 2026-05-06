@@ -247,6 +247,41 @@ def test_duplicate_serving_surface_detects_prior_candidate(tmp_path: Path) -> No
     assert loop._has_prior_surface_signature(round_dir, signature, current_candidate_id="002")
 
 
+def test_duplicate_runtime_surface_accounts_for_default_enabled_flags(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    prior = round_dir / "candidates" / "001"
+    current = round_dir / "candidates" / "002"
+    prior.mkdir(parents=True)
+    current.mkdir(parents=True)
+    prior_config = {
+        "vllm_config": {
+            "max_num_seqs": 5,
+            "max_num_batched_tokens": 2048,
+            "gpu_memory_utilization": 0.88,
+        }
+    }
+    current_config = {
+        "vllm_config": {
+            "max_num_seqs": 5,
+            "max_num_batched_tokens": 2048,
+            "gpu_memory_utilization": 0.88,
+            "enable_prefix_caching": True,
+        }
+    }
+    (prior / "serve_config.yaml").write_text(yaml.safe_dump(prior_config), encoding="utf-8")
+    (prior / "controller_result.json").write_text(
+        json.dumps({"status": "rejected", "reason": "speed_below_candidate_acceptance"}),
+        encoding="utf-8",
+    )
+    (current / "serve_config.yaml").write_text(yaml.safe_dump(current_config), encoding="utf-8")
+
+    signature = loop._surface_signature(current_config)
+
+    assert loop._surface_signature(prior_config) == signature
+    assert loop._has_prior_surface_signature(round_dir, signature, current_candidate_id="002")
+
+
 def test_surface_history_marks_request_shaping_only_as_exhausted(tmp_path: Path) -> None:
     loop = _load_loop_module()
     round_dir = tmp_path / "round"

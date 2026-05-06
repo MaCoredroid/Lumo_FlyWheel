@@ -1,23 +1,26 @@
 {
   "attempts": [
     {
-      "candidate_id": "013",
-      "detail": "Traceback (most recent call last):\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 389, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 381, in main\n    result = measure(args)\n             ^^^^^^^^^^^^^\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 275, in measure\n    warm_rows = _run_warm_batch(\n                ^^^^^^^^^^^^^^^^\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 233, in _run_warm_batch\n    row = future.result()\n          ^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/concurrent/futures/_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/concurrent/futures/_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"/usr/lib/python3.12/concurrent/futures/thread.py\", line 58, in run\n    result = self.fn(*self.args, **self.kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 190, in _post_response\n    response.raise_for_status()\n  File \"/usr/lib/python3/dist-packages/requests/models.py\", line 1021, in raise_for_status\n    raise HTTPError(http_error_msg, response=self)\nrequests.exceptions.HTTPError: 500 Server Error: Internal Server Error for url: http://127.0.0.1:9950/v1/responses\n",
-      "reason": "throughput_measure_failed",
-      "runtime_config_id": "43cf42f4-e26e-488d-9d2a-f4feb12a7db1",
-      "runtime_config_ref": "candidates/013/tuned_config_bundle.yaml",
-      "runtime_restore_ref": "candidates/013/runtime_restore_result.json",
-      "spec_decode": {
-        "method": "ngram",
-        "num_speculative_tokens": 4,
-        "prompt_lookup_max": 32,
-        "prompt_lookup_min": 2
-      },
+      "candidate_accept_decode_tps": 9.1680396,
+      "candidate_id": "014",
+      "decode_tps": 7.584679,
+      "previous_best_decode_tps": 7.640033,
+      "reason": "speed_below_candidate_acceptance",
+      "runtime_config_id": "6deb210b-45dc-4264-95a5-2c837e1f4c0f",
+      "runtime_config_ref": "candidates/014/tuned_config_bundle.yaml",
+      "runtime_restore_ref": "candidates/014/runtime_restore_result.json",
+      "spec_decode": null,
       "status": "rejected",
-      "vllm_config": null
+      "target_decode_tps": 37.5,
+      "vllm_config": {
+        "enable_prefix_caching": true,
+        "gpu_memory_utilization": 0.88,
+        "max_num_batched_tokens": 2048,
+        "max_num_seqs": 5
+      }
     }
   ],
-  "completed_at": "2026-05-06T07:14:13Z",
+  "completed_at": "2026-05-06T07:34:35Z",
   "round_dir": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
   "schema": "lumo.track_b.loop_run.v1"
 }
