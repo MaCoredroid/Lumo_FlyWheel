@@ -1,0 +1,7 @@
+Created candidate `027` under `candidates/027` with:
+
+- `serve_config.yaml`: ngram speculative decode, `num_speculative_tokens: 2`, `prompt_lookup_min: 3`, `prompt_lookup_max: 16`
+- `candidate_analysis.md`: required four bullets included
+- `notes.md`: measurement caveat
+
+I only did lightweight file validation and duplicate-surface inspection. I did not run live benchmarks.

@@ -1,0 +1,1 @@
+Measurement caveat: this candidate intentionally spends some speculative-hit rate to reduce the B-1 empty/truncated-output risk seen in the fastest prior ngram surface. If throughput drops toward candidate 018/021 levels, the likely cause is that the three-token minimum removes too many useful prompt-local draft opportunities.

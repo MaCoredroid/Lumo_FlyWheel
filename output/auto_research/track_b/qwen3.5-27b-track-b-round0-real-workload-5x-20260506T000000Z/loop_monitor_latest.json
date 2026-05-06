@@ -2,25 +2,25 @@
   "attempts": [
     {
       "candidate_accept_decode_tps": 18.9047064,
-      "candidate_id": "026",
-      "decode_tps": 7.567844,
+      "candidate_id": "027",
+      "decode_tps": 7.653164,
       "previous_best_decode_tps": 15.753922,
       "reason": "speed_below_candidate_acceptance",
-      "runtime_config_id": "9e2c4ee4-439a-431e-919a-9e1e38ba5a05",
-      "runtime_config_ref": "candidates/026/tuned_config_bundle.yaml",
-      "runtime_restore_ref": "candidates/026/runtime_restore_result.json",
+      "runtime_config_id": "71edcd12-2950-4e25-9839-3ec1ab0c7558",
+      "runtime_config_ref": "candidates/027/tuned_config_bundle.yaml",
+      "runtime_restore_ref": "candidates/027/runtime_restore_result.json",
       "spec_decode": {
         "method": "ngram",
-        "num_speculative_tokens": 3,
+        "num_speculative_tokens": 2,
         "prompt_lookup_max": 16,
-        "prompt_lookup_min": 4
+        "prompt_lookup_min": 3
       },
       "status": "rejected",
       "target_decode_tps": 37.5,
       "vllm_config": null
     }
   ],
-  "completed_at": "2026-05-06T11:23:08Z",
+  "completed_at": "2026-05-06T11:42:12Z",
   "round_dir": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
   "schema": "lumo.track_b.loop_run.v1"
 }
