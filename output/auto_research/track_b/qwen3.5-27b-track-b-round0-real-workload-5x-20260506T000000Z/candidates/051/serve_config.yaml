@@ -1,0 +1,5 @@
+spec_decode:
+  method: ngram
+  num_speculative_tokens: 4
+  prompt_lookup_min: 7
+  prompt_lookup_max: 8

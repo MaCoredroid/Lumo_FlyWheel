@@ -1,5 +1,5 @@
 {
-  "best_decode_tps": 15.753922,
+  "best_decode_tps": 17.087062,
   "candidate_accept_decode_tps_initial": 9.0,
   "checklist": [
     {
@@ -343,6 +343,16 @@
           "schema": "lumo.track_b.real_workload_first_five.v1",
           "task_count": 1,
           "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "051",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 17.087062,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/051/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
         }
       ],
       "pass": false,
@@ -376,6 +386,16 @@
           "completions_per_task": 5,
           "decode_tps": 14.581565,
           "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/028/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "051",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 17.087062,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/051/throughput.json",
           "schema": "lumo.track_b.real_workload_first_five.v1",
           "task_count": 1,
           "warm_completions_measured": 4
@@ -715,6 +735,16 @@
           "schema": "lumo.track_b.real_workload_first_five.v1",
           "task_count": 1,
           "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "051",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 17.087062,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/051/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
         }
       ],
       "pass": true,
@@ -769,6 +799,16 @@
       "completions_per_task": 5,
       "decode_tps": 14.581565,
       "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/028/throughput.json",
+      "schema": "lumo.track_b.real_workload_first_five.v1",
+      "task_count": 1,
+      "warm_completions_measured": 4
+    },
+    {
+      "candidate_id": "051",
+      "cold_completions_discarded": 1,
+      "completions_per_task": 5,
+      "decode_tps": 17.087062,
+      "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/051/throughput.json",
       "schema": "lumo.track_b.real_workload_first_five.v1",
       "task_count": 1,
       "warm_completions_measured": 4

@@ -39,13 +39,13 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`050` were generated through `codex exec` worker calls; candidate `043` has partial authoring artifacts only and candidates `044`-`050` were controller-measured | Done |
+| Let auto-research author candidates | Candidates `001`-`051` were generated through `codex exec` worker calls; candidate `043` has partial authoring artifacts only and candidates `044`-`051` were controller-measured | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Allow guided decoding candidates | Controller supports `structured_outputs` request overrides for xgrammar-style guided decoding candidates | Done |
 | Allow authored parallel workload throughput candidates | Requested, but not currently enabled in the committed controller; current controller keeps the fixed first-five decode-time gate | Not met |
-| Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence | Not met |
-| Achieve final 5x goal | Best candidate `020` measured `15.753922 tok/s`, below `37.5 tok/s` final target | Not met |
+| Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence; candidate `051` reached `17.087062 tok/s` but stayed below the `18.9047064 tok/s` 20%-over-previous-best gate | Not met |
+| Achieve final 5x goal | Best candidate `051` measured `17.087062 tok/s`, below `37.5 tok/s` final target | Not met |
 | Run full `50*5` benchmark | Not run because no candidate cleared B-1 after the speed preflight | Not met, intentionally gated |
 
 ## Candidate Results
@@ -101,6 +101,7 @@ Concrete success criteria:
 | `048` | structured outputs, xgrammar JSON object | `7.624555` | `1.017x` | Rejected |
 | `049` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 3-7 | `7.673330` | `1.023x` | Rejected |
 | `050` | kernel selection, attention backend `flash-attn-4` | `7.600478` | `1.013x` | Rejected |
+| `051` | spec decode, `ngram`, 4 speculative tokens, prompt lookup 7-8 | `17.087062` | `2.278x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -182,6 +183,8 @@ Candidate `049` selected `spec_decode: {method: ngram, num_speculative_tokens: 3
 
 Candidate `050` selected `kernel_selection: {attention_backend: flash-attn-4}`. vLLM accepted the launch arguments, but the runtime log reported that FA4 is unsupported for this device/model path, including the `head_size=256` TMEM-capacity limit, and resolved the main attention path back to FlashAttention version 2. The official first-five real-workload measurement was `7.600478 tok/s`, below the `18.9047064 tok/s` post-`020` acceptance gate, and the controller restored the baseline runtime afterward.
 
+Candidate `051` selected `spec_decode: {method: ngram, num_speculative_tokens: 4, prompt_lookup_min: 7, prompt_lookup_max: 8}`. vLLM launched with speculative decoding active and completed the official first-five real-workload measurement at `17.087062 tok/s` (`2.278x` over the nominal `7.5 tok/s` baseline). Runtime speculative metrics showed sustained high draft acceptance on the warm concurrent window, but the official result remained below the `18.9047064 tok/s` 20%-over-previous-best gate, so B-1/B-2/B-3 did not run. The controller restored the baseline runtime afterward.
+
 ## Runtime Capability Audit
 
 Live container: `lumo-vllm-l0c-fp8-cutlass-run30`
@@ -210,23 +213,23 @@ Capability checks:
 - `complete: false`
 - `target_decode_tps: 37.5`
 - `candidate_accept_decode_tps_initial: 9.0`
-- `best_decode_tps: 15.753922`
-- `incremental_candidates: [020, 025, 028]`
+- `best_decode_tps: 17.087062`
+- `incremental_candidates: [020, 025, 028, 051]`
 - `promoted_candidates: []`
 
-The loop is no longer blocked at the initial speed preflight: candidates `020`, `025`, and `028` cleared that initial `9.0 tok/s` threshold. It is now blocked at preserving candidate `020`'s speed while satisfying B-1 quality/equivalence and producing a new 20%-over-previous-best candidate. B-2/B-3 were not run because B-1 failed. Candidates `013`, `019`, `023`, and `030` are excluded from `best_decode_tps` because they failed the real-workload measurement instead of producing valid warm decode metrics. Candidate `020` is the current best valid decode-time speed measurement, but it is still below the final 5x target and is not promotable because B-1 failed.
+The loop is no longer blocked at the initial speed preflight: candidates `020`, `025`, `028`, and `051` cleared that initial `9.0 tok/s` threshold. It is now blocked at turning the speculative-decode speed family into a candidate that exceeds the 20%-over-previous-best gate while preserving B-1 quality/equivalence. B-2/B-3 were not run because no post-`020` candidate cleared the deeper gate. Candidates `013`, `019`, `023`, and `030` are excluded from `best_decode_tps` because they failed the real-workload measurement instead of producing valid warm decode metrics. Candidate `051` is the current best valid decode-time speed measurement, but it is still below the final 5x target and did not clear the `18.9047064 tok/s` candidate acceptance gate.
 
 ## Blocker
 
-The current live runtime surface has produced one material speedup via ngram speculative decoding, but that candidate did not preserve the B-1 equivalence guard. Request shaping, native prefix-cache variations, and tested vLLM launch-shape mutations remain near baseline when measured with the CUTLASS-style decode metric.
+The current live runtime surface has produced material speedups via ngram speculative decoding, with candidate `051` improving the best official decode-time measurement to `17.087062 tok/s`. It still did not reach the `18.9047064 tok/s` 20%-over-previous-best gate needed for another B-1 attempt, and candidate `020` remains the only speed-preflight candidate that reached B-1, where it failed equivalence. Request shaping, native prefix-cache variations, and tested vLLM launch-shape mutations remain near baseline when measured with the CUTLASS-style decode metric.
 
 The controller still needs an explicit total-throughput measurement surface before `wall_clock_total` accounting over parallel authored workload traces can be official. The committed controller currently keeps the fixed first-five decode-time gate.
 
 The next productive Track B branch is not more concurrency search. It should be one of:
 
-1. Continue speculative-decode auto-search around candidate `020` only if the next candidate explicitly addresses the B-1 empty-output/equivalence failure while preserving the speed gain.
+1. Continue speculative-decode auto-search around candidates `020` and `051` only if the next candidate explicitly addresses the B-1 empty-output/equivalence failure while preserving or improving the speed gain.
 2. Add a real candidate surface for `xgrammar` / guided decoding and run it only on tool-call-heavy workload slices where constrained generation can affect decode.
 3. Install LMCache or another KV-transfer path before launching a cache-oriented Track B round, because LMCache is not present in the current container.
 4. Continue runtime-config auto-search only if it explores a new launch surface beyond the tested `max_num_batched_tokens`/`max_num_seqs`/`gpu_memory_utilization` variants, because the first completed runtime-config candidate only reached `7.640033 tok/s`.
 
-Until a candidate preserves B-1 while keeping candidate `020`'s speed gain, the round remains blocked from B-2/B-3 and promotion.
+Until a candidate preserves B-1 while keeping or improving candidate `051`'s speed gain, the round remains blocked from B-2/B-3 and promotion.
