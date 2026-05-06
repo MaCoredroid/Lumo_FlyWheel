@@ -12,15 +12,15 @@ Concrete success criteria:
 - Measure 5 completions per task, discarding the first cold completion and counting the next 4 warm completions.
 - Keep the final round target at `37.5 tok/s` (`5x` over `7.5 tok/s` baseline).
 - Accept a candidate for deeper gates when it improves at least `20%` over the previous best measured real-workload warm decode.
-- For legacy single-workload candidates, keep the acceptance gate on vLLM decode-time throughput, not the rolling proxy log.
-- For explicit measurement-surface candidates, allow total serving-throughput accounting over authored workload traces by measuring wall-clock aggregate decode throughput across parallel warm windows.
+- Keep the current committed acceptance gate on vLLM decode-time throughput from `throughput.json`, not the rolling proxy log.
+- Follow-up requested: add an explicit measurement surface where total serving throughput over parallel authored workload traces can count as the official metric.
 
 ## Implemented Artifacts
 
 - Commit: `2a7d7a3 Add real workload Track B gate`
 - Follow-up: runtime-config candidate applicator added after the initial audit so workers can propose real vLLM launch-shape changes via `serve_config.yaml:vllm_config`.
 - Follow-up: speculative decode candidate support added so workers can propose vLLM `--speculative-config` via `serve_config.yaml:spec_decode`.
-- Follow-up: measurement-surface support added so workers can explicitly choose authored workload profiles, parallel warm windows, and `decode_time` or `wall_clock_total` throughput accounting.
+- Follow-up requested: measurement-surface support so workers can explicitly choose authored workload profiles, parallel warm windows, and `decode_time` or `wall_clock_total` throughput accounting.
 - Round directory: `output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z`
 - Measurement script: `scripts/measure_track_b_real_workload.py`
 - Controller: `scripts/run_track_b_loop.py`
@@ -41,7 +41,7 @@ Concrete success criteria:
 | Let auto-research author candidates | Candidates `001`-`039` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
-| Allow authored parallel workload throughput candidates | Controller supports `measurement` settings for `l0-heavy` and `multi-family-v5`, `parallel_task_count`, `warm_concurrency`, `parallel_warm_windows`, and `throughput_accounting` | Done |
+| Allow authored parallel workload throughput candidates | Requested, but not currently enabled in the committed controller; current controller keeps the fixed first-five decode-time gate | Not met |
 | Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence | Not met |
 | Achieve final 5x goal | Best candidate `020` measured `15.753922 tok/s`, below `37.5 tok/s` final target | Not met |
 | Run full `50*5` benchmark | Not run because no candidate cleared B-1 after the speed preflight | Not met, intentionally gated |
@@ -185,7 +185,7 @@ The loop is no longer blocked at the initial speed preflight: candidates `020`, 
 
 The current live runtime surface has produced one material speedup via ngram speculative decoding, but that candidate did not preserve the B-1 equivalence guard. Request shaping, native prefix-cache variations, and tested vLLM launch-shape mutations remain near baseline when measured with the CUTLASS-style decode metric.
 
-The controller can now run explicit total-throughput experiments over authored workload traces. A worker must choose the `measurement` surface to make `wall_clock_total` accounting official; otherwise the legacy decode-time gate still applies.
+The controller still needs an explicit total-throughput measurement surface before `wall_clock_total` accounting over parallel authored workload traces can be official. The committed controller currently keeps the fixed first-five decode-time gate.
 
 The next productive Track B branch is not more concurrency search. It should be one of:
 
