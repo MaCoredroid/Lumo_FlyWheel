@@ -626,3 +626,70 @@ def test_surface_history_guides_away_from_plateaued_two_token_spec_family(tmp_pa
     assert loop._spec_decode_two_token_family_plateaued(history)
     assert "2-token ngram family has plateaued" in brief
     assert "Do not spend the next candidate on 2-token ngram lookup-window interpolation" in brief
+
+
+def test_surface_history_prefers_unmeasured_kernel_selection_after_spec_search(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    candidate = round_dir / "candidates" / "001"
+    candidate.mkdir(parents=True)
+    (candidate / "serve_config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "spec_decode": {
+                    "method": "ngram",
+                    "num_speculative_tokens": 1,
+                    "prompt_lookup_min": 1,
+                    "prompt_lookup_max": 8,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (candidate / "controller_result.json").write_text(
+        json.dumps({"status": "rejected", "reason": "speed_below_candidate_acceptance", "decode_tps": 7.8}),
+        encoding="utf-8",
+    )
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert not loop._has_any_kernel_selection(history)
+    assert "kernel_selection is now supported" in brief
+    assert "Prefer a kernel_selection candidate" in brief
+
+
+def test_surface_history_guides_away_from_unstable_high_depth_min_two_spec_decode(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    outcomes = [
+        (1, 4, 6, "speed_below_candidate_acceptance", 7.7),
+        (2, 5, 8, "throughput_measure_failed", None),
+    ]
+    for index, num_speculative_tokens, prompt_lookup_max, reason, decode_tps in outcomes:
+        candidate = round_dir / "candidates" / f"{index:03d}"
+        candidate.mkdir(parents=True)
+        (candidate / "serve_config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "spec_decode": {
+                        "method": "ngram",
+                        "num_speculative_tokens": num_speculative_tokens,
+                        "prompt_lookup_min": 2,
+                        "prompt_lookup_max": prompt_lookup_max,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = {"status": "rejected", "reason": reason}
+        if decode_tps is not None:
+            result["decode_tps"] = decode_tps
+        (candidate / "controller_result.json").write_text(json.dumps(result), encoding="utf-8")
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._has_unstable_high_depth_min_two_spec_decode(history)
+    assert "high-depth ngram shapes with prompt_lookup_min=2 are unstable or flat" in brief
+    assert "Prefer the unmeasured kernel_selection surface" in brief

@@ -339,6 +339,22 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "serving surface such as kernel_selection or an evidence-backed nonlocal "
             "spec_decode shape."
         )
+    if _has_unstable_high_depth_min_two_spec_decode(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: high-depth ngram shapes with prompt_lookup_min=2 are "
+            "unstable or flat in this workload; the next candidate should not spend "
+            "another attempt on num_speculative_tokens>=4 with min=2. Prefer the "
+            "unmeasured kernel_selection surface before more speculative-depth search."
+        )
+    if _has_any_spec_decode(surface_history) and not _has_any_kernel_selection(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: kernel_selection is now supported by the Track B "
+            "controller and is unmeasured in this round. Prefer a kernel_selection "
+            "candidate over another ngram-only candidate unless there is direct new "
+            "evidence for the ngram shape."
+        )
     elif not _has_any_spec_decode(surface_history):
         lines.append("")
         lines.append(
@@ -355,6 +371,17 @@ def _has_any_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
         except (TypeError, json.JSONDecodeError):
             continue
         if "spec_decode" in signature:
+            return True
+    return False
+
+
+def _has_any_kernel_selection(surface_history: list[dict[str, Any]]) -> bool:
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if "kernel_selection" in signature:
             return True
     return False
 
@@ -451,6 +478,33 @@ def _spec_decode_two_token_family_plateaued(surface_history: list[dict[str, Any]
             continue
         measured_rejections.add((prompt_lookup_min, prompt_lookup_max))
     return {(2, 16), (3, 16), (2, 8)}.issubset(measured_rejections)
+
+
+def _has_unstable_high_depth_min_two_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
+    high_depth_outcomes = 0
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        spec_decode = signature.get("spec_decode")
+        if not isinstance(spec_decode, dict):
+            continue
+        if spec_decode.get("method") != "ngram":
+            continue
+        try:
+            num_speculative_tokens = int(spec_decode.get("num_speculative_tokens"))
+            prompt_lookup_min = int(spec_decode.get("prompt_lookup_min"))
+        except (TypeError, ValueError):
+            continue
+        if num_speculative_tokens < 4 or prompt_lookup_min != 2:
+            continue
+        reason = str(row.get("reason") or "")
+        if reason == "throughput_measure_failed":
+            high_depth_outcomes += 1
+        elif row.get("decode_tps") is not None and float(row["decode_tps"]) < 8.0:
+            high_depth_outcomes += 1
+    return high_depth_outcomes >= 2
 
 
 def _runtime_capacity_family_flat(surface_history: list[dict[str, Any]]) -> bool:
