@@ -1,0 +1,16 @@
+Created candidate `028` with the required artifacts:
+
+- `candidates/028/candidate_analysis.md`
+- `candidates/028/serve_config.yaml`
+
+Serving surface authored:
+
+```yaml
+spec_decode:
+  method: ngram
+  num_speculative_tokens: 2
+  prompt_lookup_min: 2
+  prompt_lookup_max: 8
+```
+
+No benchmarks were run, and no files outside the candidate directory were edited.

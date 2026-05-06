@@ -36,7 +36,7 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`027` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Let auto-research author candidates | Candidates `001`-`028` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence | Not met |
@@ -73,6 +73,7 @@ Concrete success criteria:
 | `025` | spec decode, `ngram`, 2 speculative tokens, prompt lookup 2-16 | `14.506594` | `1.934x` | Rejected |
 | `026` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 4-16 | `7.567844` | `1.009x` | Rejected |
 | `027` | spec decode, `ngram`, 2 speculative tokens, prompt lookup 3-16 | `7.653164` | `1.020x` | Rejected |
+| `028` | spec decode, `ngram`, 2 speculative tokens, prompt lookup 2-8 | `14.581565` | `1.944x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -110,6 +111,8 @@ Candidate `026` kept the 3-token draft depth but raised the prompt lookup floor 
 
 Candidate `027` raised candidate `025`'s prompt lookup floor from `2` to `3` while keeping the 2-token speculative draft budget and lookup max `16`. It completed the first-five real-workload measurement, but the higher floor lost candidate `025`'s speed and measured only `7.653164 tok/s`, below the `18.9047064 tok/s` post-`020` acceptance gate.
 
+Candidate `028` tested a 2-token speculative draft with lookup `2-8`, directly mirroring candidate `020`'s lookup window while reducing the draft depth to lower B-1 risk. It completed measurement at `14.581565 tok/s` (`1.944x` over baseline), the strongest 2-token ngram result so far, but still below the `18.9047064 tok/s` post-`020` acceptance gate, so B-1/B-2/B-3 did not run.
+
 ## Runtime Capability Audit
 
 Live container: `lumo-vllm-l0c-fp8-cutlass-run30`
@@ -139,10 +142,10 @@ Capability checks:
 - `target_decode_tps: 37.5`
 - `candidate_accept_decode_tps_initial: 9.0`
 - `best_decode_tps: 15.753922`
-- `incremental_candidates: [020, 025]`
+- `incremental_candidates: [020, 025, 028]`
 - `promoted_candidates: []`
 
-The loop is no longer blocked at the initial speed preflight: candidates `020` and `025` cleared that initial `9.0 tok/s` threshold. It is now blocked at preserving candidate `020`'s speed while satisfying B-1 quality/equivalence and producing a new 20%-over-previous-best candidate. B-2/B-3 were not run because B-1 failed. Candidates `013`, `019`, and `023` are excluded from `best_decode_tps` because they failed the real-workload measurement instead of producing valid warm decode metrics. Candidate `020` is the current best valid speed measurement, but it is still below the final 5x target and is not promotable because B-1 failed.
+The loop is no longer blocked at the initial speed preflight: candidates `020`, `025`, and `028` cleared that initial `9.0 tok/s` threshold. It is now blocked at preserving candidate `020`'s speed while satisfying B-1 quality/equivalence and producing a new 20%-over-previous-best candidate. B-2/B-3 were not run because B-1 failed. Candidates `013`, `019`, and `023` are excluded from `best_decode_tps` because they failed the real-workload measurement instead of producing valid warm decode metrics. Candidate `020` is the current best valid speed measurement, but it is still below the final 5x target and is not promotable because B-1 failed.
 
 ## Blocker
 
