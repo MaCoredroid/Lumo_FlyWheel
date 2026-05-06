@@ -1,0 +1,6 @@
+Authored candidate `033` under `candidates/033` with:
+
+- `serve_config.yaml`: `kernel_selection.attention_backend: flashinfer`
+- `candidate_analysis.md`: required four bullets filled out
+
+I did not run benchmarks or edit anything outside the candidate directory.

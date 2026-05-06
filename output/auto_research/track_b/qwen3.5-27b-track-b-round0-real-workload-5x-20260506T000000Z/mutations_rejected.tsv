@@ -31,3 +31,4 @@ candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
 030	controller	throughput_measure_failed	throughput_measure_failed	real_workload_measurement	2026-05-06T12:45:20Z
 031	controller	unsupported_kernel_selection:cuda_graph_capture=True	unsupported_kernel_selection:cuda_graph_capture=True	controller	2026-05-06T12:49:52Z
 032	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T13:07:37Z
+033	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T13:25:04Z
