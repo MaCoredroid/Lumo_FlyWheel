@@ -286,6 +286,14 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "throughput; avoid another candidate that only changes max_num_seqs, "
             "max_num_batched_tokens, or gpu_memory_utilization."
         )
+    if _has_spec_decode_b1_failure_after_speed(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: a spec_decode candidate cleared speed preflight but failed "
+            "B-1 equivalence with empty or truncated concurrent outputs; the next candidate "
+            "must explicitly reduce that quality risk while preserving the speculative-decode "
+            "speed gain."
+        )
     if _has_failed_spec_decode_measurement(surface_history):
         lines.append("")
         lines.append(
@@ -343,6 +351,20 @@ def _has_valid_rejected_spec_decode(surface_history: list[dict[str, Any]]) -> bo
             continue
         if row.get("status") == "rejected" and row.get("decode_tps") is not None:
             return True
+    return False
+
+
+def _has_spec_decode_b1_failure_after_speed(surface_history: list[dict[str, Any]]) -> bool:
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if "spec_decode" not in signature:
+            continue
+        if row.get("status") == "rejected" and row.get("reason") == "b1_equivalence_failed":
+            if row.get("decode_tps") is not None:
+                return True
     return False
 
 

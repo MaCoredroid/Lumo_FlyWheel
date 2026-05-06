@@ -478,3 +478,39 @@ def test_runtime_log_snapshot_captures_log_tail_on_failure(tmp_path: Path) -> No
     snapshot = (candidate_dir / snapshot_ref).read_text(encoding="utf-8")
     assert "throughput_measure_failed" in snapshot
     assert "InternalServerError" in snapshot
+
+
+def test_surface_history_guides_b1_recovery_after_fast_spec_decode_failure(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    candidate = round_dir / "candidates" / "001"
+    candidate.mkdir(parents=True)
+    (candidate / "serve_config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "spec_decode": {
+                    "method": "ngram",
+                    "num_speculative_tokens": 3,
+                    "prompt_lookup_min": 2,
+                    "prompt_lookup_max": 8,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (candidate / "controller_result.json").write_text(
+        json.dumps(
+            {
+                "status": "rejected",
+                "reason": "b1_equivalence_failed",
+                "decode_tps": 15.7,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._has_spec_decode_b1_failure_after_speed(history)
+    assert "cleared speed preflight but failed B-1 equivalence" in brief
