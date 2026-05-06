@@ -1,0 +1,101 @@
+{
+  "candidate_id": "028",
+  "decision": "not_produced_speed_below_20pct_threshold",
+  "recorded_at": "2026-05-06T20:40:00Z",
+  "runtime_config_ref": "candidates/028/tuned_config_bundle.yaml",
+  "schema": "lumo.track_b.candidate_reproduction_attempt.v1",
+  "spec_decode": {
+    "method": "ngram",
+    "num_speculative_tokens": 2,
+    "prompt_lookup_max": 8,
+    "prompt_lookup_min": 2
+  },
+  "speed_recheck": {
+    "candidate_accept_decode_tps": 9.0,
+    "cold_completions_discarded": 1,
+    "completions_per_task": 5,
+    "decode_tps_max": 8.454847,
+    "decode_tps_mean": 8.363443333333334,
+    "decode_tps_median": 8.323741,
+    "decode_tps_min": 8.311742,
+    "passes_candidate_acceptance": 0,
+    "run_count": 3,
+    "runs": [
+      {
+        "artifact_ref": "candidates/028/speed_recheck_c1_run_01.json",
+        "cache_hits": 800.0,
+        "cache_queries": 2643.0,
+        "decode_sum_s": 181.64910331647843,
+        "decode_tps": 8.323741,
+        "generation_tokens": 1512.0,
+        "measured_at": "2026-05-06T20:22:38Z",
+        "output_tokens": [
+          512,
+          512,
+          339,
+          149
+        ],
+        "pass": false,
+        "run": 1,
+        "speedup_vs_baseline": 1.1098321333333334,
+        "statuses": [
+          "incomplete",
+          "incomplete",
+          "completed",
+          "completed"
+        ]
+      },
+      {
+        "artifact_ref": "candidates/028/speed_recheck_c1_run_02.json",
+        "cache_hits": 800.0,
+        "cache_queries": 2643.0,
+        "decode_sum_s": 180.9488386074081,
+        "decode_tps": 8.311742,
+        "generation_tokens": 1504.0,
+        "measured_at": "2026-05-06T20:26:32Z",
+        "output_tokens": [
+          512,
+          512,
+          259,
+          221
+        ],
+        "pass": false,
+        "run": 2,
+        "speedup_vs_baseline": 1.1082322666666669,
+        "statuses": [
+          "incomplete",
+          "incomplete",
+          "completed",
+          "completed"
+        ]
+      },
+      {
+        "artifact_ref": "candidates/028/speed_recheck_c1_run_03.json",
+        "cache_hits": 800.0,
+        "cache_queries": 2643.0,
+        "decode_sum_s": 187.11160872504115,
+        "decode_tps": 8.454847,
+        "generation_tokens": 1582.0,
+        "measured_at": "2026-05-06T20:30:18Z",
+        "output_tokens": [
+          512,
+          512,
+          267,
+          291
+        ],
+        "pass": false,
+        "run": 3,
+        "speedup_vs_baseline": 1.1273129333333332,
+        "statuses": [
+          "incomplete",
+          "incomplete",
+          "completed",
+          "completed"
+        ]
+      }
+    ],
+    "task_count": 1,
+    "warm_completions_measured": 4,
+    "warm_concurrency": 1
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "lumo.track_b.candidate_reproduction_attempt.v1",
+  "candidate_id": "025",
+  "recorded_at": "2026-05-06T20:12:00Z",
+  "runtime_config_ref": "candidates/025/tuned_config_bundle.yaml",
+  "spec_decode": {
+    "method": "ngram",
+    "num_speculative_tokens": 2,
+    "prompt_lookup_min": 2,
+    "prompt_lookup_max": 16
+  },
+  "speed_recheck": {
+    "warm_concurrency": 1,
+    "task_count": 1,
+    "completions_per_task": 5,
+    "cold_completions_discarded": 1,
+    "warm_completions_measured": 4,
+    "status": "failed",
+    "reason": "vllm_engine_core_http_500",
+    "error_summary": "EngineCore encountered a fatal error during the first concurrency-1 speed recheck: AssertionError: num_required_blocks 4 < len(req_blocks) 5"
+  },
+  "decision": "not_produced"
+}

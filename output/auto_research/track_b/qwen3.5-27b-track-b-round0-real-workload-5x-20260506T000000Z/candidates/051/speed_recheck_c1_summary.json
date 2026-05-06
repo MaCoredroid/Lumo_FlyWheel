@@ -1,0 +1,166 @@
+{
+  "baseline_decode_tps": 7.5,
+  "cache_hits_each_run": [
+    816.0,
+    816.0,
+    816.0,
+    816.0,
+    816.0
+  ],
+  "cache_queries_each_run": [
+    2643.0,
+    2643.0,
+    2643.0,
+    2643.0,
+    2643.0
+  ],
+  "candidate_accept_decode_tps": 9.0,
+  "candidate_id": "051",
+  "cold_completions_discarded": 1,
+  "completions_per_task": 5,
+  "decision": "not_reproduced_17_tok_s_and_no_run_cleared_9_tok_s",
+  "decode_tps": {
+    "max": 7.713841,
+    "mean": 7.677189,
+    "median": 7.670172,
+    "min": 7.658967,
+    "stdev": 0.021829649985742123
+  },
+  "generation_tokens": {
+    "max": 1627.0,
+    "mean": 1543.8,
+    "median": 1545.0,
+    "min": 1447.0
+  },
+  "passes_candidate_acceptance": 0,
+  "recorded_at": "2026-05-06T19:34:30Z",
+  "run_count": 5,
+  "runs": [
+    {
+      "artifact_ref": "candidates/051/speed_recheck_c1_run_01.json",
+      "cache_hits": 816.0,
+      "cache_queries": 2643.0,
+      "decode_sum_s": 210.5712694749236,
+      "decode_tps": 7.67911,
+      "generation_tokens": 1617.0,
+      "measured_at": "2026-05-06T19:04:24Z",
+      "output_tokens": [
+        326,
+        512,
+        216,
+        563
+      ],
+      "pass": false,
+      "run": 1,
+      "speedup_vs_baseline": 1.0238813333333332,
+      "statuses": [
+        "completed",
+        "incomplete",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "artifact_ref": "candidates/051/speed_recheck_c1_run_02.json",
+      "cache_hits": 816.0,
+      "cache_queries": 2643.0,
+      "decode_sum_s": 188.65287311188877,
+      "decode_tps": 7.670172,
+      "generation_tokens": 1447.0,
+      "measured_at": "2026-05-06T19:22:43Z",
+      "output_tokens": [
+        512,
+        512,
+        233,
+        190
+      ],
+      "pass": false,
+      "run": 2,
+      "speedup_vs_baseline": 1.0226896,
+      "statuses": [
+        "incomplete",
+        "incomplete",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "artifact_ref": "candidates/051/speed_recheck_c1_run_03.json",
+      "cache_hits": 816.0,
+      "cache_queries": 2643.0,
+      "decode_sum_s": 201.72433240432292,
+      "decode_tps": 7.658967,
+      "generation_tokens": 1545.0,
+      "measured_at": "2026-05-06T19:26:51Z",
+      "output_tokens": [
+        512,
+        512,
+        292,
+        229
+      ],
+      "pass": false,
+      "run": 3,
+      "speedup_vs_baseline": 1.0211956,
+      "statuses": [
+        "incomplete",
+        "incomplete",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "artifact_ref": "candidates/051/speed_recheck_c1_run_04.json",
+      "cache_hits": 816.0,
+      "cache_queries": 2643.0,
+      "decode_sum_s": 212.29525497555733,
+      "decode_tps": 7.663855,
+      "generation_tokens": 1627.0,
+      "measured_at": "2026-05-06T19:31:11Z",
+      "output_tokens": [
+        512,
+        512,
+        327,
+        276
+      ],
+      "pass": false,
+      "run": 4,
+      "speedup_vs_baseline": 1.0218473333333333,
+      "statuses": [
+        "incomplete",
+        "incomplete",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "artifact_ref": "candidates/051/speed_recheck_c1_run_05.json",
+      "cache_hits": 816.0,
+      "cache_queries": 2643.0,
+      "decode_sum_s": 192.25181686971337,
+      "decode_tps": 7.713841,
+      "generation_tokens": 1483.0,
+      "measured_at": "2026-05-06T19:35:12Z",
+      "output_tokens": [
+        512,
+        512,
+        157,
+        302
+      ],
+      "pass": false,
+      "run": 5,
+      "speedup_vs_baseline": 1.0285121333333334,
+      "statuses": [
+        "incomplete",
+        "incomplete",
+        "completed",
+        "completed"
+      ]
+    }
+  ],
+  "runtime_config_ref": "candidates/051/tuned_config_bundle.yaml",
+  "schema": "lumo.track_b.candidate_051_concurrency1_speed_recheck_summary.v1",
+  "speedup_vs_baseline_mean": 1.0236252000000001,
+  "task_count": 1,
+  "warm_completions_measured": 4,
+  "warm_concurrency": 1
+}

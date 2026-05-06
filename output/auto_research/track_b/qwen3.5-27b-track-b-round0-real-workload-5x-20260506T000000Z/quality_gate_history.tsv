@@ -3,3 +3,11 @@ candidate_id	tier	status	score_json	artifact_ref	recorded_at
 051	b1_strong_equivalence	pass	"{""match_rate"": 1.0}"	candidates/051/b1_result.json	2026-05-06T17:51:09Z
 051	b2_workload_equivalence	pass	"{""match_rate"": 1.0}"	candidates/051/b2_result.json	2026-05-06T17:51:09Z
 051	b3_workload_equivalence	fail	"{""match_count"": 3, ""match_rate"": 0.75, ""probe_count"": 4}"	candidates/051/b3_result.json	2026-05-06T17:51:09Z
+051	speed_recheck_vs_fixed_baseline	fail	"{""candidate_accept_decode_tps"": 9.0, ""decode_tps"": 7.67911, ""speedup_vs_baseline"": 1.0238813333333332, ""warm_concurrency"": 1}"	candidates/051/speed_recheck_result.json	2026-05-06T19:04:24Z
+051	speed_recheck_c1_replicates	fail	"{""candidate_accept_decode_tps"": 9.0, ""run_count"": 5, ""decode_tps_mean"": 7.677189, ""decode_tps_min"": 7.658967, ""decode_tps_max"": 7.713841, ""passes_candidate_acceptance"": 0}"	candidates/051/speed_recheck_c1_summary.json	2026-05-06T19:34:30Z
+051	b1_recheck_concurrency1	pass	"{""match_count"": 4, ""match_rate"": 1.0, ""probe_count"": 4}"	candidates/051/b1_result_recheck_concurrency1.json	2026-05-06T18:34:10Z
+051	b2_recheck_concurrency1	pass	"{""match_count"": 4, ""match_rate"": 1.0, ""probe_count"": 4}"	candidates/051/b2_result_recheck_concurrency1.json	2026-05-06T18:34:29Z
+051	b3_recheck_concurrency1	pass	"{""match_count"": 4, ""match_rate"": 1.0, ""probe_count"": 4}"	candidates/051/b3_result_recheck_concurrency1.json	2026-05-06T18:34:59Z
+025	speed_recheck_c1	fail	"{""reason"": ""vllm_engine_core_http_500"", ""warm_concurrency"": 1}"	candidates/025/reproduction_attempt_c1_result.json	2026-05-06T20:12:00Z
+028	speed_recheck_c1_replicates	fail	"{""candidate_accept_decode_tps"": 9.0, ""run_count"": 3, ""decode_tps_mean"": 8.363443333333334, ""decode_tps_min"": 8.311742, ""decode_tps_max"": 8.454847, ""passes_candidate_acceptance"": 0}"	candidates/028/reproduction_attempt_c1_result.json	2026-05-06T20:40:00Z
+020	speed_recheck_c1	fail	"{""reason"": ""vllm_engine_core_http_500"", ""warm_concurrency"": 1}"	candidates/020/reproduction_attempt_c1_result.json	2026-05-06T20:40:00Z

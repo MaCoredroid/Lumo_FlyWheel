@@ -1,0 +1,119 @@
+{
+  "schema": "lumo.track_b.candidate_051_validation_recheck.v1",
+  "candidate_id": "051",
+  "recorded_at": "2026-05-06T19:36:00Z",
+  "runtime_config_ref": "candidates/051/tuned_config_bundle.yaml",
+  "runtime_config": {
+    "spec_decode": {
+      "method": "ngram",
+      "num_speculative_tokens": 4,
+      "prompt_lookup_min": 7,
+      "prompt_lookup_max": 8
+    },
+    "vllm_config": {
+      "max_num_seqs": 4,
+      "max_num_batched_tokens": 8192,
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": true,
+      "gpu_memory_utilization": 0.9,
+      "max_model_len": 131072,
+      "kv_cache_dtype": "fp8_e5m2"
+    }
+  },
+  "speed_recheck": {
+    "artifact_ref": "candidates/051/speed_recheck_result.json",
+    "measured_at": "2026-05-06T19:04:24Z",
+    "baseline_decode_tps": 7.5,
+    "candidate_accept_decode_tps": 9.0,
+    "decode_tps": 7.67911,
+    "speedup_vs_baseline": 1.0238813333333332,
+    "warm_concurrency": 1,
+    "task_count": 1,
+    "completions_per_task": 5,
+    "cold_completions_discarded": 1,
+    "warm_completions_measured": 4,
+    "pass": false,
+    "failure_reason": "fresh speed recheck did not reproduce the earlier 17.087062 tok/s measurement"
+  },
+  "comparison_speed_recheck_concurrency4": {
+    "artifact_ref": "candidates/051/speed_recheck_result_concurrency4.json",
+    "measured_at": "2026-05-06T18:33:36Z",
+    "baseline_decode_tps": 7.5,
+    "candidate_accept_decode_tps": 9.0,
+    "decode_tps": 7.561378,
+    "speedup_vs_baseline": 1.0081837333333334,
+    "warm_concurrency": 4,
+    "pass": false
+  },
+  "repeated_speed_recheck_concurrency1": {
+    "artifact_ref": "candidates/051/speed_recheck_c1_summary.json",
+    "run_count": 5,
+    "decode_tps_min": 7.658967,
+    "decode_tps_max": 7.713841,
+    "decode_tps_mean": 7.677189,
+    "decode_tps_median": 7.670172,
+    "decode_tps_stdev": 0.021829649985742123,
+    "passes_candidate_acceptance": 0,
+    "candidate_accept_decode_tps": 9.0,
+    "cache_hits_each_run": [
+      816.0,
+      816.0,
+      816.0,
+      816.0,
+      816.0
+    ],
+    "cache_queries_each_run": [
+      2643.0,
+      2643.0,
+      2643.0,
+      2643.0,
+      2643.0
+    ]
+  },
+  "original_speed_measurement": {
+    "artifact_ref": "candidates/051/throughput.json",
+    "measured_at": "2026-05-06T17:06:18Z",
+    "baseline_decode_tps": 7.5,
+    "decode_tps": 17.087062,
+    "speedup_vs_baseline": 2.2782749333333334,
+    "warm_concurrency": 4
+  },
+  "correctness_recheck": {
+    "concurrent_requests": 1,
+    "b1": {
+      "artifact_ref": "candidates/051/b1_result_recheck_concurrency1.json",
+      "measured_at": "2026-05-06T18:34:10Z",
+      "pass": true,
+      "match_count": 4,
+      "match_rate": 1.0
+    },
+    "b2": {
+      "artifact_ref": "candidates/051/b2_result_recheck_concurrency1.json",
+      "measured_at": "2026-05-06T18:34:29Z",
+      "pass": true,
+      "match_count": 4,
+      "match_rate": 1.0
+    },
+    "b3": {
+      "artifact_ref": "candidates/051/b3_result_recheck_concurrency1.json",
+      "measured_at": "2026-05-06T18:34:59Z",
+      "pass": true,
+      "match_count": 4,
+      "match_rate": 1.0
+    }
+  },
+  "stress_evidence": {
+    "concurrent_requests": 4,
+    "b1_ref": "candidates/051/b1_result_concurrency4.json",
+    "b2_ref": "candidates/051/b2_result_concurrency4.json",
+    "b3_ref": "candidates/051/b3_result_concurrency4.json",
+    "b3_pass": false,
+    "b3_match_rate": 0.75
+  },
+  "decision": {
+    "correctness_at_concurrency_1": "passed",
+    "speed_recheck": "failed_20pct_over_baseline",
+    "candidate_accepted_on_recheck": false,
+    "reason": "B-1/B-2/B-3 passed at concurrency 1, but five fresh warm-cache speed rechecks at concurrency 1 measured 7.658967-7.713841 tok/s with mean 7.677189 tok/s; 0/5 cleared the 9.0 tok/s 20% preflight threshold over the fixed 7.5 tok/s baseline."
+  }
+}
