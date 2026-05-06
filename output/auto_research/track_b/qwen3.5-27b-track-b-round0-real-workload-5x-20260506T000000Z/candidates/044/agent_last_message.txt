@@ -1,0 +1,15 @@
+Authored candidate `044` under `candidates/044`.
+
+Created:
+- [serve_config.yaml](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/044/serve_config.yaml)
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/044/candidate_analysis.md)
+- [notes.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/044/notes.md)
+
+Surface selected:
+
+```yaml
+kernel_selection:
+  attention_backend: flash-attn-3
+```
+
+I did not run benchmarks or edit outside the candidate directory.

@@ -1,0 +1,8 @@
+Authored candidate `043` in `candidates/043`:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+
+Surface: vLLM ngram speculative decoding with `num_speculative_tokens: 4`, `prompt_lookup_min: 5`, `prompt_lookup_max: 8`.
+
+I verified the files are present and the exact serving surface was not already present in prior candidate configs. I did not run benchmarks.
