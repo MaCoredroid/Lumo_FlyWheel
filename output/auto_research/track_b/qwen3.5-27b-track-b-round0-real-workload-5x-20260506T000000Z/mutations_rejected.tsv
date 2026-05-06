@@ -40,3 +40,4 @@ candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
 039	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T14:15:44Z
 040	controller	runtime_config_apply_failed	runtime_config_apply_failed	runtime_config	2026-05-06T14:26:11Z
 041	controller	runtime_config_apply_failed	runtime_config_apply_failed	runtime_config	2026-05-06T14:32:02Z
+042	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T14:50:22Z

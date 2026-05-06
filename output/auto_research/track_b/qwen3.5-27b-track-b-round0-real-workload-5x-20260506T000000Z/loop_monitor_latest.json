@@ -1,23 +1,27 @@
 {
   "attempts": [
     {
-      "candidate_id": "041",
-      "detail": "pe\\']}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] max_model_len={payload[\\'max_model_len\\']} gpu_memory_utilization={payload[\\'gpu_memory_utilization\\']}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] enforce_eager={str(payload[\\'enforce_eager\\']).lower()}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] tuned_config_id={payload[\\'tuned_config_id\\']} weight_version_id={payload[\\'weight_version_id\\']}\\\\n\")\\n    if payload.get(\\'kernel_runtime_activation\\') is not None:\\n        handle.write(\\'[VLLM-INIT] kernel_runtime_activation=\\' + json.dumps(payload[\\'kernel_runtime_activation\\'], sort_keys=True) + \\'\\\\n\\')\\n    if payload.get(\\'speculative_config\\'):\\n        handle.write(\\'[VLLM-INIT] speculative_config=\\' + json.dumps(payload[\\'speculative_config\\'], sort_keys=True) + \\'\\\\n\\')\\n    handle.write(f\"[VLLM-INIT] wire_api={payload[\\'wire_api\\']}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] responses_api_store={str(payload[\\'responses_api_store\\']).lower()}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] dev_mode={str(payload[\\'dev_mode\\']).lower()} sleep_mode={\\'enabled\\' if payload[\\'sleep_mode\\'] else \\'disabled\\'}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] lora_modules={\\',\\'.join(payload[\\'lora_modules\\']) or \\'none\\'} max_lora_rank={payload[\\'max_lora_rank\\']}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] launch_cmd: {payload[\\'launch_cmd\\']}\\\\n\")\\nPY\\nvllm serve /models/qwen3.5-27b-fp8 --served-model-name qwen3.5-27b --host 127.0.0.1 --port 9950 --quantization fp8 --dtype auto --kv-cache-dtype auto --max-model-len 131072 --gpu-memory-utilization 0.9 --max-num-batched-tokens 8192 --max-num-seqs 4 --enable-prefix-caching --enable-chunked-prefill --no-async-scheduling --chat-template /opt/lumo/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --compilation-config \\'{\"inductor_compile_config\": {\"triton.cudagraphs\": true}, \"mode\": \"VLLM_COMPILE\"}\\' 2>&1 | tee -a /tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.5-27b.log']' returned non-zero exit status 125.",
-      "kernel_selection": {
-        "torch_compile_mode": "reduce-overhead"
+      "candidate_accept_decode_tps": 18.9047064,
+      "candidate_id": "042",
+      "decode_tps": 7.681658,
+      "kernel_selection": null,
+      "previous_best_decode_tps": 15.753922,
+      "reason": "speed_below_candidate_acceptance",
+      "runtime_config_id": "34e96c6b-0b82-4a20-b183-9553e20c218d",
+      "runtime_config_ref": "candidates/042/tuned_config_bundle.yaml",
+      "runtime_restore_ref": "candidates/042/runtime_restore_result.json",
+      "spec_decode": {
+        "method": "ngram",
+        "num_speculative_tokens": 5,
+        "prompt_lookup_max": 8,
+        "prompt_lookup_min": 4
       },
-      "reason": "runtime_config_apply_failed",
-      "runtime_restore_after_apply_failure": {
-        "ok": true,
-        "restored_bundle_id": null,
-        "restored_bundle_path": null
-      },
-      "spec_decode": null,
       "status": "rejected",
+      "target_decode_tps": 37.5,
       "vllm_config": null
     }
   ],
-  "completed_at": "2026-05-06T14:32:02Z",
+  "completed_at": "2026-05-06T14:50:22Z",
   "round_dir": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
   "schema": "lumo.track_b.loop_run.v1"
 }

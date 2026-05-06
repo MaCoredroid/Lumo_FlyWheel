@@ -703,5 +703,26 @@
     "spec_decode": null,
     "status": "rejected",
     "vllm_config": null
+  },
+  {
+    "candidate_accept_decode_tps": 18.9047064,
+    "candidate_id": "042",
+    "decode_tps": 7.681658,
+    "kernel_selection": null,
+    "previous_best_decode_tps": 15.753922,
+    "reason": "speed_below_candidate_acceptance",
+    "recorded_at": "2026-05-06T14:50:22Z",
+    "runtime_config_id": "34e96c6b-0b82-4a20-b183-9553e20c218d",
+    "runtime_config_ref": "candidates/042/tuned_config_bundle.yaml",
+    "runtime_restore_ref": "candidates/042/runtime_restore_result.json",
+    "spec_decode": {
+      "method": "ngram",
+      "num_speculative_tokens": 5,
+      "prompt_lookup_max": 8,
+      "prompt_lookup_min": 4
+    },
+    "status": "rejected",
+    "target_decode_tps": 37.5,
+    "vllm_config": null
   }
 ]
