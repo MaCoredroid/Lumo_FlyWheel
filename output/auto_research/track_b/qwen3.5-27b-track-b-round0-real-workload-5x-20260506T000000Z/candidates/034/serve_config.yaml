@@ -1,0 +1,2 @@
+kernel_selection:
+  deltanet_kernel: triton-chunked-delta-v2

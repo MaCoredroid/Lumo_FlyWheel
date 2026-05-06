@@ -1,0 +1,13 @@
+Wrote candidate `035` under `candidates/035`:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+
+Surface selected:
+
+```yaml
+kernel_selection:
+  deltanet_kernel: triton-chunked-delta-v2
+```
+
+I did not run benchmarks or edit anything outside the candidate directory.

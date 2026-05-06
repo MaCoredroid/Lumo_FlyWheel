@@ -711,3 +711,25 @@ def test_surface_history_guides_away_from_unstable_high_depth_min_two_spec_decod
     assert loop._has_unstable_high_depth_min_two_spec_decode(history)
     assert "high-depth ngram shapes with prompt_lookup_min=2 are unstable or flat" in brief
     assert "Prefer the unmeasured kernel_selection surface" in brief
+
+
+def test_surface_history_guides_away_from_duplicate_deltanet_kernel_selection(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    candidate = round_dir / "candidates" / "001"
+    candidate.mkdir(parents=True)
+    (candidate / "serve_config.yaml").write_text(
+        yaml.safe_dump({"kernel_selection": {"deltanet_kernel": "triton-chunked-delta-v2"}}),
+        encoding="utf-8",
+    )
+    (candidate / "controller_result.json").write_text(
+        json.dumps({"status": "rejected", "reason": "duplicate_serving_surface"}),
+        encoding="utf-8",
+    )
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._has_duplicate_deltanet_default_kernel_selection(history)
+    assert "deltanet_kernel=triton-chunked-delta-v2 is baseline-equivalent" in brief
+    assert "Do not retry that axis" in brief

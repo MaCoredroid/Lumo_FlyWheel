@@ -347,6 +347,14 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "another attempt on num_speculative_tokens>=4 with min=2. Prefer the "
             "unmeasured kernel_selection surface before more speculative-depth search."
         )
+    if _has_duplicate_deltanet_default_kernel_selection(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: kernel_selection.deltanet_kernel=triton-chunked-delta-v2 "
+            "is baseline-equivalent for this model and has already been rejected as a "
+            "duplicate serving surface. Do not retry that axis; choose a measured-distinct "
+            "kernel_selection axis or return to a genuinely new speculative-decode shape."
+        )
     if _has_any_spec_decode(surface_history) and not _has_any_kernel_selection(surface_history):
         lines.append("")
         lines.append(
@@ -382,6 +390,22 @@ def _has_any_kernel_selection(surface_history: list[dict[str, Any]]) -> bool:
         except (TypeError, json.JSONDecodeError):
             continue
         if "kernel_selection" in signature:
+            return True
+    return False
+
+
+def _has_duplicate_deltanet_default_kernel_selection(surface_history: list[dict[str, Any]]) -> bool:
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        kernel_selection = signature.get("kernel_selection")
+        if not isinstance(kernel_selection, dict):
+            continue
+        if kernel_selection.get("deltanet_kernel") != "triton-chunked-delta-v2":
+            continue
+        if row.get("reason") == "duplicate_serving_surface":
             return True
     return False
 

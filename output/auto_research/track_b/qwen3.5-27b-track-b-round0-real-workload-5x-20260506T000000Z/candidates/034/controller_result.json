@@ -1,0 +1,5 @@
+{
+  "reason": "duplicate_serving_surface",
+  "status": "rejected",
+  "surface_signature": "{\"kernel_selection\":{\"deltanet_kernel\":\"triton-chunked-delta-v2\"}}"
+}

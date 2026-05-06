@@ -600,5 +600,19 @@
     "status": "rejected",
     "target_decode_tps": 37.5,
     "vllm_config": null
+  },
+  {
+    "candidate_id": "034",
+    "reason": "duplicate_serving_surface",
+    "recorded_at": "2026-05-06T13:27:10Z",
+    "status": "rejected",
+    "surface_signature": "{\"kernel_selection\":{\"deltanet_kernel\":\"triton-chunked-delta-v2\"}}"
+  },
+  {
+    "candidate_id": "035",
+    "reason": "duplicate_serving_surface",
+    "recorded_at": "2026-05-06T13:27:17Z",
+    "status": "rejected",
+    "surface_signature": "{\"kernel_selection\":{\"deltanet_kernel\":\"triton-chunked-delta-v2\"}}"
   }
 ]
