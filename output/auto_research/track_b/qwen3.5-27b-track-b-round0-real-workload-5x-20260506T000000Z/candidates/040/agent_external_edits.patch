@@ -1,0 +1,23 @@
+diff --git a/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/runtime_state/serving_runtime_state.json b/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/runtime_state/serving_runtime_state.json
+index 28a3e9a..c2e96e9 100644
+--- a/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/runtime_state/serving_runtime_state.json
++++ b/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/runtime_state/serving_runtime_state.json
+@@ -1,13 +1,13 @@
+ {
+-  "active_tuned_config_id": null,
+-  "active_tuned_config_path": null,
++  "active_tuned_config_id": "542e3d36-df2c-4377-a594-b57638db1083",
++  "active_tuned_config_path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/041/tuned_config_bundle.yaml",
+   "current_model_id": "qwen3.5-27b",
+   "current_weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+   "invalidate_count": 0,
+   "invalidated_at": null,
+   "last_known_good_model_id": "qwen3.5-27b",
+-  "last_known_good_tuned_config_id": null,
+-  "last_known_good_tuned_config_path": null,
++  "last_known_good_tuned_config_id": "542e3d36-df2c-4377-a594-b57638db1083",
++  "last_known_good_tuned_config_path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/041/tuned_config_bundle.yaml",
+   "last_known_good_weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+   "status": "READY"
+ }
+\ No newline at end of file

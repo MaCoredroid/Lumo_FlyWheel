@@ -38,7 +38,7 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`039` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Let auto-research author candidates | Candidates `001`-`041` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Allow authored parallel workload throughput candidates | Requested, but not currently enabled in the committed controller; current controller keeps the fixed first-five decode-time gate | Not met |
@@ -88,6 +88,8 @@ Concrete success criteria:
 | `037` | kernel selection, attention backend `triton` | `7.522407` | `1.003x` | Rejected |
 | `038` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 3-8 | n/a | n/a | Rejected before launch as duplicate serving surface |
 | `039` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 4-8 | `7.554970` | `1.007x` | Rejected |
+| `040` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 3-6 | n/a | n/a | Rejected on runtime apply failure |
+| `041` | kernel selection, torch compile mode `reduce-overhead` | n/a | n/a | Rejected on runtime apply failure |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -146,6 +148,10 @@ Candidate `037` selected `kernel_selection: {attention_backend: triton}`. The co
 Candidate `038` selected `spec_decode: {method: ngram, num_speculative_tokens: 3, prompt_lookup_min: 3, prompt_lookup_max: 8}`. The controller rejected it before launch as `duplicate_serving_surface` because that serving surface was already tested by candidate `022`.
 
 Candidate `039` selected `spec_decode: {method: ngram, num_speculative_tokens: 3, prompt_lookup_min: 4, prompt_lookup_max: 8}` to raise the lookup floor further from the fast-but-B-1-failing candidate `020`. vLLM accepted the launch and speculative decoding became active, but the first-five real-workload measurement completed at only `7.554970 tok/s`, below the `18.9047064 tok/s` post-`020` gate. The controller restored the baseline runtime afterward.
+
+Candidate `040` selected `spec_decode: {method: ngram, num_speculative_tokens: 3, prompt_lookup_min: 3, prompt_lookup_max: 6}`. The controller generated a tuned-config bundle, but the vLLM runtime apply failed before a real-workload throughput artifact was produced, so the candidate was rejected as `runtime_config_apply_failed`.
+
+Candidate `041` selected `kernel_selection: {torch_compile_mode: reduce-overhead}`. The controller generated a tuned-config bundle and attempted to launch vLLM with the corresponding compilation config, but runtime apply failed before measurement. The controller restored the baseline runtime afterward; `/health` returned 200 after restore.
 
 ## Runtime Capability Audit
 

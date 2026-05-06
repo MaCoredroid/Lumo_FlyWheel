@@ -1,0 +1,1 @@
+No live benchmark was run. Candidate 041 is intentionally limited to the supported `kernel_selection.torch_compile_mode` serving surface so the controller can run the fixed first-five real-workload gate and quality checks unchanged.

@@ -1,0 +1,2 @@
+kernel_selection:
+  torch_compile_mode: reduce-overhead

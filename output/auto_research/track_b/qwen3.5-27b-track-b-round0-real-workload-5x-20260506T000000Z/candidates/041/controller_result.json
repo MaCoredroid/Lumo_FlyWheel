@@ -1,0 +1,15 @@
+{
+  "detail": "pe\\']}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] max_model_len={payload[\\'max_model_len\\']} gpu_memory_utilization={payload[\\'gpu_memory_utilization\\']}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] enforce_eager={str(payload[\\'enforce_eager\\']).lower()}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] tuned_config_id={payload[\\'tuned_config_id\\']} weight_version_id={payload[\\'weight_version_id\\']}\\\\n\")\\n    if payload.get(\\'kernel_runtime_activation\\') is not None:\\n        handle.write(\\'[VLLM-INIT] kernel_runtime_activation=\\' + json.dumps(payload[\\'kernel_runtime_activation\\'], sort_keys=True) + \\'\\\\n\\')\\n    if payload.get(\\'speculative_config\\'):\\n        handle.write(\\'[VLLM-INIT] speculative_config=\\' + json.dumps(payload[\\'speculative_config\\'], sort_keys=True) + \\'\\\\n\\')\\n    handle.write(f\"[VLLM-INIT] wire_api={payload[\\'wire_api\\']}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] responses_api_store={str(payload[\\'responses_api_store\\']).lower()}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] dev_mode={str(payload[\\'dev_mode\\']).lower()} sleep_mode={\\'enabled\\' if payload[\\'sleep_mode\\'] else \\'disabled\\'}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] lora_modules={\\',\\'.join(payload[\\'lora_modules\\']) or \\'none\\'} max_lora_rank={payload[\\'max_lora_rank\\']}\\\\n\")\\n    handle.write(f\"[VLLM-INIT] launch_cmd: {payload[\\'launch_cmd\\']}\\\\n\")\\nPY\\nvllm serve /models/qwen3.5-27b-fp8 --served-model-name qwen3.5-27b --host 127.0.0.1 --port 9950 --quantization fp8 --dtype auto --kv-cache-dtype auto --max-model-len 131072 --gpu-memory-utilization 0.9 --max-num-batched-tokens 8192 --max-num-seqs 4 --enable-prefix-caching --enable-chunked-prefill --no-async-scheduling --chat-template /opt/lumo/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --compilation-config \\'{\"inductor_compile_config\": {\"triton.cudagraphs\": true}, \"mode\": \"VLLM_COMPILE\"}\\' 2>&1 | tee -a /tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.5-27b.log']' returned non-zero exit status 125.",
+  "kernel_selection": {
+    "torch_compile_mode": "reduce-overhead"
+  },
+  "reason": "runtime_config_apply_failed",
+  "runtime_restore_after_apply_failure": {
+    "ok": true,
+    "restored_bundle_id": null,
+    "restored_bundle_path": null
+  },
+  "spec_decode": null,
+  "status": "rejected",
+  "vllm_config": null
+}
