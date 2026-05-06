@@ -1,0 +1,1 @@
+No benchmark was run by this worker. The candidate is intended to test whether requiring a longer exact prompt lookup span can preserve some ngram speculative-decode benefit while reducing the empty/truncated output risk observed in earlier concurrent-output quality gates.

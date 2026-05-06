@@ -1,0 +1,10 @@
+Candidate `047` is authored under:
+
+[candidates/047](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/047)
+
+Created:
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/047/candidate_analysis.md)
+- [serve_config.yaml](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/047/serve_config.yaml)
+- [notes.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/047/notes.md)
+
+The serving surface is `spec_decode` ngram with `num_speculative_tokens: 3`, `prompt_lookup_min: 5`, `prompt_lookup_max: 8`. No benchmarks were run.
