@@ -871,6 +871,7 @@ def cmd_auto_research_track_b_launch(args: argparse.Namespace) -> int:
     result = manager.launch(
         round_root=args.round_root,
         workload_trace=workload_trace,
+        workload_file=args.workload_file,
         model_id=args.model_id,
         fallback_model_id=args.fallback_model_id,
         baseline_decode_tps=args.baseline_decode_tps,
@@ -1364,6 +1365,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Workload JSONL used to derive Track B fixture metadata. Defaults to "
             "responses-sdk-adapter-cutover/seed_trace_v5.jsonl."
         ),
+    )
+    auto_track_b_launch.add_argument(
+        "--workload-file",
+        default=str(
+            REPO_ROOT
+            / "benchmark_blueprints"
+            / "workloads"
+            / "responses-sdk-adapter-cutover-heavy"
+            / "workload.yaml"
+        ),
+        help="Real serving workload descriptor used for Track B speed gates.",
     )
     auto_track_b_launch.add_argument("--model-id", default="qwen3.6-27b-fp8")
     auto_track_b_launch.add_argument("--fallback-model-id", default="qwen3.5-27b")

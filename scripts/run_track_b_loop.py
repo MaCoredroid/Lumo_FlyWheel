@@ -77,6 +77,12 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
     if quality_history_path.is_file():
         quality_history = "\n".join(quality_history_path.read_text(encoding="utf-8").splitlines()[-12:])
     branch_log = _load_json(round_dir / "branch_log.json")
+    baseline_tps = float(spec.get("baseline_decode_tps") or 7.5)
+    previous_best_tps = _previous_best_decode_tps(round_dir, baseline_tps=baseline_tps)
+    incremental_multiplier = float(
+        spec.get("success_criteria", {}).get("candidate_acceptance_incremental_speedup_at_least", 1.2)
+    )
+    candidate_accept_tps = previous_best_tps * incremental_multiplier
     return "\n".join(
         [
             "# Track B Auto-Research Candidate Authoring",
@@ -114,7 +120,9 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "## Current Objective",
             "",
             f"- Baseline decode: `{spec.get('baseline_decode_tps')}` tok/s",
-            f"- Target decode: `{spec.get('target_decode_tps')}` tok/s",
+            f"- Final target decode: `{spec.get('target_decode_tps')}` tok/s",
+            f"- Candidate acceptance gate this iteration: `{candidate_accept_tps:.3f}` tok/s (`{incremental_multiplier:.2f}x` over previous best `{previous_best_tps:.3f}` tok/s)",
+            "- Speed gate: real vLLM workload window; 5 completions per task, first cold completion discarded, next 4 warm completions counted.",
             f"- Best audit so far: `{audit.get('best_decode_tps')}` tok/s",
             "",
             "## Recent Controller Outcomes",
@@ -229,7 +237,24 @@ def _parse_target_concurrency(candidate_dir: Path) -> int | None:
                 return None
             if 1 <= parsed <= 8:
                 return parsed
+    prefix_cache = config.get("prefix_cache")
+    if isinstance(prefix_cache, dict) and bool(prefix_cache.get("enabled", True)):
+        return 4
     return None
+
+
+def _previous_best_decode_tps(round_dir: Path, *, baseline_tps: float) -> float:
+    best = float(baseline_tps)
+    for path in sorted(round_dir.glob("candidates/*/throughput.json")):
+        payload = _load_json(path) or {}
+        raw = payload.get("warm_decode_tps") or payload.get("decode_tps")
+        if raw is None:
+            continue
+        try:
+            best = max(best, float(raw))
+        except (TypeError, ValueError):
+            continue
+    return best
 
 
 def _run_cmd(argv: list[str], *, cwd: Path, output_path: Path | None = None) -> tuple[int, str]:
@@ -248,36 +273,65 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
     if concurrency is None:
         return {"status": "rejected", "reason": "unsupported_or_missing_serve_config"}
     throughput_path = candidate_dir / "throughput.json"
+    spec = _load_yaml(round_dir / "round_spec.yaml")
+    workload_file = args.workload_file or spec.get("workload_file")
+    if not workload_file:
+        return {"status": "rejected", "reason": "real_workload_file_missing"}
+    target_tps = float(spec["success_criteria"]["decode_speed_at_least_tps"])
+    baseline_tps = float(spec.get("baseline_decode_tps", 7.5))
+    incremental_multiplier = float(
+        spec.get("success_criteria", {}).get("candidate_acceptance_incremental_speedup_at_least", 1.2)
+    )
+    previous_best_tps = _previous_best_decode_tps(round_dir, baseline_tps=baseline_tps)
+    candidate_accept_tps = previous_best_tps * incremental_multiplier
     cmd = [
-        str(REPO_ROOT / "scripts" / "measure_track_b_prefix_cache.py"),
-        "--port",
-        str(args.port),
+        str(REPO_ROOT / "scripts" / "measure_track_b_real_workload.py"),
+        "--workload-file",
+        str(workload_file),
+        "--endpoint",
+        args.endpoint,
+        "--health-url",
+        args.health_url,
+        "--metrics-url",
+        args.metrics_url,
+        "--reset-prefix-cache-url",
+        args.reset_prefix_cache_url,
+        "--api-key",
+        args.api_key,
         "--model",
         args.model,
-        "--turns",
-        "2",
-        "--concurrent-requests",
+        "--task-count",
+        str(args.task_count),
+        "--completions-per-task",
+        str(args.completions_per_task),
+        "--cold-completions",
+        str(args.cold_completions),
+        "--warm-concurrency",
         str(concurrency),
-        "--prefix-words",
-        str(args.prefix_words),
-        "--max-tokens",
-        str(args.max_tokens),
+        "--prompt-token-cap",
+        str(args.prompt_token_cap),
+        "--max-output-token-cap",
+        str(args.max_output_token_cap),
+        "--baseline-decode-tps",
+        str(spec.get("baseline_decode_tps", 7.5)),
+        "--target-multiplier",
+        str(spec.get("target_multiplier", 5.0)),
         "--reset-prefix-cache",
         "--output",
         str(throughput_path),
     ]
     code, text = _run_cmd(cmd, cwd=REPO_ROOT, output_path=candidate_dir / "throughput_command.log")
-    if code != 0:
+    if code not in {0, 2} or not throughput_path.is_file():
         return {"status": "rejected", "reason": "throughput_measure_failed", "detail": text[-2000:]}
     throughput = _load_json(throughput_path) or {}
-    spec = _load_yaml(round_dir / "round_spec.yaml")
-    target_tps = float(spec["success_criteria"]["decode_speed_at_least_tps"])
-    decode_tps = float(throughput.get("decode_tps") or 0.0)
-    if decode_tps < target_tps:
+    decode_tps = float(throughput.get("warm_decode_tps") or throughput.get("decode_tps") or 0.0)
+    if decode_tps < candidate_accept_tps:
         return {
             "status": "rejected",
-            "reason": "speed_below_target",
+            "reason": "speed_below_candidate_acceptance",
             "decode_tps": decode_tps,
+            "candidate_accept_decode_tps": candidate_accept_tps,
+            "previous_best_decode_tps": previous_best_tps,
             "target_decode_tps": target_tps,
         }
     b1_path = candidate_dir / "b1_result.json"
@@ -306,6 +360,8 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             "status": "rejected",
             "reason": "b1_equivalence_failed",
             "decode_tps": decode_tps,
+            "candidate_accept_decode_tps": candidate_accept_tps,
+            "previous_best_decode_tps": previous_best_tps,
             "target_decode_tps": target_tps,
             "b1": b1,
         }
@@ -315,6 +371,8 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             "status": "accepted_for_speed_not_promoted",
             "reason": "workload_trace_missing_for_b2_b3",
             "decode_tps": decode_tps,
+            "candidate_accept_decode_tps": candidate_accept_tps,
+            "previous_best_decode_tps": previous_best_tps,
             "target_decode_tps": target_tps,
             "concurrency": concurrency,
             "throughput_ref": str(throughput_path.relative_to(round_dir)),
@@ -351,6 +409,8 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             "status": "rejected",
             "reason": "b2_workload_equivalence_failed",
             "decode_tps": decode_tps,
+            "candidate_accept_decode_tps": candidate_accept_tps,
+            "previous_best_decode_tps": previous_best_tps,
             "target_decode_tps": target_tps,
             "concurrency": concurrency,
             "throughput_ref": str(throughput_path.relative_to(round_dir)),
@@ -396,9 +456,12 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             "b3_ref": str(b3_path.relative_to(round_dir)),
             "b3": b3,
         }
+    final_status = "accepted_final" if decode_tps >= target_tps else "accepted_candidate"
     return {
-        "status": "accepted_promoted",
+        "status": final_status,
         "decode_tps": decode_tps,
+        "candidate_accept_decode_tps": candidate_accept_tps,
+        "previous_best_decode_tps": previous_best_tps,
         "target_decode_tps": target_tps,
         "concurrency": concurrency,
         "throughput_ref": str(throughput_path.relative_to(round_dir)),
@@ -506,7 +569,7 @@ def run_loop(args: argparse.Namespace) -> dict[str, Any]:
         )
         _update_ledgers(round_dir, candidate_id, result)
         monitor_rows.append({"candidate_id": candidate_id, **result})
-        if result.get("status") == "accepted_promoted" and not args.keep_searching_after_accept:
+        if result.get("status") in {"accepted_candidate", "accepted_final"} and not args.keep_searching_after_accept:
             break
     summary = {
         "schema": "lumo.track_b.loop_run.v1",
@@ -523,10 +586,21 @@ def main() -> int:
     parser.add_argument("round_dir", type=Path)
     parser.add_argument("--max-attempts", type=int, default=1)
     parser.add_argument("--agent-timeout-s", type=int, default=900)
-    parser.add_argument("--port", type=int, default=9950)
+    parser.add_argument("--endpoint", default="http://127.0.0.1:9950/v1")
+    parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
+    parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")
+    parser.add_argument("--reset-prefix-cache-url", default="http://127.0.0.1:9950/reset_prefix_cache")
+    parser.add_argument("--api-key", default="EMPTY")
+    parser.add_argument("--workload-file")
+    parser.add_argument("--port", type=int, default=9950, help=argparse.SUPPRESS)
     parser.add_argument("--model", default="qwen3.5-27b")
-    parser.add_argument("--prefix-words", type=int, default=2048)
-    parser.add_argument("--max-tokens", type=int, default=32)
+    parser.add_argument("--task-count", type=int, default=1)
+    parser.add_argument("--completions-per-task", type=int, default=5)
+    parser.add_argument("--cold-completions", type=int, default=1)
+    parser.add_argument("--prompt-token-cap", type=int, default=0)
+    parser.add_argument("--max-output-token-cap", type=int, default=0)
+    parser.add_argument("--prefix-words", type=int, default=2048, help=argparse.SUPPRESS)
+    parser.add_argument("--max-tokens", type=int, default=32, help=argparse.SUPPRESS)
     parser.add_argument("--keep-searching-after-accept", action="store_true")
     args = parser.parse_args()
     result = run_loop(args)

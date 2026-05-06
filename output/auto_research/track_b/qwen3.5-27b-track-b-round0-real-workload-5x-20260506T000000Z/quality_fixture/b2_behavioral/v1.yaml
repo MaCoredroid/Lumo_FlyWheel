@@ -1,0 +1,16 @@
+schema: lumo.track_b.b2_behavioral_fixture.v1
+source_trace: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/seed_trace.jsonl
+source_trace_sha256: 4bbcfe34a7f703e0d86f9c5ea92abdb157d636501b038e144dbd8343d656a736
+benchmarks:
+- mmlu_mini
+- gsm8k_mini
+- humaneval
+- truthfulqa_mini
+- workload_behavioral
+- needle
+thresholds:
+  avg_quality_delta_pp: -1.0
+  single_benchmark_delta_pp: -1.5
+  workload_behavioral_judge_score_delta: -0.1
+  needle_recall_ratio: 0.95
+runner: scripts/run_b2_behavioral.py

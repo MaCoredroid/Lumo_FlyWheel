@@ -1,0 +1,1 @@
+No live benchmark was run by this worker. Candidate 005 deliberately stays on the controller-validated `request_shaping.target_concurrency` surface because candidate 002's `prefix_cache` form was rejected as unsupported or missing by the controller.

@@ -1,0 +1,9 @@
+{
+  "baseline_decode_tps": 7.5,
+  "next_command": "scripts/run_b1_distributional.py --candidate-metrics <metrics.json> --fixture /home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/quality_fixture/b1_distributional/v1.yaml",
+  "round_id": "qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
+  "schema": "lumo.track_b.run_log.v1",
+  "status": "initialized",
+  "target_decode_tps": 37.5,
+  "written_at": "2026-05-06T05:26:57Z"
+}

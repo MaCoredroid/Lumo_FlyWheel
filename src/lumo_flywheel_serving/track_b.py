@@ -14,7 +14,8 @@ import yaml
 
 
 TRACK_B_BASELINE_TPS = 7.5
-TRACK_B_TARGET_MULTIPLIER = 2.0
+TRACK_B_TARGET_MULTIPLIER = 5.0
+TRACK_B_CANDIDATE_MIN_INCREMENTAL_MULTIPLIER = 1.2
 TRACK_B_TARGET_TPS = TRACK_B_BASELINE_TPS * TRACK_B_TARGET_MULTIPLIER
 TRACK_B_SOURCE_REPORT = "docs/reports/auto_research/l0-warm-decode-quality-bounded-track-20260505.md"
 TRACK_B_CUTLASS_CLOSEOUT_REPORTS = [
@@ -253,6 +254,7 @@ class TrackBRoundManager:
         *,
         round_root: str | Path,
         workload_trace: str | Path,
+        workload_file: str | Path | None = None,
         model_id: str = "qwen3.6-27b-fp8",
         fallback_model_id: str = "qwen3.5-27b",
         baseline_decode_tps: float = TRACK_B_BASELINE_TPS,
@@ -275,6 +277,14 @@ class TrackBRoundManager:
         trace_path = trace_path.resolve()
         if not trace_path.is_file():
             raise RuntimeError(f"Track B workload trace missing: {trace_path}")
+        workload_descriptor_path: Path | None = None
+        if workload_file is not None:
+            workload_descriptor_path = Path(workload_file)
+            if not workload_descriptor_path.is_absolute():
+                workload_descriptor_path = self.repo_root / workload_descriptor_path
+            workload_descriptor_path = workload_descriptor_path.resolve()
+            if not workload_descriptor_path.is_file():
+                raise RuntimeError(f"Track B workload descriptor missing: {workload_descriptor_path}")
 
         timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         round_id = round_id or f"{_safe_id(model_id)}-track-b-{mode}-{timestamp}"
@@ -319,6 +329,7 @@ class TrackBRoundManager:
             "model_id": model_id,
             "fallback_model_id": fallback_model_id,
             "workload_trace": str(trace_path),
+            "workload_file": str(workload_descriptor_path) if workload_descriptor_path is not None else None,
             "workload_trace_sha256": trace_stats["sha256"],
             "baseline_decode_tps": baseline_decode_tps,
             "target_multiplier": target_multiplier,
@@ -326,6 +337,14 @@ class TrackBRoundManager:
             "success_criteria": {
                 "decode_speed_at_least_tps": target_tps,
                 "decode_speedup_at_least": target_multiplier,
+                "candidate_acceptance_incremental_speedup_at_least": TRACK_B_CANDIDATE_MIN_INCREMENTAL_MULTIPLIER,
+                "measurement_harness": "real_vllm_workload_first_five",
+                "real_workload_windows": {
+                    "completions_per_task": 5,
+                    "cold_completions_discarded": 1,
+                    "warm_completions_measured": 4,
+                    "full_benchmark_task_count": 50,
+                },
                 "b1_distributional_pass": True,
                 "b2_behavioral_pass": True,
                 "b3_full_pass_before_promotion": True,
@@ -552,7 +571,7 @@ class TrackBRoundManager:
                 "## Bottleneck",
                 "",
                 "- Warm-cache decode is anchored on the FP8 GEMM family: ffn_linear, deltanet_projection_linear, and gatedattn_projection_linear.",
-                "- The prior Track A tile/schedule surface is bandwidth bounded and exhausted for the 2x target.",
+                "- The prior Track A tile/schedule surface is bandwidth bounded and exhausted for the Track B speed target.",
                 "- Track B changes serving behavior or runtime bytes-per-token while preserving shipped FP8 target weights.",
                 "",
                 "## Prior CUTLASS Round Memory",
@@ -561,7 +580,7 @@ class TrackBRoundManager:
                 f"- observed_warm_decode: {memory_summary.get('warm_decode_observed_tps', 'unknown')}",
                 f"- prior_surface_status: {memory_summary.get('track_a_surface_status', 'unknown')}",
                 "- Do not retry schedule/tile/stage/caller mutations unless a new low-level timing lever proves a material per-kernel win.",
-                "- The May 5 speed-gate failures improved only around 0.18-0.24%, so they are explicit negative memory for this 2x objective.",
+                "- The May 5 speed-gate failures improved only around 0.18-0.24%, so they are explicit negative memory for this objective.",
                 "",
                 "## Required Gates",
                 "",
@@ -589,6 +608,7 @@ class TrackBRoundManager:
                 "",
                 f"- Decode throughput must reach at least {spec['target_decode_tps']:.2f} tok/s.",
                 f"- Baseline is {spec['baseline_decode_tps']:.2f} tok/s, so this is a {spec['target_multiplier']:.2f}x gate.",
+                "- Speed is measured on the real workload window: 5 completions, first completion cold/discarded, next 4 warm completions counted.",
                 "",
                 "## Self Verify",
                 "",

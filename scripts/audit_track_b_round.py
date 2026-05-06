@@ -39,6 +39,11 @@ def audit(round_dir: Path) -> dict[str, Any]:
         raise RuntimeError(f"round_spec.yaml missing: {spec_path}")
     spec = _load_yaml(spec_path)
     target_tps = float(spec["success_criteria"]["decode_speed_at_least_tps"])
+    baseline_tps = float(spec.get("baseline_decode_tps", 7.5))
+    incremental_multiplier = float(
+        spec.get("success_criteria", {}).get("candidate_acceptance_incremental_speedup_at_least", 1.2)
+    )
+    initial_candidate_accept_tps = baseline_tps * incremental_multiplier
     throughput_results: list[dict[str, Any]] = []
     for path in sorted(round_dir.glob("candidates/*/throughput.json")):
         payload = _load_json(path)
@@ -51,15 +56,30 @@ def audit(round_dir: Path) -> dict[str, Any]:
             {
                 "candidate_id": path.parent.name,
                 "decode_tps": float(decode_tps),
+                "schema": payload.get("schema"),
+                "completions_per_task": payload.get("completions_per_task"),
+                "cold_completions_discarded": payload.get("cold_completions_discarded"),
+                "warm_completions_measured": payload.get("warm_completions_measured"),
+                "task_count": payload.get("task_count"),
                 "path": str(path),
             }
         )
     best = max((row["decode_tps"] for row in throughput_results), default=None)
+    incremental_candidates = [
+        row
+        for row in throughput_results
+        if float(row["decode_tps"]) >= initial_candidate_accept_tps
+        and row.get("schema") == "lumo.track_b.real_workload_first_five.v1"
+    ]
     promoted_candidates = []
     for row in throughput_results:
         candidate_id = str(row["candidate_id"])
         if (
             float(row["decode_tps"]) >= target_tps
+            and row.get("schema") == "lumo.track_b.real_workload_first_five.v1"
+            and int(row.get("completions_per_task") or 0) == 5
+            and int(row.get("cold_completions_discarded") or 0) == 1
+            and int(row.get("warm_completions_measured") or 0) == 4
             and _candidate_gate_pass(round_dir, candidate_id, "b1")
             and _candidate_gate_pass(round_dir, candidate_id, "b2")
             and _candidate_gate_pass(round_dir, candidate_id, "b3")
@@ -78,8 +98,27 @@ def audit(round_dir: Path) -> dict[str, Any]:
             "evidence": str(round_dir / "prior_cutlass_memory.json"),
         },
         {
-            "requirement": f"Decode throughput reaches {target_tps:.2f} tok/s",
+            "requirement": f"Real workload warm decode throughput reaches {target_tps:.2f} tok/s",
             "pass": best is not None and best >= target_tps,
+            "evidence": throughput_results,
+        },
+        {
+            "requirement": (
+                f"At least one candidate clears the incremental acceptance preflight "
+                f"({incremental_multiplier:.2f}x over baseline = {initial_candidate_accept_tps:.2f} tok/s)"
+            ),
+            "pass": bool(incremental_candidates),
+            "evidence": incremental_candidates,
+        },
+        {
+            "requirement": "Speed gate uses the real vLLM first-five workload window",
+            "pass": any(
+                row.get("schema") == "lumo.track_b.real_workload_first_five.v1"
+                and int(row.get("completions_per_task") or 0) == 5
+                and int(row.get("cold_completions_discarded") or 0) == 1
+                and int(row.get("warm_completions_measured") or 0) == 4
+                for row in throughput_results
+            ),
             "evidence": throughput_results,
         },
         {
@@ -106,7 +145,9 @@ def audit(round_dir: Path) -> dict[str, Any]:
     return {
         "round_id": spec.get("round_id"),
         "target_decode_tps": target_tps,
+        "candidate_accept_decode_tps_initial": initial_candidate_accept_tps,
         "best_decode_tps": best,
+        "incremental_candidates": incremental_candidates,
         "promoted_candidates": promoted_candidates,
         "complete": all(item["pass"] for item in checklist),
         "checklist": checklist,

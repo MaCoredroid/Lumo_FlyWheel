@@ -1,0 +1,6 @@
+{
+  "decode_tps": 7.363091,
+  "reason": "speed_below_target",
+  "status": "rejected",
+  "target_decode_tps": 37.5
+}

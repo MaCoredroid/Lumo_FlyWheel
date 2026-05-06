@@ -1,0 +1,43 @@
+schema: lumo.track_b.round_spec.v1
+round_id: qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z
+round_type: track_b_quality_bounded_mutation
+source_report: docs/reports/auto_research/l0-warm-decode-quality-bounded-track-20260505.md
+mode: round0_prefix_cache
+extends_round_type: l0c_mutation
+extends_surface: fp8_gemm_cutlass_quality_bounded_successor
+dry_run: false
+model_id: qwen3.5-27b
+fallback_model_id: qwen3.5-27b
+workload_trace: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/seed_trace.jsonl
+workload_file: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/workload.yaml
+workload_trace_sha256: 4bbcfe34a7f703e0d86f9c5ea92abdb157d636501b038e144dbd8343d656a736
+baseline_decode_tps: 7.5
+target_multiplier: 5.0
+target_decode_tps: 37.5
+success_criteria:
+  decode_speed_at_least_tps: 37.5
+  decode_speedup_at_least: 5.0
+  candidate_acceptance_incremental_speedup_at_least: 1.2
+  measurement_harness: real_vllm_workload_first_five
+  real_workload_windows:
+    completions_per_task: 5
+    cold_completions_discarded: 1
+    warm_completions_measured: 4
+    full_benchmark_task_count: 50
+  b1_distributional_pass: true
+  b2_behavioral_pass: true
+  b3_full_pass_before_promotion: true
+  human_review_required: true
+quality_fixtures:
+  b1_distributional: quality_fixture/b1_distributional/v1.yaml
+  b2_behavioral: quality_fixture/b2_behavioral/v1.yaml
+  b3_full: quality_fixture/b3_full/v1.yaml
+prior_cutlass_memory:
+  enabled: true
+  artifact_ref: prior_cutlass_memory.json
+  round_count_indexed: 30
+  closeout_report_refs:
+  - docs/reports/auto_research/l0c-fp8-cutlass-loop-20260505.md
+  - docs/reports/auto_research/l0c-fp8-cutlass-round-20260505-closeout.md
+  - docs/reports/auto_research/l0c-cutlass-round-20260505T204655Z.md
+started_at: '2026-05-06T05:26:57Z'

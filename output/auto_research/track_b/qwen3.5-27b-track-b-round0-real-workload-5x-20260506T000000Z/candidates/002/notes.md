@@ -1,0 +1,1 @@
+No live benchmark was run. This candidate intentionally avoids LMCache CPU/disk tiers and any CUTLASS kernel mutation; the measurement caveat is that a decode-only counter may show limited lift if the controller excludes time-to-first-token and prompt/prefix rebuild work from the counted throughput window.

@@ -1,0 +1,15 @@
+Created candidate `006` under `candidates/006` only.
+
+Files written:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+Config uses the supported request-shaping surface:
+
+```yaml
+request_shaping:
+  target_concurrency: 6
+```
+
+I verified file presence and contents locally. No live benchmark or gate was run.

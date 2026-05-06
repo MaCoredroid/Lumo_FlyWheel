@@ -1,0 +1,14 @@
+Created candidate `004` under `candidates/004` with:
+
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/004/candidate_analysis.md)
+- [serve_config.yaml](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/004/serve_config.yaml)
+- [notes.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/004/notes.md)
+
+The serving config uses:
+
+```yaml
+request_shaping:
+  target_concurrency: 4
+```
+
+I did not run benchmarks or edit anything outside the candidate directory.

@@ -1,0 +1,2 @@
+request_shaping:
+  target_concurrency: 4

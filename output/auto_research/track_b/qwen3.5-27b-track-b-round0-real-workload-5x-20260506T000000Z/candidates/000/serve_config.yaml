@@ -1,0 +1,9 @@
+enable_prefix_caching: true
+block_size: 32
+enable_chunked_prefill: true
+num_gpu_blocks_override: auto_high_for_gb10_unified_memory
+lmcache:
+  enabled: true
+  cpu_tier: true
+  disk_tier: true
+  status: requires_runtime_validation

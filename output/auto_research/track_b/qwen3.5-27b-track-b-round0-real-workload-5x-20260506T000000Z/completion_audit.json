@@ -1,0 +1,158 @@
+{
+  "best_decode_tps": 7.488368,
+  "candidate_accept_decode_tps_initial": 9.0,
+  "checklist": [
+    {
+      "evidence": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/round_spec.yaml",
+      "pass": true,
+      "requirement": "Track B round spec exists and targets quality-bounded mutation"
+    },
+    {
+      "evidence": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/prior_cutlass_memory.json",
+      "pass": true,
+      "requirement": "Prior CUTLASS auto-research memory is inherited"
+    },
+    {
+      "evidence": [
+        {
+          "candidate_id": "001",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.346421,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/001/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "003",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.32798,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/003/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "004",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.363091,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/004/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "005",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.488368,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/005/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "006",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.367211,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/006/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        }
+      ],
+      "pass": false,
+      "requirement": "Real workload warm decode throughput reaches 37.50 tok/s"
+    },
+    {
+      "evidence": [],
+      "pass": false,
+      "requirement": "At least one candidate clears the incremental acceptance preflight (1.20x over baseline = 9.00 tok/s)"
+    },
+    {
+      "evidence": [
+        {
+          "candidate_id": "001",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.346421,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/001/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "003",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.32798,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/003/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "004",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.363091,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/004/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "005",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.488368,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/005/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "006",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.367211,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/006/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
+        }
+      ],
+      "pass": true,
+      "requirement": "Speed gate uses the real vLLM first-five workload window"
+    },
+    {
+      "evidence": "candidates/*/b1_result.json",
+      "pass": false,
+      "requirement": "B-1 strong-equivalence/distributional gate passed"
+    },
+    {
+      "evidence": "candidates/*/b2_result.json",
+      "pass": false,
+      "requirement": "B-2 behavioral gate passed"
+    },
+    {
+      "evidence": "candidates/*/b3_result.json",
+      "pass": false,
+      "requirement": "B-3 full quality gate passed before promotion"
+    },
+    {
+      "evidence": [],
+      "pass": false,
+      "requirement": "One candidate satisfies speed plus B-1/B-2/B-3"
+    }
+  ],
+  "complete": false,
+  "incremental_candidates": [],
+  "promoted_candidates": [],
+  "round_id": "qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
+  "target_decode_tps": 37.5
+}

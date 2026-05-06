@@ -1,0 +1,1 @@
+No live benchmark was run by this worker. This candidate assumes the controller maps `request_shaping.target_concurrency` to concurrent warm completions in the speed gate while preserving the underlying vLLM sampling configuration.

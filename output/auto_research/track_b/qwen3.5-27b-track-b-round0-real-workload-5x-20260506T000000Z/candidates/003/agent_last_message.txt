@@ -1,0 +1,14 @@
+Authored candidate `003` in `candidates/003` with:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The config uses the supported request-shaping surface:
+
+```yaml
+request_shaping:
+  target_concurrency: 8
+```
+
+No live benchmarks were run.

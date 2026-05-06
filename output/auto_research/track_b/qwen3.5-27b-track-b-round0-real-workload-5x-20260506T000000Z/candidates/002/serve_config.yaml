@@ -1,0 +1,5 @@
+prefix_cache:
+  enabled: true
+  block_size: 16
+  scope: native_vllm_in_memory
+  external_tiers: false

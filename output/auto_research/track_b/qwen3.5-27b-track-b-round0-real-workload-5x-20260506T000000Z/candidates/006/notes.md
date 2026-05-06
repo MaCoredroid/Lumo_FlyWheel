@@ -1,0 +1,1 @@
+No live benchmark was run by this worker. Candidate 006 stays on the controller-validated `request_shaping.target_concurrency` surface and deliberately tests an unmeasured midpoint between the prior 4-way and 8-way concurrency settings.

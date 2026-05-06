@@ -1,0 +1,52 @@
+[
+  {
+    "candidate_id": "001",
+    "decode_tps": 7.346421,
+    "reason": "speed_below_target",
+    "recorded_at": "2026-05-06T05:29:35Z",
+    "status": "rejected",
+    "target_decode_tps": 37.5
+  },
+  {
+    "candidate_id": "002",
+    "reason": "unsupported_or_missing_serve_config",
+    "recorded_at": "2026-05-06T05:30:55Z",
+    "status": "rejected"
+  },
+  {
+    "candidate_id": "003",
+    "decode_tps": 7.32798,
+    "reason": "speed_below_target",
+    "recorded_at": "2026-05-06T05:33:47Z",
+    "status": "rejected",
+    "target_decode_tps": 37.5
+  },
+  {
+    "candidate_id": "004",
+    "decode_tps": 7.363091,
+    "reason": "speed_below_target",
+    "recorded_at": "2026-05-06T05:37:03Z",
+    "status": "rejected",
+    "target_decode_tps": 37.5
+  },
+  {
+    "candidate_accept_decode_tps": 9.0,
+    "candidate_id": "005",
+    "decode_tps": 7.488368,
+    "previous_best_decode_tps": 7.5,
+    "reason": "speed_below_target",
+    "recorded_at": "2026-05-06T05:43:11Z",
+    "status": "rejected",
+    "target_decode_tps": 37.5
+  },
+  {
+    "candidate_accept_decode_tps": 9.0,
+    "candidate_id": "006",
+    "decode_tps": 7.367211,
+    "previous_best_decode_tps": 7.5,
+    "reason": "speed_below_target",
+    "recorded_at": "2026-05-06T05:48:17Z",
+    "status": "rejected",
+    "target_decode_tps": 37.5
+  }
+]

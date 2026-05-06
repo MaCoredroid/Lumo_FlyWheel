@@ -1,0 +1,16 @@
+schema: lumo.track_b.b1_distributional_fixture.v1
+source_trace: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/seed_trace.jsonl
+source_trace_sha256: 4bbcfe34a7f703e0d86f9c5ea92abdb157d636501b038e144dbd8343d656a736
+probe_policy:
+  held_out_from_proposer: true
+  prompt_count: 64
+  tokens_per_prompt: 256
+  stratification:
+  - length_bucket
+  - task_type_bucket
+thresholds:
+  mean_kl: 0.05
+  p95_kl: 0.25
+  top1_agreement: 0.98
+  entropy_delta_abs: 0.05
+runner: scripts/run_b1_distributional.py

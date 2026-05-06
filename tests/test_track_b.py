@@ -64,7 +64,10 @@ def test_track_b_launch_extends_cutlass_memory(tmp_path: Path) -> None:
     spec = yaml.safe_load((result.round_dir / "round_spec.yaml").read_text(encoding="utf-8"))
     assert spec["round_type"] == "track_b_quality_bounded_mutation"
     assert spec["extends_round_type"] == "l0c_mutation"
-    assert spec["target_decode_tps"] == 15.0
+    assert spec["target_decode_tps"] == 37.5
+    assert spec["success_criteria"]["candidate_acceptance_incremental_speedup_at_least"] == 1.2
+    assert spec["success_criteria"]["measurement_harness"] == "real_vllm_workload_first_five"
+    assert spec["success_criteria"]["real_workload_windows"]["warm_completions_measured"] == 4
     assert spec["prior_cutlass_memory"]["round_count_indexed"] == 1
     assert (result.round_dir / "prior_cutlass_memory.md").is_file()
     prior_rejections = (result.round_dir / "prior_cutlass_rejections.tsv").read_text(encoding="utf-8")

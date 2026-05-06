@@ -1,0 +1,7 @@
+Created candidate `002` under `candidates/002` with:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The candidate uses the supported `prefix_cache` serving surface and avoids CUTLASS/kernel mutations. No live benchmark was run, per instructions.
