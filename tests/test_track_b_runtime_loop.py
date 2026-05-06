@@ -145,6 +145,36 @@ def test_spec_decode_candidate_rejects_unsupported_method() -> None:
     assert error == "invalid_spec_decode_method:must_be_ngram"
 
 
+def test_kernel_selection_candidate_parses_supported_launch_surface() -> None:
+    loop = _load_loop_module()
+    parsed, error = loop._parse_kernel_selection_config(
+        {
+            "kernel_selection": {
+                "attention_backend": "flashinfer",
+                "torch_compile_mode": "reduce-overhead",
+                "cuda_graph_capture": "on",
+            }
+        }
+    )
+
+    assert error is None
+    assert parsed == {
+        "attention_backend": "flashinfer",
+        "torch_compile_mode": "reduce-overhead",
+        "cuda_graph_capture": "on",
+    }
+
+
+def test_kernel_selection_candidate_rejects_unknown_axis() -> None:
+    loop = _load_loop_module()
+    parsed, error = loop._parse_kernel_selection_config(
+        {"kernel_selection": {"sampler_backend": "experimental"}}
+    )
+
+    assert parsed is None
+    assert error == "unsupported_kernel_selection_fields:sampler_backend"
+
+
 def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) -> None:
     loop = _load_loop_module()
     registry = tmp_path / "model_registry.yaml"
@@ -177,6 +207,7 @@ def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) 
         },
         vllm_config_overrides={"max_num_seqs": 8, "max_num_batched_tokens": 16384},
         spec_decode_config={"method": "ngram", "num_speculative_tokens": 4},
+        kernel_selection_config={"attention_backend": "flashinfer"},
         workload_file=workload,
         target_tps=37.5,
         candidate_accept_tps=9.0,
@@ -189,6 +220,7 @@ def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) 
     assert bundle.vllm_config["max_model_len"] == 131072
     assert bundle.request_shaping["target_concurrency"] == 8
     assert bundle.spec_decode["method"] == "ngram"
+    assert bundle.kernel_selection["attention_backend"] == "flashinfer"
     assert bundle.objective["candidate_accept_decode_tps"] == 9.0
     assert bundle.round_provenance["round_type"] == "track_b_auto_research_runtime_config"
 

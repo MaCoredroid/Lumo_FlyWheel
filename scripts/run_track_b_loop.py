@@ -27,6 +27,7 @@ _PYTHONPATH_PARTS = [part for part in os.environ.get("PYTHONPATH", "").split(os.
 if str(SRC_ROOT) not in _PYTHONPATH_PARTS:
     os.environ["PYTHONPATH"] = os.pathsep.join([str(SRC_ROOT), *_PYTHONPATH_PARTS])
 
+from lumo_flywheel_serving.kernel_activation import resolve_kernel_runtime_activation  # noqa: E402
 from lumo_flywheel_serving.model_server import ModelServer  # noqa: E402
 from lumo_flywheel_serving.registry import ModelConfig, load_registry  # noqa: E402
 from lumo_flywheel_serving.tuned_config import (  # noqa: E402
@@ -52,6 +53,13 @@ _SUPPORTED_SPEC_DECODE_FIELDS = {
     "num_speculative_tokens",
     "prompt_lookup_min",
     "prompt_lookup_max",
+}
+_SUPPORTED_KERNEL_SELECTION_FIELDS = {
+    "attention_backend",
+    "deltanet_kernel",
+    "fp8_gemm_kernel",
+    "torch_compile_mode",
+    "cuda_graph_capture",
 }
 _SURFACE_HISTORY_LIMIT = 12
 
@@ -153,6 +161,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "   - `prefix_cache` settings for prefix-cache experiments",
             "   - `vllm_config` runtime overrides for max_num_seqs (1-64), max_num_batched_tokens (1-16384), enable_chunked_prefill (bool), enable_prefix_caching (bool), gpu_memory_utilization (0.0-0.95), max_model_len (1-131072), or kv_cache_dtype (`fp8_e5m2` or `auto` only)",
             "   - `spec_decode` settings for vLLM ngram speculative decoding: method `ngram`, num_speculative_tokens 1-8, prompt_lookup_min 1-16, prompt_lookup_max 1-64",
+            "   - `kernel_selection` settings for repo-owned vLLM launch choices: attention_backend (`flashinfer`, `triton`, `flash-attn-3`, `flash-attn-4`, or `vllm-default`), fp8_gemm_kernel (`cublas` or `cutlass`), torch_compile_mode (`default`, `reduce-overhead`, `max-autotune`, or `max-autotune-no-cudagraphs`), cuda_graph_capture (`on` or `off`), deltanet_kernel (`triton-chunked-delta-v2`)",
             "",
             "3. Optional `notes.md` with any blocker or measurement caveat.",
             "",
@@ -229,6 +238,8 @@ def _surface_payload(config: dict[str, Any]) -> dict[str, Any]:
             surface["spec_decode"] = effective_spec_decode
         else:
             surface["spec_decode"] = spec_decode
+    if "kernel_selection" in config:
+        surface["kernel_selection"] = config["kernel_selection"]
     return surface
 
 
@@ -325,7 +336,8 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "post-best acceptance gate: lookup 2-16 and 2-8 were fast-but-insufficient, "
             "while lookup 3-16 fell back to baseline. Do not spend the next candidate "
             "on 2-token ngram lookup-window interpolation; move to a different "
-            "serving surface or an evidence-backed nonlocal spec_decode shape."
+            "serving surface such as kernel_selection or an evidence-backed nonlocal "
+            "spec_decode shape."
         )
     elif not _has_any_spec_decode(surface_history):
         lines.append("")
@@ -645,6 +657,23 @@ def _parse_spec_decode_config(config: dict[str, Any]) -> tuple[dict[str, Any] | 
     return parsed, None
 
 
+def _parse_kernel_selection_config(config: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    raw = config.get("kernel_selection")
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict):
+        return None, "kernel_selection_must_be_mapping"
+    unknown = sorted(set(raw) - _SUPPORTED_KERNEL_SELECTION_FIELDS)
+    if unknown:
+        return None, f"unsupported_kernel_selection_fields:{','.join(unknown)}"
+    parsed = dict(raw)
+    plan = resolve_kernel_runtime_activation(parsed)
+    if not plan.supported:
+        unsupported = ",".join(f"{knob.axis}={knob.value}" for knob in plan.unsupported_knobs)
+        return None, f"unsupported_kernel_selection:{unsupported}"
+    return parsed, None
+
+
 def _validate_vllm_config_override_values(raw: dict[str, Any]) -> str | None:
     int_ranges = {
         "max_num_seqs": (1, 64),
@@ -749,6 +778,7 @@ def _write_runtime_tuned_config_bundle(
     candidate_config: dict[str, Any],
     vllm_config_overrides: dict[str, Any] | None,
     spec_decode_config: dict[str, Any] | None,
+    kernel_selection_config: dict[str, Any] | None,
     workload_file: Path,
     target_tps: float,
     candidate_accept_tps: float,
@@ -769,6 +799,7 @@ def _write_runtime_tuned_config_bundle(
         workload_distribution_id=compute_workload_distribution_id(workload_file),
         vllm_config=_merged_vllm_config(model_config, dict(vllm_config_overrides or {})),
         request_shaping=dict(candidate_config.get("request_shaping") or {}),
+        kernel_selection=dict(kernel_selection_config or {}),
         spec_decode=dict(spec_decode_config or {}),
         objective={
             "decode_speed_at_least_tps": target_tps,
@@ -788,6 +819,7 @@ def _write_runtime_tuned_config_bundle(
             "preserve_sampling_behavior": True,
             "runtime_config_fields_only": sorted(_SUPPORTED_VLLM_CONFIG_FIELDS),
             "spec_decode_fields_only": sorted(_SUPPORTED_SPEC_DECODE_FIELDS),
+            "kernel_selection_fields_only": sorted(_SUPPORTED_KERNEL_SELECTION_FIELDS),
         },
         round_provenance={
             "round_type": "track_b_auto_research_runtime_config",
@@ -813,6 +845,7 @@ def _apply_runtime_config_candidate(
     candidate_config: dict[str, Any],
     vllm_config_overrides: dict[str, Any] | None,
     spec_decode_config: dict[str, Any] | None,
+    kernel_selection_config: dict[str, Any] | None,
     workload_file: Path,
     target_tps: float,
     candidate_accept_tps: float,
@@ -827,6 +860,7 @@ def _apply_runtime_config_candidate(
         candidate_config=candidate_config,
         vllm_config_overrides=vllm_config_overrides,
         spec_decode_config=spec_decode_config,
+        kernel_selection_config=kernel_selection_config,
         workload_file=workload_file,
         target_tps=target_tps,
         candidate_accept_tps=candidate_accept_tps,
@@ -1109,7 +1143,14 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
     spec_decode_config, spec_decode_error = _parse_spec_decode_config(candidate_config)
     if spec_decode_error is not None:
         return {"status": "rejected", "reason": spec_decode_error}
-    runtime_candidate = vllm_config_overrides is not None or spec_decode_config is not None
+    kernel_selection_config, kernel_selection_error = _parse_kernel_selection_config(candidate_config)
+    if kernel_selection_error is not None:
+        return {"status": "rejected", "reason": kernel_selection_error}
+    runtime_candidate = (
+        vllm_config_overrides is not None
+        or spec_decode_config is not None
+        or kernel_selection_config is not None
+    )
     default_concurrency = 4 if runtime_candidate else None
     if vllm_config_overrides is not None and vllm_config_overrides.get("max_num_seqs") is not None:
         default_concurrency = int(vllm_config_overrides["max_num_seqs"])
@@ -1141,6 +1182,7 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
                 "reason": "runtime_config_requires_apply_flag",
                 "vllm_config": vllm_config_overrides,
                 "spec_decode": spec_decode_config,
+                "kernel_selection": kernel_selection_config,
             }
         try:
             runtime_activation = _apply_runtime_config_candidate(
@@ -1151,6 +1193,7 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
                 candidate_config=candidate_config,
                 vllm_config_overrides=vllm_config_overrides,
                 spec_decode_config=spec_decode_config,
+                kernel_selection_config=kernel_selection_config,
                 workload_file=workload_file,
                 target_tps=target_tps,
                 candidate_accept_tps=candidate_accept_tps,
@@ -1168,6 +1211,7 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
                 "detail": str(exc)[-2000:],
                 "vllm_config": vllm_config_overrides,
                 "spec_decode": spec_decode_config,
+                "kernel_selection": kernel_selection_config,
                 "runtime_restore_after_apply_failure": restore,
             }
 
@@ -1188,6 +1232,7 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             result["runtime_config_id"] = runtime_activation["bundle_id"]
             result["vllm_config"] = vllm_config_overrides
             result["spec_decode"] = spec_decode_config
+            result["kernel_selection"] = kernel_selection_config
         return result
     finally:
         if (
