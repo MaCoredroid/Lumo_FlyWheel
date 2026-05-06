@@ -38,7 +38,7 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`044` were generated through `codex exec` worker calls; candidate `043` has partial authoring artifacts only and candidate `044` was controller-measured | Done |
+| Let auto-research author candidates | Candidates `001`-`045` were generated through `codex exec` worker calls; candidate `043` has partial authoring artifacts only and candidates `044`-`045` were controller-measured | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Allow authored parallel workload throughput candidates | Requested, but not currently enabled in the committed controller; current controller keeps the fixed first-five decode-time gate | Not met |
@@ -93,6 +93,7 @@ Concrete success criteria:
 | `042` | spec decode, `ngram`, 5 speculative tokens, prompt lookup 4-8 | `7.681658` | `1.024x` | Rejected |
 | `043` | spec decode, `ngram`, 4 speculative tokens, prompt lookup 5-8 | n/a | n/a | Authored only; no controller result |
 | `044` | kernel selection, attention backend `flash-attn-3` | `7.597730` | `1.013x` | Rejected |
+| `045` | spec decode, `ngram`, 4 speculative tokens, prompt lookup 6-8 | `7.508654` | `1.001x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -161,6 +162,8 @@ Candidate `042` selected `spec_decode: {method: ngram, num_speculative_tokens: 5
 Candidate `043` has partial worker-authored artifacts for `spec_decode: {method: ngram, num_speculative_tokens: 4, prompt_lookup_min: 5, prompt_lookup_max: 8}`, but no `spawn_result.json`, controller result, throughput artifact, or branch-log record. It is preserved as an authored-only trace rather than counted as a measured candidate.
 
 Candidate `044` selected `kernel_selection: {attention_backend: flash-attn-3}`. vLLM accepted the launch configuration, but the runtime log reported that FA3 could not be used on the Blackwell platform and resolved the main attention path to FlashAttention version 2. The official first-five real-workload measurement was `7.597730 tok/s`, below the `18.9047064 tok/s` post-`020` acceptance gate, and the controller restored the baseline runtime afterward.
+
+Candidate `045` selected `spec_decode: {method: ngram, num_speculative_tokens: 4, prompt_lookup_min: 6, prompt_lookup_max: 8}`. vLLM launched with speculative decoding active, but runtime speculative metrics showed low accepted-token throughput during the warm concurrent window. The official first-five real-workload measurement was `7.508654 tok/s`, below the `18.9047064 tok/s` post-`020` acceptance gate, and the controller restored the baseline runtime afterward.
 
 ## Runtime Capability Audit
 
