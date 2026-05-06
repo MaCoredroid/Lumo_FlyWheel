@@ -1,0 +1,5 @@
+vllm_config:
+  max_num_seqs: 8
+  max_num_batched_tokens: 2048
+  gpu_memory_utilization: 0.88
+  enable_prefix_caching: true

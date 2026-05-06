@@ -1,0 +1,16 @@
+Authored candidate `016` under `candidates/016` with:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+
+The serving surface is a narrow vLLM runtime-capacity change:
+
+```yaml
+vllm_config:
+  max_num_seqs: 8
+  max_num_batched_tokens: 2048
+  gpu_memory_utilization: 0.88
+  enable_prefix_caching: true
+```
+
+I did not run live benchmarks or edit anything outside the candidate directory.
