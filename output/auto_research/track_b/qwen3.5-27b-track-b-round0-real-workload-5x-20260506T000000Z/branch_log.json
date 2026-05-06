@@ -557,5 +557,11 @@
     },
     "status": "rejected",
     "vllm_config": null
+  },
+  {
+    "candidate_id": "031",
+    "reason": "unsupported_kernel_selection:cuda_graph_capture=True",
+    "recorded_at": "2026-05-06T12:49:52Z",
+    "status": "rejected"
   }
 ]

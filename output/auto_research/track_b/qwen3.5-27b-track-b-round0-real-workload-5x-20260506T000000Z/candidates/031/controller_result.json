@@ -1,0 +1,4 @@
+{
+  "reason": "unsupported_kernel_selection:cuda_graph_capture=True",
+  "status": "rejected"
+}

@@ -720,12 +720,26 @@ def _parse_kernel_selection_config(config: dict[str, Any]) -> tuple[dict[str, An
     unknown = sorted(set(raw) - _SUPPORTED_KERNEL_SELECTION_FIELDS)
     if unknown:
         return None, f"unsupported_kernel_selection_fields:{','.join(unknown)}"
-    parsed = dict(raw)
+    parsed = _normalize_kernel_selection_values(raw)
     plan = resolve_kernel_runtime_activation(parsed)
     if not plan.supported:
         unsupported = ",".join(f"{knob.axis}={knob.value}" for knob in plan.unsupported_knobs)
         return None, f"unsupported_kernel_selection:{unsupported}"
     return parsed, None
+
+
+def _normalize_kernel_selection_values(raw: dict[str, Any]) -> dict[str, Any]:
+    parsed = dict(raw)
+    cuda_graph_capture = parsed.get("cuda_graph_capture")
+    if isinstance(cuda_graph_capture, bool):
+        parsed["cuda_graph_capture"] = "on" if cuda_graph_capture else "off"
+    elif isinstance(cuda_graph_capture, str):
+        normalized = cuda_graph_capture.lower()
+        if normalized == "true":
+            parsed["cuda_graph_capture"] = "on"
+        elif normalized == "false":
+            parsed["cuda_graph_capture"] = "off"
+    return parsed
 
 
 def _validate_vllm_config_override_values(raw: dict[str, Any]) -> str | None:

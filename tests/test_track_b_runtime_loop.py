@@ -165,6 +165,24 @@ def test_kernel_selection_candidate_parses_supported_launch_surface() -> None:
     }
 
 
+def test_kernel_selection_candidate_normalizes_yaml_boolean_cuda_graph_capture() -> None:
+    loop = _load_loop_module()
+    parsed, error = loop._parse_kernel_selection_config(
+        {
+            "kernel_selection": {
+                "fp8_gemm_kernel": "cublas",
+                "cuda_graph_capture": True,
+            }
+        }
+    )
+
+    assert error is None
+    assert parsed == {
+        "fp8_gemm_kernel": "cublas",
+        "cuda_graph_capture": "on",
+    }
+
+
 def test_kernel_selection_candidate_rejects_unknown_axis() -> None:
     loop = _load_loop_module()
     parsed, error = loop._parse_kernel_selection_config(
