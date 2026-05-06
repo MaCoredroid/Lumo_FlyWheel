@@ -36,11 +36,11 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`017` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Let auto-research author candidates | Candidates `001`-`018` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
-| Achieve an accepted candidate | Best candidate `017` measured `7.808374 tok/s`, below the 20% preflight | Not met |
-| Achieve final 5x goal | Best candidate `017` measured `7.808374 tok/s`, below `37.5 tok/s` final target | Not met |
+| Achieve an accepted candidate | Best candidate `018` measured `7.809454 tok/s`, below the 20% preflight | Not met |
+| Achieve final 5x goal | Best candidate `018` measured `7.809454 tok/s`, below `37.5 tok/s` final target | Not met |
 | Run full `50*5` benchmark | Not run because no candidate cleared the `20%` preflight | Not met, intentionally gated |
 
 ## Candidate Results
@@ -63,6 +63,7 @@ Concrete success criteria:
 | `015` | runtime config, `max_num_seqs: 6`, `max_num_batched_tokens: 2048`, `gpu_memory_utilization: 0.88`, explicit prefix caching | `7.651060` | `1.020x` | Rejected |
 | `016` | runtime config, `max_num_seqs: 8`, `max_num_batched_tokens: 2048`, `gpu_memory_utilization: 0.88`, explicit prefix caching | `7.575187` | `1.010x` | Rejected |
 | `017` | spec decode, `ngram`, 1 speculative token, prompt lookup 1-8 | `7.808374` | `1.041x` | Rejected |
+| `018` | spec decode, `ngram`, 2 speculative tokens, prompt lookup 1-8 | `7.809454` | `1.041x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -79,6 +80,8 @@ Candidate `015` increased the same runtime family to `max_num_seqs: 6`. It produ
 Candidate `016` increased the same runtime family again to `max_num_seqs: 8`. It measured `7.575187 tok/s`, regressing from candidate `015` and failing the updated `9.181272 tok/s` preflight threshold. This reinforces that the tested runtime-capacity family is not the path to the 20% acceptance gate for this workload.
 
 Candidate `017` retried speculative decode with a safer ngram shape after candidate `013` exposed the HTTP 500 failure mode. vLLM accepted `spec_decode: {method: ngram, num_speculative_tokens: 1, prompt_lookup_min: 1, prompt_lookup_max: 8}` and the first-five real-workload measurement completed. It set a new best valid measurement at `7.808374 tok/s`, but that is still only `1.041x` over the nominal `7.5 tok/s` baseline and below the `9.181272 tok/s` preflight threshold.
+
+Candidate `018` increased the stable ngram shape to `num_speculative_tokens: 2` while keeping prompt lookup `1-8`. It completed the first-five real-workload measurement and narrowly improved the best result to `7.809454 tok/s`, but that remained below the updated `9.3700488 tok/s` preflight threshold.
 
 ## Runtime Capability Audit
 
@@ -108,11 +111,11 @@ Capability checks:
 - `complete: false`
 - `target_decode_tps: 37.5`
 - `candidate_accept_decode_tps_initial: 9.0`
-- `best_decode_tps: 7.808374`
+- `best_decode_tps: 7.809454`
 - `incremental_candidates: []`
 - `promoted_candidates: []`
 
-The loop is therefore correctly blocked at the speed preflight. B-1/B-2/B-3 were not run because no candidate reached the incremental speed acceptance bar. Candidate `013` is excluded from `best_decode_tps` because it failed the real-workload measurement instead of producing a valid warm decode metric. Candidate `017` is the current best valid measurement, but it is still far below both preflight and the final 5x target.
+The loop is therefore correctly blocked at the speed preflight. B-1/B-2/B-3 were not run because no candidate reached the incremental speed acceptance bar. Candidate `013` is excluded from `best_decode_tps` because it failed the real-workload measurement instead of producing a valid warm decode metric. Candidate `018` is the current best valid measurement, but it is still far below both preflight and the final 5x target.
 
 ## Blocker
 
@@ -120,7 +123,7 @@ The current live runtime surface has not produced enough real-workload warm deco
 
 The next productive Track B branch is not more concurrency search. It should be one of:
 
-1. Continue speculative-decode auto-search only with distinct stable ngram combinations or with the captured vLLM HTTP 500 body/server traceback from the failed broader lookup surface; the first stable retry reached only `7.808374 tok/s`.
+1. Continue speculative-decode auto-search only with distinct stable ngram combinations or with the captured vLLM HTTP 500 body/server traceback from the failed broader lookup surface; the best stable retry reached only `7.809454 tok/s`.
 2. Add a real candidate surface for `xgrammar` / guided decoding and run it only on tool-call-heavy workload slices where constrained generation can affect decode.
 3. Install LMCache or another KV-transfer path before launching a cache-oriented Track B round, because LMCache is not present in the current container.
 4. Continue runtime-config auto-search only if it explores a new launch surface beyond the tested `max_num_batched_tokens`/`max_num_seqs`/`gpu_memory_utilization` variants, because the first completed runtime-config candidate only reached `7.640033 tok/s`.

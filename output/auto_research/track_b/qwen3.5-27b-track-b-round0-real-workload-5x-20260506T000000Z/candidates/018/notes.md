@@ -1,0 +1,1 @@
+Measurement caveat: this candidate intentionally stays close to the only stable positive ngram result, candidate 017, and changes only the speculative span from 1 to 2 tokens. If the workload has low adjacent ngram reuse, the added proposal work may remain flat or regress despite preserving target-model verification semantics.

@@ -1,0 +1,17 @@
+Authored candidate `018` in `candidates/018` with:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+Serving surface is a distinct ngram speculative decode config:
+
+```yaml
+spec_decode:
+  method: ngram
+  num_speculative_tokens: 2
+  prompt_lookup_min: 1
+  prompt_lookup_max: 8
+```
+
+I did not run live benchmarks or edit anything outside the candidate directory.
