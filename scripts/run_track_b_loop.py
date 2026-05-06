@@ -286,14 +286,14 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "throughput; avoid another candidate that only changes max_num_seqs, "
             "max_num_batched_tokens, or gpu_memory_utilization."
         )
-    if _has_failed_spec_decode_without_valid_measurement(surface_history):
+    if _has_failed_spec_decode_measurement(surface_history):
         lines.append("")
         lines.append(
             "Controller guidance: ngram spec_decode launched but failed real-workload "
-            "measurement; retry only with a safer distinct ngram shape before returning "
-            "to launch-capacity-only variants."
+            "measurement on a broader shape; avoid retrying aggressive ngram settings "
+            "without a narrower lookup window or captured server-stack evidence."
         )
-    elif _has_valid_rejected_spec_decode(surface_history):
+    if _has_valid_rejected_spec_decode(surface_history):
         lines.append("")
         lines.append(
             "Controller guidance: a stable ngram spec_decode candidate produced the best "
@@ -320,8 +320,7 @@ def _has_any_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
     return False
 
 
-def _has_failed_spec_decode_without_valid_measurement(surface_history: list[dict[str, Any]]) -> bool:
-    failed_spec_decode = False
+def _has_failed_spec_decode_measurement(surface_history: list[dict[str, Any]]) -> bool:
     for row in surface_history:
         try:
             signature = json.loads(row["signature"])
@@ -329,11 +328,9 @@ def _has_failed_spec_decode_without_valid_measurement(surface_history: list[dict
             continue
         if "spec_decode" not in signature:
             continue
-        if row.get("decode_tps") is not None:
-            return False
         if row.get("status") == "rejected" and row.get("reason") == "throughput_measure_failed":
-            failed_spec_decode = True
-    return failed_spec_decode
+            return True
+    return False
 
 
 def _has_valid_rejected_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
