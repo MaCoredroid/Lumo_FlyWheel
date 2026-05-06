@@ -355,6 +355,14 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "duplicate serving surface. Do not retry that axis; choose a measured-distinct "
             "kernel_selection axis or return to a genuinely new speculative-decode shape."
         )
+    if _has_duplicate_default_runtime_config_surface(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: runtime configs made only of default prefix/chunked "
+            "flags and kv_cache_dtype=fp8_e5m2 have already been rejected as duplicate "
+            "serving surfaces. Do not retry default-runtime bookkeeping knobs; use a "
+            "measured-distinct launch setting or a new nonlocal speculative-decode shape."
+        )
     if _has_any_spec_decode(surface_history) and not _has_any_kernel_selection(surface_history):
         lines.append("")
         lines.append(
@@ -406,6 +414,24 @@ def _has_duplicate_deltanet_default_kernel_selection(surface_history: list[dict[
         if kernel_selection.get("deltanet_kernel") != "triton-chunked-delta-v2":
             continue
         if row.get("reason") == "duplicate_serving_surface":
+            return True
+    return False
+
+
+def _has_duplicate_default_runtime_config_surface(surface_history: list[dict[str, Any]]) -> bool:
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        vllm_config = signature.get("vllm_config")
+        if not isinstance(vllm_config, dict):
+            continue
+        if row.get("reason") != "duplicate_serving_surface":
+            continue
+        if vllm_config.get("enable_prefix_caching") is True and vllm_config.get("enable_chunked_prefill") is True:
+            return True
+        if vllm_config.get("kv_cache_dtype") == "fp8_e5m2":
             return True
     return False
 

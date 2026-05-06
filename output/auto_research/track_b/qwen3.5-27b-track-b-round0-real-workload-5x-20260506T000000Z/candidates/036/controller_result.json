@@ -1,0 +1,5 @@
+{
+  "reason": "duplicate_serving_surface",
+  "status": "rejected",
+  "surface_signature": "{\"vllm_config\":{\"enable_chunked_prefill\":true,\"enable_prefix_caching\":true,\"kv_cache_dtype\":\"fp8_e5m2\"}}"
+}

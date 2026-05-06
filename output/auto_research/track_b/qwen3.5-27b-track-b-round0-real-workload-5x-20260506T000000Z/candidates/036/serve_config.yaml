@@ -1,0 +1,2 @@
+vllm_config:
+  kv_cache_dtype: fp8_e5m2

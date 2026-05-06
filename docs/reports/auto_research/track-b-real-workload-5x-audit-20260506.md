@@ -36,7 +36,7 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`035` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Let auto-research author candidates | Candidates `001`-`036` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence | Not met |
@@ -81,6 +81,7 @@ Concrete success criteria:
 | `033` | kernel selection, attention backend `flashinfer` | `7.606928` | `1.014x` | Rejected |
 | `034` | kernel selection, DeltaNet kernel `triton-chunked-delta-v2` | n/a | n/a | Rejected before launch as duplicate serving surface |
 | `035` | kernel selection, DeltaNet kernel `triton-chunked-delta-v2` | n/a | n/a | Rejected before launch as duplicate serving surface |
+| `036` | runtime config, default prefix/chunked flags plus `kv_cache_dtype: fp8_e5m2` | n/a | n/a | Rejected before launch as duplicate serving surface |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -131,6 +132,8 @@ Candidate `032` retried the first `kernel_selection` surface after the parser fi
 Candidate `033` continued the `kernel_selection` surface and selected `attention_backend: flashinfer`. The runtime log confirmed vLLM launched with `--attention-backend FLASHINFER` and the main attention backend resolved to `FLASHINFER`. The first-five real-workload measurement completed at `7.606928 tok/s`, effectively baseline and below the same `18.9047064 tok/s` gate, so B-1/B-2/B-3 did not run. The controller restored the baseline runtime afterward.
 
 Candidates `034` and `035` both selected `kernel_selection: {deltanet_kernel: triton-chunked-delta-v2}`. The controller rejected both before launch as `duplicate_serving_surface` because that value resolves to the already-active default GDN prefill path for this model. Follow-up controller steering now tells the worker not to retry that baseline-equivalent DeltaNet axis.
+
+Candidate `036` moved back to `vllm_config` but selected default prefix/chunked flags plus `kv_cache_dtype: fp8_e5m2`. The controller rejected it before launch as `duplicate_serving_surface`; follow-up steering now tells the worker not to retry default-runtime bookkeeping knobs.
 
 ## Runtime Capability Audit
 

@@ -614,5 +614,12 @@
     "recorded_at": "2026-05-06T13:27:17Z",
     "status": "rejected",
     "surface_signature": "{\"kernel_selection\":{\"deltanet_kernel\":\"triton-chunked-delta-v2\"}}"
+  },
+  {
+    "candidate_id": "036",
+    "reason": "duplicate_serving_surface",
+    "recorded_at": "2026-05-06T13:31:13Z",
+    "status": "rejected",
+    "surface_signature": "{\"vllm_config\":{\"enable_chunked_prefill\":true,\"enable_prefix_caching\":true,\"kv_cache_dtype\":\"fp8_e5m2\"}}"
   }
 ]
