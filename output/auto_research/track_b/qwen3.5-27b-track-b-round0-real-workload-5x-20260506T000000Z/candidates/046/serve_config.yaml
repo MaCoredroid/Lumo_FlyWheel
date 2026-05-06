@@ -1,0 +1,2 @@
+kernel_selection:
+  fp8_gemm_kernel: cublas
