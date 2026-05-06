@@ -816,5 +816,26 @@
       "json_object": true
     },
     "target_decode_tps": 37.5
+  },
+  {
+    "candidate_accept_decode_tps": 18.9047064,
+    "candidate_id": "049",
+    "decode_tps": 7.67333,
+    "kernel_selection": null,
+    "previous_best_decode_tps": 15.753922,
+    "reason": "speed_below_candidate_acceptance",
+    "recorded_at": "2026-05-06T16:34:25Z",
+    "runtime_config_id": "4d51da47-779d-4ed1-8ca4-ab36d5c8f356",
+    "runtime_config_ref": "candidates/049/tuned_config_bundle.yaml",
+    "runtime_restore_ref": "candidates/049/runtime_restore_result.json",
+    "spec_decode": {
+      "method": "ngram",
+      "num_speculative_tokens": 3,
+      "prompt_lookup_max": 7,
+      "prompt_lookup_min": 3
+    },
+    "status": "rejected",
+    "target_decode_tps": 37.5,
+    "vllm_config": null
   }
 ]

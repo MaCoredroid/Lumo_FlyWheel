@@ -39,7 +39,7 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`048` were generated through `codex exec` worker calls; candidate `043` has partial authoring artifacts only and candidates `044`-`048` were controller-measured | Done |
+| Let auto-research author candidates | Candidates `001`-`049` were generated through `codex exec` worker calls; candidate `043` has partial authoring artifacts only and candidates `044`-`049` were controller-measured | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Allow guided decoding candidates | Controller supports `structured_outputs` request overrides for xgrammar-style guided decoding candidates | Done |
@@ -99,6 +99,7 @@ Concrete success criteria:
 | `046` | kernel selection, FP8 GEMM `cublas` only | `7.590503` | `1.012x` | Rejected |
 | `047` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 5-8 | `7.490870` | `0.999x` | Rejected |
 | `048` | structured outputs, xgrammar JSON object | `7.624555` | `1.017x` | Rejected |
+| `049` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 3-7 | `7.673330` | `1.023x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -175,6 +176,8 @@ Candidate `046` selected `kernel_selection: {fp8_gemm_kernel: cublas}` without c
 Candidate `047` selected `spec_decode: {method: ngram, num_speculative_tokens: 3, prompt_lookup_min: 5, prompt_lookup_max: 8}`. vLLM launched with speculative decoding active, but runtime speculative metrics showed low accepted-token throughput during the warm concurrent window. The official first-five real-workload measurement was `7.490870 tok/s`, below the `18.9047064 tok/s` post-`020` acceptance gate, and the controller restored the baseline runtime afterward.
 
 Candidate `048` selected `structured_outputs: {_backend: xgrammar, json_object: true}` using the guided decoding request surface added after candidate `047`. The controller kept the same first-five real-workload window and decode-time official metric. The measurement completed at `7.624555 tok/s`, below the `18.9047064 tok/s` post-`020` acceptance gate.
+
+Candidate `049` selected `spec_decode: {method: ngram, num_speculative_tokens: 3, prompt_lookup_min: 3, prompt_lookup_max: 7}`. vLLM launched with speculative decoding active and completed the official first-five real-workload measurement at `7.673330 tok/s`, below the `18.9047064 tok/s` post-`020` acceptance gate. The controller restored the baseline runtime afterward.
 
 ## Runtime Capability Audit
 
