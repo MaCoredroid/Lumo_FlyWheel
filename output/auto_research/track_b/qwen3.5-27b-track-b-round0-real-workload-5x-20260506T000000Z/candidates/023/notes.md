@@ -1,0 +1,1 @@
+Measurement caveat: this candidate intentionally trades some ngram match coverage for B-1 safety. If the controller still observes truncated concurrent outputs, the likely failure mode is speculative decode integration rather than target-model sampling drift.
