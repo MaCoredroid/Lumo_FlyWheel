@@ -1,0 +1,444 @@
+# Runtime log snapshot: throughput_measure_failed
+
+==> /tmp/lumo-l0c-fp8-cutlass-run30-logs/codex_inference_proxy.log <==
+[PROXY-INIT] pid=3194475 listen=0.0.0.0:9951 upstream=http://127.0.0.1:9950
+/usr/bin/python3: Error while finding module specification for 'lumo_flywheel_serving.inference_proxy' (ModuleNotFoundError: No module named 'lumo_flywheel_serving')
+[PROXY-INIT] pid=3284949 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3288935 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3294522 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3297362 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3301421 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3304110 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3307709 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3311536 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3314914 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3316905 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3321249 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3323618 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3327703 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3330392 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3334070 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3336692 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3340720 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3343789 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3347575 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3350281 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3353495 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3355850 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3359594 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3362234 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3365658 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3368399 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3372025 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3375260 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3378567 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3381356 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3384523 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3387036 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3390677 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3394101 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3397775 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3402069 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+[PROXY-INIT] pid=3410716 listen=0.0.0.0:8011 upstream=http://127.0.0.1:9950
+
+==> /tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.5-27b.log <==
+(APIServer pid=52) INFO 05-06 12:32:17 [model.py:549] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=52) INFO 05-06 12:32:17 [model.py:1678] Using max model len 131072
+(APIServer pid=52) INFO 05-06 12:32:17 [scheduler.py:238] Chunked prefill is enabled with max_num_batched_tokens=8192.
+(APIServer pid=52) WARNING 05-06 12:32:17 [config.py:441] Mamba cache mode is set to 'align' for Qwen3_5ForConditionalGeneration by default when prefix caching is enabled
+(APIServer pid=52) INFO 05-06 12:32:17 [config.py:461] Warning: Prefix caching in Mamba cache 'align' mode is currently enabled. Its support for Mamba layers is experimental. Please report any issues you may observe.
+(APIServer pid=52) INFO 05-06 12:32:17 [config.py:281] Setting attention block size to 816 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=52) INFO 05-06 12:32:17 [config.py:312] Padding mamba page size by 0.99% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=52) INFO 05-06 12:32:17 [vllm.py:790] Asynchronous scheduling is disabled.
+(APIServer pid=52) INFO 05-06 12:32:17 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
+/usr/local/lib/python3.12/dist-packages/torch/library.py:357: UserWarning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: flash_attn::_flash_attn_backward(Tensor dout, Tensor q, Tensor k, Tensor v, Tensor out, Tensor softmax_lse, Tensor(a6!)? dq, Tensor(a7!)? dk, Tensor(a8!)? dv, float dropout_p, float softmax_scale, bool causal, SymInt window_size_left, SymInt window_size_right, float softcap, Tensor? alibi_slopes, bool deterministic, Tensor? rng_state=None) -> Tensor
+    registered at /usr/local/lib/python3.12/dist-packages/torch/_library/custom_ops.py:926
+  dispatch key: ADInplaceOrView
+  previous kernel: no debug info
+       new kernel: registered at /usr/local/lib/python3.12/dist-packages/torch/_library/custom_ops.py:926 (Triggered internally at /opt/pytorch/pytorch/aten/src/ATen/core/dispatch/OperatorEntry.cpp:208.)
+  self.m.impl(
+(EngineCore pid=218) INFO 05-06 12:32:26 [core.py:105] Initializing a V1 LLM engine (v0.19.0) with config: model='/models/qwen3.5-27b-fp8', speculative_config=SpeculativeConfig(method='ngram', model=None, num_spec_tokens=5), tokenizer='/models/qwen3.5-27b-fp8', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=131072, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=fp8, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='qwen3', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=qwen3.5-27b, enable_prefix_caching=True, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['+quant_fp8', 'none', '+quant_fp8'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::olmo_hybrid_gdn_full_forward', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_images_per_batch': 0, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2, 4, 8, 16, 24, 32, 40, 48], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 48, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}
+(EngineCore pid=218) INFO 05-06 12:32:27 [parallel_state.py:1400] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://10.0.0.225:52401 backend=nccl
+(EngineCore pid=218) INFO 05-06 12:32:27 [parallel_state.py:1716] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore pid=218) WARNING 05-06 12:32:27 [__init__.py:206] min_p and logit_bias parameters won't work with speculative decoding.
+(EngineCore pid=218) INFO 05-06 12:32:30 [gpu_model_runner.py:4743] Starting to load model /models/qwen3.5-27b-fp8...
+(EngineCore pid=218) INFO 05-06 12:32:31 [cuda.py:390] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore pid=218) INFO 05-06 12:32:31 [mm_encoder_attention.py:230] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore pid=218) INFO 05-06 12:32:31 [__init__.py:261] Selected CutlassFP8ScaledMMLinearKernel for Fp8LinearMethod
+(EngineCore pid=218) INFO 05-06 12:32:31 [gdn_linear_attn.py:147] Using Triton/FLA GDN prefill kernel
+(EngineCore pid=218) INFO 05-06 12:32:31 [cuda.py:334] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+(EngineCore pid=218) INFO 05-06 12:32:31 [flash_attn.py:596] Using FlashAttention version 2
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:   0% Completed | 0/11 [00:00<?, ?it/s]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:   9% Completed | 1/11 [00:16<02:42, 16.20s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  18% Completed | 2/11 [00:30<02:13, 14.80s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  27% Completed | 3/11 [00:45<01:59, 15.00s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  36% Completed | 4/11 [01:00<01:45, 15.08s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  45% Completed | 5/11 [01:15<01:30, 15.16s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  55% Completed | 6/11 [01:31<01:15, 15.19s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  64% Completed | 7/11 [01:46<01:00, 15.20s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  73% Completed | 8/11 [02:00<00:45, 15.04s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  82% Completed | 9/11 [02:15<00:30, 15.01s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards:  91% Completed | 10/11 [02:31<00:15, 15.05s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards: 100% Completed | 11/11 [02:38<00:00, 12.82s/it]
+(EngineCore pid=218)
+Loading safetensors checkpoint shards: 100% Completed | 11/11 [02:38<00:00, 14.43s/it]
+(EngineCore pid=218)
+(EngineCore pid=218) INFO 05-06 12:35:11 [default_loader.py:384] Loading weights took 158.82 seconds
+(EngineCore pid=218) INFO 05-06 12:35:11 [gpu_model_runner.py:4767] Loading drafter model...
+(EngineCore pid=218) INFO 05-06 12:35:11 [gpu_model_runner.py:4828] Model loading took 28.51 GiB memory and 160.214906 seconds
+(EngineCore pid=218) INFO 05-06 12:35:12 [gpu_model_runner.py:5761] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(EngineCore pid=218) INFO 05-06 12:35:29 [backends.py:1051] Using cache directory: /root/.cache/vllm/torch_compile_cache/f8dcacb734/rank_0_0/backbone for vLLM's torch.compile
+(EngineCore pid=218) INFO 05-06 12:35:29 [backends.py:1111] Dynamo bytecode transform time: 11.18 s
+(EngineCore pid=218) [rank0]:W0506 12:35:31.184000 218 torch/_inductor/utils.py:1703] [0/0] Not enough SMs to use max_autotune_gemm mode
+(EngineCore pid=218) INFO 05-06 12:35:32 [backends.py:372] Cache the graph of compile range (1, 8192) for later use
+(EngineCore pid=218) INFO 05-06 12:35:59 [backends.py:390] Compiling a graph for compile range (1, 8192) takes 28.99 s
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (16) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (32) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218) INFO 05-06 12:36:19 [monitor.py:48] torch.compile and initial profiling/warmup run together took 61.33 s in total
+(EngineCore pid=218) INFO 05-06 12:36:20 [kv_cache_utils.py:829] Overriding num_gpu_blocks=0 with num_gpu_blocks_override=48
+(EngineCore pid=218) INFO 05-06 12:36:20 [gpu_model_runner.py:5884] Profiling CUDA graph memory: PIECEWISE=7 (largest=48), FULL=4 (largest=24)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (24) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (18) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218) INFO 05-06 12:36:38 [gpu_model_runner.py:5963] Estimated CUDA graph memory: 0.65 GiB total
+(EngineCore pid=218) INFO 05-06 12:36:39 [gpu_worker.py:436] Available KV cache memory: 68.11 GiB
+(EngineCore pid=218) INFO 05-06 12:36:39 [gpu_worker.py:470] In v0.19, CUDA graph memory profiling will be enabled by default (VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1), which more accurately accounts for CUDA graph memory during KV cache allocation. To try it now, set VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 and increase --gpu-memory-utilization from 0.9000 to 0.9055 to maintain the same effective KV cache size.
+(EngineCore pid=218) INFO 05-06 12:36:39 [kv_cache_utils.py:1319] GPU KV cache size: 278,256 tokens
+(EngineCore pid=218) INFO 05-06 12:36:39 [kv_cache_utils.py:1324] Maximum concurrency for 131,072 tokens per request: 7.51x
+(EngineCore pid=218) 2026-05-06 12:36:53,778 - INFO - autotuner.py:262 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+(EngineCore pid=218) 2026-05-06 12:36:54,794 - INFO - autotuner.py:268 - flashinfer.jit: [Autotuner]: Autotuning process ends
+(EngineCore pid=218)
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/7 [00:00<?, ?it/s]
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  14%|█▍        | 1/7 [00:00<00:01,  4.10it/s]
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  29%|██▊       | 2/7 [00:00<00:00,  5.07it/s]
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  43%|████▎     | 3/7 [00:00<00:00,  5.44it/s]
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  57%|█████▋    | 4/7 [00:00<00:00,  5.75it/s]
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  71%|███████▏  | 5/7 [00:00<00:00,  5.99it/s]
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  86%|████████▌ | 6/7 [00:01<00:00,  6.01it/s]
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 7/7 [00:01<00:00,  6.06it/s]
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 7/7 [00:01<00:00,  5.75it/s]
+(EngineCore pid=218)
+Capturing CUDA graphs (decode, FULL):   0%|          | 0/4 [00:00<?, ?it/s]/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (24) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218)
+Capturing CUDA graphs (decode, FULL):  25%|██▌       | 1/4 [00:00<00:02,  1.27it/s]/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (18) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218)
+Capturing CUDA graphs (decode, FULL):  50%|█████     | 2/4 [00:00<00:00,  2.32it/s]/usr/local/lib/python3.12/dist-packages/torch/_dynamo/eval_frame.py:1154: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (12) < num_heads (16). This may indicate the inputs were passed in head-first format [B, H, T, ...] Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*args, **kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (12) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218)
+Capturing CUDA graphs (decode, FULL):  75%|███████▌  | 3/4 [00:01<00:00,  3.23it/s]/usr/local/lib/python3.12/dist-packages/torch/_dynamo/eval_frame.py:1154: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (6) < num_heads (16). This may indicate the inputs were passed in head-first format [B, H, T, ...] Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*args, **kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (6) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218)
+Capturing CUDA graphs (decode, FULL): 100%|██████████| 4/4 [00:01<00:00,  3.44it/s]
+Capturing CUDA graphs (decode, FULL): 100%|██████████| 4/4 [00:01<00:00,  2.86it/s]
+(EngineCore pid=218) INFO 05-06 12:37:05 [gpu_model_runner.py:6054] Graph capturing finished in 11 secs, took 0.28 GiB
+(EngineCore pid=218) INFO 05-06 12:37:05 [gpu_worker.py:597] CUDA graph pool memory: 0.28 GiB (actual), 0.65 GiB (estimated), difference: 0.37 GiB (129.3%).
+(EngineCore pid=218) INFO 05-06 12:37:05 [core.py:283] init engine (profile, create kv cache, warmup model) took 113.89 seconds
+(EngineCore pid=218) INFO 05-06 12:37:06 [vllm.py:790] Asynchronous scheduling is disabled.
+(EngineCore pid=218) INFO 05-06 12:37:06 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
+(APIServer pid=52) INFO 05-06 12:37:08 [api_server.py:590] Supported tasks: ['generate']
+(APIServer pid=52) WARNING 05-06 12:37:08 [__init__.py:14] SECURITY WARNING: Development endpoints are enabled! This should NOT be used in production!
+(APIServer pid=52) INFO 05-06 12:37:09 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=52) WARNING 05-06 12:37:09 [model.py:1435] Default vLLM sampling parameters have been overridden by the model's `generation_config.json`: `{'temperature': 0.6, 'top_k': 20, 'top_p': 0.95}`. If this is not intended, please relaunch vLLM instance with `--generation-config vllm`.
+(APIServer pid=52) WARNING 05-06 12:37:09 [serving.py:225] `VLLM_ENABLE_RESPONSES_API_STORE` is enabled. This may cause a memory leak since we never remove responses from the store.
+(APIServer pid=52) INFO 05-06 12:37:09 [hf.py:314] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=52) INFO 05-06 12:37:16 [base.py:231] Multi-modal warmup completed in 7.401s
+(APIServer pid=52) INFO 05-06 12:37:16 [api_server.py:594] Starting vLLM server on http://127.0.0.1:9950
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:37] Available routes are:
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /openapi.json, Methods: HEAD, GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /docs, Methods: HEAD, GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /docs/oauth2-redirect, Methods: HEAD, GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /redoc, Methods: HEAD, GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /sleep, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /wake_up, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /is_sleeping, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /collective_rpc, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /reset_prefix_cache, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /reset_mm_cache, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /reset_encoder_cache, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /tokenize, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /detokenize, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /load, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /version, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /health, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /metrics, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /server_info, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/models, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /ping, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /ping, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /invocations, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/chat/completions, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/chat/completions/batch, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/responses, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/responses/{response_id}, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/responses/{response_id}/cancel, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/completions, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/messages, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/messages/count_tokens, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /inference/v1/generate, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /pause, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /resume, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /is_paused, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /init_weight_transfer_engine, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /update_weights, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /get_world_size, Methods: GET
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /scale_elastic_ep, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /is_scaling_elastic_ep, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/chat/completions/render, Methods: POST
+(APIServer pid=52) INFO 05-06 12:37:16 [launcher.py:46] Route: /v1/completions/render, Methods: POST
+(APIServer pid=52) INFO:     Started server process [52]
+(APIServer pid=52) INFO:     Waiting for application startup.
+(APIServer pid=52) INFO:     Application startup complete.
+(APIServer pid=52) INFO:     127.0.0.1:51992 - "GET /health HTTP/1.1" 200 OK
+(APIServer pid=52) INFO:     127.0.0.1:52004 - "GET /v1/models HTTP/1.1" 200 OK
+(APIServer pid=52) INFO:     127.0.0.1:52020 - "GET /metrics HTTP/1.1" 200 OK
+[VLLM-READY] cuda_graph_capture_time=326.3s
+[VLLM-READY] /health 200 OK at 2026-05-06T12:37:20.563608+00:00
+[VLLM-READY] expected_models=qwen3.5-27b
+[VLLM-READY] served_models=qwen3.5-27b
+(APIServer pid=52) INFO:     127.0.0.1:52032 - "GET /health HTTP/1.1" 200 OK
+(APIServer pid=52) INFO 05-06 12:37:20 [api_router.py:39] Resetting prefix cache...
+(EngineCore pid=218) INFO 05-06 12:37:20 [block_pool.py:472] Successfully reset prefix cache
+(APIServer pid=52) INFO:     127.0.0.1:52040 - "POST /reset_prefix_cache HTTP/1.1" 200 OK
+(APIServer pid=52) INFO 05-06 12:37:20 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=52) INFO 05-06 12:37:28 [loggers.py:259] Engine 000: Avg prompt throughput: 3.3 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 1.4%, Prefix cache hit rate: 0.0%
+(APIServer pid=52) INFO 05-06 12:37:38 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 1.4%, Prefix cache hit rate: 0.0%
+(APIServer pid=52) INFO 05-06 12:37:58 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 6.0 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 1.4%, Prefix cache hit rate: 0.0%
+(APIServer pid=52) INFO 05-06 12:38:08 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 7.8 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 1.4%, Prefix cache hit rate: 0.0%
+(APIServer pid=52) INFO 05-06 12:38:08 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 1.33, Accepted throughput: 0.03 tokens/s, Drafted throughput: 0.49 tokens/s, Accepted: 2 tokens, Drafted: 30 tokens, Per-position acceptance rate: 0.333, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 6.7%
+(APIServer pid=52) INFO 05-06 12:38:18 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 8.5 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 1.4%, Prefix cache hit rate: 0.0%
+(APIServer pid=52) INFO 05-06 12:38:18 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 2.00, Accepted throughput: 0.90 tokens/s, Drafted throughput: 4.50 tokens/s, Accepted: 9 tokens, Drafted: 45 tokens, Per-position acceptance rate: 0.667, 0.222, 0.111, 0.000, 0.000, Avg Draft acceptance rate: 20.0%
+(APIServer pid=52) INFO 05-06 12:38:28 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 7.6 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 1.4%, Prefix cache hit rate: 0.0%
+(APIServer pid=52) INFO 05-06 12:38:28 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 1.00, Accepted throughput: 0.00 tokens/s, Drafted throughput: 4.50 tokens/s, Accepted: 0 tokens, Drafted: 45 tokens, Per-position acceptance rate: 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 0.0%
+(APIServer pid=52) INFO 05-06 12:38:38 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 8.0 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 1.4%, Prefix cache hit rate: 0.0%
+(APIServer pid=52) INFO 05-06 12:38:38 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 1.40, Accepted throughput: 0.40 tokens/s, Drafted throughput: 5.00 tokens/s, Accepted: 4 tokens, Drafted: 50 tokens, Per-position acceptance rate: 0.200, 0.100, 0.100, 0.000, 0.000, Avg Draft acceptance rate: 8.0%
+(APIServer pid=52) INFO:     127.0.0.1:52574 - "GET /health HTTP/1.1" 200 OK
+(APIServer pid=52) INFO 05-06 12:38:40 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=52) INFO:     127.0.0.1:52056 - "POST /v1/responses HTTP/1.1" 200 OK
+(APIServer pid=52) INFO:     127.0.0.1:52578 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=52) INFO 05-06 12:38:40 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=52) INFO 05-06 12:38:40 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=52) INFO 05-06 12:38:40 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=52) INFO 05-06 12:38:40 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/torch/_dynamo/eval_frame.py:1154: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (3) < num_heads (16). This may indicate the inputs were passed in head-first format [B, H, T, ...] Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*args, **kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (3) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=52) INFO 05-06 12:38:48 [loggers.py:259] Engine 000: Avg prompt throughput: 182.7 tokens/s, Avg generation throughput: 23.7 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 5.6%, Prefix cache hit rate: 41.2%
+(APIServer pid=52) INFO 05-06 12:38:48 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 2.00, Accepted throughput: 0.60 tokens/s, Drafted throughput: 2.60 tokens/s, Accepted: 6 tokens, Drafted: 26 tokens, Per-position acceptance rate: 0.667, 0.333, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 23.1%
+(APIServer pid=52) INFO 05-06 12:38:58 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 30.7 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 5.6%, Prefix cache hit rate: 41.2%
+(APIServer pid=52) INFO 05-06 12:38:58 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 1.86, Accepted throughput: 1.90 tokens/s, Drafted throughput: 10.60 tokens/s, Accepted: 19 tokens, Drafted: 106 tokens, Per-position acceptance rate: 0.455, 0.227, 0.136, 0.045, 0.000, Avg Draft acceptance rate: 17.9%
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/torch/_dynamo/eval_frame.py:1154: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (2) < num_heads (16). This may indicate the inputs were passed in head-first format [B, H, T, ...] Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*args, **kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (2) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/torch/_dynamo/eval_frame.py:1154: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (3) < num_heads (16). This may indicate the inputs were passed in head-first format [B, H, T, ...] Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*args, **kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (3) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=52) INFO 05-06 12:39:08 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 29.0 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 5.6%, Prefix cache hit rate: 41.2%
+(APIServer pid=52) INFO 05-06 12:39:08 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 1.41, Accepted throughput: 1.40 tokens/s, Drafted throughput: 16.90 tokens/s, Accepted: 14 tokens, Drafted: 169 tokens, Per-position acceptance rate: 0.324, 0.059, 0.029, 0.000, 0.000, Avg Draft acceptance rate: 8.3%
+(APIServer pid=52) INFO 05-06 12:39:15 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=52) INFO:     127.0.0.1:52584 - "POST /v1/responses HTTP/1.1" 200 OK
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/torch/_dynamo/eval_frame.py:1154: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (1) < num_heads (16). This may indicate the inputs were passed in head-first format [B, H, T, ...] Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*args, **kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (1) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/torch/_dynamo/eval_frame.py:1154: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (2) < num_heads (16). This may indicate the inputs were passed in head-first format [B, H, T, ...] Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*args, **kwargs)
+(EngineCore pid=218) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (2) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=218)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=52) INFO 05-06 12:39:19 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 27.1 tokens/s, Running: 3 reqs, Waiting: 0 reqs, GPU KV cache usage: 4.2%, Prefix cache hit rate: 41.2%
+(APIServer pid=52) INFO 05-06 12:39:19 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 1.50, Accepted throughput: 2.00 tokens/s, Drafted throughput: 20.00 tokens/s, Accepted: 20 tokens, Drafted: 200 tokens, Per-position acceptance rate: 0.400, 0.050, 0.025, 0.025, 0.000, Avg Draft acceptance rate: 10.0%
+(APIServer pid=52) INFO 05-06 12:39:20 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=52) INFO:     127.0.0.1:52600 - "POST /v1/responses HTTP/1.1" 200 OK
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110] EngineCore encountered a fatal error.
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110] Traceback (most recent call last):
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1101, in run_engine_core
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     engine_core.run_busy_loop()
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1142, in run_busy_loop
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     self._process_engine_step()
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1181, in _process_engine_step
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     outputs, model_executed = self.step_fn()
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]                               ^^^^^^^^^^^^^^
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 391, in step
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     scheduler_output = self.scheduler.schedule()
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]                        ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py", line 463, in schedule
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     new_blocks = self.kv_cache_manager.allocate_slots(
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_manager.py", line 404, in allocate_slots
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     new_blocks = self.coordinator.allocate_new_blocks(
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_coordinator.py", line 167, in allocate_new_blocks
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     return tuple(
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]            ^^^^^^
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_coordinator.py", line 168, in <genexpr>
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     manager.allocate_new_blocks(
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/single_type_kv_cache_manager.py", line 955, in allocate_new_blocks
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]     assert num_required_blocks > len(req_blocks), (
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=218) ERROR 05-06 12:39:28 [core.py:1110] AssertionError: num_required_blocks 7 < len(req_blocks) 8
+(EngineCore pid=218) Process EngineCore:
+(EngineCore pid=218) Traceback (most recent call last):
+(EngineCore pid=218)   File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+(EngineCore pid=218)     self.run()
+(EngineCore pid=218)   File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+(EngineCore pid=218)     self._target(*self._args, **self._kwargs)
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1112, in run_engine_core
+(EngineCore pid=218)     raise e
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1101, in run_engine_core
+(EngineCore pid=218)     engine_core.run_busy_loop()
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1142, in run_busy_loop
+(EngineCore pid=218)     self._process_engine_step()
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1181, in _process_engine_step
+(EngineCore pid=218)     outputs, model_executed = self.step_fn()
+(EngineCore pid=218)                               ^^^^^^^^^^^^^^
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 391, in step
+(EngineCore pid=218)     scheduler_output = self.scheduler.schedule()
+(EngineCore pid=218)                        ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py", line 463, in schedule
+(EngineCore pid=218)     new_blocks = self.kv_cache_manager.allocate_slots(
+(EngineCore pid=218)                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_manager.py", line 404, in allocate_slots
+(EngineCore pid=218)     new_blocks = self.coordinator.allocate_new_blocks(
+(EngineCore pid=218)                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_coordinator.py", line 167, in allocate_new_blocks
+(EngineCore pid=218)     return tuple(
+(EngineCore pid=218)            ^^^^^^
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_coordinator.py", line 168, in <genexpr>
+(EngineCore pid=218)     manager.allocate_new_blocks(
+(EngineCore pid=218)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/single_type_kv_cache_manager.py", line 955, in allocate_new_blocks
+(EngineCore pid=218)     assert num_required_blocks > len(req_blocks), (
+(EngineCore pid=218)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=218) AssertionError: num_required_blocks 7 < len(req_blocks) 8
+(APIServer pid=52) ERROR 05-06 12:39:28 [async_llm.py:707] AsyncLLM output_handler failed.
+(APIServer pid=52) ERROR 05-06 12:39:28 [async_llm.py:707] Traceback (most recent call last):
+(APIServer pid=52) ERROR 05-06 12:39:28 [async_llm.py:707]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/async_llm.py", line 663, in output_handler
+(APIServer pid=52) ERROR 05-06 12:39:28 [async_llm.py:707]     outputs = await engine_core.get_output_async()
+(APIServer pid=52) ERROR 05-06 12:39:28 [async_llm.py:707]               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [async_llm.py:707]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core_client.py", line 985, in get_output_async
+(APIServer pid=52) ERROR 05-06 12:39:28 [async_llm.py:707]     raise self._format_exception(outputs) from None
+(APIServer pid=52) ERROR 05-06 12:39:28 [async_llm.py:707] vllm.v1.engine.exceptions.EngineDeadError: EngineCore encountered an issue. See stack trace (above) for the root cause.
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346] Engine Exception caught. Request id: resp_94decad574103446
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346] Traceback (most recent call last):
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     await app(scope, receive, sender)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 120, in app
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     response = await f(request)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                ^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 674, in app
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     raw_response = await run_endpoint_function(
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 328, in run_endpoint_function
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return await dependant.call(**values)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/utils.py", line 95, in wrapper
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return handler_task.result()
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/utils.py", line 116, in wrapper
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return await func(*args, **kwargs)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/api_router.py", line 64, in create_responses
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     generator = await handler.create_responses(request, raw_request)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 565, in create_responses
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return await self.responses_full_generator(
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 754, in responses_full_generator
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     async for _ in result_generator:
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 658, in _generate_with_builtin_tools
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     async for res in generator:
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/async_llm.py", line 582, in generate
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     out = q.get_nowait() or await q.get()
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                             ^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/output_processor.py", line 85, in get
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     raise output
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/async_llm.py", line 663, in output_handler
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     outputs = await engine_core.get_output_async()
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core_client.py", line 985, in get_output_async
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     raise self._format_exception(outputs) from None
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346] vllm.v1.engine.exceptions.EngineDeadError: EngineCore encountered an issue. See stack trace (above) for the root cause.
+(APIServer pid=52) INFO:     127.0.0.1:52594 - "POST /v1/responses HTTP/1.1" 500 Internal Server Error
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346] Engine Exception caught. Request id: resp_ad74500c7dfaa3ca
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346] Traceback (most recent call last):
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     await app(scope, receive, sender)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 120, in app
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     response = await f(request)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                ^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 674, in app
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     raw_response = await run_endpoint_function(
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/fastapi/routing.py", line 328, in run_endpoint_function
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return await dependant.call(**values)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/utils.py", line 95, in wrapper
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return handler_task.result()
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/utils.py", line 116, in wrapper
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return await func(*args, **kwargs)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/api_router.py", line 64, in create_responses
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     generator = await handler.create_responses(request, raw_request)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 565, in create_responses
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return await self.responses_full_generator(
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 754, in responses_full_generator
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     async for _ in result_generator:
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 658, in _generate_with_builtin_tools
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     async for res in generator:
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/async_llm.py", line 582, in generate
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     out = q.get_nowait() or await q.get()
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                             ^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/output_processor.py", line 85, in get
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     raise output
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/utils.py", line 116, in wrapper
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return await func(*args, **kwargs)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/api_router.py", line 64, in create_responses
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     generator = await handler.create_responses(request, raw_request)
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 565, in create_responses
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     return await self.responses_full_generator(
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 754, in responses_full_generator
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     async for _ in result_generator:
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py", line 658, in _generate_with_builtin_tools
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     async for res in generator:
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/async_llm.py", line 582, in generate
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     out = q.get_nowait() or await q.get()
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]                             ^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/output_processor.py", line 85, in get
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     raise output
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/async_llm.py", line 663, in output_handler
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     outputs = await engine_core.get_output_async()
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core_client.py", line 985, in get_output_async
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346]     raise self._format_exception(outputs) from None
+(APIServer pid=52) ERROR 05-06 12:39:28 [server_utils.py:346] vllm.v1.engine.exceptions.EngineDeadError: EngineCore encountered an issue. See stack trace (above) for the root cause.
+(APIServer pid=52) INFO:     127.0.0.1:52602 - "POST /v1/responses HTTP/1.1" 500 Internal Server Error

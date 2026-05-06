@@ -1,0 +1,17 @@
+Created candidate `030` with the required artifacts under `candidates/030`:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The serving surface is a distinct ngram speculative decode shape:
+
+```yaml
+spec_decode:
+  method: ngram
+  num_speculative_tokens: 5
+  prompt_lookup_min: 2
+  prompt_lookup_max: 8
+```
+
+No live benchmark was run.

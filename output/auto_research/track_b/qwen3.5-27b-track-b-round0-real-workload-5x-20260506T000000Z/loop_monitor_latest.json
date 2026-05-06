@@ -1,26 +1,25 @@
 {
   "attempts": [
     {
-      "candidate_accept_decode_tps": 18.9047064,
-      "candidate_id": "029",
-      "decode_tps": 7.731502,
-      "previous_best_decode_tps": 15.753922,
-      "reason": "speed_below_candidate_acceptance",
-      "runtime_config_id": "9d882675-8ea4-4cbb-b527-cf5a3cbd1ed4",
-      "runtime_config_ref": "candidates/029/tuned_config_bundle.yaml",
-      "runtime_restore_ref": "candidates/029/runtime_restore_result.json",
+      "candidate_id": "030",
+      "detail": ".py\", line 1021, in raise_for_status\n    raise HTTPError(http_error_msg, response=self)\nrequests.exceptions.HTTPError: 500 Server Error: Internal Server Error for url: http://127.0.0.1:9950/v1/responses\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 400, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 392, in main\n    result = measure(args)\n             ^^^^^^^^^^^^^\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 286, in measure\n    warm_rows = _run_warm_batch(\n                ^^^^^^^^^^^^^^^^\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 244, in _run_warm_batch\n    row = future.result()\n          ^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/concurrent/futures/_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/concurrent/futures/_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"/usr/lib/python3.12/concurrent/futures/thread.py\", line 58, in run\n    result = self.fn(*self.args, **self.kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 201, in _post_response\n    _raise_for_status_with_body(response)\n  File \"/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py\", line 36, in _raise_for_status_with_body\n    raise requests.HTTPError(detail, response=response) from exc\nrequests.exceptions.HTTPError: 500 Server Error: Internal Server Error for url: http://127.0.0.1:9950/v1/responses; response_body={\"error\":{\"message\":\"EngineCore encountered an issue. See stack trace (above) for the root cause.\",\"type\":\"InternalServerError\",\"param\":null,\"code\":500}}\n",
+      "kernel_selection": null,
+      "reason": "throughput_measure_failed",
+      "runtime_config_id": "92962a37-27d0-464a-87da-d830d1094aa8",
+      "runtime_config_ref": "candidates/030/tuned_config_bundle.yaml",
+      "runtime_log_snapshot_ref": "candidates/030/runtime_logs_on_failure.log",
+      "runtime_restore_ref": "candidates/030/runtime_restore_result.json",
       "spec_decode": {
         "method": "ngram",
-        "num_speculative_tokens": 4,
-        "prompt_lookup_max": 6,
+        "num_speculative_tokens": 5,
+        "prompt_lookup_max": 8,
         "prompt_lookup_min": 2
       },
       "status": "rejected",
-      "target_decode_tps": 37.5,
       "vllm_config": null
     }
   ],
-  "completed_at": "2026-05-06T12:22:50Z",
+  "completed_at": "2026-05-06T12:45:20Z",
   "round_dir": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
   "schema": "lumo.track_b.loop_run.v1"
 }
