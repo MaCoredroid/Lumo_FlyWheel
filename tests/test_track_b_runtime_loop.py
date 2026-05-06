@@ -412,3 +412,20 @@ def test_surface_history_continues_distinct_spec_decode_after_valid_rejection(tm
 
     assert loop._has_valid_rejected_spec_decode(history)
     assert "continue only with a distinct ngram spec_decode shape" in brief
+
+
+def test_runtime_log_snapshot_captures_log_tail_on_failure(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    logs_root = tmp_path / "logs"
+    candidate_dir = tmp_path / "round" / "candidates" / "001"
+    logs_root.mkdir()
+    candidate_dir.mkdir(parents=True)
+    (logs_root / "vllm.log").write_text("ok\nTraceback line\nInternalServerError\n", encoding="utf-8")
+    args = argparse.Namespace(runtime_logs_root=logs_root)
+
+    snapshot_ref = loop._snapshot_runtime_logs(args, candidate_dir, reason="throughput_measure_failed")
+
+    assert snapshot_ref == "runtime_logs_on_failure.log"
+    snapshot = (candidate_dir / snapshot_ref).read_text(encoding="utf-8")
+    assert "throughput_measure_failed" in snapshot
+    assert "InternalServerError" in snapshot

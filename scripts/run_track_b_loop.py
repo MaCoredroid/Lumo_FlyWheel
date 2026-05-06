@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -768,6 +769,30 @@ def _run_cmd(argv: list[str], *, cwd: Path, output_path: Path | None = None) -> 
     return completed.returncode, text
 
 
+def _tail_file(path: Path, *, max_lines: int = 400) -> str:
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            return "".join(deque(handle, maxlen=max_lines))
+    except OSError as exc:
+        return f"<failed to read {path}: {exc}>\n"
+
+
+def _snapshot_runtime_logs(args: argparse.Namespace, candidate_dir: Path, *, reason: str) -> str | None:
+    logs_root = Path(args.runtime_logs_root)
+    if not logs_root.is_dir():
+        return None
+    log_paths = sorted(logs_root.glob("*.log"))
+    if not log_paths:
+        return None
+    snapshot_path = candidate_dir / "runtime_logs_on_failure.log"
+    parts = [f"# Runtime log snapshot: {reason}\n"]
+    for log_path in log_paths:
+        parts.append(f"\n==> {log_path} <==\n")
+        parts.append(_tail_file(log_path))
+    snapshot_path.write_text("".join(parts), encoding="utf-8")
+    return snapshot_path.name
+
+
 def _evaluate_candidate_core(
     args: argparse.Namespace,
     round_dir: Path,
@@ -1073,6 +1098,14 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             result["spec_decode"] = spec_decode_config
         return result
     finally:
+        if (
+            runtime_activation is not None
+            and result is not None
+            and result.get("reason") == "throughput_measure_failed"
+        ):
+            snapshot_ref = _snapshot_runtime_logs(args, candidate_dir, reason=str(result.get("reason")))
+            if snapshot_ref is not None:
+                result["runtime_log_snapshot_ref"] = str((candidate_dir / snapshot_ref).relative_to(round_dir))
         if runtime_activation is not None and args.restore_runtime_after_candidate:
             restore_path = candidate_dir / "runtime_restore_result.json"
             try:
