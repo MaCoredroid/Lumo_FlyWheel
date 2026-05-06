@@ -1,0 +1,1 @@
+This candidate intentionally trades some of candidate 020's speculative depth for lower truncation risk. The lookup window is widened to 16 to recover draft-hit opportunities that candidate 018 may have missed with `prompt_lookup_min: 1` and `prompt_lookup_max: 8`, but the controller should watch B-1 concurrent-output completeness closely.

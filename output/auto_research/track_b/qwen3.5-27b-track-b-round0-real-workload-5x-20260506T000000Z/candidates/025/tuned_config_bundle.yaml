@@ -1,0 +1,61 @@
+tuned_config_bundle:
+  bundle_id: 8ea74023-9a0a-4dd6-8505-198ae20a9b7a
+  produced_at: '2026-05-06T10:47:32+00:00'
+  weight_version_id: 2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+  model_id: qwen3.5-27b
+  family_id: qwen3.5-27b
+  workload_distribution_id: 632cac0c573c17b29328476ff8a9f4892fbad8ca2840fb13f62fcdd4533f56ad
+  vllm_config:
+    max_num_seqs: 4
+    max_num_batched_tokens: 8192
+    enable_chunked_prefill: true
+    enable_prefix_caching: true
+    gpu_memory_utilization: 0.9
+    max_model_len: 131072
+    kv_cache_dtype: fp8_e5m2
+  request_shaping: {}
+  kernel_selection: {}
+  spec_decode:
+    method: ngram
+    num_speculative_tokens: 2
+    prompt_lookup_min: 2
+    prompt_lookup_max: 16
+  lora_policy: {}
+  layer_0_deltanet: {}
+  layer_0_gatedattn: {}
+  layer_0_fp8_gemm: {}
+  objective:
+    decode_speed_at_least_tps: 37.5
+    candidate_accept_decode_tps: 18.9047064
+    metric: warm_decode_tps
+  measurement_trace_ref: candidates/025/throughput.json
+  search_trace_ref: candidates/025
+  baseline_bundle_id: null
+  regression_guard:
+    b1_required: true
+    b2_required_before_final: true
+    b3_required_before_final: true
+  safety_rails:
+    preserve_model_weights: true
+    preserve_sampling_behavior: true
+    runtime_config_fields_only:
+    - enable_chunked_prefill
+    - enable_prefix_caching
+    - gpu_memory_utilization
+    - kv_cache_dtype
+    - max_model_len
+    - max_num_batched_tokens
+    - max_num_seqs
+    spec_decode_fields_only:
+    - method
+    - num_speculative_tokens
+    - prompt_lookup_max
+    - prompt_lookup_min
+  round_provenance:
+    round_type: track_b_auto_research_runtime_config
+    candidate_id: '025'
+    confidence: experimental
+    latency_above_slo: false
+    workload_descriptor_path: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/workload.yaml
+    previous_tuned_config_path: null
+    previous_tuned_config_warning: null

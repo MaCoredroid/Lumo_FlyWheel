@@ -1,0 +1,8 @@
+Authored candidate `025` under `candidates/025`.
+
+Created:
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/025/candidate_analysis.md:1)
+- [serve_config.yaml](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/025/serve_config.yaml:1)
+- [notes.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/025/notes.md:1)
+
+Surface selected: ngram speculative decoding with `num_speculative_tokens: 2`, `prompt_lookup_min: 2`, `prompt_lookup_max: 16`. I did not run benchmarks.
