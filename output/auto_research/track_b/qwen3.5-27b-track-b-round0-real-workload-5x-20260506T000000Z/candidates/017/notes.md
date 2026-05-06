@@ -1,0 +1,1 @@
+Measurement caveat: this is a deliberately narrow ngram speculative-decoding retry after candidate 013 failed throughput measurement. If the failure was caused by any ngram speculative path issue rather than proposal shape, this candidate may fail before speed can be evaluated.

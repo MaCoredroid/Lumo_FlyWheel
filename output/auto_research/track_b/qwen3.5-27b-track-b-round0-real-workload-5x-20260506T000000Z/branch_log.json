@@ -198,5 +198,25 @@
       "max_num_batched_tokens": 2048,
       "max_num_seqs": 8
     }
+  },
+  {
+    "candidate_accept_decode_tps": 9.181272,
+    "candidate_id": "017",
+    "decode_tps": 7.808374,
+    "previous_best_decode_tps": 7.65106,
+    "reason": "speed_below_candidate_acceptance",
+    "recorded_at": "2026-05-06T08:37:29Z",
+    "runtime_config_id": "1e26b8de-992f-4723-98b8-2ec790cd18c4",
+    "runtime_config_ref": "candidates/017/tuned_config_bundle.yaml",
+    "runtime_restore_ref": "candidates/017/runtime_restore_result.json",
+    "spec_decode": {
+      "method": "ngram",
+      "num_speculative_tokens": 1,
+      "prompt_lookup_max": 8,
+      "prompt_lookup_min": 1
+    },
+    "status": "rejected",
+    "target_decode_tps": 37.5,
+    "vllm_config": null
   }
 ]

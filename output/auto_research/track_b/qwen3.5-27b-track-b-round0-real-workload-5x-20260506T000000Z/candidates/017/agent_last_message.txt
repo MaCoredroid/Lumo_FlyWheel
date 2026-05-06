@@ -1,0 +1,17 @@
+Authored candidate `017` under `candidates/017`:
+
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/017/candidate_analysis.md)
+- [serve_config.yaml](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/017/serve_config.yaml)
+- [notes.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/017/notes.md)
+
+Serving surface is a distinct conservative ngram speculative decode retry:
+
+```yaml
+spec_decode:
+  method: ngram
+  num_speculative_tokens: 1
+  prompt_lookup_min: 1
+  prompt_lookup_max: 8
+```
+
+No benchmarks were run.
