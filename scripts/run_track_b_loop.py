@@ -667,6 +667,56 @@ def _spawn_codex(round_dir: Path, candidate_dir: Path, prompt: str, timeout_s: i
     return {"ok": True, "transcript": str(transcript), "last_message": str(last_message)}
 
 
+def _restore_external_agent_edits(candidate_dir: Path) -> dict[str, Any]:
+    candidate_rel = candidate_dir.resolve().relative_to(REPO_ROOT).as_posix()
+    names = subprocess.run(
+        ["git", "diff", "--name-only"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if names.returncode != 0:
+        return {"ok": False, "reason": "git_diff_name_only_failed", "detail": names.stderr[-2000:]}
+    paths = [
+        line.strip()
+        for line in names.stdout.splitlines()
+        if line.strip() and not line.strip().startswith(f"{candidate_rel}/")
+    ]
+    if not paths:
+        return {"ok": True, "external_paths": []}
+    patch = subprocess.run(
+        ["git", "diff", "--binary", "--", *paths],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if patch.returncode != 0:
+        return {"ok": False, "reason": "git_diff_patch_failed", "paths": paths, "detail": patch.stderr[-2000:]}
+    patch_path = candidate_dir / "agent_external_edits.patch"
+    patch_path.write_text(patch.stdout, encoding="utf-8")
+    restored = subprocess.run(
+        ["git", "apply", "-R"],
+        cwd=REPO_ROOT,
+        input=patch.stdout,
+        text=True,
+        capture_output=True,
+    )
+    if restored.returncode != 0:
+        return {
+            "ok": False,
+            "reason": "git_apply_reverse_failed",
+            "paths": paths,
+            "patch_ref": str(patch_path.relative_to(candidate_dir.parent.parent)),
+            "detail": restored.stderr[-2000:],
+        }
+    return {
+        "ok": True,
+        "external_paths": paths,
+        "patch_ref": str(patch_path.relative_to(candidate_dir.parent.parent)),
+        "restored": True,
+    }
+
+
 class tempfile_file:
     def __enter__(self):
         import tempfile
@@ -1467,12 +1517,20 @@ def run_loop(args: argparse.Namespace) -> dict[str, Any]:
         candidate_dir.mkdir(parents=True)
         prompt = _render_agent_prompt(round_dir, candidate_dir, candidate_id)
         spawn = _spawn_codex(round_dir, candidate_dir, prompt, args.agent_timeout_s)
+        external_edit_guard = _restore_external_agent_edits(candidate_dir)
+        spawn["external_edit_guard"] = external_edit_guard
         (candidate_dir / "spawn_result.json").write_text(
             json.dumps(spawn, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         if not spawn.get("ok"):
             result = {"status": "rejected", "reason": "agent_spawn_failed", "spawn": spawn}
+        elif not external_edit_guard.get("ok"):
+            result = {
+                "status": "rejected",
+                "reason": "agent_external_edit_restore_failed",
+                "external_edit_guard": external_edit_guard,
+            }
         else:
             result = _evaluate_candidate(args, round_dir, candidate_dir, candidate_id)
         (candidate_dir / "controller_result.json").write_text(
