@@ -193,6 +193,7 @@ class TunedConfigBundle:
     vllm_config: dict[str, Any]
     request_shaping: dict[str, Any] = field(default_factory=dict)
     kernel_selection: dict[str, Any] = field(default_factory=dict)
+    spec_decode: dict[str, Any] = field(default_factory=dict)
     lora_policy: dict[str, Any] = field(default_factory=dict)
     layer_0_deltanet: dict[str, Any] = field(default_factory=dict)
     layer_0_gatedattn: dict[str, Any] = field(default_factory=dict)
@@ -217,6 +218,7 @@ class TunedConfigBundle:
                 "vllm_config": dict(self.vllm_config),
                 "request_shaping": dict(self.request_shaping),
                 "kernel_selection": dict(self.kernel_selection),
+                "spec_decode": dict(self.spec_decode),
                 "lora_policy": dict(self.lora_policy),
                 "layer_0_deltanet": dict(self.layer_0_deltanet),
                 "layer_0_gatedattn": dict(self.layer_0_gatedattn),
@@ -273,6 +275,11 @@ class TunedConfigBundle:
             kernel_selection=_require_mapping(
                 bundle_payload.get("kernel_selection", {}),
                 field_name="tuned_config_bundle.kernel_selection",
+                issues=issues,
+            ),
+            spec_decode=_require_mapping(
+                bundle_payload.get("spec_decode", {}),
+                field_name="tuned_config_bundle.spec_decode",
                 issues=issues,
             ),
             lora_policy=_require_mapping(
@@ -495,6 +502,7 @@ def make_tuned_config_bundle(
     round_provenance: dict[str, Any] | None = None,
     request_shaping: dict[str, Any] | None = None,
     kernel_selection: dict[str, Any] | None = None,
+    spec_decode: dict[str, Any] | None = None,
     lora_policy: dict[str, Any] | None = None,
     layer_0_deltanet: dict[str, Any] | None = None,
     layer_0_gatedattn: dict[str, Any] | None = None,
@@ -510,6 +518,7 @@ def make_tuned_config_bundle(
         vllm_config=dict(vllm_config),
         request_shaping=dict(request_shaping or {}),
         kernel_selection=dict(kernel_selection or {}),
+        spec_decode=dict(spec_decode or {}),
         lora_policy=dict(lora_policy or {}),
         layer_0_deltanet=dict(layer_0_deltanet or {}),
         layer_0_gatedattn=dict(layer_0_gatedattn or {}),

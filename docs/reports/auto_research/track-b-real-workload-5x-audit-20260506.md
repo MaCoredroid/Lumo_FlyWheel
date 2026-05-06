@@ -18,6 +18,7 @@ Concrete success criteria:
 
 - Commit: `2a7d7a3 Add real workload Track B gate`
 - Follow-up: runtime-config candidate applicator added after the initial audit so workers can propose real vLLM launch-shape changes via `serve_config.yaml:vllm_config`.
+- Follow-up: speculative decode candidate support added so workers can propose vLLM `--speculative-config` via `serve_config.yaml:spec_decode`.
 - Round directory: `output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z`
 - Measurement script: `scripts/measure_track_b_real_workload.py`
 - Controller: `scripts/run_track_b_loop.py`
@@ -37,6 +38,7 @@ Concrete success criteria:
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
 | Let auto-research author candidates | Candidates `001`-`012` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
+| Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Achieve an accepted candidate | Best candidate `012` measured `7.640033 tok/s`, below `9.0 tok/s` preflight | Not met |
 | Achieve final 5x goal | Best candidate `012` measured `7.640033 tok/s`, below `37.5 tok/s` final target | Not met |
 | Run full `50*5` benchmark | Not run because no candidate cleared the `20%` preflight | Not met, intentionally gated |
@@ -56,12 +58,15 @@ Concrete success criteria:
 | `010` | runtime config, `max_num_batched_tokens: 2048` | n/a | n/a | vLLM started, then rejected on proxy-start failure |
 | `011` | runtime config, `kv_cache_dtype: fp8_e5m2` only | n/a | n/a | Rejected before launch by missing concurrency default |
 | `012` | runtime config, `max_num_seqs: 5`, `max_num_batched_tokens: 2048`, `gpu_memory_utilization: 0.88` | `7.640033` | `1.019x` | Rejected |
+| `013` | spec decode, `ngram`, 4 speculative tokens, prompt lookup 2-32 | n/a | n/a | vLLM launched, then rejected on HTTP 500 during warm workload |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
 Candidate `007` was launched after adding the runtime-config applicator with `--apply-runtime-config` enabled. The worker did not choose the new `vllm_config` surface; it proposed another concurrency-4 request-shaping candidate, so no vLLM restart was needed for that attempt.
 
 Candidates `008`-`012` exercised the runtime-config path. This exposed and fixed loop-infra issues: duplicate request-shaping steering, invalid `kv_cache_dtype` prevalidation, stale tuned-config runtime state, a dedicated Track B proxy port, child `PYTHONPATH` propagation for the proxy process, and default warm concurrency for runtime-only configs. Candidate `012` completed the full runtime-config apply, first-five real-workload measurement, and baseline restore cycle.
+
+Candidate `013` exercised the speculative-decode path. The controller generated a tuned-config bundle with `spec_decode: {method: ngram, num_speculative_tokens: 4, prompt_lookup_min: 2, prompt_lookup_max: 32}` and vLLM launched with `--speculative-config`. vLLM metrics confirmed speculative decoding was active, but the concurrent warm workload hit an HTTP 500 from `/v1/responses`, so the candidate was rejected without a valid throughput measurement. The controller restored the baseline runtime afterward.
 
 ## Runtime Capability Audit
 
@@ -73,14 +78,16 @@ Observed runtime command includes:
 - `--enable-chunked-prefill`
 - `--max-num-batched-tokens 8192`
 - `--max-num-seqs 4`
-- `--enforce-eager`
+- `--no-async-scheduling`
 
 Capability checks:
 
-- `vllm.spec_decode`: absent
+- `vllm.config.speculative.SpeculativeConfig`: present
+- `vllm.v1.spec_decode`: present
+- `vllm.spec_decode`: absent as a legacy module path, but not required for the vLLM 0.19 `--speculative-config` launch path
 - `lmcache`: absent
 - `xgrammar`: present
-- vLLM help exposes `--speculative-config` and `--kv-transfer-config`, but the installed Python package does not expose `vllm.spec_decode`, and LMCache is not installed in the container.
+- vLLM help exposes `--speculative-config` and `--kv-transfer-config`. The installed runtime accepted `method: ngram`; `method: ngram_gpu` did not construct cleanly during introspection, so the controller currently allows only `ngram`.
 
 ## Completion Audit
 
@@ -93,7 +100,7 @@ Capability checks:
 - `incremental_candidates: []`
 - `promoted_candidates: []`
 
-The loop is therefore correctly blocked at the speed preflight. B-1/B-2/B-3 were not run because no candidate reached the incremental speed acceptance bar.
+The loop is therefore correctly blocked at the speed preflight. B-1/B-2/B-3 were not run because no candidate reached the incremental speed acceptance bar. Candidate `013` is excluded from `best_decode_tps` because it failed the real-workload measurement instead of producing a valid warm decode metric.
 
 ## Blocker
 
@@ -101,8 +108,9 @@ The current live runtime surface has not produced enough real-workload warm deco
 
 The next productive Track B branch is not more concurrency search. It should be one of:
 
-1. Install or switch to a vLLM build with working speculative decoding and LMCache support, then launch Track B Round 1.
+1. Continue speculative-decode auto-search only after capturing the vLLM HTTP 500 body/server traceback and constraining the spec-decode surface to stable combinations.
 2. Add a real candidate surface for `xgrammar` / guided decoding and run it only on tool-call-heavy workload slices where constrained generation can affect decode.
-3. Continue runtime-config auto-search only if it explores a new launch surface beyond the tested `max_num_batched_tokens`/`max_num_seqs`/`gpu_memory_utilization` variants, because the first completed runtime-config candidate only reached `7.640033 tok/s`.
+3. Install LMCache or another KV-transfer path before launching a cache-oriented Track B round, because LMCache is not present in the current container.
+4. Continue runtime-config auto-search only if it explores a new launch surface beyond the tested `max_num_batched_tokens`/`max_num_seqs`/`gpu_memory_utilization` variants, because the first completed runtime-config candidate only reached `7.640033 tok/s`.
 
 Until a candidate changes a more productive runtime surface, continuing the same loop is expected to keep generating rejected candidates around `7.3-7.7 tok/s`.

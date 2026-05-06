@@ -360,6 +360,7 @@ class ModelServer:
                     tuned_config_id=active_bundle.bundle_id if active_bundle is not None else None,
                     weight_version_id=weight_version_id,
                     kernel_activation=kernel_activation,
+                    spec_decode=active_bundle.spec_decode if active_bundle is not None else None,
                 ),
             )
             container_id = launch.stdout.strip()
@@ -663,6 +664,7 @@ class ModelServer:
         tuned_config_id: str | None = None,
         weight_version_id: str | None = None,
         kernel_activation: KernelRuntimeActivationPlan | None = None,
+        spec_decode: dict[str, object] | None = None,
     ) -> list[str]:
         log_path = self.logs_path(model_id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -736,6 +738,8 @@ class ModelServer:
                     "qwen3",
                 ]
             )
+        if spec_decode:
+            vllm_args.extend(["--speculative-config", json.dumps(spec_decode, sort_keys=True)])
         if enforce_eager:
             vllm_args.append("--enforce-eager")
         if kernel_activation is not None:
@@ -763,6 +767,7 @@ class ModelServer:
             tuned_config_id=tuned_config_id,
             weight_version_id=weight_version_id,
             kernel_activation=kernel_activation,
+            spec_decode=spec_decode,
         )
         prelaunch_shell = self.prelaunch_shell.rstrip()
         if prelaunch_shell:
@@ -942,6 +947,7 @@ class ModelServer:
         tuned_config_id: str | None,
         weight_version_id: str | None,
         kernel_activation: KernelRuntimeActivationPlan | None = None,
+        spec_decode: dict[str, object] | None = None,
     ) -> str:
         payload = {
             "timestamp": datetime.now(UTC).isoformat(),
@@ -961,6 +967,7 @@ class ModelServer:
             "tuned_config_id": tuned_config_id or "baseline",
             "weight_version_id": weight_version_id or default_weight_version_id(config),
             "kernel_runtime_activation": kernel_activation.as_dict() if kernel_activation is not None else None,
+            "speculative_config": dict(spec_decode or {}),
             "launch_cmd": shlex.join(vllm_args),
         }
         encoded = json.dumps(payload)
@@ -982,6 +989,8 @@ class ModelServer:
             "    handle.write(f\"[VLLM-INIT] tuned_config_id={payload['tuned_config_id']} weight_version_id={payload['weight_version_id']}\\n\")\n"
             "    if payload.get('kernel_runtime_activation') is not None:\n"
             "        handle.write('[VLLM-INIT] kernel_runtime_activation=' + json.dumps(payload['kernel_runtime_activation'], sort_keys=True) + '\\n')\n"
+            "    if payload.get('speculative_config'):\n"
+            "        handle.write('[VLLM-INIT] speculative_config=' + json.dumps(payload['speculative_config'], sort_keys=True) + '\\n')\n"
             "    handle.write(f\"[VLLM-INIT] wire_api={payload['wire_api']}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] responses_api_store={str(payload['responses_api_store']).lower()}\\n\")\n"
             "    handle.write(f\"[VLLM-INIT] dev_mode={str(payload['dev_mode']).lower()} sleep_mode={'enabled' if payload['sleep_mode'] else 'disabled'}\\n\")\n"

@@ -1,0 +1,26 @@
+Traceback (most recent call last):
+  File "/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py", line 389, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py", line 381, in main
+    result = measure(args)
+             ^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py", line 275, in measure
+    warm_rows = _run_warm_batch(
+                ^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py", line 233, in _run_warm_batch
+    row = future.result()
+          ^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel/scripts/measure_track_b_real_workload.py", line 190, in _post_response
+    response.raise_for_status()
+  File "/usr/lib/python3/dist-packages/requests/models.py", line 1021, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 500 Server Error: Internal Server Error for url: http://127.0.0.1:9950/v1/responses

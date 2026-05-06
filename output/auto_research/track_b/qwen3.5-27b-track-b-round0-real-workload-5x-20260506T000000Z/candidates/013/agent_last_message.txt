@@ -1,0 +1,17 @@
+Authored candidate `013` in `candidates/013` with the required files:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The serving surface is the unmeasured controller-supported ngram speculative decoding config:
+
+```yaml
+spec_decode:
+  method: ngram
+  num_speculative_tokens: 4
+  prompt_lookup_min: 2
+  prompt_lookup_max: 32
+```
+
+No live benchmark was run, and no files outside `candidates/013` were edited.

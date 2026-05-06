@@ -45,6 +45,13 @@ _SUPPORTED_VLLM_CONFIG_FIELDS = {
     "max_model_len",
     "kv_cache_dtype",
 }
+_SUPPORTED_SPEC_DECODE_METHODS = {"ngram"}
+_SUPPORTED_SPEC_DECODE_FIELDS = {
+    "method",
+    "num_speculative_tokens",
+    "prompt_lookup_min",
+    "prompt_lookup_max",
+}
 _SURFACE_HISTORY_LIMIT = 12
 
 
@@ -144,7 +151,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "   - `request_shaping.target_concurrency: <1-8>` for batching/concurrency experiments",
             "   - `prefix_cache` settings for prefix-cache experiments",
             "   - `vllm_config` runtime overrides for max_num_seqs (1-64), max_num_batched_tokens (1-16384), enable_chunked_prefill (bool), enable_prefix_caching (bool), gpu_memory_utilization (0.0-0.95), max_model_len (1-131072), or kv_cache_dtype (`fp8_e5m2` or `auto` only)",
-            "   - `spec_decode` settings only if the current runtime actually exposes such flags",
+            "   - `spec_decode` settings for vLLM ngram speculative decoding: method `ngram`, num_speculative_tokens 1-8, prompt_lookup_min 1-16, prompt_lookup_max 1-64",
             "",
             "3. Optional `notes.md` with any blocker or measurement caveat.",
             "",
@@ -246,7 +253,24 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "Controller guidance: request_shaping-only candidates are exhausted; "
             "prefer a vllm_config runtime candidate that changes actual vLLM launch capacity."
         )
+    if not _has_measured_spec_decode(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: vLLM ngram spec_decode is supported and unmeasured in this round; "
+            "prefer a spec_decode candidate before more launch-shape-only variants."
+        )
     return "\n".join(lines)
+
+
+def _has_measured_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if "spec_decode" in signature:
+            return True
+    return False
 
 
 def _request_shaping_only_exhausted(surface_history: list[dict[str, Any]]) -> bool:
@@ -394,6 +418,43 @@ def _parse_vllm_config_overrides(config: dict[str, Any]) -> tuple[dict[str, Any]
     return dict(raw), None
 
 
+def _parse_spec_decode_config(config: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    raw = config.get("spec_decode")
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict):
+        return None, "spec_decode_must_be_mapping"
+    unknown = sorted(set(raw) - _SUPPORTED_SPEC_DECODE_FIELDS)
+    if unknown:
+        return None, f"unsupported_spec_decode_fields:{','.join(unknown)}"
+    method = raw.get("method", "ngram")
+    if method not in _SUPPORTED_SPEC_DECODE_METHODS:
+        return None, "invalid_spec_decode_method:must_be_ngram"
+    parsed: dict[str, Any] = {"method": method}
+    int_ranges = {
+        "num_speculative_tokens": (1, 8),
+        "prompt_lookup_min": (1, 16),
+        "prompt_lookup_max": (1, 64),
+    }
+    for key, (minimum, maximum) in int_ranges.items():
+        value = raw.get(key)
+        if value is None:
+            if key == "num_speculative_tokens":
+                value = 4
+            elif key == "prompt_lookup_min":
+                value = 2
+            else:
+                value = 6
+        if not isinstance(value, int) or isinstance(value, bool):
+            return None, f"invalid_spec_decode_{key}:must_be_int"
+        if value < minimum or value > maximum:
+            return None, f"invalid_spec_decode_{key}:must_be_{minimum}_to_{maximum}"
+        parsed[key] = value
+    if parsed["prompt_lookup_min"] > parsed["prompt_lookup_max"]:
+        return None, "invalid_spec_decode_prompt_lookup_range:min_gt_max"
+    return parsed, None
+
+
 def _validate_vllm_config_override_values(raw: dict[str, Any]) -> str | None:
     int_ranges = {
         "max_num_seqs": (1, 64),
@@ -496,7 +557,8 @@ def _write_runtime_tuned_config_bundle(
     candidate_dir: Path,
     candidate_id: str,
     candidate_config: dict[str, Any],
-    vllm_config_overrides: dict[str, Any],
+    vllm_config_overrides: dict[str, Any] | None,
+    spec_decode_config: dict[str, Any] | None,
     workload_file: Path,
     target_tps: float,
     candidate_accept_tps: float,
@@ -515,8 +577,9 @@ def _write_runtime_tuned_config_bundle(
         family_id=model_config.served_model_name,
         weight_version_id=default_weight_version_id(model_config),
         workload_distribution_id=compute_workload_distribution_id(workload_file),
-        vllm_config=_merged_vllm_config(model_config, vllm_config_overrides),
+        vllm_config=_merged_vllm_config(model_config, dict(vllm_config_overrides or {})),
         request_shaping=dict(candidate_config.get("request_shaping") or {}),
+        spec_decode=dict(spec_decode_config or {}),
         objective={
             "decode_speed_at_least_tps": target_tps,
             "candidate_accept_decode_tps": candidate_accept_tps,
@@ -534,6 +597,7 @@ def _write_runtime_tuned_config_bundle(
             "preserve_model_weights": True,
             "preserve_sampling_behavior": True,
             "runtime_config_fields_only": sorted(_SUPPORTED_VLLM_CONFIG_FIELDS),
+            "spec_decode_fields_only": sorted(_SUPPORTED_SPEC_DECODE_FIELDS),
         },
         round_provenance={
             "round_type": "track_b_auto_research_runtime_config",
@@ -557,7 +621,8 @@ def _apply_runtime_config_candidate(
     candidate_dir: Path,
     candidate_id: str,
     candidate_config: dict[str, Any],
-    vllm_config_overrides: dict[str, Any],
+    vllm_config_overrides: dict[str, Any] | None,
+    spec_decode_config: dict[str, Any] | None,
     workload_file: Path,
     target_tps: float,
     candidate_accept_tps: float,
@@ -571,6 +636,7 @@ def _apply_runtime_config_candidate(
         candidate_id=candidate_id,
         candidate_config=candidate_config,
         vllm_config_overrides=vllm_config_overrides,
+        spec_decode_config=spec_decode_config,
         workload_file=workload_file,
         target_tps=target_tps,
         candidate_accept_tps=candidate_accept_tps,
@@ -826,7 +892,11 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
     vllm_config_overrides, vllm_config_error = _parse_vllm_config_overrides(candidate_config)
     if vllm_config_error is not None:
         return {"status": "rejected", "reason": vllm_config_error}
-    default_concurrency = 4 if vllm_config_overrides is not None else None
+    spec_decode_config, spec_decode_error = _parse_spec_decode_config(candidate_config)
+    if spec_decode_error is not None:
+        return {"status": "rejected", "reason": spec_decode_error}
+    runtime_candidate = vllm_config_overrides is not None or spec_decode_config is not None
+    default_concurrency = 4 if runtime_candidate else None
     if vllm_config_overrides is not None and vllm_config_overrides.get("max_num_seqs") is not None:
         default_concurrency = int(vllm_config_overrides["max_num_seqs"])
     concurrency = _parse_target_concurrency_from_config(
@@ -850,12 +920,13 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
     candidate_accept_tps = previous_best_tps * incremental_multiplier
 
     runtime_activation: dict[str, Any] | None = None
-    if vllm_config_overrides is not None:
+    if runtime_candidate:
         if not args.apply_runtime_config:
             return {
                 "status": "rejected",
                 "reason": "runtime_config_requires_apply_flag",
                 "vllm_config": vllm_config_overrides,
+                "spec_decode": spec_decode_config,
             }
         try:
             runtime_activation = _apply_runtime_config_candidate(
@@ -865,6 +936,7 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
                 candidate_id=candidate_id,
                 candidate_config=candidate_config,
                 vllm_config_overrides=vllm_config_overrides,
+                spec_decode_config=spec_decode_config,
                 workload_file=workload_file,
                 target_tps=target_tps,
                 candidate_accept_tps=candidate_accept_tps,
@@ -881,6 +953,7 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
                 "reason": "runtime_config_apply_failed",
                 "detail": str(exc)[-2000:],
                 "vllm_config": vllm_config_overrides,
+                "spec_decode": spec_decode_config,
                 "runtime_restore_after_apply_failure": restore,
             }
 
@@ -900,6 +973,7 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             result["runtime_config_ref"] = str(Path(runtime_activation["bundle_path"]).relative_to(round_dir))
             result["runtime_config_id"] = runtime_activation["bundle_id"]
             result["vllm_config"] = vllm_config_overrides
+            result["spec_decode"] = spec_decode_config
         return result
     finally:
         if runtime_activation is not None and args.restore_runtime_after_candidate:
@@ -972,6 +1046,13 @@ def _update_ledgers(round_dir: Path, candidate_id: str, result: dict[str, Any]) 
                 ["candidate_id", "tier", "status", "score_json", "artifact_ref", "recorded_at"],
             )
     else:
+        failing_metric_by_reason = {
+            "throughput_measure_failed": "real_workload_measurement",
+            "speed_below_candidate_acceptance": "warm_decode_tps",
+            "speed_below_target": "warm_decode_tps",
+            "runtime_config_apply_failed": "runtime_config",
+            "unsupported_or_missing_serve_config": "serve_config",
+        }
         _append_tsv(
             round_dir / "mutations_rejected.tsv",
             {
@@ -979,7 +1060,7 @@ def _update_ledgers(round_dir: Path, candidate_id: str, result: dict[str, Any]) 
                 "tier": "controller",
                 "cost_bucket": result.get("reason", "rejected"),
                 "reason": result.get("reason", "rejected"),
-                "first_failing_metric": "",
+                "first_failing_metric": failing_metric_by_reason.get(result.get("reason", ""), "controller"),
                 "recorded_at": _now(),
             },
             ["candidate_id", "tier", "cost_bucket", "reason", "first_failing_metric", "recorded_at"],

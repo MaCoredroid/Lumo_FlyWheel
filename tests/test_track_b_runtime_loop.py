@@ -113,6 +113,38 @@ def test_runtime_vllm_config_without_max_num_seqs_uses_default_concurrency(tmp_p
     assert concurrency == 4
 
 
+def test_spec_decode_candidate_parses_ngram_config() -> None:
+    loop = _load_loop_module()
+    parsed, error = loop._parse_spec_decode_config(
+        {
+            "spec_decode": {
+                "method": "ngram",
+                "num_speculative_tokens": 6,
+                "prompt_lookup_min": 2,
+                "prompt_lookup_max": 8,
+            }
+        }
+    )
+
+    assert error is None
+    assert parsed == {
+        "method": "ngram",
+        "num_speculative_tokens": 6,
+        "prompt_lookup_min": 2,
+        "prompt_lookup_max": 8,
+    }
+
+
+def test_spec_decode_candidate_rejects_unsupported_method() -> None:
+    loop = _load_loop_module()
+    parsed, error = loop._parse_spec_decode_config(
+        {"spec_decode": {"method": "draft_model", "num_speculative_tokens": 4}}
+    )
+
+    assert parsed is None
+    assert error == "invalid_spec_decode_method:must_be_ngram"
+
+
 def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) -> None:
     loop = _load_loop_module()
     registry = tmp_path / "model_registry.yaml"
@@ -139,8 +171,12 @@ def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) 
         round_dir=round_dir,
         candidate_dir=candidate_dir,
         candidate_id="000",
-        candidate_config={"request_shaping": {"target_concurrency": 8}},
+        candidate_config={
+            "request_shaping": {"target_concurrency": 8},
+            "spec_decode": {"method": "ngram", "num_speculative_tokens": 4},
+        },
         vllm_config_overrides={"max_num_seqs": 8, "max_num_batched_tokens": 16384},
+        spec_decode_config={"method": "ngram", "num_speculative_tokens": 4},
         workload_file=workload,
         target_tps=37.5,
         candidate_accept_tps=9.0,
@@ -152,6 +188,7 @@ def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) 
     assert bundle.vllm_config["max_num_batched_tokens"] == 16384
     assert bundle.vllm_config["max_model_len"] == 131072
     assert bundle.request_shaping["target_concurrency"] == 8
+    assert bundle.spec_decode["method"] == "ngram"
     assert bundle.objective["candidate_accept_decode_tps"] == 9.0
     assert bundle.round_provenance["round_type"] == "track_b_auto_research_runtime_config"
 
@@ -237,3 +274,4 @@ def test_surface_history_marks_request_shaping_only_as_exhausted(tmp_path: Path)
     assert loop._request_shaping_only_exhausted(history)
     assert "request_shaping-only candidates are exhausted" in brief
     assert "prefer a vllm_config runtime candidate" in brief
+    assert "vLLM ngram spec_decode is supported and unmeasured" in brief

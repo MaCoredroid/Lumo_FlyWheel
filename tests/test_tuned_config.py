@@ -134,6 +134,67 @@ def test_launch_command_respects_loaded_prefix_caching_flag(tmp_path: Path) -> N
     assert "--enable-prefix-caching" not in shell_command
 
 
+def test_launch_command_applies_spec_decode_config_from_bundle(tmp_path: Path) -> None:
+    registry_path = tmp_path / "model_registry.yaml"
+    _write_registry(registry_path)
+    bundle = make_tuned_config_bundle(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        weight_version_id="2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+        workload_distribution_id="prmj-v1-live",
+        vllm_config={
+            "max_num_seqs": 4,
+            "max_num_batched_tokens": 8192,
+            "enable_chunked_prefill": True,
+            "enable_prefix_caching": True,
+            "gpu_memory_utilization": 0.9,
+            "max_model_len": 131072,
+            "kv_cache_dtype": "fp8_e5m2",
+        },
+        spec_decode={
+            "method": "ngram",
+            "num_speculative_tokens": 4,
+            "prompt_lookup_min": 2,
+            "prompt_lookup_max": 6,
+        },
+        objective={"metric": "warm_decode_tps", "value": 9.0},
+        measurement_trace_ref=str(tmp_path / "measurement.json"),
+        search_trace_ref=str(tmp_path / "search.json"),
+        baseline_bundle_id=None,
+        regression_guard={},
+        safety_rails={},
+    )
+    bundle_path = persist_tuned_config_bundle(bundle, tmp_path / "bundles")
+    loaded = load_tuned_config_bundle(bundle_path)
+    assert loaded.spec_decode["method"] == "ngram"
+
+    store = RuntimeStateStore(tmp_path / "state")
+    store.activate_bundle(bundle_path, loaded)
+    server = ModelServer(
+        registry_path=registry_path,
+        state_root=tmp_path / "state",
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+    )
+    resolved_config, _resolved_path, resolved_bundle = server.resolved_model_config("qwen3.5-27b")
+    command = server._build_run_command(
+        "qwen3.5-27b",
+        resolved_config,
+        False,
+        kv_cache_dtype="auto",
+        gpu_memory_utilization=resolved_config.gpu_memory_utilization,
+        enforce_eager=False,
+        tuned_config_id=resolved_bundle.bundle_id if resolved_bundle is not None else None,
+        weight_version_id=resolved_bundle.weight_version_id if resolved_bundle is not None else None,
+        spec_decode=resolved_bundle.spec_decode if resolved_bundle is not None else None,
+    )
+    shell_command = command[-1]
+
+    assert "--speculative-config" in shell_command
+    assert '"method": "ngram"' in shell_command
+    assert '"num_speculative_tokens": 4' in shell_command
+
+
 def test_bundle_confidence_policy_warns_strict_rejects_and_pins_workload_id(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     seed = tmp_path / "seed_trace.jsonl"
     holdout = tmp_path / "holdout_trace.jsonl"

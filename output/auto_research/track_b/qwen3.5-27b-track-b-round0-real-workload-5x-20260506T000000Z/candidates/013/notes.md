@@ -1,0 +1,1 @@
+No live benchmark was run. This candidate intentionally uses only the controller-supported ngram speculative decoding surface because it is unmeasured in the round and changes decode execution behavior without touching target weights, sampling, or CUTLASS kernels.
