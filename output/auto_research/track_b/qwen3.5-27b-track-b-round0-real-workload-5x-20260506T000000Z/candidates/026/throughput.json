@@ -1,0 +1,206 @@
+{
+  "aggregate_warm_metrics_consumption": {
+    "available": true,
+    "bottleneck_hint": "decode",
+    "elapsed_s": 198.956992,
+    "metrics_delta": {
+      "cache_hits": 800.0,
+      "cache_queries": 2643.0,
+      "decode_sum_s": 271.6758054913953,
+      "generation_tokens": 2056.0,
+      "kv_computed_tokens": 1843.0,
+      "prefill_sum_s": 2.594568705186248,
+      "prompt_tokens": 2643.0,
+      "ttft_count": 4.0,
+      "ttft_sum_s": 3.8604416847229004
+    },
+    "request_count": 4,
+    "step_consumption": {
+      "cache_hit_rate_pct": 30.26863412788498,
+      "decode_ms_per_generated_token": 132.138038,
+      "decode_tokens_per_s": 7.567844,
+      "generation_tokens_per_request": 514.0,
+      "prefill_ms_per_kv_token": 1.407796,
+      "prompt_tokens_per_request": 660.75
+    }
+  },
+  "baseline_decode_tps": 7.5,
+  "cold_completions_discarded": 1,
+  "completions_per_task": 5,
+  "decode_tps": 7.567844,
+  "endpoint": "http://127.0.0.1:9950/v1",
+  "max_output_token_cap": null,
+  "measured_at": "2026-05-06T11:16:49Z",
+  "metrics_url": "http://127.0.0.1:9950/metrics",
+  "model": "qwen3.5-27b",
+  "pass": false,
+  "prompt_token_cap": 0,
+  "schema": "lumo.track_b.real_workload_first_five.v1",
+  "seed_trace": "/home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/seed_trace.jsonl",
+  "source_reports": {
+    "l0c_cutlass": "docs/reports/auto_research/l0c-cutlass-round-20260505T204655Z.md",
+    "track_b": "docs/reports/auto_research/l0-warm-decode-quality-bounded-track-20260505.md"
+  },
+  "speedup_vs_baseline": 1.0090458666666666,
+  "target_decode_tps": 37.5,
+  "target_multiplier": 5.0,
+  "task_count": 1,
+  "warm_completions_measured": 4,
+  "warm_concurrency": 4,
+  "warm_decode_tps": 7.567844,
+  "windows": [
+    {
+      "cold_completions": [
+        {
+          "max_output_tokens": 4096,
+          "prompt_tokens_requested": 58,
+          "request_id": "window-001-cold-001",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 68,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cached_tokens_per_turn": [],
+              "input_tokens_per_turn": []
+            },
+            "output_tokens": 631,
+            "output_tokens_details": {
+              "output_tokens_per_turn": [],
+              "reasoning_tokens": 0,
+              "tool_output_tokens": 0,
+              "tool_output_tokens_per_turn": []
+            },
+            "total_tokens": 699
+          },
+          "wall_s": 112.562421
+        }
+      ],
+      "warm_completions": [
+        {
+          "max_output_tokens": 512,
+          "prompt_tokens_requested": 1245,
+          "request_id": "window-001-warm-001",
+          "status": "incomplete",
+          "usage": {
+            "input_tokens": 1255,
+            "input_tokens_details": {
+              "cached_tokens": 800,
+              "cached_tokens_per_turn": [],
+              "input_tokens_per_turn": []
+            },
+            "output_tokens": 512,
+            "output_tokens_details": {
+              "output_tokens_per_turn": [],
+              "reasoning_tokens": 0,
+              "tool_output_tokens": 0,
+              "tool_output_tokens_per_turn": []
+            },
+            "total_tokens": 1767
+          },
+          "wall_s": 67.464165,
+          "warm_index": 1
+        },
+        {
+          "max_output_tokens": 512,
+          "prompt_tokens_requested": 1242,
+          "request_id": "window-001-warm-002",
+          "status": "incomplete",
+          "usage": {
+            "input_tokens": 1252,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cached_tokens_per_turn": [],
+              "input_tokens_per_turn": []
+            },
+            "output_tokens": 512,
+            "output_tokens_details": {
+              "output_tokens_per_turn": [],
+              "reasoning_tokens": 0,
+              "tool_output_tokens": 0,
+              "tool_output_tokens_per_turn": []
+            },
+            "total_tokens": 1764
+          },
+          "wall_s": 67.33317,
+          "warm_index": 2
+        },
+        {
+          "max_output_tokens": 4096,
+          "prompt_tokens_requested": 58,
+          "request_id": "window-001-warm-003",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 68,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cached_tokens_per_turn": [],
+              "input_tokens_per_turn": []
+            },
+            "output_tokens": 392,
+            "output_tokens_details": {
+              "output_tokens_per_turn": [],
+              "reasoning_tokens": 0,
+              "tool_output_tokens": 0,
+              "tool_output_tokens_per_turn": []
+            },
+            "total_tokens": 460
+          },
+          "wall_s": 54.384497,
+          "warm_index": 3
+        },
+        {
+          "max_output_tokens": 4096,
+          "prompt_tokens_requested": 58,
+          "request_id": "window-001-warm-004",
+          "status": "completed",
+          "usage": {
+            "input_tokens": 68,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cached_tokens_per_turn": [],
+              "input_tokens_per_turn": []
+            },
+            "output_tokens": 640,
+            "output_tokens_details": {
+              "output_tokens_per_turn": [],
+              "reasoning_tokens": 0,
+              "tool_output_tokens": 0,
+              "tool_output_tokens_per_turn": []
+            },
+            "total_tokens": 708
+          },
+          "wall_s": 86.377465,
+          "warm_index": 4
+        }
+      ],
+      "warm_metrics_consumption": {
+        "available": true,
+        "bottleneck_hint": "decode",
+        "elapsed_s": 86.380872,
+        "metrics_delta": {
+          "cache_hits": 800.0,
+          "cache_queries": 2643.0,
+          "decode_sum_s": 271.6758054913953,
+          "generation_tokens": 2056.0,
+          "kv_computed_tokens": 1843.0,
+          "prefill_sum_s": 2.594568705186248,
+          "prompt_tokens": 2643.0,
+          "ttft_count": 4,
+          "ttft_sum_s": 3.8604416847229004
+        },
+        "request_count": 4,
+        "step_consumption": {
+          "cache_hit_rate_pct": 30.26863412788498,
+          "decode_ms_per_generated_token": 132.138038,
+          "decode_tokens_per_s": 7.567844,
+          "generation_tokens_per_request": 514.0,
+          "prefill_ms_per_kv_token": 1.407796,
+          "prompt_tokens_per_request": 660.75
+        }
+      },
+      "window_index": 1
+    }
+  ],
+  "workload_distribution_id": "632cac0c573c17b29328476ff8a9f4892fbad8ca2840fb13f62fcdd4533f56ad",
+  "workload_file": "/home/mark/shared/lumoFlyWheel/benchmark_blueprints/workloads/responses-sdk-adapter-cutover-heavy/workload.yaml"
+}

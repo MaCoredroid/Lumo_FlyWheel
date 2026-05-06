@@ -1,0 +1,1 @@
+This candidate intentionally trades some acceptance opportunity for stability by requiring 4-token prompt matches before ngram drafting. It is a distinct speculative-depth/minimum pair from the exhausted `num_speculative_tokens: 3, prompt_lookup_min: 2` family and from the unstable `prompt_lookup_min: 1, prompt_lookup_max: 16` broad-window run.

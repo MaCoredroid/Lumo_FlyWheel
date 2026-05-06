@@ -1,0 +1,17 @@
+Created candidate `026` under `candidates/026` with:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+Surface authored:
+
+```yaml
+spec_decode:
+  method: ngram
+  num_speculative_tokens: 3
+  prompt_lookup_min: 4
+  prompt_lookup_max: 16
+```
+
+I did not run benchmarks or edit anything outside the candidate directory.

@@ -24,3 +24,4 @@ candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
 023	controller	throughput_measure_failed	throughput_measure_failed	real_workload_measurement	2026-05-06T10:26:44Z
 024	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T10:44:16Z
 025	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T11:05:09Z
+026	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T11:23:08Z
