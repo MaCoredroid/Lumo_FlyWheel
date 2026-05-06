@@ -310,3 +310,69 @@ def test_surface_history_marks_request_shaping_only_as_exhausted(tmp_path: Path)
     assert "request_shaping-only candidates are exhausted" in brief
     assert "prefer a vllm_config runtime candidate" in brief
     assert "vLLM ngram spec_decode is supported and unmeasured" in brief
+
+
+def test_surface_history_guides_away_from_flat_runtime_capacity_family(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    for index, max_num_seqs in enumerate((5, 6, 8), start=1):
+        candidate = round_dir / "candidates" / f"{index:03d}"
+        candidate.mkdir(parents=True)
+        (candidate / "serve_config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "vllm_config": {
+                        "max_num_seqs": max_num_seqs,
+                        "max_num_batched_tokens": 2048,
+                        "gpu_memory_utilization": 0.88,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        (candidate / "controller_result.json").write_text(
+            json.dumps(
+                {
+                    "status": "rejected",
+                    "reason": "speed_below_candidate_acceptance",
+                    "decode_tps": 7.6,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._runtime_capacity_family_flat(history)
+    assert "tested runtime-capacity variants are flat" in brief
+
+
+def test_surface_history_guides_safer_spec_decode_retry_after_failed_measurement(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    candidate = round_dir / "candidates" / "001"
+    candidate.mkdir(parents=True)
+    (candidate / "serve_config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "spec_decode": {
+                    "method": "ngram",
+                    "num_speculative_tokens": 4,
+                    "prompt_lookup_min": 2,
+                    "prompt_lookup_max": 32,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (candidate / "controller_result.json").write_text(
+        json.dumps({"status": "rejected", "reason": "throughput_measure_failed"}),
+        encoding="utf-8",
+    )
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._has_failed_spec_decode_without_valid_measurement(history)
+    assert "retry only with a safer distinct ngram shape" in brief

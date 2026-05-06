@@ -278,7 +278,21 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "Controller guidance: request_shaping-only candidates are exhausted; "
             "prefer a vllm_config runtime candidate that changes actual vLLM launch capacity."
         )
-    if not _has_measured_spec_decode(surface_history):
+    if _runtime_capacity_family_flat(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: tested runtime-capacity variants are flat at baseline-level "
+            "throughput; avoid another candidate that only changes max_num_seqs, "
+            "max_num_batched_tokens, or gpu_memory_utilization."
+        )
+    if _has_failed_spec_decode_without_valid_measurement(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: ngram spec_decode launched but failed real-workload "
+            "measurement; retry only with a safer distinct ngram shape before returning "
+            "to launch-capacity-only variants."
+        )
+    elif not _has_any_spec_decode(surface_history):
         lines.append("")
         lines.append(
             "Controller guidance: vLLM ngram spec_decode is supported and unmeasured in this round; "
@@ -287,7 +301,7 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
     return "\n".join(lines)
 
 
-def _has_measured_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
+def _has_any_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
     for row in surface_history:
         try:
             signature = json.loads(row["signature"])
@@ -296,6 +310,44 @@ def _has_measured_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
         if "spec_decode" in signature:
             return True
     return False
+
+
+def _has_failed_spec_decode_without_valid_measurement(surface_history: list[dict[str, Any]]) -> bool:
+    failed_spec_decode = False
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if "spec_decode" not in signature:
+            continue
+        if row.get("decode_tps") is not None:
+            return False
+        if row.get("status") == "rejected" and row.get("reason") == "throughput_measure_failed":
+            failed_spec_decode = True
+    return failed_spec_decode
+
+
+def _runtime_capacity_family_flat(surface_history: list[dict[str, Any]]) -> bool:
+    flat_rejections = 0
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        vllm_config = signature.get("vllm_config")
+        if not isinstance(vllm_config, dict) or row.get("status") != "rejected":
+            continue
+        changed_capacity = any(
+            key in vllm_config
+            for key in ("max_num_seqs", "max_num_batched_tokens", "gpu_memory_utilization")
+        )
+        decode_tps = row.get("decode_tps")
+        if not changed_capacity or decode_tps is None:
+            continue
+        if float(decode_tps) < 8.0:
+            flat_rejections += 1
+    return flat_rejections >= 3
 
 
 def _request_shaping_only_exhausted(surface_history: list[dict[str, Any]]) -> bool:
