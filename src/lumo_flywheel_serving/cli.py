@@ -31,6 +31,7 @@ from .round_driver import (
     run_round,
     run_round_exit_code,
 )
+from .track_b import TrackBRoundManager
 from .workload_p1 import heavy_workload_descriptor_path, validate_p1_workload
 
 
@@ -855,6 +856,34 @@ def cmd_auto_research_run_round(args: argparse.Namespace) -> int:
     return run_round_exit_code(result)
 
 
+def cmd_auto_research_track_b_launch(args: argparse.Namespace) -> int:
+    if (code := _auto_research_help_only(args)) >= 0:
+        return code
+    manager = TrackBRoundManager(repo_root=REPO_ROOT)
+    workload_trace = (
+        args.workload_trace
+        or REPO_ROOT
+        / "benchmark_blueprints"
+        / "families"
+        / "responses-sdk-adapter-cutover"
+        / "seed_trace_v5.jsonl"
+    )
+    result = manager.launch(
+        round_root=args.round_root,
+        workload_trace=workload_trace,
+        model_id=args.model_id,
+        fallback_model_id=args.fallback_model_id,
+        baseline_decode_tps=args.baseline_decode_tps,
+        target_multiplier=args.target_multiplier,
+        mode=args.mode,
+        dry_run=args.dry_run,
+        inherit_cutlass_memory=not args.no_inherit_cutlass_memory,
+        round_id=args.round_id,
+    )
+    print(json.dumps(result.as_dict(), indent=2))
+    return 0
+
+
 def cmd_auto_research_replay_round(args: argparse.Namespace) -> int:
     if (code := _auto_research_help_only(args)) >= 0:
         return code
@@ -1320,6 +1349,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Driver agent that performs each iteration (codex default; claude uses Claude Code CLI auth).",
     )
     auto_run_round.set_defaults(func=cmd_auto_research_run_round)
+
+    auto_track_b_launch = auto_research_subparsers.add_parser("track-b-launch")
+    auto_track_b_launch.add_argument("--help-only", action="store_true")
+    auto_track_b_launch.add_argument("--round-id")
+    auto_track_b_launch.add_argument(
+        "--mode",
+        choices=["round0_prefix_cache", "round1_spec_decode"],
+        default="round0_prefix_cache",
+    )
+    auto_track_b_launch.add_argument(
+        "--workload-trace",
+        help=(
+            "Workload JSONL used to derive Track B fixture metadata. Defaults to "
+            "responses-sdk-adapter-cutover/seed_trace_v5.jsonl."
+        ),
+    )
+    auto_track_b_launch.add_argument("--model-id", default="qwen3.6-27b-fp8")
+    auto_track_b_launch.add_argument("--fallback-model-id", default="qwen3.5-27b")
+    auto_track_b_launch.add_argument("--baseline-decode-tps", type=float, default=7.5)
+    auto_track_b_launch.add_argument("--target-multiplier", type=float, default=2.0)
+    auto_track_b_launch.add_argument("--dry-run", action="store_true")
+    auto_track_b_launch.add_argument("--no-inherit-cutlass-memory", action="store_true")
+    auto_track_b_launch.add_argument(
+        "--round-root", default=str(REPO_ROOT / "output" / "auto_research")
+    )
+    auto_track_b_launch.set_defaults(func=cmd_auto_research_track_b_launch)
 
     auto_replay_round = auto_research_subparsers.add_parser("replay-round")
     auto_replay_round.add_argument("--help-only", action="store_true")

@@ -1,0 +1,7 @@
+Authored candidate `002` in `candidates/002` with:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The candidate uses `request_shaping.target_concurrency: 8` to test higher aggregate warm decode throughput through serving-time batching pressure. I did not run live benchmarks or edit anything outside the candidate directory.

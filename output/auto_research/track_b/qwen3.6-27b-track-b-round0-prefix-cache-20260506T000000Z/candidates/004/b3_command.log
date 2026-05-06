@@ -1,0 +1,92 @@
+{
+  "comparisons": [
+    {
+      "capture_prompt_label": "v5_deep_failure_analysis",
+      "concurrent_text": "\n\n<think>\nThinking Process:\n\n1",
+      "concurrent_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 520,
+        "prompt_tokens_details": null,
+        "total_tokens": 528
+      },
+      "index": 0,
+      "match": true,
+      "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+      "serial_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 520,
+        "prompt_tokens_details": null,
+        "total_tokens": 528
+      }
+    },
+    {
+      "capture_prompt_label": "v5_acceptance_summary",
+      "concurrent_text": "\n\n<think>\n\n</think>\n\nOK",
+      "concurrent_usage": {
+        "completion_tokens": 7,
+        "prompt_tokens": 7241,
+        "prompt_tokens_details": null,
+        "total_tokens": 7248
+      },
+      "index": 1,
+      "match": true,
+      "serial_text": "\n\n<think>\n\n</think>\n\nOK",
+      "serial_usage": {
+        "completion_tokens": 7,
+        "prompt_tokens": 7241,
+        "prompt_tokens_details": null,
+        "total_tokens": 7248
+      }
+    },
+    {
+      "capture_prompt_label": "v5_implementation_plan",
+      "concurrent_text": "\n\n<think>\nThinking Process:\n\n1",
+      "concurrent_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 7241,
+        "prompt_tokens_details": null,
+        "total_tokens": 7249
+      },
+      "index": 2,
+      "match": true,
+      "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+      "serial_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 7241,
+        "prompt_tokens_details": null,
+        "total_tokens": 7249
+      }
+    },
+    {
+      "capture_prompt_label": "v5_holdout_deep_review",
+      "concurrent_text": "\n\n<think>\nThinking Process:\n\n1",
+      "concurrent_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 585,
+        "prompt_tokens_details": null,
+        "total_tokens": 593
+      },
+      "index": 3,
+      "match": true,
+      "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+      "serial_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 585,
+        "prompt_tokens_details": null,
+        "total_tokens": 593
+      }
+    }
+  ],
+  "concurrent_requests": 3,
+  "match_count": 4,
+  "match_rate": 1.0,
+  "measured_at": "2026-05-06T01:53:49Z",
+  "min_match_rate": 1.0,
+  "model": "qwen3.5-27b",
+  "pass": true,
+  "port": 9950,
+  "probe_count": 4,
+  "schema": "lumo.track_b.workload_equivalence_gate.v1",
+  "suite": "b3",
+  "trace_file": "/home/mark/shared/lumoFlyWheel/benchmark_blueprints/families/responses-sdk-adapter-cutover/seed_trace_v5.jsonl"
+}

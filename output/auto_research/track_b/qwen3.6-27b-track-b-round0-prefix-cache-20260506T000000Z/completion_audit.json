@@ -1,0 +1,82 @@
+{
+  "best_decode_tps": 24.373630400693298,
+  "checklist": [
+    {
+      "evidence": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/round_spec.yaml",
+      "pass": true,
+      "requirement": "Track B round spec exists and targets quality-bounded mutation"
+    },
+    {
+      "evidence": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/prior_cutlass_memory.json",
+      "pass": true,
+      "requirement": "Prior CUTLASS auto-research memory is inherited"
+    },
+    {
+      "evidence": [
+        {
+          "candidate_id": "000",
+          "decode_tps": 6.955109589286909,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/candidates/000/throughput.json"
+        },
+        {
+          "candidate_id": "001",
+          "decode_tps": 24.373630400693298,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/candidates/001/throughput.json"
+        },
+        {
+          "candidate_id": "002",
+          "decode_tps": 23.347667345274097,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/candidates/002/throughput.json"
+        },
+        {
+          "candidate_id": "003",
+          "decode_tps": 19.735057036717283,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/candidates/003/throughput.json"
+        },
+        {
+          "candidate_id": "004",
+          "decode_tps": 19.471946265799282,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/candidates/004/throughput.json"
+        }
+      ],
+      "pass": true,
+      "requirement": "Decode throughput reaches 15.00 tok/s"
+    },
+    {
+      "evidence": "candidates/*/b1_result.json",
+      "pass": true,
+      "requirement": "B-1 strong-equivalence/distributional gate passed"
+    },
+    {
+      "evidence": "candidates/*/b2_result.json",
+      "pass": true,
+      "requirement": "B-2 behavioral gate passed"
+    },
+    {
+      "evidence": "candidates/*/b3_result.json",
+      "pass": true,
+      "requirement": "B-3 full quality gate passed before promotion"
+    },
+    {
+      "evidence": [
+        {
+          "candidate_id": "004",
+          "decode_tps": 19.471946265799282,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/candidates/004/throughput.json"
+        }
+      ],
+      "pass": true,
+      "requirement": "One candidate satisfies speed plus B-1/B-2/B-3"
+    }
+  ],
+  "complete": true,
+  "promoted_candidates": [
+    {
+      "candidate_id": "004",
+      "decode_tps": 19.471946265799282,
+      "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z/candidates/004/throughput.json"
+    }
+  ],
+  "round_id": "qwen3.6-27b-track-b-round0-prefix-cache-20260506T000000Z",
+  "target_decode_tps": 15.0
+}

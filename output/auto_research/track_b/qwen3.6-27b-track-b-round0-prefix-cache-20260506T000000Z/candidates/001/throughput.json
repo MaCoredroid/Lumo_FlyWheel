@@ -1,0 +1,108 @@
+{
+  "batch_decode_tps": 24.373630400693298,
+  "batch_requests": [
+    {
+      "batch_index": 0,
+      "completion_tokens": 32,
+      "usage": {
+        "completion_tokens": 32,
+        "prompt_tokens": 8215,
+        "prompt_tokens_details": null,
+        "total_tokens": 8247
+      },
+      "wall_output_tps": 6.094840826034944,
+      "wall_s": 5.250342201441526
+    },
+    {
+      "batch_index": 1,
+      "completion_tokens": 32,
+      "usage": {
+        "completion_tokens": 32,
+        "prompt_tokens": 8215,
+        "prompt_tokens_details": null,
+        "total_tokens": 8247
+      },
+      "wall_output_tps": 6.09438731377739,
+      "wall_s": 5.250732904300094
+    },
+    {
+      "batch_index": 2,
+      "completion_tokens": 32,
+      "usage": {
+        "completion_tokens": 32,
+        "prompt_tokens": 8215,
+        "prompt_tokens_details": null,
+        "total_tokens": 8247
+      },
+      "wall_output_tps": 6.263083205922351,
+      "wall_s": 5.109304626472294
+    },
+    {
+      "batch_index": 3,
+      "completion_tokens": 32,
+      "usage": {
+        "completion_tokens": 32,
+        "prompt_tokens": 8215,
+        "prompt_tokens_details": null,
+        "total_tokens": 8247
+      },
+      "wall_output_tps": 6.096877929474226,
+      "wall_s": 5.248587944544852
+    }
+  ],
+  "batch_wall_s": 5.251577130518854,
+  "candidate_status": "measured",
+  "concurrent_requests": 4,
+  "decode_tps": 24.373630400693298,
+  "max_tokens": 32,
+  "measured_at": "2026-05-06T01:38:27Z",
+  "metric_deltas": {
+    "generation_tokens": 166.0,
+    "prefix_cache_hit_rate": 0.7952931629133698,
+    "prefix_cache_hits": 39200.0,
+    "prefix_cache_queries": 49290.0,
+    "prompt_tokens": 49290.0
+  },
+  "metrics_after": {
+    "vllm:generation_tokens_total": 11861.0,
+    "vllm:prefix_cache_hits_total": 70560.0,
+    "vllm:prefix_cache_queries_total": 107747.0,
+    "vllm:prompt_tokens_total": 105243.0
+  },
+  "metrics_before": {
+    "vllm:generation_tokens_total": 11695.0,
+    "vllm:prefix_cache_hits_total": 31360.0,
+    "vllm:prefix_cache_queries_total": 58457.0,
+    "vllm:prompt_tokens_total": 55953.0
+  },
+  "model": "qwen3.5-27b",
+  "port": 9950,
+  "prefix_words": 2048,
+  "requests": [
+    {
+      "completion_tokens": 19,
+      "usage": {
+        "completion_tokens": 19,
+        "prompt_tokens": 8215,
+        "prompt_tokens_details": null,
+        "total_tokens": 8234
+      },
+      "wall_output_tps": 1.6174921954482648,
+      "wall_s": 11.746579089201987
+    },
+    {
+      "completion_tokens": 19,
+      "usage": {
+        "completion_tokens": 19,
+        "prompt_tokens": 8215,
+        "prompt_tokens_details": null,
+        "total_tokens": 8234
+      },
+      "wall_output_tps": 6.966699403752739,
+      "wall_s": 2.727259911596775
+    }
+  ],
+  "schema": "lumo.track_b.prefix_cache_measurement.v1",
+  "serial_decode_tps": 6.966699403752739,
+  "turns": 2
+}

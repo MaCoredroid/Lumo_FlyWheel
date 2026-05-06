@@ -1,0 +1,1 @@
+Measurement caveat: this candidate is intended to improve aggregate warm decode throughput through higher concurrency. If the controller ranks by single-request latency or excludes batching effects from the decode counter, the expected benefit may not appear even though the serving surface is valid.

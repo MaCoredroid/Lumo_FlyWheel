@@ -99,6 +99,7 @@ PRODUCTION_AUTO_RESEARCH_SUBCOMMANDS = (
     "apply-and-test",
     "warm-diagnostic",
     "cutlass-microbench",
+    "track-b-launch",
     "resume-candidate",
     "resume-round",
 )

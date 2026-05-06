@@ -1,0 +1,8 @@
+Authored candidate `003` under `candidates/003`.
+
+Created:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The config uses `request_shaping.target_concurrency: 6`, positioned between the concurrency-4 pass and concurrency-8 B-3 divergence. No live benchmarks or gates were run.

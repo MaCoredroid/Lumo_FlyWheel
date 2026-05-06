@@ -1,0 +1,9 @@
+candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
+cutlass_prior_001	prior_cutlass_l0c	agent_no_patch	agent_no_patch		2026-05-06T01:32:41Z
+cutlass_prior_002	prior_cutlass_l0c	agent_no_patch	agent_no_patch		2026-05-06T01:32:41Z
+cutlass_prior_003	prior_cutlass_l0c	agent_no_patch	agent_no_patch		2026-05-06T01:32:41Z
+cutlass_prior_004	prior_cutlass_l0c	agent_no_patch	agent_no_patch		2026-05-06T01:32:41Z
+cutlass_prior_005	prior_cutlass_l0c	agent_no_patch	agent_no_patch		2026-05-06T01:32:41Z
+cutlass_prior_006	prior_cutlass_l0c	agent_no_patch	agent_no_patch		2026-05-06T01:32:41Z
+cutlass_prior_007	prior_cutlass_l0c	agent_no_patch	agent_no_patch		2026-05-06T01:32:41Z
+cutlass_prior_008	prior_cutlass_l0c	parity_generation_speed_below_baseline	parity_generation_speed_below_baseline		2026-05-06T01:32:41Z

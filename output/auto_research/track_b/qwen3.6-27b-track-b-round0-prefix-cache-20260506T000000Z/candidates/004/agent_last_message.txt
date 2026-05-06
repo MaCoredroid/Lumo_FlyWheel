@@ -1,0 +1,8 @@
+Authored candidate `004` under `candidates/004`.
+
+Created:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The config uses `request_shaping.target_concurrency: 3` as a lower-concurrency safety probe after the B-3 divergences at 6 and 8. No live benchmarks or gates were run.

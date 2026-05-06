@@ -1,0 +1,18 @@
+schema: lumo.track_b.b3_full_fixture.v1
+source_trace: /home/mark/shared/lumoFlyWheel/benchmark_blueprints/families/responses-sdk-adapter-cutover/seed_trace_v5.jsonl
+source_trace_sha256: 1fda3e376f362e1aefc6becc385e6c903bf23c7e9f2afa6913c4109fe7150933
+benchmarks:
+- mmlu
+- gsm8k
+- humaneval_plus
+- math_500
+- ifeval
+- ruler
+- mauve
+- held_out_perplexity
+thresholds:
+  aggregate_quality_score_delta_pp: -0.5
+  single_benchmark_delta_pp: -1.5
+  mauve: 0.95
+  perplexity_ratio_delta: 0.005
+runner: scripts/run_b3_full.py

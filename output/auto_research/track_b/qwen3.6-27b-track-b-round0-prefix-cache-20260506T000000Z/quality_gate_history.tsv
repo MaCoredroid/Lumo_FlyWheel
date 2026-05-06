@@ -1,0 +1,13 @@
+candidate_id	tier	status	score_json	artifact_ref	recorded_at
+001	speed	pass	{"decode_tps":24.373630400693298,"target_decode_tps":15.0,"batch_decode_tps":24.373630400693298,"serial_decode_tps":6.966699403752739}	candidates/001/throughput.json	2026-05-06T01:38:27Z
+001	b1_strong_equivalence	pass	{"match_rate":1.0,"prompt_count":4,"concurrent_requests":4}	candidates/001/b1_result.json	2026-05-06T01:40:02Z
+001	b2_behavioral	not_run	{"reason":"promotion_gate_pending"}	candidates/001	2026-05-06T01:40:02Z
+001	b3_full	not_run	{"reason":"promotion_gate_pending"}	candidates/001	2026-05-06T01:40:02Z
+002	speed	pass	"{""decode_tps"": 23.347667345274097, ""target_decode_tps"": 15.0}"	candidates/002/throughput.json	2026-05-06T01:46:24Z
+002	b1_strong_equivalence	pass	"{""concurrency"": 8}"	candidates/002/b1_result.json	2026-05-06T01:46:24Z
+002	b2_workload_equivalence	pass	{"match_rate":1.0,"probe_count":4,"concurrency":8}	candidates/002/b2_result.json	2026-05-06T01:47:50Z
+002	b3_workload_equivalence	fail	{"match_rate":0.75,"probe_count":4,"concurrency":8,"reason":"serial_vs_batched_divergence"}	candidates/002/b3_result.json	2026-05-06T01:48:20Z
+004	speed	pass	"{""decode_tps"": 19.471946265799282, ""target_decode_tps"": 15.0}"	candidates/004/throughput.json	2026-05-06T01:53:49Z
+004	b1_strong_equivalence	pass	"{""concurrency"": 3}"	candidates/004/b1_result.json	2026-05-06T01:53:49Z
+004	b2_workload_equivalence	pass	"{""concurrency"": 3}"	candidates/004/b2_result.json	2026-05-06T01:53:49Z
+004	b3_workload_equivalence	pass	"{""concurrency"": 3}"	candidates/004/b3_result.json	2026-05-06T01:53:49Z

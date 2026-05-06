@@ -1,0 +1,10 @@
+{
+  "b1_ref": "candidates/004/b1_result.json",
+  "b2_ref": "candidates/004/b2_result.json",
+  "b3_ref": "candidates/004/b3_result.json",
+  "concurrency": 3,
+  "decode_tps": 19.471946265799282,
+  "status": "accepted_promoted",
+  "target_decode_tps": 15.0,
+  "throughput_ref": "candidates/004/throughput.json"
+}
