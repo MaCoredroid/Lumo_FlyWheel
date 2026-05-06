@@ -1,0 +1,1 @@
+No live benchmark was run. Candidate 039 intentionally stays on the ngram speculative-decode serving surface because recent launch-capacity and attention-backend-only candidates were baseline-flat, while the remaining viable path is a measured-distinct speculative shape with tighter lookup constraints.
