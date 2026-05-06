@@ -87,7 +87,6 @@ Concrete success criteria:
 | `036` | runtime config, default prefix/chunked flags plus `kv_cache_dtype: fp8_e5m2` | n/a | n/a | Rejected before launch as duplicate serving surface |
 | `037` | kernel selection, attention backend `triton` | `7.522407` | `1.003x` | Rejected |
 | `038` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 3-8 | n/a | n/a | Rejected before launch as duplicate serving surface |
-| `037` | kernel selection, attention backend `triton` | `7.522407` | `1.003x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -141,9 +140,7 @@ Candidates `034` and `035` both selected `kernel_selection: {deltanet_kernel: tr
 
 Candidate `036` moved back to `vllm_config` but selected default prefix/chunked flags plus `kv_cache_dtype: fp8_e5m2`. The controller rejected it before launch as `duplicate_serving_surface`; follow-up steering now tells the worker not to retry default-runtime bookkeeping knobs.
 
-Candidate `037` selected `kernel_selection: {attention_backend: triton}`. The controller launched vLLM with `--attention-backend TRITON_ATTN`, and the runtime log confirmed the main attention backend resolved to `TRITON_ATTN`. The first-five real-workload measurement completed at `7.522407 tok/s` by decode-time accounting, below the `18.9047064 tok/s` post-`020` preflight gate. The same throughput artifact records `wall_decode_tokens_per_s: 28.381712` for the four concurrent warm requests, but this candidate did not opt into the new measurement surface, so its official gate remains decode-time warm TPS. The controller restored the baseline runtime afterward.
-
-Candidate `037` selected `kernel_selection: {attention_backend: triton}`. The runtime log confirmed vLLM launched with `--attention-backend TRITON_ATTN`, and the first-five real-workload measurement completed at `7.522407 tok/s`. That is effectively baseline and below the `18.9047064 tok/s` 20%-over-previous-best gate, so B-1/B-2/B-3 did not run. The controller restored the baseline runtime afterward.
+Candidate `037` selected `kernel_selection: {attention_backend: triton}`. The controller launched vLLM with `--attention-backend TRITON_ATTN`, and the runtime log confirmed the main attention backend resolved to `TRITON_ATTN`. The first-five real-workload measurement completed at `7.522407 tok/s` by decode-time accounting, below the `18.9047064 tok/s` post-`020` preflight gate. The same throughput artifact records `wall_decode_tokens_per_s: 28.381712` for the four concurrent warm requests, but that is an aggregate concurrency observation, not the official acceptance metric. The controller restored the baseline runtime afterward.
 
 Candidate `038` selected `spec_decode: {method: ngram, num_speculative_tokens: 3, prompt_lookup_min: 3, prompt_lookup_max: 8}`. The controller rejected it before launch as `duplicate_serving_surface` because that serving surface was already tested by candidate `022`.
 
