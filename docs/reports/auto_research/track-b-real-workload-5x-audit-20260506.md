@@ -36,7 +36,7 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`020` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Let auto-research author candidates | Candidates `001`-`021` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence | Not met |
@@ -66,6 +66,7 @@ Concrete success criteria:
 | `018` | spec decode, `ngram`, 2 speculative tokens, prompt lookup 1-8 | `7.809454` | `1.041x` | Rejected |
 | `019` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 1-16 | n/a | n/a | vLLM launched, then rejected on HTTP 500 during warm workload |
 | `020` | spec decode, `ngram`, 3 speculative tokens, prompt lookup 2-8 | `15.753922` | `2.100x` | Rejected on B-1 equivalence |
+| `021` | spec decode, `ngram`, 4 speculative tokens, prompt lookup 4-8 | `7.624698` | `1.017x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -88,6 +89,8 @@ Candidate `018` increased the stable ngram shape to `num_speculative_tokens: 2` 
 Candidate `019` expanded the same family to `num_speculative_tokens: 3` and prompt lookup `1-16`. vLLM accepted the launch config, but the concurrent warm workload hit an HTTP 500 from `/v1/responses`, so no valid throughput artifact was produced. The measurement harness captured the response body: `EngineCore encountered an issue. See stack trace (above) for the root cause.` The controller restored the baseline runtime afterward.
 
 Candidate `020` narrowed the 3-token speculative surface to prompt lookup `2-8`. It produced the first material speed result in this round: `15.753922 tok/s`, or `2.100x` over the nominal baseline, and cleared the incremental preflight threshold of `9.3713448 tok/s`. It then failed B-1 batch equivalence: `match_rate: 0.5` with two concurrent completions returning empty one-token outputs where serial completions produced eight-token text. The controller rejected it and restored the baseline runtime.
+
+Candidate `021` tried to recover B-1 risk by raising the exact-match lookup floor to `4` while using a 4-token draft budget and lookup max `8`. It completed the first-five real-workload measurement, but the stricter surface lost the speed gain and measured only `7.624698 tok/s`, below the post-`020` preflight threshold of `18.9047064 tok/s`.
 
 ## Runtime Capability Audit
 

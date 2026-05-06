@@ -1,0 +1,10 @@
+Candidate `021` is authored under `candidates/021`.
+
+Created:
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/021/candidate_analysis.md)
+- [serve_config.yaml](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/021/serve_config.yaml)
+- [notes.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/021/notes.md)
+
+Surface selected: `spec_decode` ngram with `num_speculative_tokens: 4`, `prompt_lookup_min: 4`, `prompt_lookup_max: 8`.
+
+No live benchmark was run.

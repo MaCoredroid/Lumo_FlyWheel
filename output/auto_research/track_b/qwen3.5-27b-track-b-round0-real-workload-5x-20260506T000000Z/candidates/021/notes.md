@@ -1,0 +1,1 @@
+No live benchmark was run by this authoring worker. This candidate intentionally keeps ngram lookup narrow and raises the exact-match floor to address the B-1 empty/truncated-output failure observed on candidate 020.
