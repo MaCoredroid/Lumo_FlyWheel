@@ -36,7 +36,7 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`031` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Let auto-research author candidates | Candidates `001`-`032` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
 | Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence | Not met |
@@ -77,6 +77,7 @@ Concrete success criteria:
 | `029` | spec decode, `ngram`, 4 speculative tokens, prompt lookup 2-6 | `7.731502` | `1.031x` | Rejected |
 | `030` | spec decode, `ngram`, 5 speculative tokens, prompt lookup 2-8 | n/a | n/a | vLLM launched, then rejected on HTTP 500 during warm workload |
 | `031` | kernel selection, FP8 GEMM `cublas`, CUDA graph capture on | n/a | n/a | Rejected before launch by YAML boolean parsing |
+| `032` | kernel selection, FP8 GEMM `cublas`, CUDA graph capture on | `7.583328` | `1.011x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -121,6 +122,8 @@ Candidate `029` was launched after adding controller steering away from the plat
 Candidate `030` was launched after adding a new controller surface for `kernel_selection`, although the worker chose another nonlocal ngram shape instead of using that surface. It used a 5-token speculative draft with lookup `2-8`; vLLM launched, but the concurrent warm workload crashed the EngineCore with `AssertionError: num_required_blocks 7 < len(req_blocks) 8`. The controller captured the `/v1/responses` HTTP 500 body and saved the runtime stack trace in `candidates/030/runtime_logs_on_failure.log` before restoring baseline.
 
 Candidate `031` was the first auto-authored `kernel_selection` candidate. It selected `fp8_gemm_kernel: cublas` with `cuda_graph_capture: on`, but unquoted YAML `on` loaded as boolean `True` and the controller rejected the candidate before launch as `unsupported_kernel_selection:cuda_graph_capture=True`. The controller parser was then fixed to normalize YAML boolean `cuda_graph_capture` values back to the intended `on`/`off` enum before runtime activation validation.
+
+Candidate `032` retried the first `kernel_selection` surface after the parser fix. The controller launched vLLM with `fp8_gemm_kernel: cublas` and `cuda_graph_capture: on`; runtime activation resolved that to Torch scaled-MM FP8 GEMM and full CUDA graph capture. The first-five real-workload measurement completed at `7.583328 tok/s`, effectively baseline and below the `18.9047064 tok/s` 20%-over-previous-best gate, so B-1/B-2/B-3 did not run. The controller restored the baseline runtime afterward.
 
 ## Runtime Capability Audit
 

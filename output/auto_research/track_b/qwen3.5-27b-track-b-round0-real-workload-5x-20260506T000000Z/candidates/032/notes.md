@@ -1,0 +1,1 @@
+Measurement caveat: this candidate intentionally corrects the candidate 031 surface encoding by quoting `cuda_graph_capture` as `"on"`. If the controller still normalizes this to a boolean internally, the useful follow-up is to test `fp8_gemm_kernel: cublas` alone rather than treating cuBLAS itself as measured.

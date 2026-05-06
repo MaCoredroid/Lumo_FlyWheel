@@ -1,0 +1,3 @@
+kernel_selection:
+  fp8_gemm_kernel: cublas
+  cuda_graph_capture: "on"
