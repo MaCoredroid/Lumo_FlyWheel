@@ -158,5 +158,25 @@
       "max_num_batched_tokens": 2048,
       "max_num_seqs": 5
     }
+  },
+  {
+    "candidate_accept_decode_tps": 9.1680396,
+    "candidate_id": "015",
+    "decode_tps": 7.65106,
+    "previous_best_decode_tps": 7.640033,
+    "reason": "speed_below_candidate_acceptance",
+    "recorded_at": "2026-05-06T08:00:40Z",
+    "runtime_config_id": "208ca184-a04a-4c83-b2b4-d78737e71891",
+    "runtime_config_ref": "candidates/015/tuned_config_bundle.yaml",
+    "runtime_restore_ref": "candidates/015/runtime_restore_result.json",
+    "spec_decode": null,
+    "status": "rejected",
+    "target_decode_tps": 37.5,
+    "vllm_config": {
+      "enable_prefix_caching": true,
+      "gpu_memory_utilization": 0.88,
+      "max_num_batched_tokens": 2048,
+      "max_num_seqs": 6
+    }
   }
 ]

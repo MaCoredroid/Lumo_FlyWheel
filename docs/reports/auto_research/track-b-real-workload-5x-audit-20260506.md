@@ -39,8 +39,8 @@ Concrete success criteria:
 | Let auto-research author candidates | Candidates `001`-`012` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
-| Achieve an accepted candidate | Best candidate `012` measured `7.640033 tok/s`, below `9.0 tok/s` preflight | Not met |
-| Achieve final 5x goal | Best candidate `012` measured `7.640033 tok/s`, below `37.5 tok/s` final target | Not met |
+| Achieve an accepted candidate | Best candidate `015` measured `7.651060 tok/s`, below the 20% preflight | Not met |
+| Achieve final 5x goal | Best candidate `015` measured `7.651060 tok/s`, below `37.5 tok/s` final target | Not met |
 | Run full `50*5` benchmark | Not run because no candidate cleared the `20%` preflight | Not met, intentionally gated |
 
 ## Candidate Results
@@ -60,6 +60,7 @@ Concrete success criteria:
 | `012` | runtime config, `max_num_seqs: 5`, `max_num_batched_tokens: 2048`, `gpu_memory_utilization: 0.88` | `7.640033` | `1.019x` | Rejected |
 | `013` | spec decode, `ngram`, 4 speculative tokens, prompt lookup 2-32 | n/a | n/a | vLLM launched, then rejected on HTTP 500 during warm workload |
 | `014` | runtime config, `max_num_seqs: 5`, `max_num_batched_tokens: 2048`, `gpu_memory_utilization: 0.88`, explicit prefix caching | `7.584679` | `1.011x` | Rejected |
+| `015` | runtime config, `max_num_seqs: 6`, `max_num_batched_tokens: 2048`, `gpu_memory_utilization: 0.88`, explicit prefix caching | `7.651060` | `1.020x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -70,6 +71,8 @@ Candidates `008`-`012` exercised the runtime-config path. This exposed and fixed
 Candidate `013` exercised the speculative-decode path. The controller generated a tuned-config bundle with `spec_decode: {method: ngram, num_speculative_tokens: 4, prompt_lookup_min: 2, prompt_lookup_max: 32}` and vLLM launched with `--speculative-config`. vLLM metrics confirmed speculative decoding was active, but the concurrent warm workload hit an HTTP 500 from `/v1/responses`, so the candidate was rejected without a valid throughput measurement. The controller restored the baseline runtime afterward.
 
 Candidate `014` was auto-authored after the speculative-decode failure. It retried the best completed runtime shape from `012` with explicit `enable_prefix_caching: true`; the effective launch was not meaningfully different because prefix caching is already enabled by default in this serving path. It measured `7.584679 tok/s`, below the `9.1680396 tok/s` current preflight threshold. The controller restored the baseline runtime afterward. Follow-up infra now normalizes default-enabled runtime flags in duplicate-surface signatures so future workers do not spend another restart on this effective duplicate.
+
+Candidate `015` increased the same runtime family to `max_num_seqs: 6`. It produced the current best valid first-five measurement at `7.651060 tok/s`, but that is only `1.020x` over the nominal `7.5 tok/s` baseline and below the 20% preflight threshold. It remained blocked at speed and did not advance to B-1/B-2/B-3.
 
 ## Runtime Capability Audit
 
@@ -99,11 +102,11 @@ Capability checks:
 - `complete: false`
 - `target_decode_tps: 37.5`
 - `candidate_accept_decode_tps_initial: 9.0`
-- `best_decode_tps: 7.640033`
+- `best_decode_tps: 7.651060`
 - `incremental_candidates: []`
 - `promoted_candidates: []`
 
-The loop is therefore correctly blocked at the speed preflight. B-1/B-2/B-3 were not run because no candidate reached the incremental speed acceptance bar. Candidate `013` is excluded from `best_decode_tps` because it failed the real-workload measurement instead of producing a valid warm decode metric. Candidate `014` is included as valid real-workload evidence, but it did not improve over candidate `012`.
+The loop is therefore correctly blocked at the speed preflight. B-1/B-2/B-3 were not run because no candidate reached the incremental speed acceptance bar. Candidate `013` is excluded from `best_decode_tps` because it failed the real-workload measurement instead of producing a valid warm decode metric. Candidate `015` is the current best valid measurement, but it is still far below both preflight and the final 5x target.
 
 ## Blocker
 

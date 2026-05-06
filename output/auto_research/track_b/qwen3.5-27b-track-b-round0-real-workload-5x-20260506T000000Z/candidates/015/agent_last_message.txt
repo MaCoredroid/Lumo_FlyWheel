@@ -1,0 +1,17 @@
+Authored candidate `015` in `candidates/015` with the required files:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The serving surface is a new vLLM runtime capacity probe:
+
+```yaml
+vllm_config:
+  max_num_seqs: 6
+  max_num_batched_tokens: 2048
+  gpu_memory_utilization: 0.88
+  enable_prefix_caching: true
+```
+
+No benchmark or controller gate was run, per instructions.

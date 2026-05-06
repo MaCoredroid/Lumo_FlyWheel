@@ -1,0 +1,1 @@
+Measurement caveat: this candidate intentionally stays close to the current best measured vLLM runtime surface and changes only the active sequence capacity. If the workload is strictly single-stream during counted warm completions, the added scheduler slot may have little effect.
