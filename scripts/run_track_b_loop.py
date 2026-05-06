@@ -308,6 +308,16 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "valid measurement but still missed preflight; continue only with a distinct "
             "ngram spec_decode shape, not another flat launch-capacity-only variant."
         )
+    if _spec_decode_three_min_two_family_exhausted(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: the local ngram family with num_speculative_tokens=3 "
+            "and prompt_lookup_min=2 is exhausted: max=8 was fast but failed B-1, "
+            "max=6 was stable but far below preflight, and max=4 crashed the warm "
+            "measurement. Do not spend the next candidate on max-only interpolation "
+            "inside this family; move to a different speculative-depth/minimum pair "
+            "or a different supported serving surface."
+        )
     elif not _has_any_spec_decode(surface_history):
         lines.append("")
         lines.append(
@@ -366,6 +376,35 @@ def _has_spec_decode_b1_failure_after_speed(surface_history: list[dict[str, Any]
             if row.get("decode_tps") is not None:
                 return True
     return False
+
+
+def _spec_decode_three_min_two_family_exhausted(surface_history: list[dict[str, Any]]) -> bool:
+    outcomes_by_max: dict[int, set[str]] = {}
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        spec_decode = signature.get("spec_decode")
+        if not isinstance(spec_decode, dict):
+            continue
+        if spec_decode.get("method") != "ngram":
+            continue
+        if spec_decode.get("num_speculative_tokens") != 3 or spec_decode.get("prompt_lookup_min") != 2:
+            continue
+        try:
+            prompt_lookup_max = int(spec_decode.get("prompt_lookup_max"))
+        except (TypeError, ValueError):
+            continue
+        reason = str(row.get("reason") or "")
+        if row.get("decode_tps") is not None:
+            reason = f"{reason}:measured"
+        outcomes_by_max.setdefault(prompt_lookup_max, set()).add(reason)
+    return (
+        any(reason.startswith("b1_equivalence_failed") for reason in outcomes_by_max.get(8, set()))
+        and any(reason.startswith("speed_below_candidate_acceptance") for reason in outcomes_by_max.get(6, set()))
+        and any(reason.startswith("throughput_measure_failed") for reason in outcomes_by_max.get(4, set()))
+    )
 
 
 def _runtime_capacity_family_flat(surface_history: list[dict[str, Any]]) -> bool:

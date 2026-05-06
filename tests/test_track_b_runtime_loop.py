@@ -514,3 +514,40 @@ def test_surface_history_guides_b1_recovery_after_fast_spec_decode_failure(tmp_p
 
     assert loop._has_spec_decode_b1_failure_after_speed(history)
     assert "cleared speed preflight but failed B-1 equivalence" in brief
+
+
+def test_surface_history_guides_away_from_exhausted_three_min_two_spec_family(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    outcomes = [
+        (1, 8, "b1_equivalence_failed", 15.7),
+        (2, 4, "throughput_measure_failed", None),
+        (3, 6, "speed_below_candidate_acceptance", 7.9),
+    ]
+    for index, prompt_lookup_max, reason, decode_tps in outcomes:
+        candidate = round_dir / "candidates" / f"{index:03d}"
+        candidate.mkdir(parents=True)
+        (candidate / "serve_config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "spec_decode": {
+                        "method": "ngram",
+                        "num_speculative_tokens": 3,
+                        "prompt_lookup_min": 2,
+                        "prompt_lookup_max": prompt_lookup_max,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = {"status": "rejected", "reason": reason}
+        if decode_tps is not None:
+            result["decode_tps"] = decode_tps
+        (candidate / "controller_result.json").write_text(json.dumps(result), encoding="utf-8")
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._spec_decode_three_min_two_family_exhausted(history)
+    assert "num_speculative_tokens=3 and prompt_lookup_min=2 is exhausted" in brief
+    assert "Do not spend the next candidate on max-only interpolation" in brief
