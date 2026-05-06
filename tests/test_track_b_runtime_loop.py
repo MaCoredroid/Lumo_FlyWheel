@@ -317,6 +317,42 @@ def test_stale_active_tuned_config_state_is_tolerated(tmp_path: Path) -> None:
     assert warning == "Invalid tuned-config bundle"
 
 
+def test_previous_best_decode_tps_uses_only_quality_equivalent_incumbents(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    fast_failed = round_dir / "candidates" / "020"
+    accepted = round_dir / "candidates" / "051"
+    fast_failed.mkdir(parents=True)
+    accepted.mkdir(parents=True)
+    (fast_failed / "throughput.json").write_text(json.dumps({"decode_tps": 15.75}), encoding="utf-8")
+    (fast_failed / "controller_result.json").write_text(
+        json.dumps({"status": "rejected", "reason": "b1_equivalence_failed"}),
+        encoding="utf-8",
+    )
+    (accepted / "throughput.json").write_text(json.dumps({"decode_tps": 17.08}), encoding="utf-8")
+    (accepted / "controller_result.json").write_text(
+        json.dumps({"status": "accepted_candidate"}),
+        encoding="utf-8",
+    )
+
+    assert loop._previous_best_decode_tps(round_dir, baseline_tps=7.5) == 17.08
+
+
+def test_previous_best_decode_tps_falls_back_to_baseline_without_quality_equivalent_candidate(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    candidate = round_dir / "candidates" / "020"
+    candidate.mkdir(parents=True)
+    (candidate / "throughput.json").write_text(json.dumps({"decode_tps": 15.75}), encoding="utf-8")
+    (candidate / "controller_result.json").write_text(
+        json.dumps({"status": "rejected", "reason": "b1_equivalence_failed"}),
+        encoding="utf-8",
+    )
+    (candidate / "b1_result.json").write_text(json.dumps({"pass": False}), encoding="utf-8")
+
+    assert loop._previous_best_decode_tps(round_dir, baseline_tps=7.5) == 7.5
+
+
 def test_duplicate_serving_surface_detects_prior_candidate(tmp_path: Path) -> None:
     loop = _load_loop_module()
     round_dir = tmp_path / "round"

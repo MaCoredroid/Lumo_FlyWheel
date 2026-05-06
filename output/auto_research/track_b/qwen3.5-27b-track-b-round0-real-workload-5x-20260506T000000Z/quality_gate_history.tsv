@@ -1,1 +1,5 @@
 candidate_id	tier	status	score_json	artifact_ref	recorded_at
+051	speed_vs_fixed_baseline	pass	"{""candidate_accept_decode_tps"": 9.0, ""decode_tps"": 17.087062}"	candidates/051/throughput.json	2026-05-06T17:51:09Z
+051	b1_strong_equivalence	pass	"{""match_rate"": 1.0}"	candidates/051/b1_result.json	2026-05-06T17:51:09Z
+051	b2_workload_equivalence	pass	"{""match_rate"": 1.0}"	candidates/051/b2_result.json	2026-05-06T17:51:09Z
+051	b3_workload_equivalence	fail	"{""match_count"": 3, ""match_rate"": 0.75, ""probe_count"": 4}"	candidates/051/b3_result.json	2026-05-06T17:51:09Z

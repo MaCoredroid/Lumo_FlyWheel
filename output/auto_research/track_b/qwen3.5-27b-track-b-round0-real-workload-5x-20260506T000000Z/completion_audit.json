@@ -1,6 +1,6 @@
 {
   "best_decode_tps": 17.087062,
-  "candidate_accept_decode_tps_initial": 9.0,
+  "candidate_accept_decode_tps": 9.0,
   "checklist": [
     {
       "evidence": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/round_spec.yaml",
@@ -353,6 +353,16 @@
           "schema": "lumo.track_b.real_workload_first_five.v1",
           "task_count": 1,
           "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "052",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.593953,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/052/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
         }
       ],
       "pass": false,
@@ -402,7 +412,7 @@
         }
       ],
       "pass": true,
-      "requirement": "At least one candidate clears the incremental acceptance preflight (1.20x over baseline = 9.00 tok/s)"
+      "requirement": "At least one candidate clears the incremental acceptance preflight (1.20x over quality-equivalent incumbent 7.50 tok/s = 9.00 tok/s)"
     },
     {
       "evidence": [
@@ -745,6 +755,16 @@
           "schema": "lumo.track_b.real_workload_first_five.v1",
           "task_count": 1,
           "warm_completions_measured": 4
+        },
+        {
+          "candidate_id": "052",
+          "cold_completions_discarded": 1,
+          "completions_per_task": 5,
+          "decode_tps": 7.593953,
+          "path": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/052/throughput.json",
+          "schema": "lumo.track_b.real_workload_first_five.v1",
+          "task_count": 1,
+          "warm_completions_measured": 4
         }
       ],
       "pass": true,
@@ -752,12 +772,12 @@
     },
     {
       "evidence": "candidates/*/b1_result.json",
-      "pass": false,
+      "pass": true,
       "requirement": "B-1 strong-equivalence/distributional gate passed"
     },
     {
       "evidence": "candidates/*/b2_result.json",
-      "pass": false,
+      "pass": true,
       "requirement": "B-2 behavioral gate passed"
     },
     {
@@ -814,6 +834,7 @@
       "warm_completions_measured": 4
     }
   ],
+  "incumbent_decode_tps": 7.5,
   "promoted_candidates": [],
   "round_id": "qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
   "target_decode_tps": 37.5

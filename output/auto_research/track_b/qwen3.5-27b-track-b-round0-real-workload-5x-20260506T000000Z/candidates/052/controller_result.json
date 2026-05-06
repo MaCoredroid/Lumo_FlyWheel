@@ -1,0 +1,19 @@
+{
+  "candidate_accept_decode_tps": 20.5044744,
+  "decode_tps": 7.593953,
+  "kernel_selection": null,
+  "previous_best_decode_tps": 17.087062,
+  "reason": "speed_below_candidate_acceptance",
+  "runtime_config_id": "b294aece-a552-41cb-b5c8-12f82619b0a6",
+  "runtime_config_ref": "candidates/052/tuned_config_bundle.yaml",
+  "runtime_restore_ref": "candidates/052/runtime_restore_result.json",
+  "spec_decode": {
+    "method": "ngram",
+    "num_speculative_tokens": 4,
+    "prompt_lookup_max": 8,
+    "prompt_lookup_min": 8
+  },
+  "status": "rejected",
+  "target_decode_tps": 37.5,
+  "vllm_config": null
+}

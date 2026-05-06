@@ -33,6 +33,17 @@ def _candidate_gate_pass(round_dir: Path, candidate_id: str, tier: str) -> bool:
     return bool((_load_json(round_dir / "candidates" / candidate_id / f"{tier}_result.json") or {}).get("pass"))
 
 
+def _candidate_quality_equivalence_passed(round_dir: Path, candidate_id: str) -> bool:
+    result = _load_json(round_dir / "candidates" / candidate_id / "controller_result.json") or {}
+    if result.get("status") in {"accepted_candidate", "accepted_final"}:
+        return True
+    return (
+        _candidate_gate_pass(round_dir, candidate_id, "b1")
+        and _candidate_gate_pass(round_dir, candidate_id, "b2")
+        and _candidate_gate_pass(round_dir, candidate_id, "b3")
+    )
+
+
 def audit(round_dir: Path) -> dict[str, Any]:
     spec_path = round_dir / "round_spec.yaml"
     if not spec_path.is_file():
@@ -43,7 +54,6 @@ def audit(round_dir: Path) -> dict[str, Any]:
     incremental_multiplier = float(
         spec.get("success_criteria", {}).get("candidate_acceptance_incremental_speedup_at_least", 1.2)
     )
-    initial_candidate_accept_tps = baseline_tps * incremental_multiplier
     throughput_results: list[dict[str, Any]] = []
     for path in sorted(round_dir.glob("candidates/*/throughput.json")):
         payload = _load_json(path)
@@ -65,10 +75,19 @@ def audit(round_dir: Path) -> dict[str, Any]:
             }
         )
     best = max((row["decode_tps"] for row in throughput_results), default=None)
+    incumbent_tps = max(
+        (
+            row["decode_tps"]
+            for row in throughput_results
+            if _candidate_quality_equivalence_passed(round_dir, str(row["candidate_id"]))
+        ),
+        default=baseline_tps,
+    )
+    candidate_accept_tps = incumbent_tps * incremental_multiplier
     incremental_candidates = [
         row
         for row in throughput_results
-        if float(row["decode_tps"]) >= initial_candidate_accept_tps
+        if float(row["decode_tps"]) >= candidate_accept_tps
         and row.get("schema") == "lumo.track_b.real_workload_first_five.v1"
     ]
     promoted_candidates = []
@@ -105,7 +124,8 @@ def audit(round_dir: Path) -> dict[str, Any]:
         {
             "requirement": (
                 f"At least one candidate clears the incremental acceptance preflight "
-                f"({incremental_multiplier:.2f}x over baseline = {initial_candidate_accept_tps:.2f} tok/s)"
+                f"({incremental_multiplier:.2f}x over quality-equivalent incumbent "
+                f"{incumbent_tps:.2f} tok/s = {candidate_accept_tps:.2f} tok/s)"
             ),
             "pass": bool(incremental_candidates),
             "evidence": incremental_candidates,
@@ -145,7 +165,8 @@ def audit(round_dir: Path) -> dict[str, Any]:
     return {
         "round_id": spec.get("round_id"),
         "target_decode_tps": target_tps,
-        "candidate_accept_decode_tps_initial": initial_candidate_accept_tps,
+        "incumbent_decode_tps": incumbent_tps,
+        "candidate_accept_decode_tps": candidate_accept_tps,
         "best_decode_tps": best,
         "incremental_candidates": incremental_candidates,
         "promoted_candidates": promoted_candidates,

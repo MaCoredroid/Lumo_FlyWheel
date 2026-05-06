@@ -1,0 +1,10 @@
+Candidate `052` is authored under `candidates/052`.
+
+Created:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+Serving surface: vLLM ngram speculative decoding with `num_speculative_tokens: 4`, `prompt_lookup_min: 8`, `prompt_lookup_max: 8`.
+
+No live benchmarks were run.

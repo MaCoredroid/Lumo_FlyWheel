@@ -49,3 +49,5 @@ candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
 049	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T16:34:25Z
 050	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T16:52:34Z
 051	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T17:12:32Z
+052	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T17:31:04Z
+051	retro_quality	b3_workload_equivalence_failed	b3_workload_equivalence_failed	b3_match_rate	2026-05-06T17:51:09Z

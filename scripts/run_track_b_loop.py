@@ -185,7 +185,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "",
             f"- Baseline decode: `{spec.get('baseline_decode_tps')}` tok/s",
             f"- Final target decode: `{spec.get('target_decode_tps')}` tok/s",
-            f"- Candidate acceptance gate this iteration: `{candidate_accept_tps:.3f}` tok/s (`{incremental_multiplier:.2f}x` over previous best `{previous_best_tps:.3f}` tok/s)",
+            f"- Candidate acceptance gate this iteration: `{candidate_accept_tps:.3f}` tok/s (`{incremental_multiplier:.2f}x` over previous quality-equivalent incumbent `{previous_best_tps:.3f}` tok/s)",
             "- Speed gate: real vLLM workload window; 5 completions per task, first cold completion discarded, next 4 warm completions counted.",
             "- The official speed metric is decode-time warm TPS from `throughput.json`; wall-clock aggregate throughput from concurrent requests is diagnostic only.",
             "- `structured_outputs` candidates still use the same first-five workload and decode-time metric; they only add vLLM guided-decoding request parameters.",
@@ -954,9 +954,22 @@ def _validate_vllm_config_override_values(raw: dict[str, Any]) -> str | None:
     return None
 
 
+def _candidate_quality_equivalence_passed(round_dir: Path, candidate_id: str) -> bool:
+    result = _load_json(round_dir / "candidates" / candidate_id / "controller_result.json") or {}
+    if result.get("status") in {"accepted_candidate", "accepted_final"}:
+        return True
+    return bool(
+        (_load_json(round_dir / "candidates" / candidate_id / "b1_result.json") or {}).get("pass")
+        and (_load_json(round_dir / "candidates" / candidate_id / "b2_result.json") or {}).get("pass")
+        and (_load_json(round_dir / "candidates" / candidate_id / "b3_result.json") or {}).get("pass")
+    )
+
+
 def _previous_best_decode_tps(round_dir: Path, *, baseline_tps: float) -> float:
     best = float(baseline_tps)
     for path in sorted(round_dir.glob("candidates/*/throughput.json")):
+        if not _candidate_quality_equivalence_passed(round_dir, path.parent.name):
+            continue
         payload = _load_json(path) or {}
         raw = payload.get("warm_decode_tps") or payload.get("decode_tps")
         if raw is None:

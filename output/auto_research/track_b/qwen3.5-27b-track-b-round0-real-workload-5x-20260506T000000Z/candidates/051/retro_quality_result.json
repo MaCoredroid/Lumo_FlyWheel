@@ -1,0 +1,23 @@
+{
+  "b1_match_rate": 1.0,
+  "b1_pass": true,
+  "b1_ref": "candidates/051/b1_result.json",
+  "b2_match_rate": 1.0,
+  "b2_pass": true,
+  "b2_ref": "candidates/051/b2_result.json",
+  "b3_match_rate": 0.75,
+  "b3_pass": false,
+  "b3_ref": "candidates/051/b3_result.json",
+  "baseline_decode_tps": 7.5,
+  "candidate_accept_decode_tps_over_fixed_baseline": 9.0,
+  "candidate_id": "051",
+  "decode_tps": 17.087062,
+  "incumbent_decision": "not_promoted_not_mutation_baseline",
+  "incumbent_reason": "speed-positive candidate failed B-3 equivalence; only speed-positive and equivalent candidates become mutation incumbents",
+  "reason": "b3_workload_equivalence_failed",
+  "recorded_at": "2026-05-06T17:51:09Z",
+  "schema": "lumo.track_b.retro_quality_audit.v1",
+  "speed_preflight_vs_fixed_baseline_pass": true,
+  "speedup_vs_baseline": 2.2782749333333334,
+  "status": "rejected"
+}
