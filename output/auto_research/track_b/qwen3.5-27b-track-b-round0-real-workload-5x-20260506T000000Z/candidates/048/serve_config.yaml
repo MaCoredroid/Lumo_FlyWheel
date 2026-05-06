@@ -1,0 +1,3 @@
+structured_outputs:
+  backend: xgrammar
+  json_object: true

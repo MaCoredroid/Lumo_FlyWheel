@@ -1,0 +1,8 @@
+Authored candidate `048` inside the required directory.
+
+Files written:
+- [candidate_analysis.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/048/candidate_analysis.md)
+- [serve_config.yaml](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/048/serve_config.yaml)
+- [notes.md](/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z/candidates/048/notes.md)
+
+The serving surface is `structured_outputs` with `backend: xgrammar` and `json_object: true`. I did not run live benchmarks.

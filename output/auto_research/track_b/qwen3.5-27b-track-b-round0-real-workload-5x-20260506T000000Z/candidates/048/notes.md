@@ -1,0 +1,1 @@
+No live benchmark was run. Candidate 048 intentionally uses the newly supported xgrammar structured-output request surface; the main caveat is that JSON-object guidance may be rejected by quality gates if the fixed workload requires unconstrained prose.
