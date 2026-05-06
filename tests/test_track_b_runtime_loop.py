@@ -376,3 +376,39 @@ def test_surface_history_guides_safer_spec_decode_retry_after_failed_measurement
 
     assert loop._has_failed_spec_decode_without_valid_measurement(history)
     assert "retry only with a safer distinct ngram shape" in brief
+
+
+def test_surface_history_continues_distinct_spec_decode_after_valid_rejection(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    candidate = round_dir / "candidates" / "001"
+    candidate.mkdir(parents=True)
+    (candidate / "serve_config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "spec_decode": {
+                    "method": "ngram",
+                    "num_speculative_tokens": 1,
+                    "prompt_lookup_min": 1,
+                    "prompt_lookup_max": 8,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (candidate / "controller_result.json").write_text(
+        json.dumps(
+            {
+                "status": "rejected",
+                "reason": "speed_below_candidate_acceptance",
+                "decode_tps": 7.8,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._has_valid_rejected_spec_decode(history)
+    assert "continue only with a distinct ngram spec_decode shape" in brief

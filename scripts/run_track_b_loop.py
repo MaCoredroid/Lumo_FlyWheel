@@ -292,6 +292,13 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "measurement; retry only with a safer distinct ngram shape before returning "
             "to launch-capacity-only variants."
         )
+    elif _has_valid_rejected_spec_decode(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: a stable ngram spec_decode candidate produced the best "
+            "valid measurement but still missed preflight; continue only with a distinct "
+            "ngram spec_decode shape, not another flat launch-capacity-only variant."
+        )
     elif not _has_any_spec_decode(surface_history):
         lines.append("")
         lines.append(
@@ -326,6 +333,19 @@ def _has_failed_spec_decode_without_valid_measurement(surface_history: list[dict
         if row.get("status") == "rejected" and row.get("reason") == "throughput_measure_failed":
             failed_spec_decode = True
     return failed_spec_decode
+
+
+def _has_valid_rejected_spec_decode(surface_history: list[dict[str, Any]]) -> bool:
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if "spec_decode" not in signature:
+            continue
+        if row.get("status") == "rejected" and row.get("decode_tps") is not None:
+            return True
+    return False
 
 
 def _runtime_capacity_family_flat(surface_history: list[dict[str, Any]]) -> bool:
