@@ -1,0 +1,103 @@
+{
+  "b1": {
+    "comparisons": [
+      {
+        "concurrent_text": "",
+        "concurrent_usage": {
+          "completion_tokens": 1,
+          "prompt_tokens": 4127,
+          "prompt_tokens_details": null,
+          "total_tokens": 4128
+        },
+        "index": 0,
+        "match": false,
+        "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+        "serial_usage": {
+          "completion_tokens": 8,
+          "prompt_tokens": 4127,
+          "prompt_tokens_details": null,
+          "total_tokens": 4135
+        }
+      },
+      {
+        "concurrent_text": "\n\nProbe 2. Complete the next",
+        "concurrent_usage": {
+          "completion_tokens": 8,
+          "prompt_tokens": 4127,
+          "prompt_tokens_details": null,
+          "total_tokens": 4135
+        },
+        "index": 1,
+        "match": true,
+        "serial_text": "\n\nProbe 2. Complete the next",
+        "serial_usage": {
+          "completion_tokens": 8,
+          "prompt_tokens": 4127,
+          "prompt_tokens_details": null,
+          "total_tokens": 4135
+        }
+      },
+      {
+        "concurrent_text": "\n\n<think>\nThinking Process:\n\n1",
+        "concurrent_usage": {
+          "completion_tokens": 8,
+          "prompt_tokens": 4127,
+          "prompt_tokens_details": null,
+          "total_tokens": 4135
+        },
+        "index": 2,
+        "match": true,
+        "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+        "serial_usage": {
+          "completion_tokens": 8,
+          "prompt_tokens": 4127,
+          "prompt_tokens_details": null,
+          "total_tokens": 4135
+        }
+      },
+      {
+        "concurrent_text": "",
+        "concurrent_usage": {
+          "completion_tokens": 1,
+          "prompt_tokens": 4127,
+          "prompt_tokens_details": null,
+          "total_tokens": 4128
+        },
+        "index": 3,
+        "match": false,
+        "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+        "serial_usage": {
+          "completion_tokens": 8,
+          "prompt_tokens": 4127,
+          "prompt_tokens_details": null,
+          "total_tokens": 4135
+        }
+      }
+    ],
+    "concurrent_requests": 4,
+    "match_count": 2,
+    "match_rate": 0.5,
+    "measured_at": "2026-05-06T09:26:12Z",
+    "model": "qwen3.5-27b",
+    "pass": false,
+    "port": 9950,
+    "prompt_count": 4,
+    "schema": "lumo.track_b.batch_equivalence_gate.v1"
+  },
+  "candidate_accept_decode_tps": 9.3713448,
+  "decode_tps": 15.753922,
+  "previous_best_decode_tps": 7.809454,
+  "reason": "b1_equivalence_failed",
+  "runtime_config_id": "51b023ff-84c6-4d9b-91f1-104c7ac6448d",
+  "runtime_config_ref": "candidates/020/tuned_config_bundle.yaml",
+  "runtime_restore_ref": "candidates/020/runtime_restore_result.json",
+  "spec_decode": {
+    "method": "ngram",
+    "num_speculative_tokens": 3,
+    "prompt_lookup_max": 8,
+    "prompt_lookup_min": 2
+  },
+  "status": "rejected",
+  "target_decode_tps": 37.5,
+  "vllm_config": null
+}

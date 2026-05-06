@@ -1,0 +1,85 @@
+{
+  "comparisons": [
+    {
+      "concurrent_text": "",
+      "concurrent_usage": {
+        "completion_tokens": 1,
+        "prompt_tokens": 4127,
+        "prompt_tokens_details": null,
+        "total_tokens": 4128
+      },
+      "index": 0,
+      "match": false,
+      "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+      "serial_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 4127,
+        "prompt_tokens_details": null,
+        "total_tokens": 4135
+      }
+    },
+    {
+      "concurrent_text": "\n\nProbe 2. Complete the next",
+      "concurrent_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 4127,
+        "prompt_tokens_details": null,
+        "total_tokens": 4135
+      },
+      "index": 1,
+      "match": true,
+      "serial_text": "\n\nProbe 2. Complete the next",
+      "serial_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 4127,
+        "prompt_tokens_details": null,
+        "total_tokens": 4135
+      }
+    },
+    {
+      "concurrent_text": "\n\n<think>\nThinking Process:\n\n1",
+      "concurrent_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 4127,
+        "prompt_tokens_details": null,
+        "total_tokens": 4135
+      },
+      "index": 2,
+      "match": true,
+      "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+      "serial_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 4127,
+        "prompt_tokens_details": null,
+        "total_tokens": 4135
+      }
+    },
+    {
+      "concurrent_text": "",
+      "concurrent_usage": {
+        "completion_tokens": 1,
+        "prompt_tokens": 4127,
+        "prompt_tokens_details": null,
+        "total_tokens": 4128
+      },
+      "index": 3,
+      "match": false,
+      "serial_text": "\n\n<think>\nThinking Process:\n\n1",
+      "serial_usage": {
+        "completion_tokens": 8,
+        "prompt_tokens": 4127,
+        "prompt_tokens_details": null,
+        "total_tokens": 4135
+      }
+    }
+  ],
+  "concurrent_requests": 4,
+  "match_count": 2,
+  "match_rate": 0.5,
+  "measured_at": "2026-05-06T09:26:12Z",
+  "model": "qwen3.5-27b",
+  "pass": false,
+  "port": 9950,
+  "prompt_count": 4,
+  "schema": "lumo.track_b.batch_equivalence_gate.v1"
+}
