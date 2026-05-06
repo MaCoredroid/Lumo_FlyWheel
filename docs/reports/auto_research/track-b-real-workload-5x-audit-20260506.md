@@ -12,13 +12,15 @@ Concrete success criteria:
 - Measure 5 completions per task, discarding the first cold completion and counting the next 4 warm completions.
 - Keep the final round target at `37.5 tok/s` (`5x` over `7.5 tok/s` baseline).
 - Accept a candidate for deeper gates when it improves at least `20%` over the previous best measured real-workload warm decode.
-- Do not treat concurrency-only aggregate proxy throughput as the final answer.
+- For legacy single-workload candidates, keep the acceptance gate on vLLM decode-time throughput, not the rolling proxy log.
+- For explicit measurement-surface candidates, allow total serving-throughput accounting over authored workload traces by measuring wall-clock aggregate decode throughput across parallel warm windows.
 
 ## Implemented Artifacts
 
 - Commit: `2a7d7a3 Add real workload Track B gate`
 - Follow-up: runtime-config candidate applicator added after the initial audit so workers can propose real vLLM launch-shape changes via `serve_config.yaml:vllm_config`.
 - Follow-up: speculative decode candidate support added so workers can propose vLLM `--speculative-config` via `serve_config.yaml:spec_decode`.
+- Follow-up: measurement-surface support added so workers can explicitly choose authored workload profiles, parallel warm windows, and `decode_time` or `wall_clock_total` throughput accounting.
 - Round directory: `output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z`
 - Measurement script: `scripts/measure_track_b_real_workload.py`
 - Controller: `scripts/run_track_b_loop.py`
@@ -36,9 +38,10 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`036` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Let auto-research author candidates | Candidates `001`-`037` were generated through `codex exec` worker calls and controller-owned measurement | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
+| Allow authored parallel workload throughput candidates | Controller supports `measurement` settings for `l0-heavy` and `multi-family-v5`, `parallel_task_count`, `warm_concurrency`, `parallel_warm_windows`, and `throughput_accounting` | Done |
 | Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence | Not met |
 | Achieve final 5x goal | Best candidate `020` measured `15.753922 tok/s`, below `37.5 tok/s` final target | Not met |
 | Run full `50*5` benchmark | Not run because no candidate cleared B-1 after the speed preflight | Not met, intentionally gated |
@@ -82,6 +85,8 @@ Concrete success criteria:
 | `034` | kernel selection, DeltaNet kernel `triton-chunked-delta-v2` | n/a | n/a | Rejected before launch as duplicate serving surface |
 | `035` | kernel selection, DeltaNet kernel `triton-chunked-delta-v2` | n/a | n/a | Rejected before launch as duplicate serving surface |
 | `036` | runtime config, default prefix/chunked flags plus `kv_cache_dtype: fp8_e5m2` | n/a | n/a | Rejected before launch as duplicate serving surface |
+| `037` | kernel selection, attention backend `triton` | `7.522407` | `1.003x` | Rejected |
+| `037` | kernel selection, attention backend `triton` | `7.522407` | `1.003x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
 
@@ -135,6 +140,10 @@ Candidates `034` and `035` both selected `kernel_selection: {deltanet_kernel: tr
 
 Candidate `036` moved back to `vllm_config` but selected default prefix/chunked flags plus `kv_cache_dtype: fp8_e5m2`. The controller rejected it before launch as `duplicate_serving_surface`; follow-up steering now tells the worker not to retry default-runtime bookkeeping knobs.
 
+Candidate `037` selected `kernel_selection: {attention_backend: triton}`. The controller launched vLLM with `--attention-backend TRITON_ATTN`, and the runtime log confirmed the main attention backend resolved to `TRITON_ATTN`. The first-five real-workload measurement completed at `7.522407 tok/s` by decode-time accounting, below the `18.9047064 tok/s` post-`020` preflight gate. The same throughput artifact records `wall_decode_tokens_per_s: 28.381712` for the four concurrent warm requests, but this candidate did not opt into the new measurement surface, so its official gate remains decode-time warm TPS. The controller restored the baseline runtime afterward.
+
+Candidate `037` selected `kernel_selection: {attention_backend: triton}`. The runtime log confirmed vLLM launched with `--attention-backend TRITON_ATTN`, and the first-five real-workload measurement completed at `7.522407 tok/s`. That is effectively baseline and below the `18.9047064 tok/s` 20%-over-previous-best gate, so B-1/B-2/B-3 did not run. The controller restored the baseline runtime afterward.
+
 ## Runtime Capability Audit
 
 Live container: `lumo-vllm-l0c-fp8-cutlass-run30`
@@ -167,11 +176,13 @@ Capability checks:
 - `incremental_candidates: [020, 025, 028]`
 - `promoted_candidates: []`
 
-The loop is no longer blocked at the initial speed preflight: candidates `020`, `025`, and `028` cleared that initial `9.0 tok/s` threshold. It is now blocked at preserving candidate `020`'s speed while satisfying B-1 quality/equivalence and producing a new 20%-over-previous-best candidate. B-2/B-3 were not run because B-1 failed. Candidates `013`, `019`, and `023` are excluded from `best_decode_tps` because they failed the real-workload measurement instead of producing valid warm decode metrics. Candidate `020` is the current best valid speed measurement, but it is still below the final 5x target and is not promotable because B-1 failed.
+The loop is no longer blocked at the initial speed preflight: candidates `020`, `025`, and `028` cleared that initial `9.0 tok/s` threshold. It is now blocked at preserving candidate `020`'s speed while satisfying B-1 quality/equivalence and producing a new 20%-over-previous-best candidate. B-2/B-3 were not run because B-1 failed. Candidates `013`, `019`, `023`, and `030` are excluded from `best_decode_tps` because they failed the real-workload measurement instead of producing valid warm decode metrics. Candidate `020` is the current best valid decode-time speed measurement, but it is still below the final 5x target and is not promotable because B-1 failed.
 
 ## Blocker
 
 The current live runtime surface has produced one material speedup via ngram speculative decoding, but that candidate did not preserve the B-1 equivalence guard. Request shaping, native prefix-cache variations, and tested vLLM launch-shape mutations remain near baseline when measured with the CUTLASS-style decode metric.
+
+The controller can now run explicit total-throughput experiments over authored workload traces. A worker must choose the `measurement` surface to make `wall_clock_total` accounting official; otherwise the legacy decode-time gate still applies.
 
 The next productive Track B branch is not more concurrency search. It should be one of:
 

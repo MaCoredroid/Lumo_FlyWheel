@@ -621,5 +621,23 @@
     "recorded_at": "2026-05-06T13:31:13Z",
     "status": "rejected",
     "surface_signature": "{\"vllm_config\":{\"enable_chunked_prefill\":true,\"enable_prefix_caching\":true,\"kv_cache_dtype\":\"fp8_e5m2\"}}"
+  },
+  {
+    "candidate_accept_decode_tps": 18.9047064,
+    "candidate_id": "037",
+    "decode_tps": 7.522407,
+    "kernel_selection": {
+      "attention_backend": "triton"
+    },
+    "previous_best_decode_tps": 15.753922,
+    "reason": "speed_below_candidate_acceptance",
+    "recorded_at": "2026-05-06T13:52:57Z",
+    "runtime_config_id": "82a7a229-b155-45bd-b774-260e9448b62c",
+    "runtime_config_ref": "candidates/037/tuned_config_bundle.yaml",
+    "runtime_restore_ref": "candidates/037/runtime_restore_result.json",
+    "spec_decode": null,
+    "status": "rejected",
+    "target_decode_tps": 37.5,
+    "vllm_config": null
   }
 ]
