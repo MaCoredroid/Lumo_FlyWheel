@@ -1,0 +1,7 @@
+Authored candidate `009` in `candidates/009` with the required files:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The serving surface is a distinct `vllm_config` runtime-capacity candidate using supported knobs, including `kv_cache_dtype: fp8_e5m2`. No benchmarks were run.

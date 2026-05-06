@@ -58,5 +58,68 @@
     "recorded_at": "2026-05-06T06:01:59Z",
     "status": "rejected",
     "target_decode_tps": 37.5
+  },
+  {
+    "candidate_id": "008",
+    "detail": "Invalid tuned-config bundle",
+    "reason": "runtime_config_apply_failed",
+    "recorded_at": "2026-05-06T06:06:33Z",
+    "status": "rejected",
+    "vllm_config": {
+      "gpu_memory_utilization": 0.92,
+      "kv_cache_dtype": "fp8_e4m3",
+      "max_num_batched_tokens": 8192,
+      "max_num_seqs": 8
+    }
+  },
+  {
+    "candidate_id": "009",
+    "detail": "Invalid tuned-config bundle",
+    "reason": "runtime_config_apply_failed",
+    "recorded_at": "2026-05-06T06:08:02Z",
+    "status": "rejected",
+    "vllm_config": {
+      "enable_chunked_prefill": true,
+      "enable_prefix_caching": true,
+      "gpu_memory_utilization": 0.9,
+      "kv_cache_dtype": "fp8_e5m2",
+      "max_num_batched_tokens": 4096,
+      "max_num_seqs": 16
+    }
+  },
+  {
+    "candidate_id": "010",
+    "detail": "inference_proxy_port_in_use:8001; stop the existing listener or choose a different proxy_port",
+    "reason": "runtime_config_apply_failed",
+    "recorded_at": "2026-05-06T06:16:29Z",
+    "status": "rejected",
+    "vllm_config": {
+      "max_num_batched_tokens": 2048,
+      "max_num_seqs": 4
+    }
+  },
+  {
+    "candidate_id": "011",
+    "reason": "unsupported_or_missing_serve_config",
+    "recorded_at": "2026-05-06T06:26:10Z",
+    "status": "rejected"
+  },
+  {
+    "candidate_accept_decode_tps": 9.0,
+    "candidate_id": "012",
+    "decode_tps": 7.640033,
+    "previous_best_decode_tps": 7.5,
+    "reason": "speed_below_candidate_acceptance",
+    "recorded_at": "2026-05-06T06:50:44Z",
+    "runtime_config_id": "772eb329-eabb-4b36-9b99-1f4cab797b52",
+    "runtime_config_ref": "candidates/012/tuned_config_bundle.yaml",
+    "runtime_restore_ref": "candidates/012/runtime_restore_result.json",
+    "status": "rejected",
+    "target_decode_tps": 37.5,
+    "vllm_config": {
+      "gpu_memory_utilization": 0.88,
+      "max_num_batched_tokens": 2048,
+      "max_num_seqs": 5
+    }
   }
 ]

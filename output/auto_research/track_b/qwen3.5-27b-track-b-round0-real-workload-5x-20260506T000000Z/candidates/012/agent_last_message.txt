@@ -1,0 +1,17 @@
+Authored candidate `012` under `candidates/012` only.
+
+Created:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+Serving surface:
+
+```yaml
+vllm_config:
+  max_num_seqs: 5
+  max_num_batched_tokens: 2048
+  gpu_memory_utilization: 0.88
+```
+
+I verified the required files exist and the `serve_config.yaml` hash is distinct from all prior candidate configs. No live benchmark was run.

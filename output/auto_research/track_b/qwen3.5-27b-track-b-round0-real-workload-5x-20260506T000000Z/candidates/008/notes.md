@@ -1,0 +1,1 @@
+Measurement caveat: this candidate assumes the active vLLM runtime exposes `kv_cache_dtype=fp8_e4m3`. If the controller build only accepts `fp8` or `fp8_e5m2`, it should be treated as an unsupported runtime surface rather than a speed result.

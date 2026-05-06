@@ -1,0 +1,13 @@
+Authored candidate `011` under `candidates/011` only.
+
+Created:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+
+Serving surface:
+```yaml
+vllm_config:
+  kv_cache_dtype: fp8_e5m2
+```
+
+I verified the files exist and did not run live benchmarks.

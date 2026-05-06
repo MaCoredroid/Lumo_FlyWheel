@@ -1,0 +1,13 @@
+{
+  "detail": "Invalid tuned-config bundle",
+  "reason": "runtime_config_apply_failed",
+  "status": "rejected",
+  "vllm_config": {
+    "enable_chunked_prefill": true,
+    "enable_prefix_caching": true,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "fp8_e5m2",
+    "max_num_batched_tokens": 4096,
+    "max_num_seqs": 16
+  }
+}

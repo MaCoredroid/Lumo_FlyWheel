@@ -1,0 +1,9 @@
+{
+  "detail": "inference_proxy_port_in_use:8001; stop the existing listener or choose a different proxy_port",
+  "reason": "runtime_config_apply_failed",
+  "status": "rejected",
+  "vllm_config": {
+    "max_num_batched_tokens": 2048,
+    "max_num_seqs": 4
+  }
+}

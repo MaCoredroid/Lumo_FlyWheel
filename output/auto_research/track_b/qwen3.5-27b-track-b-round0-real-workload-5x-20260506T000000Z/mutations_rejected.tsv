@@ -6,3 +6,8 @@ candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
 005	controller	speed_below_target	speed_below_target		2026-05-06T05:43:11Z
 006	controller	speed_below_target	speed_below_target		2026-05-06T05:48:17Z
 007	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T06:01:59Z
+008	controller	runtime_config_apply_failed	runtime_config_apply_failed	vllm_config	2026-05-06T06:06:33Z
+009	controller	runtime_config_apply_failed	runtime_config_apply_failed	vllm_config	2026-05-06T06:08:02Z
+010	controller	runtime_config_apply_failed	runtime_config_apply_failed	inference_proxy	2026-05-06T06:16:29Z
+011	controller	unsupported_or_missing_serve_config	unsupported_or_missing_serve_config	vllm_config_concurrency	2026-05-06T06:26:10Z
+012	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T06:50:44Z

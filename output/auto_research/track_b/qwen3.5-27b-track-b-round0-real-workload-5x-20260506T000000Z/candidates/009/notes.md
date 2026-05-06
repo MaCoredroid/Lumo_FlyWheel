@@ -1,0 +1,1 @@
+This candidate intentionally changes runtime serving capacity and KV-cache representation only. No benchmark was run here; the controller should validate whether this runtime accepts `kv_cache_dtype: fp8_e5m2` for the deployed model and hardware before applying speed gates.

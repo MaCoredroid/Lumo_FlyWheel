@@ -1,0 +1,13 @@
+{
+  "active_tuned_config_id": null,
+  "active_tuned_config_path": null,
+  "current_model_id": "qwen3.5-27b",
+  "current_weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+  "invalidate_count": 0,
+  "invalidated_at": null,
+  "last_known_good_model_id": "qwen3.5-27b",
+  "last_known_good_tuned_config_id": null,
+  "last_known_good_tuned_config_path": null,
+  "last_known_good_weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+  "status": "READY"
+}

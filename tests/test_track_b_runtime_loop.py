@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import importlib.util
 from pathlib import Path
 
 import yaml
 
 from lumo_flywheel_serving.tuned_config import load_tuned_config_bundle
+from lumo_flywheel_serving.model_server import ModelServer
 
 
 def _load_loop_module():
@@ -80,6 +82,37 @@ def test_runtime_vllm_config_candidate_defaults_concurrency_from_max_num_seqs(tm
     assert concurrency == 6
 
 
+def test_runtime_vllm_config_rejects_unsupported_kv_dtype(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    candidate_dir = tmp_path / "candidates" / "000"
+    candidate_dir.mkdir(parents=True)
+    (candidate_dir / "serve_config.yaml").write_text(
+        yaml.safe_dump({"vllm_config": {"kv_cache_dtype": "fp8_e4m3", "max_num_seqs": 8}}),
+        encoding="utf-8",
+    )
+
+    config, error = loop._load_serve_config(candidate_dir)
+    overrides, override_error = loop._parse_vllm_config_overrides(config)
+
+    assert error is None
+    assert overrides is None
+    assert override_error == "invalid_vllm_config_kv_cache_dtype:must_be_fp8_e5m2_or_auto"
+
+
+def test_runtime_vllm_config_without_max_num_seqs_uses_default_concurrency(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    config = {"vllm_config": {"kv_cache_dtype": "auto"}}
+    overrides, override_error = loop._parse_vllm_config_overrides(config)
+    default_concurrency = 4 if overrides is not None else None
+    concurrency = loop._parse_target_concurrency_from_config(
+        config,
+        default_from_runtime_config=default_concurrency,
+    )
+
+    assert override_error is None
+    assert concurrency == 4
+
+
 def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) -> None:
     loop = _load_loop_module()
     registry = tmp_path / "model_registry.yaml"
@@ -97,6 +130,7 @@ def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) 
         runtime_container_name="test-vllm",
         runtime_logs_root=tmp_path / "logs",
         runtime_triton_cache_root=tmp_path / "triton",
+        runtime_proxy_port=8011,
         state_root=tmp_path / "state",
         runtime_ready_timeout_s=1,
     )
@@ -120,3 +154,86 @@ def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) 
     assert bundle.request_shaping["target_concurrency"] == 8
     assert bundle.objective["candidate_accept_decode_tps"] == 9.0
     assert bundle.round_provenance["round_type"] == "track_b_auto_research_runtime_config"
+
+
+def test_stale_active_tuned_config_state_is_tolerated(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    registry = tmp_path / "model_registry.yaml"
+    state_root = tmp_path / "state"
+    state_root.mkdir()
+    _write_registry(registry)
+    (state_root / "serving_runtime_state.json").write_text(
+        json.dumps(
+            {
+                "current_model_id": "qwen3.5-27b",
+                "active_tuned_config_path": str(tmp_path / "missing-bundle.yaml"),
+                "active_tuned_config_id": "stale",
+                "status": "READY",
+            }
+        ),
+        encoding="utf-8",
+    )
+    server = ModelServer(
+        registry_path=registry,
+        port=9950,
+        container_name="test-vllm",
+        logs_root=tmp_path / "logs",
+        triton_cache_root=tmp_path / "triton",
+        state_root=state_root,
+        ready_timeout_s=1,
+    )
+
+    bundle_path, bundle, warning = loop._active_tuned_config_bundle_safe(server, "qwen3.5-27b")
+
+    assert bundle_path is None
+    assert bundle is None
+    assert warning == "Invalid tuned-config bundle"
+
+
+def test_duplicate_serving_surface_detects_prior_candidate(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    prior = round_dir / "candidates" / "001"
+    current = round_dir / "candidates" / "002"
+    prior.mkdir(parents=True)
+    current.mkdir(parents=True)
+    config = {"request_shaping": {"target_concurrency": 4}}
+    (prior / "serve_config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+    (prior / "controller_result.json").write_text(
+        json.dumps({"status": "rejected", "reason": "speed_below_candidate_acceptance"}),
+        encoding="utf-8",
+    )
+    (current / "serve_config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    signature = loop._surface_signature(config)
+
+    assert loop._has_prior_surface_signature(round_dir, signature, current_candidate_id="002")
+
+
+def test_surface_history_marks_request_shaping_only_as_exhausted(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    for index, concurrency in enumerate((2, 4, 6, 8), start=1):
+        candidate = round_dir / "candidates" / f"{index:03d}"
+        candidate.mkdir(parents=True)
+        (candidate / "serve_config.yaml").write_text(
+            yaml.safe_dump({"request_shaping": {"target_concurrency": concurrency}}),
+            encoding="utf-8",
+        )
+        (candidate / "controller_result.json").write_text(
+            json.dumps(
+                {
+                    "status": "rejected",
+                    "reason": "speed_below_candidate_acceptance",
+                    "decode_tps": 7.3,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._request_shaping_only_exhausted(history)
+    assert "request_shaping-only candidates are exhausted" in brief
+    assert "prefer a vllm_config runtime candidate" in brief

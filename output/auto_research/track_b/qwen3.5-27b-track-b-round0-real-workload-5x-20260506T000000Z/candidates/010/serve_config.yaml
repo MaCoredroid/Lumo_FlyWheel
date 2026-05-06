@@ -1,0 +1,3 @@
+vllm_config:
+  max_num_seqs: 4
+  max_num_batched_tokens: 2048

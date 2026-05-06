@@ -22,10 +22,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+_PYTHONPATH_PARTS = [part for part in os.environ.get("PYTHONPATH", "").split(os.pathsep) if part]
+if str(SRC_ROOT) not in _PYTHONPATH_PARTS:
+    os.environ["PYTHONPATH"] = os.pathsep.join([str(SRC_ROOT), *_PYTHONPATH_PARTS])
 
 from lumo_flywheel_serving.model_server import ModelServer  # noqa: E402
 from lumo_flywheel_serving.registry import ModelConfig, load_registry  # noqa: E402
 from lumo_flywheel_serving.tuned_config import (  # noqa: E402
+    StructuredValidationError,
     compute_workload_distribution_id,
     default_weight_version_id,
     make_tuned_config_bundle,
@@ -41,6 +45,7 @@ _SUPPORTED_VLLM_CONFIG_FIELDS = {
     "max_model_len",
     "kv_cache_dtype",
 }
+_SURFACE_HISTORY_LIMIT = 12
 
 
 def _now() -> str:
@@ -99,6 +104,8 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
     if quality_history_path.is_file():
         quality_history = "\n".join(quality_history_path.read_text(encoding="utf-8").splitlines()[-12:])
     branch_log = _load_json(round_dir / "branch_log.json")
+    surface_history = _candidate_surface_history(round_dir)
+    exhausted_surface_brief = _render_exhausted_surface_brief(surface_history)
     baseline_tps = float(spec.get("baseline_decode_tps") or 7.5)
     previous_best_tps = _previous_best_decode_tps(round_dir, baseline_tps=baseline_tps)
     incremental_multiplier = float(
@@ -121,6 +128,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "- Do not run expensive live benchmarks; the controller runs gates after you exit.",
             "- Preserve target model weights and sampling behavior.",
             "- Build on prior CUTLASS negative memory; do not propose another tile/schedule/stage mutation unless your config changes the available serving surface.",
+            "- Do not repeat an exact serving surface already measured in this round; the controller may reject duplicate surfaces before benchmarking.",
             "",
             "## Required Files",
             "",
@@ -135,7 +143,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "2. `serve_config.yaml` with one of these supported controller surfaces:",
             "   - `request_shaping.target_concurrency: <1-8>` for batching/concurrency experiments",
             "   - `prefix_cache` settings for prefix-cache experiments",
-            "   - `vllm_config` runtime overrides for max_num_seqs, max_num_batched_tokens, enable_chunked_prefill, enable_prefix_caching, gpu_memory_utilization, max_model_len, or kv_cache_dtype",
+            "   - `vllm_config` runtime overrides for max_num_seqs (1-64), max_num_batched_tokens (1-16384), enable_chunked_prefill (bool), enable_prefix_caching (bool), gpu_memory_utilization (0.0-0.95), max_model_len (1-131072), or kv_cache_dtype (`fp8_e5m2` or `auto` only)",
             "   - `spec_decode` settings only if the current runtime actually exposes such flags",
             "",
             "3. Optional `notes.md` with any blocker or measurement caveat.",
@@ -149,6 +157,12 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             f"- Best audit so far: `{audit.get('best_decode_tps')}` tok/s",
             "",
             "## Recent Controller Outcomes",
+            "",
+            "Exhausted serving surfaces:",
+            "",
+            "```text",
+            exhausted_surface_brief,
+            "```",
             "",
             "Quality gate history tail:",
             "",
@@ -171,6 +185,96 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             prior,
         ]
     )
+
+
+def _canonical_surface(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _canonical_surface(value[key]) for key in sorted(value)}
+    if isinstance(value, list):
+        return [_canonical_surface(item) for item in value]
+    return value
+
+
+def _surface_signature(config: dict[str, Any]) -> str:
+    surface = {
+        key: _canonical_surface(config[key])
+        for key in ("request_shaping", "prefix_cache", "vllm_config", "spec_decode")
+        if key in config
+    }
+    if not surface:
+        return "unsupported:{}"
+    return json.dumps(surface, sort_keys=True, separators=(",", ":"))
+
+
+def _candidate_surface_history(round_dir: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for candidate_path in sorted((round_dir / "candidates").glob("[0-9][0-9][0-9]")):
+        if not candidate_path.is_dir():
+            continue
+        config, error = _load_serve_config(candidate_path)
+        if error is not None or config is None:
+            continue
+        result = _load_json(candidate_path / "controller_result.json") or {}
+        throughput = _load_json(candidate_path / "throughput.json") or {}
+        decode_tps = result.get("decode_tps") or throughput.get("warm_decode_tps") or throughput.get("decode_tps")
+        rows.append(
+            {
+                "candidate_id": candidate_path.name,
+                "signature": _surface_signature(config),
+                "status": result.get("status"),
+                "reason": result.get("reason"),
+                "decode_tps": decode_tps,
+            }
+        )
+    return rows
+
+
+def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> str:
+    if not surface_history:
+        return "No prior serving surfaces measured in this round."
+    lines: list[str] = []
+    for row in surface_history[-_SURFACE_HISTORY_LIMIT:]:
+        decode_tps = row.get("decode_tps")
+        rendered_tps = "n/a" if decode_tps is None else f"{float(decode_tps):.6f} tok/s"
+        lines.append(
+            f"{row['candidate_id']}: {row['status'] or 'unknown'} "
+            f"{rendered_tps} {row.get('reason') or ''} surface={row['signature']}"
+        )
+    if _request_shaping_only_exhausted(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: request_shaping-only candidates are exhausted; "
+            "prefer a vllm_config runtime candidate that changes actual vLLM launch capacity."
+        )
+    return "\n".join(lines)
+
+
+def _request_shaping_only_exhausted(surface_history: list[dict[str, Any]]) -> bool:
+    request_only_rejections = 0
+    seen_concurrency: set[int] = set()
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if set(signature) != {"request_shaping"}:
+            continue
+        target = signature["request_shaping"].get("target_concurrency")
+        if not isinstance(target, int):
+            continue
+        seen_concurrency.add(target)
+        if row.get("status") == "rejected":
+            request_only_rejections += 1
+    return request_only_rejections >= 4 and len(seen_concurrency) >= 3
+
+
+def _has_prior_surface_signature(round_dir: Path, signature: str, *, current_candidate_id: str) -> bool:
+    for row in _candidate_surface_history(round_dir):
+        if row["candidate_id"] == current_candidate_id:
+            continue
+        if row["signature"] == signature:
+            return True
+    return False
 
 
 def _spawn_codex(round_dir: Path, candidate_dir: Path, prompt: str, timeout_s: int) -> dict[str, Any]:
@@ -284,7 +388,40 @@ def _parse_vllm_config_overrides(config: dict[str, Any]) -> tuple[dict[str, Any]
     unknown = sorted(set(raw) - _SUPPORTED_VLLM_CONFIG_FIELDS)
     if unknown:
         return None, f"unsupported_vllm_config_fields:{','.join(unknown)}"
+    issue = _validate_vllm_config_override_values(raw)
+    if issue is not None:
+        return None, issue
     return dict(raw), None
+
+
+def _validate_vllm_config_override_values(raw: dict[str, Any]) -> str | None:
+    int_ranges = {
+        "max_num_seqs": (1, 64),
+        "max_num_batched_tokens": (1, 16384),
+        "max_model_len": (1, 131072),
+    }
+    for key, (minimum, maximum) in int_ranges.items():
+        if key not in raw:
+            continue
+        value = raw[key]
+        if not isinstance(value, int) or isinstance(value, bool):
+            return f"invalid_vllm_config_{key}:must_be_int"
+        if value < minimum or value > maximum:
+            return f"invalid_vllm_config_{key}:must_be_{minimum}_to_{maximum}"
+    for key in ("enable_chunked_prefill", "enable_prefix_caching"):
+        if key in raw and not isinstance(raw[key], bool):
+            return f"invalid_vllm_config_{key}:must_be_bool"
+    if "gpu_memory_utilization" in raw:
+        value = raw["gpu_memory_utilization"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return "invalid_vllm_config_gpu_memory_utilization:must_be_number"
+        if float(value) < 0.0 or float(value) > 0.95:
+            return "invalid_vllm_config_gpu_memory_utilization:must_be_0.0_to_0.95"
+    if "kv_cache_dtype" in raw:
+        value = raw["kv_cache_dtype"]
+        if value not in {"fp8_e5m2", "auto"}:
+            return "invalid_vllm_config_kv_cache_dtype:must_be_fp8_e5m2_or_auto"
+    return None
 
 
 def _previous_best_decode_tps(round_dir: Path, *, baseline_tps: float) -> float:
@@ -337,8 +474,19 @@ def _runtime_server(args: argparse.Namespace) -> ModelServer:
         logs_root=args.runtime_logs_root,
         triton_cache_root=args.runtime_triton_cache_root,
         state_root=args.state_root,
+        proxy_port=args.runtime_proxy_port,
         ready_timeout_s=args.runtime_ready_timeout_s,
     )
+
+
+def _active_tuned_config_bundle_safe(server: ModelServer, model: str) -> tuple[str | None, Any | None, str | None]:
+    try:
+        bundle_path, bundle = server.active_tuned_config_bundle(model)
+    except StructuredValidationError as exc:
+        return None, None, exc.message
+    except Exception as exc:
+        return None, None, str(exc)
+    return bundle_path, bundle, None
 
 
 def _write_runtime_tuned_config_bundle(
@@ -358,7 +506,10 @@ def _write_runtime_tuned_config_bundle(
     if args.model not in registry:
         raise RuntimeError(f"model_not_in_registry:{args.model}")
     model_config = registry[args.model]
-    previous_bundle_path, previous_bundle = _runtime_server(args).active_tuned_config_bundle(args.model)
+    previous_bundle_path, previous_bundle, previous_bundle_warning = _active_tuned_config_bundle_safe(
+        _runtime_server(args),
+        args.model,
+    )
     bundle = make_tuned_config_bundle(
         model_id=args.model,
         family_id=model_config.served_model_name,
@@ -391,6 +542,7 @@ def _write_runtime_tuned_config_bundle(
             "latency_above_slo": False,
             "workload_descriptor_path": str(workload_file),
             "previous_tuned_config_path": previous_bundle_path,
+            "previous_tuned_config_warning": previous_bundle_warning,
         },
     )
     bundle_path = candidate_dir / "tuned_config_bundle.yaml"
@@ -411,7 +563,7 @@ def _apply_runtime_config_candidate(
     candidate_accept_tps: float,
 ) -> dict[str, Any]:
     server = _runtime_server(args)
-    previous_bundle_path, previous_bundle = server.active_tuned_config_bundle(args.model)
+    previous_bundle_path, previous_bundle, previous_bundle_warning = _active_tuned_config_bundle_safe(server, args.model)
     bundle_path = _write_runtime_tuned_config_bundle(
         args,
         round_dir=round_dir,
@@ -430,6 +582,7 @@ def _apply_runtime_config_candidate(
         "bundle_id": loaded_bundle.bundle_id,
         "previous_bundle_path": previous_bundle_path,
         "previous_bundle_id": previous_bundle.bundle_id if previous_bundle is not None else None,
+        "previous_bundle_warning": previous_bundle_warning,
     }
 
 
@@ -659,15 +812,23 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
     candidate_config, config_error = _load_serve_config(candidate_dir)
     if config_error is not None or candidate_config is None:
         return {"status": "rejected", "reason": config_error or "serve_config_missing"}
+    signature = _surface_signature(candidate_config)
+    if args.reject_duplicate_surfaces and _has_prior_surface_signature(
+        round_dir,
+        signature,
+        current_candidate_id=candidate_id,
+    ):
+        return {
+            "status": "rejected",
+            "reason": "duplicate_serving_surface",
+            "surface_signature": signature,
+        }
     vllm_config_overrides, vllm_config_error = _parse_vllm_config_overrides(candidate_config)
     if vllm_config_error is not None:
         return {"status": "rejected", "reason": vllm_config_error}
-    default_concurrency = None
+    default_concurrency = 4 if vllm_config_overrides is not None else None
     if vllm_config_overrides is not None and vllm_config_overrides.get("max_num_seqs") is not None:
-        try:
-            default_concurrency = int(vllm_config_overrides["max_num_seqs"])
-        except (TypeError, ValueError):
-            default_concurrency = None
+        default_concurrency = int(vllm_config_overrides["max_num_seqs"])
     concurrency = _parse_target_concurrency_from_config(
         candidate_config,
         default_from_runtime_config=default_concurrency,
@@ -709,11 +870,18 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
                 candidate_accept_tps=candidate_accept_tps,
             )
         except Exception as exc:
+            restore: dict[str, Any] | None = None
+            if args.restore_runtime_after_candidate:
+                try:
+                    restore = _restore_runtime_config(args, None)
+                except Exception as restore_exc:
+                    restore = {"ok": False, "error": str(restore_exc)[-2000:]}
             return {
                 "status": "rejected",
                 "reason": "runtime_config_apply_failed",
                 "detail": str(exc)[-2000:],
                 "vllm_config": vllm_config_overrides,
+                "runtime_restore_after_apply_failure": restore,
             }
 
     result: dict[str, Any] | None = None
@@ -822,6 +990,8 @@ def run_loop(args: argparse.Namespace) -> dict[str, Any]:
     round_dir = args.round_dir.resolve()
     if not (round_dir / "round_spec.yaml").is_file():
         raise RuntimeError(f"round_spec.yaml missing: {round_dir}")
+    if args.state_root is None:
+        args.state_root = round_dir / "runtime_state"
     monitor_rows: list[dict[str, Any]] = []
     for _ in range(args.max_attempts):
         candidate_id = _next_candidate_id(round_dir)
@@ -876,12 +1046,14 @@ def main() -> int:
     parser.add_argument("--prefix-words", type=int, default=2048, help=argparse.SUPPRESS)
     parser.add_argument("--max-tokens", type=int, default=32, help=argparse.SUPPRESS)
     parser.add_argument("--apply-runtime-config", action="store_true")
+    parser.add_argument("--reject-duplicate-surfaces", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--restore-runtime-after-candidate", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--registry-path", type=Path, default=REPO_ROOT / "model_registry.yaml")
-    parser.add_argument("--state-root", type=Path, default=REPO_ROOT / "output" / "serving_state")
+    parser.add_argument("--state-root", type=Path, default=None)
     parser.add_argument("--runtime-container-name", default="lumo-vllm-l0c-fp8-cutlass-run30")
     parser.add_argument("--runtime-logs-root", type=Path, default=Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs"))
     parser.add_argument("--runtime-triton-cache-root", type=Path, default=Path("/tmp/lumo-l0c-fp8-cutlass-run30-triton"))
+    parser.add_argument("--runtime-proxy-port", type=int, default=8011)
     parser.add_argument("--runtime-ready-timeout-s", type=int, default=900)
     parser.add_argument("--keep-searching-after-accept", action="store_true")
     args = parser.parse_args()

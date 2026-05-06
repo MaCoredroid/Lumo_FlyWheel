@@ -1,0 +1,7 @@
+Created candidate `008` artifacts under `candidates/008`:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The serving surface is a vLLM runtime config using `kv_cache_dtype: fp8_e4m3` with `max_num_seqs: 8`, `max_num_batched_tokens: 8192`, and `gpu_memory_utilization: 0.92`. I did not run benchmarks or edit anything outside the candidate directory.
