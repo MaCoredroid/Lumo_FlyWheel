@@ -318,6 +318,15 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "inside this family; move to a different speculative-depth/minimum pair "
             "or a different supported serving surface."
         )
+    if _spec_decode_two_token_family_plateaued(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: the 2-token ngram family has plateaued below the "
+            "post-best acceptance gate: lookup 2-16 and 2-8 were fast-but-insufficient, "
+            "while lookup 3-16 fell back to baseline. Do not spend the next candidate "
+            "on 2-token ngram lookup-window interpolation; move to a different "
+            "serving surface or an evidence-backed nonlocal spec_decode shape."
+        )
     elif not _has_any_spec_decode(surface_history):
         lines.append("")
         lines.append(
@@ -405,6 +414,31 @@ def _spec_decode_three_min_two_family_exhausted(surface_history: list[dict[str, 
         and any(reason.startswith("speed_below_candidate_acceptance") for reason in outcomes_by_max.get(6, set()))
         and any(reason.startswith("throughput_measure_failed") for reason in outcomes_by_max.get(4, set()))
     )
+
+
+def _spec_decode_two_token_family_plateaued(surface_history: list[dict[str, Any]]) -> bool:
+    measured_rejections: set[tuple[int, int]] = set()
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        spec_decode = signature.get("spec_decode")
+        if not isinstance(spec_decode, dict):
+            continue
+        if spec_decode.get("method") != "ngram" or spec_decode.get("num_speculative_tokens") != 2:
+            continue
+        if row.get("status") != "rejected" or row.get("reason") != "speed_below_candidate_acceptance":
+            continue
+        if row.get("decode_tps") is None:
+            continue
+        try:
+            prompt_lookup_min = int(spec_decode.get("prompt_lookup_min"))
+            prompt_lookup_max = int(spec_decode.get("prompt_lookup_max"))
+        except (TypeError, ValueError):
+            continue
+        measured_rejections.add((prompt_lookup_min, prompt_lookup_max))
+    return {(2, 16), (3, 16), (2, 8)}.issubset(measured_rejections)
 
 
 def _runtime_capacity_family_flat(surface_history: list[dict[str, Any]]) -> bool:

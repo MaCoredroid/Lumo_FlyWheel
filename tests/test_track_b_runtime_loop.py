@@ -551,3 +551,46 @@ def test_surface_history_guides_away_from_exhausted_three_min_two_spec_family(tm
     assert loop._spec_decode_three_min_two_family_exhausted(history)
     assert "num_speculative_tokens=3 and prompt_lookup_min=2 is exhausted" in brief
     assert "Do not spend the next candidate on max-only interpolation" in brief
+
+
+def test_surface_history_guides_away_from_plateaued_two_token_spec_family(tmp_path: Path) -> None:
+    loop = _load_loop_module()
+    round_dir = tmp_path / "round"
+    outcomes = [
+        (1, 2, 16, 14.5),
+        (2, 3, 16, 7.6),
+        (3, 2, 8, 14.6),
+    ]
+    for index, prompt_lookup_min, prompt_lookup_max, decode_tps in outcomes:
+        candidate = round_dir / "candidates" / f"{index:03d}"
+        candidate.mkdir(parents=True)
+        (candidate / "serve_config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "spec_decode": {
+                        "method": "ngram",
+                        "num_speculative_tokens": 2,
+                        "prompt_lookup_min": prompt_lookup_min,
+                        "prompt_lookup_max": prompt_lookup_max,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        (candidate / "controller_result.json").write_text(
+            json.dumps(
+                {
+                    "status": "rejected",
+                    "reason": "speed_below_candidate_acceptance",
+                    "decode_tps": decode_tps,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    history = loop._candidate_surface_history(round_dir)
+    brief = loop._render_exhausted_surface_brief(history)
+
+    assert loop._spec_decode_two_token_family_plateaued(history)
+    assert "2-token ngram family has plateaued" in brief
+    assert "Do not spend the next candidate on 2-token ngram lookup-window interpolation" in brief
