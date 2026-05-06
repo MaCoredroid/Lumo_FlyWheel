@@ -1,0 +1,13 @@
+Authored candidate `050` in `candidates/050` with:
+
+- `candidate_analysis.md`
+- `serve_config.yaml`
+
+Serving surface:
+
+```yaml
+kernel_selection:
+  attention_backend: flash-attn-4
+```
+
+I did not run benchmarks or edit anything outside the candidate directory.

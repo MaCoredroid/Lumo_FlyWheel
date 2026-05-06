@@ -1,0 +1,2 @@
+kernel_selection:
+  attention_backend: flash-attn-4
