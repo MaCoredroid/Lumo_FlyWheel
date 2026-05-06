@@ -48,5 +48,15 @@
     "recorded_at": "2026-05-06T05:48:17Z",
     "status": "rejected",
     "target_decode_tps": 37.5
+  },
+  {
+    "candidate_accept_decode_tps": 9.0,
+    "candidate_id": "007",
+    "decode_tps": 7.32286,
+    "previous_best_decode_tps": 7.5,
+    "reason": "speed_below_candidate_acceptance",
+    "recorded_at": "2026-05-06T06:01:59Z",
+    "status": "rejected",
+    "target_decode_tps": 37.5
   }
 ]

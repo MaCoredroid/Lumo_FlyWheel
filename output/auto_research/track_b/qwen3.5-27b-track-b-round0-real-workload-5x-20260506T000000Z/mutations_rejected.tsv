@@ -5,3 +5,4 @@ candidate_id	tier	cost_bucket	reason	first_failing_metric	recorded_at
 004	controller	speed_below_target	speed_below_target		2026-05-06T05:37:03Z
 005	controller	speed_below_target	speed_below_target		2026-05-06T05:43:11Z
 006	controller	speed_below_target	speed_below_target		2026-05-06T05:48:17Z
+007	controller	speed_below_candidate_acceptance	speed_below_candidate_acceptance	warm_decode_tps	2026-05-06T06:01:59Z

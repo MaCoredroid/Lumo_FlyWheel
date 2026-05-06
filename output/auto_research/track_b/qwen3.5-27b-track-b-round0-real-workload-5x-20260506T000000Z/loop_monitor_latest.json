@@ -2,24 +2,15 @@
   "attempts": [
     {
       "candidate_accept_decode_tps": 9.0,
-      "candidate_id": "005",
-      "decode_tps": 7.488368,
+      "candidate_id": "007",
+      "decode_tps": 7.32286,
       "previous_best_decode_tps": 7.5,
-      "reason": "speed_below_target",
-      "status": "rejected",
-      "target_decode_tps": 37.5
-    },
-    {
-      "candidate_accept_decode_tps": 9.0,
-      "candidate_id": "006",
-      "decode_tps": 7.367211,
-      "previous_best_decode_tps": 7.5,
-      "reason": "speed_below_target",
+      "reason": "speed_below_candidate_acceptance",
       "status": "rejected",
       "target_decode_tps": 37.5
     }
   ],
-  "completed_at": "2026-05-06T05:48:17Z",
+  "completed_at": "2026-05-06T06:01:59Z",
   "round_dir": "/home/mark/shared/lumoFlyWheel/output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z",
   "schema": "lumo.track_b.loop_run.v1"
 }

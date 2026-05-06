@@ -17,12 +17,13 @@ Concrete success criteria:
 ## Implemented Artifacts
 
 - Commit: `2a7d7a3 Add real workload Track B gate`
+- Follow-up: runtime-config candidate applicator added after the initial audit so workers can propose real vLLM launch-shape changes via `serve_config.yaml:vllm_config`.
 - Round directory: `output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z`
 - Measurement script: `scripts/measure_track_b_real_workload.py`
 - Controller: `scripts/run_track_b_loop.py`
 - Audit script: `scripts/audit_track_b_round.py`
 - Launch integration: `src/lumo_flywheel_serving/track_b.py`, `src/lumo_flywheel_serving/cli.py`
-- Tests: `tests/test_track_b.py`
+- Tests: `tests/test_track_b.py`, `tests/test_track_b_runtime_loop.py`
 
 ## Prompt-To-Artifact Checklist
 
@@ -34,7 +35,8 @@ Concrete success criteria:
 | Measure first 5 completions with 4 warm counted | Candidate throughput artifacts use schema `lumo.track_b.real_workload_first_five.v1`, `cold_completions_discarded: 1`, `warm_completions_measured: 4` | Done |
 | Keep final 5x target | `round_spec.yaml` has `target_decode_tps: 37.5` | Done |
 | Use 20% incremental candidate preflight | `round_spec.yaml` has `candidate_acceptance_incremental_speedup_at_least: 1.2`; initial preflight is `9.0 tok/s` | Done |
-| Let auto-research author candidates | Candidates `001`-`006` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Let auto-research author candidates | Candidates `001`-`007` were generated through `codex exec` worker calls and controller-owned measurement | Done |
+| Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Achieve an accepted candidate | Best candidate `005` measured `7.488368 tok/s`, below `9.0 tok/s` preflight | Not met |
 | Achieve final 5x goal | Best candidate `005` measured `7.488368 tok/s`, below `37.5 tok/s` final target | Not met |
 | Run full `50*5` benchmark | Not run because no candidate cleared the `20%` preflight | Not met, intentionally gated |
@@ -48,8 +50,11 @@ Concrete success criteria:
 | `004` | request shaping, concurrency 4 | `7.363091` | `0.982x` | Rejected |
 | `005` | request shaping, concurrency 2 | `7.488368` | `0.998x` | Rejected |
 | `006` | request shaping, concurrency 6 | `7.367211` | `0.982x` | Rejected |
+| `007` | request shaping, concurrency 4 | `7.322860` | `0.976x` | Rejected |
 
 Candidate `002` proposed a native prefix-cache config, but the live server was already launched with `--enable-prefix-caching`; after the controller was fixed to accept prefix-cache-shaped configs, later candidates still stayed at baseline-level throughput.
+
+Candidate `007` was launched after adding the runtime-config applicator with `--apply-runtime-config` enabled. The worker did not choose the new `vllm_config` surface; it proposed another concurrency-4 request-shaping candidate, so no vLLM restart was needed for that attempt.
 
 ## Runtime Capability Audit
 
@@ -91,6 +96,6 @@ The next productive Track B branch is not more concurrency search. It should be 
 
 1. Install or switch to a vLLM build with working speculative decoding and LMCache support, then launch Track B Round 1.
 2. Add a real candidate surface for `xgrammar` / guided decoding and run it only on tool-call-heavy workload slices where constrained generation can affect decode.
-3. Add a runtime-restart candidate applicator so agents can test actual vLLM launch/config mutations, not only controller-side request shaping.
+3. Force or seed Round 1 candidate generation toward the new `vllm_config` surface (`max_num_seqs`, `max_num_batched_tokens`, KV dtype, prefix/chunked flags, context length), because unconstrained workers are still falling back to request-shaping repeats.
 
-Until one of those surfaces is available, continuing the same loop is expected to keep generating rejected candidates around `7.3-7.5 tok/s`.
+Until a candidate actually changes a productive runtime surface, continuing the same loop is expected to keep generating rejected candidates around `7.3-7.5 tok/s`.

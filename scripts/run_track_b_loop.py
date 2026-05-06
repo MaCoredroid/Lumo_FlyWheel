@@ -19,6 +19,28 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from lumo_flywheel_serving.model_server import ModelServer  # noqa: E402
+from lumo_flywheel_serving.registry import ModelConfig, load_registry  # noqa: E402
+from lumo_flywheel_serving.tuned_config import (  # noqa: E402
+    compute_workload_distribution_id,
+    default_weight_version_id,
+    make_tuned_config_bundle,
+)
+
+
+_SUPPORTED_VLLM_CONFIG_FIELDS = {
+    "max_num_seqs",
+    "max_num_batched_tokens",
+    "enable_chunked_prefill",
+    "enable_prefix_caching",
+    "gpu_memory_utilization",
+    "max_model_len",
+    "kv_cache_dtype",
+}
 
 
 def _now() -> str:
@@ -113,6 +135,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "2. `serve_config.yaml` with one of these supported controller surfaces:",
             "   - `request_shaping.target_concurrency: <1-8>` for batching/concurrency experiments",
             "   - `prefix_cache` settings for prefix-cache experiments",
+            "   - `vllm_config` runtime overrides for max_num_seqs, max_num_batched_tokens, enable_chunked_prefill, enable_prefix_caching, gpu_memory_utilization, max_model_len, or kv_cache_dtype",
             "   - `spec_decode` settings only if the current runtime actually exposes such flags",
             "",
             "3. Optional `notes.md` with any blocker or measurement caveat.",
@@ -219,14 +242,21 @@ class tempfile_file:
         self._handle.close()
 
 
-def _parse_target_concurrency(candidate_dir: Path) -> int | None:
+def _load_serve_config(candidate_dir: Path) -> tuple[dict[str, Any] | None, str | None]:
     config_path = candidate_dir / "serve_config.yaml"
     if not config_path.is_file():
-        return None
+        return None, "serve_config_missing"
     try:
-        config = _load_yaml(config_path)
-    except Exception:
-        return None
+        return _load_yaml(config_path), None
+    except Exception as exc:
+        return None, f"serve_config_invalid: {exc}"
+
+
+def _parse_target_concurrency_from_config(
+    config: dict[str, Any],
+    *,
+    default_from_runtime_config: int | None = None,
+) -> int | None:
     request_shaping = config.get("request_shaping")
     if isinstance(request_shaping, dict):
         value = request_shaping.get("target_concurrency") or request_shaping.get("concurrent_requests")
@@ -240,7 +270,21 @@ def _parse_target_concurrency(candidate_dir: Path) -> int | None:
     prefix_cache = config.get("prefix_cache")
     if isinstance(prefix_cache, dict) and bool(prefix_cache.get("enabled", True)):
         return 4
+    if default_from_runtime_config is not None:
+        return max(1, min(int(default_from_runtime_config), 8))
     return None
+
+
+def _parse_vllm_config_overrides(config: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    raw = config.get("vllm_config")
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict):
+        return None, "vllm_config_must_be_mapping"
+    unknown = sorted(set(raw) - _SUPPORTED_VLLM_CONFIG_FIELDS)
+    if unknown:
+        return None, f"unsupported_vllm_config_fields:{','.join(unknown)}"
+    return dict(raw), None
 
 
 def _previous_best_decode_tps(round_dir: Path, *, baseline_tps: float) -> float:
@@ -257,6 +301,149 @@ def _previous_best_decode_tps(round_dir: Path, *, baseline_tps: float) -> float:
     return best
 
 
+def _resolve_existing_path(raw: str | Path, *, base_dir: Path = REPO_ROOT) -> Path:
+    path = Path(raw)
+    if path.is_absolute():
+        return path
+    for candidate in (base_dir / path, REPO_ROOT / path, path):
+        if candidate.exists():
+            return candidate.resolve()
+    return (base_dir / path).resolve()
+
+
+def _base_vllm_config(config: ModelConfig) -> dict[str, Any]:
+    return {
+        "max_num_seqs": config.max_num_seqs,
+        "max_num_batched_tokens": config.max_num_batched_tokens,
+        "enable_chunked_prefill": config.enable_chunked_prefill,
+        "enable_prefix_caching": config.enable_prefix_caching,
+        "gpu_memory_utilization": config.gpu_memory_utilization,
+        "max_model_len": config.max_model_len,
+        "kv_cache_dtype": config.kv_cache_dtype,
+    }
+
+
+def _merged_vllm_config(config: ModelConfig, overrides: dict[str, Any]) -> dict[str, Any]:
+    merged = _base_vllm_config(config)
+    merged.update(overrides)
+    return merged
+
+
+def _runtime_server(args: argparse.Namespace) -> ModelServer:
+    return ModelServer(
+        registry_path=_resolve_existing_path(args.registry_path),
+        port=args.port,
+        container_name=args.runtime_container_name,
+        logs_root=args.runtime_logs_root,
+        triton_cache_root=args.runtime_triton_cache_root,
+        state_root=args.state_root,
+        ready_timeout_s=args.runtime_ready_timeout_s,
+    )
+
+
+def _write_runtime_tuned_config_bundle(
+    args: argparse.Namespace,
+    *,
+    round_dir: Path,
+    candidate_dir: Path,
+    candidate_id: str,
+    candidate_config: dict[str, Any],
+    vllm_config_overrides: dict[str, Any],
+    workload_file: Path,
+    target_tps: float,
+    candidate_accept_tps: float,
+) -> Path:
+    registry_path = _resolve_existing_path(args.registry_path)
+    registry = load_registry(registry_path)
+    if args.model not in registry:
+        raise RuntimeError(f"model_not_in_registry:{args.model}")
+    model_config = registry[args.model]
+    previous_bundle_path, previous_bundle = _runtime_server(args).active_tuned_config_bundle(args.model)
+    bundle = make_tuned_config_bundle(
+        model_id=args.model,
+        family_id=model_config.served_model_name,
+        weight_version_id=default_weight_version_id(model_config),
+        workload_distribution_id=compute_workload_distribution_id(workload_file),
+        vllm_config=_merged_vllm_config(model_config, vllm_config_overrides),
+        request_shaping=dict(candidate_config.get("request_shaping") or {}),
+        objective={
+            "decode_speed_at_least_tps": target_tps,
+            "candidate_accept_decode_tps": candidate_accept_tps,
+            "metric": "warm_decode_tps",
+        },
+        measurement_trace_ref=str((candidate_dir / "throughput.json").relative_to(round_dir)),
+        search_trace_ref=str(candidate_dir.relative_to(round_dir)),
+        baseline_bundle_id=previous_bundle.bundle_id if previous_bundle is not None else None,
+        regression_guard={
+            "b1_required": True,
+            "b2_required_before_final": True,
+            "b3_required_before_final": True,
+        },
+        safety_rails={
+            "preserve_model_weights": True,
+            "preserve_sampling_behavior": True,
+            "runtime_config_fields_only": sorted(_SUPPORTED_VLLM_CONFIG_FIELDS),
+        },
+        round_provenance={
+            "round_type": "track_b_auto_research_runtime_config",
+            "candidate_id": candidate_id,
+            "confidence": "experimental",
+            "latency_above_slo": False,
+            "workload_descriptor_path": str(workload_file),
+            "previous_tuned_config_path": previous_bundle_path,
+        },
+    )
+    bundle_path = candidate_dir / "tuned_config_bundle.yaml"
+    bundle_path.write_text(yaml.safe_dump(bundle.as_dict(), sort_keys=False), encoding="utf-8")
+    return bundle_path
+
+
+def _apply_runtime_config_candidate(
+    args: argparse.Namespace,
+    *,
+    round_dir: Path,
+    candidate_dir: Path,
+    candidate_id: str,
+    candidate_config: dict[str, Any],
+    vllm_config_overrides: dict[str, Any],
+    workload_file: Path,
+    target_tps: float,
+    candidate_accept_tps: float,
+) -> dict[str, Any]:
+    server = _runtime_server(args)
+    previous_bundle_path, previous_bundle = server.active_tuned_config_bundle(args.model)
+    bundle_path = _write_runtime_tuned_config_bundle(
+        args,
+        round_dir=round_dir,
+        candidate_dir=candidate_dir,
+        candidate_id=candidate_id,
+        candidate_config=candidate_config,
+        vllm_config_overrides=vllm_config_overrides,
+        workload_file=workload_file,
+        target_tps=target_tps,
+        candidate_accept_tps=candidate_accept_tps,
+    )
+    loaded_bundle = server.load_tuned_config(bundle_path, bundle_confidence_policy="warn")
+    server.start(args.model)
+    return {
+        "bundle_path": str(bundle_path),
+        "bundle_id": loaded_bundle.bundle_id,
+        "previous_bundle_path": previous_bundle_path,
+        "previous_bundle_id": previous_bundle.bundle_id if previous_bundle is not None else None,
+    }
+
+
+def _restore_runtime_config(args: argparse.Namespace, previous_bundle_path: str | None) -> dict[str, Any]:
+    server = _runtime_server(args)
+    if previous_bundle_path:
+        bundle = server.load_tuned_config(previous_bundle_path, bundle_confidence_policy="warn")
+        server.start(args.model)
+        return {"ok": True, "restored_bundle_path": previous_bundle_path, "restored_bundle_id": bundle.bundle_id}
+    server.state_store.clear_active_bundle()
+    server.start(args.model)
+    return {"ok": True, "restored_bundle_path": None, "restored_bundle_id": None}
+
+
 def _run_cmd(argv: list[str], *, cwd: Path, output_path: Path | None = None) -> tuple[int, str]:
     completed = subprocess.run(argv, cwd=cwd, text=True, capture_output=True)
     text = completed.stdout + completed.stderr
@@ -265,25 +452,19 @@ def _run_cmd(argv: list[str], *, cwd: Path, output_path: Path | None = None) -> 
     return completed.returncode, text
 
 
-def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir: Path, candidate_id: str) -> dict[str, Any]:
-    analysis_path = candidate_dir / "candidate_analysis.md"
-    if not analysis_path.is_file():
-        return {"status": "rejected", "reason": "candidate_analysis_missing"}
-    concurrency = _parse_target_concurrency(candidate_dir)
-    if concurrency is None:
-        return {"status": "rejected", "reason": "unsupported_or_missing_serve_config"}
+def _evaluate_candidate_core(
+    args: argparse.Namespace,
+    round_dir: Path,
+    candidate_dir: Path,
+    *,
+    concurrency: int,
+    workload_file: Path,
+    target_tps: float,
+    candidate_accept_tps: float,
+    previous_best_tps: float,
+) -> dict[str, Any]:
     throughput_path = candidate_dir / "throughput.json"
     spec = _load_yaml(round_dir / "round_spec.yaml")
-    workload_file = args.workload_file or spec.get("workload_file")
-    if not workload_file:
-        return {"status": "rejected", "reason": "real_workload_file_missing"}
-    target_tps = float(spec["success_criteria"]["decode_speed_at_least_tps"])
-    baseline_tps = float(spec.get("baseline_decode_tps", 7.5))
-    incremental_multiplier = float(
-        spec.get("success_criteria", {}).get("candidate_acceptance_incremental_speedup_at_least", 1.2)
-    )
-    previous_best_tps = _previous_best_decode_tps(round_dir, baseline_tps=baseline_tps)
-    candidate_accept_tps = previous_best_tps * incremental_multiplier
     cmd = [
         str(REPO_ROOT / "scripts" / "measure_track_b_real_workload.py"),
         "--workload-file",
@@ -471,6 +652,99 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
     }
 
 
+def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir: Path, candidate_id: str) -> dict[str, Any]:
+    analysis_path = candidate_dir / "candidate_analysis.md"
+    if not analysis_path.is_file():
+        return {"status": "rejected", "reason": "candidate_analysis_missing"}
+    candidate_config, config_error = _load_serve_config(candidate_dir)
+    if config_error is not None or candidate_config is None:
+        return {"status": "rejected", "reason": config_error or "serve_config_missing"}
+    vllm_config_overrides, vllm_config_error = _parse_vllm_config_overrides(candidate_config)
+    if vllm_config_error is not None:
+        return {"status": "rejected", "reason": vllm_config_error}
+    default_concurrency = None
+    if vllm_config_overrides is not None and vllm_config_overrides.get("max_num_seqs") is not None:
+        try:
+            default_concurrency = int(vllm_config_overrides["max_num_seqs"])
+        except (TypeError, ValueError):
+            default_concurrency = None
+    concurrency = _parse_target_concurrency_from_config(
+        candidate_config,
+        default_from_runtime_config=default_concurrency,
+    )
+    if concurrency is None:
+        return {"status": "rejected", "reason": "unsupported_or_missing_serve_config"}
+
+    spec = _load_yaml(round_dir / "round_spec.yaml")
+    workload_file_raw = args.workload_file or spec.get("workload_file")
+    if not workload_file_raw:
+        return {"status": "rejected", "reason": "real_workload_file_missing"}
+    workload_file = _resolve_existing_path(workload_file_raw)
+    target_tps = float(spec["success_criteria"]["decode_speed_at_least_tps"])
+    baseline_tps = float(spec.get("baseline_decode_tps", 7.5))
+    incremental_multiplier = float(
+        spec.get("success_criteria", {}).get("candidate_acceptance_incremental_speedup_at_least", 1.2)
+    )
+    previous_best_tps = _previous_best_decode_tps(round_dir, baseline_tps=baseline_tps)
+    candidate_accept_tps = previous_best_tps * incremental_multiplier
+
+    runtime_activation: dict[str, Any] | None = None
+    if vllm_config_overrides is not None:
+        if not args.apply_runtime_config:
+            return {
+                "status": "rejected",
+                "reason": "runtime_config_requires_apply_flag",
+                "vllm_config": vllm_config_overrides,
+            }
+        try:
+            runtime_activation = _apply_runtime_config_candidate(
+                args,
+                round_dir=round_dir,
+                candidate_dir=candidate_dir,
+                candidate_id=candidate_id,
+                candidate_config=candidate_config,
+                vllm_config_overrides=vllm_config_overrides,
+                workload_file=workload_file,
+                target_tps=target_tps,
+                candidate_accept_tps=candidate_accept_tps,
+            )
+        except Exception as exc:
+            return {
+                "status": "rejected",
+                "reason": "runtime_config_apply_failed",
+                "detail": str(exc)[-2000:],
+                "vllm_config": vllm_config_overrides,
+            }
+
+    result: dict[str, Any] | None = None
+    try:
+        result = _evaluate_candidate_core(
+            args,
+            round_dir,
+            candidate_dir,
+            concurrency=concurrency,
+            workload_file=workload_file,
+            target_tps=target_tps,
+            candidate_accept_tps=candidate_accept_tps,
+            previous_best_tps=previous_best_tps,
+        )
+        if runtime_activation is not None:
+            result["runtime_config_ref"] = str(Path(runtime_activation["bundle_path"]).relative_to(round_dir))
+            result["runtime_config_id"] = runtime_activation["bundle_id"]
+            result["vllm_config"] = vllm_config_overrides
+        return result
+    finally:
+        if runtime_activation is not None and args.restore_runtime_after_candidate:
+            restore_path = candidate_dir / "runtime_restore_result.json"
+            try:
+                restore = _restore_runtime_config(args, runtime_activation["previous_bundle_path"])
+            except Exception as exc:
+                restore = {"ok": False, "error": str(exc)[-2000:]}
+            _write_json(restore_path, restore)
+            if result is not None:
+                result["runtime_restore_ref"] = str(restore_path.relative_to(round_dir))
+
+
 def _update_ledgers(round_dir: Path, candidate_id: str, result: dict[str, Any]) -> None:
     branch_log_path = round_dir / "branch_log.json"
     branch_log = json.loads(branch_log_path.read_text(encoding="utf-8")) if branch_log_path.is_file() else []
@@ -601,6 +875,14 @@ def main() -> int:
     parser.add_argument("--max-output-token-cap", type=int, default=0)
     parser.add_argument("--prefix-words", type=int, default=2048, help=argparse.SUPPRESS)
     parser.add_argument("--max-tokens", type=int, default=32, help=argparse.SUPPRESS)
+    parser.add_argument("--apply-runtime-config", action="store_true")
+    parser.add_argument("--restore-runtime-after-candidate", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--registry-path", type=Path, default=REPO_ROOT / "model_registry.yaml")
+    parser.add_argument("--state-root", type=Path, default=REPO_ROOT / "output" / "serving_state")
+    parser.add_argument("--runtime-container-name", default="lumo-vllm-l0c-fp8-cutlass-run30")
+    parser.add_argument("--runtime-logs-root", type=Path, default=Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs"))
+    parser.add_argument("--runtime-triton-cache-root", type=Path, default=Path("/tmp/lumo-l0c-fp8-cutlass-run30-triton"))
+    parser.add_argument("--runtime-ready-timeout-s", type=int, default=900)
     parser.add_argument("--keep-searching-after-accept", action="store_true")
     args = parser.parse_args()
     result = run_loop(args)

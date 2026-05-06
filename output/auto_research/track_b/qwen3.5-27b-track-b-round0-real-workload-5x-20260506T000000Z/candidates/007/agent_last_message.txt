@@ -1,0 +1,8 @@
+Authored candidate `007` under `candidates/007`.
+
+Created:
+- `candidate_analysis.md`
+- `serve_config.yaml`
+- `notes.md`
+
+The serving change is `request_shaping.target_concurrency: 4`, aimed at improving warm decode batching across the four counted completions. I did not run live benchmarks, per instruction.
