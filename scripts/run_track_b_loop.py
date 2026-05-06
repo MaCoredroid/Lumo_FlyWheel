@@ -61,6 +61,20 @@ _SUPPORTED_KERNEL_SELECTION_FIELDS = {
     "torch_compile_mode",
     "cuda_graph_capture",
 }
+_SUPPORTED_STRUCTURED_OUTPUTS_FIELDS = {
+    "json",
+    "regex",
+    "choice",
+    "grammar",
+    "json_object",
+    "disable_any_whitespace",
+    "disable_additional_properties",
+    "whitespace_pattern",
+    "structural_tag",
+    "backend",
+    "_backend",
+}
+_SUPPORTED_STRUCTURED_OUTPUTS_BACKENDS = {"xgrammar", "outlines", "guidance", "lm-format-enforcer", "auto"}
 _SURFACE_HISTORY_LIMIT = 12
 
 
@@ -163,6 +177,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "   - `vllm_config` runtime overrides for max_num_seqs (1-64), max_num_batched_tokens (1-16384), enable_chunked_prefill (bool), enable_prefix_caching (bool), gpu_memory_utilization (0.0-0.95), max_model_len (1-131072), or kv_cache_dtype (`fp8_e5m2` or `auto` only)",
             "   - `spec_decode` settings for vLLM ngram speculative decoding: method `ngram`, num_speculative_tokens 1-8, prompt_lookup_min 1-16, prompt_lookup_max 1-64",
             "   - `kernel_selection` settings for repo-owned vLLM launch choices: attention_backend (`flashinfer`, `triton`, `flash-attn-3`, `flash-attn-4`, or `vllm-default`), fp8_gemm_kernel (`cublas` or `cutlass`), torch_compile_mode (`default`, `reduce-overhead`, `max-autotune`, or `max-autotune-no-cudagraphs`), cuda_graph_capture (`on` or `off`), deltanet_kernel (`triton-chunked-delta-v2`)",
+            "   - `structured_outputs` request settings for guided decoding experiments: backend (`xgrammar`, `outlines`, `guidance`, `lm-format-enforcer`, or `auto`) plus one of json, regex, choice, grammar, or json_object",
             "",
             "3. Optional `notes.md` with any blocker or measurement caveat.",
             "",
@@ -173,6 +188,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             f"- Candidate acceptance gate this iteration: `{candidate_accept_tps:.3f}` tok/s (`{incremental_multiplier:.2f}x` over previous best `{previous_best_tps:.3f}` tok/s)",
             "- Speed gate: real vLLM workload window; 5 completions per task, first cold completion discarded, next 4 warm completions counted.",
             "- The official speed metric is decode-time warm TPS from `throughput.json`; wall-clock aggregate throughput from concurrent requests is diagnostic only.",
+            "- `structured_outputs` candidates still use the same first-five workload and decode-time metric; they only add vLLM guided-decoding request parameters.",
             f"- Best audit so far: `{audit.get('best_decode_tps')}` tok/s",
             "",
             "## Recent Controller Outcomes",
@@ -242,6 +258,15 @@ def _surface_payload(config: dict[str, Any]) -> dict[str, Any]:
             surface["spec_decode"] = spec_decode
     if "kernel_selection" in config:
         surface["kernel_selection"] = config["kernel_selection"]
+    if "structured_outputs" in config:
+        structured_outputs = config["structured_outputs"]
+        if isinstance(structured_outputs, dict):
+            effective_structured_outputs = dict(structured_outputs)
+            if "backend" in effective_structured_outputs and "_backend" not in effective_structured_outputs:
+                effective_structured_outputs["_backend"] = effective_structured_outputs.pop("backend")
+            surface["structured_outputs"] = effective_structured_outputs
+        else:
+            surface["structured_outputs"] = structured_outputs
     return surface
 
 
@@ -373,6 +398,14 @@ def _render_exhausted_surface_brief(surface_history: list[dict[str, Any]]) -> st
             "candidate over another ngram-only candidate unless there is direct new "
             "evidence for the ngram shape."
         )
+    elif _has_any_kernel_selection(surface_history) and not _has_any_structured_outputs(surface_history):
+        lines.append("")
+        lines.append(
+            "Controller guidance: structured_outputs guided decoding is now supported "
+            "by the Track B controller and is unmeasured in this round. Prefer an "
+            "xgrammar-backed structured_outputs candidate over another exhausted "
+            "ngram or kernel-selection retry unless there is direct new evidence."
+        )
     elif not _has_any_spec_decode(surface_history):
         lines.append("")
         lines.append(
@@ -400,6 +433,17 @@ def _has_any_kernel_selection(surface_history: list[dict[str, Any]]) -> bool:
         except (TypeError, json.JSONDecodeError):
             continue
         if "kernel_selection" in signature:
+            return True
+    return False
+
+
+def _has_any_structured_outputs(surface_history: list[dict[str, Any]]) -> bool:
+    for row in surface_history:
+        try:
+            signature = json.loads(row["signature"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if "structured_outputs" in signature:
             return True
     return False
 
@@ -830,6 +874,42 @@ def _parse_kernel_selection_config(config: dict[str, Any]) -> tuple[dict[str, An
     return parsed, None
 
 
+def _parse_structured_outputs_config(config: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    raw = config.get("structured_outputs")
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict):
+        return None, "structured_outputs_must_be_mapping"
+    unknown = sorted(set(raw) - _SUPPORTED_STRUCTURED_OUTPUTS_FIELDS)
+    if unknown:
+        return None, f"unsupported_structured_outputs_fields:{','.join(unknown)}"
+
+    parsed = dict(raw)
+    backend = parsed.pop("backend", parsed.get("_backend", None))
+    if backend is not None:
+        if backend not in _SUPPORTED_STRUCTURED_OUTPUTS_BACKENDS:
+            return None, "invalid_structured_outputs_backend"
+        parsed["_backend"] = backend
+
+    mode_fields = ("json", "regex", "choice", "grammar", "json_object", "structural_tag")
+    if not any(field in parsed for field in mode_fields):
+        return None, "structured_outputs_missing_mode"
+    for key in ("regex", "grammar", "whitespace_pattern", "structural_tag", "_backend"):
+        if key in parsed and parsed[key] is not None and not isinstance(parsed[key], str):
+            return None, f"invalid_structured_outputs_{key}:must_be_string"
+    for key in ("json_object", "disable_any_whitespace", "disable_additional_properties"):
+        if key in parsed and parsed[key] is not None and not isinstance(parsed[key], bool):
+            return None, f"invalid_structured_outputs_{key}:must_be_bool"
+    if "choice" in parsed:
+        choice = parsed["choice"]
+        if not isinstance(choice, list) or not choice or not all(isinstance(item, str) for item in choice):
+            return None, "invalid_structured_outputs_choice:must_be_nonempty_string_list"
+    json_schema = parsed.get("json")
+    if json_schema is not None and not isinstance(json_schema, (str, dict)):
+        return None, "invalid_structured_outputs_json:must_be_string_or_mapping"
+    return parsed, None
+
+
 def _normalize_kernel_selection_values(raw: dict[str, Any]) -> dict[str, Any]:
     parsed = dict(raw)
     cuda_graph_capture = parsed.get("cuda_graph_capture")
@@ -1099,6 +1179,7 @@ def _evaluate_candidate_core(
     target_tps: float,
     candidate_accept_tps: float,
     previous_best_tps: float,
+    request_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     throughput_path = candidate_dir / "throughput.json"
     spec = _load_yaml(round_dir / "round_spec.yaml")
@@ -1134,6 +1215,8 @@ def _evaluate_candidate_core(
         str(spec.get("baseline_decode_tps", 7.5)),
         "--target-multiplier",
         str(spec.get("target_multiplier", 5.0)),
+        "--request-overrides-json",
+        json.dumps(request_overrides or {}, sort_keys=True),
         "--reset-prefix-cache",
         "--output",
         str(throughput_path),
@@ -1316,12 +1399,15 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
     kernel_selection_config, kernel_selection_error = _parse_kernel_selection_config(candidate_config)
     if kernel_selection_error is not None:
         return {"status": "rejected", "reason": kernel_selection_error}
+    structured_outputs_config, structured_outputs_error = _parse_structured_outputs_config(candidate_config)
+    if structured_outputs_error is not None:
+        return {"status": "rejected", "reason": structured_outputs_error}
     runtime_candidate = (
         vllm_config_overrides is not None
         or spec_decode_config is not None
         or kernel_selection_config is not None
     )
-    default_concurrency = 4 if runtime_candidate else None
+    default_concurrency = 4 if runtime_candidate or structured_outputs_config is not None else None
     if vllm_config_overrides is not None and vllm_config_overrides.get("max_num_seqs") is not None:
         default_concurrency = int(vllm_config_overrides["max_num_seqs"])
     concurrency = _parse_target_concurrency_from_config(
@@ -1396,6 +1482,9 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             target_tps=target_tps,
             candidate_accept_tps=candidate_accept_tps,
             previous_best_tps=previous_best_tps,
+            request_overrides={"structured_outputs": structured_outputs_config}
+            if structured_outputs_config is not None
+            else None,
         )
         if runtime_activation is not None:
             result["runtime_config_ref"] = str(Path(runtime_activation["bundle_path"]).relative_to(round_dir))
@@ -1403,6 +1492,8 @@ def _evaluate_candidate(args: argparse.Namespace, round_dir: Path, candidate_dir
             result["vllm_config"] = vllm_config_overrides
             result["spec_decode"] = spec_decode_config
             result["kernel_selection"] = kernel_selection_config
+        if structured_outputs_config is not None:
+            result["structured_outputs"] = structured_outputs_config
         return result
     finally:
         if (

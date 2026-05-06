@@ -193,6 +193,46 @@ def test_kernel_selection_candidate_rejects_unknown_axis() -> None:
     assert error == "unsupported_kernel_selection_fields:sampler_backend"
 
 
+def test_structured_outputs_candidate_parses_xgrammar_surface() -> None:
+    loop = _load_loop_module()
+    parsed, error = loop._parse_structured_outputs_config(
+        {
+            "structured_outputs": {
+                "backend": "xgrammar",
+                "json_object": True,
+                "disable_any_whitespace": True,
+            }
+        }
+    )
+
+    assert error is None
+    assert parsed == {
+        "_backend": "xgrammar",
+        "json_object": True,
+        "disable_any_whitespace": True,
+    }
+
+
+def test_structured_outputs_candidate_requires_mode() -> None:
+    loop = _load_loop_module()
+    parsed, error = loop._parse_structured_outputs_config(
+        {"structured_outputs": {"backend": "xgrammar"}}
+    )
+
+    assert parsed is None
+    assert error == "structured_outputs_missing_mode"
+
+
+def test_structured_outputs_surface_signature_normalizes_backend_alias() -> None:
+    loop = _load_loop_module()
+
+    assert loop._surface_signature(
+        {"structured_outputs": {"backend": "xgrammar", "json_object": True}}
+    ) == loop._surface_signature(
+        {"structured_outputs": {"_backend": "xgrammar", "json_object": True}}
+    )
+
+
 def test_runtime_tuned_config_bundle_merges_candidate_overrides(tmp_path: Path) -> None:
     loop = _load_loop_module()
     registry = tmp_path / "model_registry.yaml"

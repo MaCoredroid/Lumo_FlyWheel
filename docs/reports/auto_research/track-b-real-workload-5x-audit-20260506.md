@@ -20,6 +20,7 @@ Concrete success criteria:
 - Commit: `2a7d7a3 Add real workload Track B gate`
 - Follow-up: runtime-config candidate applicator added after the initial audit so workers can propose real vLLM launch-shape changes via `serve_config.yaml:vllm_config`.
 - Follow-up: speculative decode candidate support added so workers can propose vLLM `--speculative-config` via `serve_config.yaml:spec_decode`.
+- Follow-up: structured-output candidate support added so workers can propose guided decoding request parameters via `serve_config.yaml:structured_outputs` while preserving the same first-five decode-time gate.
 - Follow-up requested: measurement-surface support so workers can explicitly choose authored workload profiles, parallel warm windows, and `decode_time` or `wall_clock_total` throughput accounting.
 - Round directory: `output/auto_research/track_b/qwen3.5-27b-track-b-round0-real-workload-5x-20260506T000000Z`
 - Measurement script: `scripts/measure_track_b_real_workload.py`
@@ -41,6 +42,7 @@ Concrete success criteria:
 | Let auto-research author candidates | Candidates `001`-`047` were generated through `codex exec` worker calls; candidate `043` has partial authoring artifacts only and candidates `044`-`047` were controller-measured | Done |
 | Allow real runtime launch-shape candidates | Controller supports `vllm_config` overrides converted into tuned-config bundles and applied with `--apply-runtime-config` | Done |
 | Allow speculative decode candidates | Controller supports `spec_decode` overrides converted into tuned-config bundles and applied as vLLM `--speculative-config` | Done |
+| Allow guided decoding candidates | Controller supports `structured_outputs` request overrides for xgrammar-style guided decoding candidates | Done |
 | Allow authored parallel workload throughput candidates | Requested, but not currently enabled in the committed controller; current controller keeps the fixed first-five decode-time gate | Not met |
 | Achieve an accepted candidate | Candidate `020` cleared speed preflight at `15.753922 tok/s` but failed B-1 equivalence | Not met |
 | Achieve final 5x goal | Best candidate `020` measured `15.753922 tok/s`, below `37.5 tok/s` final target | Not met |

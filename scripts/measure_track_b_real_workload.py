@@ -109,6 +109,7 @@ def _metric_summary(before: dict[str, float], after: dict[str, float], *, reques
             "prefill_ms_per_kv_token": round(prefill_sum_s * 1000.0 / kv_tokens, 6) if kv_tokens > 0 else None,
             "decode_ms_per_generated_token": round(decode_sum_s * 1000.0 / gen_tokens, 6) if gen_tokens > 0 else None,
             "decode_tokens_per_s": round(gen_tokens / decode_sum_s, 6) if decode_sum_s > 0 else None,
+            "wall_decode_tokens_per_s": round(gen_tokens / elapsed_s, 6) if elapsed_s > 0 else None,
             "cache_hit_rate_pct": metrics.get("cache_hit_rate_pct"),
         },
         "bottleneck_hint": "decode" if decode_sum_s >= prefill_sum_s else "prefill",
@@ -154,6 +155,7 @@ def _aggregate_metric_summaries(summaries: list[dict[str, Any]], *, request_coun
             "prefill_ms_per_kv_token": round(prefill_sum_s * 1000.0 / kv_tokens, 6) if kv_tokens > 0 else None,
             "decode_ms_per_generated_token": round(decode_sum_s * 1000.0 / gen_tokens, 6) if gen_tokens > 0 else None,
             "decode_tokens_per_s": round(gen_tokens / decode_sum_s, 6) if decode_sum_s > 0 else None,
+            "wall_decode_tokens_per_s": round(gen_tokens / elapsed_s, 6) if elapsed_s > 0 else None,
             "cache_hit_rate_pct": (totals["cache_hits"] / cache_queries * 100.0) if cache_queries > 0 else None,
         },
         "bottleneck_hint": "decode" if decode_sum_s >= prefill_sum_s else "prefill",
@@ -169,6 +171,7 @@ def _post_response(
     request_id: str,
     prompt_token_cap: int,
     max_output_token_cap: int | None,
+    request_overrides: dict[str, Any] | None,
 ) -> dict[str, Any]:
     prompt_tokens = int(entry.get("prompt_tokens") or 1)
     if prompt_token_cap > 0:
@@ -183,6 +186,13 @@ def _post_response(
     if max_output_token_cap is not None:
         output_tokens = min(output_tokens, max_output_token_cap)
     prompt = " ".join(["token"] * max(prompt_tokens, 1))
+    request_payload: dict[str, Any] = {
+        "model": model,
+        "input": prompt,
+        "max_output_tokens": output_tokens,
+    }
+    if request_overrides:
+        request_payload.update(request_overrides)
     started = time.monotonic()
     response = requests.post(
         f"{endpoint.rstrip('/')}/responses",
@@ -190,11 +200,7 @@ def _post_response(
             "Authorization": f"Bearer {api_key}",
             "X-Lumo-Request-Class": str(entry.get("class") or entry.get("request_class") or "eval"),
         },
-        json={
-            "model": model,
-            "input": prompt,
-            "max_output_tokens": output_tokens,
-        },
+        json=request_payload,
         timeout=max(60, output_tokens * 3),
     )
     wall_s = time.monotonic() - started
@@ -223,6 +229,7 @@ def _run_warm_batch(
     warm_concurrency: int,
     prompt_token_cap: int,
     max_output_token_cap: int | None,
+    request_overrides: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     max_workers = max(1, min(warm_concurrency, len(entries)))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -236,6 +243,7 @@ def _run_warm_batch(
                 request_id=f"window-{window_id:03d}-warm-{index + 1:03d}",
                 prompt_token_cap=prompt_token_cap,
                 max_output_token_cap=max_output_token_cap,
+                request_overrides=request_overrides,
             ): index
             for index, entry in enumerate(entries)
         }
@@ -250,6 +258,9 @@ def _run_warm_batch(
 def measure(args: argparse.Namespace) -> dict[str, Any]:
     workload, seed_path = _load_workload(args.workload_file)
     seed_rows = _load_seed(seed_path)
+    request_overrides = json.loads(args.request_overrides_json)
+    if not isinstance(request_overrides, dict):
+        raise RuntimeError("--request-overrides-json must decode to a JSON object")
     health = requests.get(args.health_url, timeout=20)
     _raise_for_status_with_body(health)
     if args.reset_prefix_cache:
@@ -275,6 +286,7 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
                     request_id=f"window-{window_index + 1:03d}-cold-{cold_index + 1:03d}",
                     prompt_token_cap=args.prompt_token_cap,
                     max_output_token_cap=max_output_cap,
+                    request_overrides=request_overrides,
                 )
             )
         before_window_warm = _metrics(args.metrics_url)
@@ -292,6 +304,7 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
             warm_concurrency=args.warm_concurrency,
             prompt_token_cap=args.prompt_token_cap,
             max_output_token_cap=max_output_cap,
+            request_overrides=request_overrides,
         )
         window_warm_elapsed = time.monotonic() - window_warm_started
         after_window_warm = _metrics(args.metrics_url)
@@ -345,6 +358,7 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         "warm_concurrency": args.warm_concurrency,
         "prompt_token_cap": args.prompt_token_cap,
         "max_output_token_cap": max_output_cap,
+        "request_overrides": request_overrides,
         "baseline_decode_tps": args.baseline_decode_tps,
         "target_multiplier": args.target_multiplier,
         "target_decode_tps": target_tps,
@@ -372,6 +386,7 @@ def main() -> int:
     parser.add_argument("--warm-concurrency", type=int, default=4)
     parser.add_argument("--prompt-token-cap", type=int, default=0)
     parser.add_argument("--max-output-token-cap", type=int, default=0)
+    parser.add_argument("--request-overrides-json", default="{}")
     parser.add_argument("--baseline-decode-tps", type=float, default=7.5)
     parser.add_argument("--target-multiplier", type=float, default=5.0)
     parser.add_argument("--reset-prefix-cache", action="store_true")
