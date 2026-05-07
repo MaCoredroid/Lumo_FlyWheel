@@ -291,6 +291,26 @@ def _artifact_runtime_config_hashes(
         value = payload.get("runtime_config_hash") if isinstance(payload, dict) else None
         if isinstance(value, str) and value:
             hashes["vllm_per_turn.json"] = value
+    else:
+        for name in ("vllm_per_turn.jsonl", "vllm_request_metrics.jsonl"):
+            jsonl_path = task_dir / name
+            if not jsonl_path.is_file():
+                continue
+            rows = _load_jsonl(jsonl_path)
+            vllm_hashes = sorted(
+                {
+                    row.get("runtime_config_hash")
+                    for row in rows
+                    if isinstance(row.get("runtime_config_hash"), str) and row.get("runtime_config_hash")
+                }
+            )
+            if not vllm_hashes:
+                hashes[name] = ""
+            elif len(vllm_hashes) == 1:
+                hashes[name] = vllm_hashes[0]
+            else:
+                hashes[name] = ",".join(vllm_hashes)
+            break
     if dcgm_samples:
         dcgm_hashes = sorted(
             {
