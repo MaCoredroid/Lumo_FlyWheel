@@ -30,6 +30,7 @@ def _dcgm_sample(ts: str) -> dict[str, object]:
     return {
         "ts": ts,
         "gpu": 0,
+        "runtime_config_hash": "sha256:test",
         "dram_active_pct": 0.54,
         "sm_active_pct": 0.31,
         "sm_occupancy_pct": 0.27,
@@ -311,6 +312,74 @@ def test_task_summary_rejects_runtime_config_hash_mismatch(tmp_path: Path) -> No
         )
 
 
+def test_task_summary_rejects_dcgm_runtime_config_hash_mismatch(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    base = datetime(2026, 5, 7, 18, 0, 0, tzinfo=UTC)
+
+    def ts(offset_s: float) -> str:
+        return (base + timedelta(seconds=offset_s)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    _write_jsonl(
+        task_dir / "codex_trace.jsonl",
+        [
+            {"event": "task_start", "ts": ts(0.0), "task_id": "transcript-merge-regression/v1-clean-baseline"},
+            {"event": "turn_start", "turn": 1, "regime": "plan", "ts": ts(0.5), "vllm_request_id": "req-1"},
+            {"event": "turn_end", "turn": 1, "ts": ts(1.5), "completion_tokens": 12},
+            {
+                "event": "task_end",
+                "ts": ts(2.0),
+                "task_id": "transcript-merge-regression/v1-clean-baseline",
+                "exit_code": 0,
+                "task_score": 0.74,
+                "wallclock_s": 2.0,
+            },
+        ],
+    )
+    (task_dir / "vllm_per_turn.json").write_text(
+        json.dumps(
+            {
+                "runtime_config_hash": "sha256:test",
+                "requests": {
+                    "req-1": {
+                        "prompt_tokens": 50,
+                        "completion_tokens": 12,
+                        "decode_sum_s": 1.0,
+                        "spec_decode_num_accepted_tokens": 3,
+                        "spec_decode_num_draft_tokens": 12,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    sample = _dcgm_sample(ts(1.0))
+    sample["runtime_config_hash"] = "sha256:wrong"
+    _write_jsonl(task_dir / "dcgm_samples.jsonl", [sample])
+
+    with pytest.raises(RuntimeError, match="dcgm_samples.jsonl"):
+        build_task_summary(
+            Namespace(
+                round=0,
+                task_dir=str(task_dir),
+                family="transcript-merge-regression",
+                variant="v1-clean-baseline",
+                runtime_config_hash="sha256:test",
+                baseline_workspace_hash=None,
+                run_wallclocks_json="[1.9, 2.0, 2.1]",
+                clock_skew_ms_p99=8,
+                trace_emitter_correctness_verified_at="2026-05-07T14:00:00Z",
+                dcgm_interval_s=0.01,
+                cold_completion_discarded=True,
+                cache_reset_verified=True,
+                protocol_hash_match=True,
+                generation_volume_within_band=True,
+                sample_hash_match=True,
+                write_untrusted_diagnostic=False,
+            )
+        )
+
+
 def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
@@ -438,7 +507,16 @@ def test_task_summary_rejects_missing_dcgm_profile_fields(tmp_path: Path) -> Non
     )
     _write_jsonl(
         task_dir / "dcgm_samples.jsonl",
-        [{"ts": ts(index / 100), "gpu": 0, "dram_active_pct": 0.54, "sm_active_pct": 0.31} for index in range(200)],
+        [
+            {
+                "ts": ts(index / 100),
+                "gpu": 0,
+                "runtime_config_hash": "sha256:test",
+                "dram_active_pct": 0.54,
+                "sm_active_pct": 0.31,
+            }
+            for index in range(200)
+        ],
     )
 
     summary = build_task_summary(

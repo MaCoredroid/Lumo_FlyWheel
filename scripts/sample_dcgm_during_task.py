@@ -72,7 +72,10 @@ def run(args: argparse.Namespace) -> int:
     try:
         with out_path.open("a", encoding="utf-8") as handle:
             while not stop:
-                handle.write(json.dumps(sampler.sample(), separators=(",", ":")) + "\n")
+                sample = sampler.sample()
+                if args.runtime_config_hash:
+                    sample["runtime_config_hash"] = args.runtime_config_hash
+                handle.write(json.dumps(sample, separators=(",", ":")) + "\n")
                 samples += 1
                 if samples % args.flush_every == 0:
                     handle.flush()
@@ -92,6 +95,7 @@ def main() -> int:
     parser.add_argument("--interval-s", type=float, default=0.01, help="Sampling interval; 0.01 is 100 Hz.")
     parser.add_argument("--duration-s", type=float, default=None, help="Optional maximum duration.")
     parser.add_argument("--flush-every", type=int, default=100, help="Flush every N samples.")
+    parser.add_argument("--runtime-config-hash", default="", help="Runtime config hash to stamp into every sample.")
     args = parser.parse_args()
     try:
         return run(args)

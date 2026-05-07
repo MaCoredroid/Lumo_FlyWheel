@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from argparse import Namespace
 from pathlib import Path
 
 import pytest
@@ -149,3 +150,27 @@ def test_runner_rejects_empty_prometheus_request_join(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="request-keyed vLLM rows"):
         runner._write_vllm_per_turn(task_dir, metrics_before, metrics_after)
+
+
+def test_runner_stamps_runtime_hash_into_dcgm_sampler_command(monkeypatch, tmp_path: Path) -> None:
+    seen: dict[str, object] = {}
+
+    class FakeProcess:
+        pass
+
+    def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
+        seen["command"] = command
+        seen["kwargs"] = kwargs
+        return FakeProcess()
+
+    monkeypatch.setattr(runner.subprocess, "Popen", fake_popen)
+
+    process = runner._run_sampler(
+        Namespace(no_dcgm=False, gpu=0, dcgm_interval_s=0.01, runtime_config_hash="sha256:test"),
+        tmp_path,
+    )
+
+    assert isinstance(process, FakeProcess)
+    command = seen["command"]
+    assert isinstance(command, list)
+    assert command[command.index("--runtime-config-hash") + 1] == "sha256:test"

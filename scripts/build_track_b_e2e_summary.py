@@ -262,7 +262,7 @@ def _load_vllm_request_metrics(task_dir: Path) -> dict[str, dict[str, Any]]:
     raise RuntimeError("Task directory is missing vLLM request metrics artifact")
 
 
-def _artifact_runtime_config_hashes(task_dir: Path) -> dict[str, str]:
+def _artifact_runtime_config_hashes(task_dir: Path, dcgm_samples: list[dict[str, Any]]) -> dict[str, str]:
     hashes: dict[str, str] = {}
     runner_metadata = task_dir / "runner_metadata.json"
     if runner_metadata.is_file():
@@ -276,11 +276,29 @@ def _artifact_runtime_config_hashes(task_dir: Path) -> dict[str, str]:
         value = payload.get("runtime_config_hash") if isinstance(payload, dict) else None
         if isinstance(value, str) and value:
             hashes["vllm_per_turn.json"] = value
+    if dcgm_samples:
+        dcgm_hashes = sorted(
+            {
+                sample.get("runtime_config_hash")
+                for sample in dcgm_samples
+                if isinstance(sample.get("runtime_config_hash"), str) and sample.get("runtime_config_hash")
+            }
+        )
+        if not dcgm_hashes:
+            hashes["dcgm_samples.jsonl"] = ""
+        elif len(dcgm_hashes) == 1:
+            hashes["dcgm_samples.jsonl"] = dcgm_hashes[0]
+        else:
+            hashes["dcgm_samples.jsonl"] = ",".join(dcgm_hashes)
     return hashes
 
 
-def _verify_runtime_config_hash_artifacts(task_dir: Path, expected: str) -> dict[str, str]:
-    hashes = _artifact_runtime_config_hashes(task_dir)
+def _verify_runtime_config_hash_artifacts(
+    task_dir: Path,
+    expected: str,
+    dcgm_samples: list[dict[str, Any]],
+) -> dict[str, str]:
+    hashes = _artifact_runtime_config_hashes(task_dir, dcgm_samples)
     mismatches = {
         name: value
         for name, value in hashes.items()
@@ -300,7 +318,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
     trace = _load_jsonl(task_dir / "codex_trace.jsonl")
     vllm = _load_vllm_request_metrics(task_dir)
     dcgm = _load_jsonl(task_dir / "dcgm_samples.jsonl") if (task_dir / "dcgm_samples.jsonl").is_file() else []
-    runtime_config_hash_artifacts = _verify_runtime_config_hash_artifacts(task_dir, args.runtime_config_hash)
+    runtime_config_hash_artifacts = _verify_runtime_config_hash_artifacts(task_dir, args.runtime_config_hash, dcgm)
 
     starts = [event for event in trace if event.get("event") == "turn_start"]
     ends_by_turn = {event.get("turn"): event for event in trace if event.get("event") == "turn_end"}

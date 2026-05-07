@@ -184,6 +184,8 @@ def _run_sampler(args: argparse.Namespace, task_dir: Path) -> subprocess.Popen[s
         "--interval-s",
         str(args.dcgm_interval_s),
     ]
+    if args.runtime_config_hash:
+        command.extend(["--runtime-config-hash", args.runtime_config_hash])
     return subprocess.Popen(command, cwd=REPO_ROOT, text=True)
 
 
