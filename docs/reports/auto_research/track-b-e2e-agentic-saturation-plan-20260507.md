@@ -551,6 +551,8 @@ Committed scaffold commits through this status checkpoint:
 - `94eff9e Enforce Track B round sample integrity`
 - `0efd4c6 Validate Track B readiness sample integrity`
 - `89087cd Reject incomplete Track B round summaries`
+- `12b9a76 Update Track B strict gate ledger`
+- `cddfbef Verify Track B Codex trace correctness evidence`
 
 ## 12. Decision rules for ending the loop
 
