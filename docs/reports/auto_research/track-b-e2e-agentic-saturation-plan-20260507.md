@@ -506,6 +506,7 @@ Committed scaffold commits through this status checkpoint:
 - `55a4e4e Tighten Track B vLLM request label gate`
 - `a4b1132 Record Track B E2E objective audit`
 - `2b098f8 Expose Track B DCGM profile field gaps`
+- `1d2526f Support Track B vLLM request metrics JSONL`
 
 ## 12. Decision rules for ending the loop
 
