@@ -244,7 +244,37 @@ def test_preflight_accepts_request_metrics_side_channel(tmp_path: Path, monkeypa
     assert payload["round0_may_run"] is True
     assert payload["checks"]["vllm_request_id_labels_exposed"]["ok"] is False
     assert payload["checks"]["vllm_request_metrics_side_channel"]["ok"] is True
+    assert payload["checks"]["vllm_request_metrics_side_channel"]["valid_request_metric_row_count"] == 1
     assert payload["checks"]["vllm_request_metrics_join_available"]["ok"] is True
+
+
+def test_request_metrics_side_channel_requires_complete_rows(tmp_path: Path) -> None:
+    metrics_jsonl = tmp_path / "vllm_request_metrics.jsonl"
+    metrics_jsonl.write_text(
+        "\n".join(
+            [
+                json.dumps({"request_id": "req-1"}),
+                json.dumps(
+                    {
+                        "prompt_tokens": 128,
+                        "generation_tokens": 32,
+                        "spec_decode_num_draft_tokens": 12,
+                        "spec_decode_num_accepted_tokens": 4,
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    coverage = preflight_track_b_e2e._request_metrics_jsonl_coverage(str(metrics_jsonl))
+
+    assert coverage["ok"] is False
+    assert coverage["request_id_seen"] is True
+    assert all(coverage["required_field_coverage"].values())
+    assert coverage["valid_request_metric_row_count"] == 0
+    assert coverage["invalid_request_metric_row_count"] == 2
 
 
 def test_request_id_gate_requires_labels_on_join_metrics() -> None:

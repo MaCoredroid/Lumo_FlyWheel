@@ -119,26 +119,40 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
     rows = []
     field_coverage = {field: False for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS}
     request_id_seen = False
+    valid_row_count = 0
+    invalid_row_count = 0
     for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if not raw_line.strip():
             continue
         try:
             payload = json.loads(raw_line)
         except json.JSONDecodeError:
+            invalid_row_count += 1
             continue
         if not isinstance(payload, dict):
+            invalid_row_count += 1
             continue
         rows.append(payload)
-        request_id_seen = request_id_seen or any(payload.get(key) for key in ("request_id", "vllm_request_id", "id"))
+        row_has_request_id = any(payload.get(key) for key in ("request_id", "vllm_request_id", "id"))
+        request_id_seen = request_id_seen or row_has_request_id
+        row_has_required_fields = True
         for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS:
             if isinstance(payload.get(field), (int, float)):
                 field_coverage[field] = True
-    ok = bool(rows) and request_id_seen and all(field_coverage.values())
+            else:
+                row_has_required_fields = False
+        if row_has_request_id and row_has_required_fields:
+            valid_row_count += 1
+        else:
+            invalid_row_count += 1
+    ok = valid_row_count > 0
     return {
         "ok": ok,
         "reason": "" if ok else "missing_required_request_metrics",
         "path": str(path),
         "sample_count": len(rows),
+        "valid_request_metric_row_count": valid_row_count,
+        "invalid_request_metric_row_count": invalid_row_count,
         "request_id_seen": request_id_seen,
         "required_field_coverage": field_coverage,
     }
