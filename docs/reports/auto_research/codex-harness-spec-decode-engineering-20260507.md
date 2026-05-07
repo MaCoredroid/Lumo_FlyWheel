@@ -2,44 +2,88 @@
 
 Generated: 2026-05-07
 Revised: 2026-05-06 (post-reproduction findings)
+Revised: 2026-05-07 (post-PR39562-stop-gap real-task matrix)
 
 Companion to:
 - `l0-warm-decode-quality-bounded-track-20260505.md` (Track B parent spec)
 - `track-b-real-workload-5x-audit-20260506.md` (51-candidate audit)
 - `track-b-candidate-051-validation-20260506.md` (c1 validation recheck for 051)
-- `track-b-spec-decode-salvage-20260506.md` (c1 salvage attempts for 020, 025, 028, 051)
+- `track-b-spec-decode-salvage-20260506.md` (c1 salvage attempts for 020, 025, 028, 051; pre-PR#39562)
 - `track-b-concurrency-measurement-audit-20260506.md` (warm_concurrency measurement audit)
+- `track-b-real-task-warmonly-pr39562-matrix-20260507.md` (post-PR#39562 c1/c4 real-task matrix; load-bearing for current spec state)
+- `track-b-real-task-warmonly-pr39562-matrix-20260507.md` (PR #39562 stop-gap rerun on real-task workload)
 
-## Status update — 2026-05-06 reproduction findings
+## Status update — 2026-05-07 PR #39562 stop-gap matrix
 
-The original framing of this spec ("build on candidate 051's 2.28× win") **does not survive c1 reproduction**. Three load-bearing facts have changed:
+**Step 0a is done.** The PR #39562 KV-allocator stop-gap was applied (`single_type_kv_cache_manager.py` patched via `ModelServer` prelaunch hook before `vllm serve`). All four candidates now run at c1 and c4 without crashing. The synthetic-first-five workload was replaced with a content-bearing real Codex task (`release-note-to-plan-translation/v1-clean-baseline`) at 2048-token output cap, with Prometheus decode-time throughput as the speed metric.
 
-1. **Candidate 051's 17.087 tok/s was a c4 measurement artifact, not a stable 2.28× win.** Five concurrency-1 repeats measured `7.658967-7.713841 tok/s` (mean `7.677189`, std `0.022`), all below the `9.0 tok/s` 20% gate. The original c4 run included a 4096-token cap-hit warm completion that inflated the batched aggregate; later c4 reruns also failed (`7.561378 tok/s`). B-1/B-2/B-3 do pass at c1 — correctness is fine — but speed is not reproducible. See `track-b-candidate-051-validation-20260506.md`.
-2. **Candidates 020 and 025 crash vLLM EngineCore at c1** with `AssertionError: num_required_blocks N < len(req_blocks) N+1`. This matches **vLLM PR #39562** (open, not merged) — a KV-block allocator race triggered by the combination of speculative decoding + prefix caching + dynamic draft length (`prompt_lookup_min != prompt_lookup_max`). Candidate 028 doesn't crash but only reaches `8.32-8.45 tok/s` (mean `8.36`) — still below the `9.0 tok/s` threshold. See `track-b-spec-decode-salvage-20260506.md`.
-3. **Realistic c1 ceiling for ngram on Qwen3 hybrid + GB10 is 1.02-1.20×, not 2×.** Online research (May 2026) finds no published benchmark of this hardware × model × workload triple where ngram alone clears 1.20× at c1. The published 2-4× speed-decode numbers are dominated by EAGLE-3, SuffixDecoding, or Medusa — not vanilla PLD/ngram — and most assume non-hybrid attention.
+| Candidate | spec_decode config | c1 decode tok/s | c4 decode tok/s | 9.0 tok/s gate (c1 / c4) |
+|---|---|---:|---:|---|
+| `020` | ngram, k=3, lookup 2-8 | **11.32** | 9.86 | **pass / pass** |
+| `025` | ngram, k=2, lookup 2-16 | 10.33 | 9.21 | **pass / pass** |
+| `028` | ngram, k=2, lookup 2-8 | 10.55 | 9.86 | **pass / pass** |
+| `051` | ngram, k=4, lookup 7-8 | 8.01 | 8.30 | fail / fail |
+
+See `track-b-real-task-warmonly-pr39562-matrix-20260507.md`. Three implications reshape this spec:
+
+1. **The 9.0 tok/s gate is now clearable by vanilla ngram-PLD with the right config + PR #39562 stop-gap.** The harness-coupled techniques in this spec are no longer the load-bearing path to the gate. They are now the stretch path beyond it.
+2. **Candidate 051's spec_decode config is the wrong one for real content.** `prompt_lookup_min=7` was tuned against the synthetic first-five token-count proxy (which had 7-gram repeats by construction); real Codex content has fewer 7-gram repeats, so the drafter rarely fires. The winners (020/025/028) all use `prompt_lookup_min=2`, which fires on any 2-gram and is the right shape for natural content.
+3. **`prompt_lookup_min=2` collides with vLLM Issue #40875** (corrupts tool-call XML on Qwen3). All three winning candidates need a correctness gate (B-1/B-2/B-3) on a workload that includes tool calls before they can ship; the synthetic first-five did not exercise tool-call frames.
+
+**Recommended next steps (revised after the matrix):**
+
+- Run B-1/B-2/B-3 correctness gates on 020/025/028 against a tool-call-inclusive workload to confirm Issue #40875 doesn't bite. Pick the winner.
+- Wallclock: c4 wall-output throughput is much higher than c1 (38.7 vs 11.3 tok/s for 020) but that is request-parallelism, not decode speedup — `decode_tps` is the right metric. Don't repeat the c4 measurement-artifact mistake.
+- The harness-coupled techniques (Techniques 1-5 in this spec) move from "required to clear gate" to "Round 2+ stretch" — pursue once a winning Round 1 candidate is correctness-accepted.
+
+## Status update — 2026-05-07 (post-PR#39562)
+
+**Step 0a is done.** The PR #39562 KV-allocator stop-gap was applied to `single_type_kv_cache_manager.py` via the `ModelServer` prelaunch hook. Candidates 020 and 025 — which previously crashed EngineCore at c1 — now run cleanly. The picture has changed substantially from the 2026-05-06 reproduction findings:
+
+| Candidate | c1 decode tok/s | c4 decode tok/s | c4 wall output tok/s | 9.0 tok/s gate (c1) | Note |
+|---|---:|---:|---:|---|---|
+| `020` | **11.32** | 9.86 | 38.7 | **pass (1.51×)** | Best c1 |
+| `025` | 10.33 | 9.21 | 35.8 | pass (1.38×) | |
+| `028` | 10.55 | 9.86 | 31.9 | pass (1.41×) | Best c4 by small margin |
+| `051` | 8.01 | 8.30 | 28.4 | fail (1.07×) | Original "winner"; never reproduced |
+
+Source: `track-b-real-task-warmonly-pr39562-matrix-20260507.md`. Measurement on real content-bearing task (`release-note-to-plan-translation/v1-clean-baseline`), not the synthetic first-five proxy. Output cap `2048`, one cold completion discarded, metrics sampled across the warm window only, decode metric = `generation_tokens / decode_sum_s`.
+
+**What this changes:**
+
+1. **Three candidates clear the gate at c1 with vanilla ngram-PLD.** Best is `020` at 11.32 tok/s (1.51× over `7.5` baseline). This means we are no longer in "techniques must save us from a flat baseline" mode — the recalibrated baseline for this spec is `~10.5-11.3 tok/s` (post-PR#39562 ngram-PLD on a real-task workload), and the harness-coupled techniques are now true uplift on top of a base config that already passes.
+2. **Candidate 051 is decisively retired.** It never reproduced its synthetic 17.087 tok/s number under any honest measurement: 7.677 c1 on the 2026-05-06 first-five recheck, 8.01 c1 on the 2026-05-07 real-task PR#39562 rerun. The original synthetic c4 number was a measurement artifact (one 4096-token cap-hit completion in batched aggregate).
+3. **c4 wall output throughput is much higher than c1 (28-39 vs 10-11) but c4 decode tok/s is essentially flat with c1.** This confirms the warm_concurrency audit's conclusion: c4 wall-output gains come from in-flight concurrency, not from a 4× decode speedup. **Do not treat synthetic c4 numbers as direct decode speedups.** The acceptance metric remains decode tok/s.
+4. **Real-task workload matters.** The synthetic first-five token-count proxy gave a different ranking than the content-bearing release-note-to-plan task. Going forward, acceptance evidence must come from real content tasks, not the synthetic proxy.
+
+**Pending before declaring 020 the new Track B Round 1 winner:**
+
+- **Run B-1/B-2/B-3 correctness gates on `020`, `025`, `028` under the same PR#39562-patched runtime and real-task measurement shape.** Speed is now passing for all three at c1; correctness on this runtime config has not been verified. (051's B-1/B-2/B-3 passed at c1 in the 2026-05-06 recheck, but 051 isn't a speed candidate anymore, so that result is moot.)
 
 **Implications for this spec:**
 
-- The "candidate 051 baseline = 17.1 tok/s" anchor used throughout the original draft has been replaced with **`7.5 tok/s` baseline (vanilla decode) ≈ `7.7 tok/s` ngram-PLD c1 (pre-fix)**. Headline targets recalibrated accordingly.
-- A new **Step 0** is added before any technique work: fix the EngineCore KV allocator crash (apply PR #39562 patch OR enforce `prompt_lookup_min == prompt_lookup_max` OR disable prefix caching during spec decode). Without this, candidates 020/025-class configs cannot even be measured.
-- The 9.0 tok/s 20% threshold was calibrated against an inflated baseline; the techniques in this spec (especially Techniques 1+2+3 composed) are now the load-bearing path to clearing it, not an enhancement on top of an existing 2.28× win.
-- The `Cross-turn ngram (Technique 1)` path is now the most likely **first** technique to clear the threshold at c1 — SuffixDecoding's published ~2-3× on agent traces is the closest published precedent for what we need.
+- Headline baseline becomes **`~10.5-11.3 tok/s` (post-PR#39562 c1 ngram-PLD on real-task)**, replacing the 2026-05-06 `~7.7 tok/s` flat baseline assumption.
+- The harness-coupled techniques (1-5) are now uplift on top of a passing base, not the load-bearing path to clearing the gate. Estimated combined target rises back into the `15-22 tok/s` range.
+- **Step 0a (apply PR #39562) → DONE.** **Step 0d (run B-1/B-2/B-3 on the three speed-passing candidates) → next prerequisite.**
+- The 020-vs-028 winner depends on which workload mix dominates: 020 is best at c1; 028 is best at c4 by a small margin. For the c1 acceptance shape this spec assumes, 020 is the lead candidate.
 
-The rest of this spec keeps the technique inventory but rewires the goals, the composition math, and the implementation sequence around these findings.
+The rest of this spec keeps the technique inventory but uses the new baseline.
 
 ## Why this spec exists
 
-Track B Round 1 (Eagle-3 + PLD hybrid speculative decoding) was specified generically — "speculative decoding works across LLM workloads." Vanilla `ngram` PLD on this hardware × model at c1 hits **at most 1.05-1.20× over baseline**, well below the 1.20× acceptance gate when measured fairly. The `2.28×` originally reported for candidate 051 was a c4 measurement artifact (one 4096-token cap-hit warm completion in a batched aggregate, not reproducible at c1).
+Track B Round 1 (Eagle-3 + PLD hybrid speculative decoding) was specified generically — "speculative decoding works across LLM workloads." Post-PR#39562, vanilla `ngram` PLD on this hardware × model × real-task at c1 hits **1.38×-1.51× over baseline** (candidates 020/025/028; 11.32 tok/s best), clearing the `9.0 tok/s` 20% acceptance gate. The originally reported `2.28×` for candidate 051 was a synthetic c4 measurement artifact and never reproduced; that candidate is now decisively below the gate at 8.01 c1 / 8.30 c4.
 
-**The Codex-harness-specific opportunity is to push acceptance rate substantially higher by exposing harness state to the drafter** — recent literature (Dec 2025 - May 2026) confirms this is a real research direction with published precedents and 2-5× wins on agent traces. This spec defines the engineering work to ship harness-coupled speculative decoding as the path that actually clears the Track B speed gate on this hardware.
+So the base ngram-PLD config does pass the Track B speed gate at c1 once the EngineCore allocator crash is fixed. The remaining engineering question is how much further harness-coupled techniques can push acceptance rate.
+
+**The Codex-harness-specific opportunity is to push acceptance rate substantially higher by exposing harness state to the drafter** — recent literature (Dec 2025 - May 2026) confirms this is a real research direction with published precedents and 2-5× wins on agent traces. This spec defines the engineering work to take the post-PR#39562 c1 baseline (`~11 tok/s`) into the `15-22 tok/s` range on real Codex workloads.
 
 **This is not novel as a pattern.** Cursor's "speculative edits" (production, 13× over vanilla 70B baseline, ~1000 tok/s on Fireworks) is the strongest existence proof for harness-state-feeding-the-drafter. AgentInfer (Lin et al., arXiv:2512.18337, Dec 2025) is the canonical co-design framing. ToolSpec (Xia et al., arXiv:2604.13519, April 2026) covered the schema-aware tool-call piece. **What's open territory in the literature is** (a) proactive priming from out-of-prompt agent context (read_file outputs not yet quoted), (b) turn-boundary drafter lifecycle management, and (c) token-level plan-structure pre-drafting. This spec focuses engineering effort there.
 
 ## Goals and non-goals
 
-**Goals (recalibrated 2026-05-06):**
-- Push warm-cache decode tok/s from the c1 ngram-PLD baseline (`~7.7 tok/s`, essentially flat with vanilla `7.5`) to **11-15 tok/s sustained** (1.5-2.0× baseline) on the heavy agent workload — clearing the Track B `9.0 tok/s` 20% gate with margin and matching SuffixDecoding's published 2-3× on agent traces.
-- Stretch goal: **17-22 tok/s sustained** (2.3-3.0× baseline) when Techniques 1+2+3 compose on cache-rich Codex traces. This is the territory the original (artifactual) 17.1 tok/s number suggested; here it's earned, not an accident.
+**Goals (recalibrated 2026-05-07 after PR #39562 stop-gap matrix):**
+- The Track B `9.0 tok/s` 20% gate is **already clearable** by vanilla ngram-PLD (k=2-3, prompt_lookup_min=2) at c1 once the PR #39562 stop-gap is in place — 020/025/028 measure `10.3-11.3 tok/s` on real-task content. The first goal of this spec is therefore not "clear the gate" but **"keep the gate cleared while producing trustworthy correctness evidence on tool-call-inclusive workloads"** (`prompt_lookup_min=2` collides with vLLM Issue #40875).
+- Stretch goal: take the cleared gate from `~10-11 tok/s` real-task baseline to **17-22 tok/s sustained** (2-3× over the real-task baseline; 2.3-3.0× over vanilla decode `7.5`) when Techniques 1+2+3 compose on cache-rich Codex traces. SuffixDecoding's published 2-3× on agent traces is the closest precedent; this spec engineers the harness-coupled extension that gets there.
 - Stay within the v0.6 weight-immutability constraint — same FP8 weights, same model.
 - Stay within the v0.7 quality-preservation constraint — output distribution mathematically identical (rejection sampling theorem) or quality-bounded with B-1/B-2/B-3 gate.
 - Compose multiplicatively with prefix caching + LMCache (Round 0) so combined ceiling on cache-hit turns reaches 3-5×.
@@ -48,7 +92,7 @@ Track B Round 1 (Eagle-3 + PLD hybrid speculative decoding) was specified generi
 - Replacing the agent harness (Codex CLI / Claude Code-style); this spec couples to whichever harness is in use, not to a specific implementation.
 - General-purpose chatbot inference optimization — the wins here depend on agent-workload structure.
 - Changing the model architecture or weight format.
-- Multi-tenant serving — we assume concurrency=1, both because the EngineCore KV allocator crash (PR #39562) blocks c2+ for many configs AND because c4 measurements turned out to be unreliable as a candidate acceptance basis (see `track-b-concurrency-measurement-audit-20260506.md`). When PR #39562 lands and the measurement protocol is hardened, the design generalizes to c2+.
+- Multi-tenant serving — we keep c1 as the acceptance shape. The PR #39562 stop-gap is applied, so c4 no longer crashes EngineCore, but the 2026-05-07 matrix shows c4 *decode tok/s* is essentially flat with c1 (10-11 c1 vs 9-10 c4 across 020/025/028); c4 wall-output gains are concurrency-driven (28-39 tok/s wall) and don't translate into a per-stream decode speedup. Until a workload-weighted multi-stream metric is defined, c4 numbers remain operational evidence (capacity headroom), not a candidate acceptance basis. See `track-b-concurrency-measurement-audit-20260506.md`.
 
 ## Architecture overview
 
@@ -123,7 +167,7 @@ Each technique below has: prior-art alignment, mutation surface, what to do, wha
 - Cross-turn hit rate: fraction of draft proposals that match patterns from PRIOR turns (not the current turn's prompt).
 - Compared to baseline (PLD with prompt-only ngram): expected absolute increase of 10-25 percentage points in cross-turn-relevant turn types.
 
-**Expected lift over c1 PLD baseline (`~7.7 tok/s`):** PLD captures within-prompt repetition; cross-turn captures the rest. SuffixDecoding's published numbers on agent traces (SWE-Bench, Text-to-SQL) are 2-3× over base decode, of which ~1.5-2.0× is the increment over plain PLD. On a 20-turn Codex task with high cross-turn echo, expected aggregate lift is **1.4-1.6× over plain PLD** at c1, putting us in `11-13 tok/s` territory. **This is the technique most likely to single-handedly clear the `9.0 tok/s` gate.**
+**Expected lift over c1 PLD baseline (`~11 tok/s` post-PR#39562 real-task):** PLD captures within-prompt repetition; cross-turn captures the rest. SuffixDecoding's published numbers on agent traces (SWE-Bench, Text-to-SQL) are 2-3× over base decode, of which ~1.4-1.6× is the increment over plain PLD. On a 20-turn Codex task with high cross-turn echo, expected aggregate lift is **1.4-1.6× over plain PLD** at c1, putting us in `~14-18 tok/s` territory. **The gate is already cleared by base PLD post-PR#39562; this technique is the path from "passing" to "comfortable margin and Round 2 stretch."**
 
 ---
 
@@ -152,7 +196,7 @@ Each technique below has: prior-art alignment, mutation surface, what to do, wha
 - False-positive draft rate: primed content that the drafter proposes but the verifier rejects (should stay low; high values indicate noise pollution).
 - Agent task wallclock with priming enabled vs disabled — the headline number.
 
-**Expected lift over Technique 1:** specifically on turns where the agent edits content from a file it just read. For a Codex task that's 30-40% file-edit turns, expected aggregate lift is 1.10-1.20× over Technique 1 alone (i.e., turns Technique 1's `~11-13 tok/s` into `~12-15 tok/s` on edit-heavy traces).
+**Expected lift over Technique 1:** specifically on turns where the agent edits content from a file it just read. For a Codex task that's 30-40% file-edit turns, expected aggregate lift is 1.10-1.20× over Technique 1 alone (i.e., turns Technique 1's `~14-18 tok/s` into `~15-21 tok/s` on edit-heavy traces).
 
 ---
 
@@ -206,7 +250,7 @@ Each technique below has: prior-art alignment, mutation surface, what to do, wha
 - Acceptance rate on plan-update turns specifically.
 - Wallclock per plan-emission turn before vs after.
 
-**Expected lift on plan-emission turns specifically:** 1.3-1.6× since the structural tokens are highly predictable. Plan-emission turns are ~10-15% of agent task turns, so weighted-average lift is modest (1.03-1.08× e2e on top of Technique 1+2+3 — measured against the c1 PLD baseline, this is the difference between landing at `~13 tok/s` vs `~14 tok/s`).
+**Expected lift on plan-emission turns specifically:** 1.3-1.6× since the structural tokens are highly predictable. Plan-emission turns are ~10-15% of agent task turns, so weighted-average lift is modest (1.03-1.08× e2e on top of Technique 1+2+3 — measured against the post-PR#39562 c1 baseline, this is the difference between landing at `~17 tok/s` vs `~18-19 tok/s`).
 
 ---
 
@@ -240,18 +284,18 @@ Each technique below has: prior-art alignment, mutation surface, what to do, wha
 
 ## Composition (the harness-coupled-spec-decode bundle)
 
-The five techniques compose multiplicatively on different turn types. Baseline is the c1 ngram-PLD reproduced number (`~7.7 tok/s`), not the artifactual c4 number.
+The five techniques compose multiplicatively on different turn types. Baseline is the **post-PR#39562 c1 ngram-PLD real-task number** (best `11.32 tok/s` on candidate 020; range `10.3-11.3` across 020/025/028). The previous draft anchored on a pre-PR#39562 flat baseline of `~7.7 tok/s`; that baseline no longer applies because the patch unblocks higher-acceptance configs that previously crashed.
 
-| Turn type | Frequency | Baseline (c1 PLD) | Technique 1 | + 2 | + 3 | + 4 | + 5 |
+| Turn type | Frequency | Baseline (c1 PLD, post-PR#39562) | Technique 1 | + 2 | + 3 | + 4 | + 5 |
 |---|---|---|---|---|---|---|---|
-| Code edit / rewrite | ~30% | 7.7 | ×1.50 → 11.6 | ×1.20 → 13.9 | n/a | n/a | ×1.0 |
-| Tool call emission | ~25% | 7.7 | ×1.20 → 9.2 | ×1.05 → 9.7 | ×1.70 → **16.5** | n/a | ×1.0 |
-| Plan / status update | ~15% | 7.7 | ×1.30 → 10.0 | ×1.05 → 10.5 | n/a | ×1.40 → **14.7** | ×1.0 |
-| Free-form reasoning | ~30% | 7.7 | ×1.05 → 8.1 | ×1.0 | n/a | n/a | ×1.0 |
+| Code edit / rewrite | ~30% | 11.0 | ×1.50 → 16.5 | ×1.20 → 19.8 | n/a | n/a | ×1.0 |
+| Tool call emission | ~25% | 11.0 | ×1.20 → 13.2 | ×1.05 → 13.9 | ×1.70 → **23.6** | n/a | ×1.0 |
+| Plan / status update | ~15% | 11.0 | ×1.30 → 14.3 | ×1.05 → 15.0 | n/a | ×1.40 → **21.0** | ×1.0 |
+| Free-form reasoning | ~30% | 11.0 | ×1.05 → 11.6 | ×1.0 | n/a | n/a | ×1.0 |
 
-**Workload-weighted average target:** ~11-15 tok/s sustained (1.5-2.0× over baseline 7.5), clearing the `9.0 tok/s` gate. Stretch on cache-rich Codex traces: ~17-22 tok/s when Techniques 1+2+3 land cleanly. Combined with Round 0 (prefix cache + LMCache, 2-3× on cache-hit prefill): **e2e on cache-hit turns: 3-5×.**
+**Workload-weighted average target:** ~15-20 tok/s sustained (2.0-2.7× over vanilla decode `7.5 tok/s`; 1.4-1.8× over the post-PR#39562 base config). Stretch on cache-rich Codex traces: ~22-30 tok/s when Techniques 1+2+3 land cleanly. Combined with Round 0 (prefix cache + LMCache, 2-3× on cache-hit prefill): **e2e on cache-hit turns: 4-6×.**
 
-**Note on the recalibration.** The original draft assumed candidate 051's 17.1 tok/s as a free starting point and described the techniques as multiplicative on top of it. Reproduction shows that number was a measurement artifact; the techniques are now what gets us to the speed target, not a topping. SuffixDecoding alone (Technique 1) on agent traces is published at 2-3×; that's the most likely first-arrival path to clearing the gate.
+**Note on the recalibration.** The 2026-05-06 draft anchored on a flat `~7.7 tok/s` baseline because candidates 020/025 crashed at c1 and only 051's unreproducible 17.087 number remained. Once PR #39562 unblocked 020/025/028, the c1 ngram-PLD base config measures `10.3-11.3 tok/s` on real-task content — i.e., the gate is already cleared without harness coupling. The techniques in this spec are now true uplift on top, not the load-bearing path. SuffixDecoding alone (Technique 1) on agent traces is published at 2-3× over base decode; layered onto an already-1.5× base, the realistic ceiling for Technique 1 alone on Codex traces lands in `~14-17 tok/s`.
 
 ## Integration with vLLM and Codex harness
 
@@ -340,17 +384,19 @@ Run a real Codex agent task (e.g., "fix this bug in the codebase") under each co
 
 ## Implementation sequence
 
-The sequence is now **fix-spec-decode-stability-first, then build harness-coupled techniques, then measure**. Steps 0a/0b are new prerequisites surfaced by the 2026-05-06 reproduction findings.
+The sequence is now **pick the Round 1 winner from the cleared-gate set, then build harness-coupled techniques as Round 2 stretch**. Steps 0a/0b/0c (the 2026-05-06 prerequisites) are now done or partially-done; the new Step 0d picks the Round 1 candidate.
 
 | Step | Output | Dependency | Notes |
 |---|---|---|---|
-| **0a. Fix vLLM EngineCore KV allocator crash** | `output/spec_decode_concurrency_fix_validation.md` | nothing | **Blocker.** Apply PR #39562 patch OR enforce `prompt_lookup_min == prompt_lookup_max` OR disable prefix caching for spec decode. Without this, candidates 020/025-class configs cannot even be measured. Validate by re-running 020/025 c1 reproduction without crashing. |
-| **0b. Lock down measurement protocol** | `output/spec_decode_measurement_protocol.md` | 0a | Median-of-3-or-5 c1 runs. Generated-token-volume guard (flag any run with output >= cap). Same `warm_concurrency` between baseline and candidate. Per `track-b-concurrency-measurement-audit-20260506.md`. |
-| **0c. Establish honest c1 baseline** | `output/spec_decode_c1_baseline.md` | 0a, 0b | Re-measure baseline (vanilla decode, no spec decode) and PLD (`prompt_lookup_min=7, prompt_lookup_max=8` matching 051) under the new protocol. Expected: baseline ≈ 7.5, PLD ≈ 7.7. This is the floor the techniques must beat. |
+| **0a. ✅ DONE — vLLM EngineCore KV allocator stop-gap** | `track-b-real-task-warmonly-pr39562-matrix-20260507.md` | — | PR #39562 stop-gap applied via `single_type_kv_cache_manager.py` patch in `ModelServer` prelaunch hook. Validated: 020/025/028/051 all run at c1 and c4 without crashing. Carry until upstream merge. |
+| **0b. ✅ DONE — Measurement protocol** | `track-b-concurrency-measurement-audit-20260506.md` + matrix doc | 0a | Real-task content workload (`release-note-to-plan-translation/v1-clean-baseline`) replacing synthetic first-five token-count proxy. `decode_tps = generation_tokens / decode_sum_s` is the acceptance metric, not c4 wall-output throughput. Matched `warm_concurrency` between baseline and candidate. |
+| **0c. ✅ DONE — Real-task c1/c4 baseline** | matrix summary JSON | 0a, 0b | 020/025/028 clear `9.0 tok/s` at both c1 and c4 on real content; 051 fails. Vanilla decode baseline (no spec decode) still `~7.5 tok/s`. |
+| **0d. NEW — Round 1 correctness gate on 020/025/028** | `output/track_b_round1_correctness_gate.md` | 0c | **Immediate next step.** Run B-1/B-2/B-3 on 020/025/028 against a **tool-call-inclusive** workload, not the original synthetic first-five. `prompt_lookup_min=2` is implicated by vLLM Issue #40875 (corrupts tool-call XML on Qwen3); we need direct evidence on this hardware × model × workload. Pick the winner: best correctness × best decode tps. |
+| **0e. Ship Round 1 winner** | `output/track_b_round1_release.md` | 0d | If 020/025/028 passes correctness, ship as Track B Round 1 production config. This is the first real Track B win on this hardware. The harness-coupled work below is now an enhancement on a real shipped baseline, not a path to the gate. |
 | 1. Round 0 — install LMCache + verify | `output/round_0_lmcache.md` | nothing (parallel) | Independent prerequisite for the combined 3-5× cache-hit target. |
-| 2. Pull SuffixDecoding from Snowflake ArcticInference | vLLM fork or rebase | 0a | Foundation for Technique 1; production-grade code. SuffixDecoding alone is published at 2-3× on agent traces — most likely first-arrival to clearing the speed gate. |
+| 2. Pull SuffixDecoding from Snowflake ArcticInference | vLLM fork or rebase | 0a | Foundation for Technique 1; production-grade code. SuffixDecoding alone is published at 2-3× on agent traces — the path from `~10-11 tok/s` real-task baseline to `~17-22 tok/s` stretch. |
 | 3. Implement harness oracle API (vLLM extension) | `vllm/v1/spec_decode/harness_coupled/oracle_api.py` | step 2 | Non-breaking; backward compatible. |
-| 4. Wire Technique 1 (cross-turn ngram) | `drafter_coordinator.py` updated | steps 2-3 | Build on SuffixDecoding. **Gate after this step**: re-measure under protocol 0b; if Technique 1 alone clears `9.0 tok/s` aggregate, ship-it path opens. |
+| 4. Wire Technique 1 (cross-turn ngram) | `drafter_coordinator.py` updated | steps 2-3 | Build on SuffixDecoding. **Gate after this step**: re-measure on the real-task workload; expected `~14-18 tok/s` if SuffixDecoding's 1.4-1.6× over plain PLD holds at c1. |
 | 5. Wire Technique 5 (lifecycle) | `lifecycle.py` | step 3 | Foundational; do early to bound memory while iterating. |
 | 6. Implement Technique 2 (read_file priming) | priming buffer integrated | steps 4, 5 | Open territory; novel piece. |
 | 7. Pull XGrammar-2; verify availability | sanity check | nothing (parallel) | xgrammar already present per audit. |
@@ -375,12 +421,14 @@ See also vLLM Issue #39273 (GDN ngram corruption — separate but related; ensur
 ## Open questions
 
 1. **vLLM fork or upstream contribution?** Techniques 2, 4, 5 are open territory and would be publishable contributions. Decision: fork for now (controlled iteration), upstream the non-novel pieces (1, 3) once stable.
-2. **PR #39562 carrying cost.** If we apply the unmerged patch, we own the rebase burden until upstream merges. Track the PR; switch to upstream the moment it lands. Maintain the `prompt_lookup_min == prompt_lookup_max` fallback as a one-line config flip in case the patch needs to be reverted.
-3. **Hybrid attention + spec decode at c1.** Verified correctness at c1 in the audit (B-1/B-2/B-3 pass for 051). Speed at c1 is the issue, not correctness. Multi-session state needs verification before shipping; covered by Technique 5 lifecycle work.
-4. **Is the `9.0 tok/s` 20% gate the right threshold?** Calibrated against an inflated baseline in the original Track B spec. Two options: (a) keep `9.0` and let the techniques in this spec be the path to clearing it (current plan), or (b) lower to `~9.0` over the honest baseline (effectively unchanged) but explicitly note that vanilla ngram-PLD alone cannot clear it on this hardware. Recommend (a) — the techniques are the point.
-5. **Concurrency generalization.** Once PR #39562 lands and the c4 measurement protocol is hardened, the design generalizes. Until then, c1 is the only acceptance shape. Track B parent spec should be updated to match.
-6. **LMCache + harness oracle interaction.** LMCache (Round 0) caches KV across turns; the harness oracle caches drafter state across turns. They're orthogonal but both consume `session_id`. Verify they coexist.
-7. **Should we evaluate SuffixDecoding standalone before building the harness oracle?** SuffixDecoding alone is published at 2-3× on agent traces. If Snowflake ArcticInference's drop-in achieves the gate alone, Techniques 2-4 become enhancement rather than required. Decision: gate after Step 4 — re-measure with SuffixDecoding alone before building 2-4.
+2. **PR #39562 carrying cost.** Patch is applied as a stop-gap via `single_type_kv_cache_manager.py` modification in the `ModelServer` prelaunch hook. We own the rebase burden until upstream merges. Track the PR; switch to upstream the moment it lands. Maintain the `prompt_lookup_min == prompt_lookup_max` fallback as a one-line config flip in case the patch needs to be reverted.
+3. **020 vs 028 tradeoff.** 020 is best at c1 (`11.32`); 028 is best at c4 (`9.86` decode; `31.9` wall) by a small margin. Because c1 is the acceptance shape and c4 decode is essentially flat, 020 is the lead candidate. Revisit if a workload-weighted multi-stream metric is defined.
+4. **Tool-call correctness with `prompt_lookup_min=2`.** vLLM Issue #40875 documents tool-call XML corruption on Qwen3 at low ngram min. Step 0d's B-1/B-2/B-3 must include a tool-call-inclusive workload to detect this directly on this hardware × model; if 020/025/028 fail tool-call correctness, fall back to `prompt_lookup_min >= 3` (likely costs `~0.5 tok/s` of speed) or accept slightly lower speed configs.
+5. **Hybrid attention + spec decode at c1.** Verified correctness at c1 in the 2026-05-06 recheck for 051 (B-1/B-2/B-3 pass). 020/025/028 correctness on the post-PR#39562 runtime is the open Step 0d question.
+6. **Is the `9.0 tok/s` 20% gate the right threshold?** Empirically yes — 020/025/028 cleared it cleanly on real-task content post-PR#39562, so the gate is now meaningful (it accepts real wins and rejected the artifactual one). Keep at `9.0`.
+7. **Concurrency generalization.** PR #39562 unblocks c4 from crashing, but c4 decode tok/s is essentially flat with c1 (10-11 vs 9-10). c4 wall-output throughput is concurrency-driven, not a real decode speedup. Until a workload-weighted multi-stream metric is defined, c1 stays the acceptance shape. Track B parent spec should be updated to match.
+8. **LMCache + harness oracle interaction.** LMCache (Round 0) caches KV across turns; the harness oracle caches drafter state across turns. They're orthogonal but both consume `session_id`. Verify they coexist.
+9. **Should we evaluate SuffixDecoding standalone before building the harness oracle?** SuffixDecoding alone is published at 2-3× over base decode on agent traces. Layered onto the post-PR#39562 base (`~11 tok/s`), expected `~14-17 tok/s` real-task. If Snowflake ArcticInference's drop-in achieves this alone, Techniques 2-4 become enhancement rather than required for the stretch goal. Decision: gate after Step 4 — re-measure with SuffixDecoding alone before building 2-4.
 
 ## References
 
@@ -408,4 +456,4 @@ See also vLLM Issue #39273 (GDN ngram corruption — separate but related; ensur
 
 ---
 
-*This spec defines the engineering work to take Track B Round 1 from a c1 ngram-PLD baseline (`~7.7 tok/s`, essentially flat with vanilla decode) past the `9.0 tok/s` 20% gate and into the `11-15 tok/s` sustained range (1.5-2.0× baseline; 3-5× combined with Round 0 prefix cache + LMCache on cache-hit turns). The original "candidate 051's 2.28×" framing was a c4 measurement artifact and has been retired. Two of the five techniques have published precedent we build on (SuffixDecoding for Technique 1, ToolSpec/XGrammar-2 for Technique 3); three are open research territory and may be publishable contributions in their own right. Step 0a (vLLM PR #39562 patch or `prompt_lookup_min == prompt_lookup_max` workaround) is a hard prerequisite — without it, candidates 020/025-class configs crash EngineCore at c1 and cannot even be measured.*
+*This spec defines the engineering work to take Track B Round 1 from the post-PR#39562 c1 ngram-PLD real-task baseline (best `11.32 tok/s` on candidate 020, already past the `9.0 tok/s` 20% gate) into the `15-22 tok/s` sustained range (2-3× over vanilla decode `7.5`; 4-6× combined with Round 0 prefix cache + LMCache on cache-hit turns). Step 0a (the PR #39562 KV allocator stop-gap) is DONE; the immediate next prerequisite is Step 0d — running B-1/B-2/B-3 correctness gates on `020`, `025`, `028` against a tool-call-inclusive workload to pick the Round 1 winner before harness-coupled work begins. The original "candidate 051's 2.28×" framing was a synthetic c4 measurement artifact and has been retired; 020 is the new lead candidate. Two of the five techniques have published precedent we build on (SuffixDecoding for Technique 1, ToolSpec/XGrammar-2 for Technique 3); three are open research territory and may be publishable contributions in their own right.*
