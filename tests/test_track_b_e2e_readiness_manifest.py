@@ -307,6 +307,7 @@ def _write_ncu_metadata(root: Path, archetype: str, *, runtime_config_hash: str 
         json.dumps(
             {
                 "schema": "lumo.track_b.ncu_archetype_profile.v1",
+                "round": 0,
                 "archetype": archetype,
                 "task_id": readiness.NCU_ARCHETYPE_TASKS[archetype],
                 "runtime_config_hash": runtime_config_hash,
@@ -375,6 +376,7 @@ def test_ncu_profile_verification_rejects_missing_metadata(tmp_path: Path) -> No
     assert "runtime_config_hash_missing" in long_text["metadata_reasons"]
     assert "task_id_mismatch" in long_text["metadata_reasons"]
     assert "required_metrics_mismatch" in long_text["metadata_reasons"]
+    assert "round_missing" in long_text["metadata_reasons"]
 
 
 def test_ncu_profile_verification_rejects_wrong_archetype_task_metadata(tmp_path: Path) -> None:
@@ -410,3 +412,19 @@ def test_ncu_profile_verification_rejects_required_metric_metadata_drift(tmp_pat
     profile = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
     assert profile["required_metrics_metadata_match"] is False
     assert "required_metrics_mismatch" in profile["metadata_reasons"]
+
+
+def test_ncu_profile_verification_rejects_missing_round_metadata(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        (tmp_path / f"ncu_{archetype}.csv").write_text(_ncu_csv_text(), encoding="utf-8")
+        _write_ncu_metadata(tmp_path, archetype)
+    metadata_path = tmp_path / "ncu_long-text.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata.pop("round")
+    metadata_path.write_text(json.dumps(metadata) + "\n", encoding="utf-8")
+
+    result = readiness._ncu_profile_verification(tmp_path)
+
+    assert result["ok"] is False
+    profile = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
+    assert "round_missing" in profile["metadata_reasons"]

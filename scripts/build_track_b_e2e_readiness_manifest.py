@@ -219,6 +219,8 @@ def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
             metadata_reasons.append("task_id_mismatch")
         if metadata.get("required_metrics") != list(NCU_REQUIRED_METRICS):
             metadata_reasons.append("required_metrics_mismatch")
+        if not isinstance(metadata.get("round"), int):
+            metadata_reasons.append("round_missing")
         if not isinstance(metadata.get("runtime_config_hash"), str) or not metadata.get("runtime_config_hash"):
             metadata_reasons.append("runtime_config_hash_missing")
         if metadata.get("profile_csv") != expected_profile_csv:
@@ -241,6 +243,7 @@ def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
                 "metadata_reasons": metadata_reasons,
                 "task_id": metadata.get("task_id"),
                 "expected_task_id": NCU_ARCHETYPE_TASKS[archetype],
+                "round": metadata.get("round"),
                 "required_metrics_metadata_match": metadata.get("required_metrics") == list(NCU_REQUIRED_METRICS),
                 "runtime_config_hash": metadata.get("runtime_config_hash"),
                 "size_bytes": size_bytes,
