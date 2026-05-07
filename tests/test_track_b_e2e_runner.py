@@ -27,6 +27,22 @@ def test_runner_cli_accepts_documented_ncu_mode_flag() -> None:
     assert "--ncu-mode" in result.stdout
 
 
+def test_runner_accepts_family_variant_task_id_form() -> None:
+    assert runner._resolve_task_args("sqlalchemy-2-session-modernization/v1-clean-baseline", "v1-clean-baseline") == (
+        "sqlalchemy-2-session-modernization",
+        "v1-clean-baseline",
+    )
+    assert runner._resolve_task_args("sqlalchemy-2-session-modernization/v2", "v1-clean-baseline") == (
+        "sqlalchemy-2-session-modernization",
+        "v2",
+    )
+
+
+def test_runner_rejects_conflicting_task_id_variant() -> None:
+    with pytest.raises(ValueError, match="conflict"):
+        runner._resolve_task_args("sqlalchemy-2-session-modernization/v2", "v3")
+
+
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()

@@ -15,6 +15,7 @@ from typing import Any
 import requests
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_VARIANT = "v1-clean-baseline"
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
@@ -50,6 +51,17 @@ def _write_prompt(workspace: Path, prompt_path: Path) -> None:
 def _format_command(template: str, mapping: dict[str, str]) -> list[str]:
     rendered = template.format(**mapping)
     return shlex.split(rendered)
+
+
+def _resolve_task_args(family: str, variant: str) -> tuple[str, str]:
+    if "/" not in family:
+        return family, variant
+    parsed_family, parsed_variant = family.split("/", 1)
+    if not parsed_family or not parsed_variant:
+        raise ValueError("task id must be formatted as family/variant")
+    if variant != DEFAULT_VARIANT and variant != parsed_variant:
+        raise ValueError("variant must not conflict with the family/variant task id")
+    return parsed_family, parsed_variant
 
 
 def _metrics_text(metrics_url: str) -> str:
@@ -309,11 +321,15 @@ def main() -> int:
     if not args.family:
         parser.error("family is required unless --tasks all is used")
     try:
+        family, variant = _resolve_task_args(args.family, args.variant)
+    except ValueError as exc:
+        parser.error(str(exc))
+    try:
         failures = 0
         base_attempt = args.attempt
         for offset in range(args.repeat):
             args.attempt = base_attempt + offset
-            failures += 1 if run_one(args, args.family, args.variant) != 0 else 0
+            failures += 1 if run_one(args, family, variant) != 0 else 0
         args.attempt = base_attempt
         return 1 if failures else 0
     except Exception as exc:

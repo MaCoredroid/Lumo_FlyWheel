@@ -193,6 +193,8 @@ ncu --target-processes all --kernel-id ::regex:.*linear.*|.*attention.*|.*sample
     -- python scripts/run_track_b_e2e_task.py <archetype-task> --no-dcgm --ncu-mode
 ```
 
+`scripts/run_track_b_e2e_task.py` accepts either `family variant` positional arguments or a single `family/variant` task id for `<archetype-task>`.
+
 Profile output joined into `ncu_archetype_profile.json`:
 
 ```json
