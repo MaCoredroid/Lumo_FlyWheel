@@ -560,6 +560,8 @@ Committed scaffold commits through this status checkpoint:
 - `5e400ef Reject incomplete Track B vLLM JSONL rows`
 - `9113a09 Update Track B vLLM JSONL row ledger`
 - `ef3060b Reject empty Track B vLLM request joins`
+- `a2f9317 Update Track B vLLM join ledger`
+- `bc93e96 Support Track B runner NCU mode flag`
 
 ## 12. Decision rules for ending the loop
 
