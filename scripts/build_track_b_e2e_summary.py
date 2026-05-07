@@ -419,6 +419,10 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         task_id for task_id in trusted_unique_task_ids if task_id not in TRACK_B_E2E_TASK_SET
     )
     sample_hash_mismatch_count = sum(1 for row in trusted if row.get("sample_hash") != SAMPLE_HASH)
+    trusted_completed_count = sum(1 for row in trusted if row.get("task_completed"))
+    trusted_correctness_count = sum(
+        1 for row in trusted if row.get("task_completed") and row.get("task_score") is not None
+    )
     blockers: list[str] = []
     if len(trusted) < 12:
         blockers.append(f"Only {len(trusted)} trusted task summaries found; round_summary.json requires at least 12")
@@ -432,6 +436,12 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         blockers.append(f"Unexpected trusted task summaries: {', '.join(unexpected_trusted_task_ids)}")
     if sample_hash_mismatch_count:
         blockers.append(f"{sample_hash_mismatch_count} trusted task summaries have a mismatched sample_hash")
+    if trusted_completed_count < 12:
+        blockers.append(f"Only {trusted_completed_count} trusted task summaries completed; round_summary.json requires at least 12")
+    if trusted_correctness_count < 12:
+        blockers.append(
+            f"Only {trusted_correctness_count} trusted task summaries have correctness scores; round_summary.json requires at least 12"
+        )
     if blockers and not args.write_untrusted_diagnostic:
         raise RuntimeError("; ".join(blockers))
     wallclocks = [float(row["wallclock_s"]) for row in trusted]
@@ -450,8 +460,8 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         "median_wallclock_s": statistics.median(wallclocks) if wallclocks else None,
         "aggregate_wallclock_s": sum(wallclocks),
         "wallclock_delta_vs_prior_round_s": args.wallclock_delta_vs_prior_round_s,
-        "tasks_completed": sum(1 for row in trusted if row.get("task_completed")),
-        "tasks_correctness_passed": sum(1 for row in trusted if row.get("task_completed") and row.get("task_score") is not None),
+        "tasks_completed": trusted_completed_count,
+        "tasks_correctness_passed": trusted_correctness_count,
         "regime_share_aggregate": {key: value / divisor for key, value in sorted(regime_totals.items())},
         "diagnosis_distribution": dict(sorted(diagnosis_distribution.items())),
         "sample_hash": SAMPLE_HASH,
