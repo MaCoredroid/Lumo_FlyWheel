@@ -11,6 +11,7 @@ Companion to:
 - `track-b-spec-decode-salvage-20260506.md` (c1 salvage attempts for 020, 025, 028, 051; pre-PR#39562)
 - `track-b-concurrency-measurement-audit-20260506.md` (warm_concurrency measurement audit)
 - `track-b-real-task-warmonly-pr39562-matrix-20260507.md` (post-PR#39562 c1/c4 real-task matrix; load-bearing for current spec state)
+- **`track-b-e2e-agentic-saturation-plan-20260507.md` (auto-research-loop spec; e2e Codex wallclock measurement; supersedes this spec's per-decode-tok/s framing as the Track B headline metric and gates technique prioritization on per-regime saturation evidence)**
 - `track-b-real-task-warmonly-pr39562-matrix-20260507.md` (PR #39562 stop-gap rerun on real-task workload)
 
 ## Status update — 2026-05-07 PR #39562 stop-gap matrix
