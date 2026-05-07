@@ -612,6 +612,7 @@ Committed scaffold commits through this status checkpoint:
 - `cf83817 Require Track B trace turn ends`
 - `66f7981 Verify Track B measured trace identity`
 - `e25fa20 Verify Track B raw vLLM hash provenance`
+- `9fc1ff0 Reject Track B round hash drift`
 
 ## 12. Decision rules for ending the loop
 
