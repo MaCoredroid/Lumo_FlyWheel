@@ -618,6 +618,7 @@ Committed scaffold commits through this status checkpoint:
 - `c78d7f8 Reject Track B task summary drift`
 - `1377336 Require Track B task summary readiness`
 - `b483068 Require explicit Track B mismatch zeros`
+- `6d286d5 Require Track B NCU profile metadata`
 
 ## 12. Decision rules for ending the loop
 
