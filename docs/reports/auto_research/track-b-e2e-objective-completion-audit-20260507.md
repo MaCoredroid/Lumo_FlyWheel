@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-07
-Repo checkpoint: updated through the JSONL side-channel consumer checkpoint in current git history.
+Repo checkpoint: updated through the Codex `--json` insufficiency audit checkpoint in current git history.
 
 ## Objective Restated
 
@@ -25,7 +25,7 @@ Concrete success criteria:
 | Plan defines fixed 13-task sample. | Plan §3 | Sample covers 13 fixed CNB-55 family/variant slots and says the sample must not change between rounds. | Complete |
 | Plan defines Codex trace schema and correctness check. | Plan §4 | Schema and `output/track_b_e2e/codex_trace_emitter_correctness.json` requirement are present. | Spec complete; implementation blocked |
 | Codex `--trace-out` implemented and verified. | Patched Codex CLI + correctness artifact | Live preflight reports `codex-cli 0.128.0`, `codex_trace_out_supported=false`; correctness artifact is absent. | Blocked |
-| Codex patch surface audited. | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Audit records Rust patch surface and why wrapper-only logging is insufficient. | Complete blocker record |
+| Codex patch surface audited. | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Audit records Rust patch surface, why wrapper-only logging is insufficient, and why installed `codex exec --json` cannot substitute for `--trace-out` because it lacks emitted turn ids, request/response ids, timestamps, and per-tool timing. | Complete blocker record |
 | vLLM per-request join requirement specified. | Plan §5.1 | Plan requires `vllm_per_turn.json` keyed by `vllm_request_id`. | Complete |
 | vLLM request-label / side-channel consumer implemented. | `src/lumo_flywheel_serving/metrics.py`, `scripts/run_track_b_e2e_task.py`, `scripts/build_track_b_e2e_summary.py` | `parse_prometheus_samples()` preserves labels; `compute_vllm_per_request_metrics()` computes request-keyed deltas when labels exist; summary and runner now normalize request-keyed vLLM JSONL side-channel rows into the same per-turn schema. | Scaffold complete |
 | vLLM live request labels available on required join metrics. | `scripts/preflight_track_b_e2e.py --out output/track_b_e2e/preflight_20260507.json` | Live preflight reports request-label coverage false for `vllm:prompt_tokens_total`, `vllm:generation_tokens_total`, `vllm:spec_decode_num_draft_tokens_total`, and `vllm:spec_decode_num_accepted_tokens_total`. | Blocked |
@@ -39,7 +39,7 @@ Concrete success criteria:
 | Round 0 dry run populated and validated. | `output/track_b_e2e/round_0/round_summary.json` and five NCU profiles | Readiness manifest reports `round0_summary_exists=false`, `ncu_profile_count=0`. | Blocked |
 | Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, and `tests/test_metrics.py` passed in focused runs during this work; latest focused preflight/readiness run: `5 passed`. | Complete for scaffold risk |
 | Full repo test suite green. | Full pytest | Earlier `PYTHONPATH=. .venv/bin/pytest -q -x` failed an unrelated existing `tests/test_auto_research.py` expectation. | Not green; unrelated known failure |
-| Progress committed. | Git history | Progress commits from `7de01d6` through `55a4e4e` are on `main`; repo is ahead of origin. | Complete |
+| Progress committed. | Git history | Progress commits from `7de01d6` through `c5a99ad` are on `main`; this Codex `--json` insufficiency audit is committed as the next checkpoint. | Complete for landed checkpoints |
 
 ## Current Readiness Decision
 
@@ -62,7 +62,7 @@ Blocking reasons:
 The objective is **not complete**. The plan and scaffold now truthfully prevent false Round 0 measurement, and all progress so far has been committed, but the actual E2E auto-research loop cannot yet run truthful measurements. The remaining required implementation is:
 
 1. Patch/pin Codex CLI with `--trace-out` and produce `output/track_b_e2e/codex_trace_emitter_correctness.json`.
-2. Patch vLLM or add a bounded per-request JSONL side-channel so Codex turn IDs can join to vLLM token/spec-decode metrics.
+2. Patch vLLM or add a bounded per-request JSONL side-channel, then wire Codex trace request IDs to that side-channel so Codex turns can join to vLLM token/spec-decode metrics.
 3. Fix or replace DCGM profile-field collection so required utilization fields are numeric, or explicitly revise the plan with a truthful lower-fidelity diagnosis mode.
 4. Run Round 0 only after the readiness manifest reports all hard gates passing.
 

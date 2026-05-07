@@ -18,6 +18,7 @@ Installed local CLI:
 ```bash
 codex --version
 codex exec --help
+codex exec --json 'say exactly ok' >/tmp/codex_exec_json_probe.jsonl 2>/tmp/codex_exec_json_probe.stderr
 ```
 
 Observed local version: `codex-cli 0.128.0`
@@ -59,11 +60,24 @@ JSON event path:
 
 - `codex-rs/exec/src/event_processor_with_jsonl_output.rs`
   - `--json` emits `ThreadEvent` rows from app-server notifications.
-  - This is useful for an adapter, but it is not equivalent to the plan's trace emitter because it lacks the per-request vLLM join key.
+  - `ThreadTokenUsageUpdated` is stored internally and emitted only as aggregate token usage on `turn.completed`.
+  - `TurnStartedNotification.thread_id`, `TurnStartedNotification.turn.id`, and item notification `turn_id` values are consumed while mapping events, but the emitted `turn.started`, `item.started`, and `item.completed` JSON rows do not preserve those fields except for the initial `thread.started` row.
+  - This is useful for a thin human-readable event stream, but it is not equivalent to the plan's trace emitter because it lacks the per-turn id, per-request vLLM join key, response id, timestamps, and per-tool timing.
+
+Live `--json` probe:
+
+```jsonl
+{"type":"thread.started","thread_id":"019e0404-7166-7dd1-8cf5-22dc8ebb3d44"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ok"}}
+{"type":"turn.completed","usage":{"input_tokens":15348,"cached_input_tokens":3456,"output_tokens":5,"reasoning_output_tokens":0}}
+```
+
+This confirms that the installed CLI's `--json` mode cannot substitute for `--trace-out` for Track B E2E measurement. It can report thread start, coarse item events, final text, and aggregate turn token usage, but it cannot join a Codex turn to vLLM per-request/spec-decode metrics or separate model streaming time from tool execution wait.
 
 ## Patch Shape Needed
 
-The minimum truthful patch is not just a new CLI flag. It needs a trace sink reachable from both:
+The minimum truthful patch is not just a new CLI flag or an adapter over `codex exec --json`. It needs a trace sink reachable from both:
 
 1. `exec/src/lib.rs`, for task/session/turn lifecycle events.
 2. `core/src/client.rs`, for the upstream request id and token usage as the Responses stream completes.

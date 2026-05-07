@@ -67,6 +67,8 @@ The auto research agent **must not change the sample** between rounds. Round-ove
 
 Codex CLI is open source. Patch a `trace_emitter` hook into the agent's main loop and the streaming response handler. Codex's internal state machine already distinguishes turn types; we don't infer regime from message content.
 
+Current local Codex fact (2026-05-07): `codex-cli 0.128.0` has `codex exec --json`, but not `--trace-out`. Source and live-output inspection show that `--json` emits normalized thread events and aggregate token usage only; it does not preserve emitted `turn_id`, Responses `response_id`, vLLM request id, timestamps, or per-tool timing. Therefore `--json` is **not** accepted as a substitute for the `--trace-out` artifact below.
+
 ### 4.1 Patch surface
 
 - Codex CLI fork carried at `vendor/codex-cli` (or a pinned upstream commit + patch series under `patches/codex/`).
@@ -282,7 +284,7 @@ Each round is one agent turn. The agent reads the prior `round_summary.json`, pr
 1. vLLM serves: `curl -s http://127.0.0.1:9950/health` returns 200.
 2. Single short Codex task end-to-end: run task #2 (`transcript-merge-regression/v1`, smallest in the sample). Codex returns exit_code 0 within 15 minutes.
 3. Trace integrity: `codex_trace.jsonl` for that one task contains `task_start` and `task_end` events; per-turn `vllm_request_id` present on all `turn_start` events.
-4. DCGM sampler attached: `dcgm_samples.jsonl` has ≥ 99% expected sample count over the run window.
+4. DCGM sampler attached: `dcgm_samples.jsonl` has ≥ 99% expected sample count over the run window and numeric `dram_active_pct`, `sm_active_pct`, `sm_occupancy_pct`, `pipe_tensor_active_pct`, and `pipe_fp16_active_pct` fields.
 5. Token correctness on a fixed canonical short prompt: serial output equals stored golden output byte-for-byte.
 
 If any step fails, **Round 0 must not record measurements**. Fix the runtime, repeat preflight.
