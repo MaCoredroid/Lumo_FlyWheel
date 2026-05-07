@@ -46,6 +46,10 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _runtime_config_hash_valid(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith("sha256:") and bool(value.removeprefix("sha256:"))
+
+
 def _resolve(base_dir: Path, value: Any) -> Path:
     path = Path(str(value))
     return path if path.is_absolute() else base_dir / path
@@ -91,6 +95,8 @@ def _trace_schema_result(base_dir: Path, raw: dict[str, Any]) -> dict[str, Any]:
             reasons.append("task_start_task_id_mismatch")
         if not isinstance(task_start.get("runtime_config_hash"), str) or not task_start.get("runtime_config_hash"):
             reasons.append("task_start_runtime_config_hash_missing")
+        elif not _runtime_config_hash_valid(task_start.get("runtime_config_hash")):
+            reasons.append("task_start_runtime_config_hash_invalid")
         if not isinstance(task_start.get("ts"), str) or not task_start.get("ts"):
             reasons.append("task_start_ts_missing")
     if not isinstance(task_end, dict):

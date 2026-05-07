@@ -146,6 +146,35 @@ def test_trace_correctness_verifier_rejects_trace_schema_gap(tmp_path: Path) -> 
     assert "task_start_runtime_config_hash_missing" in payload["tasks"][0]["trace_schema_reasons"]
 
 
+def test_trace_correctness_verifier_rejects_invalid_runtime_hash(tmp_path: Path) -> None:
+    tasks = [_write_task_evidence(tmp_path, f"task-{index}") for index in range(3)]
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "task-0_enabled_trace.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    rows[0]["runtime_config_hash"] = "not-a-runtime-hash"
+    (tmp_path / "task-0_enabled_trace.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "comparisons.json"
+    manifest.write_text(
+        json.dumps({"codex_version": "codex patched", "trace_out_supported": True, "tasks": tasks}) + "\n",
+        encoding="utf-8",
+    )
+
+    payload = verifier.verify(
+        Namespace(
+            comparison_manifest=str(manifest),
+            base_dir="",
+            out=str(tmp_path / "codex_trace_emitter_correctness.json"),
+        )
+    )
+
+    assert payload["ok"] is False
+    assert "task_start_runtime_config_hash_invalid" in payload["tasks"][0]["trace_schema_reasons"]
+
+
 def test_trace_correctness_verifier_rejects_missing_turn_end(tmp_path: Path) -> None:
     tasks = [_write_task_evidence(tmp_path, f"task-{index}") for index in range(3)]
     rows = [
