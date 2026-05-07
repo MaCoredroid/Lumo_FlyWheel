@@ -608,6 +608,7 @@ Committed scaffold commits through this status checkpoint:
 - `f2f5274 Verify Track B trace runtime hashes`
 - `ecbb700 Cover Track B DCGM hash stamping`
 - `af1acb2 Validate Track B trace schema evidence`
+- `03baa8a Require Track B trace schema readiness`
 
 ## 12. Decision rules for ending the loop
 
