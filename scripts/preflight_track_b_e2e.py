@@ -70,6 +70,8 @@ REQUEST_JOIN_REQUIRED_JSONL_FIELDS = (
 REQUEST_JOIN_JSONL_FIELD_ALIASES = {
     "generation_tokens": ("generation_tokens", "completion_tokens"),
 }
+REQUEST_JOIN_JSONL_SCHEMA = "lumo.track_b.vllm_request_metrics.v1"
+REQUEST_JOIN_JSONL_PRODUCER = "track_b_vllm_request_metrics_patch"
 DCGM_PROFILE_FIELDS = (
     "dram_active_pct",
     "sm_active_pct",
@@ -128,6 +130,7 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
     field_coverage = {field: False for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS}
     request_id_seen = False
     valid_row_count = 0
+    producer_row_count = 0
     invalid_row_count = 0
     for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if not raw_line.strip():
@@ -143,6 +146,12 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
         rows.append(payload)
         row_has_request_id = any(payload.get(key) for key in ("request_id", "vllm_request_id", "id"))
         request_id_seen = request_id_seen or row_has_request_id
+        row_has_required_producer = (
+            payload.get("schema") == REQUEST_JOIN_JSONL_SCHEMA
+            and payload.get("producer") == REQUEST_JOIN_JSONL_PRODUCER
+        )
+        if row_has_required_producer:
+            producer_row_count += 1
         row_has_required_fields = True
         for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS:
             aliases = REQUEST_JOIN_JSONL_FIELD_ALIASES.get(field, (field,))
@@ -150,7 +159,7 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
                 field_coverage[field] = True
             else:
                 row_has_required_fields = False
-        if row_has_request_id and row_has_required_fields:
+        if row_has_request_id and row_has_required_fields and row_has_required_producer:
             valid_row_count += 1
         else:
             invalid_row_count += 1
@@ -161,8 +170,11 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
         "path": str(path),
         "sample_count": len(rows),
         "valid_request_metric_row_count": valid_row_count,
+        "producer_row_count": producer_row_count,
         "invalid_request_metric_row_count": invalid_row_count,
         "request_id_seen": request_id_seen,
+        "required_schema": REQUEST_JOIN_JSONL_SCHEMA,
+        "required_producer": REQUEST_JOIN_JSONL_PRODUCER,
         "required_field_coverage": field_coverage,
         "accepted_field_aliases": REQUEST_JOIN_JSONL_FIELD_ALIASES,
     }
