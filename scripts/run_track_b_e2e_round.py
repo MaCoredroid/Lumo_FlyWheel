@@ -48,9 +48,14 @@ def _attempt_dir(out_root: Path, round_index: int, task_id: str, attempt: int) -
     return out_root / f"round_{round_index}" / f"{family}__{variant}" / f"run_{attempt:02d}"
 
 
-def _attempt_wallclocks(out_root: Path, round_index: int, task_id: str, repeat: int) -> list[float]:
+def _attempt_wallclocks(
+    out_root: Path,
+    round_index: int,
+    task_id: str,
+    attempts: range,
+) -> list[float]:
     wallclocks: list[float] = []
-    for attempt in range(1, repeat + 1):
+    for attempt in attempts:
         metadata_path = _attempt_dir(out_root, round_index, task_id, attempt) / "runner_metadata.json"
         payload = _read_json(metadata_path)
         elapsed_s = payload.get("elapsed_s")
@@ -137,10 +142,12 @@ def _task_summary_command(
         args.trace_emitter_correctness_verified_at,
         "--cold-completion-discarded",
         "--cache-reset-verified",
-        "--protocol-hash-match",
-        "--generation-volume-within-band",
         "--sample-hash-match",
     ]
+    if args.protocol_hash_match:
+        command.append("--protocol-hash-match")
+    if args.generation_volume_within_band:
+        command.append("--generation-volume-within-band")
     if args.write_untrusted_diagnostic:
         command.append("--write-untrusted-diagnostic")
     return command
@@ -183,8 +190,12 @@ def _read_blockers(preflight_out: Path) -> str:
 
 def run_round(args: argparse.Namespace) -> int:
     _validate_codex_command_template(args.codex_command_template)
-    if args.repeat < 3:
-        raise ValueError("--repeat must be >= 3 for truthful median measurements")
+    if args.repeat < 4:
+        raise ValueError("--repeat must be >= 4 so run_01 can be discarded as cold and 3 measured runs remain")
+    if not args.protocol_hash_match:
+        raise ValueError("--protocol-hash-match is required for trusted round summaries")
+    if not args.generation_volume_within_band:
+        raise ValueError("--generation-volume-within-band is required for trusted round summaries")
 
     out_root = Path(args.out_root)
     round_dir = out_root / f"round_{args.round}"
@@ -202,8 +213,9 @@ def run_round(args: argparse.Namespace) -> int:
         return runner.returncode
 
     for task_id in _tasks():
-        task_dir = _attempt_dir(out_root, args.round, task_id, 1)
-        wallclocks = _attempt_wallclocks(out_root, args.round, task_id, args.repeat)
+        measured_attempts = range(2, args.repeat + 1)
+        task_dir = _attempt_dir(out_root, args.round, task_id, measured_attempts.start)
+        wallclocks = _attempt_wallclocks(out_root, args.round, task_id, measured_attempts)
         summary = _run(_task_summary_command(args, task_id, task_dir, wallclocks))
         if summary.returncode != 0:
             print(summary.stderr, file=sys.stderr, end="")
@@ -221,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime-config-hash", required=True)
     parser.add_argument("--codex-command-template", required=True)
     parser.add_argument("--python", default=_default_python())
-    parser.add_argument("--repeat", type=int, default=3)
+    parser.add_argument("--repeat", type=int, default=4)
     parser.add_argument("--out-root", default=str(REPO_ROOT / "output" / "track_b_e2e"))
     parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
     parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")
@@ -232,6 +244,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--vllm-request-metrics-jsonl", default="")
     parser.add_argument("--clock-skew-ms-p99", type=float, required=True)
     parser.add_argument("--trace-emitter-correctness-verified-at", required=True)
+    parser.add_argument("--protocol-hash-match", action="store_true")
+    parser.add_argument("--generation-volume-within-band", action="store_true")
     parser.add_argument("--hypothesis", default="")
     parser.add_argument("--config-delta-vs-prior-round", default="")
     parser.add_argument("--auto-research-agent-recommendation", default="")
