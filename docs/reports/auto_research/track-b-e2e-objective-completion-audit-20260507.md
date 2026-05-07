@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-07
-Repo checkpoint: updated through the strict Track B round-summary and readiness-gate checkpoint in current git history.
+Repo checkpoint: updated through the Track B proposal-prompt readiness hard-gate checkpoint in current git history.
 
 ## Objective Restated
 
@@ -34,19 +34,19 @@ Concrete success criteria:
 | Required DCGM profiling fields numeric. | Preflight JSON | Live preflight reports `dcgm_profile_fields_available=false`, no observed numeric profile fields, and missing `dram_active_pct`, `sm_active_pct`, `sm_occupancy_pct`, `pipe_tensor_active_pct`, and `pipe_fp16_active_pct`. | Blocked |
 | E2E task runner exists. | `scripts/run_track_b_e2e_task.py` | Readiness manifest reports Step C complete; runner accepts the documented `--ncu-mode` profiling flag and single `family/variant` task-id form, and rejects Codex command templates that omit `{trace_out}`. | Scaffold complete |
 | Summary join and deterministic diagnosis exists. | `scripts/build_track_b_e2e_summary.py` | Readiness manifest reports Step E complete; focused tests cover synthetic summary behavior, reject missing DCGM profile fields, reject duplicated/off-sample trusted round summaries, and reject incomplete trusted round summaries. | Scaffold complete |
-| Auto-research round proposal template exists. | `prompts/track_b_e2e_round_proposal.md` | Readiness manifest reports Step F complete. | Complete |
-| Machine-readable readiness gate exists. | `scripts/build_track_b_e2e_readiness_manifest.py` | Command exits 1 with `round0_ready=false` and blocking reasons; trace correctness, Round 0 summary, sample-integrity, and NCU metric-coverage gates validate artifact content, not only file existence. | Complete |
+| Auto-research round proposal template exists and drives the hard-gated loop. | `prompts/track_b_e2e_round_proposal.md` | Readiness manifest reports Step F complete and now exposes `hard_gates.round_proposal_prompt_verified=true`; Step F validates the hard-gated round driver, runtime/protocol hash arguments, preflight script, exact three-counter spec-decode grep, and absence of the legacy direct repeat-3 task measurement command. | Complete |
+| Machine-readable readiness gate exists. | `scripts/build_track_b_e2e_readiness_manifest.py` | Command exits 1 with `round0_ready=false` and blocking reasons; trace correctness, proposal prompt content, Round 0 summary, sample-integrity, and NCU metric-coverage gates validate artifact content, not only file existence. | Complete |
 | Round 0 dry run populated and validated. | `output/track_b_e2e/round_0/round_summary.json` and five named NCU profiles | Readiness manifest reports `round0_summary_verified=false`, `ncu_profiles_verified=false`, `ncu_profile_count=0`. | Blocked |
-| Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_codex_trace_correctness.py`, `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, `tests/test_track_b_e2e_runner.py`, and `tests/test_metrics.py` passed in focused runs during this work. | Complete for scaffold risk |
+| Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_codex_trace_correctness.py`, `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, `tests/test_track_b_e2e_runner.py`, `tests/test_metrics.py`, `tests/test_track_b_dcgm_sampler.py`, and `tests/test_track_b_e2e_round_driver.py` passed in focused runs during this work; the latest focused Track B suite reported 67 passed. | Complete for scaffold risk |
 | Full repo test suite green. | Full pytest | Earlier `PYTHONPATH=. .venv/bin/pytest -q -x` failed an unrelated existing `tests/test_auto_research.py` expectation. | Not green; unrelated known failure |
-| Progress committed. | Git history | Progress commits from `7de01d6` through `a1bb552` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
+| Progress committed. | Git history | Progress commits from `7de01d6` through `6d8a07a` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
 
 ## Current Readiness Decision
 
 Latest readiness command:
 
 ```bash
-.venv/bin/python scripts/build_track_b_e2e_readiness_manifest.py --out /tmp/track_b_readiness_manifest_after_strict_commit.json
+.venv/bin/python scripts/build_track_b_e2e_readiness_manifest.py --out /tmp/track_b_readiness_manifest_after_prompt_gate.json
 ```
 
 Result: exit code `1`, `decision="round0_blocked"`, `round0_ready=false`.
