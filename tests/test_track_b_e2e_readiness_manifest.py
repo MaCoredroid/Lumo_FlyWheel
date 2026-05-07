@@ -266,6 +266,38 @@ def test_round0_summary_verification_rejects_existence_only_summary(tmp_path: Pa
     assert "diagnosis_distribution_missing" in result["reasons"]
 
 
+def test_round0_summary_verification_requires_explicit_zero_mismatch_counts(tmp_path: Path) -> None:
+    summary = tmp_path / "round_summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.e2e_round_summary.v1",
+                "round": 0,
+                "runtime_config_hash": "sha256:test",
+                "sample_hash": "sha256:sample",
+                "trusted_task_count": 12,
+                "trusted_unique_task_count": 12,
+                "duplicate_trusted_task_ids": [],
+                "unexpected_trusted_task_ids": [],
+                "tasks_completed": 12,
+                "tasks_correctness_passed": 12,
+                "median_wallclock_s": 187.4,
+                "aggregate_wallclock_s": 2618.1,
+                "diagnosis_distribution": {"memory-bw-headroom": 12},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = readiness._round0_summary_verification(summary)
+
+    assert result["ok"] is False
+    assert "sample_hash_mismatch" in result["reasons"]
+    assert "runtime_config_hash_mismatch" in result["reasons"]
+    assert "task_summary_schema_mismatch" in result["reasons"]
+    assert "task_summary_round_mismatch" in result["reasons"]
+
+
 def _ncu_csv_text() -> str:
     return "\n".join(f'"Metric Name","{metric}"' for metric in readiness.NCU_REQUIRED_METRICS) + "\n"
 
