@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -78,6 +79,22 @@ def test_round_driver_blocks_before_measurement_when_preflight_fails(monkeypatch
     assert rc == 1
     assert len(calls) == 1
     assert calls[0][1].endswith("preflight_track_b_e2e.py")
+
+
+def test_round_driver_passes_vllm_side_channel_to_preflight(tmp_path: Path) -> None:
+    side_channel = tmp_path / "vllm_request_metrics.jsonl"
+    command = round_driver._preflight_command(
+        argparse.Namespace(
+            python=sys.executable,
+            health_url="http://127.0.0.1:9950/health",
+            metrics_url="http://127.0.0.1:9950/metrics",
+            vllm_request_metrics_jsonl=str(side_channel),
+        ),
+        tmp_path / "preflight.json",
+    )
+
+    assert "--vllm-request-metrics-jsonl" in command
+    assert command[command.index("--vllm-request-metrics-jsonl") + 1] == str(side_channel)
 
 
 def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(

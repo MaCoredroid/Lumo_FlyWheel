@@ -469,7 +469,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     "spec_decode_num_accepted_tokens",
                 ),
                 "vllm_request_id_labels_exposed": checks.get("vllm_request_id_labels_exposed", {}).get("ok"),
-                "vllm_request_metrics_side_channel": checks.get("vllm_request_metrics_side_channel", {}).get("ok"),
+                "vllm_request_metrics_side_channel_ok": checks.get("vllm_request_metrics_side_channel", {}).get("ok"),
+                "vllm_request_metrics_side_channel": checks.get("vllm_request_metrics_side_channel", {}),
                 "vllm_request_metrics_join_available": checks.get("vllm_request_metrics_join_available", {}).get("ok"),
             },
             _contains("src/lumo_flywheel_serving/metrics.py", "def compute_vllm_per_request_metrics")

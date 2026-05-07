@@ -115,6 +115,8 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
             "reason": "not_configured",
             "path": "",
             "sample_count": 0,
+            "required_schema": REQUEST_JOIN_JSONL_SCHEMA,
+            "required_producer": REQUEST_JOIN_JSONL_PRODUCER,
             "required_field_coverage": {field: False for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS},
         }
     path = Path(path_text)
@@ -124,6 +126,8 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
             "reason": "not_found",
             "path": str(path),
             "sample_count": 0,
+            "required_schema": REQUEST_JOIN_JSONL_SCHEMA,
+            "required_producer": REQUEST_JOIN_JSONL_PRODUCER,
             "required_field_coverage": {field: False for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS},
         }
     rows = []

@@ -280,6 +280,15 @@ def test_request_metrics_side_channel_requires_complete_rows(tmp_path: Path) -> 
     assert coverage["invalid_request_metric_row_count"] == 2
 
 
+def test_request_metrics_side_channel_reports_required_producer_when_unconfigured() -> None:
+    coverage = preflight_track_b_e2e._request_metrics_jsonl_coverage("")
+
+    assert coverage["ok"] is False
+    assert coverage["reason"] == "not_configured"
+    assert coverage["required_schema"] == "lumo.track_b.vllm_request_metrics.v1"
+    assert coverage["required_producer"] == "track_b_vllm_request_metrics_patch"
+
+
 def test_request_metrics_side_channel_accepts_completion_tokens_alias(tmp_path: Path) -> None:
     metrics_jsonl = tmp_path / "vllm_request_metrics.jsonl"
     metrics_jsonl.write_text(

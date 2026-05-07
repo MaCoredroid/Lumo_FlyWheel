@@ -54,6 +54,8 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
     steps = {step["step"]: step for step in manifest["implementation_steps"]}
     assert steps["C"]["evidence"]["runner_script_exists"] is True
     assert steps["C"]["evidence"]["round_driver_script_exists"] is True
+    assert steps["D"]["evidence"]["vllm_request_metrics_side_channel_ok"] is False
+    assert steps["D"]["evidence"]["vllm_request_metrics_side_channel"] == {"ok": False}
     assert steps["F"]["evidence"]["required"]["uses_hard_gated_round_driver"] is True
     assert steps["F"]["evidence"]["required"]["checks_all_spec_decode_counters"] is True
     assert steps["F"]["evidence"]["forbidden"]["direct_repeat3_task_measurement"] is False
