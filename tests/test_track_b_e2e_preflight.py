@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from argparse import Namespace
 from pathlib import Path
@@ -66,10 +67,11 @@ def test_preflight_blocks_without_trace_out_request_labels_or_pynvml(monkeypatch
             metrics_url="http://127.0.0.1:9950/metrics",
             python=sys.executable,
             sampler_smoke_duration_s=0.05,
+            vllm_request_metrics_jsonl="",
             required_checks=[
                 "vllm_health",
                 "spec_decode_metrics_exposed",
-                "vllm_request_id_labels_exposed",
+                "vllm_request_metrics_join_available",
                 "codex_trace_out_supported",
                 "pynvml_available",
             ],
@@ -78,7 +80,7 @@ def test_preflight_blocks_without_trace_out_request_labels_or_pynvml(monkeypatch
 
     assert payload["round0_may_run"] is False
     assert payload["blocking_reasons"] == [
-        "vllm_request_id_labels_exposed",
+        "vllm_request_metrics_join_available",
         "codex_trace_out_supported",
         "pynvml_available",
     ]
@@ -138,10 +140,11 @@ def test_preflight_accepts_required_e2e_instrumentation(monkeypatch) -> None:
             metrics_url="http://127.0.0.1:9950/metrics",
             python=sys.executable,
             sampler_smoke_duration_s=0.05,
+            vllm_request_metrics_jsonl="",
             required_checks=[
                 "vllm_health",
                 "spec_decode_metrics_exposed",
-                "vllm_request_id_labels_exposed",
+                "vllm_request_metrics_join_available",
                 "codex_trace_out_supported",
                 "pynvml_available",
             ],
@@ -150,6 +153,98 @@ def test_preflight_accepts_required_e2e_instrumentation(monkeypatch) -> None:
 
     assert payload["round0_may_run"] is True
     assert payload["blocking_reasons"] == []
+
+
+def test_preflight_accepts_request_metrics_side_channel(tmp_path: Path, monkeypatch) -> None:
+    metrics_jsonl = tmp_path / "vllm_request_metrics.jsonl"
+    metrics_jsonl.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "request_id": "req-1",
+                        "prompt_tokens": 128,
+                        "generation_tokens": 32,
+                        "spec_decode_num_draft_tokens": 12,
+                        "spec_decode_num_accepted_tokens": 4,
+                    }
+                )
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_command(command: list[str], timeout_s: float = 10.0) -> dict[str, object]:
+        if command == ["codex", "--version"]:
+            return {"ok": True, "stdout": "codex-cli patched\n"}
+        if command == ["codex", "exec", "--help"]:
+            return {"ok": True, "stdout": "Usage: codex exec [OPTIONS]\n      --trace-out <PATH>\n"}
+        return {"ok": True, "stdout": ""}
+
+    def fake_get(url: str, timeout_s: float = 5.0) -> dict[str, object]:
+        if url.endswith("/health"):
+            return {"ok": True, "status_code": 200, "text": ""}
+        return {
+            "ok": True,
+            "status_code": 200,
+            "text": "\n".join(
+                [
+                    "vllm:prompt_tokens_total{engine=\"0\"} 128",
+                    "vllm:generation_tokens_total{engine=\"0\"} 32",
+                    "vllm:spec_decode_num_drafts_total{engine=\"0\"} 1",
+                    "vllm:spec_decode_num_draft_tokens_total{engine=\"0\"} 12",
+                    "vllm:spec_decode_num_accepted_tokens_total{engine=\"0\"} 4",
+                ]
+            ),
+        }
+
+    class FakeCompleted:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(preflight_track_b_e2e, "_command", fake_command)
+    monkeypatch.setattr(preflight_track_b_e2e, "_get", fake_get)
+    monkeypatch.setattr(
+        preflight_track_b_e2e,
+        "_sampler_smoke",
+        lambda python, duration_s: {
+            "ok": True,
+            "sample_count": 5,
+            "profile_fields_present": True,
+            "observed_numeric_profile_fields": list(preflight_track_b_e2e.DCGM_PROFILE_FIELDS),
+            "missing_profile_fields": [],
+            "telemetry_sources": ["dcgm"],
+            "stderr": "",
+        },
+    )
+    monkeypatch.setattr(preflight_track_b_e2e.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", lambda *args, **kwargs: FakeCompleted())
+
+    payload = preflight_track_b_e2e.audit(
+        Namespace(
+            health_url="http://127.0.0.1:9950/health",
+            metrics_url="http://127.0.0.1:9950/metrics",
+            python=sys.executable,
+            sampler_smoke_duration_s=0.05,
+            vllm_request_metrics_jsonl=str(metrics_jsonl),
+            required_checks=[
+                "vllm_health",
+                "spec_decode_metrics_exposed",
+                "vllm_request_metrics_join_available",
+                "codex_trace_out_supported",
+                "pynvml_available",
+                "dcgm_sampler_runs",
+                "dcgm_profile_fields_available",
+            ],
+        )
+    )
+
+    assert payload["round0_may_run"] is True
+    assert payload["checks"]["vllm_request_id_labels_exposed"]["ok"] is False
+    assert payload["checks"]["vllm_request_metrics_side_channel"]["ok"] is True
+    assert payload["checks"]["vllm_request_metrics_join_available"]["ok"] is True
 
 
 def test_request_id_gate_requires_labels_on_join_metrics() -> None:

@@ -56,6 +56,12 @@ REQUEST_JOIN_REQUIRED_METRICS = (
     "vllm:spec_decode_num_draft_tokens_total",
     "vllm:spec_decode_num_accepted_tokens_total",
 )
+REQUEST_JOIN_REQUIRED_JSONL_FIELDS = (
+    "prompt_tokens",
+    "generation_tokens",
+    "spec_decode_num_draft_tokens",
+    "spec_decode_num_accepted_tokens",
+)
 DCGM_PROFILE_FIELDS = (
     "dram_active_pct",
     "sm_active_pct",
@@ -90,6 +96,52 @@ def _request_labeled_metric_coverage(metrics_text: str) -> dict[str, bool]:
         if any(label in labels for label in REQUEST_ID_LABELS):
             coverage[metric_name] = True
     return coverage
+
+
+def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
+    if not path_text:
+        return {
+            "ok": False,
+            "reason": "not_configured",
+            "path": "",
+            "sample_count": 0,
+            "required_field_coverage": {field: False for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS},
+        }
+    path = Path(path_text)
+    if not path.is_file():
+        return {
+            "ok": False,
+            "reason": "not_found",
+            "path": str(path),
+            "sample_count": 0,
+            "required_field_coverage": {field: False for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS},
+        }
+    rows = []
+    field_coverage = {field: False for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS}
+    request_id_seen = False
+    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not raw_line.strip():
+            continue
+        try:
+            payload = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        rows.append(payload)
+        request_id_seen = request_id_seen or any(payload.get(key) for key in ("request_id", "vllm_request_id", "id"))
+        for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS:
+            if isinstance(payload.get(field), (int, float)):
+                field_coverage[field] = True
+    ok = bool(rows) and request_id_seen and all(field_coverage.values())
+    return {
+        "ok": ok,
+        "reason": "" if ok else "missing_required_request_metrics",
+        "path": str(path),
+        "sample_count": len(rows),
+        "request_id_seen": request_id_seen,
+        "required_field_coverage": field_coverage,
+    }
 
 
 def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any]:
@@ -157,6 +209,7 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
     metrics = _get(args.metrics_url)
     metrics_text = str(metrics.get("text") or "")
     request_label_coverage = _request_labeled_metric_coverage(metrics_text)
+    side_channel_coverage = _request_metrics_jsonl_coverage(getattr(args, "vllm_request_metrics_jsonl", ""))
     measurement_python = Path(args.python)
     sampler_smoke = _sampler_smoke(measurement_python, args.sampler_smoke_duration_s)
     pynvml_check = subprocess.run(
@@ -181,6 +234,12 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
             "ok": all(request_label_coverage.values()),
             "required_metric_coverage": request_label_coverage,
             "accepted_label_names": list(REQUEST_ID_LABELS),
+        },
+        "vllm_request_metrics_side_channel": side_channel_coverage,
+        "vllm_request_metrics_join_available": {
+            "ok": all(request_label_coverage.values()) or side_channel_coverage["ok"],
+            "prometheus_request_labels_ok": all(request_label_coverage.values()),
+            "jsonl_side_channel_ok": side_channel_coverage["ok"],
         },
         "codex_installed": {"ok": codex_version.get("ok"), "version": str(codex_version.get("stdout") or "").strip()},
         "codex_trace_out_supported": {"ok": "--trace-out" in str(codex_help.get("stdout") or "")},
@@ -224,6 +283,7 @@ def main() -> int:
     parser.add_argument("--sampler-smoke-duration-s", type=float, default=0.05)
     parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
     parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")
+    parser.add_argument("--vllm-request-metrics-jsonl", default="")
     parser.add_argument("--out", default="")
     parser.add_argument(
         "--required-checks",
@@ -231,7 +291,7 @@ def main() -> int:
         default=[
             "vllm_health",
             "spec_decode_metrics_exposed",
-            "vllm_request_id_labels_exposed",
+            "vllm_request_metrics_join_available",
             "codex_trace_out_supported",
             "nvidia_smi_available",
             "ncu_available",

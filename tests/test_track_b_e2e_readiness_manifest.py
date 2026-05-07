@@ -19,7 +19,7 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
             {
                 "round0_may_run": False,
                 "blocking_reasons": [
-                    "vllm_request_id_labels_exposed",
+                    "vllm_request_metrics_join_available",
                     "codex_trace_out_supported",
                     "dcgm_profile_fields_available",
                 ],
@@ -29,6 +29,8 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
                     "dcgm_profile_fields_available": {"ok": False},
                     "pynvml_available": {"ok": True},
                     "vllm_request_id_labels_exposed": {"ok": False},
+                    "vllm_request_metrics_side_channel": {"ok": False},
+                    "vllm_request_metrics_join_available": {"ok": False},
                 },
             }
         ),
@@ -63,6 +65,8 @@ def test_readiness_manifest_requires_round0_artifacts_even_if_preflight_passes(t
                     "dcgm_profile_fields_available": {"ok": True},
                     "pynvml_available": {"ok": True},
                     "vllm_request_id_labels_exposed": {"ok": True},
+                    "vllm_request_metrics_side_channel": {"ok": False},
+                    "vllm_request_metrics_join_available": {"ok": True},
                 },
             }
         ),

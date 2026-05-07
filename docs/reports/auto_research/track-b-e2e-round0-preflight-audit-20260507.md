@@ -13,7 +13,7 @@ Result: **Round 0 must not run yet.**
 
 Current `blocking_reasons` from the automated preflight:
 
-- `vllm_request_id_labels_exposed`
+- `vllm_request_metrics_join_available`
 - `codex_trace_out_supported`
 - `dcgm_profile_fields_available`
 

@@ -13,7 +13,7 @@ Result: **Round 0 is blocked.**
 
 ## Current Blockers
 
-- `vllm_request_id_labels_exposed`: current vLLM `/metrics` does not expose request-id labels, so per-turn vLLM joins are not trustworthy.
+- `vllm_request_metrics_join_available`: current vLLM `/metrics` does not expose request-id labels and no request-keyed JSONL side-channel is configured, so per-turn vLLM joins are not trustworthy.
 - `codex_trace_out_supported`: installed `codex-cli 0.128.0` does not expose `--trace-out`.
 - `dcgm_profile_fields_available`: the sampler runs, but required DRAM/SM profile fields are not numeric.
 
@@ -24,7 +24,7 @@ Result: **Round 0 is blocked.**
 | A. Codex `--trace-out` patch + correctness artifact | blocked | no trace patch, no validated `output/track_b_e2e/codex_trace_emitter_correctness.json`, installed Codex lacks `--trace-out` |
 | B. DCGM/NVML 100 Hz sampler | blocked | sampler script exists and runs; profile fields remain unavailable |
 | C. E2E task runner | complete | `scripts/run_track_b_e2e_task.py` |
-| D. Per-turn vLLM metrics keyed by request id | blocked | parser/join code exists; live metrics do not expose request-id labels |
+| D. Per-turn vLLM metrics keyed by request id | blocked | parser/join code exists; live metrics do not expose request-id labels and no side-channel is configured |
 | E. Summary join + diagnosis rule | complete | `scripts/build_track_b_e2e_summary.py` |
 | F. Round proposal prompt | complete | `prompts/track_b_e2e_round_proposal.md` |
 | G. Round 0 dry run | blocked | no validated `output/track_b_e2e/round_0/round_summary.json`; no five NCU archetype profiles |
