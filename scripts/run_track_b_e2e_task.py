@@ -63,6 +63,8 @@ def _write_vllm_per_turn(task_dir: Path, before_raw: str, after_raw: str) -> Non
         parse_prometheus_samples(after_raw),
         schema,
     )
+    if not per_request:
+        raise RuntimeError("Prometheus metrics did not produce any request-keyed vLLM rows")
     (task_dir / "vllm_per_turn.json").write_text(
         json.dumps({"requests": per_request}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

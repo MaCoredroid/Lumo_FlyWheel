@@ -15,6 +15,7 @@ if str(SCRIPTS) not in sys.path:
 from build_track_b_e2e_summary import (  # noqa: E402
     SAMPLE_HASH,
     TRACK_B_E2E_TASKS,
+    _load_vllm_request_metrics,
     _vllm_jsonl_by_request,
     build_round_summary,
     build_task_summary,
@@ -261,6 +262,15 @@ def test_task_summary_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Pa
 
     with pytest.raises(RuntimeError, match="missing numeric fields"):
         _vllm_jsonl_by_request(path)
+
+
+def test_task_summary_rejects_empty_vllm_per_turn_json(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    (task_dir / "vllm_per_turn.json").write_text('{"requests": {}}\n', encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="No request-keyed vLLM rows"):
+        _load_vllm_request_metrics(task_dir)
 
 
 def test_task_summary_rejects_missing_dcgm_profile_fields(tmp_path: Path) -> None:

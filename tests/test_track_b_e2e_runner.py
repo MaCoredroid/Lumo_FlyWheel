@@ -53,3 +53,24 @@ def test_runner_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Path) ->
 
     with pytest.raises(RuntimeError, match="missing numeric fields"):
         runner._write_vllm_per_turn_from_jsonl(task_dir, source)
+
+
+def test_runner_rejects_empty_prometheus_request_join(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    metric_names = [
+        "vllm:prompt_tokens_total",
+        "vllm:generation_tokens_total",
+        "vllm:request_prefill_kv_computed_tokens_sum",
+        "vllm:prefix_cache_queries_total",
+        "vllm:prefix_cache_hits_total",
+        "vllm:time_to_first_token_seconds_sum",
+        "vllm:request_prefill_time_seconds_sum",
+        "vllm:request_decode_time_seconds_sum",
+        "vllm:inter_token_latency_seconds_sum",
+    ]
+    metrics_before = "\n".join(f'{name}{{engine="0"}} 10' for name in metric_names)
+    metrics_after = "\n".join(f'{name}{{engine="0"}} 20' for name in metric_names)
+
+    with pytest.raises(RuntimeError, match="request-keyed vLLM rows"):
+        runner._write_vllm_per_turn(task_dir, metrics_before, metrics_after)

@@ -245,7 +245,10 @@ def _vllm_jsonl_by_request(path: Path) -> dict[str, dict[str, Any]]:
 def _load_vllm_request_metrics(task_dir: Path) -> dict[str, dict[str, Any]]:
     json_path = task_dir / "vllm_per_turn.json"
     if json_path.is_file():
-        return _vllm_by_request(json_path)
+        rows = _vllm_by_request(json_path)
+        if not rows:
+            raise RuntimeError(f"No request-keyed vLLM rows found in {json_path}")
+        return rows
     for name in ("vllm_per_turn.jsonl", "vllm_request_metrics.jsonl"):
         jsonl_path = task_dir / name
         if jsonl_path.is_file():
