@@ -504,6 +504,8 @@ Committed scaffold commits through this status checkpoint:
 - `440cdc7 Add Track B E2E readiness manifest`
 - `aaf2ecd Record Track B vLLM request metrics blocker`
 - `55a4e4e Tighten Track B vLLM request label gate`
+- `a4b1132 Record Track B E2E objective audit`
+- `2b098f8 Expose Track B DCGM profile field gaps`
 
 ## 12. Decision rules for ending the loop
 

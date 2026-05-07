@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-07
-Repo HEAD at audit: `55a4e4e`
+Repo HEAD at latest audit update: `2b098f8`
 
 ## Objective Restated
 
@@ -30,8 +30,8 @@ Concrete success criteria:
 | vLLM request-label parser implemented. | `src/lumo_flywheel_serving/metrics.py` | `parse_prometheus_samples()` preserves labels; `compute_vllm_per_request_metrics()` computes request-keyed deltas when labels exist. | Scaffold complete |
 | vLLM live request labels available on required join metrics. | `scripts/preflight_track_b_e2e.py --out output/track_b_e2e/preflight_20260507.json` | Live preflight reports request-label coverage false for `vllm:prompt_tokens_total`, `vllm:generation_tokens_total`, `vllm:spec_decode_num_draft_tokens_total`, and `vllm:spec_decode_num_accepted_tokens_total`. | Blocked |
 | vLLM request-metrics patch surface audited. | `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Audit records that request IDs exist in OpenAI serving but are dropped before Prometheus aggregation. | Complete blocker record |
-| DCGM/NVML 100 Hz sampler exists. | `scripts/sample_dcgm_during_task.py` | Sampler script exists and live preflight reports `dcgm_sampler_runs=true`. | Scaffold complete |
-| Required DCGM profiling fields numeric. | Preflight JSON | Live preflight reports `dcgm_profile_fields_available=false`; sampler emits rows but profile fields are not numeric in this environment. | Blocked |
+| DCGM/NVML 100 Hz sampler exists. | `scripts/sample_dcgm_during_task.py` | Sampler script exists and live preflight reports `dcgm_sampler_runs=true` with `telemetry_sources=["nvml"]`. | Scaffold complete |
+| Required DCGM profiling fields numeric. | Preflight JSON | Live preflight reports `dcgm_profile_fields_available=false`, no observed numeric profile fields, and missing `dram_active_pct`, `sm_active_pct`, `sm_occupancy_pct`, `pipe_tensor_active_pct`, and `pipe_fp16_active_pct`. | Blocked |
 | E2E task runner exists. | `scripts/run_track_b_e2e_task.py` | Readiness manifest reports Step C complete. | Scaffold complete |
 | Summary join and deterministic diagnosis exist. | `scripts/build_track_b_e2e_summary.py` | Readiness manifest reports Step E complete; focused tests cover synthetic summary behavior. | Scaffold complete |
 | Auto-research round proposal template exists. | `prompts/track_b_e2e_round_proposal.md` | Readiness manifest reports Step F complete. | Complete |
