@@ -1,0 +1,23 @@
+[router]
+default_skill = "general_helper"
+schema_version = 2
+ranking = "most_specific"
+fallback_when_no_eligible = true
+
+[[skills]]
+name = "general_helper"
+triggers = ["help"]
+negative_triggers = []
+required_inputs = []
+
+[[skills]]
+name = "release_handoff"
+triggers = ["release handoff", "handoff draft"]
+negative_triggers = []
+required_inputs = []
+
+[[skills]]
+name = "deploy_check"
+triggers = ["deploy", "rollout"]
+negative_triggers = ["policy", "doc"]
+required_inputs = ["env"]
