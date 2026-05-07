@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,6 +12,19 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import run_track_b_e2e_task as runner  # noqa: E402
+
+
+def test_runner_cli_accepts_documented_ncu_mode_flag() -> None:
+    script = SCRIPTS / "run_track_b_e2e_task.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+
+    assert "--ncu-mode" in result.stdout
 
 
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:

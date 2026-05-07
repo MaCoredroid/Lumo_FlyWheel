@@ -236,6 +236,7 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "elapsed_s": elapsed_s,
         "codex_command_template": args.codex_command_template,
         "vllm_request_metrics_jsonl": args.vllm_request_metrics_jsonl,
+        "ncu_mode": bool(args.ncu_mode),
         "codex_exit_code": result.returncode if result else None,
     }
     (task_dir / "runner_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -263,6 +264,11 @@ def main() -> int:
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--dcgm-interval-s", type=float, default=0.01)
     parser.add_argument("--no-dcgm", action="store_true")
+    parser.add_argument(
+        "--ncu-mode",
+        action="store_true",
+        help="Record that this run is an isolated NCU archetype profile run.",
+    )
     parser.add_argument(
         "--vllm-request-metrics-jsonl",
         default="",
