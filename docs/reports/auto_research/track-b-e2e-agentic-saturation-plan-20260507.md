@@ -620,6 +620,7 @@ Committed scaffold commits through this status checkpoint:
 - `b483068 Require explicit Track B mismatch zeros`
 - `6d286d5 Require Track B NCU profile metadata`
 - `1788a05 Verify Track B NCU task metadata`
+- `31458bc Verify Track B NCU metric metadata`
 
 ## 12. Decision rules for ending the loop
 
