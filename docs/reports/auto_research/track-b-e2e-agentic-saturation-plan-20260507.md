@@ -595,6 +595,8 @@ Committed scaffold commits through this status checkpoint:
 - `478f38c Reject stale Track B round summaries`
 - `2024c71 Update Track B stale summary ledger`
 - `dd11475 Reject stale Track B measurement outputs`
+- `0ee0dd9 Update Track B stale output ledger`
+- `d1b7a55 Accept Track B completion token side channel`
 
 ## 12. Decision rules for ending the loop
 
