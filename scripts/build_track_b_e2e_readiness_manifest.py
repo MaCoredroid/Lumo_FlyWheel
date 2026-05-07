@@ -20,6 +20,13 @@ TRACE_CORRECTNESS_REQUIRED_TASK_FIELDS = (
     "milestone_scores_identical",
 )
 ROUND0_MIN_TRUSTED_TASKS = 12
+NCU_ARCHETYPES = (
+    "long-text",
+    "tool-call-frame",
+    "pure-investigation",
+    "multimodal-prefill",
+    "subagent-orchestration",
+)
 
 
 def _now() -> str:
@@ -153,6 +160,35 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
     }
 
 
+def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
+    profiles: list[dict[str, Any]] = []
+    reasons: list[str] = []
+    for archetype in NCU_ARCHETYPES:
+        path = output_dir / f"ncu_{archetype}.csv"
+        exists = path.is_file()
+        size_bytes = path.stat().st_size if exists else 0
+        ok = exists and size_bytes > 0
+        if not ok:
+            reasons.append(f"{archetype}_missing_or_empty")
+        profiles.append(
+            {
+                "archetype": archetype,
+                "path": str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path),
+                "exists": exists,
+                "size_bytes": size_bytes,
+                "ok": ok,
+            }
+        )
+    return {
+        "ok": not reasons,
+        "expected_archetypes": list(NCU_ARCHETYPES),
+        "profile_count": sum(1 for profile in profiles if profile["ok"]),
+        "expected_profile_count": len(NCU_ARCHETYPES),
+        "reasons": reasons,
+        "profiles": profiles,
+    }
+
+
 def _status(ok: bool, *, blocked: bool = False) -> str:
     if ok:
         return "complete"
@@ -186,7 +222,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     trace_correctness = _trace_correctness_verification(trace_correctness_path)
     round0_summary_path = REPO_ROOT / "output" / "track_b_e2e" / "round_0" / "round_summary.json"
     round0_summary = _round0_summary_verification(round0_summary_path)
-    ncu_outputs = sorted((REPO_ROOT / "output" / "track_b_e2e").glob("ncu_*.csv"))
+    ncu_profiles = _ncu_profile_verification(REPO_ROOT / "output" / "track_b_e2e")
 
     steps = [
         _step(
@@ -282,10 +318,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "round0_summary_exists": round0_summary_path.is_file(),
                 "round0_summary_verified": round0_summary["ok"],
                 "round0_summary_verification": round0_summary,
-                "ncu_profile_count": len(ncu_outputs),
-                "expected_ncu_profile_count": 5,
+                "ncu_profile_count": ncu_profiles["profile_count"],
+                "expected_ncu_profile_count": ncu_profiles["expected_profile_count"],
+                "ncu_profiles_verified": ncu_profiles["ok"],
+                "ncu_profiles": ncu_profiles,
             },
-            round0_summary["ok"] and len(ncu_outputs) >= 5,
+            round0_summary["ok"] and ncu_profiles["ok"],
             blocked=bool(blockers),
         ),
     ]
@@ -293,6 +331,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     hard_gates = {
         "preflight_round0_may_run": preflight.get("round0_may_run") is True,
         "round0_summary_verified": round0_summary["ok"],
+        "ncu_profiles_verified": ncu_profiles["ok"],
         "trace_correctness_verified": trace_correctness["ok"],
         "all_implementation_steps_complete": all(step["status"] == "complete" for step in steps),
     }

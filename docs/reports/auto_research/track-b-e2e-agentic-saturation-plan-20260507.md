@@ -316,9 +316,11 @@ If any step fails, **Round 0 must not record measurements**. Fix the runtime, re
 
 1. For each of the 13 tasks, run `scripts/run_track_b_e2e_task.py <family> <variant>` three times. Median wallclock per task is reported.
 2. After all 13 × 3 = 39 task runs, collect per-task `summary.json` and produce `round_0/round_summary.json`.
-3. Run NCU archetype profiles once (5 runs).
+3. Run NCU archetype profiles once (5 runs) and write the expected non-empty files:
+   `ncu_long-text.csv`, `ncu_tool-call-frame.csv`, `ncu_pure-investigation.csv`,
+   `ncu_multimodal-prefill.csv`, and `ncu_subagent-orchestration.csv`.
 
-`round_0/round_summary.json` is not accepted by existence alone. The readiness manifest validates `schema="lumo.track_b.e2e_round_summary.v1"`, `round=0`, non-empty `runtime_config_hash`, `sample_hash`, numeric median/aggregate wallclock, non-empty `diagnosis_distribution`, and at least 12 trusted, completed, correctness-passed task summaries.
+`round_0/round_summary.json` is not accepted by existence alone. The readiness manifest validates `schema="lumo.track_b.e2e_round_summary.v1"`, `round=0`, non-empty `runtime_config_hash`, `sample_hash`, numeric median/aggregate wallclock, non-empty `diagnosis_distribution`, and at least 12 trusted, completed, correctness-passed task summaries. NCU validation likewise requires the five named archetype CSVs, not any five `ncu_*.csv` files.
 
 **Correctness caveats:** see §9.
 
