@@ -96,6 +96,10 @@ def _contains(rel: str, needle: str) -> bool:
     return needle in path.read_text(encoding="utf-8", errors="replace")
 
 
+def _runtime_config_hash_valid(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith("sha256:") and bool(value.removeprefix("sha256:"))
+
+
 def _round_proposal_prompt_verification() -> dict[str, Any]:
     path = REPO_ROOT / ROUND_PROPOSAL_PROMPT
     exists = path.is_file()
@@ -180,6 +184,8 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
         reasons.append("round_not_zero")
     if not isinstance(payload.get("runtime_config_hash"), str) or not payload.get("runtime_config_hash"):
         reasons.append("runtime_config_hash_missing")
+    elif not _runtime_config_hash_valid(payload.get("runtime_config_hash")):
+        reasons.append("runtime_config_hash_invalid")
     if payload.get("sample_hash") is None:
         reasons.append("sample_hash_missing")
 
@@ -257,6 +263,8 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
             metadata_reasons.append("round_missing")
         if not isinstance(metadata.get("runtime_config_hash"), str) or not metadata.get("runtime_config_hash"):
             metadata_reasons.append("runtime_config_hash_missing")
+        elif not _runtime_config_hash_valid(metadata.get("runtime_config_hash")):
+            metadata_reasons.append("runtime_config_hash_invalid")
         elif expected_runtime_config_hash and metadata.get("runtime_config_hash") != expected_runtime_config_hash:
             metadata_reasons.append("runtime_config_hash_mismatch")
         if metadata.get("profile_csv") != expected_profile_csv:

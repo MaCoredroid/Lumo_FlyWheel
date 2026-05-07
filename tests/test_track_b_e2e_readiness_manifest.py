@@ -309,6 +309,39 @@ def test_round0_summary_verification_rejects_existence_only_summary(tmp_path: Pa
     assert "diagnosis_distribution_missing" in result["reasons"]
 
 
+def test_round0_summary_verification_rejects_invalid_runtime_hash(tmp_path: Path) -> None:
+    summary = tmp_path / "round_summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.e2e_round_summary.v1",
+                "round": 0,
+                "runtime_config_hash": "not-a-runtime-hash",
+                "sample_hash": "sha256:sample",
+                "trusted_task_count": 12,
+                "trusted_unique_task_count": 12,
+                "duplicate_trusted_task_ids": [],
+                "unexpected_trusted_task_ids": [],
+                "sample_hash_mismatch_count": 0,
+                "runtime_config_hash_mismatch_count": 0,
+                "task_summary_schema_mismatch_count": 0,
+                "task_summary_round_mismatch_count": 0,
+                "tasks_completed": 12,
+                "tasks_correctness_passed": 12,
+                "median_wallclock_s": 187.4,
+                "aggregate_wallclock_s": 2618.1,
+                "diagnosis_distribution": {"memory-bw-headroom": 12},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = readiness._round0_summary_verification(summary)
+
+    assert result["ok"] is False
+    assert "runtime_config_hash_invalid" in result["reasons"]
+
+
 def test_round0_summary_verification_requires_explicit_zero_mismatch_counts(tmp_path: Path) -> None:
     summary = tmp_path / "round_summary.json"
     summary.write_text(
@@ -471,6 +504,22 @@ def test_ncu_profile_verification_rejects_missing_round_metadata(tmp_path: Path)
     assert result["ok"] is False
     profile = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
     assert "round_missing" in profile["metadata_reasons"]
+
+
+def test_ncu_profile_verification_rejects_invalid_runtime_hash_metadata(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        (tmp_path / f"ncu_{archetype}.csv").write_text(_ncu_csv_text(), encoding="utf-8")
+        _write_ncu_metadata(
+            tmp_path,
+            archetype,
+            runtime_config_hash="not-a-runtime-hash" if archetype == "long-text" else "sha256:test",
+        )
+
+    result = readiness._ncu_profile_verification(tmp_path)
+
+    assert result["ok"] is False
+    profile = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
+    assert "runtime_config_hash_invalid" in profile["metadata_reasons"]
 
 
 def test_ncu_profile_verification_rejects_runtime_hash_drift_when_expected(tmp_path: Path) -> None:

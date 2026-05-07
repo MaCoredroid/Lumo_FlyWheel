@@ -16,6 +16,7 @@ from build_track_b_e2e_summary import (  # noqa: E402
     SAMPLE_HASH,
     TRACK_B_E2E_TASKS,
     _load_vllm_request_metrics,
+    _validate_runtime_config_hash,
     _vllm_jsonl_by_request,
     build_round_summary,
     build_task_summary,
@@ -37,6 +38,14 @@ def _dcgm_sample(ts: str) -> dict[str, object]:
         "pipe_tensor_active_pct": 0.18,
         "pipe_fp16_active_pct": 0.04,
     }
+
+
+def test_summary_rejects_unstamped_runtime_hash() -> None:
+    _validate_runtime_config_hash("sha256:test")
+    with pytest.raises(ValueError, match="runtime-config-hash"):
+        _validate_runtime_config_hash("not-a-runtime-hash")
+    with pytest.raises(ValueError, match="runtime-config-hash"):
+        _validate_runtime_config_hash("sha256:")
 
 
 def test_task_summary_requires_and_records_truthful_attestation(tmp_path: Path) -> None:

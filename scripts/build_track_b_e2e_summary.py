@@ -39,6 +39,11 @@ DCGM_PROFILE_FIELDS = (
 )
 
 
+def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
+    if not runtime_config_hash.startswith("sha256:") or not runtime_config_hash.removeprefix("sha256:"):
+        raise ValueError("--runtime-config-hash must be a non-empty sha256:<digest> value")
+
+
 def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -347,6 +352,7 @@ def _verify_runtime_config_hash_artifacts(
 
 
 def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
+    _validate_runtime_config_hash(args.runtime_config_hash)
     task_dir = Path(args.task_dir)
     family = args.family
     variant = args.variant
@@ -517,6 +523,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
+    _validate_runtime_config_hash(args.runtime_config_hash)
     round_dir = Path(args.round_dir)
     summaries = [_load_json(path) for path in _round_summary_paths(round_dir)]
     trusted = [row for row in summaries if row.get("trusted_measurement")]
