@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-07
-Repo checkpoint: updated through the Track B sampler runtime-hash checkpoint in current git history.
+Repo checkpoint: updated through the Track B raw vLLM side-channel runtime-hash checkpoint in current git history.
 
 ## Objective Restated
 
@@ -27,7 +27,7 @@ Concrete success criteria:
 | Codex `--trace-out` implemented and verified. | Patched Codex CLI + correctness artifact | Live preflight reports `codex-cli 0.128.0`, `codex_trace_out_supported=false`; validated correctness artifact is absent. A verifier now exists at `scripts/verify_track_b_codex_trace_correctness.py` to build the artifact from real enabled/disabled evidence once patched Codex is available. | Blocked |
 | Codex patch surface audited. | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Audit records Rust patch surface, why wrapper-only logging is insufficient, and why installed `codex exec --json` cannot substitute for `--trace-out` because it lacks emitted turn ids, request/response ids, timestamps, and per-tool timing. | Complete blocker record |
 | vLLM per-request join requirement specified. | Plan §5.1 | Plan requires `vllm_per_turn.json` keyed by `vllm_request_id`. | Complete |
-| vLLM request-label / side-channel consumer implemented. | `src/lumo_flywheel_serving/metrics.py`, `scripts/run_track_b_e2e_task.py`, `scripts/build_track_b_e2e_summary.py` | `parse_prometheus_samples()` preserves labels; `compute_vllm_per_request_metrics()` computes request-keyed deltas when labels exist; summary and runner normalize request-keyed vLLM JSONL side-channel rows into the same per-turn schema and reject incomplete or empty request-keyed artifacts. | Scaffold complete |
+| vLLM request-label / side-channel consumer implemented. | `src/lumo_flywheel_serving/metrics.py`, `scripts/run_track_b_e2e_task.py`, `scripts/build_track_b_e2e_summary.py` | `parse_prometheus_samples()` preserves labels; `compute_vllm_per_request_metrics()` computes request-keyed deltas when labels exist; summary and runner normalize request-keyed vLLM JSONL side-channel rows into the same per-turn schema, stamp the captured raw JSONL copy with the round hash, and reject incomplete or empty request-keyed artifacts. | Scaffold complete |
 | vLLM request metrics join available. | `scripts/preflight_track_b_e2e.py --out output/track_b_e2e/preflight_20260507.json` | Preflight now accepts either request-labeled Prometheus metrics or row-complete request-keyed JSONL side-channel metrics; live environment has neither source available. | Blocked |
 | vLLM request-metrics patch surface audited. | `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Audit records that request IDs exist in OpenAI serving but are dropped before Prometheus aggregation. | Complete blocker record |
 | DCGM/NVML 100 Hz sampler exists. | `scripts/sample_dcgm_during_task.py` | Sampler script exists, requires `sha256:<digest>` runtime-hash stamps for measurement output, keeps an explicit `--allow-unstamped-smoke` path for preflight-only temporary rows, and live preflight reports `dcgm_sampler_runs=true` with `telemetry_sources=["nvml"]`. | Scaffold complete |
@@ -39,7 +39,7 @@ Concrete success criteria:
 | Round 0 dry run populated and validated. | `output/track_b_e2e/round_0/round_summary.json` and five named NCU profiles | Readiness manifest reports `round0_summary_verified=false`, `ncu_profiles_verified=false`, `ncu_profile_count=0`; direct task, sampler, round, NCU profile, summary, and readiness paths now require non-empty `sha256:<digest>` runtime hash stamps before writing or accepting trusted artifacts. | Blocked |
 | Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_codex_trace_correctness.py`, `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, `tests/test_track_b_e2e_runner.py`, `tests/test_metrics.py`, `tests/test_track_b_dcgm_sampler.py`, `tests/test_track_b_e2e_round_driver.py`, and `tests/test_track_b_e2e_ncu_profiles.py` passed in focused runs during this work; the latest focused Track B suite reported 78 passed. | Complete for scaffold risk |
 | Full repo test suite green. | Full pytest | Earlier `PYTHONPATH=. .venv/bin/pytest -q -x` failed an unrelated existing `tests/test_auto_research.py` expectation. | Not green; unrelated known failure |
-| Progress committed. | Git history | Progress commits from `7de01d6` through `bb54343` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
+| Progress committed. | Git history | Progress commits from `7de01d6` through `45e6e32` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
 
 ## Current Readiness Decision
 
