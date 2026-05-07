@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-07
-Repo checkpoint: updated through the Track B runtime-hash stamp checkpoint in current git history.
+Repo checkpoint: updated through the Track B direct task runtime-hash checkpoint in current git history.
 
 ## Objective Restated
 
@@ -32,14 +32,14 @@ Concrete success criteria:
 | vLLM request-metrics patch surface audited. | `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Audit records that request IDs exist in OpenAI serving but are dropped before Prometheus aggregation. | Complete blocker record |
 | DCGM/NVML 100 Hz sampler exists. | `scripts/sample_dcgm_during_task.py` | Sampler script exists and live preflight reports `dcgm_sampler_runs=true` with `telemetry_sources=["nvml"]`. | Scaffold complete |
 | Required DCGM profiling fields numeric. | Preflight JSON | Live preflight reports `dcgm_profile_fields_available=false`, no observed numeric profile fields, and missing `dram_active_pct`, `sm_active_pct`, `sm_occupancy_pct`, `pipe_tensor_active_pct`, and `pipe_fp16_active_pct`. | Blocked |
-| E2E task runner exists. | `scripts/run_track_b_e2e_task.py` | Readiness manifest reports Step C complete; runner accepts the documented `--ncu-mode` profiling flag and single `family/variant` task-id form, rejects Codex command templates that omit `{trace_out}`, and the round driver rejects unstamped runtime hashes before measurement. | Scaffold complete |
+| E2E task runner exists. | `scripts/run_track_b_e2e_task.py` | Readiness manifest reports Step C complete; runner accepts the documented `--ncu-mode` profiling flag and single `family/variant` task-id form, rejects Codex command templates that omit `{trace_out}`, and the direct task and round drivers reject unstamped runtime hashes before measurement. | Scaffold complete |
 | Summary join and deterministic diagnosis exists. | `scripts/build_track_b_e2e_summary.py` | Readiness manifest reports Step E complete; focused tests cover synthetic summary behavior, reject missing DCGM profile fields, reject duplicated/off-sample trusted round summaries, and reject incomplete trusted round summaries. | Scaffold complete |
 | Auto-research round proposal template exists and drives the hard-gated loop. | `prompts/track_b_e2e_round_proposal.md` | Readiness manifest reports Step F complete and now exposes `hard_gates.round_proposal_prompt_verified=true`; Step F validates the hard-gated round driver, runtime/protocol hash arguments, preflight script, exact three-counter spec-decode grep, and absence of the legacy direct repeat-3 task measurement command. | Complete |
 | Machine-readable readiness gate exists. | `scripts/build_track_b_e2e_readiness_manifest.py` | Command exits 1 with `round0_ready=false` and blocking reasons; trace correctness, proposal prompt content, Round 0 summary, sample-integrity, and NCU metric-coverage gates validate artifact content, not only file existence. | Complete |
-| Round 0 dry run populated and validated. | `output/track_b_e2e/round_0/round_summary.json` and five named NCU profiles | Readiness manifest reports `round0_summary_verified=false`, `ncu_profiles_verified=false`, `ncu_profile_count=0`; round and NCU profile drivers now require non-empty `sha256:<digest>` runtime hash stamps before writing trusted artifacts. | Blocked |
-| Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_codex_trace_correctness.py`, `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, `tests/test_track_b_e2e_runner.py`, `tests/test_metrics.py`, `tests/test_track_b_dcgm_sampler.py`, `tests/test_track_b_e2e_round_driver.py`, and `tests/test_track_b_e2e_ncu_profiles.py` passed in focused runs during this work; the latest focused Track B suite reported 71 passed. | Complete for scaffold risk |
+| Round 0 dry run populated and validated. | `output/track_b_e2e/round_0/round_summary.json` and five named NCU profiles | Readiness manifest reports `round0_summary_verified=false`, `ncu_profiles_verified=false`, `ncu_profile_count=0`; direct task, round, and NCU profile drivers now require non-empty `sha256:<digest>` runtime hash stamps before writing trusted artifacts. | Blocked |
+| Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_codex_trace_correctness.py`, `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, `tests/test_track_b_e2e_runner.py`, `tests/test_metrics.py`, `tests/test_track_b_dcgm_sampler.py`, `tests/test_track_b_e2e_round_driver.py`, and `tests/test_track_b_e2e_ncu_profiles.py` passed in focused runs during this work; the latest focused Track B suite reported 72 passed. | Complete for scaffold risk |
 | Full repo test suite green. | Full pytest | Earlier `PYTHONPATH=. .venv/bin/pytest -q -x` failed an unrelated existing `tests/test_auto_research.py` expectation. | Not green; unrelated known failure |
-| Progress committed. | Git history | Progress commits from `7de01d6` through `1fafa1c` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
+| Progress committed. | Git history | Progress commits from `7de01d6` through `6d0968a` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
 
 ## Current Readiness Decision
 
