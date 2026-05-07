@@ -15,6 +15,11 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
+    if not runtime_config_hash.startswith("sha256:") or not runtime_config_hash.removeprefix("sha256:"):
+        raise ValueError("--runtime-config-hash must be a non-empty sha256:<digest> value")
+
+
 class NvmlSampler:
     def __init__(self, gpu_index: int) -> None:
         try:
@@ -55,6 +60,11 @@ class NvmlSampler:
 
 
 def run(args: argparse.Namespace) -> int:
+    allow_unstamped_smoke = bool(getattr(args, "allow_unstamped_smoke", False))
+    if args.runtime_config_hash:
+        _validate_runtime_config_hash(args.runtime_config_hash)
+    elif not allow_unstamped_smoke:
+        raise ValueError("--runtime-config-hash is required unless --allow-unstamped-smoke is set")
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     stop = False
@@ -96,6 +106,11 @@ def main() -> int:
     parser.add_argument("--duration-s", type=float, default=None, help="Optional maximum duration.")
     parser.add_argument("--flush-every", type=int, default=100, help="Flush every N samples.")
     parser.add_argument("--runtime-config-hash", default="", help="Runtime config hash to stamp into every sample.")
+    parser.add_argument(
+        "--allow-unstamped-smoke",
+        action="store_true",
+        help="Allow unstamped temporary samples for preflight smoke checks only.",
+    )
     args = parser.parse_args()
     try:
         return run(args)

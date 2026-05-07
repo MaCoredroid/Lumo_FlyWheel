@@ -175,6 +175,7 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
                 str(duration_s),
                 "--interval-s",
                 "0.01",
+                "--allow-unstamped-smoke",
             ],
             text=True,
             stdout=subprocess.PIPE,
