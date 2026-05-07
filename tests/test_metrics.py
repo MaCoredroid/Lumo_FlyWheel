@@ -84,6 +84,21 @@ vllm:inter_token_latency_seconds_sum{model_name="qwen3.5-27b",engine="0"} 0.4
     }
 
 
+def test_prometheus_parsers_drop_nonfinite_samples() -> None:
+    raw = """
+vllm:prompt_tokens_total{request_id="req-1"} 10
+vllm:generation_tokens_total{request_id="req-1"} NaN
+vllm:request_decode_time_seconds_sum{request_id="req-1"} +Inf
+vllm:spec_decode_num_accepted_tokens_total{request_id="req-1"} -Inf
+"""
+
+    metrics = parse_prometheus_text(raw)
+    samples = parse_prometheus_samples(raw)
+
+    assert metrics == {"vllm:prompt_tokens_total": 10.0}
+    assert [(sample.name, sample.value) for sample in samples] == [("vllm:prompt_tokens_total", 10.0)]
+
+
 def test_per_request_prometheus_parser_preserves_request_labels() -> None:
     before_raw = """
 vllm:prompt_tokens_total{request_id="req-1"} 10

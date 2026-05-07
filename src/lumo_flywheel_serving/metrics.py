@@ -5,6 +5,7 @@ import fcntl
 import glob
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -81,6 +82,8 @@ def parse_prometheus_text(raw: str) -> dict[str, float]:
             value = float(match.group(2))
         except ValueError:
             continue
+        if not math.isfinite(value):
+            continue
 
         key = _normalize_metric_key(match.group(1))
         result[key] = result.get(key, 0.0) + value
@@ -133,6 +136,8 @@ def parse_prometheus_samples(raw: str) -> list[PrometheusSample]:
         try:
             value = float(match.group(3))
         except ValueError:
+            continue
+        if not math.isfinite(value):
             continue
         samples.append(PrometheusSample(match.group(1), _parse_labels(match.group(2)), value))
     return samples
