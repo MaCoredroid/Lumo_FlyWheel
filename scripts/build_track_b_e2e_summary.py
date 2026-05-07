@@ -277,6 +277,10 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
     task_end = next((event for event in reversed(trace) if event.get("event") == "task_end"), None)
     if not task_start or not task_end:
         raise RuntimeError("codex_trace.jsonl must contain task_start and task_end")
+    for event_name, event in (("task_start", task_start), ("task_end", task_end)):
+        trace_task_id = event.get("task_id")
+        if isinstance(trace_task_id, str) and trace_task_id and trace_task_id != task_id:
+            raise RuntimeError(f"codex_trace.jsonl {event_name}.task_id {trace_task_id} does not match {task_id}")
 
     turns: list[dict[str, Any]] = []
     regime_duration: dict[str, float] = defaultdict(float)

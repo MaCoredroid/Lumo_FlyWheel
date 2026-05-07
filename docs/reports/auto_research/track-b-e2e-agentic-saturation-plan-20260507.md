@@ -442,6 +442,8 @@ The full sweep is 13 × 3 = 39 task runs. At an estimated 10-90 minutes per task
 | 14 | Task transcript byte-equality with `--trace-out` disabled | Verified once at trace_emitter patch time, §4.3. Re-verified after every Codex CLI fork rebase. | Block all rounds until reverified. |
 | 15 | Auto research agent does not modify the sample | `tasks_in_round` array hash matches Round 0's. | Hard fail; the agent has no authority to change the sample mid-loop. |
 
+Task summaries also reject trace identity mismatches: if `task_start.task_id` or `task_end.task_id` is present in `codex_trace.jsonl`, it must equal the summary's `family/variant` task ID.
+
 ### 8.2 Why these rules specifically
 
 - **Rule 2** is the direct counter to the 051 c4 17.087 incident: a single cap-hit completion in a batched aggregate inflated decode_tps. Flag, don't auto-discard, because legitimately long tasks do hit the cap. Median-of-3 (rule 3) usually washes this out.
