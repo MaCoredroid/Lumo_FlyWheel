@@ -395,7 +395,7 @@ Preflight must be **fast (≤ 5 minutes total) and predictive (catches the bulk 
 | Gate | Command | Failure mode it catches |
 |---|---|---|
 | Server starts | `curl http://127.0.0.1:9950/health` | vLLM crashes on startup (bad serve_config.yaml) |
-| Spec_decode loads | `curl http://127.0.0.1:9950/metrics \| grep spec_decode_num_drafts_total` | spec_decode disabled by config error |
+| Spec_decode loads | `curl http://127.0.0.1:9950/metrics \| grep -E 'spec_decode_num_(drafts\|draft_tokens\|accepted_tokens)_total'` | spec_decode disabled by config error |
 | Smoke task completes | Run task #2 end-to-end | Codex hangs / errors / Codex-trace integrity broken |
 | Token correctness | Run a fixed deterministic short prompt; compare to golden | Token-level corruption (Issue #40875 recurrence) |
 | Smoke decode_tps not catastrophic | task #2 decode_tps ≥ 0.6 × Round 0 baseline | Config silently disabled spec decode |
@@ -439,7 +439,7 @@ The full sweep is 13 × 3 = 39 task runs. At an estimated 10-90 minutes per task
 | 10 | No comparison across different baseline protocols | All compared rounds must use the same `runtime_config_hash` for the **measurement protocol** parts (sample list, runner, grader). Only the **runtime config under test** changes. | Hard fail; abort comparison. |
 | 11 | Generation-token-volume guard | If any task's aggregate completion_tokens exceeds 1.5× the median across the 3 runs, that run is rerun. | Auto-rerun once; if persists, flag for review. |
 | 12 | Spec_decode metrics captured | `vllm:spec_decode_num_accepted_tokens` and `vllm:spec_decode_num_draft_tokens` present in `vllm_per_turn.json` for every spec_decode-eligible turn. | Hard fail; missing metric means measurement protocol broken. |
-| 13 | No silent fallback to vanilla decode | `spec_decode_num_drafts_total` increments on every plan/file-edit/tool-call turn (not on prefill). | Mark `silent_fallback_to_vanilla=true`; investigate config. |
+| 13 | No silent fallback to vanilla decode | `spec_decode_num_drafts_total`, `spec_decode_num_draft_tokens_total`, and `spec_decode_num_accepted_tokens_total` increment on every spec-decode-eligible plan/file-edit/tool-call turn (not on prefill). | Mark `silent_fallback_to_vanilla=true`; investigate config. |
 | 14 | Task transcript byte-equality with `--trace-out` disabled | Verified once at trace_emitter patch time, §4.3. Re-verified after every Codex CLI fork rebase. | Block all rounds until reverified. |
 | 15 | Auto research agent does not modify the sample | `tasks_in_round` array hash matches Round 0's. | Hard fail; the agent has no authority to change the sample mid-loop. |
 

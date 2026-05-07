@@ -65,6 +65,7 @@ def test_round_proposal_prompt_uses_hard_gated_round_driver() -> None:
     assert "scripts/run_track_b_e2e_round.py" in prompt
     assert "--runtime-config-hash {{runtime_config_hash}}" in prompt
     assert "--protocol-hash-match" in prompt
+    assert "spec_decode_num_(drafts|draft_tokens|accepted_tokens)_total" in prompt
     assert "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3" not in prompt
 
 

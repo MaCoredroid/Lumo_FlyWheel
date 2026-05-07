@@ -19,7 +19,7 @@
 
 ## Cheap preflight commands
 1. `curl -sSf http://127.0.0.1:9950/health`
-2. `curl -sSf http://127.0.0.1:9950/metrics | grep spec_decode_num_drafts_total`
+2. `curl -sSf http://127.0.0.1:9950/metrics | grep -E 'spec_decode_num_(drafts|draft_tokens|accepted_tokens)_total'`
 3. `.venv/bin/python scripts/preflight_track_b_e2e.py --out output/track_b_e2e/round_{{round}}/preflight_audit.json`
 4. `.venv/bin/python scripts/run_track_b_e2e_task.py transcript-merge-regression/v1-clean-baseline --round {{round}} --attempt 1 --runtime-config-hash {{runtime_config_hash}} --codex-command-template "{{codex_command_template}}"`
 5. `.venv/bin/python scripts/build_track_b_e2e_summary.py task --round {{round}} --task-dir output/track_b_e2e/round_{{round}}/transcript-merge-regression__v1-clean-baseline/run_01 --family transcript-merge-regression --variant v1-clean-baseline --runtime-config-hash {{runtime_config_hash}} --cold-completion-discarded --cache-reset-verified --protocol-hash-match --generation-volume-within-band --sample-hash-match --clock-skew-ms-p99 {{clock_skew_ms_p99}} --trace-emitter-correctness-verified-at {{trace_emitter_correctness_verified_at}} --write-untrusted-diagnostic`
