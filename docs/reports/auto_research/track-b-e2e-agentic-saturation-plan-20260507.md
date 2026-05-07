@@ -502,6 +502,8 @@ Committed scaffold commits through this status checkpoint:
 - `aa255b6 Tighten Track B E2E preflight gating`
 - `be03780 Record Codex trace patch surface audit`
 - `440cdc7 Add Track B E2E readiness manifest`
+- `aaf2ecd Record Track B vLLM request metrics blocker`
+- `55a4e4e Tighten Track B vLLM request label gate`
 
 ## 12. Decision rules for ending the loop
 
@@ -538,6 +540,7 @@ On termination, write `output/track_b_e2e/loop_closeout.md` summarizing the fina
 | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Current blocker record | Shows where Codex CLI must be patched for `--trace-out`. |
 | `track-b-e2e-readiness-manifest-20260507.md` | Current blocker record | Defines the machine-readable readiness manifest and `round0_ready=false` gate. |
 | `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Current blocker record | Shows vLLM request IDs exist in serving but not in Prometheus metric labels. |
+| `track-b-e2e-objective-completion-audit-20260507.md` | Current blocker record | Maps the user objective to concrete artifacts and records why the objective is not complete. |
 | `l0-warm-decode-quality-bounded-track-20260505.md` | Parent spec | Track B Round 1 framing; this plan is the e2e measurement instrument that should drive its next rounds. |
 | `benchmark_blueprints/tracks/README.md` | Bench source | The 11-track structure used for sample selection. |
 | Codex CLI (open source) | External | Patch surface for `--trace-out`; carry as fork until upstreamable. |
