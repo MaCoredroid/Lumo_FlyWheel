@@ -21,7 +21,7 @@ Result: **Round 0 is blocked.**
 
 | Step | Status | Evidence |
 |---|---|---|
-| A. Codex `--trace-out` patch + correctness artifact | blocked | no trace patch, no validated `output/track_b_e2e/codex_trace_emitter_correctness.json`, installed Codex lacks `--trace-out` |
+| A. Codex `--trace-out` patch + correctness artifact | blocked | no content-validated trace patch, no validated `output/track_b_e2e/codex_trace_emitter_correctness.json`, installed Codex lacks `--trace-out` |
 | B. DCGM/NVML 100 Hz sampler | blocked | sampler script exists and runs; profile fields remain unavailable |
 | C. E2E task runner | complete | `scripts/run_track_b_e2e_task.py` |
 | D. Per-turn vLLM metrics keyed by request id | blocked | parser/join code exists; live metrics do not expose request-id labels and no side-channel is configured |
@@ -31,4 +31,4 @@ Result: **Round 0 is blocked.**
 
 ## Decision
 
-The readiness manifest intentionally requires both setup gates and actual Round 0 artifacts. Passing preflight alone is not enough. A trace correctness artifact must satisfy the `lumo.track_b.codex_trace_correctness.v1` schema with three enabled/disabled byte-equality task checks, the Round 0 summary must satisfy the round-summary schema with at least 12 trusted, completed, correctness-passed tasks, and NCU must produce the five named archetype CSVs with all required §5.3 metric names. Current preflight does not pass. Do not promote or compare any Track B E2E round from this state.
+The readiness manifest intentionally requires both setup gates and actual Round 0 artifacts. Passing preflight alone is not enough. The Codex trace patch must be a non-placeholder unified diff that touches the `codex-rs/` surface and contains the required trace event/runtime-hash markers; a trace correctness artifact must satisfy the `lumo.track_b.codex_trace_correctness.v1` schema with three enabled/disabled byte-equality task checks; the Round 0 summary must satisfy the round-summary schema with at least 12 trusted, completed, correctness-passed tasks; and NCU must produce the five named archetype CSVs with all required §5.3 metric names. Current preflight does not pass. Do not promote or compare any Track B E2E round from this state.
