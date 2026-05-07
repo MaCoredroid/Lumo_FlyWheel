@@ -1,0 +1,10 @@
+request_shaping:
+  target_concurrency: 1
+spec_decode:
+  method: suffix
+  num_speculative_tokens: 12
+  suffix_decoding_max_tree_depth: 32
+  suffix_decoding_max_cached_requests: 1000
+  suffix_decoding_max_spec_factor: 2.0
+  suffix_decoding_min_token_prob: 0.05
+  rejection_sample_method: probabilistic

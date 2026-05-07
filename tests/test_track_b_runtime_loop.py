@@ -142,7 +142,35 @@ def test_spec_decode_candidate_rejects_unsupported_method() -> None:
     )
 
     assert parsed is None
-    assert error == "invalid_spec_decode_method:must_be_ngram"
+    assert error == "invalid_spec_decode_method:must_be_ngram_or_suffix"
+
+
+def test_spec_decode_candidate_parses_suffix_config() -> None:
+    loop = _load_loop_module()
+    parsed, error = loop._parse_spec_decode_config(
+        {
+            "spec_decode": {
+                "method": "suffix",
+                "num_speculative_tokens": 12,
+                "suffix_decoding_max_tree_depth": 32,
+                "suffix_decoding_max_cached_requests": 1000,
+                "suffix_decoding_max_spec_factor": 2.0,
+                "suffix_decoding_min_token_prob": 0.05,
+                "rejection_sample_method": "probabilistic",
+            }
+        }
+    )
+
+    assert error is None
+    assert parsed == {
+        "method": "suffix",
+        "num_speculative_tokens": 12,
+        "suffix_decoding_max_tree_depth": 32,
+        "suffix_decoding_max_cached_requests": 1000,
+        "suffix_decoding_max_spec_factor": 2.0,
+        "suffix_decoding_min_token_prob": 0.05,
+        "rejection_sample_method": "probabilistic",
+    }
 
 
 def test_kernel_selection_candidate_parses_supported_launch_surface() -> None:

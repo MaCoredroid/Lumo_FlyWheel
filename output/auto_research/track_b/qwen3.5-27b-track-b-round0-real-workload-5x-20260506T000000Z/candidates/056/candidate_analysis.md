@@ -1,0 +1,6 @@
+# Candidate 056
+
+- speed_thesis: Candidate 055 showed that suffix decoding accepts much more when the response is shaped as deterministic JSON, but those >30 tok/s runs were invalid because Qwen thinking output still consumed the response. This candidate keeps the candidate 055 suffix runtime and disables Qwen thinking at launch with `LUMO_DEFAULT_CHAT_TEMPLATE_KWARGS={"enable_thinking": false}` so JSON-shaped output can be tested without the reasoning artifact.
+- expected_affected_counter: `decode_tps`, `spec_decode_delta.accepted_per_draft_token`, and the retrieved warm response should show completed message output that parses as the release-plan JSON contract instead of a `reasoning` item.
+- quality_risk: Launch-level `enable_thinking=false` changes response formatting behavior. The candidate only counts if the retrieved warm response is a complete valid JSON message and the separate auto tool-call gate still exercises the Qwen3 XML parser path under the PR #39562 runtime.
+- why_not_prior_failure: Candidate 055's raw >30 tok/s JSON-mode measurements were rejected because full retrieval showed incomplete reasoning text, not a completed structured brief. This candidate tests the vLLM-supported chat-template setting that the Qwen3 reasoning parser checks directly.

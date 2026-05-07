@@ -728,6 +728,9 @@ class ModelServer:
             vllm_args.extend(self._format_lora_modules(config))
         if chat_template_path is not None:
             vllm_args.extend(["--chat-template", str(chat_template_path)])
+        default_chat_template_kwargs = os.environ.get("LUMO_DEFAULT_CHAT_TEMPLATE_KWARGS")
+        if default_chat_template_kwargs:
+            vllm_args.extend(["--default-chat-template-kwargs", default_chat_template_kwargs])
         if self._uses_qwen_openai_parsers(config):
             vllm_args.extend(
                 [

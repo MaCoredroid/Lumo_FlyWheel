@@ -47,12 +47,17 @@ _SUPPORTED_VLLM_CONFIG_FIELDS = {
     "max_model_len",
     "kv_cache_dtype",
 }
-_SUPPORTED_SPEC_DECODE_METHODS = {"ngram"}
+_SUPPORTED_SPEC_DECODE_METHODS = {"ngram", "suffix"}
 _SUPPORTED_SPEC_DECODE_FIELDS = {
     "method",
     "num_speculative_tokens",
     "prompt_lookup_min",
     "prompt_lookup_max",
+    "suffix_decoding_max_tree_depth",
+    "suffix_decoding_max_cached_requests",
+    "suffix_decoding_max_spec_factor",
+    "suffix_decoding_min_token_prob",
+    "rejection_sample_method",
 }
 _SUPPORTED_KERNEL_SELECTION_FIELDS = {
     "attention_backend",
@@ -175,7 +180,7 @@ def _render_agent_prompt(round_dir: Path, candidate_dir: Path, candidate_id: str
             "   - `request_shaping.target_concurrency: <1-8>` for batching/concurrency experiments",
             "   - `prefix_cache` settings for prefix-cache experiments",
             "   - `vllm_config` runtime overrides for max_num_seqs (1-64), max_num_batched_tokens (1-16384), enable_chunked_prefill (bool), enable_prefix_caching (bool), gpu_memory_utilization (0.0-0.95), max_model_len (1-131072), or kv_cache_dtype (`fp8_e5m2` or `auto` only)",
-            "   - `spec_decode` settings for vLLM ngram speculative decoding: method `ngram`, num_speculative_tokens 1-8, prompt_lookup_min 1-16, prompt_lookup_max 1-64",
+            "   - `spec_decode` settings for vLLM speculative decoding: method `ngram` with num_speculative_tokens 1-8, prompt_lookup_min 1-16, prompt_lookup_max 1-64; or method `suffix` with num_speculative_tokens 1-32, suffix_decoding_max_tree_depth 1-64, suffix_decoding_max_cached_requests 0-10000, suffix_decoding_max_spec_factor 0.0-4.0, suffix_decoding_min_token_prob 0.0-1.0, and optional rejection_sample_method `strict` or `probabilistic`",
             "   - `kernel_selection` settings for repo-owned vLLM launch choices: attention_backend (`flashinfer`, `triton`, `flash-attn-3`, `flash-attn-4`, or `vllm-default`), fp8_gemm_kernel (`cublas` or `cutlass`), torch_compile_mode (`default`, `reduce-overhead`, `max-autotune`, or `max-autotune-no-cudagraphs`), cuda_graph_capture (`on` or `off`), deltanet_kernel (`triton-chunked-delta-v2`)",
             "   - `structured_outputs` request settings for guided decoding experiments: backend (`xgrammar`, `outlines`, `guidance`, `lm-format-enforcer`, or `auto`) plus one of json, regex, choice, grammar, or json_object",
             "",
@@ -251,8 +256,9 @@ def _surface_payload(config: dict[str, Any]) -> dict[str, Any]:
             effective_spec_decode = dict(spec_decode)
             effective_spec_decode.setdefault("method", "ngram")
             effective_spec_decode.setdefault("num_speculative_tokens", 4)
-            effective_spec_decode.setdefault("prompt_lookup_min", 2)
-            effective_spec_decode.setdefault("prompt_lookup_max", 6)
+            if effective_spec_decode.get("method") == "ngram":
+                effective_spec_decode.setdefault("prompt_lookup_min", 2)
+                effective_spec_decode.setdefault("prompt_lookup_max", 6)
             surface["spec_decode"] = effective_spec_decode
         else:
             surface["spec_decode"] = spec_decode
@@ -831,8 +837,10 @@ def _parse_spec_decode_config(config: dict[str, Any]) -> tuple[dict[str, Any] | 
         return None, f"unsupported_spec_decode_fields:{','.join(unknown)}"
     method = raw.get("method", "ngram")
     if method not in _SUPPORTED_SPEC_DECODE_METHODS:
-        return None, "invalid_spec_decode_method:must_be_ngram"
+        return None, "invalid_spec_decode_method:must_be_ngram_or_suffix"
     parsed: dict[str, Any] = {"method": method}
+    if method == "suffix":
+        return _parse_suffix_spec_decode_config(raw, parsed)
     int_ranges = {
         "num_speculative_tokens": (1, 8),
         "prompt_lookup_min": (1, 16),
@@ -854,6 +862,48 @@ def _parse_spec_decode_config(config: dict[str, Any]) -> tuple[dict[str, Any] | 
         parsed[key] = value
     if parsed["prompt_lookup_min"] > parsed["prompt_lookup_max"]:
         return None, "invalid_spec_decode_prompt_lookup_range:min_gt_max"
+    return parsed, None
+
+
+def _parse_suffix_spec_decode_config(raw: dict[str, Any], parsed: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    int_ranges = {
+        "num_speculative_tokens": (1, 32),
+        "suffix_decoding_max_tree_depth": (1, 64),
+        "suffix_decoding_max_cached_requests": (0, 10000),
+    }
+    defaults = {
+        "num_speculative_tokens": 8,
+        "suffix_decoding_max_tree_depth": 24,
+        "suffix_decoding_max_cached_requests": 10000,
+    }
+    for key, (minimum, maximum) in int_ranges.items():
+        value = raw.get(key, defaults[key])
+        if not isinstance(value, int) or isinstance(value, bool):
+            return None, f"invalid_spec_decode_{key}:must_be_int"
+        if value < minimum or value > maximum:
+            return None, f"invalid_spec_decode_{key}:must_be_{minimum}_to_{maximum}"
+        parsed[key] = value
+    float_ranges = {
+        "suffix_decoding_max_spec_factor": (0.0, 4.0),
+        "suffix_decoding_min_token_prob": (0.0, 1.0),
+    }
+    float_defaults = {
+        "suffix_decoding_max_spec_factor": 1.0,
+        "suffix_decoding_min_token_prob": 0.1,
+    }
+    for key, (minimum, maximum) in float_ranges.items():
+        value = raw.get(key, float_defaults[key])
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return None, f"invalid_spec_decode_{key}:must_be_number"
+        parsed_value = float(value)
+        if parsed_value < minimum or parsed_value > maximum:
+            return None, f"invalid_spec_decode_{key}:must_be_{minimum}_to_{maximum}"
+        parsed[key] = parsed_value
+    rejection_sample_method = raw.get("rejection_sample_method")
+    if rejection_sample_method is not None:
+        if rejection_sample_method not in {"strict", "probabilistic"}:
+            return None, "invalid_spec_decode_rejection_sample_method:must_be_strict_or_probabilistic"
+        parsed["rejection_sample_method"] = rejection_sample_method
     return parsed, None
 
 
@@ -1019,7 +1069,47 @@ def _runtime_server(args: argparse.Namespace) -> ModelServer:
         state_root=args.state_root,
         proxy_port=args.runtime_proxy_port,
         ready_timeout_s=args.runtime_ready_timeout_s,
+        prelaunch_shell=_track_b_runtime_prelaunch_shell(),
     )
+
+
+def _track_b_runtime_prelaunch_shell() -> str:
+    return r"""python3 - <<'PY'
+from pathlib import Path
+
+path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/single_type_kv_cache_manager.py')
+if path.is_file():
+    text = path.read_text(encoding='utf-8')
+    old = 'num_required_blocks == len(req_blocks)'
+    new = 'num_required_blocks <= len(req_blocks)'
+    if old in text:
+        path.write_text(text.replace(old, new), encoding='utf-8')
+        print('[TRACK-B-PRELAUNCH] applied PR39562 KV allocator stop-gap')
+    elif new in text:
+        print('[TRACK-B-PRELAUNCH] PR39562 KV allocator stop-gap already present')
+    else:
+        raise RuntimeError('PR39562 patch target not found in single_type_kv_cache_manager.py')
+else:
+    raise RuntimeError(f'vLLM KV cache manager source missing: {path}')
+PY
+python3 - <<'PY'
+import importlib.util
+import subprocess
+import sys
+
+if importlib.util.find_spec('arctic_inference') is None:
+    print('[TRACK-B-PRELAUNCH] installing arctic-inference for suffix decoding')
+    subprocess.check_call([
+        sys.executable,
+        '-m',
+        'pip',
+        'install',
+        '--disable-pip-version-check',
+        'arctic-inference==0.1.2',
+    ])
+else:
+    print('[TRACK-B-PRELAUNCH] arctic-inference already available')
+PY"""
 
 
 def _active_tuned_config_bundle_safe(server: ModelServer, model: str) -> tuple[str | None, Any | None, str | None]:

@@ -1,0 +1,123 @@
+{
+  "agentic_task": "release-note-to-plan-translation",
+  "cold_discarded": {
+    "label": "cold_discard",
+    "response_id": "resp_b49bd6d47409fd6a",
+    "status": "incomplete",
+    "text_summary": {
+      "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Read `AGENTS.md`, follow instructions exactly, create `brief_input.json` at the workspace root, and run `./bin/cnb55-brief submit brief_input.json` to produce `brief/manager_brief.json`.\n    *   **Constraint: Do not modify any file outside `brief/` (except `brief_input.json` at root).\n    *   **Input Files:**\n        *   `AGENTS.md` (Instructions)\n        *   `release_notes/release_notes_2026_04.md` (Frozen release notes)\n        *   `repo_inventory/dependency_map.md` (Dependency map)\n        *   `repo_inventory/repo_state.md` (",
+      "most_common_8gram_count": 4,
+      "sha256": "433db0f1428ddefa4939058532a91dd9f027e0e6b372a2bdba3abf48624180db",
+      "tail_600": "sions\"\n    },\n    {\n      \"id\": \"RN-103\",\n      \"rank\": 3,\n      \"description\": \"Enable translated release-plan dashboard summary behind kill switch\"\n    },\n    {\n      \"id\": \"RN-104\",\n      \"rank\": 4,\n      \"description\": \"Update operator runbook and launch checklist\"\n    }\n  ],\n  \"dependency_notes\": [\n    \"RN-102 requires RN-101 completion to ensure fixtures reflect the correct schema.\",\n    \"RN-103 requires RN-101 and RN-102 completion; dashboard must not ship until fixtures reflect new schema.\",\n    \"RN-104 requires RN-103 completion; runbook stabilizes after rollout shape is known.\"\n  ],\n",
+      "text_chars": 7557,
+      "unique_word_count": 439,
+      "unique_word_ratio": 0.492152,
+      "word_count": 892
+    },
+    "usage": {
+      "input_tokens": 1068,
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "cached_tokens_per_turn": [],
+        "input_tokens_per_turn": []
+      },
+      "output_tokens": 2048,
+      "output_tokens_details": {
+        "output_tokens_per_turn": [],
+        "reasoning_tokens": 0,
+        "tool_output_tokens": 0,
+        "tool_output_tokens_per_turn": []
+      },
+      "total_tokens": 3116
+    },
+    "wall_s": 174.841839
+  },
+  "decode_tps": 15.148751,
+  "endpoint": "http://127.0.0.1:9950/v1",
+  "family": "release-note-to-plan-translation",
+  "included_files": [
+    "AGENTS.md",
+    ".scenario_variant",
+    "release_notes/release_notes_2026_04.md",
+    "repo_inventory/dependency_map.md",
+    "repo_inventory/repo_state.md",
+    "repo_inventory/test_inventory.md"
+  ],
+  "max_output_tokens": 2048,
+  "measured_at": "2026-05-07T08:30:11Z",
+  "measurement_policy": "one cold completion discarded; metrics sampled before and after warm window only",
+  "metrics_delta": {
+    "decode_sum_s": 135.19266179110855,
+    "decode_tokens_per_s": 15.148751,
+    "generation_tokens": 2048.0,
+    "generation_tokens_per_request": 2048.0,
+    "kv_computed_tokens": 220.0,
+    "prefill_sum_s": 0.1917983340099454,
+    "prompt_tokens": 1068.0,
+    "prompt_tokens_per_request": 1068.0,
+    "wall_output_tokens_per_s": 15.126022
+  },
+  "model": "qwen3.5-27b",
+  "pass_target_gate": false,
+  "prompt_chars": 4449,
+  "prompt_word_count": 619,
+  "request_overrides": {
+    "temperature": 0,
+    "text": {
+      "format": {
+        "type": "json_object"
+      }
+    }
+  },
+  "schema": "lumo.track_b.real_content_task_warmonly_probe.v2",
+  "source_prompt_metadata": "benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_01_live_probe/metadata.json",
+  "spec_decode_delta": {
+    "accepted_per_draft_token": 0.252084,
+    "accepted_tokens": 1028.0,
+    "draft_tokens": 4078.0,
+    "draft_tokens_per_draft": 4.681975,
+    "drafts": 871.0
+  },
+  "target_decode_tps": 30.0,
+  "task_id": "release-note-to-plan-translation/v1-clean-baseline",
+  "variant": "v1-clean-baseline",
+  "wall_output_tps": 15.126022,
+  "warm": [
+    {
+      "label": "warm_1",
+      "response_id": "resp_a3c1e4d41a4f7828",
+      "status": "incomplete",
+      "text_summary": {
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Read `AGENTS.md`, follow instructions exactly, create `brief_input.json` at workspace root, run `./bin/cnb55-brief submit brief_input.json` to produce `brief/manager_brief.json`.\n    *   **Constraint:** Do not modify any file outside `brief/` (except `brief_input.json` at root).\n    *   **Input Data files (`release_notes/`, `repo_inventory/`, etc.) must not be modified.\n    *   **Task:** Translate release notes + repo state into an ordered implementation plan.\n    *   **Output Format:** JSON brief via CLI `./bin/cnb55-brief`.\n  ",
+        "most_common_8gram_count": 2,
+        "sha256": "d2934efcbbd8a1545d4422b14d3eee44774843d298c5ce27300fbe8057953cc8",
+        "tail_600": "io_variant` (from `.scenario_variant`)\n\n*Let's draft the JSON.*\n\n*Scenario Variant:* `v1-clean-baseline`\n\n*First Milestone:* `RN-101` (Audit translator schema drift). Why? Because `repo_state.md` says legacy shim masks drift. `dependency_map.md` says dashboard consumes schema. Must audit before removing shim or enabling dashboard.)\n\n*Ordered Steps:*\n1. `RN-101`\n2. `RN-102`\n3. `RN-103`\n4. `RN-104`\n\n*Dependency Notes:*\n- RN-102 requires RN-101 (fixtures must reflect schema audit).\n- RN-103 requires RN-102 (dashboard needs fixtures) and RN-101 (schema stability).\n- RN-104 requires RN-103 (runbook",
+        "text_chars": 7581,
+        "unique_word_count": 481,
+        "unique_word_ratio": 0.487335,
+        "word_count": 987
+      },
+      "usage": {
+        "input_tokens": 1068,
+        "input_tokens_details": {
+          "cached_tokens": 848,
+          "cached_tokens_per_turn": [],
+          "input_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "output_tokens_per_turn": [],
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3116
+      },
+      "wall_s": 135.394883
+    }
+  ],
+  "warm_concurrency": 1,
+  "warm_elapsed_s": 135.395809,
+  "warm_usage_output_tokens_total": 2048.0,
+  "workspace_bundle": "benchmark_blueprints/families/release-note-to-plan-translation/workspace_bundle/v1-clean-baseline"
+}

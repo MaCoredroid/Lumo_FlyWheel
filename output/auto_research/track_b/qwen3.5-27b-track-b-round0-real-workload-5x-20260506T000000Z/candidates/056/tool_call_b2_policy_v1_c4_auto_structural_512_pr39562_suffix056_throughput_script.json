@@ -1,0 +1,408 @@
+{
+  "benchmark_family": "policy-aware-request-resolution",
+  "comparisons": [
+    {
+      "concurrent": {
+        "expected_arguments": {
+          "path": "AGENTS.md"
+        },
+        "expected_name": "read_file",
+        "function_call": {
+          "arguments": {
+            "path": "AGENTS.md"
+          },
+          "arguments_raw": "{\"path\": \"AGENTS.md\"}",
+          "call_id": "chatcmpl-tool-8c66ee45e2d4ba79",
+          "name": "read_file",
+          "status": "completed"
+        },
+        "label": "read_file_agents",
+        "response_status": "completed",
+        "usage": {
+          "input_tokens": 630,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cached_tokens_per_turn": [],
+            "input_tokens_per_turn": []
+          },
+          "output_tokens": 66,
+          "output_tokens_details": {
+            "output_tokens_per_turn": [],
+            "reasoning_tokens": 0,
+            "tool_output_tokens": 0,
+            "tool_output_tokens_per_turn": []
+          },
+          "total_tokens": 696
+        },
+        "valid": true,
+        "wall_s": 2.438542
+      },
+      "concurrent_valid": true,
+      "index": 0,
+      "label": "read_file_agents",
+      "match": true,
+      "normalized_concurrent": {
+        "arguments": {
+          "path": "AGENTS.md"
+        },
+        "name": "read_file",
+        "status": "completed"
+      },
+      "normalized_serial": {
+        "arguments": {
+          "path": "AGENTS.md"
+        },
+        "name": "read_file",
+        "status": "completed"
+      },
+      "serial": {
+        "expected_arguments": {
+          "path": "AGENTS.md"
+        },
+        "expected_name": "read_file",
+        "function_call": {
+          "arguments": {
+            "path": "AGENTS.md"
+          },
+          "arguments_raw": "{\"path\": \"AGENTS.md\"}",
+          "call_id": "chatcmpl-tool-9a58749b9bac3457",
+          "name": "read_file",
+          "status": "completed"
+        },
+        "label": "read_file_agents",
+        "response_status": "completed",
+        "usage": {
+          "input_tokens": 630,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cached_tokens_per_turn": [],
+            "input_tokens_per_turn": []
+          },
+          "output_tokens": 66,
+          "output_tokens_details": {
+            "output_tokens_per_turn": [],
+            "reasoning_tokens": 0,
+            "tool_output_tokens": 0,
+            "tool_output_tokens_per_turn": []
+          },
+          "total_tokens": 696
+        },
+        "valid": true,
+        "wall_s": 1.292568
+      },
+      "serial_valid": true
+    },
+    {
+      "concurrent": {
+        "expected_arguments": {
+          "cmd": "pytest -q",
+          "workdir": "."
+        },
+        "expected_name": "exec_command",
+        "function_call": {
+          "arguments": {
+            "cmd": "pytest -q",
+            "workdir": "."
+          },
+          "arguments_raw": "{\"cmd\": \"pytest -q\", \"workdir\": \".\"}",
+          "call_id": "chatcmpl-tool-9d7e9eeca90babab",
+          "name": "exec_command",
+          "status": "completed"
+        },
+        "label": "shell_visible_tests",
+        "response_status": "completed",
+        "usage": {
+          "input_tokens": 646,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cached_tokens_per_turn": [],
+            "input_tokens_per_turn": []
+          },
+          "output_tokens": 87,
+          "output_tokens_details": {
+            "output_tokens_per_turn": [],
+            "reasoning_tokens": 0,
+            "tool_output_tokens": 0,
+            "tool_output_tokens_per_turn": []
+          },
+          "total_tokens": 733
+        },
+        "valid": true,
+        "wall_s": 2.928221
+      },
+      "concurrent_valid": true,
+      "index": 1,
+      "label": "shell_visible_tests",
+      "match": true,
+      "normalized_concurrent": {
+        "arguments": {
+          "cmd": "pytest -q",
+          "workdir": "."
+        },
+        "name": "exec_command",
+        "status": "completed"
+      },
+      "normalized_serial": {
+        "arguments": {
+          "cmd": "pytest -q",
+          "workdir": "."
+        },
+        "name": "exec_command",
+        "status": "completed"
+      },
+      "serial": {
+        "expected_arguments": {
+          "cmd": "pytest -q",
+          "workdir": "."
+        },
+        "expected_name": "exec_command",
+        "function_call": {
+          "arguments": {
+            "cmd": "pytest -q",
+            "workdir": "."
+          },
+          "arguments_raw": "{\"cmd\": \"pytest -q\", \"workdir\": \".\"}",
+          "call_id": "chatcmpl-tool-8c5ac70f7de34ed0",
+          "name": "exec_command",
+          "status": "completed"
+        },
+        "label": "shell_visible_tests",
+        "response_status": "completed",
+        "usage": {
+          "input_tokens": 646,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cached_tokens_per_turn": [],
+            "input_tokens_per_turn": []
+          },
+          "output_tokens": 87,
+          "output_tokens_details": {
+            "output_tokens_per_turn": [],
+            "reasoning_tokens": 0,
+            "tool_output_tokens": 0,
+            "tool_output_tokens_per_turn": []
+          },
+          "total_tokens": 733
+        },
+        "valid": true,
+        "wall_s": 1.437575
+      },
+      "serial_valid": true
+    },
+    {
+      "concurrent": {
+        "expected_arguments": {
+          "patch": "*** Begin Patch\n*** Add File: artifacts/tool_gate_marker.txt\n+tool gate\n*** End Patch\n"
+        },
+        "expected_name": "apply_patch",
+        "function_call": {
+          "arguments": {
+            "patch": "diff --git a/artifact/tool_gate_marker.txt b/artifact/tool_gate_marker.txt\nnew file mode 100644\nindex 0000000..e69de29\n--- /dev/null\n+++ b/artifact/tool_gate_marker.txt\n@@ -0,0 +1 @@\n+tool gate"
+          },
+          "arguments_raw": "{\"patch\": \"diff --git a/artifact/tool_gate_marker.txt b/artifact/tool_gate_marker.txt\\nnew file mode 100644\\nindex 0000000..e69de29\\n--- /dev/null\\n+++ b/artifact/tool_gate_marker.txt\\n@@ -0,0 +1 @@\\n+tool gate\"}",
+          "call_id": "chatcmpl-tool-9f888aa5550816df",
+          "name": "apply_patch",
+          "status": "completed"
+        },
+        "label": "apply_patch_note",
+        "response_status": "completed",
+        "usage": {
+          "input_tokens": 637,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cached_tokens_per_turn": [],
+            "input_tokens_per_turn": []
+          },
+          "output_tokens": 139,
+          "output_tokens_details": {
+            "output_tokens_per_turn": [],
+            "reasoning_tokens": 0,
+            "tool_output_tokens": 0,
+            "tool_output_tokens_per_turn": []
+          },
+          "total_tokens": 776
+        },
+        "valid": true,
+        "wall_s": 3.378295
+      },
+      "concurrent_valid": true,
+      "index": 2,
+      "label": "apply_patch_note",
+      "match": true,
+      "normalized_concurrent": {
+        "arguments": {
+          "patch": "diff --git a/artifact/tool_gate_marker.txt b/artifact/tool_gate_marker.txt\nnew file mode 100644\nindex 0000000..e69de29\n--- /dev/null\n+++ b/artifact/tool_gate_marker.txt\n@@ -0,0 +1 @@\n+tool gate"
+        },
+        "name": "apply_patch",
+        "status": "completed"
+      },
+      "normalized_serial": {
+        "arguments": {
+          "patch": "diff --git a/artifact/tool_gate_marker.txt b/artifact/tool_gate_marker.txt\nnew file mode 100644\nindex 0000000..e69de29\n--- /dev/null\n+++ b/artifact/tool_gate_marker.txt\n@@ -0,0 +1 @@\n+tool gate"
+        },
+        "name": "apply_patch",
+        "status": "completed"
+      },
+      "serial": {
+        "expected_arguments": {
+          "patch": "*** Begin Patch\n*** Add File: artifacts/tool_gate_marker.txt\n+tool gate\n*** End Patch\n"
+        },
+        "expected_name": "apply_patch",
+        "function_call": {
+          "arguments": {
+            "patch": "diff --git a/artifact/tool_gate_marker.txt b/artifact/tool_gate_marker.txt\nnew file mode 100644\nindex 0000000..e69de29\n--- /dev/null\n+++ b/artifact/tool_gate_marker.txt\n@@ -0,0 +1 @@\n+tool gate"
+          },
+          "arguments_raw": "{\"patch\": \"diff --git a/artifact/tool_gate_marker.txt b/artifact/tool_gate_marker.txt\\nnew file mode 100644\\nindex 0000000..e69de29\\n--- /dev/null\\n+++ b/artifact/tool_gate_marker.txt\\n@@ -0,0 +1 @@\\n+tool gate\"}",
+          "call_id": "chatcmpl-tool-b6bf74e07792f4dc",
+          "name": "apply_patch",
+          "status": "completed"
+        },
+        "label": "apply_patch_note",
+        "response_status": "completed",
+        "usage": {
+          "input_tokens": 637,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cached_tokens_per_turn": [],
+            "input_tokens_per_turn": []
+          },
+          "output_tokens": 139,
+          "output_tokens_details": {
+            "output_tokens_per_turn": [],
+            "reasoning_tokens": 0,
+            "tool_output_tokens": 0,
+            "tool_output_tokens_per_turn": []
+          },
+          "total_tokens": 776
+        },
+        "valid": true,
+        "wall_s": 2.114145
+      },
+      "serial_valid": true
+    },
+    {
+      "concurrent": {
+        "expected_arguments": {
+          "content": "{\"family\": \"policy-aware-request-resolution\", \"status\": \"checked\", \"variant\": \"v1-clean-baseline\"}",
+          "path": "artifacts/tool_gate.json"
+        },
+        "expected_name": "write_file",
+        "function_call": {
+          "arguments": {
+            "content": "{\n  \"family\": \"policy-aware-request-resolution\",\n  \"variant\": \"v1-clean-baseline\",\n  \"checked\": true\n}",
+            "path": "artifacts/tool_gate.json"
+          },
+          "arguments_raw": "{\"path\": \"artifacts/tool_gate.json\", \"content\": \"{\\n  \\\"family\\\": \\\"policy-aware-request-resolution\\\",\\n  \\\"variant\\\": \\\"v1-clean-baseline\\\",\\n  \\\"checked\\\": true\\n}\"}",
+          "call_id": "chatcmpl-tool-a1dfcc0e953e8647",
+          "name": "write_file",
+          "status": "completed"
+        },
+        "label": "write_report_json",
+        "response_status": "completed",
+        "usage": {
+          "input_tokens": 656,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cached_tokens_per_turn": [],
+            "input_tokens_per_turn": []
+          },
+          "output_tokens": 166,
+          "output_tokens_details": {
+            "output_tokens_per_turn": [],
+            "reasoning_tokens": 0,
+            "tool_output_tokens": 0,
+            "tool_output_tokens_per_turn": []
+          },
+          "total_tokens": 822
+        },
+        "valid": true,
+        "wall_s": 3.787311
+      },
+      "concurrent_valid": true,
+      "index": 3,
+      "label": "write_report_json",
+      "match": true,
+      "normalized_concurrent": {
+        "arguments": {
+          "content": "{\n  \"family\": \"policy-aware-request-resolution\",\n  \"variant\": \"v1-clean-baseline\",\n  \"checked\": true\n}",
+          "path": "artifacts/tool_gate.json"
+        },
+        "name": "write_file",
+        "status": "completed"
+      },
+      "normalized_serial": {
+        "arguments": {
+          "content": "{\n  \"family\": \"policy-aware-request-resolution\",\n  \"variant\": \"v1-clean-baseline\",\n  \"checked\": true\n}",
+          "path": "artifacts/tool_gate.json"
+        },
+        "name": "write_file",
+        "status": "completed"
+      },
+      "serial": {
+        "expected_arguments": {
+          "content": "{\"family\": \"policy-aware-request-resolution\", \"status\": \"checked\", \"variant\": \"v1-clean-baseline\"}",
+          "path": "artifacts/tool_gate.json"
+        },
+        "expected_name": "write_file",
+        "function_call": {
+          "arguments": {
+            "content": "{\n  \"family\": \"policy-aware-request-resolution\",\n  \"variant\": \"v1-clean-baseline\",\n  \"checked\": true\n}",
+            "path": "artifacts/tool_gate.json"
+          },
+          "arguments_raw": "{\"path\": \"artifacts/tool_gate.json\", \"content\": \"{\\n  \\\"family\\\": \\\"policy-aware-request-resolution\\\",\\n  \\\"variant\\\": \\\"v1-clean-baseline\\\",\\n  \\\"checked\\\": true\\n}\"}",
+          "call_id": "chatcmpl-tool-81a999ebf47883ba",
+          "name": "write_file",
+          "status": "completed"
+        },
+        "label": "write_report_json",
+        "response_status": "completed",
+        "usage": {
+          "input_tokens": 656,
+          "input_tokens_details": {
+            "cached_tokens": 0,
+            "cached_tokens_per_turn": [],
+            "input_tokens_per_turn": []
+          },
+          "output_tokens": 166,
+          "output_tokens_details": {
+            "output_tokens_per_turn": [],
+            "reasoning_tokens": 0,
+            "tool_output_tokens": 0,
+            "tool_output_tokens_per_turn": []
+          },
+          "total_tokens": 822
+        },
+        "valid": true,
+        "wall_s": 2.39523
+      },
+      "serial_valid": true
+    }
+  ],
+  "concurrent_requests": 4,
+  "endpoint": "http://127.0.0.1:9950/v1",
+  "exact_arguments": false,
+  "measured_at": "2026-05-07T08:35:59Z",
+  "metrics_delta": {
+    "decode_sum_s": 13.816825034096837,
+    "decode_tokens_per_s": 66.295983,
+    "generation_tokens": 916.0,
+    "generation_tokens_per_request": 114.5,
+    "prefill_sum_s": 4.888850664719939,
+    "prompt_tokens": 5138.0,
+    "prompt_tokens_per_request": 642.25,
+    "request_count": 8,
+    "wall_output_tokens_per_s": 83.034414
+  },
+  "min_pass_rate": 1.0,
+  "model": "qwen3.5-27b",
+  "pass": true,
+  "pass_count": 4,
+  "pass_rate": 1.0,
+  "pass_target_gate": true,
+  "probe_count": 4,
+  "schema": "lumo.track_b.tool_call_correctness_gate.v1",
+  "suite": "b2",
+  "target_decode_tps": 30.0,
+  "tool_choice_mode": "auto",
+  "variant": "v1-clean-baseline"
+}
