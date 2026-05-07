@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-07
-Repo checkpoint: updated through the Track B raw vLLM side-channel runtime-hash checkpoint in current git history.
+Repo checkpoint: updated through the Track B runtime-hash hex-digest checkpoint in current git history.
 
 ## Objective Restated
 
@@ -39,7 +39,7 @@ Concrete success criteria:
 | Round 0 dry run populated and validated. | `output/track_b_e2e/round_0/round_summary.json` and five named NCU profiles | Readiness manifest reports `round0_summary_verified=false`, `ncu_profiles_verified=false`, `ncu_profile_count=0`; direct task, sampler, round, NCU profile, summary, and readiness paths now require `sha256:<64-hex-digest>` runtime hash stamps before writing or accepting trusted artifacts. | Blocked |
 | Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_codex_trace_correctness.py`, `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, `tests/test_track_b_e2e_runner.py`, `tests/test_metrics.py`, `tests/test_track_b_dcgm_sampler.py`, `tests/test_track_b_e2e_round_driver.py`, and `tests/test_track_b_e2e_ncu_profiles.py` passed in focused runs during this work; the latest focused Track B suite reported 78 passed. | Complete for scaffold risk |
 | Full repo test suite green. | Full pytest | Earlier `PYTHONPATH=. .venv/bin/pytest -q -x` failed an unrelated existing `tests/test_auto_research.py` expectation. | Not green; unrelated known failure |
-| Progress committed. | Git history | Progress commits from `7de01d6` through `45e6e32` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
+| Progress committed. | Git history | The runtime-hash implementation checkpoint (`10a5356`) and paired ledger checkpoint (`9991034`) are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
 
 ## Current Readiness Decision
 

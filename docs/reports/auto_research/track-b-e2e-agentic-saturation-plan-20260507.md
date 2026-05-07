@@ -636,6 +636,9 @@ Committed scaffold commits through this status checkpoint:
 - `547e53d Validate Track B run one hash`
 - `bb54343 Require Track B sampler runtime hash`
 - `45e6e32 Stamp Track B raw vLLM side channel`
+- `3428694 Update Track B raw vLLM ledger`
+- `10a5356 Require Track B runtime hash hex digests`
+- `9991034 Update Track B runtime digest ledger`
 
 ## 12. Decision rules for ending the loop
 
