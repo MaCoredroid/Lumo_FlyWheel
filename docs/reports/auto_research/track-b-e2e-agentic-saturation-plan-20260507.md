@@ -469,6 +469,7 @@ The agent emits this block in every `summary.json`:
 ```
 
 A round summary may not be promoted to round_summary.json unless **every rule's check passes** for ≥ 12 of 13 tasks.
+The promoted trusted set must also contain at least 12 unique task IDs from the fixed §3 sample, with no duplicate trusted task IDs, no unexpected task IDs, and no `sample_hash` mismatch.
 
 ## 9. Correctness caveats (gates that block round acceptance regardless of speed)
 

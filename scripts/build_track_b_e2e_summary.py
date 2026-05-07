@@ -29,6 +29,7 @@ TRACK_B_E2E_TASKS = [
     "fanout-fullstack-release-blocker/v1-clean-baseline",
 ]
 SAMPLE_HASH = hashlib.sha256("\n".join(TRACK_B_E2E_TASKS).encode("utf-8")).hexdigest()
+TRACK_B_E2E_TASK_SET = set(TRACK_B_E2E_TASKS)
 DCGM_PROFILE_FIELDS = (
     "dram_active_pct",
     "sm_active_pct",
@@ -409,8 +410,30 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
     round_dir = Path(args.round_dir)
     summaries = [_load_json(path) for path in sorted(round_dir.glob("*/summary.json"))]
     trusted = [row for row in summaries if row.get("trusted_measurement")]
-    if len(trusted) < 12 and not args.write_untrusted_diagnostic:
-        raise RuntimeError(f"Only {len(trusted)} trusted task summaries found; round_summary.json requires at least 12")
+    trusted_task_ids = [str(row.get("task_id")) for row in trusted]
+    trusted_unique_task_ids = sorted(set(trusted_task_ids))
+    duplicate_trusted_task_ids = sorted(
+        task_id for task_id, count in Counter(trusted_task_ids).items() if count > 1
+    )
+    unexpected_trusted_task_ids = sorted(
+        task_id for task_id in trusted_unique_task_ids if task_id not in TRACK_B_E2E_TASK_SET
+    )
+    sample_hash_mismatch_count = sum(1 for row in trusted if row.get("sample_hash") != SAMPLE_HASH)
+    blockers: list[str] = []
+    if len(trusted) < 12:
+        blockers.append(f"Only {len(trusted)} trusted task summaries found; round_summary.json requires at least 12")
+    if len(trusted_unique_task_ids) < 12:
+        blockers.append(
+            f"Only {len(trusted_unique_task_ids)} unique trusted sample tasks found; round_summary.json requires at least 12"
+        )
+    if duplicate_trusted_task_ids:
+        blockers.append(f"Duplicate trusted task summaries: {', '.join(duplicate_trusted_task_ids)}")
+    if unexpected_trusted_task_ids:
+        blockers.append(f"Unexpected trusted task summaries: {', '.join(unexpected_trusted_task_ids)}")
+    if sample_hash_mismatch_count:
+        blockers.append(f"{sample_hash_mismatch_count} trusted task summaries have a mismatched sample_hash")
+    if blockers and not args.write_untrusted_diagnostic:
+        raise RuntimeError("; ".join(blockers))
     wallclocks = [float(row["wallclock_s"]) for row in trusted]
     diagnosis_distribution = Counter(str(row.get("bottleneck_diagnosis")) for row in trusted)
     regime_totals: dict[str, float] = defaultdict(float)
@@ -433,11 +456,15 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         "diagnosis_distribution": dict(sorted(diagnosis_distribution.items())),
         "sample_hash": SAMPLE_HASH,
         "trusted_task_count": len(trusted),
+        "trusted_unique_task_count": len(trusted_unique_task_ids),
+        "duplicate_trusted_task_ids": duplicate_trusted_task_ids,
+        "unexpected_trusted_task_ids": unexpected_trusted_task_ids,
+        "sample_hash_mismatch_count": sample_hash_mismatch_count,
         "untrusted_task_count": len(summaries) - len(trusted),
         "auto_research_agent_recommendation": args.auto_research_agent_recommendation,
         "next_round_proposal": args.next_round_proposal,
     }
-    if len(trusted) >= 12 or args.write_untrusted_diagnostic:
+    if not blockers or args.write_untrusted_diagnostic:
         (round_dir / "round_summary.json").write_text(
             json.dumps(round_summary, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
