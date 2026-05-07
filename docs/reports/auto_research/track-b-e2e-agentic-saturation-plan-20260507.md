@@ -104,6 +104,29 @@ The trace_emitter must be **observation-only**. It must not change agent behavio
 - Assert task transcripts (model outputs, tool-call sequences, milestone scores) are byte-identical between the two.
 - Record this verification artifact at `output/track_b_e2e/codex_trace_emitter_correctness.json`.
 
+Minimum artifact schema:
+
+```json
+{
+  "schema": "lumo.track_b.codex_trace_correctness.v1",
+  "verified_at": "2026-05-07T20:00:00Z",
+  "codex_version": "<patched codex version>",
+  "trace_out_supported": true,
+  "tasks": [
+    {
+      "task_id": "transcript-merge-regression/v1-clean-baseline",
+      "trace_out_enabled_exit_code": 0,
+      "trace_out_disabled_exit_code": 0,
+      "model_outputs_byte_identical": true,
+      "tool_call_sequences_byte_identical": true,
+      "milestone_scores_identical": true
+    }
+  ]
+}
+```
+
+The readiness manifest requires at least three task entries and rejects an existence-only artifact.
+
 If transcripts diverge, the patch is wrong and **no rounds may run** until it is fixed.
 
 ## 5. Four data streams joined per task

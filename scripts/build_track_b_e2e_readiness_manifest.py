@@ -10,6 +10,15 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+TRACE_CORRECTNESS_MIN_TASKS = 3
+TRACE_CORRECTNESS_REQUIRED_TASK_FIELDS = (
+    "task_id",
+    "trace_out_enabled_exit_code",
+    "trace_out_disabled_exit_code",
+    "model_outputs_byte_identical",
+    "tool_call_sequences_byte_identical",
+    "milestone_scores_identical",
+)
 
 
 def _now() -> str:
@@ -19,7 +28,10 @@ def _now() -> str:
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
     return payload if isinstance(payload, dict) else {}
 
 
@@ -46,6 +58,55 @@ def _contains(rel: str, needle: str) -> bool:
     if not path.is_file():
         return False
     return needle in path.read_text(encoding="utf-8", errors="replace")
+
+
+def _trace_correctness_verification(path: Path) -> dict[str, Any]:
+    payload = _load_json(path)
+    tasks = payload.get("tasks") if isinstance(payload.get("tasks"), list) else []
+    reasons: list[str] = []
+    if not payload:
+        reasons.append("artifact_missing_or_invalid_json")
+    if payload.get("schema") != "lumo.track_b.codex_trace_correctness.v1":
+        reasons.append("schema_mismatch")
+    if not isinstance(payload.get("verified_at"), str) or not payload.get("verified_at"):
+        reasons.append("verified_at_missing")
+    if payload.get("trace_out_supported") is not True:
+        reasons.append("trace_out_supported_not_true")
+    if len(tasks) < TRACE_CORRECTNESS_MIN_TASKS:
+        reasons.append("too_few_tasks")
+
+    task_results: list[dict[str, Any]] = []
+    for index, raw_task in enumerate(tasks):
+        task = raw_task if isinstance(raw_task, dict) else {}
+        missing = [field for field in TRACE_CORRECTNESS_REQUIRED_TASK_FIELDS if field not in task]
+        task_ok = (
+            not missing
+            and task.get("trace_out_enabled_exit_code") == 0
+            and task.get("trace_out_disabled_exit_code") == 0
+            and task.get("model_outputs_byte_identical") is True
+            and task.get("tool_call_sequences_byte_identical") is True
+            and task.get("milestone_scores_identical") is True
+        )
+        if not task_ok:
+            reasons.append(f"task_{index}_failed")
+        task_results.append(
+            {
+                "task_id": task.get("task_id", f"task_{index}"),
+                "ok": task_ok,
+                "missing_fields": missing,
+            }
+        )
+
+    return {
+        "ok": not reasons,
+        "path": str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path),
+        "schema": payload.get("schema"),
+        "verified_at": payload.get("verified_at"),
+        "task_count": len(tasks),
+        "min_task_count": TRACE_CORRECTNESS_MIN_TASKS,
+        "reasons": reasons,
+        "tasks": task_results,
+    }
 
 
 def _status(ok: bool, *, blocked: bool = False) -> str:
@@ -78,6 +139,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         ]
     )
     trace_correctness_path = REPO_ROOT / "output" / "track_b_e2e" / "codex_trace_emitter_correctness.json"
+    trace_correctness = _trace_correctness_verification(trace_correctness_path)
     round0_summary_path = REPO_ROOT / "output" / "track_b_e2e" / "round_0" / "round_summary.json"
     ncu_outputs = sorted((REPO_ROOT / "output" / "track_b_e2e").glob("ncu_*.csv"))
 
@@ -89,9 +151,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "trace_patch_exists": trace_patch_exists,
                 "trace_correctness_artifact": str(trace_correctness_path.relative_to(REPO_ROOT)),
                 "trace_correctness_exists": trace_correctness_path.is_file(),
+                "trace_correctness_verified": trace_correctness["ok"],
+                "trace_correctness": trace_correctness,
                 "codex_trace_out_supported": checks.get("codex_trace_out_supported", {}).get("ok"),
             },
-            trace_patch_exists and trace_correctness_path.is_file() and checks.get("codex_trace_out_supported", {}).get("ok") is True,
+            trace_patch_exists
+            and trace_correctness["ok"]
+            and checks.get("codex_trace_out_supported", {}).get("ok") is True,
             blocked="codex_trace_out_supported" in blockers,
         ),
         _step(
@@ -175,7 +241,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     hard_gates = {
         "preflight_round0_may_run": preflight.get("round0_may_run") is True,
         "round0_summary_exists": round0_summary_path.is_file(),
-        "trace_correctness_exists": trace_correctness_path.is_file(),
+        "trace_correctness_verified": trace_correctness["ok"],
         "all_implementation_steps_complete": all(step["status"] == "complete" for step in steps),
     }
     ready = all(hard_gates.values())
