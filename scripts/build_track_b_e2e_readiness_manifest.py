@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -117,6 +118,10 @@ def _runtime_config_hash_valid(value: Any) -> bool:
         return False
     digest = value.removeprefix("sha256:")
     return len(digest) == 64 and all(char in "0123456789abcdefABCDEF" for char in digest)
+
+
+def _finite_positive_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) > 0
 
 
 def _round_proposal_prompt_verification() -> dict[str, Any]:
@@ -265,9 +270,9 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
         reasons.append("task_summary_schema_mismatch")
     if payload.get("task_summary_round_mismatch_count") != 0:
         reasons.append("task_summary_round_mismatch")
-    if not isinstance(payload.get("median_wallclock_s"), (int, float)):
+    if not _finite_positive_number(payload.get("median_wallclock_s")):
         reasons.append("median_wallclock_missing")
-    if not isinstance(payload.get("aggregate_wallclock_s"), (int, float)):
+    if not _finite_positive_number(payload.get("aggregate_wallclock_s")):
         reasons.append("aggregate_wallclock_missing")
     if not isinstance(payload.get("diagnosis_distribution"), dict) or not payload.get("diagnosis_distribution"):
         reasons.append("diagnosis_distribution_missing")
