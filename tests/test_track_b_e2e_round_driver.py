@@ -43,7 +43,6 @@ def test_round_driver_blocks_before_measurement_when_preflight_fails(monkeypatch
             "--trace-emitter-correctness-verified-at",
             "2026-05-07T00:00:00Z",
             "--protocol-hash-match",
-            "--generation-volume-within-band",
             "--out-root",
             str(tmp_path),
         ]
@@ -80,6 +79,10 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
                         json.dumps({"elapsed_s": 100.0 + attempt}) + "\n",
                         encoding="utf-8",
                     )
+                    (task_dir / "codex_trace.jsonl").write_text(
+                        json.dumps({"event": "turn_end", "completion_tokens": 100 + attempt}) + "\n",
+                        encoding="utf-8",
+                    )
         return _completed(command)
 
     monkeypatch.setattr(round_driver, "_run", fake_run)
@@ -97,7 +100,6 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
             "--trace-emitter-correctness-verified-at",
             "2026-05-07T00:00:00Z",
             "--protocol-hash-match",
-            "--generation-volume-within-band",
             "--out-root",
             str(tmp_path),
         ]
@@ -119,3 +121,51 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
         command for command in commands if Path(command[1]).name == "build_track_b_e2e_summary.py" and "round" in command
     ]
     assert len(round_summary_commands) == 1
+
+
+def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: Path) -> None:
+    tasks = ["transcript-merge-regression/v1-clean-baseline"]
+    monkeypatch.setattr(round_driver, "_tasks", lambda: tasks)
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        script = Path(command[1]).name
+        if script == "preflight_track_b_e2e.py":
+            preflight_out = Path(command[command.index("--out") + 1])
+            preflight_out.write_text(json.dumps({"blocking_reasons": []}) + "\n", encoding="utf-8")
+        if script == "run_track_b_e2e_task.py":
+            out_root = Path(command[command.index("--out-root") + 1])
+            family, variant = tasks[0].split("/", 1)
+            for attempt, tokens in [(1, 100), (2, 100), (3, 100), (4, 1000)]:
+                task_dir = out_root / "round_0" / f"{family}__{variant}" / f"run_{attempt:02d}"
+                task_dir.mkdir(parents=True)
+                (task_dir / "runner_metadata.json").write_text(
+                    json.dumps({"elapsed_s": 100.0 + attempt}) + "\n",
+                    encoding="utf-8",
+                )
+                (task_dir / "codex_trace.jsonl").write_text(
+                    json.dumps({"event": "turn_end", "completion_tokens": tokens}) + "\n",
+                    encoding="utf-8",
+                )
+        return _completed(command)
+
+    monkeypatch.setattr(round_driver, "_run", fake_run)
+
+    rc = round_driver.main(
+        [
+            "--round",
+            "0",
+            "--runtime-config-hash",
+            "sha256:test",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--clock-skew-ms-p99",
+            "10",
+            "--trace-emitter-correctness-verified-at",
+            "2026-05-07T00:00:00Z",
+            "--protocol-hash-match",
+            "--out-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert rc == 2

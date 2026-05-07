@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import statistics
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +44,22 @@ def _read_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _read_jsonl(path: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                payload = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"malformed JSONL at {path}:{line_number}: {exc.msg}") from exc
+            if isinstance(payload, dict):
+                rows.append(payload)
+    return rows
+
+
 def _attempt_dir(out_root: Path, round_index: int, task_id: str, attempt: int) -> Path:
     family, variant = task_id.split("/", 1)
     return out_root / f"round_{round_index}" / f"{family}__{variant}" / f"run_{attempt:02d}"
@@ -63,6 +80,39 @@ def _attempt_wallclocks(
             raise RuntimeError(f"missing numeric elapsed_s in {metadata_path}")
         wallclocks.append(float(elapsed_s))
     return wallclocks
+
+
+def _completion_tokens_for_attempt(out_root: Path, round_index: int, task_id: str, attempt: int) -> int:
+    trace_path = _attempt_dir(out_root, round_index, task_id, attempt) / "codex_trace.jsonl"
+    total = 0
+    for event in _read_jsonl(trace_path):
+        if event.get("event") != "turn_end":
+            continue
+        completion_tokens = event.get("completion_tokens")
+        if isinstance(completion_tokens, (int, float)):
+            total += int(completion_tokens)
+    return total
+
+
+def _verify_generation_volume_within_band(
+    out_root: Path,
+    round_index: int,
+    task_id: str,
+    attempts: range,
+) -> None:
+    totals = [_completion_tokens_for_attempt(out_root, round_index, task_id, attempt) for attempt in attempts]
+    median = statistics.median(totals)
+    if median <= 0:
+        raise RuntimeError(f"{task_id} has no measured completion tokens across attempts {attempts.start}..{attempts.stop - 1}")
+    oversized = [
+        f"run_{attempt:02d}={total}"
+        for attempt, total in zip(attempts, totals, strict=True)
+        if total > 1.5 * median
+    ]
+    if oversized:
+        raise RuntimeError(
+            f"{task_id} failed generation-token-volume guard; median={median}, oversized={', '.join(oversized)}"
+        )
 
 
 def _preflight_command(args: argparse.Namespace, preflight_out: Path) -> list[str]:
@@ -146,8 +196,7 @@ def _task_summary_command(
     ]
     if args.protocol_hash_match:
         command.append("--protocol-hash-match")
-    if args.generation_volume_within_band:
-        command.append("--generation-volume-within-band")
+    command.append("--generation-volume-within-band")
     if args.write_untrusted_diagnostic:
         command.append("--write-untrusted-diagnostic")
     return command
@@ -194,8 +243,6 @@ def run_round(args: argparse.Namespace) -> int:
         raise ValueError("--repeat must be >= 4 so run_01 can be discarded as cold and 3 measured runs remain")
     if not args.protocol_hash_match:
         raise ValueError("--protocol-hash-match is required for trusted round summaries")
-    if not args.generation_volume_within_band:
-        raise ValueError("--generation-volume-within-band is required for trusted round summaries")
 
     out_root = Path(args.out_root)
     round_dir = out_root / f"round_{args.round}"
@@ -214,6 +261,7 @@ def run_round(args: argparse.Namespace) -> int:
 
     for task_id in _tasks():
         measured_attempts = range(2, args.repeat + 1)
+        _verify_generation_volume_within_band(out_root, args.round, task_id, measured_attempts)
         task_dir = _attempt_dir(out_root, args.round, task_id, measured_attempts.start)
         wallclocks = _attempt_wallclocks(out_root, args.round, task_id, measured_attempts)
         summary = _run(_task_summary_command(args, task_id, task_dir, wallclocks))
@@ -245,7 +293,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--clock-skew-ms-p99", type=float, required=True)
     parser.add_argument("--trace-emitter-correctness-verified-at", required=True)
     parser.add_argument("--protocol-hash-match", action="store_true")
-    parser.add_argument("--generation-volume-within-band", action="store_true")
     parser.add_argument("--hypothesis", default="")
     parser.add_argument("--config-delta-vs-prior-round", default="")
     parser.add_argument("--auto-research-agent-recommendation", default="")
