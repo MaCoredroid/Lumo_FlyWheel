@@ -195,23 +195,40 @@ def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
     reasons: list[str] = []
     for archetype in NCU_ARCHETYPES:
         path = output_dir / f"ncu_{archetype}.csv"
+        metadata_path = output_dir / f"ncu_{archetype}.json"
         exists = path.is_file()
+        metadata = _load_json(metadata_path)
         size_bytes = path.stat().st_size if exists else 0
         text = path.read_text(encoding="utf-8", errors="replace") if exists else ""
         metric_coverage = {metric: metric in text for metric in NCU_REQUIRED_METRICS}
         missing_metrics = [metric for metric, present in metric_coverage.items() if not present]
-        ok = exists and size_bytes > 0 and not missing_metrics
+        metadata_reasons: list[str] = []
+        expected_profile_csv = str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path)
+        if metadata.get("schema") != "lumo.track_b.ncu_archetype_profile.v1":
+            metadata_reasons.append("schema_mismatch")
+        if metadata.get("archetype") != archetype:
+            metadata_reasons.append("archetype_mismatch")
+        if not isinstance(metadata.get("runtime_config_hash"), str) or not metadata.get("runtime_config_hash"):
+            metadata_reasons.append("runtime_config_hash_missing")
+        if metadata.get("profile_csv") != expected_profile_csv:
+            metadata_reasons.append("profile_csv_mismatch")
+        ok = exists and size_bytes > 0 and not missing_metrics and not metadata_reasons
         if not ok:
-            reasons.append(
-                f"{archetype}_missing_or_empty"
-                if not exists or size_bytes <= 0
-                else f"{archetype}_missing_required_metrics"
-            )
+            if not exists or size_bytes <= 0:
+                reasons.append(f"{archetype}_missing_or_empty")
+            elif missing_metrics:
+                reasons.append(f"{archetype}_missing_required_metrics")
+            else:
+                reasons.append(f"{archetype}_metadata_invalid")
         profiles.append(
             {
                 "archetype": archetype,
                 "path": str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path),
                 "exists": exists,
+                "metadata_path": str(metadata_path.relative_to(REPO_ROOT)) if metadata_path.is_relative_to(REPO_ROOT) else str(metadata_path),
+                "metadata_exists": metadata_path.is_file(),
+                "metadata_reasons": metadata_reasons,
+                "runtime_config_hash": metadata.get("runtime_config_hash"),
                 "size_bytes": size_bytes,
                 "required_metric_coverage": metric_coverage,
                 "missing_metrics": missing_metrics,

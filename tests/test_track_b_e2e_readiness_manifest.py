@@ -302,9 +302,25 @@ def _ncu_csv_text() -> str:
     return "\n".join(f'"Metric Name","{metric}"' for metric in readiness.NCU_REQUIRED_METRICS) + "\n"
 
 
+def _write_ncu_metadata(root: Path, archetype: str, *, runtime_config_hash: str = "sha256:test") -> None:
+    (root / f"ncu_{archetype}.json").write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.ncu_archetype_profile.v1",
+                "archetype": archetype,
+                "runtime_config_hash": runtime_config_hash,
+                "profile_csv": str(root / f"ncu_{archetype}.csv"),
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_ncu_profile_verification_requires_named_metric_complete_archetypes(tmp_path: Path) -> None:
     for archetype in readiness.NCU_ARCHETYPES:
         (tmp_path / f"ncu_{archetype}.csv").write_text(_ncu_csv_text(), encoding="utf-8")
+        _write_ncu_metadata(tmp_path, archetype)
 
     result = readiness._ncu_profile_verification(tmp_path)
 
@@ -331,6 +347,7 @@ def test_ncu_profile_verification_rejects_missing_required_metrics(tmp_path: Pat
         if archetype == "long-text":
             text = text.replace("gpu__time_duration.sum", "some_other_metric")
         (tmp_path / f"ncu_{archetype}.csv").write_text(text, encoding="utf-8")
+        _write_ncu_metadata(tmp_path, archetype)
 
     result = readiness._ncu_profile_verification(tmp_path)
 
@@ -339,3 +356,18 @@ def test_ncu_profile_verification_rejects_missing_required_metrics(tmp_path: Pat
     assert "long-text_missing_required_metrics" in result["reasons"]
     long_text = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
     assert long_text["missing_metrics"] == ["gpu__time_duration.sum"]
+
+
+def test_ncu_profile_verification_rejects_missing_metadata(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        (tmp_path / f"ncu_{archetype}.csv").write_text(_ncu_csv_text(), encoding="utf-8")
+        if archetype != "long-text":
+            _write_ncu_metadata(tmp_path, archetype)
+
+    result = readiness._ncu_profile_verification(tmp_path)
+
+    assert result["ok"] is False
+    assert "long-text_metadata_invalid" in result["reasons"]
+    long_text = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
+    assert "schema_mismatch" in long_text["metadata_reasons"]
+    assert "runtime_config_hash_missing" in long_text["metadata_reasons"]

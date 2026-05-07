@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +42,14 @@ def _validate_codex_command_template(template: str) -> None:
 
 def _profile_path(out_root: Path, archetype: str) -> Path:
     return out_root / f"ncu_{archetype}.csv"
+
+
+def _metadata_path(out_root: Path, archetype: str) -> Path:
+    return out_root / f"ncu_{archetype}.json"
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _validate_profile(path: Path) -> None:
@@ -92,6 +102,8 @@ def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
         args.api_key,
         "--model",
         args.model,
+        "--runtime-config-hash",
+        args.runtime_config_hash,
         "--timeout-s",
         str(args.timeout_s),
         "--no-dcgm",
@@ -102,6 +114,26 @@ def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
     return command
+
+
+def _write_profile_metadata(args: argparse.Namespace, archetype: str, command: list[str]) -> None:
+    out_root = Path(args.out_root)
+    profile_path = _profile_path(out_root, archetype)
+    metadata = {
+        "schema": "lumo.track_b.ncu_archetype_profile.v1",
+        "recorded_at": _now(),
+        "round": args.round,
+        "archetype": archetype,
+        "task_id": ARCHETYPE_TASKS[archetype],
+        "runtime_config_hash": args.runtime_config_hash,
+        "profile_csv": str(profile_path.relative_to(REPO_ROOT)) if profile_path.is_relative_to(REPO_ROOT) else str(profile_path),
+        "required_metrics": list(NCU_REQUIRED_METRICS),
+        "ncu_command": command,
+    }
+    _metadata_path(out_root, archetype).write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -124,11 +156,13 @@ def run_profiles(args: argparse.Namespace) -> int:
     Path(args.task_out_root).mkdir(parents=True, exist_ok=True)
     archetypes = list(ARCHETYPE_TASKS) if args.archetype == "all" else [args.archetype]
     for archetype in archetypes:
-        result = _run(_ncu_command(args, archetype))
+        command = _ncu_command(args, archetype)
+        result = _run(command)
         if result.returncode != 0:
             print(result.stderr, file=sys.stderr, end="")
             return result.returncode
         _validate_profile(_profile_path(out_root, archetype))
+        _write_profile_metadata(args, archetype, command)
     return 0
 
 
@@ -151,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--endpoint", default="http://127.0.0.1:9950/v1")
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "local"))
     parser.add_argument("--model", default="qwen3.5-27b")
+    parser.add_argument("--runtime-config-hash", required=True)
     parser.add_argument("--timeout-s", type=float, default=900.0)
     parser.add_argument("--vllm-request-metrics-jsonl", default="")
     parser.add_argument("--codex-command-template", required=True)

@@ -182,7 +182,8 @@ NCU command (all five profiles, one archetype task each):
 
 ```bash
 .venv/bin/python scripts/run_track_b_e2e_ncu_profiles.py \
-    --codex-command-template '<patched-codex-command-with-{trace_out}>'
+  --runtime-config-hash <hash> \
+  --codex-command-template '<patched-codex-command-with-{trace_out}>'
 ```
 
 The driver expands to the required single-profile NCU command shape:
@@ -200,7 +201,7 @@ ncu --target-processes all --kernel-id ::regex:.*linear.*|.*attention.*|.*sample
     -- python scripts/run_track_b_e2e_task.py <archetype-task> --no-dcgm --ncu-mode
 ```
 
-`scripts/run_track_b_e2e_ncu_profiles.py` owns the five archetype-to-task mappings, runs `scripts/run_track_b_e2e_task.py` with `--no-dcgm --ncu-mode`, writes the five `output/track_b_e2e/ncu_<archetype>.csv` files, stores profiled task artifacts under `output/track_b_e2e/ncu_task_runs/` so they cannot overwrite measurement-round attempts, and rejects missing or metric-incomplete CSVs before the readiness manifest sees them.
+`scripts/run_track_b_e2e_ncu_profiles.py` owns the five archetype-to-task mappings, runs `scripts/run_track_b_e2e_task.py` with `--no-dcgm --ncu-mode`, writes the five `output/track_b_e2e/ncu_<archetype>.csv` files plus `ncu_<archetype>.json` sidecars carrying archetype/task/round/runtime hash provenance, stores profiled task artifacts under `output/track_b_e2e/ncu_task_runs/` so they cannot overwrite measurement-round attempts, and rejects missing or metric-incomplete CSVs before the readiness manifest sees them.
 
 Profile output joined into `ncu_archetype_profile.json`:
 
@@ -327,11 +328,11 @@ If any step fails, **Round 0 must not record measurements**. Fix the runtime, re
 1. Run the hard-gated round driver:
    `.venv/bin/python scripts/run_track_b_e2e_round.py --round 0 --runtime-config-hash <hash> --codex-command-template '<patched-codex-command-with-{trace_out}>' --clock-skew-ms-p99 <measured> --trace-emitter-correctness-verified-at <timestamp> --protocol-hash-match`.
 2. The driver first rejects an already-populated round directory containing any measurement output other than a prior `preflight_audit.json`, then runs `scripts/preflight_track_b_e2e.py` and aborts before measurement if trace, DCGM, or vLLM request-correlation gates fail. If preflight passes, it runs all 13 tasks four times through `scripts/run_track_b_e2e_task.py`, discards cold `run_01`, verifies every measured attempt trace has matching task identity and `runtime_config_hash`, verifies the generation-token-volume guard from the measured attempt traces, derives each measured wallclock from `task_end.ts - task_start.ts`, summarizes canonical measured `run_02` with wallclocks from `run_02` through `run_04`, and produces `round_0/round_summary.json`.
-3. Run NCU archetype profiles once (5 runs) and write the expected non-empty files:
+3. Run NCU archetype profiles once (5 runs) and write the expected non-empty files plus metadata sidecars:
    `ncu_long-text.csv`, `ncu_tool-call-frame.csv`, `ncu_pure-investigation.csv`,
    `ncu_multimodal-prefill.csv`, and `ncu_subagent-orchestration.csv`.
 
-`round_0/round_summary.json` is not accepted by existence alone. The readiness manifest validates `schema="lumo.track_b.e2e_round_summary.v1"`, `round=0`, non-empty `runtime_config_hash`, `sample_hash`, numeric median/aggregate wallclock, non-empty `diagnosis_distribution`, at least 12 trusted/completed/correctness-passed task summaries, at least 12 unique trusted task IDs, no duplicate trusted task IDs, no unexpected trusted task IDs, and explicit zero values for `sample_hash_mismatch_count`, `runtime_config_hash_mismatch_count`, `task_summary_schema_mismatch_count`, and `task_summary_round_mismatch_count`. Round promotion only counts trusted task summaries with the Track B task-summary schema and matching round index. Trace correctness validation requires at least three enabled/disabled byte-equality tasks and `trace_schema_valid=true` for every task. NCU validation likewise requires the five named archetype CSVs and all §5.3 required metric names, not any five `ncu_*.csv` files.
+`round_0/round_summary.json` is not accepted by existence alone. The readiness manifest validates `schema="lumo.track_b.e2e_round_summary.v1"`, `round=0`, non-empty `runtime_config_hash`, `sample_hash`, numeric median/aggregate wallclock, non-empty `diagnosis_distribution`, at least 12 trusted/completed/correctness-passed task summaries, at least 12 unique trusted task IDs, no duplicate trusted task IDs, no unexpected trusted task IDs, and explicit zero values for `sample_hash_mismatch_count`, `runtime_config_hash_mismatch_count`, `task_summary_schema_mismatch_count`, and `task_summary_round_mismatch_count`. Round promotion only counts trusted task summaries with the Track B task-summary schema and matching round index. Trace correctness validation requires at least three enabled/disabled byte-equality tasks and `trace_schema_valid=true` for every task. NCU validation likewise requires the five named archetype CSVs, matching `ncu_<archetype>.json` metadata sidecars with non-empty `runtime_config_hash`, and all §5.3 required metric names, not any five `ncu_*.csv` files.
 
 **Correctness caveats:** see §9.
 
@@ -539,7 +540,7 @@ This plan has a working local scaffold, but **Round 0 has not run and no E2E hea
 | D. Per-turn vLLM metric extension | Consumer scaffold complete; live correlation blocked. Local code can preserve request-id Prometheus labels when they exist and can now normalize a request-keyed vLLM JSONL side-channel into `vllm_per_turn.json`, but the active vLLM process exposes neither source. | `src/lumo_flywheel_serving/metrics.py`; `scripts/run_track_b_e2e_task.py`; `scripts/build_track_b_e2e_summary.py`; `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md`. |
 | E. Summary join + diagnosis rule | Scaffolded and unit-tested on synthetic artifacts. It correctly refuses missing/joinless evidence instead of manufacturing a round summary, rejects mismatched stamped `runtime_config_hash` provenance across trace, runner, vLLM, and DCGM artifacts, rejects round promotion when trusted task summaries do not match the round hash/schema/index, and accepts the runner's nested `round_<N>/<task>/run_XX/summary.json` layout when promoting a round. | `scripts/build_track_b_e2e_summary.py`; `tests/test_track_b_e2e_summary.py`. |
 | F. Auto research agent prompt template | Scaffolded. | `prompts/track_b_e2e_round_proposal.md`. |
-| G. Round 0 dry run | Blocked. `output/track_b_e2e/round_0/round_summary.json` and the five NCU profile CSVs are absent by design because the trace, DCGM, and vLLM request-correlation gates have not passed. | `scripts/run_track_b_e2e_round.py`; `scripts/run_track_b_e2e_ncu_profiles.py`; `scripts/build_track_b_e2e_readiness_manifest.py`; `track-b-e2e-readiness-manifest-20260507.md`. |
+| G. Round 0 dry run | Blocked. `output/track_b_e2e/round_0/round_summary.json`, the five NCU profile CSVs, and the five NCU metadata sidecars are absent by design because the trace, DCGM, and vLLM request-correlation gates have not passed. | `scripts/run_track_b_e2e_round.py`; `scripts/run_track_b_e2e_ncu_profiles.py`; `scripts/build_track_b_e2e_readiness_manifest.py`; `track-b-e2e-readiness-manifest-20260507.md`. |
 
 Committed scaffold commits through this status checkpoint:
 
