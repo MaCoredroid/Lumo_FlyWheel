@@ -126,6 +126,7 @@ Minimum artifact schema:
 ```
 
 The readiness manifest requires at least three task entries and rejects an existence-only artifact.
+Use `scripts/verify_track_b_codex_trace_correctness.py` to build this artifact from real enabled/disabled run evidence; it compares model-output bytes, tool-call-sequence bytes, milestone-score JSON, and both exit codes for each task.
 
 If transcripts diverge, the patch is wrong and **no rounds may run** until it is fixed.
 
