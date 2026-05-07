@@ -481,6 +481,28 @@ Standardized so the auto research agent's recommendations are predictable and re
 
 Total ramp before Round 1 can be authored: ~5 days serial, ~2-3 days with parallelism.
 
+### 11.1 Implementation status as of 2026-05-07
+
+This plan has a working local scaffold, but **Round 0 has not run and no E2E headline measurement is valid yet**. The current readiness manifest reports `round0_ready=false`; this is intentional and prevents recording a partial or unjoinable baseline.
+
+| Step | Current status | Evidence |
+|---|---|---|
+| A. Patch Codex CLI with `--trace-out` | Blocked. Installed `codex-cli 0.128.0` has `codex exec --json` but no `--trace-out`; source audit shows wrapper-only logging is insufficient because request/exec events live in `codex-rs/core` and `codex-rs/exec`. | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md`; `output/track_b_e2e/codex_trace_emitter_correctness.json` is absent. |
+| B. DCGM/NVML 100 Hz sampler | Scaffolded but blocked for full readiness. The sampler runs under `.venv/bin/python`, but required DCGM profiling fields currently report `null` in this environment. | `scripts/sample_dcgm_during_task.py`; `scripts/preflight_track_b_e2e.py`; `track-b-e2e-round0-preflight-audit-20260507.md`. |
+| C. E2E task runner | Scaffolded. It wraps task directory creation, sampler lifecycle, Codex spawn, Prometheus capture, and summary build inputs, but cannot produce trusted Round 0 output until A/B/D pass. | `scripts/run_track_b_e2e_task.py`. |
+| D. Per-turn vLLM metric extension | Parser scaffold complete; live correlation blocked. Local code can preserve request-id labels if they exist, but the active vLLM `/metrics` endpoint exposes only aggregate labels such as `model_name`, `engine`, `source`, and `finished_reason`, not `request_id`. | `src/lumo_flywheel_serving/metrics.py`; `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md`. |
+| E. Summary join + diagnosis rule | Scaffolded and unit-tested on synthetic artifacts. It correctly refuses missing/joinless evidence instead of manufacturing a round summary. | `scripts/build_track_b_e2e_summary.py`; `tests/test_track_b_e2e_summary.py`. |
+| F. Auto research agent prompt template | Scaffolded. | `prompts/track_b_e2e_round_proposal.md`. |
+| G. Round 0 dry run | Blocked. `output/track_b_e2e/round_0/round_summary.json` is absent by design because the trace, DCGM, and vLLM request-correlation gates have not passed. | `scripts/build_track_b_e2e_readiness_manifest.py`; `track-b-e2e-readiness-manifest-20260507.md`. |
+
+Committed scaffold commits through this status checkpoint:
+
+- `7de01d6 Add Track B E2E measurement scaffold`
+- `023702a Record Track B E2E preflight blockers`
+- `aa255b6 Tighten Track B E2E preflight gating`
+- `be03780 Record Codex trace patch surface audit`
+- `440cdc7 Add Track B E2E readiness manifest`
+
 ## 12. Decision rules for ending the loop
 
 The loop terminates when one of these conditions holds:
@@ -512,6 +534,10 @@ On termination, write `output/track_b_e2e/loop_closeout.md` summarizing the fina
 | `track-b-real-task-warmonly-pr39562-matrix-20260507.md` | Current evidence | Post-PR#39562 candidate matrix; 020/025/028 cleared the `9.0` gate at c1, 051 retired. |
 | `track_b_tool_call_throughput_closeout_20260507.md` | Current production runtime | Candidate-056 closeout; Round 0 baseline config. |
 | `track-b-concurrency-measurement-audit-20260506.md` | Reference | Established truthful-measurement rules. |
+| `track-b-e2e-round0-preflight-audit-20260507.md` | Current blocker record | Live Round 0 preflight failures and remediation requirements. |
+| `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Current blocker record | Shows where Codex CLI must be patched for `--trace-out`. |
+| `track-b-e2e-readiness-manifest-20260507.md` | Current blocker record | Defines the machine-readable readiness manifest and `round0_ready=false` gate. |
+| `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Current blocker record | Shows vLLM request IDs exist in serving but not in Prometheus metric labels. |
 | `l0-warm-decode-quality-bounded-track-20260505.md` | Parent spec | Track B Round 1 framing; this plan is the e2e measurement instrument that should drive its next rounds. |
 | `benchmark_blueprints/tracks/README.md` | Bench source | The 11-track structure used for sample selection. |
 | Codex CLI (open source) | External | Patch surface for `--trace-out`; carry as fork until upstreamable. |
