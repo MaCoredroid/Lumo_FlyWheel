@@ -178,7 +178,14 @@ Five archetypes, five NCU runs total. Reused across rounds unless the runtime co
 | Multimodal prefill | `responsive-checkout-visual-regression/v1` (#6) | Image tokens at prefill, smaller decode. |
 | Subagent orchestration | `fanout-fullstack-release-blocker/v1` (#13) | Multi-surface; orchestration overhead. |
 
-NCU command (single profile, ~10 min):
+NCU command (all five profiles, one archetype task each):
+
+```bash
+.venv/bin/python scripts/run_track_b_e2e_ncu_profiles.py \
+    --codex-command-template '<patched-codex-command-with-{trace_out}>'
+```
+
+The driver expands to the required single-profile NCU command shape:
 
 ```bash
 ncu --target-processes all --kernel-id ::regex:.*linear.*|.*attention.*|.*sample.*|.*spec.*: \
@@ -193,7 +200,7 @@ ncu --target-processes all --kernel-id ::regex:.*linear.*|.*attention.*|.*sample
     -- python scripts/run_track_b_e2e_task.py <archetype-task> --no-dcgm --ncu-mode
 ```
 
-`scripts/run_track_b_e2e_task.py` accepts either `family variant` positional arguments or a single `family/variant` task id for `<archetype-task>`.
+`scripts/run_track_b_e2e_ncu_profiles.py` owns the five archetype-to-task mappings, runs `scripts/run_track_b_e2e_task.py` with `--no-dcgm --ncu-mode`, writes the five `output/track_b_e2e/ncu_<archetype>.csv` files, and rejects missing or metric-incomplete CSVs before the readiness manifest sees them.
 
 Profile output joined into `ncu_archetype_profile.json`:
 
@@ -530,7 +537,7 @@ This plan has a working local scaffold, but **Round 0 has not run and no E2E hea
 | D. Per-turn vLLM metric extension | Consumer scaffold complete; live correlation blocked. Local code can preserve request-id Prometheus labels when they exist and can now normalize a request-keyed vLLM JSONL side-channel into `vllm_per_turn.json`, but the active vLLM process exposes neither source. | `src/lumo_flywheel_serving/metrics.py`; `scripts/run_track_b_e2e_task.py`; `scripts/build_track_b_e2e_summary.py`; `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md`. |
 | E. Summary join + diagnosis rule | Scaffolded and unit-tested on synthetic artifacts. It correctly refuses missing/joinless evidence instead of manufacturing a round summary, and it now accepts the runner's nested `round_<N>/<task>/run_XX/summary.json` layout when promoting a round. | `scripts/build_track_b_e2e_summary.py`; `tests/test_track_b_e2e_summary.py`. |
 | F. Auto research agent prompt template | Scaffolded. | `prompts/track_b_e2e_round_proposal.md`. |
-| G. Round 0 dry run | Blocked. `output/track_b_e2e/round_0/round_summary.json` is absent by design because the trace, DCGM, and vLLM request-correlation gates have not passed. | `scripts/build_track_b_e2e_readiness_manifest.py`; `track-b-e2e-readiness-manifest-20260507.md`. |
+| G. Round 0 dry run | Blocked. `output/track_b_e2e/round_0/round_summary.json` and the five NCU profile CSVs are absent by design because the trace, DCGM, and vLLM request-correlation gates have not passed. | `scripts/run_track_b_e2e_round.py`; `scripts/run_track_b_e2e_ncu_profiles.py`; `scripts/build_track_b_e2e_readiness_manifest.py`; `track-b-e2e-readiness-manifest-20260507.md`. |
 
 Committed scaffold commits through this status checkpoint:
 
@@ -572,6 +579,8 @@ Committed scaffold commits through this status checkpoint:
 - `e772822 Update Track B trace template ledger`
 - `52be8a6 Accept nested Track B task summaries`
 - `bcee31b Add Track B E2E round driver`
+- `d2a642e Update Track B round driver ledger`
+- `c980c39 Add Track B NCU profile driver`
 
 ## 12. Decision rules for ending the loop
 
