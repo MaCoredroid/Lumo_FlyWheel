@@ -55,6 +55,21 @@ ROUND_PROPOSAL_REQUIRED_TEXT = {
 ROUND_PROPOSAL_FORBIDDEN_TEXT = {
     "direct_repeat3_task_measurement": "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3",
 }
+TRACE_PATCH_CANDIDATES = (
+    "vendor/codex-cli/patches/trace_emitter.patch",
+    "patches/codex/trace_emitter.patch",
+)
+TRACE_PATCH_REQUIRED_TEXT = {
+    "unified_diff": "diff --git",
+    "codex_rust_surface": "codex-rs/",
+    "trace_out_flag": "--trace-out",
+    "task_start_event": "task_start",
+    "turn_start_event": "turn_start",
+    "turn_end_event": "turn_end",
+    "tool_call_event": "tool_call",
+    "task_end_event": "task_end",
+    "runtime_hash_stamp": "runtime_config_hash",
+}
 
 
 def _now() -> str:
@@ -123,6 +138,39 @@ def _round_proposal_prompt_verification() -> dict[str, Any]:
         "required": required,
         "forbidden": forbidden,
         "reasons": reasons,
+    }
+
+
+def _trace_patch_verification() -> dict[str, Any]:
+    patches: list[dict[str, Any]] = []
+    for rel in TRACE_PATCH_CANDIDATES:
+        path = REPO_ROOT / rel
+        exists = path.is_file()
+        text = path.read_text(encoding="utf-8", errors="replace") if exists else ""
+        required = {name: needle in text for name, needle in TRACE_PATCH_REQUIRED_TEXT.items()}
+        missing_required = [name for name, present in required.items() if not present]
+        patches.append(
+            {
+                "path": rel,
+                "exists": exists,
+                "size_bytes": path.stat().st_size if exists else 0,
+                "required": required,
+                "missing_required": missing_required,
+                "ok": exists and bool(text.strip()) and not missing_required,
+            }
+        )
+    ok = any(patch["ok"] for patch in patches)
+    reasons: list[str] = []
+    if not any(patch["exists"] for patch in patches):
+        reasons.append("trace_patch_missing")
+    elif not ok:
+        reasons.append("trace_patch_content_invalid")
+    return {
+        "ok": ok,
+        "candidates": list(TRACE_PATCH_CANDIDATES),
+        "required_text": TRACE_PATCH_REQUIRED_TEXT,
+        "reasons": reasons,
+        "patches": patches,
     }
 
 
@@ -333,13 +381,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     checks = preflight.get("checks") if isinstance(preflight.get("checks"), dict) else {}
     blockers = preflight.get("blocking_reasons") if isinstance(preflight.get("blocking_reasons"), list) else []
 
-    trace_patch_exists = any(
-        path.exists()
-        for path in [
-            REPO_ROOT / "vendor" / "codex-cli" / "patches" / "trace_emitter.patch",
-            REPO_ROOT / "patches" / "codex" / "trace_emitter.patch",
-        ]
-    )
+    trace_patch = _trace_patch_verification()
     trace_correctness_path = REPO_ROOT / "output" / "track_b_e2e" / "codex_trace_emitter_correctness.json"
     trace_correctness = _trace_correctness_verification(trace_correctness_path)
     round0_summary_path = REPO_ROOT / "output" / "track_b_e2e" / "round_0" / "round_summary.json"
@@ -360,14 +402,16 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "A",
             "Patch Codex CLI with --trace-out and verify trace-emitter correctness.",
             {
-                "trace_patch_exists": trace_patch_exists,
+                "trace_patch_exists": any(patch["exists"] for patch in trace_patch["patches"]),
+                "trace_patch_verified": trace_patch["ok"],
+                "trace_patch": trace_patch,
                 "trace_correctness_artifact": str(trace_correctness_path.relative_to(REPO_ROOT)),
                 "trace_correctness_exists": trace_correctness_path.is_file(),
                 "trace_correctness_verified": trace_correctness["ok"],
                 "trace_correctness": trace_correctness,
                 "codex_trace_out_supported": checks.get("codex_trace_out_supported", {}).get("ok"),
             },
-            trace_patch_exists
+            trace_patch["ok"]
             and trace_correctness["ok"]
             and checks.get("codex_trace_out_supported", {}).get("ok") is True,
             blocked="codex_trace_out_supported" in blockers,

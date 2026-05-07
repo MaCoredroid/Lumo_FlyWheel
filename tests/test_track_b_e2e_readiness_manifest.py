@@ -238,6 +238,47 @@ def test_trace_correctness_verification_rejects_missing_trace_schema_status(tmp_
     assert result["tasks"][0]["missing_fields"] == ["trace_schema_valid"]
 
 
+def test_trace_patch_verification_rejects_placeholder_patch(tmp_path: Path, monkeypatch) -> None:
+    patch_path = tmp_path / "patches" / "codex" / "trace_emitter.patch"
+    patch_path.parent.mkdir(parents=True)
+    patch_path.write_text("TODO: add trace-out support later\n", encoding="utf-8")
+    monkeypatch.setattr(readiness, "REPO_ROOT", tmp_path)
+
+    result = readiness._trace_patch_verification()
+
+    assert result["ok"] is False
+    assert result["reasons"] == ["trace_patch_content_invalid"]
+    patch = next(patch for patch in result["patches"] if patch["exists"])
+    assert "unified_diff" in patch["missing_required"]
+    assert "trace_out_flag" in patch["missing_required"]
+
+
+def test_trace_patch_verification_requires_trace_emitter_surface(tmp_path: Path, monkeypatch) -> None:
+    patch_path = tmp_path / "vendor" / "codex-cli" / "patches" / "trace_emitter.patch"
+    patch_path.parent.mkdir(parents=True)
+    patch_path.write_text(
+        "\n".join(
+            [
+                "diff --git a/codex-rs/exec/src/main.rs b/codex-rs/exec/src/main.rs",
+                "+    --trace-out <PATH>",
+                "+    emit_jsonl(\"task_start\", runtime_config_hash);",
+                "+    emit_jsonl(\"turn_start\", vllm_request_id);",
+                "+    emit_jsonl(\"turn_end\", completion_tokens);",
+                "+    emit_jsonl(\"tool_call\", tool_name);",
+                "+    emit_jsonl(\"task_end\", exit_code);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(readiness, "REPO_ROOT", tmp_path)
+
+    result = readiness._trace_patch_verification()
+
+    assert result["ok"] is True
+    assert result["reasons"] == []
+    assert result["patches"][0]["ok"] is True
+
+
 def test_round0_summary_verification_requires_trusted_completed_tasks(tmp_path: Path) -> None:
     summary = tmp_path / "round_summary.json"
     summary.write_text(
