@@ -460,6 +460,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "round0_summary_verified": round0_summary["ok"],
         "ncu_profiles_verified": ncu_profiles["ok"],
         "trace_correctness_verified": trace_correctness["ok"],
+        "round_proposal_prompt_verified": round_proposal_prompt["ok"],
         "all_implementation_steps_complete": all(step["status"] == "complete" for step in steps),
     }
     ready = all(hard_gates.values())
