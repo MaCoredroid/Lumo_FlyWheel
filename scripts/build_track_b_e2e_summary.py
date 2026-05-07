@@ -529,6 +529,11 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         task_id for task_id in trusted_unique_task_ids if task_id not in TRACK_B_E2E_TASK_SET
     )
     sample_hash_mismatch_count = sum(1 for row in trusted if row.get("sample_hash") != SAMPLE_HASH)
+    runtime_config_hash_mismatches = sorted(
+        str(row.get("task_id"))
+        for row in trusted
+        if row.get("runtime_config_hash") != args.runtime_config_hash
+    )
     trusted_completed_count = sum(1 for row in trusted if row.get("task_completed"))
     trusted_correctness_count = sum(
         1 for row in trusted if row.get("task_completed") and row.get("task_score") is not None
@@ -546,6 +551,11 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         blockers.append(f"Unexpected trusted task summaries: {', '.join(unexpected_trusted_task_ids)}")
     if sample_hash_mismatch_count:
         blockers.append(f"{sample_hash_mismatch_count} trusted task summaries have a mismatched sample_hash")
+    if runtime_config_hash_mismatches:
+        blockers.append(
+            "Trusted task summaries have mismatched runtime_config_hash: "
+            + ", ".join(runtime_config_hash_mismatches)
+        )
     if trusted_completed_count < 12:
         blockers.append(f"Only {trusted_completed_count} trusted task summaries completed; round_summary.json requires at least 12")
     if trusted_correctness_count < 12:
@@ -580,6 +590,8 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         "duplicate_trusted_task_ids": duplicate_trusted_task_ids,
         "unexpected_trusted_task_ids": unexpected_trusted_task_ids,
         "sample_hash_mismatch_count": sample_hash_mismatch_count,
+        "runtime_config_hash_mismatch_count": len(runtime_config_hash_mismatches),
+        "runtime_config_hash_mismatch_task_ids": runtime_config_hash_mismatches,
         "untrusted_task_count": len(summaries) - len(trusted),
         "auto_research_agent_recommendation": args.auto_research_agent_recommendation,
         "next_round_proposal": args.next_round_proposal,
