@@ -19,6 +19,7 @@ TRACE_CORRECTNESS_REQUIRED_TASK_FIELDS = (
     "tool_call_sequences_byte_identical",
     "milestone_scores_identical",
 )
+ROUND0_MIN_TRUSTED_TASKS = 12
 
 
 def _now() -> str:
@@ -109,6 +110,49 @@ def _trace_correctness_verification(path: Path) -> dict[str, Any]:
     }
 
 
+def _round0_summary_verification(path: Path) -> dict[str, Any]:
+    payload = _load_json(path)
+    reasons: list[str] = []
+    if not payload:
+        reasons.append("summary_missing_or_invalid_json")
+    if payload.get("schema") != "lumo.track_b.e2e_round_summary.v1":
+        reasons.append("schema_mismatch")
+    if payload.get("round") != 0:
+        reasons.append("round_not_zero")
+    if not isinstance(payload.get("runtime_config_hash"), str) or not payload.get("runtime_config_hash"):
+        reasons.append("runtime_config_hash_missing")
+    if payload.get("sample_hash") is None:
+        reasons.append("sample_hash_missing")
+
+    trusted_task_count = payload.get("trusted_task_count")
+    tasks_completed = payload.get("tasks_completed")
+    tasks_correctness_passed = payload.get("tasks_correctness_passed")
+    if not isinstance(trusted_task_count, int) or trusted_task_count < ROUND0_MIN_TRUSTED_TASKS:
+        reasons.append("too_few_trusted_tasks")
+    if not isinstance(tasks_completed, int) or tasks_completed < ROUND0_MIN_TRUSTED_TASKS:
+        reasons.append("too_few_completed_tasks")
+    if not isinstance(tasks_correctness_passed, int) or tasks_correctness_passed < ROUND0_MIN_TRUSTED_TASKS:
+        reasons.append("too_few_correct_tasks")
+    if not isinstance(payload.get("median_wallclock_s"), (int, float)):
+        reasons.append("median_wallclock_missing")
+    if not isinstance(payload.get("aggregate_wallclock_s"), (int, float)):
+        reasons.append("aggregate_wallclock_missing")
+    if not isinstance(payload.get("diagnosis_distribution"), dict) or not payload.get("diagnosis_distribution"):
+        reasons.append("diagnosis_distribution_missing")
+
+    return {
+        "ok": not reasons,
+        "path": str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path),
+        "schema": payload.get("schema"),
+        "round": payload.get("round"),
+        "trusted_task_count": trusted_task_count,
+        "min_trusted_task_count": ROUND0_MIN_TRUSTED_TASKS,
+        "tasks_completed": tasks_completed,
+        "tasks_correctness_passed": tasks_correctness_passed,
+        "reasons": reasons,
+    }
+
+
 def _status(ok: bool, *, blocked: bool = False) -> str:
     if ok:
         return "complete"
@@ -141,6 +185,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     trace_correctness_path = REPO_ROOT / "output" / "track_b_e2e" / "codex_trace_emitter_correctness.json"
     trace_correctness = _trace_correctness_verification(trace_correctness_path)
     round0_summary_path = REPO_ROOT / "output" / "track_b_e2e" / "round_0" / "round_summary.json"
+    round0_summary = _round0_summary_verification(round0_summary_path)
     ncu_outputs = sorted((REPO_ROOT / "output" / "track_b_e2e").glob("ncu_*.csv"))
 
     steps = [
@@ -230,17 +275,19 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "round0_summary": str(round0_summary_path.relative_to(REPO_ROOT)),
                 "round0_summary_exists": round0_summary_path.is_file(),
+                "round0_summary_verified": round0_summary["ok"],
+                "round0_summary_verification": round0_summary,
                 "ncu_profile_count": len(ncu_outputs),
                 "expected_ncu_profile_count": 5,
             },
-            round0_summary_path.is_file() and len(ncu_outputs) >= 5,
+            round0_summary["ok"] and len(ncu_outputs) >= 5,
             blocked=bool(blockers),
         ),
     ]
 
     hard_gates = {
         "preflight_round0_may_run": preflight.get("round0_may_run") is True,
-        "round0_summary_exists": round0_summary_path.is_file(),
+        "round0_summary_verified": round0_summary["ok"],
         "trace_correctness_verified": trace_correctness["ok"],
         "all_implementation_steps_complete": all(step["status"] == "complete" for step in steps),
     }

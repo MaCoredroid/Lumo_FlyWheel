@@ -47,7 +47,7 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
     assert statuses["E"] == "complete"
     assert statuses["F"] == "complete"
     assert statuses["G"] == "blocked"
-    assert manifest["hard_gates"]["round0_summary_exists"] is False
+    assert manifest["hard_gates"]["round0_summary_verified"] is False
 
 
 def test_readiness_manifest_requires_round0_artifacts_even_if_preflight_passes(tmp_path: Path) -> None:
@@ -72,7 +72,7 @@ def test_readiness_manifest_requires_round0_artifacts_even_if_preflight_passes(t
     manifest = readiness.build_manifest(Namespace(preflight_json=str(preflight_path), out=""))
 
     assert manifest["hard_gates"]["preflight_round0_may_run"] is True
-    assert manifest["hard_gates"]["round0_summary_exists"] is False
+    assert manifest["hard_gates"]["round0_summary_verified"] is False
     assert manifest["round0_ready"] is False
 
 
@@ -150,3 +150,52 @@ def test_trace_correctness_verification_rejects_weak_artifact(tmp_path: Path) ->
     assert result["ok"] is False
     assert "too_few_tasks" in result["reasons"]
     assert "task_0_failed" in result["reasons"]
+
+
+def test_round0_summary_verification_requires_trusted_completed_tasks(tmp_path: Path) -> None:
+    summary = tmp_path / "round_summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.e2e_round_summary.v1",
+                "round": 0,
+                "runtime_config_hash": "sha256:test",
+                "sample_hash": "sha256:sample",
+                "trusted_task_count": 12,
+                "tasks_completed": 12,
+                "tasks_correctness_passed": 12,
+                "median_wallclock_s": 187.4,
+                "aggregate_wallclock_s": 2618.1,
+                "diagnosis_distribution": {"memory-bw-headroom": 12},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = readiness._round0_summary_verification(summary)
+
+    assert result["ok"] is True
+    assert result["trusted_task_count"] == 12
+    assert result["reasons"] == []
+
+
+def test_round0_summary_verification_rejects_existence_only_summary(tmp_path: Path) -> None:
+    summary = tmp_path / "round_summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.e2e_round_summary.v1",
+                "round": 0,
+                "runtime_config_hash": "sha256:test",
+                "trusted_task_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = readiness._round0_summary_verification(summary)
+
+    assert result["ok"] is False
+    assert "too_few_trusted_tasks" in result["reasons"]
+    assert "sample_hash_missing" in result["reasons"]
+    assert "diagnosis_distribution_missing" in result["reasons"]

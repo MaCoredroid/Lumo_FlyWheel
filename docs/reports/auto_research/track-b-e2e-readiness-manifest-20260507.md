@@ -27,8 +27,8 @@ Result: **Round 0 is blocked.**
 | D. Per-turn vLLM metrics keyed by request id | blocked | parser/join code exists; live metrics do not expose request-id labels |
 | E. Summary join + diagnosis rule | complete | `scripts/build_track_b_e2e_summary.py` |
 | F. Round proposal prompt | complete | `prompts/track_b_e2e_round_proposal.md` |
-| G. Round 0 dry run | blocked | no `output/track_b_e2e/round_0/round_summary.json`; no five NCU archetype profiles |
+| G. Round 0 dry run | blocked | no validated `output/track_b_e2e/round_0/round_summary.json`; no five NCU archetype profiles |
 
 ## Decision
 
-The readiness manifest intentionally requires both setup gates and actual Round 0 artifacts. Passing preflight alone is not enough, and a trace correctness artifact must satisfy the `lumo.track_b.codex_trace_correctness.v1` schema with three enabled/disabled byte-equality task checks. Current preflight does not pass. Do not promote or compare any Track B E2E round from this state.
+The readiness manifest intentionally requires both setup gates and actual Round 0 artifacts. Passing preflight alone is not enough. A trace correctness artifact must satisfy the `lumo.track_b.codex_trace_correctness.v1` schema with three enabled/disabled byte-equality task checks, and the Round 0 summary must satisfy the round-summary schema with at least 12 trusted, completed, correctness-passed tasks. Current preflight does not pass. Do not promote or compare any Track B E2E round from this state.

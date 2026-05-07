@@ -318,6 +318,8 @@ If any step fails, **Round 0 must not record measurements**. Fix the runtime, re
 2. After all 13 × 3 = 39 task runs, collect per-task `summary.json` and produce `round_0/round_summary.json`.
 3. Run NCU archetype profiles once (5 runs).
 
+`round_0/round_summary.json` is not accepted by existence alone. The readiness manifest validates `schema="lumo.track_b.e2e_round_summary.v1"`, `round=0`, non-empty `runtime_config_hash`, `sample_hash`, numeric median/aggregate wallclock, non-empty `diagnosis_distribution`, and at least 12 trusted, completed, correctness-passed task summaries.
+
 **Correctness caveats:** see §9.
 
 **Truthful measurement contract:** see §8.
