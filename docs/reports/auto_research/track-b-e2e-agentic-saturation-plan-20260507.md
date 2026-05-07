@@ -591,6 +591,8 @@ Committed scaffold commits through this status checkpoint:
 - `8973a1a Use Track B trace wallclocks in round driver`
 - `d1061f8 Update Track B trace wallclock ledger`
 - `8e212bd Isolate Track B NCU task artifacts`
+- `4af0f4e Update Track B NCU isolation ledger`
+- `478f38c Reject stale Track B round summaries`
 
 ## 12. Decision rules for ending the loop
 
