@@ -7,6 +7,7 @@ import os
 import statistics
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +61,32 @@ def _read_jsonl(path: Path) -> list[dict[str, object]]:
     return rows
 
 
+def _parse_ts(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _trace_wallclock_s(path: Path) -> float:
+    task_start: dict[str, object] | None = None
+    task_end: dict[str, object] | None = None
+    for event in _read_jsonl(path):
+        if event.get("event") == "task_start" and task_start is None:
+            task_start = event
+        if event.get("event") == "task_end":
+            task_end = event
+    if task_start is None or task_end is None:
+        raise RuntimeError(f"{path} must contain task_start and task_end events")
+    start_ts = _parse_ts(task_start.get("ts"))
+    end_ts = _parse_ts(task_end.get("ts"))
+    if start_ts is None or end_ts is None:
+        raise RuntimeError(f"{path} task_start/task_end timestamps must be ISO-8601 strings")
+    return max(0.0, (end_ts - start_ts).total_seconds())
+
+
 def _attempt_dir(out_root: Path, round_index: int, task_id: str, attempt: int) -> Path:
     family, variant = task_id.split("/", 1)
     return out_root / f"round_{round_index}" / f"{family}__{variant}" / f"run_{attempt:02d}"
@@ -73,12 +100,8 @@ def _attempt_wallclocks(
 ) -> list[float]:
     wallclocks: list[float] = []
     for attempt in attempts:
-        metadata_path = _attempt_dir(out_root, round_index, task_id, attempt) / "runner_metadata.json"
-        payload = _read_json(metadata_path)
-        elapsed_s = payload.get("elapsed_s")
-        if not isinstance(elapsed_s, (int, float)):
-            raise RuntimeError(f"missing numeric elapsed_s in {metadata_path}")
-        wallclocks.append(float(elapsed_s))
+        trace_path = _attempt_dir(out_root, round_index, task_id, attempt) / "codex_trace.jsonl"
+        wallclocks.append(_trace_wallclock_s(trace_path))
     return wallclocks
 
 

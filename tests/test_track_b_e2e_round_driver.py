@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -14,6 +15,17 @@ import run_track_b_e2e_round as round_driver  # noqa: E402
 
 def _completed(command: list[str], returncode: int = 0) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(command, returncode, stdout="", stderr="")
+
+
+def _trace_text(duration_s: float, completion_tokens: int) -> str:
+    start = datetime(2026, 5, 7, 20, 0, 0, tzinfo=UTC)
+    end = start + timedelta(seconds=duration_s)
+    rows = [
+        {"event": "task_start", "ts": start.isoformat(timespec="milliseconds").replace("+00:00", "Z")},
+        {"event": "turn_end", "completion_tokens": completion_tokens},
+        {"event": "task_end", "ts": end.isoformat(timespec="milliseconds").replace("+00:00", "Z")},
+    ]
+    return "\n".join(json.dumps(row) for row in rows) + "\n"
 
 
 def test_round_driver_blocks_before_measurement_when_preflight_fails(monkeypatch, tmp_path: Path) -> None:
@@ -76,11 +88,11 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
                     task_dir = out_root / f"round_{round_index}" / f"{family}__{variant}" / f"run_{attempt:02d}"
                     task_dir.mkdir(parents=True)
                     (task_dir / "runner_metadata.json").write_text(
-                        json.dumps({"elapsed_s": 100.0 + attempt}) + "\n",
+                        json.dumps({"elapsed_s": 900.0 + attempt}) + "\n",
                         encoding="utf-8",
                     )
                     (task_dir / "codex_trace.jsonl").write_text(
-                        json.dumps({"event": "turn_end", "completion_tokens": 100 + attempt}) + "\n",
+                        _trace_text(10.0 + attempt, 100 + attempt),
                         encoding="utf-8",
                     )
         return _completed(command)
@@ -113,7 +125,7 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
     for command, task_id in zip(task_summary_commands, tasks, strict=True):
         family, variant = task_id.split("/", 1)
         assert command[command.index("--task-dir") + 1].endswith(f"{family}__{variant}/run_02")
-        assert json.loads(command[command.index("--run-wallclocks-json") + 1]) == [102.0, 103.0, 104.0]
+        assert json.loads(command[command.index("--run-wallclocks-json") + 1]) == [12.0, 13.0, 14.0]
         assert "--protocol-hash-match" in command
         assert "--generation-volume-within-band" in command
 
@@ -142,10 +154,7 @@ def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: P
                     json.dumps({"elapsed_s": 100.0 + attempt}) + "\n",
                     encoding="utf-8",
                 )
-                (task_dir / "codex_trace.jsonl").write_text(
-                    json.dumps({"event": "turn_end", "completion_tokens": tokens}) + "\n",
-                    encoding="utf-8",
-                )
+                (task_dir / "codex_trace.jsonl").write_text(_trace_text(10.0 + attempt, tokens), encoding="utf-8")
         return _completed(command)
 
     monkeypatch.setattr(round_driver, "_run", fake_run)
