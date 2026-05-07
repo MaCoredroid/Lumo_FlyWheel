@@ -176,6 +176,8 @@ def _runner_command(args: argparse.Namespace) -> list[str]:
         args.api_key,
         "--model",
         args.model,
+        "--runtime-config-hash",
+        args.runtime_config_hash,
         "--timeout-s",
         str(args.timeout_s),
         "--codex-command-template",

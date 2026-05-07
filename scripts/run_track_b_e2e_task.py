@@ -73,7 +73,7 @@ def _metrics_text(metrics_url: str) -> str:
     return _request("GET", metrics_url).text
 
 
-def _write_vllm_per_turn(task_dir: Path, before_raw: str, after_raw: str) -> None:
+def _write_vllm_per_turn(task_dir: Path, before_raw: str, after_raw: str, *, runtime_config_hash: str = "") -> None:
     schema = resolve_metric_schema(parse_prometheus_text(after_raw))
     per_request = compute_vllm_per_request_metrics(
         parse_prometheus_samples(before_raw),
@@ -83,7 +83,7 @@ def _write_vllm_per_turn(task_dir: Path, before_raw: str, after_raw: str) -> Non
     if not per_request:
         raise RuntimeError("Prometheus metrics did not produce any request-keyed vLLM rows")
     (task_dir / "vllm_per_turn.json").write_text(
-        json.dumps({"requests": per_request}, indent=2, sort_keys=True) + "\n",
+        json.dumps({"requests": per_request, "runtime_config_hash": runtime_config_hash}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
@@ -135,7 +135,13 @@ def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str,
     return str(request_id), normalized
 
 
-def _write_vllm_per_turn_from_jsonl(task_dir: Path, source: Path, *, start_offset: int = 0) -> None:
+def _write_vllm_per_turn_from_jsonl(
+    task_dir: Path,
+    source: Path,
+    *,
+    start_offset: int = 0,
+    runtime_config_hash: str = "",
+) -> None:
     requests_by_id: dict[str, dict[str, Any]] = {}
     captured_lines: list[str] = []
     with source.open("r", encoding="utf-8") as handle:
@@ -159,7 +165,7 @@ def _write_vllm_per_turn_from_jsonl(task_dir: Path, source: Path, *, start_offse
         raise RuntimeError(f"No complete vLLM request metrics rows found in {source}")
     (task_dir / "vllm_request_metrics.jsonl").write_text("".join(captured_lines), encoding="utf-8")
     (task_dir / "vllm_per_turn.json").write_text(
-        json.dumps({"requests": requests_by_id}, indent=2, sort_keys=True) + "\n",
+        json.dumps({"requests": requests_by_id, "runtime_config_hash": runtime_config_hash}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
@@ -251,9 +257,10 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
             task_dir,
             vllm_request_metrics_jsonl,
             start_offset=vllm_request_metrics_start_offset,
+            runtime_config_hash=args.runtime_config_hash,
         )
     else:
-        _write_vllm_per_turn(task_dir, metrics_pre, metrics_post)
+        _write_vllm_per_turn(task_dir, metrics_pre, metrics_post, runtime_config_hash=args.runtime_config_hash)
     metadata = {
         "schema": "lumo.track_b.e2e_runner_metadata.v1",
         "recorded_at": _now(),
@@ -264,6 +271,7 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "workspace": str(workspace.relative_to(REPO_ROOT)),
         "trace_out": str(trace_out),
         "elapsed_s": elapsed_s,
+        "runtime_config_hash": args.runtime_config_hash,
         "codex_command_template": args.codex_command_template,
         "vllm_request_metrics_jsonl": args.vllm_request_metrics_jsonl,
         "ncu_mode": bool(args.ncu_mode),
@@ -290,6 +298,7 @@ def main() -> int:
     parser.add_argument("--endpoint", default="http://127.0.0.1:9950/v1")
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "local"))
     parser.add_argument("--model", default="qwen3.5-27b")
+    parser.add_argument("--runtime-config-hash", default="")
     parser.add_argument("--timeout-s", type=float, default=900.0)
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--dcgm-interval-s", type=float, default=0.01)

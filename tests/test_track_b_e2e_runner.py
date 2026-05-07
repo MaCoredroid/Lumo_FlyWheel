@@ -25,6 +25,7 @@ def test_runner_cli_accepts_documented_ncu_mode_flag() -> None:
     )
 
     assert "--ncu-mode" in result.stdout
+    assert "--runtime-config-hash" in result.stdout
 
 
 def test_runner_accepts_family_variant_task_id_form() -> None:
@@ -69,9 +70,10 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    runner._write_vllm_per_turn_from_jsonl(task_dir, source)
+    runner._write_vllm_per_turn_from_jsonl(task_dir, source, runtime_config_hash="sha256:test")
 
     payload = json.loads((task_dir / "vllm_per_turn.json").read_text(encoding="utf-8"))
+    assert payload["runtime_config_hash"] == "sha256:test"
     metrics = payload["requests"]["req-1"]
     assert metrics["completion_tokens"] == 12
     assert metrics["prefill_sum_s"] == 0.2

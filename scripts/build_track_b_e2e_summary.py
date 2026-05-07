@@ -262,6 +262,36 @@ def _load_vllm_request_metrics(task_dir: Path) -> dict[str, dict[str, Any]]:
     raise RuntimeError("Task directory is missing vLLM request metrics artifact")
 
 
+def _artifact_runtime_config_hashes(task_dir: Path) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+    runner_metadata = task_dir / "runner_metadata.json"
+    if runner_metadata.is_file():
+        payload = _load_json(runner_metadata)
+        value = payload.get("runtime_config_hash") if isinstance(payload, dict) else None
+        if isinstance(value, str) and value:
+            hashes["runner_metadata.json"] = value
+    vllm_per_turn = task_dir / "vllm_per_turn.json"
+    if vllm_per_turn.is_file():
+        payload = _load_json(vllm_per_turn)
+        value = payload.get("runtime_config_hash") if isinstance(payload, dict) else None
+        if isinstance(value, str) and value:
+            hashes["vllm_per_turn.json"] = value
+    return hashes
+
+
+def _verify_runtime_config_hash_artifacts(task_dir: Path, expected: str) -> dict[str, str]:
+    hashes = _artifact_runtime_config_hashes(task_dir)
+    mismatches = {
+        name: value
+        for name, value in hashes.items()
+        if value != expected
+    }
+    if mismatches:
+        rendered = ", ".join(f"{name}={value}" for name, value in sorted(mismatches.items()))
+        raise RuntimeError(f"runtime_config_hash mismatch for {task_dir}: expected {expected}; {rendered}")
+    return hashes
+
+
 def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
     task_dir = Path(args.task_dir)
     family = args.family
@@ -270,6 +300,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
     trace = _load_jsonl(task_dir / "codex_trace.jsonl")
     vllm = _load_vllm_request_metrics(task_dir)
     dcgm = _load_jsonl(task_dir / "dcgm_samples.jsonl") if (task_dir / "dcgm_samples.jsonl").is_file() else []
+    runtime_config_hash_artifacts = _verify_runtime_config_hash_artifacts(task_dir, args.runtime_config_hash)
 
     starts = [event for event in trace if event.get("event") == "turn_start"]
     ends_by_turn = {event.get("turn"): event for event in trace if event.get("event") == "turn_end"}
@@ -406,6 +437,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         "round": args.round,
         "task_id": task_id,
         "runtime_config_hash": args.runtime_config_hash,
+        "runtime_config_hash_artifacts": runtime_config_hash_artifacts,
         "wallclock_s": round(wallclock_s, 6),
         "observed_run_wallclock_s": round(observed_wallclock_s, 6),
         "run_wallclocks_s": run_wallclocks,

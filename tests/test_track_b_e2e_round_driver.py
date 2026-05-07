@@ -121,6 +121,9 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
     task_summary_commands = [
         command for command in commands if Path(command[1]).name == "build_track_b_e2e_summary.py" and "task" in command
     ]
+    runner_commands = [command for command in commands if Path(command[1]).name == "run_track_b_e2e_task.py"]
+    assert len(runner_commands) == 1
+    assert runner_commands[0][runner_commands[0].index("--runtime-config-hash") + 1] == "sha256:test"
     assert len(task_summary_commands) == 2
     for command, task_id in zip(task_summary_commands, tasks, strict=True):
         family, variant = task_id.split("/", 1)
