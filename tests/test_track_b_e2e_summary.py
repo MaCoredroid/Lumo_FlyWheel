@@ -649,6 +649,27 @@ def test_task_summary_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Pa
         _vllm_jsonl_by_request(path)
 
 
+def test_task_summary_rejects_nonfinite_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
+    path = tmp_path / "vllm_request_metrics.jsonl"
+    _write_jsonl(
+        path,
+        [
+            {
+                "request_id": "req-1",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
+                "prompt_tokens": 50,
+                "generation_tokens": float("nan"),
+                "spec_decode_num_accepted_tokens": 3,
+                "spec_decode_num_draft_tokens": 12,
+            }
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="missing numeric fields"):
+        _vllm_jsonl_by_request(path)
+
+
 def test_task_summary_rejects_vllm_request_metrics_without_producer_metadata(tmp_path: Path) -> None:
     path = tmp_path / "vllm_request_metrics.jsonl"
     _write_jsonl(

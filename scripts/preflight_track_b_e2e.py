@@ -59,6 +59,10 @@ def _finite_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and math.isfinite(float(value))
 
 
+def _finite_nonnegative_number(value: Any) -> bool:
+    return _finite_number(value) and float(value) >= 0
+
+
 REQUEST_ID_LABELS = ("request_id", "vllm_request_id", "request")
 REQUEST_JOIN_REQUIRED_METRICS = (
     "vllm:prompt_tokens_total",
@@ -164,7 +168,7 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
         row_has_required_fields = True
         for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS:
             aliases = REQUEST_JOIN_JSONL_FIELD_ALIASES.get(field, (field,))
-            if any(isinstance(payload.get(alias), (int, float)) for alias in aliases):
+            if any(_finite_nonnegative_number(payload.get(alias)) for alias in aliases):
                 field_coverage[field] = True
             else:
                 row_has_required_fields = False

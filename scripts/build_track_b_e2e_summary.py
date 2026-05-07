@@ -141,6 +141,10 @@ def _finite_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and math.isfinite(float(value))
 
 
+def _finite_nonnegative_metric(value: Any) -> bool:
+    return _finite_number(value) and float(value) >= 0
+
+
 def _sample_values(samples: list[dict[str, Any]], field: str, start: Any, end: Any) -> list[float]:
     start_ts = _parse_ts(start)
     end_ts = _parse_ts(end)
@@ -255,7 +259,7 @@ def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str,
         "spec_decode_num_accepted_tokens": accepted,
         "spec_decode_num_draft_tokens": draft_tokens,
     }
-    missing = [key for key, value in required.items() if not isinstance(value, (int, float))]
+    missing = [key for key, value in required.items() if not _finite_nonnegative_metric(value)]
     if missing:
         raise RuntimeError(f"vLLM request metrics row for {request_id} is missing numeric fields: {', '.join(missing)}")
     normalized = dict(row)
@@ -270,16 +274,16 @@ def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str,
         }
     )
     if (
-        isinstance(completion_tokens, (int, float))
-        and isinstance(decode_sum_s, (int, float))
-        and decode_sum_s > 0
+        _finite_nonnegative_metric(completion_tokens)
+        and _finite_nonnegative_metric(decode_sum_s)
+        and float(decode_sum_s) > 0
         and "decode_tps" not in normalized
     ):
         normalized["decode_tps"] = completion_tokens / decode_sum_s
     if (
-        isinstance(accepted, (int, float))
-        and isinstance(draft_tokens, (int, float))
-        and draft_tokens > 0
+        _finite_nonnegative_metric(accepted)
+        and _finite_nonnegative_metric(draft_tokens)
+        and float(draft_tokens) > 0
         and "accepted_per_draft_token" not in normalized
     ):
         normalized["accepted_per_draft_token"] = accepted / draft_tokens
