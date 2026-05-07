@@ -103,7 +103,11 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     assert metrics["decode_sum_s"] == 1.0
     assert metrics["decode_tps"] == 12.0
     assert metrics["accepted_per_draft_token"] == 0.25
-    assert (task_dir / "vllm_request_metrics.jsonl").is_file()
+    raw_rows = [
+        json.loads(line)
+        for line in (task_dir / "vllm_request_metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert raw_rows[0]["runtime_config_hash"] == "sha256:test"
 
 
 def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Path) -> None:
@@ -136,11 +140,21 @@ def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Pa
     )
     source.write_text(stale + fresh, encoding="utf-8")
 
-    runner._write_vllm_per_turn_from_jsonl(task_dir, source, start_offset=len(stale.encode("utf-8")))
+    runner._write_vllm_per_turn_from_jsonl(
+        task_dir,
+        source,
+        start_offset=len(stale.encode("utf-8")),
+        runtime_config_hash="sha256:test",
+    )
 
     payload = json.loads((task_dir / "vllm_per_turn.json").read_text(encoding="utf-8"))
     assert sorted(payload["requests"]) == ["fresh"]
-    assert (task_dir / "vllm_request_metrics.jsonl").read_text(encoding="utf-8") == fresh
+    raw_rows = [
+        json.loads(line)
+        for line in (task_dir / "vllm_request_metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [row["request_id"] for row in raw_rows] == ["fresh"]
+    assert raw_rows[0]["runtime_config_hash"] == "sha256:test"
 
 
 def test_runner_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Path) -> None:

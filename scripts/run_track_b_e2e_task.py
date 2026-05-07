@@ -148,19 +148,22 @@ def _write_vllm_per_turn_from_jsonl(
     runtime_config_hash: str = "",
 ) -> None:
     requests_by_id: dict[str, dict[str, Any]] = {}
-    captured_lines: list[str] = []
+    captured_rows: list[dict[str, Any]] = []
     with source.open("r", encoding="utf-8") as handle:
         handle.seek(start_offset)
         for line_number, line in enumerate(handle, start=1):
             if not line.strip():
                 continue
-            captured_lines.append(line)
             try:
                 row = json.loads(line)
             except json.JSONDecodeError as exc:
                 raise RuntimeError(f"Malformed vLLM request metrics JSONL at {source}:{line_number}") from exc
             if not isinstance(row, dict):
                 continue
+            if runtime_config_hash:
+                row = dict(row)
+                row["runtime_config_hash"] = runtime_config_hash
+            captured_rows.append(row)
             normalized = _normalize_vllm_request_metrics(row)
             if normalized is None:
                 continue
@@ -168,7 +171,10 @@ def _write_vllm_per_turn_from_jsonl(
             requests_by_id[request_id] = metrics
     if not requests_by_id:
         raise RuntimeError(f"No complete vLLM request metrics rows found in {source}")
-    (task_dir / "vllm_request_metrics.jsonl").write_text("".join(captured_lines), encoding="utf-8")
+    (task_dir / "vllm_request_metrics.jsonl").write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in captured_rows),
+        encoding="utf-8",
+    )
     (task_dir / "vllm_per_turn.json").write_text(
         json.dumps({"requests": requests_by_id, "runtime_config_hash": runtime_config_hash}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
