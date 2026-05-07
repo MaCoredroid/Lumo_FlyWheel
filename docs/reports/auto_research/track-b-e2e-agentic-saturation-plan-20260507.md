@@ -616,6 +616,7 @@ Committed scaffold commits through this status checkpoint:
 - `c4a52fd Require Track B round hash readiness`
 - `c78d7f8 Reject Track B task summary drift`
 - `1377336 Require Track B task summary readiness`
+- `b483068 Require explicit Track B mismatch zeros`
 
 ## 12. Decision rules for ending the loop
 
