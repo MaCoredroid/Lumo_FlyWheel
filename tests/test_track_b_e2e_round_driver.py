@@ -107,7 +107,7 @@ def test_round_driver_blocks_before_measurement_when_preflight_fails(monkeypatch
     assert calls[0][1].endswith("preflight_track_b_e2e.py")
 
 
-def test_round_driver_defers_instrumentation_blockers_and_writes_diagnostic_summaries(
+def test_round_driver_excludes_deferred_instrumentation_checks_from_round_contract(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -175,18 +175,23 @@ def test_round_driver_defers_instrumentation_blockers_and_writes_diagnostic_summ
     assert rc == 0
     preflight_command = next(command for command in commands if Path(command[1]).name == "preflight_track_b_e2e.py")
     assert "--defer-checks" in preflight_command
-    assert "track_b_sample_workspaces_available" in preflight_command
+    assert "track_b_sample_workspaces_available" not in preflight_command
+    assert "codex_command_smoke" not in preflight_command
     runner_command = next(command for command in commands if Path(command[1]).name == "run_track_b_e2e_task.py")
     assert "--defer-codex-trace-out" in runner_command
     assert "--defer-vllm-request-metrics-join" in runner_command
     assert "--defer-dcgm-profile-fields" in runner_command
-    assert "--allow-missing-workspace-diagnostic" in runner_command
+    assert "--allow-missing-workspace-diagnostic" not in runner_command
     task_summary_command = next(
         command for command in commands if Path(command[1]).name == "build_track_b_e2e_summary.py" and "task" in command
     )
     assert "--generation-volume-within-band" not in task_summary_command
-    assert "--write-untrusted-diagnostic" in task_summary_command
+    assert "--write-untrusted-diagnostic" not in task_summary_command
     assert "--deferred-instrumentation-checks" in task_summary_command
+    round_summary_command = next(
+        command for command in commands if Path(command[1]).name == "build_track_b_e2e_summary.py" and "round" in command
+    )
+    assert "--write-untrusted-diagnostic" not in round_summary_command
 
 
 def test_round_driver_passes_vllm_side_channel_to_preflight(tmp_path: Path) -> None:

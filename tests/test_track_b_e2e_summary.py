@@ -226,6 +226,97 @@ def test_task_summary_single_run_is_diagnostic_only(tmp_path: Path) -> None:
     assert summary["truthful_measurement_attestation"]["rule_3_median_of_n_runs"] == 1
 
 
+def test_task_summary_treats_deferred_checks_as_contract_exclusions(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    base = datetime(2026, 5, 7, 18, 0, 0, tzinfo=UTC)
+
+    def ts(offset_s: float) -> str:
+        return (base + timedelta(seconds=offset_s)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    runtime_config_hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    _write_jsonl(
+        task_dir / "codex_trace.jsonl",
+        [
+            {
+                "event": "task_start",
+                "ts": ts(0.0),
+                "task_id": "transcript-merge-regression/v1-clean-baseline",
+                "runtime_config_hash": runtime_config_hash,
+                "trace_deferred": True,
+            },
+            {
+                "event": "task_end",
+                "ts": ts(2.0),
+                "task_id": "transcript-merge-regression/v1-clean-baseline",
+                "runtime_config_hash": runtime_config_hash,
+                "exit_code": 0,
+                "task_score": None,
+                "wallclock_s": 2.0,
+                "trace_deferred": True,
+            },
+        ],
+    )
+    (task_dir / "vllm_per_turn.json").write_text(
+        json.dumps(
+            {
+                "deferred": True,
+                "deferred_reason": "vllm_request_metrics_join_available",
+                "requests": {},
+                "runtime_config_hash": runtime_config_hash,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _write_jsonl(
+        task_dir / "dcgm_samples.jsonl",
+        [
+            {
+                "ts": ts(index / 100),
+                "gpu": 0,
+                "runtime_config_hash": runtime_config_hash,
+                "dram_active_pct": 0.54,
+                "sm_active_pct": 0.31,
+            }
+            for index in range(200)
+        ],
+    )
+
+    summary = build_task_summary(
+        Namespace(
+            round=0,
+            task_dir=str(task_dir),
+            family="transcript-merge-regression",
+            variant="v1-clean-baseline",
+            runtime_config_hash=runtime_config_hash,
+            baseline_workspace_hash=None,
+            run_wallclocks_json="[1.9, 2.0, 2.1]",
+            clock_skew_ms_p99=8,
+            trace_emitter_correctness_verified_at="",
+            dcgm_interval_s=0.01,
+            cold_completion_discarded=True,
+            cache_reset_verified=True,
+            protocol_hash_match=True,
+            generation_volume_within_band=False,
+            sample_hash_match=True,
+            deferred_instrumentation_checks=[
+                "vllm_request_metrics_join_available",
+                "codex_trace_out_supported",
+                "dcgm_profile_fields_available",
+            ],
+            write_untrusted_diagnostic=False,
+        )
+    )
+
+    assert summary["trusted_measurement"] is True
+    assert summary["diagnostic_only"] is False
+    assert summary["task_score"] is None
+    assert summary["truthful_measurement_attestation"]["rule_6_dcgm_profile_fields_present"] is False
+    assert summary["truthful_measurement_attestation"]["rule_11_generation_volume_within_band"] is False
+    assert summary["truthful_measurement_attestation"]["rule_14_trace_emitter_correctness_verified_at"] == ""
+
+
 def test_task_summary_rejects_trace_task_id_mismatch(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
@@ -945,6 +1036,54 @@ def test_round_summary_requires_unique_fixed_sample_tasks(tmp_path: Path) -> Non
     assert summary["task_summary_schema_mismatch_count"] == 0
     assert summary["task_summary_round_mismatch_count"] == 0
     assert (round_dir / "round_summary.json").is_file()
+
+
+def test_round_summary_counts_trace_deferred_completion_by_exit_code(tmp_path: Path) -> None:
+    round_dir = tmp_path / "round_0"
+    round_dir.mkdir()
+    for index, task_id in enumerate(TRACK_B_E2E_TASKS[:12]):
+        task_dir = round_dir / f"task_{index:02d}"
+        task_dir.mkdir(parents=True)
+        (task_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "schema": "lumo.track_b.e2e_task_summary.v1",
+                    "round": 0,
+                    "task_id": task_id,
+                    "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "trusted_measurement": True,
+                    "wallclock_s": float(100 + index),
+                    "task_completed": True,
+                    "task_score": None,
+                    "regime_share": {"plan": 1.0},
+                    "bottleneck_diagnosis": "trace-deferred",
+                    "sample_hash": SAMPLE_HASH,
+                    "deferred_instrumentation_checks": ["codex_trace_out_supported"],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    summary = build_round_summary(
+        Namespace(
+            round=0,
+            round_dir=str(round_dir),
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            config_delta_vs_prior_round="",
+            hypothesis="baseline",
+            wallclock_delta_vs_prior_round_s=None,
+            auto_research_agent_recommendation="",
+            next_round_proposal="",
+            deferred_instrumentation_checks=["codex_trace_out_supported"],
+            write_untrusted_diagnostic=False,
+        )
+    )
+
+    assert summary["trusted_task_count"] == 12
+    assert summary["tasks_correctness_passed"] == 12
+    assert summary["tasks_correctness_deferred_to_exit_code"] == 12
+    assert summary["diagnostic_only"] is False
 
 
 def test_round_summary_accepts_runner_nested_attempt_summaries(tmp_path: Path) -> None:

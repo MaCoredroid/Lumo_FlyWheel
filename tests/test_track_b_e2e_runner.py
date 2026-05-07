@@ -115,7 +115,7 @@ def test_run_one_can_record_missing_workspace_diagnostic(tmp_path: Path) -> None
     assert [row["event"] for row in trace_rows] == ["task_start", "task_end"]
 
 
-def test_deferred_runner_exit_code_does_not_fail_attempt(monkeypatch, tmp_path: Path) -> None:
+def test_deferred_runner_preserves_codex_exit_code(monkeypatch, tmp_path: Path) -> None:
     workspace = tmp_path / "benchmark_blueprints" / "families" / "family" / "workspace_bundle" / "variant"
     workspace.mkdir(parents=True)
     monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
@@ -147,7 +147,7 @@ def test_deferred_runner_exit_code_does_not_fail_attempt(monkeypatch, tmp_path: 
 
     rc = runner.run_one(args, "family", "variant")
 
-    assert rc == 0
+    assert rc == 1
     metadata = json.loads(
         (tmp_path / "out" / "round_0" / "family__variant" / "run_01" / "runner_metadata.json").read_text(
             encoding="utf-8"

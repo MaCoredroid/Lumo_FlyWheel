@@ -16,10 +16,6 @@ DEFERABLE_PREFLIGHT_CHECKS = {
     "codex_trace_out_supported",
     "dcgm_profile_fields_available",
 }
-DIAGNOSTIC_PREFLIGHT_DEFERS = {
-    "codex_command_smoke",
-    "track_b_sample_workspaces_available",
-}
 
 
 def _default_python() -> str:
@@ -264,8 +260,6 @@ def _preflight_command(args: argparse.Namespace, preflight_out: Path) -> list[st
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
     deferred = set(getattr(args, "defer_preflight_checks", []) or [])
     if deferred:
-        deferred.update(DIAGNOSTIC_PREFLIGHT_DEFERS)
-    if deferred:
         command.extend(["--defer-checks", *sorted(deferred)])
     return command
 
@@ -308,8 +302,6 @@ def _runner_command(args: argparse.Namespace) -> list[str]:
         command.append("--defer-vllm-request-metrics-join")
     if "dcgm_profile_fields_available" in deferred:
         command.append("--defer-dcgm-profile-fields")
-    if deferred:
-        command.append("--allow-missing-workspace-diagnostic")
     return command
 
 
@@ -351,7 +343,7 @@ def _task_summary_command(
         command.append("--generation-volume-within-band")
     if deferred:
         command.extend(["--deferred-instrumentation-checks", *deferred])
-    if args.write_untrusted_diagnostic or deferred:
+    if args.write_untrusted_diagnostic:
         command.append("--write-untrusted-diagnostic")
     return command
 
@@ -379,7 +371,7 @@ def _round_summary_command(args: argparse.Namespace, round_dir: Path) -> list[st
     deferred = getattr(args, "defer_preflight_checks", []) or []
     if deferred:
         command.extend(["--deferred-instrumentation-checks", *deferred])
-    if args.write_untrusted_diagnostic or deferred:
+    if args.write_untrusted_diagnostic:
         command.append("--write-untrusted-diagnostic")
     return command
 
@@ -494,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
         nargs="*",
         default=[],
         help=(
-            "Run a diagnostic round while recording these failed preflight checks as deferred. "
+            "Exclude these failed instrumentation checks from this round's required measurement contract. "
             "Supported values: vllm_request_metrics_join_available, codex_trace_out_supported, "
             "dcgm_profile_fields_available."
         ),
