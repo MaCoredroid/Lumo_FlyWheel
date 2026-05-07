@@ -135,12 +135,15 @@ def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str,
     return str(request_id), normalized
 
 
-def _write_vllm_per_turn_from_jsonl(task_dir: Path, source: Path) -> None:
+def _write_vllm_per_turn_from_jsonl(task_dir: Path, source: Path, *, start_offset: int = 0) -> None:
     requests_by_id: dict[str, dict[str, Any]] = {}
+    captured_lines: list[str] = []
     with source.open("r", encoding="utf-8") as handle:
+        handle.seek(start_offset)
         for line_number, line in enumerate(handle, start=1):
             if not line.strip():
                 continue
+            captured_lines.append(line)
             try:
                 row = json.loads(line)
             except json.JSONDecodeError as exc:
@@ -154,7 +157,7 @@ def _write_vllm_per_turn_from_jsonl(task_dir: Path, source: Path) -> None:
             requests_by_id[request_id] = metrics
     if not requests_by_id:
         raise RuntimeError(f"No complete vLLM request metrics rows found in {source}")
-    (task_dir / "vllm_request_metrics.jsonl").write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    (task_dir / "vllm_request_metrics.jsonl").write_text("".join(captured_lines), encoding="utf-8")
     (task_dir / "vllm_per_turn.json").write_text(
         json.dumps({"requests": requests_by_id}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -202,6 +205,12 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     _request("GET", args.health_url)
     if args.reset_prefix_cache_url:
         _request("POST", args.reset_prefix_cache_url, api_key=args.api_key, timeout=30)
+    vllm_request_metrics_jsonl = Path(args.vllm_request_metrics_jsonl) if args.vllm_request_metrics_jsonl else None
+    vllm_request_metrics_start_offset = (
+        vllm_request_metrics_jsonl.stat().st_size
+        if vllm_request_metrics_jsonl is not None and vllm_request_metrics_jsonl.is_file()
+        else 0
+    )
     metrics_pre = _metrics_text(args.metrics_url)
     (task_dir / "vllm_metrics_pre.txt").write_text(metrics_pre, encoding="utf-8")
 
@@ -237,8 +246,12 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     (task_dir / "codex_stderr.log").write_text(result.stderr if result else "", encoding="utf-8")
     metrics_post = _metrics_text(args.metrics_url)
     (task_dir / "vllm_metrics_post.txt").write_text(metrics_post, encoding="utf-8")
-    if args.vllm_request_metrics_jsonl:
-        _write_vllm_per_turn_from_jsonl(task_dir, Path(args.vllm_request_metrics_jsonl))
+    if vllm_request_metrics_jsonl is not None:
+        _write_vllm_per_turn_from_jsonl(
+            task_dir,
+            vllm_request_metrics_jsonl,
+            start_offset=vllm_request_metrics_start_offset,
+        )
     else:
         _write_vllm_per_turn(task_dir, metrics_pre, metrics_post)
     metadata = {

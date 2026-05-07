@@ -81,6 +81,43 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     assert (task_dir / "vllm_request_metrics.jsonl").is_file()
 
 
+def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    source = tmp_path / "vllm_requests.jsonl"
+    stale = (
+        json.dumps(
+            {
+                "request_id": "stale",
+                "prompt_tokens": 10,
+                "generation_tokens": 1,
+                "spec_decode_num_accepted_tokens": 0,
+                "spec_decode_num_draft_tokens": 1,
+            }
+        )
+        + "\n"
+    )
+    fresh = (
+        json.dumps(
+            {
+                "request_id": "fresh",
+                "prompt_tokens": 50,
+                "generation_tokens": 12,
+                "spec_decode_num_accepted_tokens": 3,
+                "spec_decode_num_draft_tokens": 12,
+            }
+        )
+        + "\n"
+    )
+    source.write_text(stale + fresh, encoding="utf-8")
+
+    runner._write_vllm_per_turn_from_jsonl(task_dir, source, start_offset=len(stale.encode("utf-8")))
+
+    payload = json.loads((task_dir / "vllm_per_turn.json").read_text(encoding="utf-8"))
+    assert sorted(payload["requests"]) == ["fresh"]
+    assert (task_dir / "vllm_request_metrics.jsonl").read_text(encoding="utf-8") == fresh
+
+
 def test_runner_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
