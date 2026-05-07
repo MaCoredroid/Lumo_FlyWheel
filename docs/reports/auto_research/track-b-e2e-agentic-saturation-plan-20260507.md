@@ -585,6 +585,8 @@ Committed scaffold commits through this status checkpoint:
 - `37ada55 Expose Track B driver evidence in readiness`
 - `88dd25f Update Track B readiness evidence ledger`
 - `ba92dae Tighten Track B round attestation driver`
+- `0b622b6 Update Track B attestation driver ledger`
+- `c7a790a Verify Track B generation volume guard`
 
 ## 12. Decision rules for ending the loop
 
