@@ -564,6 +564,8 @@ Committed scaffold commits through this status checkpoint:
 - `ef3060b Reject empty Track B vLLM request joins`
 - `a2f9317 Update Track B vLLM join ledger`
 - `bc93e96 Support Track B runner NCU mode flag`
+- `3e6d385 Update Track B runner NCU ledger`
+- `e13b92e Accept Track B runner task ids`
 
 ## 12. Decision rules for ending the loop
 
