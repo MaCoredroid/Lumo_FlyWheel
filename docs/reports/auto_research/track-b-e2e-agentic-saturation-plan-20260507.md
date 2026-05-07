@@ -317,8 +317,9 @@ If any step fails, **Round 0 must not record measurements**. Fix the runtime, re
 
 **Full measurement:**
 
-1. For each of the 13 tasks, run `scripts/run_track_b_e2e_task.py <family> <variant>` three times. Median wallclock per task is reported.
-2. After all 13 × 3 = 39 task runs, collect per-task `summary.json` and produce `round_0/round_summary.json`.
+1. Run the hard-gated round driver:
+   `.venv/bin/python scripts/run_track_b_e2e_round.py --round 0 --runtime-config-hash <hash> --codex-command-template '<patched-codex-command-with-{trace_out}>' --clock-skew-ms-p99 <measured> --trace-emitter-correctness-verified-at <timestamp>`.
+2. The driver runs `scripts/preflight_track_b_e2e.py` first and aborts before measurement if trace, DCGM, or vLLM request-correlation gates fail. If preflight passes, it runs all 13 tasks three times through `scripts/run_track_b_e2e_task.py`, summarizes the canonical `run_01` attempt with all three wallclocks, and produces `round_0/round_summary.json`.
 3. Run NCU archetype profiles once (5 runs) and write the expected non-empty files:
    `ncu_long-text.csv`, `ncu_tool-call-frame.csv`, `ncu_pure-investigation.csv`,
    `ncu_multimodal-prefill.csv`, and `ncu_subagent-orchestration.csv`.
@@ -364,7 +365,7 @@ Auto research agent produces this filled-in template before any work runs. Store
 ...
 
 ## Full measurement command
-`scripts/run_track_b_e2e_task.py --round N --tasks all`
+`.venv/bin/python scripts/run_track_b_e2e_round.py --round N --runtime-config-hash <hash> --codex-command-template "<patched-codex-command-with-{trace_out}>" --clock-skew-ms-p99 <measured> --trace-emitter-correctness-verified-at <timestamp>`
 
 ## Correctness caveat checklist
 - [ ] B-1 batch equivalence retained
@@ -525,7 +526,7 @@ This plan has a working local scaffold, but **Round 0 has not run and no E2E hea
 |---|---|---|
 | A. Patch Codex CLI with `--trace-out` | Blocked. Installed `codex-cli 0.128.0` has `codex exec --json` but no `--trace-out`; source audit shows wrapper-only logging is insufficient because request/exec events live in `codex-rs/core` and `codex-rs/exec`. | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md`; `output/track_b_e2e/codex_trace_emitter_correctness.json` is absent. |
 | B. DCGM/NVML 100 Hz sampler | Scaffolded but blocked for full readiness. The sampler runs under `.venv/bin/python`, but required DCGM profiling fields currently report `null` in this environment. | `scripts/sample_dcgm_during_task.py`; `scripts/preflight_track_b_e2e.py`; `track-b-e2e-round0-preflight-audit-20260507.md`. |
-| C. E2E task runner | Scaffolded. It wraps task directory creation, sampler lifecycle, Codex spawn, Prometheus capture, and summary build inputs, but cannot produce trusted Round 0 output until A/B/D pass. | `scripts/run_track_b_e2e_task.py`. |
+| C. E2E task runner | Scaffolded. The per-task runner wraps task directory creation, sampler lifecycle, Codex spawn, Prometheus capture, and summary build inputs. The round driver now hard-gates preflight before measurement, runs all 13 tasks with `--repeat 3`, summarizes one canonical task artifact with all three wallclocks, and promotes the round summary. It still cannot produce trusted Round 0 output until A/B/D pass. | `scripts/run_track_b_e2e_task.py`; `scripts/run_track_b_e2e_round.py`; `tests/test_track_b_e2e_round_driver.py`. |
 | D. Per-turn vLLM metric extension | Consumer scaffold complete; live correlation blocked. Local code can preserve request-id Prometheus labels when they exist and can now normalize a request-keyed vLLM JSONL side-channel into `vllm_per_turn.json`, but the active vLLM process exposes neither source. | `src/lumo_flywheel_serving/metrics.py`; `scripts/run_track_b_e2e_task.py`; `scripts/build_track_b_e2e_summary.py`; `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md`. |
 | E. Summary join + diagnosis rule | Scaffolded and unit-tested on synthetic artifacts. It correctly refuses missing/joinless evidence instead of manufacturing a round summary, and it now accepts the runner's nested `round_<N>/<task>/run_XX/summary.json` layout when promoting a round. | `scripts/build_track_b_e2e_summary.py`; `tests/test_track_b_e2e_summary.py`. |
 | F. Auto research agent prompt template | Scaffolded. | `prompts/track_b_e2e_round_proposal.md`. |
@@ -570,6 +571,7 @@ Committed scaffold commits through this status checkpoint:
 - `a1bb552 Validate Track B Codex trace command template`
 - `e772822 Update Track B trace template ledger`
 - `52be8a6 Accept nested Track B task summaries`
+- `bcee31b Add Track B E2E round driver`
 
 ## 12. Decision rules for ending the loop
 
