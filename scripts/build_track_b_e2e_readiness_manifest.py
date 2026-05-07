@@ -160,6 +160,8 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
         reasons.append("unexpected_trusted_task_ids_present")
     if payload.get("sample_hash_mismatch_count") not in (0, None):
         reasons.append("sample_hash_mismatch")
+    if payload.get("runtime_config_hash_mismatch_count") not in (0, None):
+        reasons.append("runtime_config_hash_mismatch")
     if not isinstance(payload.get("median_wallclock_s"), (int, float)):
         reasons.append("median_wallclock_missing")
     if not isinstance(payload.get("aggregate_wallclock_s"), (int, float)):
@@ -177,6 +179,7 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
         "min_trusted_task_count": ROUND0_MIN_TRUSTED_TASKS,
         "tasks_completed": tasks_completed,
         "tasks_correctness_passed": tasks_correctness_passed,
+        "runtime_config_hash_mismatch_count": payload.get("runtime_config_hash_mismatch_count"),
         "reasons": reasons,
     }
 
