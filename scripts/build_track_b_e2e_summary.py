@@ -137,6 +137,10 @@ def _finite_positive_number(value: Any, field: str) -> float:
     return value_float
 
 
+def _finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and math.isfinite(float(value))
+
+
 def _sample_values(samples: list[dict[str, Any]], field: str, start: Any, end: Any) -> list[float]:
     start_ts = _parse_ts(start)
     end_ts = _parse_ts(end)
@@ -150,7 +154,7 @@ def _sample_values(samples: list[dict[str, Any]], field: str, start: Any, end: A
         if end_ts is not None and sample_ts > end_ts:
             continue
         value = sample.get(field)
-        if isinstance(value, (int, float)):
+        if _finite_number(value):
             values.append(float(value))
     return values
 
@@ -160,14 +164,14 @@ def _dcgm_profile_field_status(samples: list[dict[str, Any]]) -> dict[str, Any]:
         sample
         for sample in samples
         if sample.get("profile_fields_available") is True
-        and all(isinstance(sample.get(field), (int, float)) for field in DCGM_PROFILE_FIELDS)
+        and all(_finite_number(sample.get(field)) for field in DCGM_PROFILE_FIELDS)
     ]
     observed = sorted(
         {
             field
             for sample in samples
             for field in DCGM_PROFILE_FIELDS
-            if isinstance(sample.get(field), (int, float))
+            if _finite_number(sample.get(field))
         }
     )
     missing = [field for field in DCGM_PROFILE_FIELDS if field not in observed]

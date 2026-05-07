@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -52,6 +53,10 @@ def _has_any(text: str, needles: list[str]) -> bool:
 
 def _module_available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
+
+
+def _finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and math.isfinite(float(value))
 
 
 REQUEST_ID_LABELS = ("request_id", "vllm_request_id", "request")
@@ -217,7 +222,7 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
         row
         for row in rows
         if row.get("profile_fields_available") is True
-        and all(isinstance(row.get(field), (int, float)) for field in DCGM_PROFILE_FIELDS)
+        and all(_finite_number(row.get(field)) for field in DCGM_PROFILE_FIELDS)
     ]
     profile_fields_present = bool(profile_field_rows)
     observed_numeric_fields = sorted(
@@ -225,7 +230,7 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
             field
             for row in rows
             for field in DCGM_PROFILE_FIELDS
-            if isinstance(row.get(field), (int, float))
+            if _finite_number(row.get(field))
         }
     )
     telemetry_sources = sorted(

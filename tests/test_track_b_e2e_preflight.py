@@ -454,6 +454,53 @@ def test_dcgm_profile_gate_requires_available_flag(monkeypatch, tmp_path: Path) 
     assert payload["missing_profile_fields"] == []
 
 
+def test_dcgm_profile_gate_rejects_nonfinite_profile_fields(monkeypatch, tmp_path: Path) -> None:
+    sample_path = tmp_path / "samples.jsonl"
+    sample_path.write_text(
+        json.dumps(
+            {
+                "profile_fields_available": True,
+                "dram_active_pct": float("nan"),
+                "sm_active_pct": 0.5,
+                "sm_occupancy_pct": 0.6,
+                "pipe_tensor_active_pct": 0.7,
+                "pipe_fp16_active_pct": 0.8,
+                "telemetry_source": "dcgm",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    class FakeTemp:
+        name = str(sample_path)
+
+        def __enter__(self) -> "FakeTemp":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    class FakeCompleted:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(
+        preflight_track_b_e2e.tempfile,
+        "NamedTemporaryFile",
+        lambda **kwargs: FakeTemp(),
+    )
+    monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", lambda *args, **kwargs: FakeCompleted())
+
+    payload = preflight_track_b_e2e._sampler_smoke(Path(sys.executable), 0.05)
+
+    assert payload["profile_fields_present"] is False
+    assert payload["profile_fields_available_sample_count"] == 0
+    assert "dram_active_pct" in payload["missing_profile_fields"]
+    assert "dram_active_pct" not in payload["observed_numeric_profile_fields"]
+
+
 def test_preflight_reports_dcgm_binding_availability(monkeypatch) -> None:
     class FakeCompleted:
         returncode = 0

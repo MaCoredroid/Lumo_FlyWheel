@@ -70,6 +70,18 @@ def test_dcgm_profile_status_requires_available_flag() -> None:
     assert status["profile_fields_available_missing"] is True
 
 
+def test_dcgm_profile_status_requires_finite_profile_fields() -> None:
+    sample = _dcgm_sample("2026-05-07T18:00:00.000Z")
+    sample["dram_active_pct"] = float("nan")
+
+    status = _dcgm_profile_field_status([sample])
+
+    assert status["ok"] is False
+    assert "dram_active_pct" in status["missing_profile_fields"]
+    assert "dram_active_pct" not in status["observed_numeric_profile_fields"]
+    assert status["profile_fields_available_sample_count"] == 0
+
+
 def test_task_summary_requires_and_records_truthful_attestation(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
