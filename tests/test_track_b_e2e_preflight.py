@@ -23,6 +23,43 @@ def test_preflight_reports_missing_track_b_sample_workspaces(monkeypatch, tmp_pa
     assert "transcript-merge-regression/v1-clean-baseline" in result["missing_task_ids"]
 
 
+def test_preflight_codex_command_smoke_reports_model_failure(monkeypatch, tmp_path: Path) -> None:
+    def fake_run(command, **kwargs):
+        return type(
+            "Completed",
+            (),
+            {
+                "returncode": 1,
+                "stdout": '{"type":"error","message":"model unsupported"}',
+                "stderr": "Reading additional input from stdin...",
+            },
+        )()
+
+    monkeypatch.setattr(preflight_track_b_e2e.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", fake_run)
+
+    result = preflight_track_b_e2e._codex_command_smoke(
+        Namespace(
+            codex_command_template='codex exec --json -C {workspace} --model {model} "Read {prompt_file}"',
+            codex_model="qwen3.5-27b",
+            codex_endpoint="http://127.0.0.1:9950/v1",
+            codex_api_key="local",
+            codex_smoke_timeout_s=1.0,
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["returncode"] == 1
+    assert "model unsupported" in result["stdout_tail"]
+
+
+def test_preflight_codex_command_smoke_requires_template() -> None:
+    result = preflight_track_b_e2e._codex_command_smoke(Namespace(codex_command_template=""))
+
+    assert result["ok"] is False
+    assert result["reason"] == "not_configured"
+
+
 def test_preflight_blocks_without_trace_out_request_labels_or_pynvml(monkeypatch) -> None:
     def fake_command(command: list[str], timeout_s: float = 10.0) -> dict[str, object]:
         if command == ["codex", "--version"]:
@@ -71,6 +108,11 @@ def test_preflight_blocks_without_trace_out_request_labels_or_pynvml(monkeypatch
     )
     monkeypatch.setattr(preflight_track_b_e2e.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", lambda *args, **kwargs: FakeCompleted())
+    monkeypatch.setattr(
+        preflight_track_b_e2e,
+        "_codex_command_smoke",
+        lambda args: {"ok": True, "returncode": 0},
+    )
 
     payload = preflight_track_b_e2e.audit(
         Namespace(
@@ -144,6 +186,11 @@ def test_preflight_accepts_required_e2e_instrumentation(monkeypatch) -> None:
     )
     monkeypatch.setattr(preflight_track_b_e2e.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", lambda *args, **kwargs: FakeCompleted())
+    monkeypatch.setattr(
+        preflight_track_b_e2e,
+        "_codex_command_smoke",
+        lambda args: {"ok": True, "returncode": 0},
+    )
 
     payload = preflight_track_b_e2e.audit(
         Namespace(

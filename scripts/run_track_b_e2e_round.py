@@ -17,6 +17,7 @@ DEFERABLE_PREFLIGHT_CHECKS = {
     "dcgm_profile_fields_available",
 }
 DIAGNOSTIC_PREFLIGHT_DEFERS = {
+    "codex_command_smoke",
     "track_b_sample_workspaces_available",
 }
 
@@ -250,6 +251,14 @@ def _preflight_command(args: argparse.Namespace, preflight_out: Path) -> list[st
         args.health_url,
         "--metrics-url",
         args.metrics_url,
+        "--codex-command-template",
+        getattr(args, "codex_command_template", ""),
+        "--codex-model",
+        getattr(args, "model", "qwen3.5-27b"),
+        "--codex-endpoint",
+        getattr(args, "endpoint", "http://127.0.0.1:9950/v1"),
+        "--codex-api-key",
+        getattr(args, "api_key", "local"),
     ]
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])

@@ -5,6 +5,8 @@ import argparse
 import importlib.util
 import json
 import math
+import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -37,6 +39,25 @@ def _command(command: list[str], timeout_s: float = 10.0) -> dict[str, Any]:
         "stdout": result.stdout,
         "stderr": result.stderr,
     }
+
+
+def _format_command_template(template: str, mapping: dict[str, str]) -> list[str]:
+    try:
+        rendered = template.format(**mapping)
+    except KeyError as exc:
+        return [f"template_error: missing placeholder {exc.args[0]}"]
+    return shlex.split(rendered)
+
+
+def _redact_command(command: list[str], secrets: list[str]) -> list[str]:
+    redacted = []
+    for part in command:
+        clean = part
+        for secret in secrets:
+            if secret:
+                clean = clean.replace(secret, "<redacted>")
+        redacted.append(clean)
+    return redacted
 
 
 def _get(url: str, timeout_s: float = 5.0) -> dict[str, Any]:
@@ -112,6 +133,66 @@ def _track_b_sample_workspace_coverage() -> dict[str, Any]:
         "missing_task_ids": missing,
         "task_coverage": task_coverage,
     }
+
+
+def _codex_command_smoke(args: argparse.Namespace) -> dict[str, Any]:
+    template = getattr(args, "codex_command_template", "") or ""
+    if not template:
+        return {
+            "ok": False,
+            "reason": "not_configured",
+            "required_placeholder": "{prompt_file}",
+        }
+    with tempfile.TemporaryDirectory(prefix="track_b_codex_smoke_") as tmp:
+        root = Path(tmp)
+        workspace = root / "workspace"
+        task_dir = root / "task"
+        workspace.mkdir()
+        task_dir.mkdir()
+        subprocess.run(["git", "init"], cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        prompt = root / "prompt.md"
+        trace_out = root / "codex_trace.jsonl"
+        prompt.write_text("Track B preflight smoke: reply with OK only.\n", encoding="utf-8")
+        command = _format_command_template(
+            template,
+            {
+                "trace_out": str(trace_out),
+                "workspace": str(workspace),
+                "prompt_file": str(prompt),
+                "model": args.codex_model,
+                "endpoint": args.codex_endpoint,
+                "api_key": args.codex_api_key,
+                "task_dir": str(task_dir),
+            },
+        )
+        redacted_command = _redact_command(command, [args.codex_api_key])
+        if command and command[0].startswith("template_error:"):
+            return {"ok": False, "reason": command[0], "command": command}
+        if not command:
+            return {"ok": False, "reason": "empty_command", "command": command}
+        path = shutil.which(command[0])
+        if path is None:
+            return {"ok": False, "reason": "not_found", "command": redacted_command}
+        try:
+            result = subprocess.run(
+                command,
+                cwd=workspace,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=args.codex_smoke_timeout_s,
+                env={**os.environ, "OPENAI_API_KEY": args.codex_api_key, "OPENAI_BASE_URL": args.codex_endpoint},
+            )
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "reason": "timeout", "command": redacted_command}
+        return {
+            "ok": result.returncode == 0,
+            "returncode": result.returncode,
+            "command": redacted_command,
+            "stdout_tail": result.stdout[-2000:],
+            "stderr_tail": result.stderr[-2000:],
+            "trace_out_created": trace_out.is_file(),
+        }
 
 
 def _metric_label_names(line: str) -> set[str]:
@@ -291,6 +372,7 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
 def audit(args: argparse.Namespace) -> dict[str, Any]:
     codex_help = _command(["codex", "exec", "--help"])
     codex_version = _command(["codex", "--version"])
+    codex_smoke = _codex_command_smoke(args)
     health = _get(args.health_url)
     metrics = _get(args.metrics_url)
     metrics_text = str(metrics.get("text") or "")
@@ -331,6 +413,7 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
         "codex_installed": {"ok": codex_version.get("ok"), "version": str(codex_version.get("stdout") or "").strip()},
         "codex_trace_out_supported": {"ok": "--trace-out" in str(codex_help.get("stdout") or "")},
         "codex_json_events_supported": {"ok": "--json" in str(codex_help.get("stdout") or "")},
+        "codex_command_smoke": codex_smoke,
         "nvidia_smi_available": {"ok": shutil.which("nvidia-smi") is not None},
         "ncu_available": {"ok": shutil.which("ncu") is not None},
         "dcgmi_available": {"ok": shutil.which("dcgmi") is not None},
@@ -397,6 +480,11 @@ def main() -> int:
     parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
     parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")
     parser.add_argument("--vllm-request-metrics-jsonl", default="")
+    parser.add_argument("--codex-command-template", default="")
+    parser.add_argument("--codex-model", default="qwen3.5-27b")
+    parser.add_argument("--codex-endpoint", default="http://127.0.0.1:9950/v1")
+    parser.add_argument("--codex-api-key", default=os.environ.get("OPENAI_API_KEY", "local"))
+    parser.add_argument("--codex-smoke-timeout-s", type=float, default=60.0)
     parser.add_argument("--out", default="")
     parser.add_argument(
         "--defer-checks",
@@ -412,6 +500,7 @@ def main() -> int:
             "spec_decode_metrics_exposed",
             "vllm_request_metrics_join_available",
             "codex_trace_out_supported",
+            "codex_command_smoke",
             "nvidia_smi_available",
             "ncu_available",
             "pynvml_available",
