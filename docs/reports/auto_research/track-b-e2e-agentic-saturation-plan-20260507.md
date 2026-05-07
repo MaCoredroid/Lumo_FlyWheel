@@ -601,6 +601,8 @@ Committed scaffold commits through this status checkpoint:
 - `d1b7a55 Accept Track B completion token side channel`
 - `752b3eb Update Track B completion token ledger`
 - `ecba6e9 Verify Track B trace task identity`
+- `764f47c Update Track B trace identity ledger`
+- `6b74dc1 Snapshot Track B vLLM side channel rows`
 
 ## 12. Decision rules for ending the loop
 
