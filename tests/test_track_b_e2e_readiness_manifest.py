@@ -210,6 +210,8 @@ def test_round0_summary_verification_requires_trusted_completed_tasks(tmp_path: 
                 "unexpected_trusted_task_ids": [],
                 "sample_hash_mismatch_count": 0,
                 "runtime_config_hash_mismatch_count": 0,
+                "task_summary_schema_mismatch_count": 0,
+                "task_summary_round_mismatch_count": 0,
                 "tasks_completed": 12,
                 "tasks_correctness_passed": 12,
                 "median_wallclock_s": 187.4,
@@ -242,6 +244,8 @@ def test_round0_summary_verification_rejects_existence_only_summary(tmp_path: Pa
                 "unexpected_trusted_task_ids": ["off-sample/v1"],
                 "sample_hash_mismatch_count": 1,
                 "runtime_config_hash_mismatch_count": 1,
+                "task_summary_schema_mismatch_count": 1,
+                "task_summary_round_mismatch_count": 1,
             }
         ),
         encoding="utf-8",
@@ -256,6 +260,8 @@ def test_round0_summary_verification_rejects_existence_only_summary(tmp_path: Pa
     assert "unexpected_trusted_task_ids_present" in result["reasons"]
     assert "sample_hash_mismatch" in result["reasons"]
     assert "runtime_config_hash_mismatch" in result["reasons"]
+    assert "task_summary_schema_mismatch" in result["reasons"]
+    assert "task_summary_round_mismatch" in result["reasons"]
     assert "sample_hash_missing" in result["reasons"]
     assert "diagnosis_distribution_missing" in result["reasons"]
 
