@@ -556,6 +556,8 @@ Committed scaffold commits through this status checkpoint:
 - `cb1bc58 Update Track B trace verifier ledger`
 - `b9dee12 Validate Track B NCU metric coverage`
 - `f1a6ee7 Tighten Track B vLLM JSONL join gate`
+- `0919c33 Update Track B JSONL gate ledger`
+- `5e400ef Reject incomplete Track B vLLM JSONL rows`
 
 ## 12. Decision rules for ending the loop
 
