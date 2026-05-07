@@ -23,6 +23,11 @@ def _validate_codex_command_template(template: str) -> None:
         raise ValueError("codex command template must include {trace_out}")
 
 
+def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
+    if not runtime_config_hash.startswith("sha256:") or not runtime_config_hash.removeprefix("sha256:"):
+        raise ValueError("--runtime-config-hash must be a non-empty sha256:<digest> value")
+
+
 def _tasks() -> list[str]:
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     from build_track_b_e2e_summary import TRACK_B_E2E_TASKS  # noqa: PLC0415
@@ -320,6 +325,7 @@ def _read_blockers(preflight_out: Path) -> str:
 
 def run_round(args: argparse.Namespace) -> int:
     _validate_codex_command_template(args.codex_command_template)
+    _validate_runtime_config_hash(args.runtime_config_hash)
     if args.repeat < 4:
         raise ValueError("--repeat must be >= 4 so run_01 can be discarded as cold and 3 measured runs remain")
     if not args.protocol_hash_match:

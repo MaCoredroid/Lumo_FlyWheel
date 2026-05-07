@@ -40,6 +40,11 @@ def _validate_codex_command_template(template: str) -> None:
         raise ValueError("codex command template must include {trace_out}")
 
 
+def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
+    if not runtime_config_hash.startswith("sha256:") or not runtime_config_hash.removeprefix("sha256:"):
+        raise ValueError("--runtime-config-hash must be a non-empty sha256:<digest> value")
+
+
 def _profile_path(out_root: Path, archetype: str) -> Path:
     return out_root / f"ncu_{archetype}.csv"
 
@@ -149,6 +154,7 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
 
 def run_profiles(args: argparse.Namespace) -> int:
     _validate_codex_command_template(args.codex_command_template)
+    _validate_runtime_config_hash(args.runtime_config_hash)
     if shutil.which(args.ncu_bin) is None:
         raise RuntimeError(f"ncu binary not found: {args.ncu_bin}")
     out_root = Path(args.out_root)

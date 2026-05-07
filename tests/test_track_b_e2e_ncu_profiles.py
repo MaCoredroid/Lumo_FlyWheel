@@ -73,3 +73,24 @@ def test_ncu_profile_driver_rejects_missing_metric(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="missing required metrics"):
         ncu_profiles._validate_profile(profile)
+
+
+def test_ncu_profile_driver_rejects_unstamped_runtime_hash(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+
+    rc = ncu_profiles.main(
+        [
+            "--archetype",
+            "tool-call-frame",
+            "--out-root",
+            str(tmp_path),
+            "--task-out-root",
+            str(tmp_path / "ncu_task_runs"),
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--runtime-config-hash",
+            "not-a-runtime-hash",
+        ]
+    )
+
+    assert rc == 2

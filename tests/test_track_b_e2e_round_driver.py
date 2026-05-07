@@ -270,3 +270,25 @@ def test_round_driver_rejects_existing_measurement_outputs(tmp_path: Path) -> No
     )
 
     assert rc == 2
+
+
+def test_round_driver_rejects_unstamped_runtime_hash(tmp_path: Path) -> None:
+    rc = round_driver.main(
+        [
+            "--round",
+            "0",
+            "--runtime-config-hash",
+            "not-a-runtime-hash",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--clock-skew-ms-p99",
+            "10",
+            "--trace-emitter-correctness-verified-at",
+            "2026-05-07T00:00:00Z",
+            "--protocol-hash-match",
+            "--out-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert rc == 2
