@@ -59,6 +59,20 @@ def test_runner_rejects_unstamped_runtime_hash() -> None:
         runner._validate_runtime_config_hash("sha256:")
 
 
+def test_run_one_rejects_unstamped_runtime_hash_before_artifacts(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="runtime-config-hash"):
+        runner.run_one(
+            Namespace(
+                runtime_config_hash="not-a-runtime-hash",
+                out_root=str(tmp_path),
+            ),
+            "missing-family",
+            "v1-clean-baseline",
+        )
+
+    assert not any(tmp_path.iterdir())
+
+
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()

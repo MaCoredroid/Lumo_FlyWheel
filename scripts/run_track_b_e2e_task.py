@@ -206,6 +206,7 @@ def _stop_sampler(process: subprocess.Popen[str] | None) -> None:
 
 
 def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
+    _validate_runtime_config_hash(args.runtime_config_hash)
     workspace = REPO_ROOT / "benchmark_blueprints" / "families" / family / "workspace_bundle" / variant
     if not workspace.is_dir():
         raise RuntimeError(f"workspace bundle missing: {workspace}")
