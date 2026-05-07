@@ -137,7 +137,7 @@ If transcripts diverge, the patch is wrong and **no rounds may run** until it is
 | `codex_trace.jsonl` | patched Codex CLI | per-turn, per-tool-call, per-file-read | per task |
 | `vllm_per_turn.json` | vLLM Prometheus delta keyed by `vllm_request_id` | per-turn | per task |
 | `dcgm_samples.jsonl` | DCGM/NVML 100 Hz sampler | timestamped | per task |
-| `ncu_archetype_profile.json` | one-shot NCU per archetype | per-kernel | one per archetype, reused across rounds |
+| `ncu_<archetype>.csv` + `ncu_<archetype>.json` | one-shot NCU per archetype | per-kernel profile plus provenance sidecar | one pair per archetype, reused across rounds |
 
 ### 5.1 vLLM per-turn join
 
@@ -198,26 +198,26 @@ ncu --target-processes all --kernel-id ::regex:.*linear.*|.*attention.*|.*sample
               l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,\
               tpc__warps_active.avg.pct_of_peak_sustained_active \
     --csv --log-file output/track_b_e2e/ncu_<archetype>.csv \
-    -- python scripts/run_track_b_e2e_task.py <archetype-task> --no-dcgm --ncu-mode
+    -- python scripts/run_track_b_e2e_task.py <archetype-task> --runtime-config-hash <hash> --no-dcgm --ncu-mode
 ```
 
 `scripts/run_track_b_e2e_ncu_profiles.py` owns the five archetype-to-task mappings, runs `scripts/run_track_b_e2e_task.py` with `--no-dcgm --ncu-mode`, writes the five `output/track_b_e2e/ncu_<archetype>.csv` files plus `ncu_<archetype>.json` sidecars carrying archetype/task/round/runtime-hash provenance, stores profiled task artifacts under `output/track_b_e2e/ncu_task_runs/` so they cannot overwrite measurement-round attempts, and rejects missing or metric-incomplete CSVs before the readiness manifest sees them.
 
-Profile output joined into `ncu_archetype_profile.json`:
+Profile sidecar `ncu_<archetype>.json`:
 
 ```json
 {
+  "schema": "lumo.track_b.ncu_archetype_profile.v1",
   "archetype": "long-text",
-  "representative_task": "sqlalchemy-2-session-modernization/v1-clean-baseline",
-  "kernels": [
-    {"name": "ffn_silu_mul_fp8_gemm_kernel", "time_share_pct": 38.4, "dram_throughput_pct": 0.71, "sm_active_pct": 0.42, "classification": "memory-bound"},
-    ...
-  ],
-  "summary": {"memory_bound_share": 0.61, "sm_bound_share": 0.18, "latency_bound_share": 0.21}
+  "task_id": "sqlalchemy-2-session-modernization/v1-clean-baseline",
+  "round": 0,
+  "runtime_config_hash": "sha256:...",
+  "profile_csv": "output/track_b_e2e/ncu_long-text.csv",
+  "required_metrics": ["gpu__time_duration.sum", "..."]
 }
 ```
 
-Per-kernel `classification` rule:
+Per-kernel classification rule for downstream analysis of the NCU CSV:
 
 - `dram_throughput_pct >= 0.80` → `memory-bound`
 - `sm_active_pct >= 0.80 AND dram_throughput_pct < 0.50` → `sm-bound`
