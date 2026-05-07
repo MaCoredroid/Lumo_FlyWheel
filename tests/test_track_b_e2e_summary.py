@@ -17,6 +17,18 @@ def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
 
+def _dcgm_sample(ts: str) -> dict[str, object]:
+    return {
+        "ts": ts,
+        "gpu": 0,
+        "dram_active_pct": 0.54,
+        "sm_active_pct": 0.31,
+        "sm_occupancy_pct": 0.27,
+        "pipe_tensor_active_pct": 0.18,
+        "pipe_fp16_active_pct": 0.04,
+    }
+
+
 def test_task_summary_requires_and_records_truthful_attestation(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
@@ -63,10 +75,7 @@ def test_task_summary_requires_and_records_truthful_attestation(tmp_path: Path) 
         ),
         encoding="utf-8",
     )
-    samples = [
-        {"ts": ts(index / 100), "gpu": 0, "dram_active_pct": 0.54, "sm_active_pct": 0.31}
-        for index in range(200)
-    ]
+    samples = [_dcgm_sample(ts(index / 100)) for index in range(200)]
     _write_jsonl(task_dir / "dcgm_samples.jsonl", samples)
 
     summary = build_task_summary(
@@ -96,6 +105,7 @@ def test_task_summary_requires_and_records_truthful_attestation(tmp_path: Path) 
     assert summary["wallclock_s"] == 2.0
     assert summary["bottleneck_regime"] == "plan"
     assert summary["truthful_measurement_attestation"]["rule_12_spec_decode_metrics_present"] is True
+    assert summary["truthful_measurement_attestation"]["rule_6_dcgm_missing_profile_fields"] == []
     assert (task_dir / "summary.json").is_file()
 
 
@@ -135,7 +145,7 @@ def test_task_summary_single_run_is_diagnostic_only(tmp_path: Path) -> None:
     )
     _write_jsonl(
         task_dir / "dcgm_samples.jsonl",
-        [{"ts": ts(index / 100), "gpu": 0, "dram_active_pct": 0.54, "sm_active_pct": 0.31} for index in range(200)],
+        [_dcgm_sample(ts(index / 100)) for index in range(200)],
     )
 
     summary = build_task_summary(
@@ -207,7 +217,7 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
     )
     _write_jsonl(
         task_dir / "dcgm_samples.jsonl",
-        [{"ts": ts(index / 100), "gpu": 0, "dram_active_pct": 0.54, "sm_active_pct": 0.31} for index in range(200)],
+        [_dcgm_sample(ts(index / 100)) for index in range(200)],
     )
 
     summary = build_task_summary(
@@ -235,3 +245,72 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
     assert summary["trusted_measurement"] is True
     assert plan_turn["decode_tps"] == 12.0
     assert plan_turn["accepted_per_draft"] == 0.25
+
+
+def test_task_summary_rejects_missing_dcgm_profile_fields(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    base = datetime(2026, 5, 7, 18, 0, 0, tzinfo=UTC)
+
+    def ts(offset_s: float) -> str:
+        return (base + timedelta(seconds=offset_s)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    _write_jsonl(
+        task_dir / "codex_trace.jsonl",
+        [
+            {"event": "task_start", "ts": ts(0.0), "task_id": "transcript-merge-regression/v1-clean-baseline"},
+            {"event": "turn_start", "turn": 0, "regime": "plan", "ts": ts(0.1), "vllm_request_id": "req-1"},
+            {"event": "turn_end", "turn": 0, "ts": ts(1.0), "prompt_tokens": 50, "completion_tokens": 12},
+            {"event": "task_end", "ts": ts(2.0), "exit_code": 0, "task_score": 0.74, "wallclock_s": 2.0},
+        ],
+    )
+    (task_dir / "vllm_per_turn.json").write_text(
+        json.dumps(
+            {
+                "requests": {
+                    "req-1": {
+                        "completion_tokens": 12,
+                        "decode_sum_s": 0.9,
+                        "decode_tps": 13.33,
+                        "spec_decode_num_accepted_tokens": 3,
+                        "spec_decode_num_draft_tokens": 12,
+                        "accepted_per_draft_token": 0.25,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_jsonl(
+        task_dir / "dcgm_samples.jsonl",
+        [{"ts": ts(index / 100), "gpu": 0, "dram_active_pct": 0.54, "sm_active_pct": 0.31} for index in range(200)],
+    )
+
+    summary = build_task_summary(
+        Namespace(
+            round=0,
+            task_dir=str(task_dir),
+            family="transcript-merge-regression",
+            variant="v1-clean-baseline",
+            runtime_config_hash="sha256:test",
+            baseline_workspace_hash=None,
+            run_wallclocks_json="[1.9, 2.0, 2.1]",
+            clock_skew_ms_p99=8,
+            trace_emitter_correctness_verified_at="2026-05-07T14:00:00Z",
+            dcgm_interval_s=0.01,
+            cold_completion_discarded=True,
+            cache_reset_verified=True,
+            protocol_hash_match=True,
+            generation_volume_within_band=True,
+            sample_hash_match=True,
+            write_untrusted_diagnostic=True,
+        )
+    )
+
+    assert summary["trusted_measurement"] is False
+    assert summary["truthful_measurement_attestation"]["rule_6_dcgm_profile_fields_present"] is False
+    assert summary["truthful_measurement_attestation"]["rule_6_dcgm_missing_profile_fields"] == [
+        "sm_occupancy_pct",
+        "pipe_tensor_active_pct",
+        "pipe_fp16_active_pct",
+    ]

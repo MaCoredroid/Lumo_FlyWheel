@@ -29,6 +29,13 @@ TRACK_B_E2E_TASKS = [
     "fanout-fullstack-release-blocker/v1-clean-baseline",
 ]
 SAMPLE_HASH = hashlib.sha256("\n".join(TRACK_B_E2E_TASKS).encode("utf-8")).hexdigest()
+DCGM_PROFILE_FIELDS = (
+    "dram_active_pct",
+    "sm_active_pct",
+    "sm_occupancy_pct",
+    "pipe_tensor_active_pct",
+    "pipe_fp16_active_pct",
+)
 
 
 def _load_json(path: Path) -> Any:
@@ -105,6 +112,23 @@ def _sample_values(samples: list[dict[str, Any]], field: str, start: Any, end: A
         if isinstance(value, (int, float)):
             values.append(float(value))
     return values
+
+
+def _dcgm_profile_field_status(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    observed = sorted(
+        {
+            field
+            for sample in samples
+            for field in DCGM_PROFILE_FIELDS
+            if isinstance(sample.get(field), (int, float))
+        }
+    )
+    missing = [field for field in DCGM_PROFILE_FIELDS if field not in observed]
+    return {
+        "ok": not missing,
+        "observed_numeric_profile_fields": observed,
+        "missing_profile_fields": missing,
+    }
 
 
 def _manifest_workspace_hash(family: str, variant: str) -> str | None:
@@ -311,10 +335,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
     }
     expected_samples = observed_wallclock_s / args.dcgm_interval_s if args.dcgm_interval_s > 0 else 0
     dcgm_dropout_pct = max(0.0, (1.0 - (len(dcgm) / expected_samples)) * 100.0) if expected_samples else 100.0
-    dcgm_profile_fields_present = any(
-        isinstance(sample.get("dram_active_pct"), (int, float)) and isinstance(sample.get("sm_active_pct"), (int, float))
-        for sample in dcgm
-    )
+    dcgm_profile_fields = _dcgm_profile_field_status(dcgm)
     workspace_hash = _manifest_workspace_hash(family, variant)
     baseline_hash = args.baseline_workspace_hash or workspace_hash
     attestation = {
@@ -324,7 +345,9 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         "rule_4_workspace_hash_match": workspace_hash == baseline_hash,
         "rule_5_cache_reset_verified": bool(args.cache_reset_verified),
         "rule_6_dcgm_dropout_pct": round(dcgm_dropout_pct, 6),
-        "rule_6_dcgm_profile_fields_present": dcgm_profile_fields_present,
+        "rule_6_dcgm_profile_fields_present": dcgm_profile_fields["ok"],
+        "rule_6_dcgm_observed_numeric_profile_fields": dcgm_profile_fields["observed_numeric_profile_fields"],
+        "rule_6_dcgm_missing_profile_fields": dcgm_profile_fields["missing_profile_fields"],
         "rule_7_clock_skew_ms_p99": args.clock_skew_ms_p99,
         "rule_8_task_completed_normally": task_end.get("exit_code") == 0 and task_end.get("task_score") is not None,
         "rule_9_wallclock_wall_to_wall": abs(observed_wallclock_s - (float(task_end.get("wallclock_s", observed_wallclock_s)))) < 0.001,
