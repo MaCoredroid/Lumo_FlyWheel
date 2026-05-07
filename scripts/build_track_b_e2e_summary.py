@@ -581,7 +581,7 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
     _validate_runtime_config_hash(args.runtime_config_hash)
     round_dir = Path(args.round_dir)
     summaries = [_load_json(path) for path in _round_summary_paths(round_dir)]
-    trusted = [row for row in summaries if row.get("trusted_measurement")]
+    trusted = [row for row in summaries if row.get("trusted_measurement") is True]
     trusted_task_ids = [str(row.get("task_id")) for row in trusted]
     trusted_unique_task_ids = sorted(set(trusted_task_ids))
     duplicate_trusted_task_ids = sorted(
@@ -606,11 +606,11 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         for row in trusted
         if row.get("round") != args.round
     )
-    trusted_completed_count = sum(1 for row in trusted if row.get("task_completed"))
+    trusted_completed_count = sum(1 for row in trusted if row.get("task_completed") is True)
     trusted_correctness_count = sum(
         1
         for row in trusted
-        if row.get("task_completed")
+        if row.get("task_completed") is True
         and isinstance(row.get("task_score"), (int, float))
         and math.isfinite(float(row["task_score"]))
         and float(row["task_score"]) >= 0
