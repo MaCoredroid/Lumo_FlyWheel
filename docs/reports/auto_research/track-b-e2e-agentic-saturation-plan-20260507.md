@@ -625,6 +625,7 @@ Committed scaffold commits through this status checkpoint:
 - `9d2d256 Align Track B NCU artifact docs`
 - `93866a3 Match Track B NCU hashes to round`
 - `4e2e0be Use Track B round driver in proposal prompt`
+- `84a7a40 Align Track B spec metric prompt`
 
 ## 12. Decision rules for ending the loop
 
