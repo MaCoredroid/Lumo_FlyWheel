@@ -16,6 +16,9 @@ DEFERABLE_PREFLIGHT_CHECKS = {
     "codex_trace_out_supported",
     "dcgm_profile_fields_available",
 }
+DIAGNOSTIC_PREFLIGHT_DEFERS = {
+    "track_b_sample_workspaces_available",
+}
 
 
 def _default_python() -> str:
@@ -250,9 +253,11 @@ def _preflight_command(args: argparse.Namespace, preflight_out: Path) -> list[st
     ]
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
-    deferred = getattr(args, "defer_preflight_checks", []) or []
+    deferred = set(getattr(args, "defer_preflight_checks", []) or [])
     if deferred:
-        command.extend(["--defer-checks", *deferred])
+        deferred.update(DIAGNOSTIC_PREFLIGHT_DEFERS)
+    if deferred:
+        command.extend(["--defer-checks", *sorted(deferred)])
     return command
 
 

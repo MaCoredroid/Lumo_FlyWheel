@@ -12,6 +12,17 @@ if str(SCRIPTS) not in sys.path:
 import preflight_track_b_e2e  # noqa: E402
 
 
+def test_preflight_reports_missing_track_b_sample_workspaces(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(preflight_track_b_e2e, "REPO_ROOT", tmp_path)
+
+    result = preflight_track_b_e2e._track_b_sample_workspace_coverage()
+
+    assert result["ok"] is False
+    assert result["expected_task_count"] == 13
+    assert result["available_task_count"] == 0
+    assert "transcript-merge-regression/v1-clean-baseline" in result["missing_task_ids"]
+
+
 def test_preflight_blocks_without_trace_out_request_labels_or_pynvml(monkeypatch) -> None:
     def fake_command(command: list[str], timeout_s: float = 10.0) -> dict[str, object]:
         if command == ["codex", "--version"]:

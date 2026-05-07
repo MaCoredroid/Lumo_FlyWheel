@@ -175,6 +175,7 @@ def test_round_driver_defers_instrumentation_blockers_and_writes_diagnostic_summ
     assert rc == 0
     preflight_command = next(command for command in commands if Path(command[1]).name == "preflight_track_b_e2e.py")
     assert "--defer-checks" in preflight_command
+    assert "track_b_sample_workspaces_available" in preflight_command
     runner_command = next(command for command in commands if Path(command[1]).name == "run_track_b_e2e_task.py")
     assert "--defer-codex-trace-out" in runner_command
     assert "--defer-vllm-request-metrics-join" in runner_command

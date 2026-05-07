@@ -90,6 +90,30 @@ DCGM_PROFILE_FIELDS = (
 )
 
 
+def _track_b_sample_workspace_coverage() -> dict[str, Any]:
+    from build_track_b_e2e_summary import TRACK_B_E2E_TASKS  # noqa: PLC0415
+
+    task_coverage: dict[str, dict[str, Any]] = {}
+    missing: list[str] = []
+    for task_id in TRACK_B_E2E_TASKS:
+        family, variant = task_id.split("/", 1)
+        path = REPO_ROOT / "benchmark_blueprints" / "families" / family / "workspace_bundle" / variant
+        ok = path.is_dir()
+        if not ok:
+            missing.append(task_id)
+        task_coverage[task_id] = {
+            "ok": ok,
+            "path": str(path.relative_to(REPO_ROOT)),
+        }
+    return {
+        "ok": not missing,
+        "expected_task_count": len(TRACK_B_E2E_TASKS),
+        "available_task_count": len(TRACK_B_E2E_TASKS) - len(missing),
+        "missing_task_ids": missing,
+        "task_coverage": task_coverage,
+    }
+
+
 def _metric_label_names(line: str) -> set[str]:
     if "{" not in line or "}" not in line:
         return set()
@@ -272,6 +296,7 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
     metrics_text = str(metrics.get("text") or "")
     request_label_coverage = _request_labeled_metric_coverage(metrics_text)
     side_channel_coverage = _request_metrics_jsonl_coverage(getattr(args, "vllm_request_metrics_jsonl", ""))
+    sample_workspace_coverage = _track_b_sample_workspace_coverage()
     measurement_python = Path(args.python)
     sampler_smoke = _sampler_smoke(measurement_python, args.sampler_smoke_duration_s)
     pynvml_check = subprocess.run(
@@ -337,6 +362,7 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
             "profile_fields_available_sample_count": sampler_smoke.get("profile_fields_available_sample_count", 0),
             "profile_fields_unavailable_reasons": sampler_smoke.get("profile_fields_unavailable_reasons", []),
         },
+        "track_b_sample_workspaces_available": sample_workspace_coverage,
     }
     deferred = sorted(set(getattr(args, "defer_checks", []) or []))
     blockers = [
@@ -391,6 +417,7 @@ def main() -> int:
             "pynvml_available",
             "dcgm_sampler_runs",
             "dcgm_profile_fields_available",
+            "track_b_sample_workspaces_available",
         ],
     )
     args = parser.parse_args()
