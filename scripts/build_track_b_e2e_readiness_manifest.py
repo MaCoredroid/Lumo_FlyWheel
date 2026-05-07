@@ -18,6 +18,7 @@ TRACE_CORRECTNESS_REQUIRED_TASK_FIELDS = (
     "model_outputs_byte_identical",
     "tool_call_sequences_byte_identical",
     "milestone_scores_identical",
+    "trace_schema_valid",
 )
 ROUND0_MIN_TRUSTED_TASKS = 12
 NCU_ARCHETYPES = (
@@ -103,6 +104,7 @@ def _trace_correctness_verification(path: Path) -> dict[str, Any]:
             and task.get("model_outputs_byte_identical") is True
             and task.get("tool_call_sequences_byte_identical") is True
             and task.get("milestone_scores_identical") is True
+            and task.get("trace_schema_valid") is True
         )
         if not task_ok:
             reasons.append(f"task_{index}_failed")

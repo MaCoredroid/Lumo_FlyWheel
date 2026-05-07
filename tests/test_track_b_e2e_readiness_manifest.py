@@ -101,6 +101,7 @@ def test_trace_correctness_verification_requires_three_matching_tasks(tmp_path: 
                         "model_outputs_byte_identical": True,
                         "tool_call_sequences_byte_identical": True,
                         "milestone_scores_identical": True,
+                        "trace_schema_valid": True,
                     },
                     {
                         "task_id": "task-b",
@@ -109,6 +110,7 @@ def test_trace_correctness_verification_requires_three_matching_tasks(tmp_path: 
                         "model_outputs_byte_identical": True,
                         "tool_call_sequences_byte_identical": True,
                         "milestone_scores_identical": True,
+                        "trace_schema_valid": True,
                     },
                     {
                         "task_id": "task-c",
@@ -117,6 +119,7 @@ def test_trace_correctness_verification_requires_three_matching_tasks(tmp_path: 
                         "model_outputs_byte_identical": True,
                         "tool_call_sequences_byte_identical": True,
                         "milestone_scores_identical": True,
+                        "trace_schema_valid": True,
                     },
                 ],
             }
@@ -147,6 +150,7 @@ def test_trace_correctness_verification_rejects_weak_artifact(tmp_path: Path) ->
                         "model_outputs_byte_identical": True,
                         "tool_call_sequences_byte_identical": False,
                         "milestone_scores_identical": True,
+                        "trace_schema_valid": True,
                     }
                 ],
             }
@@ -159,6 +163,36 @@ def test_trace_correctness_verification_rejects_weak_artifact(tmp_path: Path) ->
     assert result["ok"] is False
     assert "too_few_tasks" in result["reasons"]
     assert "task_0_failed" in result["reasons"]
+
+
+def test_trace_correctness_verification_rejects_missing_trace_schema_status(tmp_path: Path) -> None:
+    artifact = tmp_path / "codex_trace_emitter_correctness.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.codex_trace_correctness.v1",
+                "verified_at": "2026-05-07T20:00:00Z",
+                "trace_out_supported": True,
+                "tasks": [
+                    {
+                        "task_id": f"task-{index}",
+                        "trace_out_enabled_exit_code": 0,
+                        "trace_out_disabled_exit_code": 0,
+                        "model_outputs_byte_identical": True,
+                        "tool_call_sequences_byte_identical": True,
+                        "milestone_scores_identical": True,
+                    }
+                    for index in range(3)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = readiness._trace_correctness_verification(artifact)
+
+    assert result["ok"] is False
+    assert result["tasks"][0]["missing_fields"] == ["trace_schema_valid"]
 
 
 def test_round0_summary_verification_requires_trusted_completed_tasks(tmp_path: Path) -> None:
