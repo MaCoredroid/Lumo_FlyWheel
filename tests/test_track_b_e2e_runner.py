@@ -51,6 +51,14 @@ def test_runner_requires_trace_out_in_command_template() -> None:
         runner._validate_codex_command_template("codex exec --cwd {workspace}")
 
 
+def test_runner_rejects_unstamped_runtime_hash() -> None:
+    runner._validate_runtime_config_hash("sha256:test")
+    with pytest.raises(ValueError, match="runtime-config-hash"):
+        runner._validate_runtime_config_hash("not-a-runtime-hash")
+    with pytest.raises(ValueError, match="runtime-config-hash"):
+        runner._validate_runtime_config_hash("sha256:")
+
+
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()

@@ -58,6 +58,11 @@ def _validate_codex_command_template(template: str) -> None:
         raise ValueError("codex command template must include {trace_out}")
 
 
+def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
+    if not runtime_config_hash.startswith("sha256:") or not runtime_config_hash.removeprefix("sha256:"):
+        raise ValueError("--runtime-config-hash must be a non-empty sha256:<digest> value")
+
+
 def _resolve_task_args(family: str, variant: str) -> tuple[str, str]:
     if "/" not in family:
         return family, variant
@@ -332,6 +337,7 @@ def main() -> int:
         parser.error("--repeat must be >= 1")
     try:
         _validate_codex_command_template(args.codex_command_template)
+        _validate_runtime_config_hash(args.runtime_config_hash)
     except ValueError as exc:
         parser.error(str(exc))
 
