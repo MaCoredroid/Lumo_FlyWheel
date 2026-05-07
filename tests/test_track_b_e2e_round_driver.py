@@ -44,6 +44,32 @@ def _trace_text(
     return "\n".join(json.dumps(row) for row in rows) + "\n"
 
 
+def _write_trace_correctness_artifact(path: Path, *, verified_at: str = "2026-05-07T00:00:00Z") -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.codex_trace_correctness.v1",
+                "verified_at": verified_at,
+                "trace_out_supported": True,
+                "tasks": [
+                    {
+                        "task_id": f"task-{index}",
+                        "trace_out_enabled_exit_code": 0,
+                        "trace_out_disabled_exit_code": 0,
+                        "model_outputs_byte_identical": True,
+                        "tool_call_sequences_byte_identical": True,
+                        "milestone_scores_identical": True,
+                        "trace_schema_valid": True,
+                    }
+                    for index in range(3)
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_round_driver_blocks_before_measurement_when_preflight_fails(monkeypatch, tmp_path: Path) -> None:
     calls: list[list[str]] = []
 
@@ -97,6 +123,42 @@ def test_round_driver_passes_vllm_side_channel_to_preflight(tmp_path: Path) -> N
     assert command[command.index("--vllm-request-metrics-jsonl") + 1] == str(side_channel)
 
 
+def test_round_driver_blocks_after_preflight_without_trace_correctness_artifact(monkeypatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        preflight_out = Path(command[command.index("--out") + 1])
+        preflight_out.write_text(json.dumps({"blocking_reasons": []}) + "\n", encoding="utf-8")
+        return _completed(command)
+
+    monkeypatch.setattr(round_driver, "_run", fake_run)
+
+    rc = round_driver.main(
+        [
+            "--round",
+            "0",
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--clock-skew-ms-p99",
+            "10",
+            "--trace-emitter-correctness-verified-at",
+            "2026-05-07T00:00:00Z",
+            "--protocol-hash-match",
+            "--out-root",
+            str(tmp_path),
+            "--trace-correctness-artifact",
+            str(tmp_path / "missing_trace_correctness.json"),
+        ]
+    )
+
+    assert rc == 2
+    assert len(calls) == 1
+    assert calls[0][1].endswith("preflight_track_b_e2e.py")
+
+
 def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
     monkeypatch,
     tmp_path: Path,
@@ -104,6 +166,8 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
     tasks = ["transcript-merge-regression/v1-clean-baseline", "dead-flag-reachability-audit/v1-clean-baseline"]
     monkeypatch.setattr(round_driver, "_tasks", lambda: tasks)
     commands: list[list[str]] = []
+    trace_correctness_artifact = tmp_path / "trace_correctness.json"
+    _write_trace_correctness_artifact(trace_correctness_artifact)
 
     def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
         commands.append(command)
@@ -146,6 +210,8 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
             "--protocol-hash-match",
             "--out-root",
             str(tmp_path),
+            "--trace-correctness-artifact",
+            str(trace_correctness_artifact),
         ]
     )
 
@@ -173,6 +239,8 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
 def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: Path) -> None:
     tasks = ["transcript-merge-regression/v1-clean-baseline"]
     monkeypatch.setattr(round_driver, "_tasks", lambda: tasks)
+    trace_correctness_artifact = tmp_path / "trace_correctness.json"
+    _write_trace_correctness_artifact(trace_correctness_artifact)
 
     def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
         script = Path(command[1]).name
@@ -212,6 +280,8 @@ def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: P
             "--protocol-hash-match",
             "--out-root",
             str(tmp_path),
+            "--trace-correctness-artifact",
+            str(trace_correctness_artifact),
         ]
     )
 
@@ -221,6 +291,8 @@ def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: P
 def test_round_driver_rejects_measured_trace_runtime_hash_mismatch(monkeypatch, tmp_path: Path) -> None:
     tasks = ["transcript-merge-regression/v1-clean-baseline"]
     monkeypatch.setattr(round_driver, "_tasks", lambda: tasks)
+    trace_correctness_artifact = tmp_path / "trace_correctness.json"
+    _write_trace_correctness_artifact(trace_correctness_artifact)
 
     def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
         script = Path(command[1]).name
@@ -257,6 +329,8 @@ def test_round_driver_rejects_measured_trace_runtime_hash_mismatch(monkeypatch, 
             "--protocol-hash-match",
             "--out-root",
             str(tmp_path),
+            "--trace-correctness-artifact",
+            str(trace_correctness_artifact),
         ]
     )
 

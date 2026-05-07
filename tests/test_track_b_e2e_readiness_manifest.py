@@ -71,6 +71,7 @@ def test_round_proposal_prompt_uses_hard_gated_round_driver() -> None:
     assert "scripts/run_track_b_e2e_round.py" in prompt
     assert "--runtime-config-hash {{runtime_config_hash}}" in prompt
     assert "--protocol-hash-match" in prompt
+    assert "--trace-correctness-artifact output/track_b_e2e/codex_trace_emitter_correctness.json" in prompt
     assert "spec_decode_num_(drafts|draft_tokens|accepted_tokens)_total" in prompt
     assert "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3" not in prompt
 
@@ -86,6 +87,7 @@ def test_round_proposal_prompt_verification_rejects_legacy_direct_measurement(
                 "scripts/run_track_b_e2e_round.py",
                 "--runtime-config-hash {{runtime_config_hash}}",
                 "--protocol-hash-match",
+                "--trace-correctness-artifact output/track_b_e2e/codex_trace_emitter_correctness.json",
                 "scripts/preflight_track_b_e2e.py",
                 "spec_decode_num_(drafts|draft_tokens|accepted_tokens)_total",
                 "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3",

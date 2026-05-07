@@ -49,6 +49,7 @@ ROUND_PROPOSAL_REQUIRED_TEXT = {
     "uses_hard_gated_round_driver": "scripts/run_track_b_e2e_round.py",
     "passes_runtime_config_hash": "--runtime-config-hash {{runtime_config_hash}}",
     "passes_protocol_hash_gate": "--protocol-hash-match",
+    "passes_trace_correctness_artifact": "--trace-correctness-artifact output/track_b_e2e/codex_trace_emitter_correctness.json",
     "uses_preflight_script": "scripts/preflight_track_b_e2e.py",
     "checks_all_spec_decode_counters": "spec_decode_num_(drafts|draft_tokens|accepted_tokens)_total",
 }

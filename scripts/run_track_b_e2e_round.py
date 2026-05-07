@@ -71,6 +71,44 @@ def _read_jsonl(path: Path) -> list[dict[str, object]]:
     return rows
 
 
+def _verify_trace_correctness_artifact(path: Path, expected_verified_at: str) -> None:
+    if not path.is_file():
+        raise RuntimeError(f"trace correctness artifact missing: {path}")
+    payload = _read_json(path)
+    if payload.get("schema") != "lumo.track_b.codex_trace_correctness.v1":
+        raise RuntimeError(f"trace correctness artifact schema mismatch: {path}")
+    if payload.get("verified_at") != expected_verified_at:
+        raise RuntimeError(
+            f"trace correctness artifact verified_at {payload.get('verified_at')!r} does not match "
+            f"{expected_verified_at!r}"
+        )
+    if payload.get("trace_out_supported") is not True:
+        raise RuntimeError("trace correctness artifact does not prove --trace-out support")
+    tasks = payload.get("tasks")
+    if not isinstance(tasks, list) or len(tasks) < 3:
+        raise RuntimeError("trace correctness artifact must include at least three task checks")
+    required = (
+        "trace_out_enabled_exit_code",
+        "trace_out_disabled_exit_code",
+        "model_outputs_byte_identical",
+        "tool_call_sequences_byte_identical",
+        "milestone_scores_identical",
+        "trace_schema_valid",
+    )
+    for index, raw_task in enumerate(tasks):
+        task = raw_task if isinstance(raw_task, dict) else {}
+        task_ok = (
+            task.get("trace_out_enabled_exit_code") == 0
+            and task.get("trace_out_disabled_exit_code") == 0
+            and task.get("model_outputs_byte_identical") is True
+            and task.get("tool_call_sequences_byte_identical") is True
+            and task.get("milestone_scores_identical") is True
+            and task.get("trace_schema_valid") is True
+        )
+        if not task_ok or any(field not in task for field in required):
+            raise RuntimeError(f"trace correctness artifact task_{index} failed")
+
+
 def _parse_ts(value: object) -> datetime | None:
     if not isinstance(value, str):
         return None
@@ -347,6 +385,11 @@ def run_round(args: argparse.Namespace) -> int:
         print(f"Track B E2E round blocked by preflight: {_read_blockers(preflight_out)}", file=sys.stderr)
         return 1
 
+    _verify_trace_correctness_artifact(
+        Path(args.trace_correctness_artifact),
+        args.trace_emitter_correctness_verified_at,
+    )
+
     runner = _run(_runner_command(args))
     if runner.returncode != 0:
         print(runner.stderr, file=sys.stderr, end="")
@@ -385,6 +428,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--vllm-request-metrics-jsonl", default="")
     parser.add_argument("--clock-skew-ms-p99", type=float, required=True)
     parser.add_argument("--trace-emitter-correctness-verified-at", required=True)
+    parser.add_argument(
+        "--trace-correctness-artifact",
+        default=str(REPO_ROOT / "output" / "track_b_e2e" / "codex_trace_emitter_correctness.json"),
+    )
     parser.add_argument("--protocol-hash-match", action="store_true")
     parser.add_argument("--hypothesis", default="")
     parser.add_argument("--config-delta-vs-prior-round", default="")

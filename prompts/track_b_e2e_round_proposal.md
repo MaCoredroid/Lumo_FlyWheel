@@ -34,7 +34,7 @@
 - Tool-call XML auto mode remains 4/4.
 
 ## Full measurement command
-`.venv/bin/python scripts/run_track_b_e2e_round.py --round {{round}} --runtime-config-hash {{runtime_config_hash}} --codex-command-template "{{codex_command_template}}" --clock-skew-ms-p99 {{clock_skew_ms_p99}} --trace-emitter-correctness-verified-at {{trace_emitter_correctness_verified_at}} --protocol-hash-match`
+`.venv/bin/python scripts/run_track_b_e2e_round.py --round {{round}} --runtime-config-hash {{runtime_config_hash}} --codex-command-template "{{codex_command_template}}" --clock-skew-ms-p99 {{clock_skew_ms_p99}} --trace-emitter-correctness-verified-at {{trace_emitter_correctness_verified_at}} --trace-correctness-artifact output/track_b_e2e/codex_trace_emitter_correctness.json --protocol-hash-match`
 
 ## Correctness caveat checklist
 - [ ] B-1 batch equivalence retained
