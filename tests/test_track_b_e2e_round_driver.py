@@ -178,3 +178,29 @@ def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: P
     )
 
     assert rc == 2
+
+
+def test_round_driver_rejects_existing_summary_outputs(tmp_path: Path) -> None:
+    stale_summary = tmp_path / "round_0" / "task" / "run_02" / "summary.json"
+    stale_summary.parent.mkdir(parents=True)
+    stale_summary.write_text("{}\n", encoding="utf-8")
+
+    rc = round_driver.main(
+        [
+            "--round",
+            "0",
+            "--runtime-config-hash",
+            "sha256:test",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--clock-skew-ms-p99",
+            "10",
+            "--trace-emitter-correctness-verified-at",
+            "2026-05-07T00:00:00Z",
+            "--protocol-hash-match",
+            "--out-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert rc == 2
