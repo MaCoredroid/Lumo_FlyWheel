@@ -624,6 +624,7 @@ Committed scaffold commits through this status checkpoint:
 - `705ece8 Require Track B NCU round metadata`
 - `9d2d256 Align Track B NCU artifact docs`
 - `93866a3 Match Track B NCU hashes to round`
+- `4e2e0be Use Track B round driver in proposal prompt`
 
 ## 12. Decision rules for ending the loop
 
