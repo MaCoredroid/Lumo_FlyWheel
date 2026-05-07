@@ -219,9 +219,13 @@ def test_round0_summary_verification_rejects_existence_only_summary(tmp_path: Pa
     assert "diagnosis_distribution_missing" in result["reasons"]
 
 
-def test_ncu_profile_verification_requires_named_nonempty_archetypes(tmp_path: Path) -> None:
+def _ncu_csv_text() -> str:
+    return "\n".join(f'"Metric Name","{metric}"' for metric in readiness.NCU_REQUIRED_METRICS) + "\n"
+
+
+def test_ncu_profile_verification_requires_named_metric_complete_archetypes(tmp_path: Path) -> None:
     for archetype in readiness.NCU_ARCHETYPES:
-        (tmp_path / f"ncu_{archetype}.csv").write_text("Metric Name,Metric Value\n", encoding="utf-8")
+        (tmp_path / f"ncu_{archetype}.csv").write_text(_ncu_csv_text(), encoding="utf-8")
 
     result = readiness._ncu_profile_verification(tmp_path)
 
@@ -240,3 +244,19 @@ def test_ncu_profile_verification_rejects_wrong_or_empty_files(tmp_path: Path) -
     assert result["profile_count"] == 0
     assert "long-text_missing_or_empty" in result["reasons"]
     assert "tool-call-frame_missing_or_empty" in result["reasons"]
+
+
+def test_ncu_profile_verification_rejects_missing_required_metrics(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        text = _ncu_csv_text()
+        if archetype == "long-text":
+            text = text.replace("gpu__time_duration.sum", "some_other_metric")
+        (tmp_path / f"ncu_{archetype}.csv").write_text(text, encoding="utf-8")
+
+    result = readiness._ncu_profile_verification(tmp_path)
+
+    assert result["ok"] is False
+    assert result["profile_count"] == 4
+    assert "long-text_missing_required_metrics" in result["reasons"]
+    long_text = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
+    assert long_text["missing_metrics"] == ["gpu__time_duration.sum"]

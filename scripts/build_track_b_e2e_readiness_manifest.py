@@ -27,6 +27,15 @@ NCU_ARCHETYPES = (
     "multimodal-prefill",
     "subagent-orchestration",
 )
+NCU_REQUIRED_METRICS = (
+    "gpu__time_duration.sum",
+    "sm__cycles_active.avg.pct_of_peak_sustained_elapsed",
+    "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+    "sm__warps_active.avg.pct_of_peak_sustained_active",
+    "smsp__sass_thread_inst_executed_op_memory_ld_pred_on.sum",
+    "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+    "tpc__warps_active.avg.pct_of_peak_sustained_active",
+)
 
 
 def _now() -> str:
@@ -177,21 +186,31 @@ def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
         path = output_dir / f"ncu_{archetype}.csv"
         exists = path.is_file()
         size_bytes = path.stat().st_size if exists else 0
-        ok = exists and size_bytes > 0
+        text = path.read_text(encoding="utf-8", errors="replace") if exists else ""
+        metric_coverage = {metric: metric in text for metric in NCU_REQUIRED_METRICS}
+        missing_metrics = [metric for metric, present in metric_coverage.items() if not present]
+        ok = exists and size_bytes > 0 and not missing_metrics
         if not ok:
-            reasons.append(f"{archetype}_missing_or_empty")
+            reasons.append(
+                f"{archetype}_missing_or_empty"
+                if not exists or size_bytes <= 0
+                else f"{archetype}_missing_required_metrics"
+            )
         profiles.append(
             {
                 "archetype": archetype,
                 "path": str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path),
                 "exists": exists,
                 "size_bytes": size_bytes,
+                "required_metric_coverage": metric_coverage,
+                "missing_metrics": missing_metrics,
                 "ok": ok,
             }
         )
     return {
         "ok": not reasons,
         "expected_archetypes": list(NCU_ARCHETYPES),
+        "required_metrics": list(NCU_REQUIRED_METRICS),
         "profile_count": sum(1 for profile in profiles if profile["ok"]),
         "expected_profile_count": len(NCU_ARCHETYPES),
         "reasons": reasons,
