@@ -93,7 +93,7 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    runner._write_vllm_per_turn_from_jsonl(task_dir, source, runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    capture = runner._write_vllm_per_turn_from_jsonl(task_dir, source, runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
     payload = json.loads((task_dir / "vllm_per_turn.json").read_text(encoding="utf-8"))
     assert payload["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -108,6 +108,14 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
         for line in (task_dir / "vllm_request_metrics.jsonl").read_text(encoding="utf-8").splitlines()
     ]
     assert raw_rows[0]["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    assert capture == {
+        "source": str(source),
+        "start_offset": 0,
+        "end_offset": source.stat().st_size,
+        "captured_row_count": 1,
+        "normalized_request_count": 1,
+        "request_ids": ["req-1"],
+    }
 
 
 def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Path) -> None:
@@ -140,7 +148,7 @@ def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Pa
     )
     source.write_text(stale + fresh, encoding="utf-8")
 
-    runner._write_vllm_per_turn_from_jsonl(
+    capture = runner._write_vllm_per_turn_from_jsonl(
         task_dir,
         source,
         start_offset=len(stale.encode("utf-8")),
@@ -155,6 +163,11 @@ def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Pa
     ]
     assert [row["request_id"] for row in raw_rows] == ["fresh"]
     assert raw_rows[0]["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    assert capture["start_offset"] == len(stale.encode("utf-8"))
+    assert capture["end_offset"] == source.stat().st_size
+    assert capture["captured_row_count"] == 1
+    assert capture["normalized_request_count"] == 1
+    assert capture["request_ids"] == ["fresh"]
 
 
 def test_runner_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Path) -> None:

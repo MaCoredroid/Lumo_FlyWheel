@@ -151,7 +151,7 @@ def _write_vllm_per_turn_from_jsonl(
     *,
     start_offset: int = 0,
     runtime_config_hash: str = "",
-) -> None:
+) -> dict[str, Any]:
     requests_by_id: dict[str, dict[str, Any]] = {}
     captured_rows: list[dict[str, Any]] = []
     with source.open("r", encoding="utf-8") as handle:
@@ -184,6 +184,14 @@ def _write_vllm_per_turn_from_jsonl(
         json.dumps({"requests": requests_by_id, "runtime_config_hash": runtime_config_hash}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    return {
+        "source": str(source),
+        "start_offset": start_offset,
+        "end_offset": source.stat().st_size,
+        "captured_row_count": len(captured_rows),
+        "normalized_request_count": len(requests_by_id),
+        "request_ids": sorted(requests_by_id),
+    }
 
 
 def _run_sampler(args: argparse.Namespace, task_dir: Path) -> subprocess.Popen[str] | None:
@@ -271,8 +279,9 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     (task_dir / "codex_stderr.log").write_text(result.stderr if result else "", encoding="utf-8")
     metrics_post = _metrics_text(args.metrics_url)
     (task_dir / "vllm_metrics_post.txt").write_text(metrics_post, encoding="utf-8")
+    vllm_request_metrics_capture: dict[str, Any] | None = None
     if vllm_request_metrics_jsonl is not None:
-        _write_vllm_per_turn_from_jsonl(
+        vllm_request_metrics_capture = _write_vllm_per_turn_from_jsonl(
             task_dir,
             vllm_request_metrics_jsonl,
             start_offset=vllm_request_metrics_start_offset,
@@ -293,6 +302,7 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "runtime_config_hash": args.runtime_config_hash,
         "codex_command_template": args.codex_command_template,
         "vllm_request_metrics_jsonl": args.vllm_request_metrics_jsonl,
+        "vllm_request_metrics_capture": vllm_request_metrics_capture,
         "ncu_mode": bool(args.ncu_mode),
         "codex_exit_code": result.returncode if result else None,
     }
