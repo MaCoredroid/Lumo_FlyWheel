@@ -11,6 +11,8 @@ if str(SCRIPTS) not in sys.path:
 
 import build_track_b_e2e_readiness_manifest as readiness  # noqa: E402
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
     preflight_path = tmp_path / "preflight.json"
@@ -55,6 +57,15 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
     assert steps["G"]["evidence"]["ncu_profile_driver_exists"] is True
     assert manifest["hard_gates"]["round0_summary_verified"] is False
     assert manifest["hard_gates"]["ncu_profiles_verified"] is False
+
+
+def test_round_proposal_prompt_uses_hard_gated_round_driver() -> None:
+    prompt = (REPO_ROOT / "prompts" / "track_b_e2e_round_proposal.md").read_text(encoding="utf-8")
+
+    assert "scripts/run_track_b_e2e_round.py" in prompt
+    assert "--runtime-config-hash {{runtime_config_hash}}" in prompt
+    assert "--protocol-hash-match" in prompt
+    assert "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3" not in prompt
 
 
 def test_readiness_manifest_requires_round0_artifacts_even_if_preflight_passes(tmp_path: Path) -> None:
