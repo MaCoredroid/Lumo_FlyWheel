@@ -605,6 +605,7 @@ Committed scaffold commits through this status checkpoint:
 - `6b74dc1 Snapshot Track B vLLM side channel rows`
 - `65afad0 Stamp Track B runtime hash artifacts`
 - `effef5e Stamp Track B DCGM runtime hashes`
+- `f2f5274 Verify Track B trace runtime hashes`
 
 ## 12. Decision rules for ending the loop
 
