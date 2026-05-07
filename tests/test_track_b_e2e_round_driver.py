@@ -180,10 +180,10 @@ def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: P
     assert rc == 2
 
 
-def test_round_driver_rejects_existing_summary_outputs(tmp_path: Path) -> None:
-    stale_summary = tmp_path / "round_0" / "task" / "run_02" / "summary.json"
-    stale_summary.parent.mkdir(parents=True)
-    stale_summary.write_text("{}\n", encoding="utf-8")
+def test_round_driver_rejects_existing_measurement_outputs(tmp_path: Path) -> None:
+    stale_trace = tmp_path / "round_0" / "task" / "run_02" / "codex_trace.jsonl"
+    stale_trace.parent.mkdir(parents=True)
+    stale_trace.write_text("{}\n", encoding="utf-8")
 
     rc = round_driver.main(
         [

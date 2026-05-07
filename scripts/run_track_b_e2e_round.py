@@ -250,13 +250,14 @@ def _round_summary_command(args: argparse.Namespace, round_dir: Path) -> list[st
     return command
 
 
-def _reject_existing_summary_outputs(round_dir: Path) -> None:
-    stale = sorted([*round_dir.glob("round_summary.json"), *round_dir.glob("*/*/summary.json")])
+def _reject_existing_round_outputs(round_dir: Path) -> None:
+    allowed = {"preflight_audit.json"}
+    stale = sorted(path for path in round_dir.iterdir() if path.name not in allowed)
     if stale:
         rel = ", ".join(str(path.relative_to(round_dir)) for path in stale[:5])
         if len(stale) > 5:
             rel += f", ... +{len(stale) - 5} more"
-        raise RuntimeError(f"round directory already contains summary outputs; move or archive them first: {rel}")
+        raise RuntimeError(f"round directory already contains measurement outputs; move or archive them first: {rel}")
 
 
 def _read_blockers(preflight_out: Path) -> str:
@@ -279,7 +280,7 @@ def run_round(args: argparse.Namespace) -> int:
     out_root = Path(args.out_root)
     round_dir = out_root / f"round_{args.round}"
     round_dir.mkdir(parents=True, exist_ok=True)
-    _reject_existing_summary_outputs(round_dir)
+    _reject_existing_round_outputs(round_dir)
     preflight_out = round_dir / "preflight_audit.json"
 
     preflight = _run(_preflight_command(args, preflight_out))
