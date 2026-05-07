@@ -623,6 +623,7 @@ Committed scaffold commits through this status checkpoint:
 - `31458bc Verify Track B NCU metric metadata`
 - `705ece8 Require Track B NCU round metadata`
 - `9d2d256 Align Track B NCU artifact docs`
+- `93866a3 Match Track B NCU hashes to round`
 
 ## 12. Decision rules for ending the loop
 
