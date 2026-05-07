@@ -132,6 +132,12 @@ def _sample_values(samples: list[dict[str, Any]], field: str, start: Any, end: A
 
 
 def _dcgm_profile_field_status(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    profile_field_rows = [
+        sample
+        for sample in samples
+        if sample.get("profile_fields_available") is True
+        and all(isinstance(sample.get(field), (int, float)) for field in DCGM_PROFILE_FIELDS)
+    ]
     observed = sorted(
         {
             field
@@ -142,9 +148,11 @@ def _dcgm_profile_field_status(samples: list[dict[str, Any]]) -> dict[str, Any]:
     )
     missing = [field for field in DCGM_PROFILE_FIELDS if field not in observed]
     return {
-        "ok": not missing,
+        "ok": not missing and bool(profile_field_rows),
+        "profile_fields_available_sample_count": len(profile_field_rows),
         "observed_numeric_profile_fields": observed,
         "missing_profile_fields": missing,
+        "profile_fields_available_missing": not profile_field_rows,
     }
 
 
@@ -467,8 +475,14 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         "rule_5_cache_reset_verified": bool(args.cache_reset_verified),
         "rule_6_dcgm_dropout_pct": round(dcgm_dropout_pct, 6),
         "rule_6_dcgm_profile_fields_present": dcgm_profile_fields["ok"],
+        "rule_6_dcgm_profile_fields_available_sample_count": dcgm_profile_fields[
+            "profile_fields_available_sample_count"
+        ],
         "rule_6_dcgm_observed_numeric_profile_fields": dcgm_profile_fields["observed_numeric_profile_fields"],
         "rule_6_dcgm_missing_profile_fields": dcgm_profile_fields["missing_profile_fields"],
+        "rule_6_dcgm_profile_fields_available_missing": dcgm_profile_fields[
+            "profile_fields_available_missing"
+        ],
         "rule_7_clock_skew_ms_p99": args.clock_skew_ms_p99,
         "rule_8_task_completed_normally": task_end.get("exit_code") == 0 and task_end.get("task_score") is not None,
         "rule_9_wallclock_wall_to_wall": abs(observed_wallclock_s - (float(task_end.get("wallclock_s", observed_wallclock_s)))) < 0.001,

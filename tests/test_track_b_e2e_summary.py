@@ -15,6 +15,7 @@ if str(SCRIPTS) not in sys.path:
 from build_track_b_e2e_summary import (  # noqa: E402
     SAMPLE_HASH,
     TRACK_B_E2E_TASKS,
+    _dcgm_profile_field_status,
     _load_vllm_request_metrics,
     _validate_runtime_config_hash,
     _vllm_jsonl_by_request,
@@ -32,6 +33,7 @@ def _dcgm_sample(ts: str) -> dict[str, object]:
         "ts": ts,
         "gpu": 0,
         "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profile_fields_available": True,
         "dram_active_pct": 0.54,
         "sm_active_pct": 0.31,
         "sm_occupancy_pct": 0.27,
@@ -46,6 +48,18 @@ def test_summary_rejects_unstamped_runtime_hash() -> None:
         _validate_runtime_config_hash("not-a-runtime-hash")
     with pytest.raises(ValueError, match="runtime-config-hash"):
         _validate_runtime_config_hash("sha256:")
+
+
+def test_dcgm_profile_status_requires_available_flag() -> None:
+    sample = _dcgm_sample("2026-05-07T18:00:00.000Z")
+    sample["profile_fields_available"] = False
+
+    status = _dcgm_profile_field_status([sample])
+
+    assert status["ok"] is False
+    assert status["missing_profile_fields"] == []
+    assert status["profile_fields_available_sample_count"] == 0
+    assert status["profile_fields_available_missing"] is True
 
 
 def test_task_summary_requires_and_records_truthful_attestation(tmp_path: Path) -> None:

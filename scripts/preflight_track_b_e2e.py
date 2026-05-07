@@ -192,10 +192,13 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
                 continue
             if isinstance(payload, dict):
                 rows.append(payload)
-    profile_fields_present = any(
-        all(isinstance(row.get(field), (int, float)) for field in DCGM_PROFILE_FIELDS)
+    profile_field_rows = [
+        row
         for row in rows
-    )
+        if row.get("profile_fields_available") is True
+        and all(isinstance(row.get(field), (int, float)) for field in DCGM_PROFILE_FIELDS)
+    ]
+    profile_fields_present = bool(profile_field_rows)
     observed_numeric_fields = sorted(
         {
             field
@@ -212,6 +215,7 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
         "returncode": result.returncode,
         "sample_count": len(rows),
         "profile_fields_present": profile_fields_present,
+        "profile_fields_available_sample_count": len(profile_field_rows),
         "observed_numeric_profile_fields": observed_numeric_fields,
         "missing_profile_fields": [
             field for field in DCGM_PROFILE_FIELDS if field not in observed_numeric_fields
