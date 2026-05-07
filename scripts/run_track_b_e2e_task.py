@@ -456,6 +456,8 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
             ended_at=ended_at,
             exit_code=result.returncode if result else None,
         )
+    if _deferred_instrumentation_checks(args):
+        return 0
     return int(result.returncode if result else 2)
 
 

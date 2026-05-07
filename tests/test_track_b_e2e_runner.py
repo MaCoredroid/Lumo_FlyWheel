@@ -115,6 +115,47 @@ def test_run_one_can_record_missing_workspace_diagnostic(tmp_path: Path) -> None
     assert [row["event"] for row in trace_rows] == ["task_start", "task_end"]
 
 
+def test_deferred_runner_exit_code_does_not_fail_attempt(monkeypatch, tmp_path: Path) -> None:
+    workspace = tmp_path / "benchmark_blueprints" / "families" / "family" / "workspace_bundle" / "variant"
+    workspace.mkdir(parents=True)
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(runner, "_request", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner, "_metrics_text", lambda url: "")
+    monkeypatch.setattr(runner, "_run_sampler", lambda args, task_dir: None)
+    monkeypatch.setattr(runner.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "failed"))
+
+    args = Namespace(
+        runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        out_root=str(tmp_path / "out"),
+        round=0,
+        attempt=1,
+        health_url="http://127.0.0.1:9950/health",
+        reset_prefix_cache_url="",
+        api_key="local",
+        metrics_url="http://127.0.0.1:9950/metrics",
+        endpoint="http://127.0.0.1:9950/v1",
+        model="qwen3.5-27b",
+        timeout_s=1,
+        codex_command_template="codex exec --json",
+        vllm_request_metrics_jsonl="",
+        ncu_mode=False,
+        defer_codex_trace_out=True,
+        defer_vllm_request_metrics_join=True,
+        defer_dcgm_profile_fields=True,
+        allow_missing_workspace_diagnostic=False,
+    )
+
+    rc = runner.run_one(args, "family", "variant")
+
+    assert rc == 0
+    metadata = json.loads(
+        (tmp_path / "out" / "round_0" / "family__variant" / "run_01" / "runner_metadata.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert metadata["codex_exit_code"] == 1
+
+
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
