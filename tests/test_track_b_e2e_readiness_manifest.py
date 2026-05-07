@@ -428,3 +428,20 @@ def test_ncu_profile_verification_rejects_missing_round_metadata(tmp_path: Path)
     assert result["ok"] is False
     profile = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
     assert "round_missing" in profile["metadata_reasons"]
+
+
+def test_ncu_profile_verification_rejects_runtime_hash_drift_when_expected(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        (tmp_path / f"ncu_{archetype}.csv").write_text(_ncu_csv_text(), encoding="utf-8")
+        _write_ncu_metadata(
+            tmp_path,
+            archetype,
+            runtime_config_hash="sha256:wrong" if archetype == "long-text" else "sha256:test",
+        )
+
+    result = readiness._ncu_profile_verification(tmp_path, expected_runtime_config_hash="sha256:test")
+
+    assert result["ok"] is False
+    assert result["expected_runtime_config_hash"] == "sha256:test"
+    profile = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
+    assert "runtime_config_hash_mismatch" in profile["metadata_reasons"]

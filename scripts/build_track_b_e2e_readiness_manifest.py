@@ -197,7 +197,7 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
     }
 
 
-def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
+def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash: str = "") -> dict[str, Any]:
     profiles: list[dict[str, Any]] = []
     reasons: list[str] = []
     for archetype in NCU_ARCHETYPES:
@@ -223,6 +223,8 @@ def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
             metadata_reasons.append("round_missing")
         if not isinstance(metadata.get("runtime_config_hash"), str) or not metadata.get("runtime_config_hash"):
             metadata_reasons.append("runtime_config_hash_missing")
+        elif expected_runtime_config_hash and metadata.get("runtime_config_hash") != expected_runtime_config_hash:
+            metadata_reasons.append("runtime_config_hash_mismatch")
         if metadata.get("profile_csv") != expected_profile_csv:
             metadata_reasons.append("profile_csv_mismatch")
         ok = exists and size_bytes > 0 and not missing_metrics and not metadata_reasons
@@ -258,6 +260,7 @@ def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
         "required_metrics": list(NCU_REQUIRED_METRICS),
         "profile_count": sum(1 for profile in profiles if profile["ok"]),
         "expected_profile_count": len(NCU_ARCHETYPES),
+        "expected_runtime_config_hash": expected_runtime_config_hash,
         "reasons": reasons,
         "profiles": profiles,
     }
@@ -296,7 +299,15 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     trace_correctness = _trace_correctness_verification(trace_correctness_path)
     round0_summary_path = REPO_ROOT / "output" / "track_b_e2e" / "round_0" / "round_summary.json"
     round0_summary = _round0_summary_verification(round0_summary_path)
-    ncu_profiles = _ncu_profile_verification(REPO_ROOT / "output" / "track_b_e2e")
+    expected_ncu_runtime_config_hash = (
+        str(round0_summary.get("runtime_config_hash"))
+        if isinstance(round0_summary.get("runtime_config_hash"), str)
+        else ""
+    )
+    ncu_profiles = _ncu_profile_verification(
+        REPO_ROOT / "output" / "track_b_e2e",
+        expected_runtime_config_hash=expected_ncu_runtime_config_hash,
+    )
 
     steps = [
         _step(
