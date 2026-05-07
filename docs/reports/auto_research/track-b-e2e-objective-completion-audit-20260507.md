@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-07
-Repo checkpoint: updated through the Codex `--json` insufficiency audit checkpoint in current git history.
+Repo checkpoint: updated through the strict Track B round-summary and readiness-gate checkpoint in current git history.
 
 ## Objective Restated
 
@@ -37,9 +37,9 @@ Concrete success criteria:
 | Auto-research round proposal template exists. | `prompts/track_b_e2e_round_proposal.md` | Readiness manifest reports Step F complete. | Complete |
 | Machine-readable readiness gate exists. | `scripts/build_track_b_e2e_readiness_manifest.py` | Command exits 1 with `round0_ready=false` and blocking reasons; trace correctness, Round 0 summary, sample-integrity, and NCU gates validate artifact content, not only file existence. | Complete |
 | Round 0 dry run populated and validated. | `output/track_b_e2e/round_0/round_summary.json` and five named NCU profiles | Readiness manifest reports `round0_summary_verified=false`, `ncu_profiles_verified=false`, `ncu_profile_count=0`. | Blocked |
-| Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, and `tests/test_metrics.py` passed in focused runs during this work; latest focused scaffold run: `18 passed`. | Complete for scaffold risk |
+| Tests cover new scaffolding. | Focused pytest commands | `tests/test_track_b_e2e_preflight.py`, `tests/test_track_b_e2e_readiness_manifest.py`, `tests/test_track_b_e2e_summary.py`, `tests/test_track_b_e2e_runner.py`, and `tests/test_metrics.py` passed in focused runs during this work; latest focused scaffold run: `27 passed`. | Complete for scaffold risk |
 | Full repo test suite green. | Full pytest | Earlier `PYTHONPATH=. .venv/bin/pytest -q -x` failed an unrelated existing `tests/test_auto_research.py` expectation. | Not green; unrelated known failure |
-| Progress committed. | Git history | Progress commits from `7de01d6` through `c5a99ad` are on `main`; this Codex `--json` insufficiency audit is committed as the next checkpoint. | Complete for landed checkpoints |
+| Progress committed. | Git history | Progress commits from `7de01d6` through `89087cd` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
 
 ## Current Readiness Decision
 

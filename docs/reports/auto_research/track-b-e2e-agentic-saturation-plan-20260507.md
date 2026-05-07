@@ -540,6 +540,16 @@ Committed scaffold commits through this status checkpoint:
 - `a4b1132 Record Track B E2E objective audit`
 - `2b098f8 Expose Track B DCGM profile field gaps`
 - `1d2526f Support Track B vLLM request metrics JSONL`
+- `c5a99ad Update Track B E2E commit ledger`
+- `82e774a Record Codex JSON trace gap`
+- `a52e0d7 Validate Track B trace correctness artifact`
+- `a9b6e1b Validate Track B Round 0 summary gate`
+- `d35df33 Accept Track B vLLM request metrics side channel`
+- `bc98b18 Validate Track B NCU archetype outputs`
+- `ef84f33 Require Track B summary DCGM profile fields`
+- `94eff9e Enforce Track B round sample integrity`
+- `0efd4c6 Validate Track B readiness sample integrity`
+- `89087cd Reject incomplete Track B round summaries`
 
 ## 12. Decision rules for ending the loop
 
