@@ -587,6 +587,8 @@ Committed scaffold commits through this status checkpoint:
 - `ba92dae Tighten Track B round attestation driver`
 - `0b622b6 Update Track B attestation driver ledger`
 - `c7a790a Verify Track B generation volume guard`
+- `1efbc1f Update Track B generation guard ledger`
+- `8973a1a Use Track B trace wallclocks in round driver`
 
 ## 12. Decision rules for ending the loop
 
