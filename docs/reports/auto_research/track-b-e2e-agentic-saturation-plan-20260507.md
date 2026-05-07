@@ -606,6 +606,7 @@ Committed scaffold commits through this status checkpoint:
 - `65afad0 Stamp Track B runtime hash artifacts`
 - `effef5e Stamp Track B DCGM runtime hashes`
 - `f2f5274 Verify Track B trace runtime hashes`
+- `ecbb700 Cover Track B DCGM hash stamping`
 
 ## 12. Decision rules for ending the loop
 
