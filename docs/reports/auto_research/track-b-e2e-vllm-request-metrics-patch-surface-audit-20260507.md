@@ -67,6 +67,6 @@ If Prometheus request labels are still preferred, they should be behind an expli
 
 ## Readiness Impact
 
-`vllm_request_metrics_join_available=false` is a hard Round 0 blocker. The gate may pass through either request-labeled Prometheus metrics or a bounded request-keyed JSONL side-channel. For the JSONL path, at least one row must contain a request id and every required numeric request metric in the same row; field coverage spread across unrelated rows is rejected. The Track B summary code must not infer per-turn vLLM metrics from aggregate deltas while multiple turns or tasks can contribute to the same process-level counters.
+`vllm_request_metrics_join_available=false` is a hard Round 0 blocker. The gate may pass through either request-labeled Prometheus metrics or a bounded request-keyed JSONL side-channel. For the JSONL path, at least one row must contain a request id and every required numeric request metric in the same row; field coverage spread across unrelated rows is rejected. The preflight, runner, and summary paths all fail closed on incomplete request rows. The Track B summary code must not infer per-turn vLLM metrics from aggregate deltas while multiple turns or tasks can contribute to the same process-level counters.
 
 The existing Track B parser work remains useful: it will consume request-labeled metrics or a request-keyed JSON artifact once vLLM emits one. It is not sufficient by itself to make the live server ready.

@@ -12,7 +12,13 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from build_track_b_e2e_summary import SAMPLE_HASH, TRACK_B_E2E_TASKS, build_round_summary, build_task_summary  # noqa: E402
+from build_track_b_e2e_summary import (  # noqa: E402
+    SAMPLE_HASH,
+    TRACK_B_E2E_TASKS,
+    _vllm_jsonl_by_request,
+    build_round_summary,
+    build_task_summary,
+)
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
@@ -247,6 +253,14 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
     assert summary["trusted_measurement"] is True
     assert plan_turn["decode_tps"] == 12.0
     assert plan_turn["accepted_per_draft"] == 0.25
+
+
+def test_task_summary_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
+    path = tmp_path / "vllm_request_metrics.jsonl"
+    _write_jsonl(path, [{"request_id": "req-1", "prompt_tokens": 50}])
+
+    with pytest.raises(RuntimeError, match="missing numeric fields"):
+        _vllm_jsonl_by_request(path)
 
 
 def test_task_summary_rejects_missing_dcgm_profile_fields(tmp_path: Path) -> None:

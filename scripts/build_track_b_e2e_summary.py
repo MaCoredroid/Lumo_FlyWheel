@@ -193,6 +193,15 @@ def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str,
     decode_sum_s = row.get("decode_sum_s", row.get("decode_s"))
     accepted = row.get("spec_decode_num_accepted_tokens")
     draft_tokens = row.get("spec_decode_num_draft_tokens")
+    required = {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "spec_decode_num_accepted_tokens": accepted,
+        "spec_decode_num_draft_tokens": draft_tokens,
+    }
+    missing = [key for key, value in required.items() if not isinstance(value, (int, float))]
+    if missing:
+        raise RuntimeError(f"vLLM request metrics row for {request_id} is missing numeric fields: {', '.join(missing)}")
     normalized = dict(row)
     normalized.update(
         {
@@ -228,6 +237,8 @@ def _vllm_jsonl_by_request(path: Path) -> dict[str, dict[str, Any]]:
         if normalized is not None:
             request_id, metrics = normalized
             rows[request_id] = metrics
+    if not rows:
+        raise RuntimeError(f"No complete vLLM request metrics rows found in {path}")
     return rows
 
 
