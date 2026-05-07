@@ -40,6 +40,21 @@ DCGM_PROFILE_FIELDS = (
     "pipe_tensor_active_pct",
     "pipe_fp16_active_pct",
 )
+VLLM_REQUEST_METRIC_FIELDS = (
+    "prompt_tokens",
+    "completion_tokens",
+    "generation_tokens",
+    "prefill_sum_s",
+    "prefill_s",
+    "decode_sum_s",
+    "decode_s",
+    "decode_tps",
+    "spec_decode_num_accepted_tokens",
+    "spec_decode_num_draft_tokens",
+    "accepted_per_draft_token",
+    "accepted_per_draft",
+    "max_tokens",
+)
 
 
 def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
@@ -226,17 +241,34 @@ def _diagnose(regime_share: dict[str, float], evidence: dict[str, Any], bottlene
 
 def _vllm_by_request(path: Path) -> dict[str, dict[str, Any]]:
     payload = _load_json(path)
+    rows: dict[str, dict[str, Any]]
     if isinstance(payload, dict):
         if "requests" in payload and isinstance(payload["requests"], dict):
-            return {str(key): value for key, value in payload["requests"].items() if isinstance(value, dict)}
-        return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
-    if isinstance(payload, list):
+            rows = {str(key): value for key, value in payload["requests"].items() if isinstance(value, dict)}
+        else:
+            rows = {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+    elif isinstance(payload, list):
         rows = {}
         for row in payload:
             if isinstance(row, dict) and row.get("vllm_request_id"):
                 rows[str(row["vllm_request_id"])] = row
-        return rows
-    raise RuntimeError(f"Unsupported vLLM per-turn JSON shape: {path}")
+    else:
+        raise RuntimeError(f"Unsupported vLLM per-turn JSON shape: {path}")
+    for request_id, row in rows.items():
+        _validate_vllm_request_metric_fields(row, request_id)
+    return rows
+
+
+def _validate_vllm_request_metric_fields(row: dict[str, Any], request_id: str) -> None:
+    nonfinite = [
+        field
+        for field in VLLM_REQUEST_METRIC_FIELDS
+        if field in row and row.get(field) is not None and not _finite_nonnegative_metric(row.get(field))
+    ]
+    if nonfinite:
+        raise RuntimeError(
+            f"vLLM request metrics row for {request_id} is missing numeric fields: {', '.join(nonfinite)}"
+        )
 
 
 def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
@@ -287,6 +319,7 @@ def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str,
         and "accepted_per_draft_token" not in normalized
     ):
         normalized["accepted_per_draft_token"] = accepted / draft_tokens
+    _validate_vllm_request_metric_fields(normalized, str(request_id))
     return str(request_id), normalized
 
 

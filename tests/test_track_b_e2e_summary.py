@@ -698,6 +698,30 @@ def test_task_summary_rejects_empty_vllm_per_turn_json(tmp_path: Path) -> None:
         _load_vllm_request_metrics(task_dir)
 
 
+def test_task_summary_rejects_nonfinite_vllm_per_turn_json(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    (task_dir / "vllm_per_turn.json").write_text(
+        json.dumps(
+            {
+                "requests": {
+                    "req-1": {
+                        "prompt_tokens": 50,
+                        "completion_tokens": float("nan"),
+                        "spec_decode_num_accepted_tokens": 3,
+                        "spec_decode_num_draft_tokens": 12,
+                    }
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="missing numeric fields"):
+        _load_vllm_request_metrics(task_dir)
+
+
 def test_task_summary_rejects_missing_dcgm_profile_fields(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
