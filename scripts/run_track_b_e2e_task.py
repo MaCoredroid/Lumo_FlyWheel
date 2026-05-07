@@ -60,8 +60,8 @@ def _format_command(template: str, mapping: dict[str, str]) -> list[str]:
     return shlex.split(rendered)
 
 
-def _validate_codex_command_template(template: str) -> None:
-    if "{trace_out}" not in template:
+def _validate_codex_command_template(template: str, *, require_trace_out: bool = True) -> None:
+    if require_trace_out and "{trace_out}" not in template:
         raise ValueError("codex command template must include {trace_out}")
 
 
@@ -101,6 +101,23 @@ def _write_vllm_per_turn(task_dir: Path, before_raw: str, after_raw: str, *, run
         raise RuntimeError("Prometheus metrics did not produce any request-keyed vLLM rows")
     (task_dir / "vllm_per_turn.json").write_text(
         json.dumps({"requests": per_request, "runtime_config_hash": runtime_config_hash}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_deferred_vllm_per_turn(task_dir: Path, *, runtime_config_hash: str, reason: str) -> None:
+    (task_dir / "vllm_per_turn.json").write_text(
+        json.dumps(
+            {
+                "requests": {},
+                "runtime_config_hash": runtime_config_hash,
+                "deferred": True,
+                "deferred_reason": reason,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -235,6 +252,44 @@ def _stop_sampler(process: subprocess.Popen[str] | None) -> None:
         process.wait(timeout=10)
 
 
+def _write_deferred_trace(
+    path: Path,
+    *,
+    family: str,
+    variant: str,
+    runtime_config_hash: str,
+    started_at: datetime,
+    ended_at: datetime,
+    exit_code: int | None,
+) -> None:
+    task_id = f"{family}/{variant}"
+    wallclock_s = max(0.0, (ended_at - started_at).total_seconds())
+    rows = [
+        {
+            "event": "task_start",
+            "task_id": task_id,
+            "family": family,
+            "variant": variant,
+            "runtime_config_hash": runtime_config_hash,
+            "ts": started_at.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "trace_deferred": True,
+            "deferred_reason": "codex_trace_out_supported",
+        },
+        {
+            "event": "task_end",
+            "task_id": task_id,
+            "runtime_config_hash": runtime_config_hash,
+            "ts": ended_at.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "exit_code": exit_code,
+            "wallclock_s": wallclock_s,
+            "task_score": None,
+            "trace_deferred": True,
+            "deferred_reason": "codex_trace_out_supported",
+        },
+    ]
+    path.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows), encoding="utf-8")
+
+
 def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     _validate_runtime_config_hash(args.runtime_config_hash)
     workspace = REPO_ROOT / "benchmark_blueprints" / "families" / family / "workspace_bundle" / variant
@@ -259,6 +314,7 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     (task_dir / "vllm_metrics_pre.txt").write_text(metrics_pre, encoding="utf-8")
 
     sampler = _run_sampler(args, task_dir)
+    started_at = datetime.now(UTC)
     started = time.monotonic()
     command = _format_command(
         args.codex_command_template,
@@ -286,6 +342,7 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     finally:
         _stop_sampler(sampler)
     elapsed_s = time.monotonic() - started
+    ended_at = datetime.now(UTC)
     (task_dir / "codex_stdout.log").write_text(result.stdout if result else "", encoding="utf-8")
     (task_dir / "codex_stderr.log").write_text(result.stderr if result else "", encoding="utf-8")
     metrics_post = _metrics_text(args.metrics_url)
@@ -297,6 +354,12 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
             vllm_request_metrics_jsonl,
             start_offset=vllm_request_metrics_start_offset,
             runtime_config_hash=args.runtime_config_hash,
+        )
+    elif args.defer_vllm_request_metrics_join:
+        _write_deferred_vllm_per_turn(
+            task_dir,
+            runtime_config_hash=args.runtime_config_hash,
+            reason="vllm_request_metrics_join_available",
         )
     else:
         _write_vllm_per_turn(task_dir, metrics_pre, metrics_post, runtime_config_hash=args.runtime_config_hash)
@@ -316,10 +379,29 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "vllm_request_metrics_capture": vllm_request_metrics_capture,
         "ncu_mode": bool(args.ncu_mode),
         "codex_exit_code": result.returncode if result else None,
+        "deferred_instrumentation_checks": sorted(
+            check
+            for check, enabled in {
+                "codex_trace_out_supported": args.defer_codex_trace_out,
+                "vllm_request_metrics_join_available": args.defer_vllm_request_metrics_join,
+                "dcgm_profile_fields_available": args.defer_dcgm_profile_fields,
+            }.items()
+            if enabled
+        ),
     }
     (task_dir / "runner_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if not trace_out.is_file():
-        raise RuntimeError("patched Codex did not create codex_trace.jsonl; Round 0 preflight must fail")
+        if not args.defer_codex_trace_out:
+            raise RuntimeError("patched Codex did not create codex_trace.jsonl; Round 0 preflight must fail")
+        _write_deferred_trace(
+            trace_out,
+            family=family,
+            variant=variant,
+            runtime_config_hash=args.runtime_config_hash,
+            started_at=started_at,
+            ended_at=ended_at,
+            exit_code=result.returncode if result else None,
+        )
     return int(result.returncode if result else 2)
 
 
@@ -348,6 +430,9 @@ def main() -> int:
         action="store_true",
         help="Record that this run is an isolated NCU archetype profile run.",
     )
+    parser.add_argument("--defer-codex-trace-out", action="store_true")
+    parser.add_argument("--defer-vllm-request-metrics-join", action="store_true")
+    parser.add_argument("--defer-dcgm-profile-fields", action="store_true")
     parser.add_argument(
         "--vllm-request-metrics-jsonl",
         default="",
@@ -369,7 +454,7 @@ def main() -> int:
     if args.repeat < 1:
         parser.error("--repeat must be >= 1")
     try:
-        _validate_codex_command_template(args.codex_command_template)
+        _validate_codex_command_template(args.codex_command_template, require_trace_out=not args.defer_codex_trace_out)
         _validate_runtime_config_hash(args.runtime_config_hash)
     except ValueError as exc:
         parser.error(str(exc))

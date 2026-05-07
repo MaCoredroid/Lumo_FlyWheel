@@ -338,6 +338,9 @@ def _vllm_jsonl_by_request(path: Path) -> dict[str, dict[str, Any]]:
 def _load_vllm_request_metrics(task_dir: Path) -> dict[str, dict[str, Any]]:
     json_path = task_dir / "vllm_per_turn.json"
     if json_path.is_file():
+        payload = _load_json(json_path)
+        if isinstance(payload, dict) and payload.get("deferred") is True and payload.get("requests") == {}:
+            return {}
         rows = _vllm_by_request(json_path)
         if not rows:
             raise RuntimeError(f"No request-keyed vLLM rows found in {json_path}")
@@ -544,6 +547,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         and math.isfinite(float(task_score))
         and float(task_score) >= 0
     )
+    deferred_instrumentation_checks = sorted(set(getattr(args, "deferred_instrumentation_checks", []) or []))
     attestation = {
         "rule_1_cold_completion_discarded": bool(args.cold_completion_discarded),
         "rule_2_output_cap_hit_count": output_cap_hits,
@@ -569,9 +573,11 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         "rule_13_silent_fallback_to_vanilla": silent_fallback,
         "rule_14_trace_emitter_correctness_verified_at": args.trace_emitter_correctness_verified_at,
         "rule_15_sample_hash_match": bool(args.sample_hash_match),
+        "deferred_instrumentation_checks": deferred_instrumentation_checks,
     }
     trusted = (
-        attestation["rule_1_cold_completion_discarded"]
+        not deferred_instrumentation_checks
+        and attestation["rule_1_cold_completion_discarded"]
         and attestation["rule_3_median_of_n_runs"] >= 3
         and attestation["rule_4_workspace_hash_match"]
         and attestation["rule_5_cache_reset_verified"]
@@ -609,6 +615,8 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         "missing_vllm_request_id_turns": missing_request_ids,
         "truthful_measurement_attestation": attestation,
         "trusted_measurement": trusted,
+        "diagnostic_only": bool(deferred_instrumentation_checks),
+        "deferred_instrumentation_checks": deferred_instrumentation_checks,
     }
     out = task_dir / "summary.json"
     if trusted or args.write_untrusted_diagnostic:
@@ -623,6 +631,7 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
     round_dir = Path(args.round_dir)
     summaries = [_load_json(path) for path in _round_summary_paths(round_dir)]
     trusted = [row for row in summaries if row.get("trusted_measurement") is True]
+    diagnostic = [row for row in summaries if row.get("trusted_measurement") is not True]
     trusted_task_ids = [str(row.get("task_id")) for row in trusted]
     trusted_unique_task_ids = sorted(set(trusted_task_ids))
     duplicate_trusted_task_ids = sorted(
@@ -694,6 +703,11 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         _finite_positive_number(row.get("wallclock_s"), f"{row.get('task_id')}.wallclock_s")
         for row in trusted
     ]
+    diagnostic_wallclocks = [
+        _finite_positive_number(row.get("wallclock_s"), f"{row.get('task_id')}.wallclock_s")
+        for row in diagnostic
+        if isinstance(row.get("wallclock_s"), (int, float))
+    ]
     diagnosis_distribution = Counter(str(row.get("bottleneck_diagnosis")) for row in trusted)
     regime_totals: dict[str, float] = defaultdict(float)
     for row in trusted:
@@ -726,6 +740,13 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         "task_summary_round_mismatch_count": len(task_summary_round_mismatches),
         "task_summary_round_mismatch_task_ids": task_summary_round_mismatches,
         "untrusted_task_count": len(summaries) - len(trusted),
+        "diagnostic_task_count": len(diagnostic),
+        "diagnostic_median_wallclock_s": statistics.median(diagnostic_wallclocks) if diagnostic_wallclocks else None,
+        "diagnostic_aggregate_wallclock_s": sum(diagnostic_wallclocks),
+        "diagnostic_only": bool(getattr(args, "deferred_instrumentation_checks", [])),
+        "deferred_instrumentation_checks": sorted(
+            set(getattr(args, "deferred_instrumentation_checks", []) or [])
+        ),
         "auto_research_agent_recommendation": args.auto_research_agent_recommendation,
         "next_round_proposal": args.next_round_proposal,
     }
@@ -756,6 +777,7 @@ def main() -> int:
     task.add_argument("--protocol-hash-match", action="store_true")
     task.add_argument("--generation-volume-within-band", action="store_true")
     task.add_argument("--sample-hash-match", action="store_true")
+    task.add_argument("--deferred-instrumentation-checks", nargs="*", default=[])
     task.add_argument("--write-untrusted-diagnostic", action="store_true")
 
     round_parser = sub.add_parser("round")
@@ -767,6 +789,7 @@ def main() -> int:
     round_parser.add_argument("--wallclock-delta-vs-prior-round-s", type=float, default=None)
     round_parser.add_argument("--auto-research-agent-recommendation", default="")
     round_parser.add_argument("--next-round-proposal", default="")
+    round_parser.add_argument("--deferred-instrumentation-checks", nargs="*", default=[])
     round_parser.add_argument("--write-untrusted-diagnostic", action="store_true")
     args = parser.parse_args()
     try:

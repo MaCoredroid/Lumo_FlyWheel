@@ -47,8 +47,22 @@ def test_runner_rejects_conflicting_task_id_variant() -> None:
 
 def test_runner_requires_trace_out_in_command_template() -> None:
     runner._validate_codex_command_template("codex exec --trace-out {trace_out} --cwd {workspace}")
+    runner._validate_codex_command_template("codex exec --json", require_trace_out=False)
     with pytest.raises(ValueError, match="trace_out"):
         runner._validate_codex_command_template("codex exec --cwd {workspace}")
+
+
+def test_runner_writes_deferred_vllm_metrics(tmp_path: Path) -> None:
+    runner._write_deferred_vllm_per_turn(
+        tmp_path,
+        runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        reason="vllm_request_metrics_join_available",
+    )
+
+    payload = json.loads((tmp_path / "vllm_per_turn.json").read_text(encoding="utf-8"))
+    assert payload["deferred"] is True
+    assert payload["requests"] == {}
+    assert payload["deferred_reason"] == "vllm_request_metrics_join_available"
 
 
 def test_runner_rejects_unstamped_runtime_hash() -> None:

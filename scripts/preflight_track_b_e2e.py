@@ -338,7 +338,17 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
             "profile_fields_unavailable_reasons": sampler_smoke.get("profile_fields_unavailable_reasons", []),
         },
     }
-    blockers = [name for name, check in checks.items() if name in args.required_checks and not check["ok"]]
+    deferred = sorted(set(getattr(args, "defer_checks", []) or []))
+    blockers = [
+        name
+        for name, check in checks.items()
+        if name in args.required_checks and name not in deferred and not check["ok"]
+    ]
+    deferred_reasons = [
+        name
+        for name, check in checks.items()
+        if name in args.required_checks and name in deferred and not check["ok"]
+    ]
     return {
         "schema": "lumo.track_b.e2e_preflight_audit.v1",
         "recorded_at": _now(),
@@ -347,6 +357,8 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
         "metrics_url": args.metrics_url,
         "checks": checks,
         "blocking_reasons": blockers,
+        "deferred_reasons": deferred_reasons,
+        "deferred_checks": deferred,
         "round0_may_run": not blockers,
     }
 
@@ -360,6 +372,12 @@ def main() -> int:
     parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")
     parser.add_argument("--vllm-request-metrics-jsonl", default="")
     parser.add_argument("--out", default="")
+    parser.add_argument(
+        "--defer-checks",
+        nargs="*",
+        default=[],
+        help="Required checks to record as deferred instead of blocking this diagnostic run.",
+    )
     parser.add_argument(
         "--required-checks",
         nargs="*",

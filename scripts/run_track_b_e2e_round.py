@@ -11,6 +11,11 @@ from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFERABLE_PREFLIGHT_CHECKS = {
+    "vllm_request_metrics_join_available",
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+}
 
 
 def _default_python() -> str:
@@ -245,6 +250,9 @@ def _preflight_command(args: argparse.Namespace, preflight_out: Path) -> list[st
     ]
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
+    deferred = getattr(args, "defer_preflight_checks", []) or []
+    if deferred:
+        command.extend(["--defer-checks", *deferred])
     return command
 
 
@@ -279,6 +287,13 @@ def _runner_command(args: argparse.Namespace) -> list[str]:
     ]
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
+    deferred = getattr(args, "defer_preflight_checks", []) or []
+    if "codex_trace_out_supported" in deferred:
+        command.append("--defer-codex-trace-out")
+    if "vllm_request_metrics_join_available" in deferred:
+        command.append("--defer-vllm-request-metrics-join")
+    if "dcgm_profile_fields_available" in deferred:
+        command.append("--defer-dcgm-profile-fields")
     return command
 
 
@@ -315,8 +330,12 @@ def _task_summary_command(
     ]
     if args.protocol_hash_match:
         command.append("--protocol-hash-match")
-    command.append("--generation-volume-within-band")
-    if args.write_untrusted_diagnostic:
+    deferred = getattr(args, "defer_preflight_checks", []) or []
+    if "codex_trace_out_supported" not in deferred:
+        command.append("--generation-volume-within-band")
+    if deferred:
+        command.extend(["--deferred-instrumentation-checks", *deferred])
+    if args.write_untrusted_diagnostic or deferred:
         command.append("--write-untrusted-diagnostic")
     return command
 
@@ -341,7 +360,10 @@ def _round_summary_command(args: argparse.Namespace, round_dir: Path) -> list[st
         "--next-round-proposal",
         args.next_round_proposal,
     ]
-    if args.write_untrusted_diagnostic:
+    deferred = getattr(args, "defer_preflight_checks", []) or []
+    if deferred:
+        command.extend(["--deferred-instrumentation-checks", *deferred])
+    if args.write_untrusted_diagnostic or deferred:
         command.append("--write-untrusted-diagnostic")
     return command
 
@@ -367,7 +389,12 @@ def _read_blockers(preflight_out: Path) -> str:
 
 
 def run_round(args: argparse.Namespace) -> int:
-    _validate_codex_command_template(args.codex_command_template)
+    args.defer_preflight_checks = sorted(set(args.defer_preflight_checks or []))
+    unknown_defers = sorted(set(args.defer_preflight_checks) - DEFERABLE_PREFLIGHT_CHECKS)
+    if unknown_defers:
+        raise ValueError(f"unsupported deferred preflight checks: {', '.join(unknown_defers)}")
+    if "codex_trace_out_supported" not in args.defer_preflight_checks:
+        _validate_codex_command_template(args.codex_command_template)
     _validate_runtime_config_hash(args.runtime_config_hash)
     if args.repeat < 4:
         raise ValueError("--repeat must be >= 4 so run_01 can be discarded as cold and 3 measured runs remain")
@@ -385,10 +412,11 @@ def run_round(args: argparse.Namespace) -> int:
         print(f"Track B E2E round blocked by preflight: {_read_blockers(preflight_out)}", file=sys.stderr)
         return 1
 
-    _verify_trace_correctness_artifact(
-        Path(args.trace_correctness_artifact),
-        args.trace_emitter_correctness_verified_at,
-    )
+    if "codex_trace_out_supported" not in args.defer_preflight_checks:
+        _verify_trace_correctness_artifact(
+            Path(args.trace_correctness_artifact),
+            args.trace_emitter_correctness_verified_at,
+        )
 
     runner = _run(_runner_command(args))
     if runner.returncode != 0:
@@ -397,7 +425,14 @@ def run_round(args: argparse.Namespace) -> int:
 
     for task_id in _tasks():
         measured_attempts = range(2, args.repeat + 1)
-        _verify_generation_volume_within_band(out_root, args.round, task_id, measured_attempts, args.runtime_config_hash)
+        if "codex_trace_out_supported" not in args.defer_preflight_checks:
+            _verify_generation_volume_within_band(
+                out_root,
+                args.round,
+                task_id,
+                measured_attempts,
+                args.runtime_config_hash,
+            )
         task_dir = _attempt_dir(out_root, args.round, task_id, measured_attempts.start)
         wallclocks = _attempt_wallclocks(out_root, args.round, task_id, measured_attempts, args.runtime_config_hash)
         summary = _run(_task_summary_command(args, task_id, task_dir, wallclocks))
@@ -438,6 +473,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--auto-research-agent-recommendation", default="")
     parser.add_argument("--next-round-proposal", default="")
     parser.add_argument("--write-untrusted-diagnostic", action="store_true")
+    parser.add_argument(
+        "--defer-preflight-checks",
+        nargs="*",
+        default=[],
+        help=(
+            "Run a diagnostic round while recording these failed preflight checks as deferred. "
+            "Supported values: vllm_request_metrics_join_available, codex_trace_out_supported, "
+            "dcgm_profile_fields_available."
+        ),
+    )
     args = parser.parse_args(argv)
     try:
         return run_round(args)

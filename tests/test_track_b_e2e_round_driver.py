@@ -107,6 +107,86 @@ def test_round_driver_blocks_before_measurement_when_preflight_fails(monkeypatch
     assert calls[0][1].endswith("preflight_track_b_e2e.py")
 
 
+def test_round_driver_defers_instrumentation_blockers_and_writes_diagnostic_summaries(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    tasks = ["transcript-merge-regression/v1-clean-baseline"]
+    monkeypatch.setattr(round_driver, "_tasks", lambda: tasks)
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        script = Path(command[1]).name
+        if script == "preflight_track_b_e2e.py":
+            preflight_out = Path(command[command.index("--out") + 1])
+            preflight_out.write_text(
+                json.dumps(
+                    {
+                        "blocking_reasons": [],
+                        "deferred_reasons": [
+                            "vllm_request_metrics_join_available",
+                            "codex_trace_out_supported",
+                            "dcgm_profile_fields_available",
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        if script == "run_track_b_e2e_task.py":
+            round_index = int(command[command.index("--round") + 1])
+            out_root = Path(command[command.index("--out-root") + 1])
+            for task_id in tasks:
+                family, variant = task_id.split("/", 1)
+                for attempt in range(1, 5):
+                    task_dir = out_root / f"round_{round_index}" / f"{family}__{variant}" / f"run_{attempt:02d}"
+                    task_dir.mkdir(parents=True)
+                    (task_dir / "codex_trace.jsonl").write_text(
+                        _trace_text(10.0 + attempt, 100, task_id=task_id),
+                        encoding="utf-8",
+                    )
+        return _completed(command)
+
+    monkeypatch.setattr(round_driver, "_run", fake_run)
+
+    rc = round_driver.main(
+        [
+            "--round",
+            "0",
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--codex-command-template",
+            "codex exec --json",
+            "--clock-skew-ms-p99",
+            "10",
+            "--trace-emitter-correctness-verified-at",
+            "deferred",
+            "--protocol-hash-match",
+            "--out-root",
+            str(tmp_path),
+            "--defer-preflight-checks",
+            "vllm_request_metrics_join_available",
+            "codex_trace_out_supported",
+            "dcgm_profile_fields_available",
+        ]
+    )
+
+    assert rc == 0
+    preflight_command = next(command for command in commands if Path(command[1]).name == "preflight_track_b_e2e.py")
+    assert "--defer-checks" in preflight_command
+    runner_command = next(command for command in commands if Path(command[1]).name == "run_track_b_e2e_task.py")
+    assert "--defer-codex-trace-out" in runner_command
+    assert "--defer-vllm-request-metrics-join" in runner_command
+    assert "--defer-dcgm-profile-fields" in runner_command
+    task_summary_command = next(
+        command for command in commands if Path(command[1]).name == "build_track_b_e2e_summary.py" and "task" in command
+    )
+    assert "--generation-volume-within-band" not in task_summary_command
+    assert "--write-untrusted-diagnostic" in task_summary_command
+    assert "--deferred-instrumentation-checks" in task_summary_command
+
+
 def test_round_driver_passes_vllm_side_channel_to_preflight(tmp_path: Path) -> None:
     side_channel = tmp_path / "vllm_request_metrics.jsonl"
     command = round_driver._preflight_command(
