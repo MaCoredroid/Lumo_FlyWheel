@@ -693,6 +693,7 @@ def _write_task_summary(
         json.dumps(
             {
                 "schema": "lumo.track_b.e2e_task_summary.v1",
+                "round": 0,
                 "task_id": task_id,
                 "runtime_config_hash": runtime_config_hash,
                 "trusted_measurement": True,
@@ -716,6 +717,7 @@ def _write_nested_task_summary(round_dir: Path, index: int, task_id: str) -> Non
         json.dumps(
             {
                 "schema": "lumo.track_b.e2e_task_summary.v1",
+                "round": 0,
                 "task_id": task_id,
                 "runtime_config_hash": "sha256:test",
                 "trusted_measurement": True,
@@ -756,6 +758,8 @@ def test_round_summary_requires_unique_fixed_sample_tasks(tmp_path: Path) -> Non
     assert summary["trusted_unique_task_count"] == 12
     assert summary["duplicate_trusted_task_ids"] == []
     assert summary["runtime_config_hash_mismatch_count"] == 0
+    assert summary["task_summary_schema_mismatch_count"] == 0
+    assert summary["task_summary_round_mismatch_count"] == 0
     assert (round_dir / "round_summary.json").is_file()
 
 
@@ -851,6 +855,36 @@ def test_round_summary_rejects_runtime_config_hash_mismatch(tmp_path: Path) -> N
         )
 
     with pytest.raises(RuntimeError, match="runtime_config_hash"):
+        build_round_summary(
+            Namespace(
+                round=0,
+                round_dir=str(round_dir),
+                runtime_config_hash="sha256:test",
+                config_delta_vs_prior_round="",
+                hypothesis="baseline",
+                wallclock_delta_vs_prior_round_s=None,
+                auto_research_agent_recommendation="",
+                next_round_proposal="",
+                write_untrusted_diagnostic=False,
+            )
+        )
+
+
+def test_round_summary_rejects_task_summary_schema_or_round_mismatch(tmp_path: Path) -> None:
+    round_dir = tmp_path / "round_0"
+    round_dir.mkdir()
+    for index, task_id in enumerate(TRACK_B_E2E_TASKS[:12]):
+        _write_task_summary(round_dir, index, task_id)
+    first_summary = round_dir / "task_00" / "summary.json"
+    payload = json.loads(first_summary.read_text(encoding="utf-8"))
+    payload["schema"] = "not-track-b"
+    first_summary.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    second_summary = round_dir / "task_01" / "summary.json"
+    payload = json.loads(second_summary.read_text(encoding="utf-8"))
+    payload["round"] = 99
+    second_summary.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="mismatched schema"):
         build_round_summary(
             Namespace(
                 round=0,
