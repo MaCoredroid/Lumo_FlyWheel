@@ -53,6 +53,7 @@ def _validate_profile(path: Path) -> None:
 
 def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
     out_root = Path(args.out_root)
+    task_out_root = Path(args.task_out_root)
     task_id = ARCHETYPE_TASKS[archetype]
     command = [
         args.ncu_bin,
@@ -80,7 +81,7 @@ def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
         "--repeat",
         "1",
         "--out-root",
-        args.out_root,
+        str(task_out_root),
         "--health-url",
         args.health_url,
         "--metrics-url",
@@ -120,6 +121,7 @@ def run_profiles(args: argparse.Namespace) -> int:
         raise RuntimeError(f"ncu binary not found: {args.ncu_bin}")
     out_root = Path(args.out_root)
     out_root.mkdir(parents=True, exist_ok=True)
+    Path(args.task_out_root).mkdir(parents=True, exist_ok=True)
     archetypes = list(ARCHETYPE_TASKS) if args.archetype == "all" else [args.archetype]
     for archetype in archetypes:
         result = _run(_ncu_command(args, archetype))
@@ -135,6 +137,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--round", type=int, default=0)
     parser.add_argument("--archetype", choices=["all", *ARCHETYPE_TASKS.keys()], default="all")
     parser.add_argument("--out-root", default=str(REPO_ROOT / "output" / "track_b_e2e"))
+    parser.add_argument(
+        "--task-out-root",
+        default=str(REPO_ROOT / "output" / "track_b_e2e" / "ncu_task_runs"),
+        help="Separate root for profiled task artifacts so NCU runs do not contaminate measurement rounds.",
+    )
     parser.add_argument("--python", default=_default_python())
     parser.add_argument("--ncu-bin", default="ncu")
     parser.add_argument("--launch-skip-before-match", type=int, default=200)

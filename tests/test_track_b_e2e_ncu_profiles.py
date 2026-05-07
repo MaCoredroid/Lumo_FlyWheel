@@ -39,6 +39,8 @@ def test_ncu_profile_driver_builds_named_archetype_command(monkeypatch, tmp_path
             "tool-call-frame",
             "--out-root",
             str(tmp_path),
+            "--task-out-root",
+            str(tmp_path / "ncu_task_runs"),
             "--codex-command-template",
             "codex exec --trace-out {trace_out}",
         ]
@@ -49,6 +51,7 @@ def test_ncu_profile_driver_builds_named_archetype_command(monkeypatch, tmp_path
     command = commands[0]
     assert command[0] == "ncu"
     assert command[command.index("--log-file") + 1] == str(tmp_path / "ncu_tool-call-frame.csv")
+    assert command[command.index("--out-root") + 1] == str(tmp_path / "ncu_task_runs")
     assert "policy-aware-request-resolution/v1-clean-baseline" in command
     assert "--no-dcgm" in command
     assert "--ncu-mode" in command

@@ -200,7 +200,7 @@ ncu --target-processes all --kernel-id ::regex:.*linear.*|.*attention.*|.*sample
     -- python scripts/run_track_b_e2e_task.py <archetype-task> --no-dcgm --ncu-mode
 ```
 
-`scripts/run_track_b_e2e_ncu_profiles.py` owns the five archetype-to-task mappings, runs `scripts/run_track_b_e2e_task.py` with `--no-dcgm --ncu-mode`, writes the five `output/track_b_e2e/ncu_<archetype>.csv` files, and rejects missing or metric-incomplete CSVs before the readiness manifest sees them.
+`scripts/run_track_b_e2e_ncu_profiles.py` owns the five archetype-to-task mappings, runs `scripts/run_track_b_e2e_task.py` with `--no-dcgm --ncu-mode`, writes the five `output/track_b_e2e/ncu_<archetype>.csv` files, stores profiled task artifacts under `output/track_b_e2e/ncu_task_runs/` so they cannot overwrite measurement-round attempts, and rejects missing or metric-incomplete CSVs before the readiness manifest sees them.
 
 Profile output joined into `ncu_archetype_profile.json`:
 
