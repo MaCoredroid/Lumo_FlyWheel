@@ -743,6 +743,67 @@ def test_task_summary_rejects_missing_dcgm_profile_fields(tmp_path: Path) -> Non
     ]
 
 
+def test_task_summary_requires_finite_task_score(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    base = datetime(2026, 5, 7, 18, 0, 0, tzinfo=UTC)
+
+    def ts(offset_s: float) -> str:
+        return (base + timedelta(seconds=offset_s)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    _write_jsonl(
+        task_dir / "codex_trace.jsonl",
+        [
+            {"event": "task_start", "ts": ts(0.0), "task_id": "transcript-merge-regression/v1-clean-baseline"},
+            {"event": "turn_start", "turn": 0, "regime": "plan", "ts": ts(0.1), "vllm_request_id": "req-1"},
+            {"event": "turn_end", "turn": 0, "ts": ts(1.0), "prompt_tokens": 50, "completion_tokens": 12},
+            {"event": "task_end", "ts": ts(2.0), "exit_code": 0, "task_score": float("nan"), "wallclock_s": 2.0},
+        ],
+    )
+    (task_dir / "vllm_per_turn.json").write_text(
+        json.dumps(
+            {
+                "requests": {
+                    "req-1": {
+                        "completion_tokens": 12,
+                        "decode_sum_s": 0.9,
+                        "decode_tps": 13.33,
+                        "spec_decode_num_accepted_tokens": 3,
+                        "spec_decode_num_draft_tokens": 12,
+                        "accepted_per_draft_token": 0.25,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_jsonl(task_dir / "dcgm_samples.jsonl", [_dcgm_sample(ts(index / 100)) for index in range(200)])
+
+    summary = build_task_summary(
+        Namespace(
+            round=0,
+            task_dir=str(task_dir),
+            family="transcript-merge-regression",
+            variant="v1-clean-baseline",
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            baseline_workspace_hash=None,
+            run_wallclocks_json="[1.9, 2.0, 2.1]",
+            clock_skew_ms_p99=8,
+            trace_emitter_correctness_verified_at="2026-05-07T14:00:00Z",
+            dcgm_interval_s=0.01,
+            cold_completion_discarded=True,
+            cache_reset_verified=True,
+            protocol_hash_match=True,
+            generation_volume_within_band=True,
+            sample_hash_match=True,
+            write_untrusted_diagnostic=True,
+        )
+    )
+
+    assert summary["trusted_measurement"] is False
+    assert summary["truthful_measurement_attestation"]["rule_8_task_completed_normally"] is False
+
+
 def _write_task_summary(
     round_dir: Path,
     index: int,
@@ -894,6 +955,33 @@ def test_round_summary_rejects_incomplete_trusted_tasks(tmp_path: Path) -> None:
         )
 
     with pytest.raises(RuntimeError, match="trusted task summaries completed"):
+        build_round_summary(
+            Namespace(
+                round=0,
+                round_dir=str(round_dir),
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                config_delta_vs_prior_round="",
+                hypothesis="baseline",
+                wallclock_delta_vs_prior_round_s=None,
+                auto_research_agent_recommendation="",
+                next_round_proposal="",
+                write_untrusted_diagnostic=False,
+            )
+        )
+
+
+def test_round_summary_rejects_nonfinite_trusted_task_score(tmp_path: Path) -> None:
+    round_dir = tmp_path / "round_0"
+    round_dir.mkdir()
+    for index, task_id in enumerate(TRACK_B_E2E_TASKS[:12]):
+        _write_task_summary(
+            round_dir,
+            index,
+            task_id,
+            task_score=float("nan") if index == 0 else 0.8,
+        )
+
+    with pytest.raises(RuntimeError, match="correctness scores"):
         build_round_summary(
             Namespace(
                 round=0,

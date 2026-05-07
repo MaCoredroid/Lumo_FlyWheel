@@ -497,6 +497,12 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
     dcgm_profile_fields = _dcgm_profile_field_status(dcgm)
     workspace_hash = _manifest_workspace_hash(family, variant)
     baseline_hash = args.baseline_workspace_hash or workspace_hash
+    task_score = task_end.get("task_score")
+    task_score_is_valid = (
+        isinstance(task_score, (int, float))
+        and math.isfinite(float(task_score))
+        and float(task_score) >= 0
+    )
     attestation = {
         "rule_1_cold_completion_discarded": bool(args.cold_completion_discarded),
         "rule_2_output_cap_hit_count": output_cap_hits,
@@ -514,7 +520,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
             "profile_fields_available_missing"
         ],
         "rule_7_clock_skew_ms_p99": clock_skew_ms_p99,
-        "rule_8_task_completed_normally": task_end.get("exit_code") == 0 and task_end.get("task_score") is not None,
+        "rule_8_task_completed_normally": task_end.get("exit_code") == 0 and task_score_is_valid,
         "rule_9_wallclock_wall_to_wall": abs(observed_wallclock_s - (float(task_end.get("wallclock_s", observed_wallclock_s)))) < 0.001,
         "rule_10_protocol_hash_match": bool(args.protocol_hash_match),
         "rule_11_generation_volume_within_band": bool(args.generation_volume_within_band),
@@ -550,7 +556,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         "wallclock_s": round(wallclock_s, 6),
         "observed_run_wallclock_s": round(observed_wallclock_s, 6),
         "run_wallclocks_s": run_wallclocks,
-        "task_score": task_end.get("task_score"),
+        "task_score": float(task_score) if task_score_is_valid else task_score,
         "task_completed": task_end.get("exit_code") == 0,
         "turns": turns,
         "regime_share": regime_share,
@@ -602,7 +608,12 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
     )
     trusted_completed_count = sum(1 for row in trusted if row.get("task_completed"))
     trusted_correctness_count = sum(
-        1 for row in trusted if row.get("task_completed") and row.get("task_score") is not None
+        1
+        for row in trusted
+        if row.get("task_completed")
+        and isinstance(row.get("task_score"), (int, float))
+        and math.isfinite(float(row["task_score"]))
+        and float(row["task_score"]) >= 0
     )
     blockers: list[str] = []
     if len(trusted) < 12:
