@@ -291,9 +291,14 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         ),
         _step(
             "C",
-            "E2E task runner exists.",
-            {"runner_script": "scripts/run_track_b_e2e_task.py", "exists": _exists("scripts/run_track_b_e2e_task.py")},
-            _exists("scripts/run_track_b_e2e_task.py"),
+            "E2E task and round runners exist.",
+            {
+                "runner_script": "scripts/run_track_b_e2e_task.py",
+                "runner_script_exists": _exists("scripts/run_track_b_e2e_task.py"),
+                "round_driver_script": "scripts/run_track_b_e2e_round.py",
+                "round_driver_script_exists": _exists("scripts/run_track_b_e2e_round.py"),
+            },
+            _exists("scripts/run_track_b_e2e_task.py") and _exists("scripts/run_track_b_e2e_round.py"),
         ),
         _step(
             "D",
@@ -349,10 +354,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "round0_summary_verification": round0_summary,
                 "ncu_profile_count": ncu_profiles["profile_count"],
                 "expected_ncu_profile_count": ncu_profiles["expected_profile_count"],
+                "ncu_profile_driver": "scripts/run_track_b_e2e_ncu_profiles.py",
+                "ncu_profile_driver_exists": _exists("scripts/run_track_b_e2e_ncu_profiles.py"),
                 "ncu_profiles_verified": ncu_profiles["ok"],
                 "ncu_profiles": ncu_profiles,
             },
-            round0_summary["ok"] and ncu_profiles["ok"],
+            round0_summary["ok"] and _exists("scripts/run_track_b_e2e_ncu_profiles.py") and ncu_profiles["ok"],
             blocked=bool(blockers),
         ),
     ]

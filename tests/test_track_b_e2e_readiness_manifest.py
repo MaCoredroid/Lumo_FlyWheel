@@ -49,6 +49,10 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
     assert statuses["E"] == "complete"
     assert statuses["F"] == "complete"
     assert statuses["G"] == "blocked"
+    steps = {step["step"]: step for step in manifest["implementation_steps"]}
+    assert steps["C"]["evidence"]["runner_script_exists"] is True
+    assert steps["C"]["evidence"]["round_driver_script_exists"] is True
+    assert steps["G"]["evidence"]["ncu_profile_driver_exists"] is True
     assert manifest["hard_gates"]["round0_summary_verified"] is False
     assert manifest["hard_gates"]["ncu_profiles_verified"] is False
 
