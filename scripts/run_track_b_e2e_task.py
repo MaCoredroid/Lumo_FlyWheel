@@ -53,6 +53,11 @@ def _format_command(template: str, mapping: dict[str, str]) -> list[str]:
     return shlex.split(rendered)
 
 
+def _validate_codex_command_template(template: str) -> None:
+    if "{trace_out}" not in template:
+        raise ValueError("codex command template must include {trace_out}")
+
+
 def _resolve_task_args(family: str, variant: str) -> tuple[str, str]:
     if "/" not in family:
         return family, variant
@@ -301,6 +306,10 @@ def main() -> int:
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be >= 1")
+    try:
+        _validate_codex_command_template(args.codex_command_template)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.tasks == "all":
         from build_track_b_e2e_summary import TRACK_B_E2E_TASKS

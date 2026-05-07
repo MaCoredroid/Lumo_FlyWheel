@@ -43,6 +43,12 @@ def test_runner_rejects_conflicting_task_id_variant() -> None:
         runner._resolve_task_args("sqlalchemy-2-session-modernization/v2", "v3")
 
 
+def test_runner_requires_trace_out_in_command_template() -> None:
+    runner._validate_codex_command_template("codex exec --trace-out {trace_out} --cwd {workspace}")
+    with pytest.raises(ValueError, match="trace_out"):
+        runner._validate_codex_command_template("codex exec --cwd {workspace}")
+
+
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
