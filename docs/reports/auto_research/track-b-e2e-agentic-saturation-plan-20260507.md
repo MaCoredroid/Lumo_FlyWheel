@@ -320,7 +320,7 @@ If any step fails, **Round 0 must not record measurements**. Fix the runtime, re
    `ncu_long-text.csv`, `ncu_tool-call-frame.csv`, `ncu_pure-investigation.csv`,
    `ncu_multimodal-prefill.csv`, and `ncu_subagent-orchestration.csv`.
 
-`round_0/round_summary.json` is not accepted by existence alone. The readiness manifest validates `schema="lumo.track_b.e2e_round_summary.v1"`, `round=0`, non-empty `runtime_config_hash`, `sample_hash`, numeric median/aggregate wallclock, non-empty `diagnosis_distribution`, and at least 12 trusted, completed, correctness-passed task summaries. NCU validation likewise requires the five named archetype CSVs, not any five `ncu_*.csv` files.
+`round_0/round_summary.json` is not accepted by existence alone. The readiness manifest validates `schema="lumo.track_b.e2e_round_summary.v1"`, `round=0`, non-empty `runtime_config_hash`, `sample_hash`, numeric median/aggregate wallclock, non-empty `diagnosis_distribution`, at least 12 trusted/completed/correctness-passed task summaries, at least 12 unique trusted task IDs, no duplicate trusted task IDs, no unexpected trusted task IDs, and no `sample_hash` mismatch. NCU validation likewise requires the five named archetype CSVs, not any five `ncu_*.csv` files.
 
 **Correctness caveats:** see §9.
 

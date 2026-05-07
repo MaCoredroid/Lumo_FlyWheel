@@ -132,14 +132,23 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
         reasons.append("sample_hash_missing")
 
     trusted_task_count = payload.get("trusted_task_count")
+    trusted_unique_task_count = payload.get("trusted_unique_task_count")
     tasks_completed = payload.get("tasks_completed")
     tasks_correctness_passed = payload.get("tasks_correctness_passed")
     if not isinstance(trusted_task_count, int) or trusted_task_count < ROUND0_MIN_TRUSTED_TASKS:
         reasons.append("too_few_trusted_tasks")
+    if not isinstance(trusted_unique_task_count, int) or trusted_unique_task_count < ROUND0_MIN_TRUSTED_TASKS:
+        reasons.append("too_few_unique_trusted_tasks")
     if not isinstance(tasks_completed, int) or tasks_completed < ROUND0_MIN_TRUSTED_TASKS:
         reasons.append("too_few_completed_tasks")
     if not isinstance(tasks_correctness_passed, int) or tasks_correctness_passed < ROUND0_MIN_TRUSTED_TASKS:
         reasons.append("too_few_correct_tasks")
+    if payload.get("duplicate_trusted_task_ids") not in ([], None):
+        reasons.append("duplicate_trusted_task_ids_present")
+    if payload.get("unexpected_trusted_task_ids") not in ([], None):
+        reasons.append("unexpected_trusted_task_ids_present")
+    if payload.get("sample_hash_mismatch_count") not in (0, None):
+        reasons.append("sample_hash_mismatch")
     if not isinstance(payload.get("median_wallclock_s"), (int, float)):
         reasons.append("median_wallclock_missing")
     if not isinstance(payload.get("aggregate_wallclock_s"), (int, float)):
@@ -153,6 +162,7 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
         "schema": payload.get("schema"),
         "round": payload.get("round"),
         "trusted_task_count": trusted_task_count,
+        "trusted_unique_task_count": trusted_unique_task_count,
         "min_trusted_task_count": ROUND0_MIN_TRUSTED_TASKS,
         "tasks_completed": tasks_completed,
         "tasks_correctness_passed": tasks_correctness_passed,
