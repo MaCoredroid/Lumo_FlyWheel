@@ -81,6 +81,8 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
         json.dumps(
             {
                 "request_id": "req-1",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
                 "prompt_tokens": 50,
                 "generation_tokens": 12,
                 "prefill_s": 0.2,
@@ -126,6 +128,8 @@ def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Pa
         json.dumps(
             {
                 "request_id": "stale",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
                 "prompt_tokens": 10,
                 "generation_tokens": 1,
                 "spec_decode_num_accepted_tokens": 0,
@@ -138,6 +142,8 @@ def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Pa
         json.dumps(
             {
                 "request_id": "fresh",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
                 "prompt_tokens": 50,
                 "generation_tokens": 12,
                 "spec_decode_num_accepted_tokens": 3,
@@ -174,9 +180,42 @@ def test_runner_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Path) ->
     task_dir = tmp_path / "task"
     task_dir.mkdir()
     source = tmp_path / "vllm_requests.jsonl"
-    source.write_text(json.dumps({"request_id": "req-1", "prompt_tokens": 50}) + "\n", encoding="utf-8")
+    source.write_text(
+        json.dumps(
+            {
+                "request_id": "req-1",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
+                "prompt_tokens": 50,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     with pytest.raises(RuntimeError, match="missing numeric fields"):
+        runner._write_vllm_per_turn_from_jsonl(task_dir, source)
+
+
+def test_runner_rejects_vllm_request_metrics_without_producer_metadata(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    source = tmp_path / "vllm_requests.jsonl"
+    source.write_text(
+        json.dumps(
+            {
+                "request_id": "req-1",
+                "prompt_tokens": 50,
+                "generation_tokens": 12,
+                "spec_decode_num_accepted_tokens": 3,
+                "spec_decode_num_draft_tokens": 12,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="producer metadata"):
         runner._write_vllm_per_turn_from_jsonl(task_dir, source)
 
 

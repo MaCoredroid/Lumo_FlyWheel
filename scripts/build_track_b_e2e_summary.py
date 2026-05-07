@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+REQUEST_JOIN_JSONL_SCHEMA = "lumo.track_b.vllm_request_metrics.v1"
+REQUEST_JOIN_JSONL_PRODUCER = "track_b_vllm_request_metrics_patch"
 
 TRACK_B_E2E_TASKS = [
     "responses-sdk-adapter-cutover/v1-clean-baseline",
@@ -211,6 +213,10 @@ def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str,
     request_id = row.get("request_id") or row.get("vllm_request_id") or row.get("id")
     if not request_id:
         return None
+    if row.get("schema") != REQUEST_JOIN_JSONL_SCHEMA or row.get("producer") != REQUEST_JOIN_JSONL_PRODUCER:
+        raise RuntimeError(
+            f"vLLM request metrics row for {request_id} is missing Track B producer metadata"
+        )
     prompt_tokens = row.get("prompt_tokens")
     completion_tokens = row.get("completion_tokens", row.get("generation_tokens"))
     prefill_sum_s = row.get("prefill_sum_s", row.get("prefill_s"))

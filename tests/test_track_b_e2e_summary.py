@@ -497,6 +497,8 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
         [
             {
                 "request_id": "req-0",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
                 "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "prompt_tokens": 50,
                 "generation_tokens": 0,
@@ -507,6 +509,8 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
             },
             {
                 "request_id": "req-1",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
                 "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "prompt_tokens": 50,
                 "generation_tokens": 12,
@@ -572,6 +576,8 @@ def test_task_summary_rejects_raw_vllm_jsonl_runtime_config_hash_mismatch(tmp_pa
         [
             {
                 "request_id": "req-1",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
                 "runtime_config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "prompt_tokens": 50,
                 "generation_tokens": 12,
@@ -607,9 +613,38 @@ def test_task_summary_rejects_raw_vllm_jsonl_runtime_config_hash_mismatch(tmp_pa
 
 def test_task_summary_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     path = tmp_path / "vllm_request_metrics.jsonl"
-    _write_jsonl(path, [{"request_id": "req-1", "prompt_tokens": 50}])
+    _write_jsonl(
+        path,
+        [
+            {
+                "request_id": "req-1",
+                "schema": "lumo.track_b.vllm_request_metrics.v1",
+                "producer": "track_b_vllm_request_metrics_patch",
+                "prompt_tokens": 50,
+            }
+        ],
+    )
 
     with pytest.raises(RuntimeError, match="missing numeric fields"):
+        _vllm_jsonl_by_request(path)
+
+
+def test_task_summary_rejects_vllm_request_metrics_without_producer_metadata(tmp_path: Path) -> None:
+    path = tmp_path / "vllm_request_metrics.jsonl"
+    _write_jsonl(
+        path,
+        [
+            {
+                "request_id": "req-1",
+                "prompt_tokens": 50,
+                "generation_tokens": 12,
+                "spec_decode_num_accepted_tokens": 3,
+                "spec_decode_num_draft_tokens": 12,
+            }
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="producer metadata"):
         _vllm_jsonl_by_request(path)
 
 
