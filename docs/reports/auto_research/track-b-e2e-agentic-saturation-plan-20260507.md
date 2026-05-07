@@ -547,7 +547,7 @@ Deferred diagnostic result recorded on 2026-05-07:
 - `output/track_b_e2e/round_0/round_summary.json` exists, but has `diagnostic_only=true`, `trusted_task_count=0`, `untrusted_task_count=13`, `diagnostic_task_count=13`, `median_wallclock_s=null`, `diagnostic_median_wallclock_s=2.253`, and `diagnostic_aggregate_wallclock_s=20.581`.
 - The run is not a performance baseline: 20 attempts are missing-workspace diagnostics, and 32 live-workspace attempts recorded Codex exit `1` because installed Codex rejected `qwen3.5-27b` under the ChatGPT account path.
 - Readiness with `output/track_b_e2e/round_0/preflight_audit.json` still returns `decision="round0_blocked"` and `round0_ready=false`; the Round 0 summary verifier rejects the diagnostic summary for too few trusted/completed/correct task summaries and missing trusted median/aggregate wallclock fields.
-- Trusted preflight now also checks the fixed sample's workspace bundles before measurement. After materializing two existing legacy workspaces into `workspace_bundle/v1-clean-baseline`, the current repo has 10/13 available and still blocks on `track_b_sample_workspaces_available`; missing tasks are `responsive-checkout-visual-regression/v1-clean-baseline`, `incident-evidence-synthesis/v1-clean-baseline`, and `multi-tool-transaction-repair/v1-clean-baseline`.
+- Trusted preflight now also checks the fixed sample's workspace bundles before measurement. After materializing two existing legacy workspaces and seeding the three missing family workspaces from their task specs, the current repo has 13/13 available and no longer blocks on `track_b_sample_workspaces_available`.
 - Trusted preflight now smoke-runs the configured Codex command template in a temporary git workspace before the full round. With the diagnostic command template and `qwen3.5-27b`, it blocks on `codex_command_smoke` with the real Codex error: `The 'qwen3.5-27b' model is not supported when using Codex with a ChatGPT account.`
 
 | Step | Current status | Evidence |
@@ -689,6 +689,7 @@ Committed scaffold commits through this status checkpoint:
 - `d1c3691 Gate Track B sample workspaces in preflight`
 - `c3e255d Smoke Track B Codex command in preflight`
 - `1fba6d8 Materialize Track B existing workspace bundles`
+- `fbe7c8e Seed remaining Track B workspace bundles`
 
 ## 12. Decision rules for ending the loop
 

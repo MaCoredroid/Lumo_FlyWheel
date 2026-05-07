@@ -23,7 +23,7 @@ Concrete success criteria:
 |---|---|---|---|
 | Plan states Track B headline metric as E2E Codex task wallclock, not decode tok/s. | `track-b-e2e-agentic-saturation-plan-20260507.md` §1-§2 | Plan says the headline metric is median per-task wallclock across the 13-task sample, with decode tok/s diagnostic-only. | Complete |
 | Plan defines fixed 13-task sample. | Plan §3 | Sample covers 13 fixed CNB-55 family/variant slots and says the sample must not change between rounds. | Complete |
-| Fixed sample workspace bundles exist. | `scripts/preflight_track_b_e2e.py` | Trusted preflight now checks `track_b_sample_workspaces_available`; after materializing `skill-router-contract-upgrade` and `plugin-scaffold-alignment` from existing legacy `workspace/` directories, current repo reports 10/13 available and still missing `responsive-checkout-visual-regression/v1-clean-baseline`, `incident-evidence-synthesis/v1-clean-baseline`, and `multi-tool-transaction-repair/v1-clean-baseline`. | Blocked |
+| Fixed sample workspace bundles exist. | `scripts/preflight_track_b_e2e.py` | Trusted preflight now checks `track_b_sample_workspaces_available`; after materializing `skill-router-contract-upgrade` and `plugin-scaffold-alignment` from existing legacy `workspace/` directories and seeding the remaining three workspaces from their task specs, current repo reports 13/13 available and no missing task IDs. | Complete |
 | Plan defines Codex trace schema and correctness check. | Plan §4 | Trace event schema and `output/track_b_e2e/codex_trace_emitter_correctness.json` verifier schema are present; readiness rejects an existence-only correctness artifact, and the verifier requires `task_start.runtime_config_hash` to be a `sha256:<64-hex-digest>` value. | Spec complete; implementation blocked |
 | Codex `--trace-out` implemented and verified. | Patched Codex CLI + correctness artifact | Live preflight reports `codex-cli 0.128.0`, `codex_trace_out_supported=false`; validated correctness artifact is absent. A verifier now exists at `scripts/verify_track_b_codex_trace_correctness.py` to build the artifact from real enabled/disabled evidence once patched Codex is available. The 2026-05-07 deferred diagnostic round synthesized minimal trace anchors and is explicitly untrusted. | Deferred; still blocked for trusted baseline |
 | Codex command/model path can run. | `scripts/preflight_track_b_e2e.py --codex-command-template ...` | Trusted preflight now smoke-runs the configured Codex command template in a temporary git workspace. With the diagnostic command and `qwen3.5-27b`, current preflight blocks on `codex_command_smoke`; Codex returns `The 'qwen3.5-27b' model is not supported when using Codex with a ChatGPT account.` | Blocked |
@@ -39,9 +39,9 @@ Concrete success criteria:
 | Auto-research round proposal template exists and drives the hard-gated loop. | `prompts/track_b_e2e_round_proposal.md` | Readiness manifest reports Step F complete and now exposes `hard_gates.round_proposal_prompt_verified=true`; Step F validates the hard-gated round driver, runtime/protocol hash arguments, trace-correctness artifact argument, preflight script, exact three-counter spec-decode grep, and absence of the legacy direct repeat-3 task measurement command. | Complete |
 | Machine-readable readiness gate exists. | `scripts/build_track_b_e2e_readiness_manifest.py` | Command exits 1 with `round0_ready=false` and blocking reasons; trace patch content, trace correctness, proposal prompt content, Round 0 summary, sample-integrity, runtime-hash format, finite positive Round 0 wallclock fields, and NCU metric-coverage gates validate artifact content, not only file existence. | Complete |
 | Round 0 dry run populated and validated. | `output/track_b_e2e/round_0/round_summary.json` and five named NCU profiles | Deferred diagnostic round completed: 52 runner attempts, 13 task summaries, and one `round_summary.json`. The summary has `diagnostic_only=true`, `trusted_task_count=0`, `untrusted_task_count=13`, `diagnostic_task_count=13`, `median_wallclock_s=null`, and `diagnostic_median_wallclock_s=2.253`. Readiness still reports `round0_summary_verified=false`, `ncu_profiles_verified=false`, and `round0_ready=false`. | Deferred diagnostic complete; trusted baseline blocked |
-| Tests cover new scaffolding. | Focused pytest commands | The full focused Track B suite passed after the Codex command smoke gate and workspace materialization: `111 passed` across trace correctness, preflight, readiness, summary, runner, metrics, DCGM sampler, round driver, and NCU profile tests. | Complete for scaffold risk |
+| Tests cover new scaffolding. | Focused pytest commands | The full focused Track B suite passed after the Codex command smoke gate and all workspace materialization: `111 passed` across trace correctness, preflight, readiness, summary, runner, metrics, DCGM sampler, round driver, and NCU profile tests. | Complete for scaffold risk |
 | Full repo test suite green. | Full pytest | Earlier `PYTHONPATH=. .venv/bin/pytest -q -x` failed an unrelated existing `tests/test_auto_research.py` expectation. | Not green; unrelated known failure |
-| Progress committed. | Git history | Deferred diagnostic checkpoints `5ba8bc7`, `66f094a`, `283f0d8`, sample-workspace preflight gate `d1c3691`, Codex command smoke gate `c3e255d`, and workspace materialization checkpoint `1fba6d8` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
+| Progress committed. | Git history | Deferred diagnostic checkpoints `5ba8bc7`, `66f094a`, `283f0d8`, sample-workspace preflight gate `d1c3691`, Codex command smoke gate `c3e255d`, workspace materialization checkpoint `1fba6d8`, and remaining workspace seed checkpoint `fbe7c8e` are on `main`; repo is ahead of origin. | Complete for landed checkpoints |
 
 ## Current Readiness Decision
 
@@ -77,9 +77,8 @@ Result: exit code `1`, `round0_may_run=false`, with blockers:
 - `codex_trace_out_supported`
 - `codex_command_smoke`
 - `dcgm_profile_fields_available`
-- `track_b_sample_workspaces_available`
 
-The latest sample workspace check after materializing existing bundles reports `available_task_count=10`, `expected_task_count=13`.
+The latest sample workspace check after seeding the remaining bundles reports `available_task_count=13`, `expected_task_count=13`, and no missing task IDs. Latest readiness with that preflight still returns `decision="round0_blocked"` and `round0_ready=false`.
 The Codex smoke check returns exit code `1` with the unsupported `qwen3.5-27b` ChatGPT-account error.
 
 Deferred reasons:
@@ -105,8 +104,7 @@ The objective is **not complete**. The plan and scaffold now truthfully prevent 
 1. Patch/pin Codex CLI with `--trace-out` and produce `output/track_b_e2e/codex_trace_emitter_correctness.json`.
 2. Patch vLLM or add a bounded per-request JSONL side-channel, then wire Codex trace request IDs to that side-channel so Codex turns can join to vLLM token/spec-decode metrics.
 3. Fix or replace DCGM profile-field collection so required utilization fields are numeric, or explicitly revise the plan with a truthful lower-fidelity diagnosis mode.
-4. Populate or revise the three remaining missing workspace bundles, or update the fixed sample with a formal sample-hash reset.
-5. Route Codex to the intended local `qwen3.5-27b` runtime or choose a supported Codex model path for the diagnostic loop.
-6. Run trusted Round 0 only after the readiness manifest reports all hard gates passing.
+4. Route Codex to the intended local `qwen3.5-27b` runtime or choose a supported Codex model path for the diagnostic loop.
+5. Run trusted Round 0 only after the readiness manifest reports all hard gates passing.
 
 The current `round_0/round_summary.json` is diagnostic only and must not be used as a headline E2E baseline.
