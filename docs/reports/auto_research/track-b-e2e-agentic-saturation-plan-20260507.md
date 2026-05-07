@@ -593,6 +593,8 @@ Committed scaffold commits through this status checkpoint:
 - `8e212bd Isolate Track B NCU task artifacts`
 - `4af0f4e Update Track B NCU isolation ledger`
 - `478f38c Reject stale Track B round summaries`
+- `2024c71 Update Track B stale summary ledger`
+- `dd11475 Reject stale Track B measurement outputs`
 
 ## 12. Decision rules for ending the loop
 
