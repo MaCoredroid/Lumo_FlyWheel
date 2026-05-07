@@ -17,13 +17,28 @@ def _completed(command: list[str], returncode: int = 0) -> subprocess.CompletedP
     return subprocess.CompletedProcess(command, returncode, stdout="", stderr="")
 
 
-def _trace_text(duration_s: float, completion_tokens: int) -> str:
+def _trace_text(
+    duration_s: float,
+    completion_tokens: int,
+    *,
+    task_id: str = "transcript-merge-regression/v1-clean-baseline",
+    runtime_config_hash: str = "sha256:test",
+) -> str:
     start = datetime(2026, 5, 7, 20, 0, 0, tzinfo=UTC)
     end = start + timedelta(seconds=duration_s)
     rows = [
-        {"event": "task_start", "ts": start.isoformat(timespec="milliseconds").replace("+00:00", "Z")},
+        {
+            "event": "task_start",
+            "ts": start.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "task_id": task_id,
+            "runtime_config_hash": runtime_config_hash,
+        },
         {"event": "turn_end", "completion_tokens": completion_tokens},
-        {"event": "task_end", "ts": end.isoformat(timespec="milliseconds").replace("+00:00", "Z")},
+        {
+            "event": "task_end",
+            "ts": end.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "task_id": task_id,
+        },
     ]
     return "\n".join(json.dumps(row) for row in rows) + "\n"
 
@@ -92,7 +107,7 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
                         encoding="utf-8",
                     )
                     (task_dir / "codex_trace.jsonl").write_text(
-                        _trace_text(10.0 + attempt, 100 + attempt),
+                        _trace_text(10.0 + attempt, 100 + attempt, task_id=task_id),
                         encoding="utf-8",
                     )
         return _completed(command)
@@ -157,7 +172,55 @@ def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: P
                     json.dumps({"elapsed_s": 100.0 + attempt}) + "\n",
                     encoding="utf-8",
                 )
-                (task_dir / "codex_trace.jsonl").write_text(_trace_text(10.0 + attempt, tokens), encoding="utf-8")
+                (task_dir / "codex_trace.jsonl").write_text(
+                    _trace_text(10.0 + attempt, tokens, task_id=tasks[0]),
+                    encoding="utf-8",
+                )
+        return _completed(command)
+
+    monkeypatch.setattr(round_driver, "_run", fake_run)
+
+    rc = round_driver.main(
+        [
+            "--round",
+            "0",
+            "--runtime-config-hash",
+            "sha256:test",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--clock-skew-ms-p99",
+            "10",
+            "--trace-emitter-correctness-verified-at",
+            "2026-05-07T00:00:00Z",
+            "--protocol-hash-match",
+            "--out-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert rc == 2
+
+
+def test_round_driver_rejects_measured_trace_runtime_hash_mismatch(monkeypatch, tmp_path: Path) -> None:
+    tasks = ["transcript-merge-regression/v1-clean-baseline"]
+    monkeypatch.setattr(round_driver, "_tasks", lambda: tasks)
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        script = Path(command[1]).name
+        if script == "preflight_track_b_e2e.py":
+            preflight_out = Path(command[command.index("--out") + 1])
+            preflight_out.write_text(json.dumps({"blocking_reasons": []}) + "\n", encoding="utf-8")
+        if script == "run_track_b_e2e_task.py":
+            out_root = Path(command[command.index("--out-root") + 1])
+            family, variant = tasks[0].split("/", 1)
+            for attempt in range(1, 5):
+                task_dir = out_root / "round_0" / f"{family}__{variant}" / f"run_{attempt:02d}"
+                task_dir.mkdir(parents=True)
+                runtime_hash = "sha256:wrong" if attempt == 3 else "sha256:test"
+                (task_dir / "codex_trace.jsonl").write_text(
+                    _trace_text(10.0 + attempt, 100, task_id=tasks[0], runtime_config_hash=runtime_hash),
+                    encoding="utf-8",
+                )
         return _completed(command)
 
     monkeypatch.setattr(round_driver, "_run", fake_run)

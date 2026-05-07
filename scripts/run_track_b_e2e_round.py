@@ -70,10 +70,45 @@ def _parse_ts(value: object) -> datetime | None:
         return None
 
 
-def _trace_wallclock_s(path: Path) -> float:
+def _verify_trace_attempt_identity(
+    path: Path,
+    events: list[dict[str, object]],
+    *,
+    task_id: str,
+    runtime_config_hash: str,
+) -> None:
+    task_start = next((event for event in events if event.get("event") == "task_start"), None)
+    task_end = next((event for event in reversed(events) if event.get("event") == "task_end"), None)
+    if task_start is None or task_end is None:
+        raise RuntimeError(f"{path} must contain task_start and task_end events")
+    for event_name, event in (("task_start", task_start), ("task_end", task_end)):
+        trace_task_id = event.get("task_id")
+        if isinstance(trace_task_id, str) and trace_task_id and trace_task_id != task_id:
+            raise RuntimeError(f"{path} {event_name}.task_id {trace_task_id} does not match {task_id}")
+    trace_runtime_config_hash = task_start.get("runtime_config_hash")
+    if trace_runtime_config_hash != runtime_config_hash:
+        raise RuntimeError(
+            f"{path} task_start.runtime_config_hash {trace_runtime_config_hash!r} does not match {runtime_config_hash!r}"
+        )
+
+
+def _attempt_trace_events(
+    out_root: Path,
+    round_index: int,
+    task_id: str,
+    attempt: int,
+    runtime_config_hash: str,
+) -> tuple[Path, list[dict[str, object]]]:
+    trace_path = _attempt_dir(out_root, round_index, task_id, attempt) / "codex_trace.jsonl"
+    events = _read_jsonl(trace_path)
+    _verify_trace_attempt_identity(trace_path, events, task_id=task_id, runtime_config_hash=runtime_config_hash)
+    return trace_path, events
+
+
+def _trace_wallclock_s(path: Path, events: list[dict[str, object]]) -> float:
     task_start: dict[str, object] | None = None
     task_end: dict[str, object] | None = None
-    for event in _read_jsonl(path):
+    for event in events:
         if event.get("event") == "task_start" and task_start is None:
             task_start = event
         if event.get("event") == "task_end":
@@ -97,18 +132,25 @@ def _attempt_wallclocks(
     round_index: int,
     task_id: str,
     attempts: range,
+    runtime_config_hash: str,
 ) -> list[float]:
     wallclocks: list[float] = []
     for attempt in attempts:
-        trace_path = _attempt_dir(out_root, round_index, task_id, attempt) / "codex_trace.jsonl"
-        wallclocks.append(_trace_wallclock_s(trace_path))
+        trace_path, events = _attempt_trace_events(out_root, round_index, task_id, attempt, runtime_config_hash)
+        wallclocks.append(_trace_wallclock_s(trace_path, events))
     return wallclocks
 
 
-def _completion_tokens_for_attempt(out_root: Path, round_index: int, task_id: str, attempt: int) -> int:
-    trace_path = _attempt_dir(out_root, round_index, task_id, attempt) / "codex_trace.jsonl"
+def _completion_tokens_for_attempt(
+    out_root: Path,
+    round_index: int,
+    task_id: str,
+    attempt: int,
+    runtime_config_hash: str,
+) -> int:
+    _trace_path, events = _attempt_trace_events(out_root, round_index, task_id, attempt, runtime_config_hash)
     total = 0
-    for event in _read_jsonl(trace_path):
+    for event in events:
         if event.get("event") != "turn_end":
             continue
         completion_tokens = event.get("completion_tokens")
@@ -122,8 +164,12 @@ def _verify_generation_volume_within_band(
     round_index: int,
     task_id: str,
     attempts: range,
+    runtime_config_hash: str,
 ) -> None:
-    totals = [_completion_tokens_for_attempt(out_root, round_index, task_id, attempt) for attempt in attempts]
+    totals = [
+        _completion_tokens_for_attempt(out_root, round_index, task_id, attempt, runtime_config_hash)
+        for attempt in attempts
+    ]
     median = statistics.median(totals)
     if median <= 0:
         raise RuntimeError(f"{task_id} has no measured completion tokens across attempts {attempts.start}..{attempts.stop - 1}")
@@ -297,9 +343,9 @@ def run_round(args: argparse.Namespace) -> int:
 
     for task_id in _tasks():
         measured_attempts = range(2, args.repeat + 1)
-        _verify_generation_volume_within_band(out_root, args.round, task_id, measured_attempts)
+        _verify_generation_volume_within_band(out_root, args.round, task_id, measured_attempts, args.runtime_config_hash)
         task_dir = _attempt_dir(out_root, args.round, task_id, measured_attempts.start)
-        wallclocks = _attempt_wallclocks(out_root, args.round, task_id, measured_attempts)
+        wallclocks = _attempt_wallclocks(out_root, args.round, task_id, measured_attempts, args.runtime_config_hash)
         summary = _run(_task_summary_command(args, task_id, task_dir, wallclocks))
         if summary.returncode != 0:
             print(summary.stderr, file=sys.stderr, end="")
