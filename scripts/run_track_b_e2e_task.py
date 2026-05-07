@@ -69,6 +69,68 @@ def _write_vllm_per_turn(task_dir: Path, before_raw: str, after_raw: str) -> Non
     )
 
 
+def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    request_id = row.get("request_id") or row.get("vllm_request_id") or row.get("id")
+    if not request_id:
+        return None
+    prompt_tokens = row.get("prompt_tokens")
+    completion_tokens = row.get("completion_tokens", row.get("generation_tokens"))
+    prefill_sum_s = row.get("prefill_sum_s", row.get("prefill_s"))
+    decode_sum_s = row.get("decode_sum_s", row.get("decode_s"))
+    accepted = row.get("spec_decode_num_accepted_tokens")
+    draft_tokens = row.get("spec_decode_num_draft_tokens")
+    normalized = dict(row)
+    normalized.update(
+        {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "prefill_sum_s": prefill_sum_s,
+            "decode_sum_s": decode_sum_s,
+            "spec_decode_num_accepted_tokens": accepted,
+            "spec_decode_num_draft_tokens": draft_tokens,
+        }
+    )
+    if (
+        isinstance(completion_tokens, (int, float))
+        and isinstance(decode_sum_s, (int, float))
+        and decode_sum_s > 0
+        and "decode_tps" not in normalized
+    ):
+        normalized["decode_tps"] = completion_tokens / decode_sum_s
+    if (
+        isinstance(accepted, (int, float))
+        and isinstance(draft_tokens, (int, float))
+        and draft_tokens > 0
+        and "accepted_per_draft_token" not in normalized
+    ):
+        normalized["accepted_per_draft_token"] = accepted / draft_tokens
+    return str(request_id), normalized
+
+
+def _write_vllm_per_turn_from_jsonl(task_dir: Path, source: Path) -> None:
+    requests_by_id: dict[str, dict[str, Any]] = {}
+    with source.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Malformed vLLM request metrics JSONL at {source}:{line_number}") from exc
+            if not isinstance(row, dict):
+                continue
+            normalized = _normalize_vllm_request_metrics(row)
+            if normalized is None:
+                continue
+            request_id, metrics = normalized
+            requests_by_id[request_id] = metrics
+    (task_dir / "vllm_request_metrics.jsonl").write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    (task_dir / "vllm_per_turn.json").write_text(
+        json.dumps({"requests": requests_by_id}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _run_sampler(args: argparse.Namespace, task_dir: Path) -> subprocess.Popen[str] | None:
     if args.no_dcgm:
         return None
@@ -145,7 +207,10 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     (task_dir / "codex_stderr.log").write_text(result.stderr if result else "", encoding="utf-8")
     metrics_post = _metrics_text(args.metrics_url)
     (task_dir / "vllm_metrics_post.txt").write_text(metrics_post, encoding="utf-8")
-    _write_vllm_per_turn(task_dir, metrics_pre, metrics_post)
+    if args.vllm_request_metrics_jsonl:
+        _write_vllm_per_turn_from_jsonl(task_dir, Path(args.vllm_request_metrics_jsonl))
+    else:
+        _write_vllm_per_turn(task_dir, metrics_pre, metrics_post)
     metadata = {
         "schema": "lumo.track_b.e2e_runner_metadata.v1",
         "recorded_at": _now(),
@@ -157,6 +222,7 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "trace_out": str(trace_out),
         "elapsed_s": elapsed_s,
         "codex_command_template": args.codex_command_template,
+        "vllm_request_metrics_jsonl": args.vllm_request_metrics_jsonl,
         "codex_exit_code": result.returncode if result else None,
     }
     (task_dir / "runner_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -184,6 +250,15 @@ def main() -> int:
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--dcgm-interval-s", type=float, default=0.01)
     parser.add_argument("--no-dcgm", action="store_true")
+    parser.add_argument(
+        "--vllm-request-metrics-jsonl",
+        default="",
+        help=(
+            "Optional vLLM per-request JSONL side-channel. When supplied, "
+            "the runner normalizes it into vllm_per_turn.json instead of "
+            "requiring request_id labels in Prometheus."
+        ),
+    )
     parser.add_argument(
         "--codex-command-template",
         required=True,

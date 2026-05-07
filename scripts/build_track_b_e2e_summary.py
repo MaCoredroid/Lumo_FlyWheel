@@ -158,13 +158,72 @@ def _vllm_by_request(path: Path) -> dict[str, dict[str, Any]]:
     raise RuntimeError(f"Unsupported vLLM per-turn JSON shape: {path}")
 
 
+def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    request_id = row.get("request_id") or row.get("vllm_request_id") or row.get("id")
+    if not request_id:
+        return None
+    prompt_tokens = row.get("prompt_tokens")
+    completion_tokens = row.get("completion_tokens", row.get("generation_tokens"))
+    prefill_sum_s = row.get("prefill_sum_s", row.get("prefill_s"))
+    decode_sum_s = row.get("decode_sum_s", row.get("decode_s"))
+    accepted = row.get("spec_decode_num_accepted_tokens")
+    draft_tokens = row.get("spec_decode_num_draft_tokens")
+    normalized = dict(row)
+    normalized.update(
+        {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "prefill_sum_s": prefill_sum_s,
+            "decode_sum_s": decode_sum_s,
+            "spec_decode_num_accepted_tokens": accepted,
+            "spec_decode_num_draft_tokens": draft_tokens,
+        }
+    )
+    if (
+        isinstance(completion_tokens, (int, float))
+        and isinstance(decode_sum_s, (int, float))
+        and decode_sum_s > 0
+        and "decode_tps" not in normalized
+    ):
+        normalized["decode_tps"] = completion_tokens / decode_sum_s
+    if (
+        isinstance(accepted, (int, float))
+        and isinstance(draft_tokens, (int, float))
+        and draft_tokens > 0
+        and "accepted_per_draft_token" not in normalized
+    ):
+        normalized["accepted_per_draft_token"] = accepted / draft_tokens
+    return str(request_id), normalized
+
+
+def _vllm_jsonl_by_request(path: Path) -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    for row in _load_jsonl(path):
+        normalized = _normalize_vllm_request_metrics(row)
+        if normalized is not None:
+            request_id, metrics = normalized
+            rows[request_id] = metrics
+    return rows
+
+
+def _load_vllm_request_metrics(task_dir: Path) -> dict[str, dict[str, Any]]:
+    json_path = task_dir / "vllm_per_turn.json"
+    if json_path.is_file():
+        return _vllm_by_request(json_path)
+    for name in ("vllm_per_turn.jsonl", "vllm_request_metrics.jsonl"):
+        jsonl_path = task_dir / name
+        if jsonl_path.is_file():
+            return _vllm_jsonl_by_request(jsonl_path)
+    raise RuntimeError("Task directory is missing vLLM request metrics artifact")
+
+
 def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
     task_dir = Path(args.task_dir)
     family = args.family
     variant = args.variant
     task_id = f"{family}/{variant}"
     trace = _load_jsonl(task_dir / "codex_trace.jsonl")
-    vllm = _vllm_by_request(task_dir / "vllm_per_turn.json")
+    vllm = _load_vllm_request_metrics(task_dir)
     dcgm = _load_jsonl(task_dir / "dcgm_samples.jsonl") if (task_dir / "dcgm_samples.jsonl").is_file() else []
 
     starts = [event for event in trace if event.get("event") == "turn_start"]

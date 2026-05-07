@@ -161,3 +161,77 @@ def test_task_summary_single_run_is_diagnostic_only(tmp_path: Path) -> None:
 
     assert summary["trusted_measurement"] is False
     assert summary["truthful_measurement_attestation"]["rule_3_median_of_n_runs"] == 1
+
+
+def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    base = datetime(2026, 5, 7, 18, 0, 0, tzinfo=UTC)
+
+    def ts(offset_s: float) -> str:
+        return (base + timedelta(seconds=offset_s)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    _write_jsonl(
+        task_dir / "codex_trace.jsonl",
+        [
+            {"event": "task_start", "ts": ts(0.0), "task_id": "transcript-merge-regression/v1-clean-baseline"},
+            {"event": "turn_start", "turn": 0, "regime": "prefill", "ts": ts(0.1), "vllm_request_id": "req-0"},
+            {"event": "turn_end", "turn": 0, "ts": ts(0.5), "prompt_tokens": 50, "completion_tokens": 0},
+            {"event": "turn_start", "turn": 1, "regime": "plan", "ts": ts(0.5), "vllm_request_id": "req-1"},
+            {"event": "turn_end", "turn": 1, "ts": ts(1.5), "prompt_tokens": 50, "completion_tokens": 12},
+            {"event": "task_end", "ts": ts(2.0), "exit_code": 0, "task_score": 0.74, "wallclock_s": 2.0},
+        ],
+    )
+    _write_jsonl(
+        task_dir / "vllm_request_metrics.jsonl",
+        [
+            {
+                "request_id": "req-0",
+                "prompt_tokens": 50,
+                "generation_tokens": 0,
+                "prefill_s": 0.4,
+                "decode_s": 0.0,
+                "spec_decode_num_accepted_tokens": 0,
+                "spec_decode_num_draft_tokens": 0,
+            },
+            {
+                "request_id": "req-1",
+                "prompt_tokens": 50,
+                "generation_tokens": 12,
+                "prefill_s": 0.2,
+                "decode_s": 1.0,
+                "spec_decode_num_accepted_tokens": 3,
+                "spec_decode_num_draft_tokens": 12,
+            },
+        ],
+    )
+    _write_jsonl(
+        task_dir / "dcgm_samples.jsonl",
+        [{"ts": ts(index / 100), "gpu": 0, "dram_active_pct": 0.54, "sm_active_pct": 0.31} for index in range(200)],
+    )
+
+    summary = build_task_summary(
+        Namespace(
+            round=0,
+            task_dir=str(task_dir),
+            family="transcript-merge-regression",
+            variant="v1-clean-baseline",
+            runtime_config_hash="sha256:test",
+            baseline_workspace_hash=None,
+            run_wallclocks_json="[1.9, 2.0, 2.1]",
+            clock_skew_ms_p99=8,
+            trace_emitter_correctness_verified_at="2026-05-07T14:00:00Z",
+            dcgm_interval_s=0.01,
+            cold_completion_discarded=True,
+            cache_reset_verified=True,
+            protocol_hash_match=True,
+            generation_volume_within_band=True,
+            sample_hash_match=True,
+            write_untrusted_diagnostic=False,
+        )
+    )
+
+    plan_turn = summary["turns"][1]
+    assert summary["trusted_measurement"] is True
+    assert plan_turn["decode_tps"] == 12.0
+    assert plan_turn["accepted_per_draft"] == 0.25

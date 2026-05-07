@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-07
-Repo HEAD at latest audit update: `2b098f8`
+Repo checkpoint: updated through the JSONL side-channel consumer checkpoint in current git history.
 
 ## Objective Restated
 
@@ -27,7 +27,7 @@ Concrete success criteria:
 | Codex `--trace-out` implemented and verified. | Patched Codex CLI + correctness artifact | Live preflight reports `codex-cli 0.128.0`, `codex_trace_out_supported=false`; correctness artifact is absent. | Blocked |
 | Codex patch surface audited. | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Audit records Rust patch surface and why wrapper-only logging is insufficient. | Complete blocker record |
 | vLLM per-request join requirement specified. | Plan §5.1 | Plan requires `vllm_per_turn.json` keyed by `vllm_request_id`. | Complete |
-| vLLM request-label parser implemented. | `src/lumo_flywheel_serving/metrics.py` | `parse_prometheus_samples()` preserves labels; `compute_vllm_per_request_metrics()` computes request-keyed deltas when labels exist. | Scaffold complete |
+| vLLM request-label / side-channel consumer implemented. | `src/lumo_flywheel_serving/metrics.py`, `scripts/run_track_b_e2e_task.py`, `scripts/build_track_b_e2e_summary.py` | `parse_prometheus_samples()` preserves labels; `compute_vllm_per_request_metrics()` computes request-keyed deltas when labels exist; summary and runner now normalize request-keyed vLLM JSONL side-channel rows into the same per-turn schema. | Scaffold complete |
 | vLLM live request labels available on required join metrics. | `scripts/preflight_track_b_e2e.py --out output/track_b_e2e/preflight_20260507.json` | Live preflight reports request-label coverage false for `vllm:prompt_tokens_total`, `vllm:generation_tokens_total`, `vllm:spec_decode_num_draft_tokens_total`, and `vllm:spec_decode_num_accepted_tokens_total`. | Blocked |
 | vLLM request-metrics patch surface audited. | `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Audit records that request IDs exist in OpenAI serving but are dropped before Prometheus aggregation. | Complete blocker record |
 | DCGM/NVML 100 Hz sampler exists. | `scripts/sample_dcgm_during_task.py` | Sampler script exists and live preflight reports `dcgm_sampler_runs=true` with `telemetry_sources=["nvml"]`. | Scaffold complete |
