@@ -454,7 +454,11 @@ def test_round0_summary_verification_requires_explicit_zero_mismatch_counts(tmp_
 
 
 def _ncu_csv_text() -> str:
-    return "\n".join(f'"Metric Name","{metric}"' for metric in readiness.NCU_REQUIRED_METRICS) + "\n"
+    return (
+        '"Metric Name","Metric Value"\n'
+        + "\n".join(f'"{metric}",1.0' for metric in readiness.NCU_REQUIRED_METRICS)
+        + "\n"
+    )
 
 
 def _write_ncu_metadata(root: Path, archetype: str, *, runtime_config_hash: str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") -> None:
@@ -514,6 +518,23 @@ def test_ncu_profile_verification_rejects_missing_required_metrics(tmp_path: Pat
     assert "long-text_missing_required_metrics" in result["reasons"]
     long_text = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
     assert long_text["missing_metrics"] == ["gpu__time_duration.sum"]
+
+
+def test_ncu_profile_verification_rejects_nonfinite_required_metric_values(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        text = _ncu_csv_text()
+        if archetype == "long-text":
+            text = text.replace('"gpu__time_duration.sum",1.0', '"gpu__time_duration.sum",NaN')
+        (tmp_path / f"ncu_{archetype}.csv").write_text(text, encoding="utf-8")
+        _write_ncu_metadata(tmp_path, archetype)
+
+    result = readiness._ncu_profile_verification(tmp_path)
+
+    assert result["ok"] is False
+    assert "long-text_nonfinite_required_metrics" in result["reasons"]
+    long_text = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
+    assert long_text["nonfinite_metrics"] == ["gpu__time_duration.sum"]
+    assert long_text["required_metric_values"]["gpu__time_duration.sum"] == []
 
 
 def test_ncu_profile_verification_rejects_missing_metadata(tmp_path: Path) -> None:

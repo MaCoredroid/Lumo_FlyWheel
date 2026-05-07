@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -62,13 +64,46 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def _finite_csv_number(value: str) -> float | None:
+    cleaned = value.strip().strip('"').replace(",", "")
+    if cleaned.endswith("%"):
+        cleaned = cleaned[:-1]
+    if not cleaned:
+        return None
+    try:
+        parsed = float(cleaned)
+    except ValueError:
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def _metric_values(text: str) -> dict[str, list[float]]:
+    values = {metric: [] for metric in NCU_REQUIRED_METRICS}
+    for row in csv.reader(text.splitlines()):
+        matched = next((metric for metric in NCU_REQUIRED_METRICS if metric in row), None)
+        if matched is None:
+            continue
+        values[matched].extend(
+            parsed
+            for cell in row
+            if cell != matched
+            for parsed in [_finite_csv_number(cell)]
+            if parsed is not None
+        )
+    return values
+
+
 def _validate_profile(path: Path) -> None:
     if not path.is_file() or path.stat().st_size <= 0:
         raise RuntimeError(f"NCU profile missing or empty: {path}")
     text = path.read_text(encoding="utf-8", errors="replace")
+    values = _metric_values(text)
     missing = [metric for metric in NCU_REQUIRED_METRICS if metric not in text]
     if missing:
         raise RuntimeError(f"NCU profile {path} is missing required metrics: {', '.join(missing)}")
+    nonfinite = [metric for metric, metric_values in values.items() if not metric_values]
+    if nonfinite:
+        raise RuntimeError(f"NCU profile {path} has no finite values for required metrics: {', '.join(nonfinite)}")
 
 
 def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:

@@ -75,6 +75,15 @@ def test_ncu_profile_driver_rejects_missing_metric(tmp_path: Path) -> None:
         ncu_profiles._validate_profile(profile)
 
 
+def test_ncu_profile_driver_rejects_nonfinite_metric_value(tmp_path: Path) -> None:
+    profile = tmp_path / "ncu_long-text.csv"
+    text = _metric_csv().replace("gpu__time_duration.sum,1", "gpu__time_duration.sum,NaN")
+    profile.write_text(text, encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="no finite values"):
+        ncu_profiles._validate_profile(profile)
+
+
 def test_ncu_profile_driver_rejects_unstamped_runtime_hash(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
 

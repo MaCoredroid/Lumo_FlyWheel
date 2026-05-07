@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import subprocess
@@ -304,8 +305,12 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
         metadata = _load_json(metadata_path)
         size_bytes = path.stat().st_size if exists else 0
         text = path.read_text(encoding="utf-8", errors="replace") if exists else ""
+        metric_values = _ncu_metric_values(text)
         metric_coverage = {metric: metric in text for metric in NCU_REQUIRED_METRICS}
         missing_metrics = [metric for metric, present in metric_coverage.items() if not present]
+        nonfinite_metrics = [
+            metric for metric, values in metric_values.items() if metric_coverage[metric] and not values
+        ]
         metadata_reasons: list[str] = []
         expected_profile_csv = str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path)
         if metadata.get("schema") != "lumo.track_b.ncu_archetype_profile.v1":
@@ -326,12 +331,14 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
             metadata_reasons.append("runtime_config_hash_mismatch")
         if metadata.get("profile_csv") != expected_profile_csv:
             metadata_reasons.append("profile_csv_mismatch")
-        ok = exists and size_bytes > 0 and not missing_metrics and not metadata_reasons
+        ok = exists and size_bytes > 0 and not missing_metrics and not nonfinite_metrics and not metadata_reasons
         if not ok:
             if not exists or size_bytes <= 0:
                 reasons.append(f"{archetype}_missing_or_empty")
             elif missing_metrics:
                 reasons.append(f"{archetype}_missing_required_metrics")
+            elif nonfinite_metrics:
+                reasons.append(f"{archetype}_nonfinite_required_metrics")
             else:
                 reasons.append(f"{archetype}_metadata_invalid")
         profiles.append(
@@ -350,6 +357,8 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
                 "size_bytes": size_bytes,
                 "required_metric_coverage": metric_coverage,
                 "missing_metrics": missing_metrics,
+                "required_metric_values": metric_values,
+                "nonfinite_metrics": nonfinite_metrics,
                 "ok": ok,
             }
         )
@@ -363,6 +372,35 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
         "reasons": reasons,
         "profiles": profiles,
     }
+
+
+def _finite_csv_number(value: str) -> float | None:
+    cleaned = value.strip().strip('"').replace(",", "")
+    if cleaned.endswith("%"):
+        cleaned = cleaned[:-1]
+    if not cleaned:
+        return None
+    try:
+        parsed = float(cleaned)
+    except ValueError:
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def _ncu_metric_values(text: str) -> dict[str, list[float]]:
+    values = {metric: [] for metric in NCU_REQUIRED_METRICS}
+    for row in csv.reader(text.splitlines()):
+        matched = next((metric for metric in NCU_REQUIRED_METRICS if metric in row), None)
+        if matched is None:
+            continue
+        values[matched].extend(
+            parsed
+            for cell in row
+            if cell != matched
+            for parsed in [_finite_csv_number(cell)]
+            if parsed is not None
+        )
+    return values
 
 
 def _status(ok: bool, *, blocked: bool = False) -> str:
