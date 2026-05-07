@@ -423,10 +423,19 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "sampler_script": "scripts/sample_dcgm_during_task.py",
                 "sampler_script_exists": _exists("scripts/sample_dcgm_during_task.py"),
                 "pynvml_available": checks.get("pynvml_available", {}).get("ok"),
+                "dcgmi_available": checks.get("dcgmi_available", {}).get("ok"),
+                "dcgm_python_bindings_available": checks.get("dcgm_python_bindings_available", {}).get("ok"),
+                "dcgm_python_bindings_modules": checks.get("dcgm_python_bindings_available", {}).get("modules"),
                 "dcgm_sampler_runs": checks.get("dcgm_sampler_runs", {}).get("ok"),
                 "dcgm_profile_fields_available": checks.get("dcgm_profile_fields_available", {}).get("ok"),
                 "missing_profile_fields": checks.get("dcgm_profile_fields_available", {}).get(
                     "missing_profile_fields"
+                ),
+                "profile_fields_available_sample_count": checks.get("dcgm_profile_fields_available", {}).get(
+                    "profile_fields_available_sample_count"
+                ),
+                "profile_fields_unavailable_reasons": checks.get("dcgm_profile_fields_available", {}).get(
+                    "profile_fields_unavailable_reasons"
                 ),
                 "telemetry_sources": checks.get("dcgm_sampler_runs", {}).get("telemetry_sources"),
             },

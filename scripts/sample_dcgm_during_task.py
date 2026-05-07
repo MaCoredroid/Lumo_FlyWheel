@@ -53,6 +53,7 @@ class NvmlSampler:
             "gpu": self._gpu_index,
             "telemetry_source": "nvml",
             "profile_fields_available": False,
+            "profile_fields_unavailable_reason": "nvml_fallback_only",
             "dram_active_pct": None,
             "sm_active_pct": None,
             "sm_occupancy_pct": None,

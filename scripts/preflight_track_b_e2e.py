@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -47,6 +48,10 @@ def _get(url: str, timeout_s: float = 5.0) -> dict[str, Any]:
 
 def _has_any(text: str, needles: list[str]) -> bool:
     return any(needle in text for needle in needles)
+
+
+def _module_available(name: str) -> bool:
+    return importlib.util.find_spec(name) is not None
 
 
 REQUEST_ID_LABELS = ("request_id", "vllm_request_id", "request")
@@ -210,6 +215,13 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
     telemetry_sources = sorted(
         {str(row.get("telemetry_source")) for row in rows if row.get("telemetry_source")}
     )
+    unavailable_reasons = sorted(
+        {
+            str(row.get("profile_fields_unavailable_reason"))
+            for row in rows
+            if row.get("profile_fields_unavailable_reason")
+        }
+    )
     return {
         "ok": result.returncode == 0 and bool(rows),
         "returncode": result.returncode,
@@ -221,6 +233,7 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
             field for field in DCGM_PROFILE_FIELDS if field not in observed_numeric_fields
         ],
         "telemetry_sources": telemetry_sources,
+        "profile_fields_unavailable_reasons": unavailable_reasons,
         "stdout": result.stdout,
         "stderr": result.stderr,
     }
@@ -270,6 +283,17 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
         "codex_json_events_supported": {"ok": "--json" in str(codex_help.get("stdout") or "")},
         "nvidia_smi_available": {"ok": shutil.which("nvidia-smi") is not None},
         "ncu_available": {"ok": shutil.which("ncu") is not None},
+        "dcgmi_available": {"ok": shutil.which("dcgmi") is not None},
+        "dcgm_python_bindings_available": {
+            "ok": _module_available("pydcgm")
+            and _module_available("dcgm_agent")
+            and _module_available("dcgm_fields"),
+            "modules": {
+                "pydcgm": _module_available("pydcgm"),
+                "dcgm_agent": _module_available("dcgm_agent"),
+                "dcgm_fields": _module_available("dcgm_fields"),
+            },
+        },
         "pynvml_available": {
             "ok": pynvml_check.returncode == 0,
             "stderr": pynvml_check.stderr,
@@ -285,6 +309,8 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
             "sample_count": sampler_smoke["sample_count"],
             "observed_numeric_profile_fields": sampler_smoke["observed_numeric_profile_fields"],
             "missing_profile_fields": sampler_smoke["missing_profile_fields"],
+            "profile_fields_available_sample_count": sampler_smoke.get("profile_fields_available_sample_count", 0),
+            "profile_fields_unavailable_reasons": sampler_smoke.get("profile_fields_unavailable_reasons", []),
         },
     }
     blockers = [name for name, check in checks.items() if name in args.required_checks and not check["ok"]]

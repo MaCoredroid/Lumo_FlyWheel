@@ -378,6 +378,7 @@ def test_dcgm_profile_gate_requires_available_flag(monkeypatch, tmp_path: Path) 
                 "pipe_tensor_active_pct": 0.7,
                 "pipe_fp16_active_pct": 0.8,
                 "telemetry_source": "nvml",
+                "profile_fields_unavailable_reason": "nvml_fallback_only",
             }
         )
         + "\n",
@@ -409,5 +410,48 @@ def test_dcgm_profile_gate_requires_available_flag(monkeypatch, tmp_path: Path) 
 
     assert payload["profile_fields_present"] is False
     assert payload["profile_fields_available_sample_count"] == 0
+    assert payload["profile_fields_unavailable_reasons"] == ["nvml_fallback_only"]
     assert payload["observed_numeric_profile_fields"] == sorted(preflight_track_b_e2e.DCGM_PROFILE_FIELDS)
     assert payload["missing_profile_fields"] == []
+
+
+def test_preflight_reports_dcgm_binding_availability(monkeypatch) -> None:
+    class FakeCompleted:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(preflight_track_b_e2e, "_command", lambda command, timeout_s=10.0: {"ok": True, "stdout": ""})
+    monkeypatch.setattr(preflight_track_b_e2e, "_get", lambda url, timeout_s=5.0: {"ok": True, "status_code": 200, "text": ""})
+    monkeypatch.setattr(
+        preflight_track_b_e2e,
+        "_sampler_smoke",
+        lambda python, duration_s: {
+            "ok": True,
+            "sample_count": 1,
+            "profile_fields_present": False,
+            "profile_fields_available_sample_count": 0,
+            "observed_numeric_profile_fields": [],
+            "missing_profile_fields": list(preflight_track_b_e2e.DCGM_PROFILE_FIELDS),
+            "profile_fields_unavailable_reasons": ["nvml_fallback_only"],
+            "telemetry_sources": ["nvml"],
+            "stderr": "",
+        },
+    )
+    monkeypatch.setattr(preflight_track_b_e2e.shutil, "which", lambda name: None)
+    monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", lambda *args, **kwargs: FakeCompleted())
+    monkeypatch.setattr(preflight_track_b_e2e, "_module_available", lambda name: name != "dcgm_agent")
+
+    payload = preflight_track_b_e2e.audit(
+        Namespace(
+            health_url="http://127.0.0.1:9950/health",
+            metrics_url="http://127.0.0.1:9950/metrics",
+            python=sys.executable,
+            sampler_smoke_duration_s=0.05,
+            vllm_request_metrics_jsonl="",
+            required_checks=[],
+        )
+    )
+
+    assert payload["checks"]["dcgm_python_bindings_available"]["ok"] is False
+    assert payload["checks"]["dcgm_python_bindings_available"]["modules"]["dcgm_agent"] is False
