@@ -1,0 +1,193 @@
+{
+  "schema": "lumo.track_b.real_content_task_warmonly_probe.v1",
+  "candidate": "025",
+  "task_id": "release-note-to-plan-translation/v1-clean-baseline",
+  "agentic_task": "release-note-to-plan-translation",
+  "patch": "vllm-pr39562-prelaunch-stopgap",
+  "source_prompt_metadata": "benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_01_live_probe/metadata.json",
+  "workspace_bundle": "benchmark_blueprints/families/release-note-to-plan-translation/workspace_bundle/v1-clean-baseline",
+  "prompt_chars": 4648,
+  "prompt_word_count": 653,
+  "max_output_tokens": 2048,
+  "warm_concurrency": 4,
+  "measurement_policy": "one cold completion discarded; metrics sampled before and after warm window only",
+  "cold_discarded": {
+    "label": "cold_discard",
+    "status": "incomplete",
+    "response_id": "resp_b11af260af482a5d",
+    "usage": {
+      "input_tokens": 1112,
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "input_tokens_per_turn": [],
+        "cached_tokens_per_turn": []
+      },
+      "output_tokens": 2048,
+      "output_tokens_details": {
+        "reasoning_tokens": 0,
+        "tool_output_tokens": 0,
+        "output_tokens_per_turn": [],
+        "tool_output_tokens_per_turn": []
+      },
+      "total_tokens": 3160
+    },
+    "wall_s": 197.843615,
+    "text_summary": {
+      "text_chars": 7592,
+      "word_count": 941,
+      "unique_word_count": 495,
+      "unique_word_ratio": 0.526036,
+      "most_common_8gram_count": 1,
+      "sha256": "974b57996d57977999fe4853c6a57b2ed0dac078d4d1cfd1d49ba8596958475d",
+      "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the content for `brief_input.json` based on the provided context (AGENTS.md, release notes, repo inventory, etc.).\n    *   **Constraint:** Do *not* claim to run commands or write files. Just provide the JSON object.\n    *   **Context:**\n        *   `AGENTS.md`: Defines the task (translate release notes + repo state into an ordered implementation plan), input sources, output format (JSON via CLI), and rules.\n        *   `.scenario_variant`: `v1-clean-baseline`.\n        *   `release_notes/`: 4 items (RN-101 to RN-104).\n   ",
+      "tail_600": " not impact unrelated services.\" }\n ]\n    *   `scenario_variant`: \"v1-clean-baseline\"\n    *   `schema_version`: \"cnb55.release_plan_brief.v1\"\n\n    Wait, check `brief_input.json` location`. The prompt says \"Author brief_input.json at the workspace root\".\n    The task for *this* probe is \"Produce the structured content you would put into brief_input.json. Do not claim to run commands or write files; just provide the JSON object.\"\n    So I output the JSON block.\n\n    Double check `AGENTS.md` schema hints:\n    \"Your brief must contain: `first_milestone_id`, `ordered_steps` with contiguous ranks, `"
+    }
+  },
+  "warm_elapsed_s": 228.818247,
+  "warm": [
+    {
+      "label": "warm_1",
+      "status": "incomplete",
+      "response_id": "resp_9552c2349ab2a58d",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 800,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3160
+      },
+      "wall_s": 225.23518,
+      "text_summary": {
+        "text_chars": 7420,
+        "word_count": 894,
+        "unique_word_count": 463,
+        "unique_word_ratio": 0.517897,
+        "most_common_8gram_count": 2,
+        "sha256": "934f67cf421d53c717d332038e983a772a4ef2506230b98026622704e8358a38",
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the structured content for `brief_input.json` based on the provided context (AGENTS.md, release_notes, repo_inventory, etc.).\n    *   **Constraint:** I am a text model. I cannot actually run commands like `./bin/cnb55-brief submit`. I must provide the JSON object that *would* be put into `brief_input.json`.\n    *   **Input Data:**\n        *   `AGENTS.md`: Instructions on how to translate release notes into a plan.\n        *   `.scenario_variant`: `v1-clean-baseline`.\n        *   `release_notes/release_notes_2026_04.md`: ",
+        "tail_600": " only stabilizes after the rollout and rollback shape are known.\"}\n      ],\n      \"primary_risk\": \"Dashboard renders incorrect step order if schema drift is not audited and fixtures are not backfilled before enabling the summary view, exposing users to broken workflows.\",\n      \"assumption_ledger\": [\n        { \"key\": \"schema_target_version\", \"status\": \"assumed\", \"note\": \"Assuming target schema is v2 based on release notes.\"},\n        { \"key\": \"canary_env_access\", \"status\": \"missing\", \"note\": \"Details on canary environment access not provided in repo_inventory.\"}\n      ]\n    }\n    ```\n\n    Wait"
+      },
+      "warm_index": 1
+    },
+    {
+      "label": "warm_2",
+      "status": "incomplete",
+      "response_id": "resp_b33978018dfd71bb",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 800,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3160
+      },
+      "wall_s": 217.560511,
+      "text_summary": {
+        "text_chars": 7521,
+        "word_count": 920,
+        "unique_word_count": 469,
+        "unique_word_ratio": 0.509783,
+        "most_common_8gram_count": 2,
+        "sha256": "ace35054a3e6002cdc2cad0abd4dc14993a57cfbdeb95929e15a529ab6e3f11f",
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the content for `brief_input.json` based on the provided context (AGENTS.md, release notes, repo inventory, etc.).\n    *   **Constraint:** Do not claim to run commands or write files. Just provide the JSON object.\n    *   **Context:**\n        *   `AGENTS.md`: Defines the task (translate release notes + repo state into an implementation plan).\n        *   `AGENTS.md` specifies the output schema (`cnb55.release_plan_brief.v1`).\n        *   `release_notes/release_notes_2026_04.md`: Contains 4 release notes (RN-101 to RN-104",
+        "tail_600": "he structured content you would put into brief_input.json. Do not claim to run commands or write files; just provide the JSON object.\"\n\n    Okay, so I just output the JSON.\n\n    I need to make sure the JSON is valid.\n\n    **Schema Inference:**\n    Based on `AGENTS.md`:\n    - `scenario_variant` (from .scenario_variant)\n    - `first_milestone_id` (string)\n    - `ordered_steps` (array of objects with rank, id, description?)\n    - `dependency_notes` (array of strings or objects?) \"tying prerequisite work to downstream steps\"\n    - `primary_risk` (string)\n    - `assumption_ledger` (array of objects"
+      },
+      "warm_index": 2
+    },
+    {
+      "label": "warm_3",
+      "status": "incomplete",
+      "response_id": "resp_b303a4ebf614eaa7",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 800,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3160
+      },
+      "wall_s": 219.49211,
+      "text_summary": {
+        "text_chars": 7579,
+        "word_count": 980,
+        "unique_word_count": 505,
+        "unique_word_ratio": 0.515306,
+        "most_common_8gram_count": 2,
+        "sha256": "714919b40848dc1636d27b3eb78014fee6077afc7570e776898472cd53666d40",
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the content for `brief_input.json` based on the provided context (AGENTS.md, release_notes, repo_inventory, etc.)`.\n    *   **Constraint:** Do *not* actually run commands or write files. Just provide the JSON object that would go into `brief_input.json`.\n    *   **Context:**\n        *   `AGENTS.md`: Defines the task (translate release notes + repo state into an ordered implementation plan), output format (JSON via CLI tool `./bin/cnb55-brief`), rules (don't modify certain files, only write to `brief/` or root `brief_inpu",
+        "tail_600": "put the JSON.\n\n    One detail from AGENTS.md: \"Your brief must contain:\n    - `first_milestone_id`\n    - `ordered_steps` with contiguous ranks\n    - `dependency_notes` tying prerequisite work to downstream steps\n    - `primary_risk` naming the user-visible failure mode if the order is wrong\n    - `assumption_ledger` with at least one honest `missing` row\n\n    I will ensure all these are present.\n\n    `assumption_ledger` format isn't strictly defined in AGENTS, but \"row\" implies a list. I'll use `status: \"missing\"`.\n\n    Let's construct the JSON.\n\n    `schema_version`: \"cnb55.release_plan_brief"
+      },
+      "warm_index": 3
+    },
+    {
+      "label": "warm_4",
+      "status": "incomplete",
+      "response_id": "resp_97730ac568939431",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 800,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3160
+      },
+      "wall_s": 228.813348,
+      "text_summary": {
+        "text_chars": 7234,
+        "word_count": 891,
+        "unique_word_count": 493,
+        "unique_word_ratio": 0.553311,
+        "most_common_8gram_count": 1,
+        "sha256": "a7048d5be6881be3d3e50b8df84806bb3f0cbfbe4be90a4a806f3dc8036014cd",
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the content for `brief_input.json` based on the provided context (AGENTS.md, release_notes, repo_inventory, etc.).\n    *   **Constraint:** I am a model-only probe. I cannot actually run commands (`./bin/cnb55-brief`), write files, or access the filesystem. I must *simulate* the output that *would* be written to `brief_input.json`.\n    *   **Input Data:**\n        *   `AGENTS.md`: Instructions for translating release notes + repo state into an implementation plan.\n        *   `.scenario_variant`: `v1-clean-baseline`\n      ",
+        "tail_600": "  `dependency_notes`: List of strings or objects? AGENTS says \"dependency_notes tying prerequisite work to downstream steps\". Usually a list of strings describing the link.\n    Let's look at typical JSON structure for this type of task.\n    Usually:\n    ```json\n    {\n      \"schema_version\": \"...\",\n      \"scenario_variant\": \"...\",\n      \"first_milestone_id\": \"...\",\n      \"ordered_steps\": [ ... ],\n      \"dependency_notes\": [ ... ],\n      \"primary_risk\": \"...\",\n      \"assumption_ledger\": [ ... ]\n    }\n    ```\n    I will infer the exact field names based on standard practices for this prompt style"
+      },
+      "warm_index": 4
+    }
+  ],
+  "warm_usage_output_tokens_total": 8192.0,
+  "metrics_delta": {
+    "generation_tokens": 8192.0,
+    "decode_sum_s": 889.0181188834831,
+    "prefill_sum_s": 1.3430220540612936,
+    "prompt_tokens": 4448.0,
+    "kv_computed_tokens": 1248.0
+  },
+  "decode_tps": 9.21466,
+  "wall_output_tps": 35.801341,
+  "target_decode_tps": 9.0,
+  "pass_9tps_gate": true
+}

@@ -1,0 +1,78 @@
+{
+  "task_id": "release-note-to-plan-translation/v1-clean-baseline",
+  "max_output_tokens": 2048,
+  "rows": [
+    {
+      "candidate": "020",
+      "warm_concurrency": 1,
+      "decode_tps": 11.32239,
+      "wall_output_tps": 11.30789,
+      "warm_metrics_generation_tokens": 2048.0,
+      "warm_usage_output_tokens_total": 2048.0,
+      "pass_9tps_gate": true
+    },
+    {
+      "candidate": "020",
+      "warm_concurrency": 4,
+      "decode_tps": 9.861393,
+      "wall_output_tps": 38.746154,
+      "warm_metrics_generation_tokens": 8192.0,
+      "warm_usage_output_tokens_total": 8192.0,
+      "pass_9tps_gate": true
+    },
+    {
+      "candidate": "025",
+      "warm_concurrency": 1,
+      "decode_tps": 10.328952,
+      "wall_output_tps": 10.316675,
+      "warm_metrics_generation_tokens": 2048.0,
+      "warm_usage_output_tokens_total": 2048.0,
+      "pass_9tps_gate": true
+    },
+    {
+      "candidate": "025",
+      "warm_concurrency": 4,
+      "decode_tps": 9.21466,
+      "wall_output_tps": 35.801341,
+      "warm_metrics_generation_tokens": 8192.0,
+      "warm_usage_output_tokens_total": 8192.0,
+      "pass_9tps_gate": true
+    },
+    {
+      "candidate": "028",
+      "warm_concurrency": 1,
+      "decode_tps": 10.54706,
+      "wall_output_tps": 10.534431,
+      "warm_metrics_generation_tokens": 2048.0,
+      "warm_usage_output_tokens_total": 2048.0,
+      "pass_9tps_gate": true
+    },
+    {
+      "candidate": "028",
+      "warm_concurrency": 4,
+      "decode_tps": 9.860336,
+      "wall_output_tps": 31.874462,
+      "warm_metrics_generation_tokens": 7233.0,
+      "warm_usage_output_tokens_total": 7233.0,
+      "pass_9tps_gate": true
+    },
+    {
+      "candidate": "051",
+      "warm_concurrency": 1,
+      "decode_tps": 8.009177,
+      "wall_output_tps": 8.001952,
+      "warm_metrics_generation_tokens": 2048.0,
+      "warm_usage_output_tokens_total": 2048.0,
+      "pass_9tps_gate": false
+    },
+    {
+      "candidate": "051",
+      "warm_concurrency": 4,
+      "decode_tps": 8.304864,
+      "wall_output_tps": 28.374132,
+      "warm_metrics_generation_tokens": 7511.0,
+      "warm_usage_output_tokens_total": 7511.0,
+      "pass_9tps_gate": false
+    }
+  ]
+}

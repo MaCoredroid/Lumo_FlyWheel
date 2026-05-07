@@ -1,0 +1,193 @@
+{
+  "schema": "lumo.track_b.real_content_task_warmonly_probe.v1",
+  "candidate": "051",
+  "task_id": "release-note-to-plan-translation/v1-clean-baseline",
+  "agentic_task": "release-note-to-plan-translation",
+  "patch": "vllm-pr39562-prelaunch-stopgap",
+  "source_prompt_metadata": "benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_01_live_probe/metadata.json",
+  "workspace_bundle": "benchmark_blueprints/families/release-note-to-plan-translation/workspace_bundle/v1-clean-baseline",
+  "prompt_chars": 4648,
+  "prompt_word_count": 653,
+  "max_output_tokens": 2048,
+  "warm_concurrency": 4,
+  "measurement_policy": "one cold completion discarded; metrics sampled before and after warm window only",
+  "cold_discarded": {
+    "label": "cold_discard",
+    "status": "completed",
+    "response_id": "resp_96b444c3f9c9be56",
+    "usage": {
+      "input_tokens": 1112,
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "input_tokens_per_turn": [],
+        "cached_tokens_per_turn": []
+      },
+      "output_tokens": 735,
+      "output_tokens_details": {
+        "reasoning_tokens": 0,
+        "tool_output_tokens": 0,
+        "output_tokens_per_turn": [],
+        "tool_output_tokens_per_turn": []
+      },
+      "total_tokens": 1847
+    },
+    "wall_s": 84.126679,
+    "text_summary": {
+      "text_chars": 2577,
+      "word_count": 282,
+      "unique_word_count": 184,
+      "unique_word_ratio": 0.652482,
+      "most_common_8gram_count": 1,
+      "sha256": "9a0bb3821b9974e975c62fcdf955b670a49d3b452cbbf61c5db83e5f30664d1b",
+      "head_600": "The user is asking me to produce the content for `brief_input.json` based on the AGENTS.md instructions and the provided context files. This is a planning task where I need to translate release notes into an implementation plan.\n\nLet me analyze the inputs:\n\n**Release Notes:**\n- RN-101: Audit translator schema drift before removing the legacy parser shim\n\n\n\n```json\n{\n  \"schema_version\": \"cnb55.release_plan_brief.v1\",\n  \"scenario_variant\": \"v1-clean-baseline\",\n  \"first_milestone_id\": \"RN-101\",\n  \"ordered_steps\": [\n    {\n      \"rank\": 1,\n      \"step_id\": \"RN-101\",\n      \"\n    },\n    {\n      \"rank",
+      "tail_600": "-visible and renders whatever order translator emits\",\n    \"mitigation\": \"Schema audit (RN-101) and fixture backfill (RN-102) must complete before dashboard enablement (RN-103)\"\n  },\n  \"assumption_ledger\": [\n    {\n      \"assumption\": \"Legacy parser shim removal is deferred until schema drift is fully audited\",\n      \"status\": \"confirmed\",\n      \"source\": \"release_notes/release_notes_2026_04.md RN-101\"\n    },\n    {\n      \"assumption\": \"Canary coverage exists but does not cover bad dependency ordering\",\n      \"status\": \"missing\",\n      \"source\": \"repo_inventory/test_inventory.md\"\n    }\n  ]\n}\n```"
+    }
+  },
+  "warm_elapsed_s": 264.712944,
+  "warm": [
+    {
+      "label": "warm_1",
+      "status": "incomplete",
+      "response_id": "resp_a40d49b078871f9f",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 816,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3160
+      },
+      "wall_s": 261.417479,
+      "text_summary": {
+        "text_chars": 7972,
+        "word_count": 921,
+        "unique_word_count": 499,
+        "unique_word_ratio": 0.541802,
+        "most_common_8gram_count": 1,
+        "sha256": "2cb7ebe93230a7b0d4926c74b1bf314cb491b19c611e18ee78537d3e98f52941",
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the content for `brief_input.json` based on the provided `AGENTS.md` instructions and input files (`release_notes/`, `repo_inventory/`, `.\n    *   **Constraint:** I am a model-only probe. I cannot actually run commands (`./bin/cnb55-brief`), write files, or access the filesystem beyond what's provided in the prompt. I must output the JSON object that *would* be written to `brief_input.json`.\n    *   **Input Data:**\n        *   `AGENTS.md`: Instructions on how to structure the brief (schema `cnb55.release_plan_brief.v1`, ",
+        "tail_600": "traints:* \"Do not claim to run commands or write files; just provide the JSON object.\"\n    *Checking `AGENTS.md` rules:* \"Do not write files outside brief/.\" (This applies to the agent running the task, but I am simulating the output).\n    *Checking `ordered_steps`:* \"contiguous ranks\". 1, 2, 3, 4.\n    *Checking `assumption_ledger`:* \"at least one honest `missing` row\".\n    *Checking `primary_risk`:* \"naming the user-visible failure mode\".\n\n    *Refining Risk:* \"The release dashboard is user-visible and will render whatever order the translator emits.\" (repo_inventory/repo_state.md). If schema"
+      },
+      "warm_index": 1
+    },
+    {
+      "label": "warm_2",
+      "status": "incomplete",
+      "response_id": "resp_971efe155c12c050",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 816,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3160
+      },
+      "wall_s": 205.237921,
+      "text_summary": {
+        "text_chars": 7867,
+        "word_count": 1026,
+        "unique_word_count": 356,
+        "unique_word_ratio": 0.346979,
+        "most_common_8gram_count": 4,
+        "sha256": "84f1b2ee3baf62e2f883936d0706ee7f14b42ead70014c13b88b022243b45df7",
+        "head_600": "The user is asking me to produce the content for `brief_input.json` based on the AGENTS.md instructions and the provided context files. I need to translate the frozen release notes into an ordered implementation plan.\n\nLet me analyze the inputs:\n\n**Release Notes (release_notes/release_notes_2026_04.md):**\n- RN-101: Audit translator schema drift before removing the legacy parser shim\nlegacy parser shim\n- RN-102: Backfill dependency-graph fixtures so the plan contract catches ordering regressions\n- RN-103: Enable the translated release-plan dashboard summary behind a kill switch after the schema",
+        "tail_600": " schema drift before removing the legacy parser shim\"\n    },\n    {\n      \"rank\": 2,\n      \"id\": \"RN-102\",\n      \"title\": \"Backfill dependency-graph fixtures so the plan contract catches ordering regressions\"\n    },\n    {\n      \"rank\": 3,\n      \"id\": \"RN-103\",\n      \"title\": \"Enable the translated release-plan dashboard summary behind a kill switch after the schema is stable\"\n    },\n    {\n      \"rank\": 4,\n      \"id\": \"RN-104\",\n      \"title\": \"Update the operator runbook and launch checklist after the summary path is proven in canary\"\n    }\n  ],\n  \"dependency_notes\": [\n    \"RN-102 depends on RN-"
+      },
+      "warm_index": 2
+    },
+    {
+      "label": "warm_3",
+      "status": "completed",
+      "response_id": "resp_a565edcdb00c1b9f",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 816,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 1367,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 2479
+      },
+      "wall_s": 175.308343,
+      "text_summary": {
+        "text_chars": 4881,
+        "word_count": 560,
+        "unique_word_count": 336,
+        "unique_word_ratio": 0.6,
+        "most_common_8gram_count": 1,
+        "sha256": "a1945472c6d0a3d1c446ceca84cddbbadc00918454dad8989ce98e8d38756b03",
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the structured content for `brief_input.json` based on the provided instructions (`AGENTS.md`), release notes, repo inventory, and scenario variant.\n    *   **Constraint:** I am a model-only probe. I cannot actually run commands (`./bin/cnb55-brief submit`), write files to the filesystem, or access external tools. I must output the JSON object that *would* be put into `brief_input.json`.\n    *   **Input Data:**\n        *   `AGENTS.md`: Defines the task, inputs, output format (CLI tool usage, but I need to simulate the JS",
+        "tail_600": "tion.\",\n    \"RN-104 requires RN-103: Runbook stabilizes only after rollout/rollback shape is known from canary.\"\n  ],\n  \"primary_risk\": \"Dashboard renders incorrect order if RN-103 ships before RN-101/RN-102. Legacy shim masks drift locally, making UI output unreliable in production.\",\n  \"assumption_ledger\": [\n    {\n      \"type\": \"missing\",\n      \"description\": \"No explicit timeline for legacy parser shim removal provided in release notes.\"\n    },\n    {\n      \"type\": \"verified\",\n      \"description\": \"Canary coverage exists for dashboard summary but not for bad dependency ordering.\"\n    }\n  ]\n}"
+      },
+      "warm_index": 3
+    },
+    {
+      "label": "warm_4",
+      "status": "incomplete",
+      "response_id": "resp_b360fbf34d423cc7",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 816,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3160
+      },
+      "wall_s": 264.703987,
+      "text_summary": {
+        "text_chars": 7711,
+        "word_count": 975,
+        "unique_word_count": 538,
+        "unique_word_ratio": 0.551795,
+        "most_common_8gram_count": 1,
+        "sha256": "dbff281d940e2bb4c384ac73200fbecec795748abdadc7ce41acbe24f107112d",
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the content for `brief_input.json` based on the provided context (AGENTS.md, release notes, repo inventory, etc.).\n    *   **Constraint:** Do *not* actually run commands or write files. Just provide the JSON object that *would* be written to `brief_input.json`.\n    *   **Input Data:**\n        *   `AGENTS.md`: Instructions on how to structure the brief (schema `cnb55.release_plan_brief.v1`).\n        *   `.scenario_variant`: `v1-clean-baseline`.\n        *   `release_notes/release_notes_2026_04.md`: Four release notes (RN-1",
+        "tail_600": "egacy parser shim still masks schema drift\". If we don't audit/remove shim, we don't know the true schema for RN-102 (fixtures) or RN-103 (dashboard).\n    *   **Risk:** \"Dashboard renders corrupted plan order\" (from repo_inventory: \"dashboard is user-visible and will render whatever order the translator emits\").\n    *   **Assumption:** \"Missing\": The `tests/plan_contract.py` failure is solely due to missing fixtures and will pass once RN-102 is complete.\n\n    Let's write the JSON.\n\n    One more check: `ordered_steps` usually needs `id`, `rank`, `description`.\n    `description`.\n    `dependency"
+      },
+      "warm_index": 4
+    }
+  ],
+  "warm_usage_output_tokens_total": 7511.0,
+  "metrics_delta": {
+    "generation_tokens": 7511.0,
+    "decode_sum_s": 904.4098042175174,
+    "prefill_sum_s": 1.5674779871478677,
+    "prompt_tokens": 4448.0,
+    "kv_computed_tokens": 1184.0
+  },
+  "decode_tps": 8.304864,
+  "wall_output_tps": 28.374132,
+  "target_decode_tps": 9.0,
+  "pass_9tps_gate": false
+}

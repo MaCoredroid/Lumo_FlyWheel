@@ -1,0 +1,94 @@
+{
+  "schema": "lumo.track_b.real_content_task_warmonly_probe.v1",
+  "candidate": "025",
+  "task_id": "release-note-to-plan-translation/v1-clean-baseline",
+  "agentic_task": "release-note-to-plan-translation",
+  "patch": "vllm-pr39562-prelaunch-stopgap",
+  "source_prompt_metadata": "benchmark_blueprints/families/release-note-to-plan-translation/report/attempt_01_live_probe/metadata.json",
+  "workspace_bundle": "benchmark_blueprints/families/release-note-to-plan-translation/workspace_bundle/v1-clean-baseline",
+  "prompt_chars": 4648,
+  "prompt_word_count": 653,
+  "max_output_tokens": 2048,
+  "warm_concurrency": 1,
+  "measurement_policy": "one cold completion discarded; metrics sampled before and after warm window only",
+  "cold_discarded": {
+    "label": "cold_discard",
+    "status": "incomplete",
+    "response_id": "resp_bb9657dc9741caf4",
+    "usage": {
+      "input_tokens": 1112,
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "input_tokens_per_turn": [],
+        "cached_tokens_per_turn": []
+      },
+      "output_tokens": 2048,
+      "output_tokens_details": {
+        "reasoning_tokens": 0,
+        "tool_output_tokens": 0,
+        "output_tokens_per_turn": [],
+        "tool_output_tokens_per_turn": []
+      },
+      "total_tokens": 3160
+    },
+    "wall_s": 228.363553,
+    "text_summary": {
+      "text_chars": 7487,
+      "word_count": 910,
+      "unique_word_count": 499,
+      "unique_word_ratio": 0.548352,
+      "most_common_8gram_count": 2,
+      "sha256": "bf82f0c884a97128014aa6120b40c0abe9a59d318bc82ad8362ec05813d21ff0",
+      "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the content for `brief_input.json` based on the provided instructions (`AGENTS.md`md`, `release_notes`, `repo_inventory`, `repo_inventory`, `.scenario_variant`).\n    *   **Constraint:** I am a text-based AI model. I cannot actually run commands (`./bin/cnb55-brief submit`), write files to the filesystem, or read files that aren't provided in the prompt.\n    *   **Specific Instruction:** \"Produce the structured content you would put into brief_input.json. Do not claim to run commands or write files; just provide the JSON ",
+      "tail_600": "iguous ranks\". `description` is good practice.\n    `assumption_ledger` needs a `missing` row.\n\n    Let's draft the JSON content.\n\n5.  **Reviewing Constraints:**\n    *   \"Do not claim to run commands or write files; just provide the JSON object.\"\n    *   \"Do not modify any file outside brief/.\" (I am not modifying files, just outputting JSON).\n    *   \"Read AGENTS.md in this directory and follow it exactly.\" (I am following the logic).\n    *   \"Produce the structured content you would put into brief_input.json.\"\n\n6.  **Final Check on Logic:**\n    *   RN-101 (Audit) -> RN-102 (Fixtures) -> RN-10"
+    }
+  },
+  "warm_elapsed_s": 198.51357,
+  "warm": [
+    {
+      "label": "warm_1",
+      "status": "incomplete",
+      "response_id": "resp_a1321f519dbdce04",
+      "usage": {
+        "input_tokens": 1112,
+        "input_tokens_details": {
+          "cached_tokens": 800,
+          "input_tokens_per_turn": [],
+          "cached_tokens_per_turn": []
+        },
+        "output_tokens": 2048,
+        "output_tokens_details": {
+          "reasoning_tokens": 0,
+          "tool_output_tokens": 0,
+          "output_tokens_per_turn": [],
+          "tool_output_tokens_per_turn": []
+        },
+        "total_tokens": 3160
+      },
+      "wall_s": 198.506351,
+      "text_summary": {
+        "text_chars": 7677,
+        "word_count": 929,
+        "unique_word_count": 492,
+        "unique_word_ratio": 0.529602,
+        "most_common_8gram_count": 3,
+        "sha256": "869f0504e0a46c2c43f6a771d1aa939ed99ec179437965ae6a3f72450151288d",
+        "head_600": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   **Goal:** Produce the content for `brief_input.json` based on the provided context (AGENTS.md, release_notes, repo_inventory, etc.)\n    *   **Constraint:** Do *not* claim to run commands or write files. Just provide the JSON object.\n    *   **Context:**\n        *   `AGENTS.md`: Defines the task (translate release notes + repo state into an implementation plan).\n        *   `release_notes/release_notes_2026_04.md`: Contains 4 release notes (RN-101 to RN-104).\n        *   `repo_inventory/`: Contains state, dependency map, and test inventory",
+        "tail_600": "cy_notes`:\n        - \"RN-102 requires RN-101 audit to identify correct schema targets for fixtures.\"\n        - \"RN-103 dashboard enablement requires RN-102 fixtures to prevent rendering invalid step order.\"\n        - \"RN-104 runbook update requires RN-103 canary validation to confirm rollout shape.\"\n    *   `primary_risk`: \"Dashboard displays incorrect plan ordering to users if schema and fixtures are not synchronized, causing confusion during release execution.\"\n    *   `assumption_ledger`:\n        - { \"id\": \"schema_drift_details\", \"status\": \"missing\", \"note\": \"Specific drift items identified"
+      },
+      "warm_index": 1
+    }
+  ],
+  "warm_usage_output_tokens_total": 2048.0,
+  "metrics_delta": {
+    "generation_tokens": 2048.0,
+    "decode_sum_s": 198.27762321662158,
+    "prefill_sum_s": 0.2144437376409769,
+    "prompt_tokens": 1112.0,
+    "kv_computed_tokens": 312.0
+  },
+  "decode_tps": 10.328952,
+  "wall_output_tps": 10.316675,
+  "target_decode_tps": 9.0,
+  "pass_9tps_gate": true
+}
