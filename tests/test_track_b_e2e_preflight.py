@@ -27,6 +27,9 @@ def test_preflight_blocks_without_trace_out_request_labels_or_pynvml(monkeypatch
             "status_code": 200,
             "text": "\n".join(
                 [
+                    "unrelated_metric_total{request_id=\"req-1\"} 1",
+                    "vllm:prompt_tokens_total{engine=\"0\"} 128",
+                    "vllm:generation_tokens_total{engine=\"0\"} 32",
                     "vllm:spec_decode_num_drafts_total{engine=\"0\"} 1",
                     "vllm:spec_decode_num_draft_tokens_total{engine=\"0\"} 12",
                     "vllm:spec_decode_num_accepted_tokens_total{engine=\"0\"} 4",
@@ -89,6 +92,8 @@ def test_preflight_accepts_required_e2e_instrumentation(monkeypatch) -> None:
             "status_code": 200,
             "text": "\n".join(
                 [
+                    "vllm:prompt_tokens_total{engine=\"0\",request_id=\"req-1\"} 128",
+                    "vllm:generation_tokens_total{engine=\"0\",request_id=\"req-1\"} 32",
                     "vllm:spec_decode_num_drafts_total{engine=\"0\",request_id=\"req-1\"} 1",
                     "vllm:spec_decode_num_draft_tokens_total{engine=\"0\",request_id=\"req-1\"} 12",
                     "vllm:spec_decode_num_accepted_tokens_total{engine=\"0\",request_id=\"req-1\"} 4",
@@ -129,3 +134,24 @@ def test_preflight_accepts_required_e2e_instrumentation(monkeypatch) -> None:
 
     assert payload["round0_may_run"] is True
     assert payload["blocking_reasons"] == []
+
+
+def test_request_id_gate_requires_labels_on_join_metrics() -> None:
+    metrics = "\n".join(
+        [
+            "some_debug_metric_total{request_id=\"req-1\"} 1",
+            "vllm:prompt_tokens_total{engine=\"0\"} 128",
+            "vllm:generation_tokens_total{engine=\"0\",request_id=\"req-1\"} 32",
+            "vllm:spec_decode_num_draft_tokens_total{engine=\"0\",request_id=\"req-1\"} 12",
+            "vllm:spec_decode_num_accepted_tokens_total{engine=\"0\",request_id=\"req-1\"} 4",
+        ]
+    )
+
+    coverage = preflight_track_b_e2e._request_labeled_metric_coverage(metrics)
+
+    assert coverage == {
+        "vllm:prompt_tokens_total": False,
+        "vllm:generation_tokens_total": True,
+        "vllm:spec_decode_num_draft_tokens_total": True,
+        "vllm:spec_decode_num_accepted_tokens_total": True,
+    }

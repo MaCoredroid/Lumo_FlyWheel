@@ -49,6 +49,42 @@ def _has_any(text: str, needles: list[str]) -> bool:
     return any(needle in text for needle in needles)
 
 
+REQUEST_ID_LABELS = ("request_id", "vllm_request_id", "request")
+REQUEST_JOIN_REQUIRED_METRICS = (
+    "vllm:prompt_tokens_total",
+    "vllm:generation_tokens_total",
+    "vllm:spec_decode_num_draft_tokens_total",
+    "vllm:spec_decode_num_accepted_tokens_total",
+)
+
+
+def _metric_label_names(line: str) -> set[str]:
+    if "{" not in line or "}" not in line:
+        return set()
+    label_block = line.split("{", 1)[1].split("}", 1)[0]
+    names: set[str] = set()
+    for item in label_block.split(","):
+        name = item.split("=", 1)[0].strip()
+        if name:
+            names.add(name)
+    return names
+
+
+def _request_labeled_metric_coverage(metrics_text: str) -> dict[str, bool]:
+    coverage = {metric: False for metric in REQUEST_JOIN_REQUIRED_METRICS}
+    for raw_line in metrics_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        metric_name = line.split("{", 1)[0].split(None, 1)[0]
+        if metric_name not in coverage:
+            continue
+        labels = _metric_label_names(line)
+        if any(label in labels for label in REQUEST_ID_LABELS):
+            coverage[metric_name] = True
+    return coverage
+
+
 def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any]:
     with tempfile.NamedTemporaryFile(prefix="track_b_dcgm_", suffix=".jsonl") as handle:
         result = subprocess.run(
@@ -97,6 +133,7 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
     health = _get(args.health_url)
     metrics = _get(args.metrics_url)
     metrics_text = str(metrics.get("text") or "")
+    request_label_coverage = _request_labeled_metric_coverage(metrics_text)
     measurement_python = Path(args.python)
     sampler_smoke = _sampler_smoke(measurement_python, args.sampler_smoke_duration_s)
     pynvml_check = subprocess.run(
@@ -118,7 +155,9 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
             and _has_any(metrics_text, ["vllm:spec_decode_num_accepted_tokens_total"])
         },
         "vllm_request_id_labels_exposed": {
-            "ok": _has_any(metrics_text, ["request_id=", "vllm_request_id=", "request="])
+            "ok": all(request_label_coverage.values()),
+            "required_metric_coverage": request_label_coverage,
+            "accepted_label_names": list(REQUEST_ID_LABELS),
         },
         "codex_installed": {"ok": codex_version.get("ok"), "version": str(codex_version.get("stdout") or "").strip()},
         "codex_trace_out_supported": {"ok": "--trace-out" in str(codex_help.get("stdout") or "")},
