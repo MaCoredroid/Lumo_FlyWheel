@@ -52,7 +52,7 @@ def test_runner_requires_trace_out_in_command_template() -> None:
 
 
 def test_runner_rejects_unstamped_runtime_hash() -> None:
-    runner._validate_runtime_config_hash("sha256:test")
+    runner._validate_runtime_config_hash("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     with pytest.raises(ValueError, match="runtime-config-hash"):
         runner._validate_runtime_config_hash("not-a-runtime-hash")
     with pytest.raises(ValueError, match="runtime-config-hash"):
@@ -93,10 +93,10 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    runner._write_vllm_per_turn_from_jsonl(task_dir, source, runtime_config_hash="sha256:test")
+    runner._write_vllm_per_turn_from_jsonl(task_dir, source, runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
     payload = json.loads((task_dir / "vllm_per_turn.json").read_text(encoding="utf-8"))
-    assert payload["runtime_config_hash"] == "sha256:test"
+    assert payload["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     metrics = payload["requests"]["req-1"]
     assert metrics["completion_tokens"] == 12
     assert metrics["prefill_sum_s"] == 0.2
@@ -107,7 +107,7 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
         json.loads(line)
         for line in (task_dir / "vllm_request_metrics.jsonl").read_text(encoding="utf-8").splitlines()
     ]
-    assert raw_rows[0]["runtime_config_hash"] == "sha256:test"
+    assert raw_rows[0]["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 
 def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Path) -> None:
@@ -144,7 +144,7 @@ def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Pa
         task_dir,
         source,
         start_offset=len(stale.encode("utf-8")),
-        runtime_config_hash="sha256:test",
+        runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     )
 
     payload = json.loads((task_dir / "vllm_per_turn.json").read_text(encoding="utf-8"))
@@ -154,7 +154,7 @@ def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Pa
         for line in (task_dir / "vllm_request_metrics.jsonl").read_text(encoding="utf-8").splitlines()
     ]
     assert [row["request_id"] for row in raw_rows] == ["fresh"]
-    assert raw_rows[0]["runtime_config_hash"] == "sha256:test"
+    assert raw_rows[0]["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 
 def test_runner_rejects_incomplete_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
@@ -202,11 +202,11 @@ def test_runner_stamps_runtime_hash_into_dcgm_sampler_command(monkeypatch, tmp_p
     monkeypatch.setattr(runner.subprocess, "Popen", fake_popen)
 
     process = runner._run_sampler(
-        Namespace(no_dcgm=False, gpu=0, dcgm_interval_s=0.01, runtime_config_hash="sha256:test"),
+        Namespace(no_dcgm=False, gpu=0, dcgm_interval_s=0.01, runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
         tmp_path,
     )
 
     assert isinstance(process, FakeProcess)
     command = seen["command"]
     assert isinstance(command, list)
-    assert command[command.index("--runtime-config-hash") + 1] == "sha256:test"
+    assert command[command.index("--runtime-config-hash") + 1] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

@@ -34,7 +34,7 @@ def _write_task_evidence(root: Path, name: str, *, model: str = "ok", tools: str
                 {
                     "event": "task_start",
                     "task_id": task_id,
-                    "runtime_config_hash": "sha256:test",
+                    "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                     "ts": "2026-05-07T21:30:00.000Z",
                 },
                 {

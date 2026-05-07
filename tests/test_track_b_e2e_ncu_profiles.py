@@ -45,7 +45,7 @@ def test_ncu_profile_driver_builds_named_archetype_command(monkeypatch, tmp_path
             "--codex-command-template",
             "codex exec --trace-out {trace_out}",
             "--runtime-config-hash",
-            "sha256:test",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ]
     )
 
@@ -55,14 +55,14 @@ def test_ncu_profile_driver_builds_named_archetype_command(monkeypatch, tmp_path
     assert command[0] == "ncu"
     assert command[command.index("--log-file") + 1] == str(tmp_path / "ncu_tool-call-frame.csv")
     assert command[command.index("--out-root") + 1] == str(tmp_path / "ncu_task_runs")
-    assert command[command.index("--runtime-config-hash") + 1] == "sha256:test"
+    assert command[command.index("--runtime-config-hash") + 1] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     assert "policy-aware-request-resolution/v1-clean-baseline" in command
     assert "--no-dcgm" in command
     assert "--ncu-mode" in command
     assert command[command.index("--metrics") + 1] == ",".join(ncu_profiles.NCU_REQUIRED_METRICS)
     metadata = json.loads((tmp_path / "ncu_tool-call-frame.json").read_text(encoding="utf-8"))
     assert metadata["schema"] == "lumo.track_b.ncu_archetype_profile.v1"
-    assert metadata["runtime_config_hash"] == "sha256:test"
+    assert metadata["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     assert metadata["archetype"] == "tool-call-frame"
     assert metadata["task_id"] == "policy-aware-request-resolution/v1-clean-baseline"
 

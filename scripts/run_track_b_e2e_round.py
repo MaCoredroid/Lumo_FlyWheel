@@ -24,8 +24,13 @@ def _validate_codex_command_template(template: str) -> None:
 
 
 def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
-    if not runtime_config_hash.startswith("sha256:") or not runtime_config_hash.removeprefix("sha256:"):
-        raise ValueError("--runtime-config-hash must be a non-empty sha256:<digest> value")
+    digest = runtime_config_hash.removeprefix("sha256:")
+    if (
+        not runtime_config_hash.startswith("sha256:")
+        or len(digest) != 64
+        or any(char not in "0123456789abcdefABCDEF" for char in digest)
+    ):
+        raise ValueError("--runtime-config-hash must be a sha256:<64-hex-digest> value")
 
 
 def _tasks() -> list[str]:

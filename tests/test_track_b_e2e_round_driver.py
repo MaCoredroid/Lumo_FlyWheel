@@ -22,7 +22,7 @@ def _trace_text(
     completion_tokens: int,
     *,
     task_id: str = "transcript-merge-regression/v1-clean-baseline",
-    runtime_config_hash: str = "sha256:test",
+    runtime_config_hash: str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 ) -> str:
     start = datetime(2026, 5, 7, 20, 0, 0, tzinfo=UTC)
     end = start + timedelta(seconds=duration_s)
@@ -62,7 +62,7 @@ def test_round_driver_blocks_before_measurement_when_preflight_fails(monkeypatch
             "--round",
             "0",
             "--runtime-config-hash",
-            "sha256:test",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "--codex-command-template",
             "codex exec --trace-out {trace_out}",
             "--clock-skew-ms-p99",
@@ -119,7 +119,7 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
             "--round",
             "0",
             "--runtime-config-hash",
-            "sha256:test",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "--codex-command-template",
             "codex exec --trace-out {trace_out}",
             "--clock-skew-ms-p99",
@@ -138,7 +138,7 @@ def test_round_driver_summarizes_only_canonical_attempt_with_all_wallclocks(
     ]
     runner_commands = [command for command in commands if Path(command[1]).name == "run_track_b_e2e_task.py"]
     assert len(runner_commands) == 1
-    assert runner_commands[0][runner_commands[0].index("--runtime-config-hash") + 1] == "sha256:test"
+    assert runner_commands[0][runner_commands[0].index("--runtime-config-hash") + 1] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     assert len(task_summary_commands) == 2
     for command, task_id in zip(task_summary_commands, tasks, strict=True):
         family, variant = task_id.split("/", 1)
@@ -185,7 +185,7 @@ def test_round_driver_rejects_generation_volume_outlier(monkeypatch, tmp_path: P
             "--round",
             "0",
             "--runtime-config-hash",
-            "sha256:test",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "--codex-command-template",
             "codex exec --trace-out {trace_out}",
             "--clock-skew-ms-p99",
@@ -216,7 +216,7 @@ def test_round_driver_rejects_measured_trace_runtime_hash_mismatch(monkeypatch, 
             for attempt in range(1, 5):
                 task_dir = out_root / "round_0" / f"{family}__{variant}" / f"run_{attempt:02d}"
                 task_dir.mkdir(parents=True)
-                runtime_hash = "sha256:wrong" if attempt == 3 else "sha256:test"
+                runtime_hash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" if attempt == 3 else "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 (task_dir / "codex_trace.jsonl").write_text(
                     _trace_text(10.0 + attempt, 100, task_id=tasks[0], runtime_config_hash=runtime_hash),
                     encoding="utf-8",
@@ -230,7 +230,7 @@ def test_round_driver_rejects_measured_trace_runtime_hash_mismatch(monkeypatch, 
             "--round",
             "0",
             "--runtime-config-hash",
-            "sha256:test",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "--codex-command-template",
             "codex exec --trace-out {trace_out}",
             "--clock-skew-ms-p99",
@@ -256,7 +256,7 @@ def test_round_driver_rejects_existing_measurement_outputs(tmp_path: Path) -> No
             "--round",
             "0",
             "--runtime-config-hash",
-            "sha256:test",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "--codex-command-template",
             "codex exec --trace-out {trace_out}",
             "--clock-skew-ms-p99",

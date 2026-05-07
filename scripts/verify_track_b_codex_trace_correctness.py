@@ -47,7 +47,10 @@ def _sha256(data: bytes) -> str:
 
 
 def _runtime_config_hash_valid(value: Any) -> bool:
-    return isinstance(value, str) and value.startswith("sha256:") and bool(value.removeprefix("sha256:"))
+    if not isinstance(value, str) or not value.startswith("sha256:"):
+        return False
+    digest = value.removeprefix("sha256:")
+    return len(digest) == 64 and all(char in "0123456789abcdefABCDEF" for char in digest)
 
 
 def _resolve(base_dir: Path, value: Any) -> Path:

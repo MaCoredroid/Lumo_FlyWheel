@@ -31,7 +31,7 @@ def _dcgm_sample(ts: str) -> dict[str, object]:
     return {
         "ts": ts,
         "gpu": 0,
-        "runtime_config_hash": "sha256:test",
+        "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "dram_active_pct": 0.54,
         "sm_active_pct": 0.31,
         "sm_occupancy_pct": 0.27,
@@ -41,7 +41,7 @@ def _dcgm_sample(ts: str) -> dict[str, object]:
 
 
 def test_summary_rejects_unstamped_runtime_hash() -> None:
-    _validate_runtime_config_hash("sha256:test")
+    _validate_runtime_config_hash("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     with pytest.raises(ValueError, match="runtime-config-hash"):
         _validate_runtime_config_hash("not-a-runtime-hash")
     with pytest.raises(ValueError, match="runtime-config-hash"):
@@ -103,7 +103,7 @@ def test_task_summary_requires_and_records_truthful_attestation(tmp_path: Path) 
             task_dir=str(task_dir),
             family="transcript-merge-regression",
             variant="v1-clean-baseline",
-            runtime_config_hash="sha256:test",
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             baseline_workspace_hash=None,
             median_of_n_runs=3,
             run_wallclocks_json="[1.9, 2.0, 2.1]",
@@ -173,7 +173,7 @@ def test_task_summary_single_run_is_diagnostic_only(tmp_path: Path) -> None:
             task_dir=str(task_dir),
             family="transcript-merge-regression",
             variant="v1-clean-baseline",
-            runtime_config_hash="sha256:test",
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             baseline_workspace_hash=None,
             run_wallclocks_json="",
             clock_skew_ms_p99=8,
@@ -240,7 +240,7 @@ def test_task_summary_rejects_trace_task_id_mismatch(tmp_path: Path) -> None:
                 task_dir=str(task_dir),
                 family="dead-flag-reachability-audit",
                 variant="v1-clean-baseline",
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 baseline_workspace_hash=None,
                 run_wallclocks_json="[1.9, 2.0, 2.1]",
                 clock_skew_ms_p99=8,
@@ -283,7 +283,7 @@ def test_task_summary_rejects_runtime_config_hash_mismatch(tmp_path: Path) -> No
     (task_dir / "vllm_per_turn.json").write_text(
         json.dumps(
             {
-                "runtime_config_hash": "sha256:wrong",
+                "runtime_config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "requests": {
                     "req-1": {
                         "prompt_tokens": 50,
@@ -305,7 +305,7 @@ def test_task_summary_rejects_runtime_config_hash_mismatch(tmp_path: Path) -> No
                 task_dir=str(task_dir),
                 family="transcript-merge-regression",
                 variant="v1-clean-baseline",
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 baseline_workspace_hash=None,
                 run_wallclocks_json="[1.9, 2.0, 2.1]",
                 clock_skew_ms_p99=8,
@@ -348,7 +348,7 @@ def test_task_summary_rejects_dcgm_runtime_config_hash_mismatch(tmp_path: Path) 
     (task_dir / "vllm_per_turn.json").write_text(
         json.dumps(
             {
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "requests": {
                     "req-1": {
                         "prompt_tokens": 50,
@@ -363,7 +363,7 @@ def test_task_summary_rejects_dcgm_runtime_config_hash_mismatch(tmp_path: Path) 
         encoding="utf-8",
     )
     sample = _dcgm_sample(ts(1.0))
-    sample["runtime_config_hash"] = "sha256:wrong"
+    sample["runtime_config_hash"] = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     _write_jsonl(task_dir / "dcgm_samples.jsonl", [sample])
 
     with pytest.raises(RuntimeError, match="dcgm_samples.jsonl"):
@@ -373,7 +373,7 @@ def test_task_summary_rejects_dcgm_runtime_config_hash_mismatch(tmp_path: Path) 
                 task_dir=str(task_dir),
                 family="transcript-merge-regression",
                 variant="v1-clean-baseline",
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 baseline_workspace_hash=None,
                 run_wallclocks_json="[1.9, 2.0, 2.1]",
                 clock_skew_ms_p99=8,
@@ -404,7 +404,7 @@ def test_task_summary_rejects_trace_runtime_config_hash_mismatch(tmp_path: Path)
                 "event": "task_start",
                 "ts": ts(0.0),
                 "task_id": "transcript-merge-regression/v1-clean-baseline",
-                "runtime_config_hash": "sha256:wrong",
+                "runtime_config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             },
             {"event": "turn_start", "turn": 1, "regime": "plan", "ts": ts(0.5), "vllm_request_id": "req-1"},
             {"event": "turn_end", "turn": 1, "ts": ts(1.5), "completion_tokens": 12},
@@ -421,7 +421,7 @@ def test_task_summary_rejects_trace_runtime_config_hash_mismatch(tmp_path: Path)
     (task_dir / "vllm_per_turn.json").write_text(
         json.dumps(
             {
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "requests": {
                     "req-1": {
                         "prompt_tokens": 50,
@@ -443,7 +443,7 @@ def test_task_summary_rejects_trace_runtime_config_hash_mismatch(tmp_path: Path)
                 task_dir=str(task_dir),
                 family="transcript-merge-regression",
                 variant="v1-clean-baseline",
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 baseline_workspace_hash=None,
                 run_wallclocks_json="[1.9, 2.0, 2.1]",
                 clock_skew_ms_p99=8,
@@ -483,7 +483,7 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
         [
             {
                 "request_id": "req-0",
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "prompt_tokens": 50,
                 "generation_tokens": 0,
                 "prefill_s": 0.4,
@@ -493,7 +493,7 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
             },
             {
                 "request_id": "req-1",
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "prompt_tokens": 50,
                 "generation_tokens": 12,
                 "prefill_s": 0.2,
@@ -514,7 +514,7 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
             task_dir=str(task_dir),
             family="transcript-merge-regression",
             variant="v1-clean-baseline",
-            runtime_config_hash="sha256:test",
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             baseline_workspace_hash=None,
             run_wallclocks_json="[1.9, 2.0, 2.1]",
             clock_skew_ms_p99=8,
@@ -533,7 +533,7 @@ def test_task_summary_accepts_vllm_request_metrics_jsonl_side_channel(tmp_path: 
     assert summary["trusted_measurement"] is True
     assert plan_turn["decode_tps"] == 12.0
     assert plan_turn["accepted_per_draft"] == 0.25
-    assert summary["runtime_config_hash_artifacts"]["vllm_request_metrics.jsonl"] == "sha256:test"
+    assert summary["runtime_config_hash_artifacts"]["vllm_request_metrics.jsonl"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 
 def test_task_summary_rejects_raw_vllm_jsonl_runtime_config_hash_mismatch(tmp_path: Path) -> None:
@@ -558,7 +558,7 @@ def test_task_summary_rejects_raw_vllm_jsonl_runtime_config_hash_mismatch(tmp_pa
         [
             {
                 "request_id": "req-1",
-                "runtime_config_hash": "sha256:wrong",
+                "runtime_config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 "prompt_tokens": 50,
                 "generation_tokens": 12,
                 "decode_s": 1.0,
@@ -575,7 +575,7 @@ def test_task_summary_rejects_raw_vllm_jsonl_runtime_config_hash_mismatch(tmp_pa
                 task_dir=str(task_dir),
                 family="transcript-merge-regression",
                 variant="v1-clean-baseline",
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 baseline_workspace_hash=None,
                 run_wallclocks_json="[1.9, 2.0, 2.1]",
                 clock_skew_ms_p99=8,
@@ -648,7 +648,7 @@ def test_task_summary_rejects_missing_dcgm_profile_fields(tmp_path: Path) -> Non
             {
                 "ts": ts(index / 100),
                 "gpu": 0,
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "dram_active_pct": 0.54,
                 "sm_active_pct": 0.31,
             }
@@ -662,7 +662,7 @@ def test_task_summary_rejects_missing_dcgm_profile_fields(tmp_path: Path) -> Non
             task_dir=str(task_dir),
             family="transcript-merge-regression",
             variant="v1-clean-baseline",
-            runtime_config_hash="sha256:test",
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             baseline_workspace_hash=None,
             run_wallclocks_json="[1.9, 2.0, 2.1]",
             clock_skew_ms_p99=8,
@@ -691,7 +691,7 @@ def _write_task_summary(
     index: int,
     task_id: str,
     *,
-    runtime_config_hash: str = "sha256:test",
+    runtime_config_hash: str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     sample_hash: str = SAMPLE_HASH,
     task_completed: bool = True,
     task_score: float | None = 0.8,
@@ -728,7 +728,7 @@ def _write_nested_task_summary(round_dir: Path, index: int, task_id: str) -> Non
                 "schema": "lumo.track_b.e2e_task_summary.v1",
                 "round": 0,
                 "task_id": task_id,
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "trusted_measurement": True,
                 "wallclock_s": float(100 + index),
                 "task_completed": True,
@@ -753,7 +753,7 @@ def test_round_summary_requires_unique_fixed_sample_tasks(tmp_path: Path) -> Non
         Namespace(
             round=0,
             round_dir=str(round_dir),
-            runtime_config_hash="sha256:test",
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             config_delta_vs_prior_round="",
             hypothesis="baseline",
             wallclock_delta_vs_prior_round_s=None,
@@ -782,7 +782,7 @@ def test_round_summary_accepts_runner_nested_attempt_summaries(tmp_path: Path) -
         Namespace(
             round=0,
             round_dir=str(round_dir),
-            runtime_config_hash="sha256:test",
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             config_delta_vs_prior_round="",
             hypothesis="baseline",
             wallclock_delta_vs_prior_round_s=None,
@@ -805,7 +805,7 @@ def test_round_summary_rejects_duplicate_or_mismatched_sample_tasks(tmp_path: Pa
             round_dir,
             index,
             TRACK_B_E2E_TASKS[0],
-            sample_hash="sha256:wrong" if index == 0 else SAMPLE_HASH,
+            sample_hash="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" if index == 0 else SAMPLE_HASH,
         )
 
     with pytest.raises(RuntimeError, match="unique trusted sample tasks"):
@@ -813,7 +813,7 @@ def test_round_summary_rejects_duplicate_or_mismatched_sample_tasks(tmp_path: Pa
             Namespace(
                 round=0,
                 round_dir=str(round_dir),
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 config_delta_vs_prior_round="",
                 hypothesis="baseline",
                 wallclock_delta_vs_prior_round_s=None,
@@ -841,7 +841,7 @@ def test_round_summary_rejects_incomplete_trusted_tasks(tmp_path: Path) -> None:
             Namespace(
                 round=0,
                 round_dir=str(round_dir),
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 config_delta_vs_prior_round="",
                 hypothesis="baseline",
                 wallclock_delta_vs_prior_round_s=None,
@@ -860,7 +860,7 @@ def test_round_summary_rejects_runtime_config_hash_mismatch(tmp_path: Path) -> N
             round_dir,
             index,
             task_id,
-            runtime_config_hash="sha256:wrong" if index == 0 else "sha256:test",
+            runtime_config_hash="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" if index == 0 else "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )
 
     with pytest.raises(RuntimeError, match="runtime_config_hash"):
@@ -868,7 +868,7 @@ def test_round_summary_rejects_runtime_config_hash_mismatch(tmp_path: Path) -> N
             Namespace(
                 round=0,
                 round_dir=str(round_dir),
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 config_delta_vs_prior_round="",
                 hypothesis="baseline",
                 wallclock_delta_vs_prior_round_s=None,
@@ -898,7 +898,7 @@ def test_round_summary_rejects_task_summary_schema_or_round_mismatch(tmp_path: P
             Namespace(
                 round=0,
                 round_dir=str(round_dir),
-                runtime_config_hash="sha256:test",
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 config_delta_vs_prior_round="",
                 hypothesis="baseline",
                 wallclock_delta_vs_prior_round_s=None,

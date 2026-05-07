@@ -42,7 +42,7 @@ def test_dcgm_sampler_stamps_runtime_config_hash(monkeypatch, tmp_path: Path) ->
             interval_s=0.001,
             duration_s=0.0,
             flush_every=1,
-            runtime_config_hash="sha256:test",
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             allow_unstamped_smoke=False,
         )
     )
@@ -50,7 +50,7 @@ def test_dcgm_sampler_stamps_runtime_config_hash(monkeypatch, tmp_path: Path) ->
     assert rc == 0
     rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 1
-    assert rows[0]["runtime_config_hash"] == "sha256:test"
+    assert rows[0]["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 
 def test_dcgm_sampler_rejects_unstamped_measurement(tmp_path: Path) -> None:

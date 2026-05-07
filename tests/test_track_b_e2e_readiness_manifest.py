@@ -245,7 +245,7 @@ def test_round0_summary_verification_requires_trusted_completed_tasks(tmp_path: 
             {
                 "schema": "lumo.track_b.e2e_round_summary.v1",
                 "round": 0,
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "sample_hash": "sha256:sample",
                 "trusted_task_count": 12,
                 "trusted_unique_task_count": 12,
@@ -280,7 +280,7 @@ def test_round0_summary_verification_rejects_existence_only_summary(tmp_path: Pa
             {
                 "schema": "lumo.track_b.e2e_round_summary.v1",
                 "round": 0,
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "trusted_task_count": 1,
                 "trusted_unique_task_count": 1,
                 "duplicate_trusted_task_ids": ["task-a"],
@@ -349,7 +349,7 @@ def test_round0_summary_verification_requires_explicit_zero_mismatch_counts(tmp_
             {
                 "schema": "lumo.track_b.e2e_round_summary.v1",
                 "round": 0,
-                "runtime_config_hash": "sha256:test",
+                "runtime_config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "sample_hash": "sha256:sample",
                 "trusted_task_count": 12,
                 "trusted_unique_task_count": 12,
@@ -378,7 +378,7 @@ def _ncu_csv_text() -> str:
     return "\n".join(f'"Metric Name","{metric}"' for metric in readiness.NCU_REQUIRED_METRICS) + "\n"
 
 
-def _write_ncu_metadata(root: Path, archetype: str, *, runtime_config_hash: str = "sha256:test") -> None:
+def _write_ncu_metadata(root: Path, archetype: str, *, runtime_config_hash: str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") -> None:
     (root / f"ncu_{archetype}.json").write_text(
         json.dumps(
             {
@@ -512,7 +512,7 @@ def test_ncu_profile_verification_rejects_invalid_runtime_hash_metadata(tmp_path
         _write_ncu_metadata(
             tmp_path,
             archetype,
-            runtime_config_hash="not-a-runtime-hash" if archetype == "long-text" else "sha256:test",
+            runtime_config_hash="not-a-runtime-hash" if archetype == "long-text" else "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )
 
     result = readiness._ncu_profile_verification(tmp_path)
@@ -528,12 +528,12 @@ def test_ncu_profile_verification_rejects_runtime_hash_drift_when_expected(tmp_p
         _write_ncu_metadata(
             tmp_path,
             archetype,
-            runtime_config_hash="sha256:wrong" if archetype == "long-text" else "sha256:test",
+            runtime_config_hash="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" if archetype == "long-text" else "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )
 
-    result = readiness._ncu_profile_verification(tmp_path, expected_runtime_config_hash="sha256:test")
+    result = readiness._ncu_profile_verification(tmp_path, expected_runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
     assert result["ok"] is False
-    assert result["expected_runtime_config_hash"] == "sha256:test"
+    assert result["expected_runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     profile = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
     assert "runtime_config_hash_mismatch" in profile["metadata_reasons"]
