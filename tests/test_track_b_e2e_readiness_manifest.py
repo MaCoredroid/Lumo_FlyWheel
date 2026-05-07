@@ -54,6 +54,9 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
     steps = {step["step"]: step for step in manifest["implementation_steps"]}
     assert steps["C"]["evidence"]["runner_script_exists"] is True
     assert steps["C"]["evidence"]["round_driver_script_exists"] is True
+    assert steps["F"]["evidence"]["required"]["uses_hard_gated_round_driver"] is True
+    assert steps["F"]["evidence"]["required"]["checks_all_spec_decode_counters"] is True
+    assert steps["F"]["evidence"]["forbidden"]["direct_repeat3_task_measurement"] is False
     assert steps["G"]["evidence"]["ncu_profile_driver_exists"] is True
     assert manifest["hard_gates"]["round0_summary_verified"] is False
     assert manifest["hard_gates"]["ncu_profiles_verified"] is False
@@ -67,6 +70,32 @@ def test_round_proposal_prompt_uses_hard_gated_round_driver() -> None:
     assert "--protocol-hash-match" in prompt
     assert "spec_decode_num_(drafts|draft_tokens|accepted_tokens)_total" in prompt
     assert "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3" not in prompt
+
+
+def test_round_proposal_prompt_verification_rejects_legacy_direct_measurement(
+    tmp_path: Path, monkeypatch
+) -> None:
+    prompt = tmp_path / "prompts" / "track_b_e2e_round_proposal.md"
+    prompt.parent.mkdir()
+    prompt.write_text(
+        "\n".join(
+            [
+                "scripts/run_track_b_e2e_round.py",
+                "--runtime-config-hash {{runtime_config_hash}}",
+                "--protocol-hash-match",
+                "scripts/preflight_track_b_e2e.py",
+                "spec_decode_num_(drafts|draft_tokens|accepted_tokens)_total",
+                "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(readiness, "REPO_ROOT", tmp_path)
+
+    result = readiness._round_proposal_prompt_verification()
+
+    assert result["ok"] is False
+    assert "forbidden_direct_repeat3_task_measurement_present" in result["reasons"]
 
 
 def test_readiness_manifest_requires_round0_artifacts_even_if_preflight_passes(tmp_path: Path) -> None:

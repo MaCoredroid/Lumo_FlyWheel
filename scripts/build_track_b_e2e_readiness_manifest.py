@@ -44,6 +44,17 @@ NCU_ARCHETYPE_TASKS = {
     "multimodal-prefill": "responsive-checkout-visual-regression/v1-clean-baseline",
     "subagent-orchestration": "fanout-fullstack-release-blocker/v1-clean-baseline",
 }
+ROUND_PROPOSAL_PROMPT = "prompts/track_b_e2e_round_proposal.md"
+ROUND_PROPOSAL_REQUIRED_TEXT = {
+    "uses_hard_gated_round_driver": "scripts/run_track_b_e2e_round.py",
+    "passes_runtime_config_hash": "--runtime-config-hash {{runtime_config_hash}}",
+    "passes_protocol_hash_gate": "--protocol-hash-match",
+    "uses_preflight_script": "scripts/preflight_track_b_e2e.py",
+    "checks_all_spec_decode_counters": "spec_decode_num_(drafts|draft_tokens|accepted_tokens)_total",
+}
+ROUND_PROPOSAL_FORBIDDEN_TEXT = {
+    "direct_repeat3_task_measurement": "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3",
+}
 
 
 def _now() -> str:
@@ -83,6 +94,29 @@ def _contains(rel: str, needle: str) -> bool:
     if not path.is_file():
         return False
     return needle in path.read_text(encoding="utf-8", errors="replace")
+
+
+def _round_proposal_prompt_verification() -> dict[str, Any]:
+    path = REPO_ROOT / ROUND_PROPOSAL_PROMPT
+    exists = path.is_file()
+    text = path.read_text(encoding="utf-8", errors="replace") if exists else ""
+    required = {name: needle in text for name, needle in ROUND_PROPOSAL_REQUIRED_TEXT.items()}
+    forbidden = {name: needle in text for name, needle in ROUND_PROPOSAL_FORBIDDEN_TEXT.items()}
+    missing_required = [name for name, present in required.items() if not present]
+    present_forbidden = [name for name, present in forbidden.items() if present]
+    reasons: list[str] = []
+    if not exists:
+        reasons.append("prompt_missing")
+    reasons.extend(f"missing_{name}" for name in missing_required)
+    reasons.extend(f"forbidden_{name}_present" for name in present_forbidden)
+    return {
+        "ok": exists and not missing_required and not present_forbidden,
+        "prompt": ROUND_PROPOSAL_PROMPT,
+        "exists": exists,
+        "required": required,
+        "forbidden": forbidden,
+        "reasons": reasons,
+    }
 
 
 def _trace_correctness_verification(path: Path) -> dict[str, Any]:
@@ -308,6 +342,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         REPO_ROOT / "output" / "track_b_e2e",
         expected_runtime_config_hash=expected_ncu_runtime_config_hash,
     )
+    round_proposal_prompt = _round_proposal_prompt_verification()
 
     steps = [
         _step(
@@ -396,9 +431,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         ),
         _step(
             "F",
-            "Auto research agent round proposal prompt template exists.",
-            {"prompt": "prompts/track_b_e2e_round_proposal.md", "exists": _exists("prompts/track_b_e2e_round_proposal.md")},
-            _exists("prompts/track_b_e2e_round_proposal.md"),
+            "Auto research agent round proposal prompt drives the hard-gated measurement loop.",
+            round_proposal_prompt,
+            round_proposal_prompt["ok"],
         ),
         _step(
             "G",
