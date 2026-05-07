@@ -80,6 +80,7 @@ def _trace_schema_result(base_dir: Path, raw: dict[str, Any]) -> dict[str, Any]:
     task_start = next((row for row in rows if row.get("event") == "task_start"), None)
     task_end = next((row for row in reversed(rows) if row.get("event") == "task_end"), None)
     turn_starts = [row for row in rows if row.get("event") == "turn_start"]
+    turn_ends_by_turn = {row.get("turn"): row for row in rows if row.get("event") == "turn_end"}
     reasons: list[str] = []
     if not rows:
         reasons.append("trace_missing_or_empty")
@@ -102,19 +103,31 @@ def _trace_schema_result(base_dir: Path, raw: dict[str, Any]) -> dict[str, Any]:
     if not turn_starts:
         reasons.append("turn_start_missing")
     for index, turn_start in enumerate(turn_starts):
-        if not isinstance(turn_start.get("turn"), int):
+        turn = turn_start.get("turn")
+        if not isinstance(turn, int):
             reasons.append(f"turn_start_{index}_turn_missing")
+            turn_end = None
+        else:
+            turn_end = turn_ends_by_turn.get(turn)
         if not isinstance(turn_start.get("regime"), str) or not turn_start.get("regime"):
             reasons.append(f"turn_start_{index}_regime_missing")
         if not isinstance(turn_start.get("vllm_request_id"), str) or not turn_start.get("vllm_request_id"):
             reasons.append(f"turn_start_{index}_vllm_request_id_missing")
         if not isinstance(turn_start.get("ts"), str) or not turn_start.get("ts"):
             reasons.append(f"turn_start_{index}_ts_missing")
+        if not isinstance(turn_end, dict):
+            reasons.append(f"turn_start_{index}_matching_turn_end_missing")
+        else:
+            if not isinstance(turn_end.get("ts"), str) or not turn_end.get("ts"):
+                reasons.append(f"turn_end_{turn}_ts_missing")
+            if not isinstance(turn_end.get("completion_tokens"), (int, float)):
+                reasons.append(f"turn_end_{turn}_completion_tokens_missing")
     return {
         "trace_schema_valid": not reasons,
         "trace_schema_reasons": reasons,
         "trace_event_count": len(rows),
         "trace_turn_start_count": len(turn_starts),
+        "trace_turn_end_count": len(turn_ends_by_turn),
     }
 
 

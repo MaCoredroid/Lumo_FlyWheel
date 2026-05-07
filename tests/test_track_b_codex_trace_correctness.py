@@ -45,6 +45,12 @@ def _write_task_evidence(root: Path, name: str, *, model: str = "ok", tools: str
                     "ts": "2026-05-07T21:30:00.100Z",
                 },
                 {
+                    "event": "turn_end",
+                    "turn": 0,
+                    "ts": "2026-05-07T21:30:00.900Z",
+                    "completion_tokens": 12,
+                },
+                {
                     "event": "task_end",
                     "ts": "2026-05-07T21:30:01.000Z",
                     "exit_code": 0,
@@ -83,6 +89,7 @@ def test_trace_correctness_verifier_writes_passing_artifact(tmp_path: Path) -> N
     assert payload["schema"] == "lumo.track_b.codex_trace_correctness.v1"
     assert len(payload["tasks"]) == 3
     assert payload["tasks"][0]["trace_schema_valid"] is True
+    assert payload["tasks"][0]["trace_turn_end_count"] == 1
     assert out.is_file()
 
 
@@ -137,3 +144,31 @@ def test_trace_correctness_verifier_rejects_trace_schema_gap(tmp_path: Path) -> 
     assert payload["ok"] is False
     assert payload["tasks"][0]["trace_schema_valid"] is False
     assert "task_start_runtime_config_hash_missing" in payload["tasks"][0]["trace_schema_reasons"]
+
+
+def test_trace_correctness_verifier_rejects_missing_turn_end(tmp_path: Path) -> None:
+    tasks = [_write_task_evidence(tmp_path, f"task-{index}") for index in range(3)]
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "task-0_enabled_trace.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    (tmp_path / "task-0_enabled_trace.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows if row.get("event") != "turn_end") + "\n",
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "comparisons.json"
+    manifest.write_text(
+        json.dumps({"codex_version": "codex patched", "trace_out_supported": True, "tasks": tasks}) + "\n",
+        encoding="utf-8",
+    )
+
+    payload = verifier.verify(
+        Namespace(
+            comparison_manifest=str(manifest),
+            base_dir="",
+            out=str(tmp_path / "codex_trace_emitter_correctness.json"),
+        )
+    )
+
+    assert payload["ok"] is False
+    assert "turn_start_0_matching_turn_end_missing" in payload["tasks"][0]["trace_schema_reasons"]

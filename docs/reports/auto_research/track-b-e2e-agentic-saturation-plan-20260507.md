@@ -126,7 +126,7 @@ Minimum artifact schema:
 ```
 
 The readiness manifest requires at least three task entries and rejects an existence-only artifact.
-Use `scripts/verify_track_b_codex_trace_correctness.py` to build this artifact from real enabled/disabled run evidence; it compares model-output bytes, tool-call-sequence bytes, milestone-score JSON, and both exit codes for each task, and it validates that the enabled trace has the Track B schema anchors needed for joins: `task_start` with matching `task_id`, non-empty `runtime_config_hash`, and timestamp; at least one `turn_start` with `turn`, `regime`, `vllm_request_id`, and timestamp; and `task_end` with timestamp and exit code.
+Use `scripts/verify_track_b_codex_trace_correctness.py` to build this artifact from real enabled/disabled run evidence; it compares model-output bytes, tool-call-sequence bytes, milestone-score JSON, and both exit codes for each task, and it validates that the enabled trace has the Track B schema anchors needed for joins: `task_start` with matching `task_id`, non-empty `runtime_config_hash`, and timestamp; at least one `turn_start` with `turn`, `regime`, `vllm_request_id`, timestamp, and a matching `turn_end` with timestamp plus numeric `completion_tokens`; and `task_end` with timestamp and exit code.
 
 If transcripts diverge, the patch is wrong and **no rounds may run** until it is fixed.
 
