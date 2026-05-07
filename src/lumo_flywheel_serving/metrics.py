@@ -49,6 +49,14 @@ _SAMPLE_RE = re.compile(
     r"([0-9eE.+\-]+|NaN|Inf|\+Inf|-Inf)"
     r"(?:\s+\d+)?$"
 )
+_SERIES_RE = re.compile(
+    r"^([a-zA-Z_:][a-zA-Z0-9_:]*)"
+    r"(?:\{([^}]*)\})?"
+    r"\s+"
+    r"([0-9eE.+\-]+|NaN|Inf|\+Inf|-Inf)"
+    r"(?:\s+\d+)?$"
+)
+_LABEL_RE = re.compile(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"\s*(?:,|$)')
 
 
 def _normalize_metric_key(key: str) -> str:
@@ -77,6 +85,57 @@ def parse_prometheus_text(raw: str) -> dict[str, float]:
         key = _normalize_metric_key(match.group(1))
         result[key] = result.get(key, 0.0) + value
     return result
+
+
+@dataclass(frozen=True)
+class PrometheusSample:
+    """One Prometheus sample with labels preserved for per-request joins."""
+
+    name: str
+    labels: dict[str, str]
+    value: float
+
+
+def _parse_labels(raw_labels: str | None) -> dict[str, str]:
+    if not raw_labels:
+        return {}
+    labels: dict[str, str] = {}
+    pos = 0
+    while pos < len(raw_labels):
+        match = _LABEL_RE.match(raw_labels, pos)
+        if match is None:
+            break
+        labels[match.group(1)] = bytes(match.group(2), "utf-8").decode("unicode_escape")
+        pos = match.end()
+    return labels
+
+
+def parse_prometheus_samples(raw: str) -> list[PrometheusSample]:
+    """Parse /metrics while keeping labels for request-id keyed accounting.
+
+    parse_prometheus_text intentionally aggregates all label series because the
+    historical Track B probes only needed task-level deltas. Track B E2E needs
+    the request_id/vllm_request_id label, so this parser returns one row per
+    non-bucket sample.
+    """
+
+    samples: list[PrometheusSample] = []
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        metric_name = stripped.split("{", 1)[0].split()[0]
+        if any(metric_name.endswith(suffix) for suffix in _SKIP_SUFFIXES):
+            continue
+        match = _SERIES_RE.match(stripped)
+        if match is None:
+            continue
+        try:
+            value = float(match.group(3))
+        except ValueError:
+            continue
+        samples.append(PrometheusSample(match.group(1), _parse_labels(match.group(2)), value))
+    return samples
 
 
 def _resolve_metric_candidate(logical_name: str, candidates: list[str], metrics_snapshot: dict[str, float]) -> str:
@@ -190,6 +249,77 @@ def _task_metrics_from_snapshots(
         "cache_queries": cache_queries,
         "cache_hits": cache_hits,
     }
+
+
+def _samples_by_request_id(samples: list[PrometheusSample]) -> dict[str, dict[str, float]]:
+    grouped: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    for sample in samples:
+        request_id = (
+            sample.labels.get("request_id")
+            or sample.labels.get("vllm_request_id")
+            or sample.labels.get("request")
+        )
+        if request_id:
+            grouped[request_id][sample.name] += sample.value
+    return {request_id: dict(metrics) for request_id, metrics in grouped.items()}
+
+
+def compute_vllm_per_request_metrics(
+    before_samples: list[PrometheusSample],
+    after_samples: list[PrometheusSample],
+    schema: dict[str, str],
+) -> dict[str, dict[str, float | None]]:
+    """Compute per-vLLM-request deltas from labeled Prometheus samples."""
+
+    before_by_request = _samples_by_request_id(before_samples)
+    after_by_request = _samples_by_request_id(after_samples)
+    request_ids = sorted(set(before_by_request) | set(after_by_request))
+    results: dict[str, dict[str, float | None]] = {}
+
+    accepted_key = "vllm:spec_decode_num_accepted_tokens_total"
+    draft_tokens_key = "vllm:spec_decode_num_draft_tokens_total"
+    prompt_key = _schema_value(schema, "prompt_tokens")
+    completion_key = _schema_value(schema, "generation_tokens")
+    prefill_key = _schema_histogram_base(schema, "prefill_time", "prefill_seconds")
+    decode_key = _schema_histogram_base(schema, "decode_time", "decode_seconds")
+    cache_queries_key = _schema_value(schema, "cache_queries", "prefix_cache_queries")
+    cache_hits_key = _schema_value(schema, "cache_hits", "prefix_cache_hits")
+
+    for request_id in request_ids:
+        before = before_by_request.get(request_id, {})
+        after = after_by_request.get(request_id, {})
+
+        def delta(key: str) -> float:
+            value = after.get(key, 0.0) - before.get(key, 0.0)
+            if value < 0:
+                raise RuntimeError(
+                    f"Metric '{key}' decreased for request_id={request_id}; "
+                    "per-request counters cannot be joined truthfully."
+                )
+            return value
+
+        completion_tokens = delta(completion_key)
+        decode_sum_s = delta(f"{decode_key}_sum")
+        prompt_tokens = delta(prompt_key)
+        prefill_sum_s = delta(f"{prefill_key}_sum")
+        cache_queries = delta(cache_queries_key)
+        cache_hits = delta(cache_hits_key)
+        accepted = delta(accepted_key)
+        draft_tokens = delta(draft_tokens_key)
+        results[request_id] = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "prefill_sum_s": prefill_sum_s,
+            "decode_sum_s": decode_sum_s,
+            "decode_tps": completion_tokens / decode_sum_s if decode_sum_s > 0 else None,
+            "cache_hit_rate_pct": cache_hits / cache_queries * 100 if cache_queries > 0 else None,
+            "prefix_cache_queries": cache_queries,
+            "prefix_cache_hits": cache_hits,
+            "spec_decode_num_accepted_tokens": accepted,
+            "spec_decode_num_draft_tokens": draft_tokens,
+            "accepted_per_draft_token": accepted / draft_tokens if draft_tokens > 0 else None,
+        }
+    return results
 
 
 @dataclass
@@ -919,6 +1049,7 @@ __all__ = [
     "LatencyRecord",
     "ModelLatencySummary",
     "PendingSnapshot",
+    "PrometheusSample",
     "REQUIRED_METRIC_VARIANTS",
     "SnapshotManager",
     "TaskMetrics",
@@ -928,9 +1059,11 @@ __all__ = [
     "TurnInfo",
     "aggregate_by_model",
     "compute_task_metrics",
+    "compute_vllm_per_request_metrics",
     "extract_turns",
     "fetch_metrics",
     "load_telemetry",
+    "parse_prometheus_samples",
     "parse_prometheus_text",
     "resolve_metric_schema",
 ]

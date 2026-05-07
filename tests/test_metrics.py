@@ -5,7 +5,9 @@ from pathlib import Path
 from lumo_flywheel_serving.metrics import (
     REQUIRED_METRIC_VARIANTS,
     PendingSnapshot,
+    compute_vllm_per_request_metrics,
     compute_task_metrics,
+    parse_prometheus_samples,
     parse_prometheus_text,
     resolve_metric_schema,
 )
@@ -80,6 +82,50 @@ vllm:inter_token_latency_seconds_sum{model_name="qwen3.5-27b",engine="0"} 0.4
         "decode_time": "vllm:request_decode_time_seconds",
         "itl": "vllm:inter_token_latency_seconds",
     }
+
+
+def test_per_request_prometheus_parser_preserves_request_labels() -> None:
+    before_raw = """
+vllm:prompt_tokens_total{request_id="req-1"} 10
+vllm:generation_tokens_total{request_id="req-1"} 4
+vllm:request_prefill_time_seconds_sum{request_id="req-1"} 1.0
+vllm:request_decode_time_seconds_sum{request_id="req-1"} 0.5
+vllm:prefix_cache_queries_total{request_id="req-1"} 2
+vllm:prefix_cache_hits_total{request_id="req-1"} 1
+vllm:spec_decode_num_accepted_tokens_total{request_id="req-1"} 3
+vllm:spec_decode_num_draft_tokens_total{request_id="req-1"} 6
+"""
+    after_raw = """
+vllm:prompt_tokens_total{request_id="req-1"} 20
+vllm:generation_tokens_total{request_id="req-1"} 10
+vllm:request_prefill_time_seconds_sum{request_id="req-1"} 1.5
+vllm:request_decode_time_seconds_sum{request_id="req-1"} 0.8
+vllm:prefix_cache_queries_total{request_id="req-1"} 4
+vllm:prefix_cache_hits_total{request_id="req-1"} 3
+vllm:spec_decode_num_accepted_tokens_total{request_id="req-1"} 7
+vllm:spec_decode_num_draft_tokens_total{request_id="req-1"} 14
+"""
+
+    metrics = compute_vllm_per_request_metrics(
+        parse_prometheus_samples(before_raw),
+        parse_prometheus_samples(after_raw),
+        {
+            "prompt_tokens": "vllm:prompt_tokens_total",
+            "generation_tokens": "vllm:generation_tokens_total",
+            "cache_queries": "vllm:prefix_cache_queries_total",
+            "cache_hits": "vllm:prefix_cache_hits_total",
+            "kv_computed_tokens": "vllm:request_prefill_kv_computed_tokens",
+            "ttft": "vllm:time_to_first_token_seconds",
+            "prefill_time": "vllm:request_prefill_time_seconds",
+            "decode_time": "vllm:request_decode_time_seconds",
+            "itl": "vllm:inter_token_latency_seconds",
+        },
+    )
+
+    assert metrics["req-1"]["prompt_tokens"] == 10
+    assert metrics["req-1"]["completion_tokens"] == 6
+    assert round(metrics["req-1"]["decode_tps"] or 0.0, 4) == 20.0
+    assert metrics["req-1"]["accepted_per_draft_token"] == 0.5
 
 
 def test_parse_prometheus_text_against_live_vllm_fixture() -> None:
