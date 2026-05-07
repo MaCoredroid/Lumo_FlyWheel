@@ -558,6 +558,8 @@ Committed scaffold commits through this status checkpoint:
 - `f1a6ee7 Tighten Track B vLLM JSONL join gate`
 - `0919c33 Update Track B JSONL gate ledger`
 - `5e400ef Reject incomplete Track B vLLM JSONL rows`
+- `9113a09 Update Track B vLLM JSONL row ledger`
+- `ef3060b Reject empty Track B vLLM request joins`
 
 ## 12. Decision rules for ending the loop
 
