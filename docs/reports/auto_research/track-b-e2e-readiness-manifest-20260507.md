@@ -22,7 +22,7 @@ Result: **Round 0 is blocked.**
 | Step | Status | Evidence |
 |---|---|---|
 | A. Codex `--trace-out` patch + correctness artifact | blocked | no content-validated trace patch, no validated `output/track_b_e2e/codex_trace_emitter_correctness.json`, installed Codex lacks `--trace-out` |
-| B. DCGM/NVML 100 Hz sampler | blocked | sampler script exists and runs; profile fields remain unavailable |
+| B. DCGM/NVML 100 Hz sampler | blocked | sampler script exists and runs through NVML fallback; `dcgmi` and DCGM Python bindings are unavailable, so profile fields remain unavailable |
 | C. E2E task runner | complete | `scripts/run_track_b_e2e_task.py` |
 | D. Per-turn vLLM metrics keyed by request id | blocked | parser/join code exists; live metrics do not expose request-id labels and no side-channel is configured |
 | E. Summary join + diagnosis rule | complete | `scripts/build_track_b_e2e_summary.py` |
