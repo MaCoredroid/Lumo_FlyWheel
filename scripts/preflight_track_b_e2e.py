@@ -56,6 +56,13 @@ REQUEST_JOIN_REQUIRED_METRICS = (
     "vllm:spec_decode_num_draft_tokens_total",
     "vllm:spec_decode_num_accepted_tokens_total",
 )
+DCGM_PROFILE_FIELDS = (
+    "dram_active_pct",
+    "sm_active_pct",
+    "sm_occupancy_pct",
+    "pipe_tensor_active_pct",
+    "pipe_fp16_active_pct",
+)
 
 
 def _metric_label_names(line: str) -> set[str]:
@@ -114,14 +121,30 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
             if isinstance(payload, dict):
                 rows.append(payload)
     profile_fields_present = any(
-        isinstance(row.get("dram_active_pct"), (int, float)) and isinstance(row.get("sm_active_pct"), (int, float))
+        all(isinstance(row.get(field), (int, float)) for field in DCGM_PROFILE_FIELDS)
         for row in rows
+    )
+    observed_numeric_fields = sorted(
+        {
+            field
+            for row in rows
+            for field in DCGM_PROFILE_FIELDS
+            if isinstance(row.get(field), (int, float))
+        }
+    )
+    telemetry_sources = sorted(
+        {str(row.get("telemetry_source")) for row in rows if row.get("telemetry_source")}
     )
     return {
         "ok": result.returncode == 0 and bool(rows),
         "returncode": result.returncode,
         "sample_count": len(rows),
         "profile_fields_present": profile_fields_present,
+        "observed_numeric_profile_fields": observed_numeric_fields,
+        "missing_profile_fields": [
+            field for field in DCGM_PROFILE_FIELDS if field not in observed_numeric_fields
+        ],
+        "telemetry_sources": telemetry_sources,
         "stdout": result.stdout,
         "stderr": result.stderr,
     }
@@ -171,11 +194,14 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
         "dcgm_sampler_runs": {
             "ok": sampler_smoke["ok"],
             "sample_count": sampler_smoke["sample_count"],
+            "telemetry_sources": sampler_smoke["telemetry_sources"],
             "stderr": sampler_smoke["stderr"],
         },
         "dcgm_profile_fields_available": {
             "ok": sampler_smoke["profile_fields_present"],
             "sample_count": sampler_smoke["sample_count"],
+            "observed_numeric_profile_fields": sampler_smoke["observed_numeric_profile_fields"],
+            "missing_profile_fields": sampler_smoke["missing_profile_fields"],
         },
     }
     blockers = [name for name, check in checks.items() if name in args.required_checks and not check["ok"]]

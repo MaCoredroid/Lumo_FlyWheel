@@ -47,7 +47,15 @@ def test_preflight_blocks_without_trace_out_request_labels_or_pynvml(monkeypatch
     monkeypatch.setattr(
         preflight_track_b_e2e,
         "_sampler_smoke",
-        lambda python, duration_s: {"ok": False, "sample_count": 0, "profile_fields_present": False, "stderr": ""},
+        lambda python, duration_s: {
+            "ok": False,
+            "sample_count": 0,
+            "profile_fields_present": False,
+            "observed_numeric_profile_fields": [],
+            "missing_profile_fields": list(preflight_track_b_e2e.DCGM_PROFILE_FIELDS),
+            "telemetry_sources": [],
+            "stderr": "",
+        },
     )
     monkeypatch.setattr(preflight_track_b_e2e.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", lambda *args, **kwargs: FakeCompleted())
@@ -111,7 +119,15 @@ def test_preflight_accepts_required_e2e_instrumentation(monkeypatch) -> None:
     monkeypatch.setattr(
         preflight_track_b_e2e,
         "_sampler_smoke",
-        lambda python, duration_s: {"ok": True, "sample_count": 5, "profile_fields_present": True, "stderr": ""},
+        lambda python, duration_s: {
+            "ok": True,
+            "sample_count": 5,
+            "profile_fields_present": True,
+            "observed_numeric_profile_fields": list(preflight_track_b_e2e.DCGM_PROFILE_FIELDS),
+            "missing_profile_fields": [],
+            "telemetry_sources": ["dcgm"],
+            "stderr": "",
+        },
     )
     monkeypatch.setattr(preflight_track_b_e2e.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", lambda *args, **kwargs: FakeCompleted())
@@ -155,3 +171,48 @@ def test_request_id_gate_requires_labels_on_join_metrics() -> None:
         "vllm:spec_decode_num_draft_tokens_total": True,
         "vllm:spec_decode_num_accepted_tokens_total": True,
     }
+
+
+def test_dcgm_profile_gate_requires_all_profile_fields(monkeypatch, tmp_path: Path) -> None:
+    sample_path = tmp_path / "samples.jsonl"
+    sample_path.write_text(
+        "\n".join(
+            [
+                '{"dram_active_pct":0.4,"sm_active_pct":0.5,"telemetry_source":"dcgm"}',
+                '{"dram_active_pct":0.4,"sm_active_pct":0.5,"telemetry_source":"dcgm"}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    class FakeTemp:
+        name = str(sample_path)
+
+        def __enter__(self) -> "FakeTemp":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    class FakeCompleted:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(
+        preflight_track_b_e2e.tempfile,
+        "NamedTemporaryFile",
+        lambda **kwargs: FakeTemp(),
+    )
+    monkeypatch.setattr(preflight_track_b_e2e.subprocess, "run", lambda *args, **kwargs: FakeCompleted())
+
+    payload = preflight_track_b_e2e._sampler_smoke(Path(sys.executable), 0.05)
+
+    assert payload["profile_fields_present"] is False
+    assert payload["observed_numeric_profile_fields"] == ["dram_active_pct", "sm_active_pct"]
+    assert payload["missing_profile_fields"] == [
+        "sm_occupancy_pct",
+        "pipe_tensor_active_pct",
+        "pipe_fp16_active_pct",
+    ]

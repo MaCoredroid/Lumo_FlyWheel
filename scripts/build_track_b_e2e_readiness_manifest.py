@@ -103,6 +103,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "pynvml_available": checks.get("pynvml_available", {}).get("ok"),
                 "dcgm_sampler_runs": checks.get("dcgm_sampler_runs", {}).get("ok"),
                 "dcgm_profile_fields_available": checks.get("dcgm_profile_fields_available", {}).get("ok"),
+                "missing_profile_fields": checks.get("dcgm_profile_fields_available", {}).get(
+                    "missing_profile_fields"
+                ),
+                "telemetry_sources": checks.get("dcgm_sampler_runs", {}).get("telemetry_sources"),
             },
             _exists("scripts/sample_dcgm_during_task.py")
             and checks.get("dcgm_sampler_runs", {}).get("ok") is True

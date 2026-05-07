@@ -41,6 +41,8 @@ class NvmlSampler:
         return {
             "ts": _now_iso(),
             "gpu": self._gpu_index,
+            "telemetry_source": "nvml",
+            "profile_fields_available": False,
             "dram_active_pct": None,
             "sm_active_pct": None,
             "sm_occupancy_pct": None,
