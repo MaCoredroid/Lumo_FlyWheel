@@ -308,6 +308,7 @@ def _write_ncu_metadata(root: Path, archetype: str, *, runtime_config_hash: str 
             {
                 "schema": "lumo.track_b.ncu_archetype_profile.v1",
                 "archetype": archetype,
+                "task_id": readiness.NCU_ARCHETYPE_TASKS[archetype],
                 "runtime_config_hash": runtime_config_hash,
                 "profile_csv": str(root / f"ncu_{archetype}.csv"),
             }
@@ -371,3 +372,22 @@ def test_ncu_profile_verification_rejects_missing_metadata(tmp_path: Path) -> No
     long_text = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
     assert "schema_mismatch" in long_text["metadata_reasons"]
     assert "runtime_config_hash_missing" in long_text["metadata_reasons"]
+    assert "task_id_mismatch" in long_text["metadata_reasons"]
+
+
+def test_ncu_profile_verification_rejects_wrong_archetype_task_metadata(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        (tmp_path / f"ncu_{archetype}.csv").write_text(_ncu_csv_text(), encoding="utf-8")
+        _write_ncu_metadata(tmp_path, archetype)
+    metadata_path = tmp_path / "ncu_tool-call-frame.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["task_id"] = "wrong-task/v1-clean-baseline"
+    metadata_path.write_text(json.dumps(metadata) + "\n", encoding="utf-8")
+
+    result = readiness._ncu_profile_verification(tmp_path)
+
+    assert result["ok"] is False
+    assert "tool-call-frame_metadata_invalid" in result["reasons"]
+    profile = next(profile for profile in result["profiles"] if profile["archetype"] == "tool-call-frame")
+    assert profile["expected_task_id"] == "policy-aware-request-resolution/v1-clean-baseline"
+    assert "task_id_mismatch" in profile["metadata_reasons"]

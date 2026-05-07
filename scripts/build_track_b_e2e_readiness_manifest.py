@@ -37,6 +37,13 @@ NCU_REQUIRED_METRICS = (
     "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
     "tpc__warps_active.avg.pct_of_peak_sustained_active",
 )
+NCU_ARCHETYPE_TASKS = {
+    "long-text": "sqlalchemy-2-session-modernization/v1-clean-baseline",
+    "tool-call-frame": "policy-aware-request-resolution/v1-clean-baseline",
+    "pure-investigation": "dead-flag-reachability-audit/v1-clean-baseline",
+    "multimodal-prefill": "responsive-checkout-visual-regression/v1-clean-baseline",
+    "subagent-orchestration": "fanout-fullstack-release-blocker/v1-clean-baseline",
+}
 
 
 def _now() -> str:
@@ -208,6 +215,8 @@ def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
             metadata_reasons.append("schema_mismatch")
         if metadata.get("archetype") != archetype:
             metadata_reasons.append("archetype_mismatch")
+        if metadata.get("task_id") != NCU_ARCHETYPE_TASKS[archetype]:
+            metadata_reasons.append("task_id_mismatch")
         if not isinstance(metadata.get("runtime_config_hash"), str) or not metadata.get("runtime_config_hash"):
             metadata_reasons.append("runtime_config_hash_missing")
         if metadata.get("profile_csv") != expected_profile_csv:
@@ -228,6 +237,8 @@ def _ncu_profile_verification(output_dir: Path) -> dict[str, Any]:
                 "metadata_path": str(metadata_path.relative_to(REPO_ROOT)) if metadata_path.is_relative_to(REPO_ROOT) else str(metadata_path),
                 "metadata_exists": metadata_path.is_file(),
                 "metadata_reasons": metadata_reasons,
+                "task_id": metadata.get("task_id"),
+                "expected_task_id": NCU_ARCHETYPE_TASKS[archetype],
                 "runtime_config_hash": metadata.get("runtime_config_hash"),
                 "size_bytes": size_bytes,
                 "required_metric_coverage": metric_coverage,
