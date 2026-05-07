@@ -87,6 +87,34 @@ def test_run_one_rejects_unstamped_runtime_hash_before_artifacts(tmp_path: Path)
     assert not any(tmp_path.iterdir())
 
 
+def test_run_one_can_record_missing_workspace_diagnostic(tmp_path: Path) -> None:
+    args = Namespace(
+        runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        out_root=str(tmp_path),
+        round=0,
+        attempt=2,
+        codex_command_template="codex exec --json",
+        vllm_request_metrics_jsonl="",
+        ncu_mode=False,
+        defer_codex_trace_out=True,
+        defer_vllm_request_metrics_join=True,
+        defer_dcgm_profile_fields=True,
+        allow_missing_workspace_diagnostic=True,
+    )
+
+    rc = runner.run_one(args, "missing-family", "v1-clean-baseline")
+
+    task_dir = tmp_path / "round_0" / "missing-family__v1-clean-baseline" / "run_02"
+    assert rc == 0
+    assert json.loads((task_dir / "runner_metadata.json").read_text(encoding="utf-8"))["workspace_missing"] is True
+    assert json.loads((task_dir / "vllm_per_turn.json").read_text(encoding="utf-8"))["deferred"] is True
+    trace_rows = [
+        json.loads(line)
+        for line in (task_dir / "codex_trace.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [row["event"] for row in trace_rows] == ["task_start", "task_end"]
+
+
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()

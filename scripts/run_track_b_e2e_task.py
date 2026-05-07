@@ -9,7 +9,7 @@ import shlex
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -252,6 +252,18 @@ def _stop_sampler(process: subprocess.Popen[str] | None) -> None:
         process.wait(timeout=10)
 
 
+def _deferred_instrumentation_checks(args: argparse.Namespace) -> list[str]:
+    return sorted(
+        check
+        for check, enabled in {
+            "codex_trace_out_supported": args.defer_codex_trace_out,
+            "vllm_request_metrics_join_available": args.defer_vllm_request_metrics_join,
+            "dcgm_profile_fields_available": args.defer_dcgm_profile_fields,
+        }.items()
+        if enabled
+    )
+
+
 def _write_deferred_trace(
     path: Path,
     *,
@@ -290,10 +302,60 @@ def _write_deferred_trace(
     path.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows), encoding="utf-8")
 
 
+def _write_missing_workspace_diagnostic(args: argparse.Namespace, family: str, variant: str, workspace: Path) -> None:
+    task_dir = Path(args.out_root) / f"round_{args.round}" / f"{family}__{variant}" / f"run_{args.attempt:02d}"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    trace_out = task_dir / "codex_trace.jsonl"
+    started_at = datetime.now(UTC)
+    ended_at = started_at + timedelta(milliseconds=1)
+    (task_dir / "prompt.md").write_text("", encoding="utf-8")
+    (task_dir / "codex_stdout.log").write_text("", encoding="utf-8")
+    (task_dir / "codex_stderr.log").write_text(f"workspace bundle missing: {workspace}\n", encoding="utf-8")
+    (task_dir / "vllm_metrics_pre.txt").write_text("", encoding="utf-8")
+    (task_dir / "vllm_metrics_post.txt").write_text("", encoding="utf-8")
+    _write_deferred_vllm_per_turn(
+        task_dir,
+        runtime_config_hash=args.runtime_config_hash,
+        reason="vllm_request_metrics_join_available",
+    )
+    _write_deferred_trace(
+        trace_out,
+        family=family,
+        variant=variant,
+        runtime_config_hash=args.runtime_config_hash,
+        started_at=started_at,
+        ended_at=ended_at,
+        exit_code=None,
+    )
+    metadata = {
+        "schema": "lumo.track_b.e2e_runner_metadata.v1",
+        "recorded_at": _now(),
+        "family": family,
+        "variant": variant,
+        "round": args.round,
+        "attempt": args.attempt,
+        "workspace": str(workspace),
+        "workspace_missing": True,
+        "trace_out": str(trace_out),
+        "elapsed_s": 0.0,
+        "runtime_config_hash": args.runtime_config_hash,
+        "codex_command_template": args.codex_command_template,
+        "vllm_request_metrics_jsonl": args.vllm_request_metrics_jsonl,
+        "vllm_request_metrics_capture": None,
+        "ncu_mode": bool(args.ncu_mode),
+        "codex_exit_code": None,
+        "deferred_instrumentation_checks": _deferred_instrumentation_checks(args),
+    }
+    (task_dir / "runner_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     _validate_runtime_config_hash(args.runtime_config_hash)
     workspace = REPO_ROOT / "benchmark_blueprints" / "families" / family / "workspace_bundle" / variant
     if not workspace.is_dir():
+        if args.allow_missing_workspace_diagnostic:
+            _write_missing_workspace_diagnostic(args, family, variant, workspace)
+            return 0
         raise RuntimeError(f"workspace bundle missing: {workspace}")
     task_dir = Path(args.out_root) / f"round_{args.round}" / f"{family}__{variant}" / f"run_{args.attempt:02d}"
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -379,15 +441,7 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "vllm_request_metrics_capture": vllm_request_metrics_capture,
         "ncu_mode": bool(args.ncu_mode),
         "codex_exit_code": result.returncode if result else None,
-        "deferred_instrumentation_checks": sorted(
-            check
-            for check, enabled in {
-                "codex_trace_out_supported": args.defer_codex_trace_out,
-                "vllm_request_metrics_join_available": args.defer_vllm_request_metrics_join,
-                "dcgm_profile_fields_available": args.defer_dcgm_profile_fields,
-            }.items()
-            if enabled
-        ),
+        "deferred_instrumentation_checks": _deferred_instrumentation_checks(args),
     }
     (task_dir / "runner_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if not trace_out.is_file():
@@ -433,6 +487,7 @@ def main() -> int:
     parser.add_argument("--defer-codex-trace-out", action="store_true")
     parser.add_argument("--defer-vllm-request-metrics-join", action="store_true")
     parser.add_argument("--defer-dcgm-profile-fields", action="store_true")
+    parser.add_argument("--allow-missing-workspace-diagnostic", action="store_true")
     parser.add_argument(
         "--vllm-request-metrics-jsonl",
         default="",

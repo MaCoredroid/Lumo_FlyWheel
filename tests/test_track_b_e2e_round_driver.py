@@ -179,6 +179,7 @@ def test_round_driver_defers_instrumentation_blockers_and_writes_diagnostic_summ
     assert "--defer-codex-trace-out" in runner_command
     assert "--defer-vllm-request-metrics-join" in runner_command
     assert "--defer-dcgm-profile-fields" in runner_command
+    assert "--allow-missing-workspace-diagnostic" in runner_command
     task_summary_command = next(
         command for command in commands if Path(command[1]).name == "build_track_b_e2e_summary.py" and "task" in command
     )

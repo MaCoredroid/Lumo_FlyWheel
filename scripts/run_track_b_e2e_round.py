@@ -294,6 +294,8 @@ def _runner_command(args: argparse.Namespace) -> list[str]:
         command.append("--defer-vllm-request-metrics-join")
     if "dcgm_profile_fields_available" in deferred:
         command.append("--defer-dcgm-profile-fields")
+    if deferred:
+        command.append("--allow-missing-workspace-diagnostic")
     return command
 
 
