@@ -372,6 +372,28 @@ def _write_task_summary(
     )
 
 
+def _write_nested_task_summary(round_dir: Path, index: int, task_id: str) -> None:
+    task_dir = round_dir / f"task_{index:02d}" / "run_01"
+    task_dir.mkdir(parents=True)
+    (task_dir / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.e2e_task_summary.v1",
+                "task_id": task_id,
+                "trusted_measurement": True,
+                "wallclock_s": float(100 + index),
+                "task_completed": True,
+                "task_score": 0.8,
+                "regime_share": {"plan": 1.0},
+                "bottleneck_diagnosis": "memory-bw-headroom",
+                "sample_hash": SAMPLE_HASH,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_round_summary_requires_unique_fixed_sample_tasks(tmp_path: Path) -> None:
     round_dir = tmp_path / "round_0"
     round_dir.mkdir()
@@ -396,6 +418,31 @@ def test_round_summary_requires_unique_fixed_sample_tasks(tmp_path: Path) -> Non
     assert summary["trusted_unique_task_count"] == 12
     assert summary["duplicate_trusted_task_ids"] == []
     assert (round_dir / "round_summary.json").is_file()
+
+
+def test_round_summary_accepts_runner_nested_attempt_summaries(tmp_path: Path) -> None:
+    round_dir = tmp_path / "round_0"
+    round_dir.mkdir()
+    for index, task_id in enumerate(TRACK_B_E2E_TASKS[:12]):
+        _write_nested_task_summary(round_dir, index, task_id)
+
+    summary = build_round_summary(
+        Namespace(
+            round=0,
+            round_dir=str(round_dir),
+            runtime_config_hash="sha256:test",
+            config_delta_vs_prior_round="",
+            hypothesis="baseline",
+            wallclock_delta_vs_prior_round_s=None,
+            auto_research_agent_recommendation="",
+            next_round_proposal="",
+            write_untrusted_diagnostic=False,
+        )
+    )
+
+    assert summary["trusted_task_count"] == 12
+    assert summary["trusted_unique_task_count"] == 12
+    assert summary["duplicate_trusted_task_ids"] == []
 
 
 def test_round_summary_rejects_duplicate_or_mismatched_sample_tasks(tmp_path: Path) -> None:

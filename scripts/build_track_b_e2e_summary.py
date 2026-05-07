@@ -43,6 +43,12 @@ def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _round_summary_paths(round_dir: Path) -> list[Path]:
+    direct = set(round_dir.glob("*/summary.json"))
+    nested = set(round_dir.glob("*/*/summary.json"))
+    return sorted(direct | nested)
+
+
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -422,7 +428,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
 
 def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
     round_dir = Path(args.round_dir)
-    summaries = [_load_json(path) for path in sorted(round_dir.glob("*/summary.json"))]
+    summaries = [_load_json(path) for path in _round_summary_paths(round_dir)]
     trusted = [row for row in summaries if row.get("trusted_measurement")]
     trusted_task_ids = [str(row.get("task_id")) for row in trusted]
     trusted_unique_task_ids = sorted(set(trusted_task_ids))
