@@ -22,6 +22,20 @@ def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not path.is_file():
+        return rows
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            if isinstance(payload, dict):
+                rows.append(payload)
+    return rows
+
+
 def _read_bytes(path: Path) -> bytes:
     if not path.is_file():
         return b""
@@ -59,6 +73,51 @@ def _codex_trace_out_supported() -> bool:
     return result.returncode == 0 and "--trace-out" in result.stdout
 
 
+def _trace_schema_result(base_dir: Path, raw: dict[str, Any]) -> dict[str, Any]:
+    trace_path = _resolve(base_dir, raw.get("trace_out_enabled_trace_jsonl", ""))
+    rows = _load_jsonl(trace_path)
+    task_id = str(raw.get("task_id", ""))
+    task_start = next((row for row in rows if row.get("event") == "task_start"), None)
+    task_end = next((row for row in reversed(rows) if row.get("event") == "task_end"), None)
+    turn_starts = [row for row in rows if row.get("event") == "turn_start"]
+    reasons: list[str] = []
+    if not rows:
+        reasons.append("trace_missing_or_empty")
+    if not isinstance(task_start, dict):
+        reasons.append("task_start_missing")
+    else:
+        if task_start.get("task_id") != task_id:
+            reasons.append("task_start_task_id_mismatch")
+        if not isinstance(task_start.get("runtime_config_hash"), str) or not task_start.get("runtime_config_hash"):
+            reasons.append("task_start_runtime_config_hash_missing")
+        if not isinstance(task_start.get("ts"), str) or not task_start.get("ts"):
+            reasons.append("task_start_ts_missing")
+    if not isinstance(task_end, dict):
+        reasons.append("task_end_missing")
+    else:
+        if not isinstance(task_end.get("ts"), str) or not task_end.get("ts"):
+            reasons.append("task_end_ts_missing")
+        if not isinstance(task_end.get("exit_code"), int):
+            reasons.append("task_end_exit_code_missing")
+    if not turn_starts:
+        reasons.append("turn_start_missing")
+    for index, turn_start in enumerate(turn_starts):
+        if not isinstance(turn_start.get("turn"), int):
+            reasons.append(f"turn_start_{index}_turn_missing")
+        if not isinstance(turn_start.get("regime"), str) or not turn_start.get("regime"):
+            reasons.append(f"turn_start_{index}_regime_missing")
+        if not isinstance(turn_start.get("vllm_request_id"), str) or not turn_start.get("vllm_request_id"):
+            reasons.append(f"turn_start_{index}_vllm_request_id_missing")
+        if not isinstance(turn_start.get("ts"), str) or not turn_start.get("ts"):
+            reasons.append(f"turn_start_{index}_ts_missing")
+    return {
+        "trace_schema_valid": not reasons,
+        "trace_schema_reasons": reasons,
+        "trace_event_count": len(rows),
+        "trace_turn_start_count": len(turn_starts),
+    }
+
+
 def _task_result(base_dir: Path, raw: dict[str, Any]) -> dict[str, Any]:
     enabled_model = _read_bytes(_resolve(base_dir, raw.get("trace_out_enabled_model_outputs", "")))
     disabled_model = _read_bytes(_resolve(base_dir, raw.get("trace_out_disabled_model_outputs", "")))
@@ -68,7 +127,7 @@ def _task_result(base_dir: Path, raw: dict[str, Any]) -> dict[str, Any]:
     disabled_scores_path = _resolve(base_dir, raw.get("trace_out_disabled_milestone_scores", ""))
     enabled_scores = _load_json(enabled_scores_path) if enabled_scores_path.is_file() else None
     disabled_scores = _load_json(disabled_scores_path) if disabled_scores_path.is_file() else None
-    return {
+    result = {
         "task_id": str(raw.get("task_id", "")),
         "trace_out_enabled_exit_code": raw.get("trace_out_enabled_exit_code"),
         "trace_out_disabled_exit_code": raw.get("trace_out_disabled_exit_code"),
@@ -82,6 +141,8 @@ def _task_result(base_dir: Path, raw: dict[str, Any]) -> dict[str, Any]:
             "trace_out_disabled_tool_call_sequence": _sha256(disabled_tools),
         },
     }
+    result.update(_trace_schema_result(base_dir, raw))
+    return result
 
 
 def verify(args: argparse.Namespace) -> dict[str, Any]:
@@ -107,6 +168,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         and task.get("model_outputs_byte_identical") is True
         and task.get("tool_call_sequences_byte_identical") is True
         and task.get("milestone_scores_identical") is True
+        and task.get("trace_schema_valid") is True
         for task in tasks
     )
     payload["ok"] = ok
