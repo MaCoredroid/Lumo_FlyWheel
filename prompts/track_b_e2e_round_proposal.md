@@ -20,9 +20,9 @@
 ## Cheap preflight commands
 1. `curl -sSf http://127.0.0.1:9950/health`
 2. `curl -sSf http://127.0.0.1:9950/metrics | grep spec_decode_num_drafts_total`
-3. `python scripts/run_track_b_e2e_task.py transcript-merge-regression v1-clean-baseline --round {{round}} --attempt 1 --codex-command-template "{{codex_command_template}}"`
-4. `python scripts/build_track_b_e2e_summary.py task --round {{round}} --task-dir output/track_b_e2e/round_{{round}}/transcript-merge-regression__v1-clean-baseline/run_01 --family transcript-merge-regression --variant v1-clean-baseline --runtime-config-hash {{runtime_config_hash}} --cold-completion-discarded --cache-reset-verified --protocol-hash-match --generation-volume-within-band --sample-hash-match --clock-skew-ms-p99 {{clock_skew_ms_p99}} --trace-emitter-correctness-verified-at {{trace_emitter_correctness_verified_at}} --write-untrusted-diagnostic`
-5. `python scripts/run_track_b_tool_call_gate.py --family policy-aware-request-resolution --variant v1-clean-baseline --mode auto --cases 4`
+3. `.venv/bin/python scripts/run_track_b_e2e_task.py transcript-merge-regression v1-clean-baseline --round {{round}} --attempt 1 --codex-command-template "{{codex_command_template}}"`
+4. `.venv/bin/python scripts/build_track_b_e2e_summary.py task --round {{round}} --task-dir output/track_b_e2e/round_{{round}}/transcript-merge-regression__v1-clean-baseline/run_01 --family transcript-merge-regression --variant v1-clean-baseline --runtime-config-hash {{runtime_config_hash}} --cold-completion-discarded --cache-reset-verified --protocol-hash-match --generation-volume-within-band --sample-hash-match --clock-skew-ms-p99 {{clock_skew_ms_p99}} --trace-emitter-correctness-verified-at {{trace_emitter_correctness_verified_at}} --write-untrusted-diagnostic`
+5. `.venv/bin/python scripts/run_track_b_tool_call_gate.py --family policy-aware-request-resolution --variant v1-clean-baseline --mode auto --cases 4`
 
 ## Cheap preflight pass criteria
 - vLLM health check returns 200.
@@ -33,7 +33,7 @@
 - Tool-call XML auto mode remains 4/4.
 
 ## Full measurement command
-`python scripts/run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3 --codex-command-template "{{codex_command_template}}"`
+`.venv/bin/python scripts/run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3 --codex-command-template "{{codex_command_template}}"`
 
 ## Correctness caveat checklist
 - [ ] B-1 batch equivalence retained

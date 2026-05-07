@@ -6,11 +6,14 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import requests
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _now() -> str:
@@ -46,15 +49,59 @@ def _has_any(text: str, needles: list[str]) -> bool:
     return any(needle in text for needle in needles)
 
 
+def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any]:
+    with tempfile.NamedTemporaryFile(prefix="track_b_dcgm_", suffix=".jsonl") as handle:
+        result = subprocess.run(
+            [
+                str(measurement_python),
+                str(REPO_ROOT / "scripts" / "sample_dcgm_during_task.py"),
+                "--out",
+                handle.name,
+                "--duration-s",
+                str(duration_s),
+                "--interval-s",
+                "0.01",
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=max(5.0, duration_s + 5.0),
+        )
+        rows: list[dict[str, Any]] = []
+        for line in Path(handle.name).read_text(encoding="utf-8", errors="replace").splitlines():
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                rows.append(payload)
+    profile_fields_present = any(
+        isinstance(row.get("dram_active_pct"), (int, float)) and isinstance(row.get("sm_active_pct"), (int, float))
+        for row in rows
+    )
+    return {
+        "ok": result.returncode == 0 and bool(rows),
+        "returncode": result.returncode,
+        "sample_count": len(rows),
+        "profile_fields_present": profile_fields_present,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+
+
 def audit(args: argparse.Namespace) -> dict[str, Any]:
     codex_help = _command(["codex", "exec", "--help"])
     codex_version = _command(["codex", "--version"])
     health = _get(args.health_url)
     metrics = _get(args.metrics_url)
     metrics_text = str(metrics.get("text") or "")
+    measurement_python = Path(args.python)
+    sampler_smoke = _sampler_smoke(measurement_python, args.sampler_smoke_duration_s)
     pynvml_check = subprocess.run(
         [
-            sys.executable,
+            str(measurement_python),
             "-c",
             "import importlib.util; raise SystemExit(0 if importlib.util.find_spec('pynvml') else 1)",
         ],
@@ -82,11 +129,21 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
             "ok": pynvml_check.returncode == 0,
             "stderr": pynvml_check.stderr,
         },
+        "dcgm_sampler_runs": {
+            "ok": sampler_smoke["ok"],
+            "sample_count": sampler_smoke["sample_count"],
+            "stderr": sampler_smoke["stderr"],
+        },
+        "dcgm_profile_fields_available": {
+            "ok": sampler_smoke["profile_fields_present"],
+            "sample_count": sampler_smoke["sample_count"],
+        },
     }
     blockers = [name for name, check in checks.items() if name in args.required_checks and not check["ok"]]
     return {
         "schema": "lumo.track_b.e2e_preflight_audit.v1",
         "recorded_at": _now(),
+        "measurement_python": str(measurement_python),
         "health_url": args.health_url,
         "metrics_url": args.metrics_url,
         "checks": checks,
@@ -97,6 +154,9 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit whether Track B E2E Round 0 may truthfully run.")
+    default_python = REPO_ROOT / ".venv" / "bin" / "python"
+    parser.add_argument("--python", default=str(default_python if default_python.exists() else Path(sys.executable)))
+    parser.add_argument("--sampler-smoke-duration-s", type=float, default=0.05)
     parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
     parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")
     parser.add_argument("--out", default="")
@@ -111,6 +171,8 @@ def main() -> int:
             "nvidia_smi_available",
             "ncu_available",
             "pynvml_available",
+            "dcgm_sampler_runs",
+            "dcgm_profile_fields_available",
         ],
     )
     args = parser.parse_args()

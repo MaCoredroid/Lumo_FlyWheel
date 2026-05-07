@@ -9,6 +9,7 @@ description = "Local vLLM serving layer tooling for Lumo FlyWheel"
 requires-python = ">=3.12"
 dependencies = [
   "huggingface_hub>=0.32.0",
+  "nvidia-ml-py>=12.575.51",
   "PyYAML>=6.0.1",
   "requests>=2.32.0",
 ]
