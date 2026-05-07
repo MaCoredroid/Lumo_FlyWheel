@@ -143,7 +143,7 @@ If transcripts diverge, the patch is wrong and **no rounds may run** until it is
 
 The per-turn vLLM metrics are already half-built in `scripts/measure_track_b_real_content_task.py` (Prometheus delta logic in `compute_task_metrics`). Extend to:
 
-- Capture metrics deltas keyed by `vllm_request_id`. The preferred public artifact is a bounded vLLM per-request JSONL side-channel normalized to `vllm_per_turn.json`; Prometheus request labels are also accepted if a patched vLLM exposes the required low-volume offline labels.
+- Capture metrics deltas keyed by `vllm_request_id`. The preferred public artifact is a bounded vLLM per-request JSONL side-channel normalized to `vllm_per_turn.json`; Prometheus request labels are also accepted if a patched vLLM exposes the required low-volume offline labels. The side-channel gate accepts either `generation_tokens` or the OpenAI-style alias `completion_tokens`, but the prompt/speculative-decode fields must be numeric in the same request-keyed row.
 - Persist `decode_tps`, `accepted_per_draft_token`, `prompt_tokens`, `completion_tokens`, `prefill_sum_s`, `decode_sum_s`, `cache_hit_rate_pct`, `prefix_cache_queries`, `prefix_cache_hits` per `vllm_request_id`.
 - Add **`vllm:spec_decode_num_accepted_tokens` and `vllm:spec_decode_num_draft_tokens`** to the captured metric set. Without these, accepted/draft ratio is invisible per-turn.
 

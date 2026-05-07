@@ -277,6 +277,29 @@ def test_request_metrics_side_channel_requires_complete_rows(tmp_path: Path) -> 
     assert coverage["invalid_request_metric_row_count"] == 2
 
 
+def test_request_metrics_side_channel_accepts_completion_tokens_alias(tmp_path: Path) -> None:
+    metrics_jsonl = tmp_path / "vllm_request_metrics.jsonl"
+    metrics_jsonl.write_text(
+        json.dumps(
+            {
+                "request_id": "req-1",
+                "prompt_tokens": 128,
+                "completion_tokens": 32,
+                "spec_decode_num_draft_tokens": 12,
+                "spec_decode_num_accepted_tokens": 4,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    coverage = preflight_track_b_e2e._request_metrics_jsonl_coverage(str(metrics_jsonl))
+
+    assert coverage["ok"] is True
+    assert coverage["valid_request_metric_row_count"] == 1
+    assert coverage["required_field_coverage"]["generation_tokens"] is True
+
+
 def test_request_id_gate_requires_labels_on_join_metrics() -> None:
     metrics = "\n".join(
         [

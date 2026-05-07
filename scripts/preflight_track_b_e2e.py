@@ -62,6 +62,9 @@ REQUEST_JOIN_REQUIRED_JSONL_FIELDS = (
     "spec_decode_num_draft_tokens",
     "spec_decode_num_accepted_tokens",
 )
+REQUEST_JOIN_JSONL_FIELD_ALIASES = {
+    "generation_tokens": ("generation_tokens", "completion_tokens"),
+}
 DCGM_PROFILE_FIELDS = (
     "dram_active_pct",
     "sm_active_pct",
@@ -137,7 +140,8 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
         request_id_seen = request_id_seen or row_has_request_id
         row_has_required_fields = True
         for field in REQUEST_JOIN_REQUIRED_JSONL_FIELDS:
-            if isinstance(payload.get(field), (int, float)):
+            aliases = REQUEST_JOIN_JSONL_FIELD_ALIASES.get(field, (field,))
+            if any(isinstance(payload.get(alias), (int, float)) for alias in aliases):
                 field_coverage[field] = True
             else:
                 row_has_required_fields = False
@@ -155,6 +159,7 @@ def _request_metrics_jsonl_coverage(path_text: str) -> dict[str, Any]:
         "invalid_request_metric_row_count": invalid_row_count,
         "request_id_seen": request_id_seen,
         "required_field_coverage": field_coverage,
+        "accepted_field_aliases": REQUEST_JOIN_JSONL_FIELD_ALIASES,
     }
 
 
