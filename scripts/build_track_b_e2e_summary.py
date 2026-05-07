@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import statistics
 import sys
 from collections import Counter, defaultdict
@@ -106,13 +107,34 @@ def _json_float_list(raw: str) -> list[float]:
         return []
     payload = json.loads(raw)
     if not isinstance(payload, list):
-        raise RuntimeError("Expected a JSON list of numeric wallclock values")
+        raise RuntimeError("Expected a JSON list of finite positive wallclock values")
     values: list[float] = []
     for value in payload:
         if not isinstance(value, (int, float)):
-            raise RuntimeError("Expected a JSON list of numeric wallclock values")
-        values.append(float(value))
+            raise RuntimeError("Expected a JSON list of finite positive wallclock values")
+        value_float = float(value)
+        if not math.isfinite(value_float) or value_float <= 0:
+            raise RuntimeError("Expected a JSON list of finite positive wallclock values")
+        values.append(value_float)
     return values
+
+
+def _finite_nonnegative_number(value: Any, field: str) -> float:
+    if not isinstance(value, (int, float)):
+        raise RuntimeError(f"{field} must be a finite non-negative number")
+    value_float = float(value)
+    if not math.isfinite(value_float) or value_float < 0:
+        raise RuntimeError(f"{field} must be a finite non-negative number")
+    return value_float
+
+
+def _finite_positive_number(value: Any, field: str) -> float:
+    if not isinstance(value, (int, float)):
+        raise RuntimeError(f"{field} must be a finite positive number")
+    value_float = float(value)
+    if not math.isfinite(value_float) or value_float <= 0:
+        raise RuntimeError(f"{field} must be a finite positive number")
+    return value_float
 
 
 def _sample_values(samples: list[dict[str, Any]], field: str, start: Any, end: Any) -> list[float]:
@@ -372,6 +394,8 @@ def _verify_runtime_config_hash_artifacts(
 
 def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
     _validate_runtime_config_hash(args.runtime_config_hash)
+    clock_skew_ms_p99 = _finite_nonnegative_number(args.clock_skew_ms_p99, "--clock-skew-ms-p99")
+    dcgm_interval_s = _finite_positive_number(args.dcgm_interval_s, "--dcgm-interval-s")
     task_dir = Path(args.task_dir)
     family = args.family
     variant = args.variant
@@ -468,7 +492,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         "regime_sm_active_p50": _p50(regime_sm[bottleneck_regime]),
         "regime_accepted_per_draft_p50": _p50(regime_acceptance[bottleneck_regime]),
     }
-    expected_samples = observed_wallclock_s / args.dcgm_interval_s if args.dcgm_interval_s > 0 else 0
+    expected_samples = observed_wallclock_s / dcgm_interval_s
     dcgm_dropout_pct = max(0.0, (1.0 - (len(dcgm) / expected_samples)) * 100.0) if expected_samples else 100.0
     dcgm_profile_fields = _dcgm_profile_field_status(dcgm)
     workspace_hash = _manifest_workspace_hash(family, variant)
@@ -489,7 +513,7 @@ def build_task_summary(args: argparse.Namespace) -> dict[str, Any]:
         "rule_6_dcgm_profile_fields_available_missing": dcgm_profile_fields[
             "profile_fields_available_missing"
         ],
-        "rule_7_clock_skew_ms_p99": args.clock_skew_ms_p99,
+        "rule_7_clock_skew_ms_p99": clock_skew_ms_p99,
         "rule_8_task_completed_normally": task_end.get("exit_code") == 0 and task_end.get("task_score") is not None,
         "rule_9_wallclock_wall_to_wall": abs(observed_wallclock_s - (float(task_end.get("wallclock_s", observed_wallclock_s)))) < 0.001,
         "rule_10_protocol_hash_match": bool(args.protocol_hash_match),
@@ -614,7 +638,10 @@ def build_round_summary(args: argparse.Namespace) -> dict[str, Any]:
         )
     if blockers and not args.write_untrusted_diagnostic:
         raise RuntimeError("; ".join(blockers))
-    wallclocks = [float(row["wallclock_s"]) for row in trusted]
+    wallclocks = [
+        _finite_positive_number(row.get("wallclock_s"), f"{row.get('task_id')}.wallclock_s")
+        for row in trusted
+    ]
     diagnosis_distribution = Counter(str(row.get("bottleneck_diagnosis")) for row in trusted)
     regime_totals: dict[str, float] = defaultdict(float)
     for row in trusted:

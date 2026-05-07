@@ -16,6 +16,7 @@ from build_track_b_e2e_summary import (  # noqa: E402
     SAMPLE_HASH,
     TRACK_B_E2E_TASKS,
     _dcgm_profile_field_status,
+    _json_float_list,
     _load_vllm_request_metrics,
     _validate_runtime_config_hash,
     _vllm_jsonl_by_request,
@@ -48,6 +49,13 @@ def test_summary_rejects_unstamped_runtime_hash() -> None:
         _validate_runtime_config_hash("not-a-runtime-hash")
     with pytest.raises(ValueError, match="runtime-config-hash"):
         _validate_runtime_config_hash("sha256:")
+
+
+def test_summary_rejects_nonfinite_wallclock_values() -> None:
+    with pytest.raises(RuntimeError, match="finite positive wallclock"):
+        _json_float_list("[NaN, 2.0, 3.0]")
+    with pytest.raises(RuntimeError, match="finite positive wallclock"):
+        _json_float_list("[0, 2.0, 3.0]")
 
 
 def test_dcgm_profile_status_requires_available_flag() -> None:
@@ -943,6 +951,32 @@ def test_round_summary_rejects_task_summary_schema_or_round_mismatch(tmp_path: P
     second_summary.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="mismatched schema"):
+        build_round_summary(
+            Namespace(
+                round=0,
+                round_dir=str(round_dir),
+                runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                config_delta_vs_prior_round="",
+                hypothesis="baseline",
+                wallclock_delta_vs_prior_round_s=None,
+                auto_research_agent_recommendation="",
+                next_round_proposal="",
+                write_untrusted_diagnostic=False,
+            )
+        )
+
+
+def test_round_summary_rejects_nonfinite_trusted_wallclock(tmp_path: Path) -> None:
+    round_dir = tmp_path / "round_0"
+    round_dir.mkdir()
+    for index, task_id in enumerate(TRACK_B_E2E_TASKS[:12]):
+        _write_task_summary(round_dir, index, task_id)
+    first_summary = round_dir / "task_00" / "summary.json"
+    payload = json.loads(first_summary.read_text(encoding="utf-8"))
+    payload["wallclock_s"] = float("nan")
+    first_summary.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="wallclock_s"):
         build_round_summary(
             Namespace(
                 round=0,
