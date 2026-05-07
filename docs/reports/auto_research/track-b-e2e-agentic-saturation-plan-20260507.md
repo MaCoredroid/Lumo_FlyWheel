@@ -589,6 +589,8 @@ Committed scaffold commits through this status checkpoint:
 - `c7a790a Verify Track B generation volume guard`
 - `1efbc1f Update Track B generation guard ledger`
 - `8973a1a Use Track B trace wallclocks in round driver`
+- `d1061f8 Update Track B trace wallclock ledger`
+- `8e212bd Isolate Track B NCU task artifacts`
 
 ## 12. Decision rules for ending the loop
 
