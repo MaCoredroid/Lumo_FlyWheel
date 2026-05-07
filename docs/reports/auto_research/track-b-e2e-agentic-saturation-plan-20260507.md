@@ -581,6 +581,8 @@ Committed scaffold commits through this status checkpoint:
 - `bcee31b Add Track B E2E round driver`
 - `d2a642e Update Track B round driver ledger`
 - `c980c39 Add Track B NCU profile driver`
+- `b430ed7 Update Track B NCU driver ledger`
+- `37ada55 Expose Track B driver evidence in readiness`
 
 ## 12. Decision rules for ending the loop
 
