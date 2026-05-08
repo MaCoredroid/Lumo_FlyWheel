@@ -558,6 +558,7 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
             return 0
         raise RuntimeError(f"workspace bundle missing: {source_workspace}")
     task_dir = Path(args.out_root) / f"round_{args.round}" / f"{family}__{variant}" / f"run_{args.attempt:02d}"
+    task_dir = task_dir.resolve()
     task_dir.mkdir(parents=True, exist_ok=True)
     workspace = _prepare_attempt_workspace(source_workspace, task_dir)
     trace_out = task_dir / "codex_trace.jsonl"
