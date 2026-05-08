@@ -76,6 +76,8 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path, monkeypatch) 
     assert steps["F"]["evidence"]["required"]["checks_all_spec_decode_counters"] is True
     assert steps["F"]["evidence"]["forbidden"]["direct_repeat3_task_measurement"] is False
     assert steps["G"]["evidence"]["ncu_profile_driver_exists"] is True
+    assert steps["G"]["evidence"]["ncu_profile_driver_server_launch_supported"] is True
+    assert steps["G"]["evidence"]["ncu_profile_required_topology"] == "server-launch"
     assert manifest["hard_gates"]["round_proposal_prompt_verified"] is True
     assert manifest["hard_gates"]["round0_summary_verified"] is False
     assert manifest["hard_gates"]["ncu_profiles_verified"] is False

@@ -567,6 +567,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "expected_ncu_profile_count": ncu_profiles["expected_profile_count"],
                 "ncu_profile_driver": "scripts/run_track_b_e2e_ncu_profiles.py",
                 "ncu_profile_driver_exists": _exists("scripts/run_track_b_e2e_ncu_profiles.py"),
+                "ncu_profile_driver_server_launch_supported": (
+                    _contains("scripts/run_track_b_e2e_ncu_profiles.py", "--profile-target")
+                    and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "server-launch")
+                    and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "--server-launch-command")
+                    and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "--server-ready-url")
+                ),
+                "ncu_profile_required_topology": "server-launch",
                 "ncu_profiles_verified": ncu_profiles["ok"],
                 "ncu_profiles": ncu_profiles,
             },
