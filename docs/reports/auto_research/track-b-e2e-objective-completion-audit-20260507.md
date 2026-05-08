@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-08
-Evidence checkpoint inspected: `a82578c Refresh Track B instrumentation audits`.
+Evidence checkpoint inspected before this audit refresh: `a82578c Refresh Track B instrumentation audits`.
 
 ## Objective Restated
 
@@ -54,7 +54,7 @@ Latest readiness command after the reduced-contract Round 0 summary, NCU topolog
   --out /tmp/track_b_objective_audit_current.json
 ```
 
-Result: exit code `1`, `decision="round0_blocked"`, `round0_ready=false`, `git_head="a82578c"`.
+Result at the inspected checkpoint: exit code `1`, `decision="round0_blocked"`, `round0_ready=false`.
 
 Current hard-gate evidence:
 
