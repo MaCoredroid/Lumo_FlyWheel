@@ -7,9 +7,15 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import pytest
 import requests
 
 from lumo_flywheel_serving.inference_proxy import (
+    TRACK_B_REQUEST_METRICS_PRODUCER,
+    TRACK_B_REQUEST_METRICS_SCHEMA,
+    TrackBRequestMetricsCapture,
+    _classify_regime,
+    _extract_response_metadata,
     _normalize_request_shaping_policy,
     _write_chunked_stream,
     is_inference_path,
@@ -610,3 +616,236 @@ def test_proxy_records_advisory_fields_without_enforcing_output_cap_or_preemptio
         upstream_thread.join(timeout=5)
         proxy.server_close()
         upstream.server_close()
+
+
+# --- Track B per-request capture ---
+
+
+def test_classify_regime_buckets() -> None:
+    assert _classify_regime({"has_tool_call": True}) == "tool-call"
+    assert _classify_regime({"text_chars": 4096}) == "summary"
+    assert _classify_regime({"text_chars": 100}) == "reasoning"
+    assert _classify_regime({}) == "unknown"
+
+
+def test_extract_response_metadata_captures_usage_tool_call_and_text() -> None:
+    ctx: dict[str, object] = {}
+    _extract_response_metadata({"type": "response.output_text.delta", "delta": "hello "}, ctx)
+    _extract_response_metadata({"type": "response.output_text.delta", "delta": "world"}, ctx)
+    _extract_response_metadata(
+        {"type": "response.output_item.added", "item": {"type": "function_call"}},
+        ctx,
+    )
+    _extract_response_metadata(
+        {"type": "response.completed", "response": {"usage": {"prompt_tokens": 100, "completion_tokens": 50}}},
+        ctx,
+    )
+
+    assert ctx["text_chars"] == len("hello world")
+    assert ctx["has_tool_call"] is True
+    assert ctx["usage"] == {"prompt_tokens": 100, "completion_tokens": 50}
+
+
+def test_track_b_capture_from_env_returns_none_when_unset(monkeypatch) -> None:
+    monkeypatch.delenv("LUMO_TRACK_B_REQUEST_METRICS_OUT", raising=False)
+    monkeypatch.delenv("LUMO_TRACK_B_RUNTIME_CONFIG_HASH", raising=False)
+    assert TrackBRequestMetricsCapture.from_env("http://upstream.invalid") is None
+
+
+def test_track_b_capture_from_env_returns_instance(monkeypatch, tmp_path: Path) -> None:
+    out = tmp_path / "track_b_request_metrics.jsonl"
+    monkeypatch.setenv("LUMO_TRACK_B_REQUEST_METRICS_OUT", str(out))
+    monkeypatch.setenv("LUMO_TRACK_B_RUNTIME_CONFIG_HASH", "sha256:" + "0" * 64)
+    capture = TrackBRequestMetricsCapture.from_env("http://upstream.invalid")
+    assert capture is not None
+
+
+def test_track_b_capture_compute_deltas_handles_missing_and_negative() -> None:
+    capture = TrackBRequestMetricsCapture(Path("/tmp/unused.jsonl"), "http://upstream.invalid/metrics")
+    before = {
+        "vllm:spec_decode_num_accepted_tokens_total": 100.0,
+        "vllm:spec_decode_num_draft_tokens_total": 200.0,
+        "vllm:request_decode_time_seconds_sum": 5.0,
+        "vllm:request_prefill_time_seconds_sum": 1.0,
+    }
+    after = {
+        "vllm:spec_decode_num_accepted_tokens_total": 110.0,
+        "vllm:spec_decode_num_draft_tokens_total": 220.0,
+        "vllm:request_decode_time_seconds_sum": 5.5,
+        "vllm:request_prefill_time_seconds_sum": 1.2,
+    }
+    deltas = capture.compute_deltas(before, after)
+    assert deltas["spec_decode_num_accepted_tokens"] == 10.0
+    assert deltas["spec_decode_num_draft_tokens"] == 20.0
+    assert deltas["decode_sum_s"] == pytest.approx(0.5)
+    assert deltas["prefill_sum_s"] == pytest.approx(0.2)
+
+    # Negative delta (counter reset) → None
+    after_reset = {
+        "vllm:spec_decode_num_accepted_tokens_total": 5.0,
+        "vllm:spec_decode_num_draft_tokens_total": 220.0,
+        "vllm:request_decode_time_seconds_sum": 5.5,
+        "vllm:request_prefill_time_seconds_sum": 1.2,
+    }
+    deltas_reset = capture.compute_deltas(before, after_reset)
+    assert deltas_reset["spec_decode_num_accepted_tokens"] is None
+
+    # Empty before/after → None
+    deltas_empty = capture.compute_deltas({}, {})
+    assert all(value is None for value in deltas_empty.values())
+
+
+def test_track_b_capture_record_writes_schema_and_producer(tmp_path: Path) -> None:
+    out = tmp_path / "rows.jsonl"
+    capture = TrackBRequestMetricsCapture(out, "http://upstream.invalid/metrics", runtime_config_hash="sha256:" + "1" * 64)
+    capture.record({"request_id": "resp_abc", "prompt_tokens": 10, "completion_tokens": 5})
+    capture.record({"request_id": "resp_def", "prompt_tokens": 11, "completion_tokens": 6})
+
+    lines = out.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
+    rows = [json.loads(line) for line in lines]
+    for row in rows:
+        assert row["schema"] == TRACK_B_REQUEST_METRICS_SCHEMA
+        assert row["producer"] == TRACK_B_REQUEST_METRICS_PRODUCER
+        assert row["runtime_config_hash"] == "sha256:" + "1" * 64
+    assert rows[0]["request_id"] == "resp_abc"
+    assert rows[1]["request_id"] == "resp_def"
+
+
+def test_proxy_emits_track_b_capture_row_for_streaming_response(monkeypatch, tmp_path: Path) -> None:
+    out = tmp_path / "track_b_request_metrics.jsonl"
+    monkeypatch.setenv("LUMO_TRACK_B_REQUEST_METRICS_OUT", str(out))
+    monkeypatch.setenv("LUMO_TRACK_B_RUNTIME_CONFIG_HASH", "sha256:" + "a" * 64)
+
+    metrics_seq = iter(
+        [
+            (
+                "# HELP vllm:spec_decode_num_accepted_tokens_total foo\n"
+                "# TYPE vllm:spec_decode_num_accepted_tokens_total counter\n"
+                'vllm:spec_decode_num_accepted_tokens_total{engine="0"} 100.0\n'
+                "# HELP vllm:spec_decode_num_draft_tokens_total foo\n"
+                "# TYPE vllm:spec_decode_num_draft_tokens_total counter\n"
+                'vllm:spec_decode_num_draft_tokens_total{engine="0"} 200.0\n'
+                "# HELP vllm:request_decode_time_seconds_sum foo\n"
+                "# TYPE vllm:request_decode_time_seconds_sum counter\n"
+                'vllm:request_decode_time_seconds_sum{engine="0"} 5.0\n'
+                "# HELP vllm:request_prefill_time_seconds_sum foo\n"
+                "# TYPE vllm:request_prefill_time_seconds_sum counter\n"
+                'vllm:request_prefill_time_seconds_sum{engine="0"} 1.0\n'
+            ),
+            (
+                'vllm:spec_decode_num_accepted_tokens_total{engine="0"} 130.0\n'
+                'vllm:spec_decode_num_draft_tokens_total{engine="0"} 250.0\n'
+                'vllm:request_decode_time_seconds_sum{engine="0"} 5.6\n'
+                'vllm:request_prefill_time_seconds_sum{engine="0"} 1.3\n'
+            ),
+        ]
+    )
+
+    class _MetricsResp:
+        status_code = 200
+
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+        def raise_for_status(self) -> None:
+            return
+
+    class _UpstreamResp:
+        status_code = 200
+        headers = {"Content-Type": "text/event-stream"}
+
+        def iter_content(self, chunk_size: int):
+            yield (
+                b'event: response.created\n'
+                b'data: {"type":"response.created","response":{"id":"resp_test_123","model":"qwen3.5-27b"}}\n\n'
+                b'event: response.output_text.delta\n'
+                b'data: {"type":"response.output_text.delta","delta":"hi"}\n\n'
+                b'event: response.completed\n'
+                b'data: {"type":"response.completed","response":{"id":"resp_test_123","model":"qwen3.5-27b","usage":{"prompt_tokens":42,"completion_tokens":7}}}\n\n'
+            )
+
+        def close(self) -> None:
+            return
+
+    def fake_get(url: str, *args: object, **kwargs: object):
+        return _MetricsResp(next(metrics_seq))
+
+    def fake_post(*args: object, **kwargs: object) -> _UpstreamResp:
+        return _UpstreamResp()
+
+    monkeypatch.setattr("lumo_flywheel_serving.inference_proxy.requests.get", fake_get)
+    monkeypatch.setattr("lumo_flywheel_serving.inference_proxy.requests.post", fake_post)
+
+    proxy, proxy_thread, proxy_url = _start_server(
+        build_proxy_handler("http://upstream.invalid", state_root=tmp_path / "state")
+    )
+    try:
+        response = requests.request(
+            "POST",
+            f"{proxy_url}/v1/responses",
+            json={"model": "qwen3.5-27b", "input": "ping"},
+            timeout=10,
+        )
+        assert response.status_code == 200
+        # Allow a brief moment for the capture to flush
+        for _ in range(20):
+            if out.is_file() and out.stat().st_size > 0:
+                break
+            time.sleep(0.05)
+    finally:
+        proxy.shutdown()
+        proxy_thread.join(timeout=5)
+        proxy.server_close()
+
+    rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines() if line]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["schema"] == TRACK_B_REQUEST_METRICS_SCHEMA
+    assert row["producer"] == TRACK_B_REQUEST_METRICS_PRODUCER
+    assert row["request_id"] == "resp_test_123"
+    assert row["model"] == "qwen3.5-27b"
+    assert row["prompt_tokens"] == 42
+    assert row["completion_tokens"] == 7
+    assert row["spec_decode_num_accepted_tokens"] == 30.0
+    assert row["spec_decode_num_draft_tokens"] == 50.0
+    assert row["decode_sum_s"] == pytest.approx(0.6)
+    assert row["prefill_sum_s"] == pytest.approx(0.3)
+    assert row["runtime_config_hash"] == "sha256:" + "a" * 64
+    assert row["regime"] in {"reasoning", "unknown"}
+    assert row["saw_response_completed"] is True
+
+
+def test_proxy_does_not_emit_capture_when_env_unset(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("LUMO_TRACK_B_REQUEST_METRICS_OUT", raising=False)
+
+    class _UpstreamResp:
+        status_code = 200
+        headers = {"Content-Type": "text/event-stream"}
+
+        def iter_content(self, chunk_size: int):
+            yield b'event: response.completed\ndata: {"type":"response.completed","response":{"id":"x","output":[]}}\n\n'
+
+        def close(self) -> None:
+            return
+
+    def fake_post(*args: object, **kwargs: object) -> _UpstreamResp:
+        return _UpstreamResp()
+
+    monkeypatch.setattr("lumo_flywheel_serving.inference_proxy.requests.post", fake_post)
+
+    proxy, proxy_thread, proxy_url = _start_server(
+        build_proxy_handler("http://upstream.invalid", state_root=tmp_path / "state")
+    )
+    try:
+        response = requests.request(
+            "POST",
+            f"{proxy_url}/v1/responses",
+            json={"model": "qwen3.5-27b", "input": "ping"},
+            timeout=10,
+        )
+        assert response.status_code == 200
+    finally:
+        proxy.shutdown()
+        proxy_thread.join(timeout=5)
+        proxy.server_close()

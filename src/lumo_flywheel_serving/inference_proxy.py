@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
 import threading
+import time
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, NamedTuple
 
 import requests
 
+from .metrics import parse_prometheus_text
 from .registry import load_registry
 from .tuned_config import (
     RuntimeStateStore,
@@ -19,6 +23,11 @@ from .tuned_config import (
     load_tuned_config_bundle,
     validate_bundle_load_policy,
 )
+
+TRACK_B_REQUEST_METRICS_SCHEMA = "lumo.track_b.vllm_request_metrics.v1"
+TRACK_B_REQUEST_METRICS_PRODUCER = "track_b_vllm_request_metrics_patch"
+TRACK_B_REQUEST_METRICS_OUT_ENV = "LUMO_TRACK_B_REQUEST_METRICS_OUT"
+TRACK_B_RUNTIME_CONFIG_HASH_ENV = "LUMO_TRACK_B_RUNTIME_CONFIG_HASH"
 
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -220,6 +229,196 @@ def _synthetic_response_completed_block(context: dict[str, Any] | None = None) -
     )
 
 
+def _iso_ts(seconds: float) -> str:
+    return datetime.fromtimestamp(seconds, UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _classify_regime(observed: dict[str, Any]) -> str:
+    if observed.get("has_tool_call"):
+        return "tool-call"
+    text_chars = int(observed.get("text_chars", 0) or 0)
+    if text_chars >= 4096:
+        return "summary"
+    if text_chars > 0:
+        return "reasoning"
+    return "unknown"
+
+
+def _extract_response_metadata(payload: dict[str, Any], context: dict[str, Any]) -> None:
+    """Extend the SSE block scan to capture per-request usage + regime hints.
+
+    Called alongside _update_synthetic_response_context. Fills in
+    ``context["usage"]``, ``context["has_tool_call"]``, ``context["text_chars"]``
+    so the request-finalize path can write a per-request observability row.
+    """
+
+    payload_type = payload.get("type")
+    response = payload.get("response")
+    if isinstance(response, dict) and isinstance(response.get("usage"), dict):
+        usage_in = response["usage"]
+        usage_out = context.setdefault("usage", {})
+        for key in (
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "input_tokens",
+            "output_tokens",
+            "reasoning_output_tokens",
+            "cached_input_tokens",
+        ):
+            value = usage_in.get(key)
+            if value is not None:
+                usage_out[key] = value
+    if isinstance(payload_type, str):
+        if payload_type.startswith("response.function_call") or payload_type.endswith(".function_call"):
+            context["has_tool_call"] = True
+        elif payload_type == "response.output_item.added":
+            item = payload.get("item")
+            if isinstance(item, dict) and item.get("type") in {"function_call", "tool_call"}:
+                context["has_tool_call"] = True
+        elif payload_type in {"response.output_text.delta", "response.output_text.done"}:
+            delta = payload.get("delta")
+            if isinstance(delta, str):
+                context["text_chars"] = int(context.get("text_chars", 0) or 0) + len(delta)
+            elif payload_type == "response.output_text.done":
+                text = payload.get("text")
+                if isinstance(text, str):
+                    context["text_chars"] = max(int(context.get("text_chars", 0) or 0), len(text))
+
+
+class TrackBRequestMetricsCapture:
+    """Per-request observability writer for Track B E2E.
+
+    When ``LUMO_TRACK_B_REQUEST_METRICS_OUT`` points to a writable JSONL path,
+    the proxy captures one row per ``/v1/responses`` request describing the
+    upstream request id, token counts, /metrics deltas (prefill/decode/spec_decode),
+    and a regime heuristic. The runner consumes this file via
+    ``--vllm-request-metrics-jsonl`` to populate ``vllm_per_turn.json`` and
+    synthesize ``codex_trace.jsonl``.
+
+    Default off: when the env var is unset, ``from_env`` returns ``None`` and
+    the proxy serves traffic unchanged.
+    """
+
+    _SPEC_KEYS: tuple[tuple[str, str], ...] = (
+        ("spec_decode_num_accepted_tokens", "vllm:spec_decode_num_accepted_tokens_total"),
+        ("spec_decode_num_draft_tokens", "vllm:spec_decode_num_draft_tokens_total"),
+        ("spec_decode_num_drafts", "vllm:spec_decode_num_drafts_total"),
+    )
+    _HISTOGRAM_KEYS: tuple[tuple[str, str], ...] = (
+        ("prefill_sum_s", "vllm:request_prefill_time_seconds_sum"),
+        ("decode_sum_s", "vllm:request_decode_time_seconds_sum"),
+    )
+
+    def __init__(self, output_path: Path, upstream_metrics_url: str, *, runtime_config_hash: str = "") -> None:
+        self._path = output_path
+        self._upstream_metrics_url = upstream_metrics_url
+        self._runtime_config_hash = runtime_config_hash
+        self._lock = threading.Lock()
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def from_env(cls, upstream_base_url: str) -> "TrackBRequestMetricsCapture | None":
+        out = os.environ.get(TRACK_B_REQUEST_METRICS_OUT_ENV, "").strip()
+        if not out:
+            return None
+        runtime_config_hash = os.environ.get(TRACK_B_RUNTIME_CONFIG_HASH_ENV, "").strip()
+        return cls(
+            Path(out),
+            f"{upstream_base_url.rstrip('/')}/metrics",
+            runtime_config_hash=runtime_config_hash,
+        )
+
+    def fetch_metrics_snapshot(self) -> dict[str, float]:
+        try:
+            response = requests.get(self._upstream_metrics_url, timeout=5)
+            response.raise_for_status()
+            return parse_prometheus_text(response.text)
+        except requests.RequestException:
+            return {}
+
+    def compute_deltas(
+        self,
+        before: dict[str, float],
+        after: dict[str, float],
+    ) -> dict[str, float | None]:
+        result: dict[str, float | None] = {}
+        for logical, metric_key in self._SPEC_KEYS + self._HISTOGRAM_KEYS:
+            if not before or not after or metric_key not in after:
+                result[logical] = None
+                continue
+            value = after.get(metric_key, 0.0) - before.get(metric_key, 0.0)
+            if value < 0:
+                result[logical] = None
+            else:
+                result[logical] = value
+        return result
+
+    def record(self, row: dict[str, Any]) -> None:
+        row["schema"] = TRACK_B_REQUEST_METRICS_SCHEMA
+        row["producer"] = TRACK_B_REQUEST_METRICS_PRODUCER
+        if self._runtime_config_hash and "runtime_config_hash" not in row:
+            row["runtime_config_hash"] = self._runtime_config_hash
+        line = json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
+        with self._lock, self._path.open("a", encoding="utf-8") as handle:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    handle.write(line)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                finally:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                # Best-effort capture; never break inference traffic on disk error.
+                pass
+
+
+def _build_request_metrics_row(
+    *,
+    request_id: str,
+    request_path: str,
+    request_class: str,
+    upstream_status: int,
+    metrics_before: dict[str, float],
+    metrics_after: dict[str, float],
+    deltas: dict[str, float | None],
+    response_observed: dict[str, Any],
+    ts_request_received: float,
+    ts_first_byte: float | None,
+    ts_completed: float,
+    saw_completed: bool,
+) -> dict[str, Any]:
+    usage = response_observed.get("usage") if isinstance(response_observed.get("usage"), dict) else {}
+    prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
+    completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
+    row: dict[str, Any] = {
+        "request_id": request_id,
+        "model": response_observed.get("model"),
+        "request_path": request_path,
+        "request_class": request_class,
+        "upstream_status": upstream_status,
+        "ts_request_received": _iso_ts(ts_request_received),
+        "ts_first_byte": _iso_ts(ts_first_byte) if ts_first_byte is not None else None,
+        "ts_completed": _iso_ts(ts_completed),
+        "wallclock_s": max(0.0, ts_completed - ts_request_received),
+        "first_byte_s": (ts_first_byte - ts_request_received) if ts_first_byte is not None else None,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "prefill_sum_s": deltas.get("prefill_sum_s"),
+        "decode_sum_s": deltas.get("decode_sum_s"),
+        "spec_decode_num_accepted_tokens": deltas.get("spec_decode_num_accepted_tokens"),
+        "spec_decode_num_draft_tokens": deltas.get("spec_decode_num_draft_tokens"),
+        "spec_decode_num_drafts": deltas.get("spec_decode_num_drafts"),
+        "regime": _classify_regime(response_observed),
+        "tool_call_observed": bool(response_observed.get("has_tool_call")),
+        "text_chars_observed": int(response_observed.get("text_chars", 0) or 0),
+        "saw_response_completed": bool(saw_completed),
+        "metrics_snapshot_collected": bool(metrics_before) and bool(metrics_after),
+    }
+    return row
+
+
 def _filtered_headers(headers: Any) -> dict[str, str]:
     filtered: dict[str, str] = {}
     for key, value in headers.items():
@@ -259,12 +458,19 @@ def _write_json_payload(handler: BaseHTTPRequestHandler, status: int, payload: d
     handler.wfile.write(body)
 
 
-def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Response) -> None:
+def _write_chunked_stream(
+    handler: BaseHTTPRequestHandler,
+    upstream: requests.Response,
+    *,
+    capture_state: dict[str, Any] | None = None,
+) -> None:
     def write_chunk(chunk: bytes) -> None:
         handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
         handler.wfile.write(chunk)
         handler.wfile.write(b"\r\n")
         handler.wfile.flush()
+        if capture_state is not None and capture_state.get("ts_first_byte") is None:
+            capture_state["ts_first_byte"] = time.time()
 
     pending = b""
     saw_event = False
@@ -283,17 +489,27 @@ def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Re
                 saw_event = True
                 saw_completed = saw_completed or _responses_sse_payload_type(normalized) == "response.completed"
                 _update_synthetic_response_context(synthetic_response_context, normalized)
+                if capture_state is not None:
+                    for payload in _responses_sse_payloads(normalized):
+                        _extract_response_metadata(payload, capture_state)
                 write_chunk(normalized)
         if pending:
             normalized = normalize_responses_sse_block(pending)
             saw_event = True
             saw_completed = saw_completed or _responses_sse_payload_type(normalized) == "response.completed"
             _update_synthetic_response_context(synthetic_response_context, normalized)
+            if capture_state is not None:
+                for payload in _responses_sse_payloads(normalized):
+                    _extract_response_metadata(payload, capture_state)
             write_chunk(normalized)
         if saw_event and not saw_completed:
             write_chunk(_synthetic_response_completed_block(synthetic_response_context))
         handler.wfile.write(b"0\r\n\r\n")
         handler.wfile.flush()
+        if capture_state is not None:
+            capture_state["response_id"] = synthetic_response_context.get("id")
+            capture_state["model"] = synthetic_response_context.get("model")
+            capture_state["saw_response_completed"] = saw_completed
     except (BrokenPipeError, ConnectionResetError):
         # Codex occasionally abandons an HTTP stream after it already has the
         # terminal event. Treat that as a cancelled client, not a proxy crash.
@@ -535,10 +751,12 @@ def build_proxy_handler(
     *,
     state_root: str | Path | None = None,
     registry_path: str | Path | None = None,
+    request_metrics_capture: TrackBRequestMetricsCapture | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     state_store = RuntimeStateStore(state_root or Path.cwd() / "output" / "serving_state")
     registry = load_registry(registry_path) if registry_path is not None else {}
     admission = AdmissionController(state_store)
+    capture = request_metrics_capture if request_metrics_capture is not None else TrackBRequestMetricsCapture.from_env(upstream_base_url)
 
     class ProxyHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -587,6 +805,11 @@ def build_proxy_handler(
                     headers={"Retry-After": "1"},
                 )
                 return
+            capture_active = capture is not None and self.path == "/v1/responses"
+            metrics_before: dict[str, float] = {}
+            ts_request_received = time.time()
+            if capture_active:
+                metrics_before = capture.fetch_metrics_snapshot()
             try:
                 upstream = requests.post(
                     f"{upstream_base_url}{self.path}",
@@ -602,6 +825,8 @@ def build_proxy_handler(
 
             self.send_response(upstream.status_code)
             response_headers = _filtered_headers(upstream.headers)
+            response_content: bytes | None = None
+            non_streaming_parsed: dict[str, Any] | None = None
             if upstream.headers.get("Content-Type", "").startswith("text/event-stream"):
                 response_headers["Transfer-Encoding"] = "chunked"
                 response_headers.pop("Content-Length", None)
@@ -613,24 +838,107 @@ def build_proxy_handler(
                     except (UnicodeDecodeError, json.JSONDecodeError):
                         parsed = None
                     if isinstance(parsed, dict):
+                        non_streaming_parsed = parsed
                         response_content = json.dumps(normalize_responses_response_payload(parsed)).encode("utf-8")
                 response_headers["Content-Length"] = str(len(response_content))
             for key, value in response_headers.items():
                 self.send_header(key, value)
             self.end_headers()
 
+            capture_state: dict[str, Any] | None = (
+                {"ts_first_byte": None, "has_tool_call": False, "text_chars": 0}
+                if capture_active
+                else None
+            )
+
             if response_headers.get("Transfer-Encoding") == "chunked":
                 try:
-                    _write_chunked_stream(self, upstream)
+                    _write_chunked_stream(self, upstream, capture_state=capture_state)
                 finally:
                     admission.release(ticket)
+                if capture_active and capture_state is not None:
+                    self._emit_track_b_capture_row(
+                        capture=capture,
+                        request_class=request_class,
+                        upstream_status=upstream.status_code,
+                        metrics_before=metrics_before,
+                        capture_state=capture_state,
+                        ts_request_received=ts_request_received,
+                    )
                 return
 
             try:
                 self.wfile.write(response_content)
                 self.wfile.flush()
+                if capture_active:
+                    capture_state_local: dict[str, Any] = {
+                        "ts_first_byte": time.time(),
+                        "has_tool_call": False,
+                        "text_chars": 0,
+                    }
+                    if isinstance(non_streaming_parsed, dict):
+                        capture_state_local["response_id"] = non_streaming_parsed.get("id")
+                        capture_state_local["model"] = non_streaming_parsed.get("model")
+                        if isinstance(non_streaming_parsed.get("usage"), dict):
+                            capture_state_local["usage"] = dict(non_streaming_parsed["usage"])
+                        output = non_streaming_parsed.get("output")
+                        if isinstance(output, list):
+                            for item in output:
+                                if isinstance(item, dict) and item.get("type") in {"function_call", "tool_call"}:
+                                    capture_state_local["has_tool_call"] = True
+                                if isinstance(item, dict) and isinstance(item.get("content"), list):
+                                    for inner in item["content"]:
+                                        if isinstance(inner, dict) and isinstance(inner.get("text"), str):
+                                            capture_state_local["text_chars"] = (
+                                                capture_state_local.get("text_chars", 0) + len(inner["text"])
+                                            )
+                        capture_state_local["saw_response_completed"] = True
+                    self._emit_track_b_capture_row(
+                        capture=capture,
+                        request_class=request_class,
+                        upstream_status=upstream.status_code,
+                        metrics_before=metrics_before,
+                        capture_state=capture_state_local,
+                        ts_request_received=ts_request_received,
+                    )
             finally:
                 admission.release(ticket)
+
+        def _emit_track_b_capture_row(
+            self,
+            *,
+            capture: TrackBRequestMetricsCapture,
+            request_class: str,
+            upstream_status: int,
+            metrics_before: dict[str, float],
+            capture_state: dict[str, Any],
+            ts_request_received: float,
+        ) -> None:
+            try:
+                ts_completed = time.time()
+                metrics_after = capture.fetch_metrics_snapshot()
+                deltas = capture.compute_deltas(metrics_before, metrics_after)
+                request_id = capture_state.get("response_id") or ""
+                row = _build_request_metrics_row(
+                    request_id=str(request_id),
+                    request_path=self.path,
+                    request_class=request_class,
+                    upstream_status=upstream_status,
+                    metrics_before=metrics_before,
+                    metrics_after=metrics_after,
+                    deltas=deltas,
+                    response_observed=capture_state,
+                    ts_request_received=ts_request_received,
+                    ts_first_byte=capture_state.get("ts_first_byte"),
+                    ts_completed=ts_completed,
+                    saw_completed=bool(capture_state.get("saw_response_completed")),
+                )
+                if not row.get("request_id"):
+                    return
+                capture.record(row)
+            except Exception:
+                # Capture must never break inference traffic.
+                pass
 
         def _handle_admin_request(self) -> None:
             try:
