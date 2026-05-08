@@ -1,7 +1,7 @@
 # Track B E2E Objective Completion Audit
 
 Generated: 2026-05-08
-Repo checkpoint: updated through `cbed669 Refresh Track B NCU status ledger`.
+Evidence checkpoint inspected: `a82578c Refresh Track B instrumentation audits`.
 
 ## Objective Restated
 
@@ -42,19 +42,19 @@ Concrete success criteria:
 | NCU archetype profiles produced and verified. | `output/track_b_e2e/ncu_<archetype>.csv` plus `ncu_<archetype>.json` for five archetypes | Current readiness sees `ncu_profile_count=0` of `expected_ncu_profile_count=5` and now carries the verified Round 0 `expected_runtime_config_hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` into the NCU metadata expectation. The manifest also guards against using malformed Round 0 runtime hashes as NCU expectations. `output/track_b_e2e/ncu_long-text.csv` exists but is `0` bytes and no metadata sidecar exists. Container probe evidence under `/tmp/track_b_container_ncu_probe_20260508T060426Z/profiles/ncu_long-text.csv` records an application error from an isolated second server OOM while live `:9950` remained resident; it was not promoted. The durable blocker record `track-b-e2e-ncu-server-profiling-blocker-20260508.md` captures this ephemeral CSV content and current live topology. | Blocked |
 | Tests cover new scaffolding. | Focused pytest commands | The latest focused readiness/NCU check passed in tmux: `45 passed` for `tests/test_track_b_e2e_readiness_manifest.py` and `tests/test_track_b_e2e_ncu_profiles.py`. Earlier full focused Track B suite after the NCU failure-sidecar changes passed with `149 passed`. | Complete for scaffold risk |
 | Full repo test suite green. | Full pytest | Earlier `PYTHONPATH=. .venv/bin/pytest -q -x` failed an unrelated existing `tests/test_auto_research.py` expectation. | Not green; unrelated known failure |
-| Progress committed. | Git history | Current history includes the deferred Round 0 summary checkpoint `bf2764a`, NCU topology/failure handling through `049985c`, the objective audit refresh `833e991`, the NCU server blocker record `7826c5c`, and the readiness surfacing checkpoint `51da1f7`. | Complete for landed checkpoints |
+| Progress committed. | Git history | Current history includes the deferred Round 0 summary checkpoint `bf2764a`, NCU topology/failure handling through `049985c`, the objective audit refresh `833e991`, the NCU server blocker record `7826c5c`, readiness/blocker/preflight refreshes through `654eb7b`, and the instrumentation audit refresh `a82578c`. | Complete for landed checkpoints |
 
 ## Current Readiness Decision
 
-Latest readiness command after the reduced-contract Round 0 summary and NCU topology work:
+Latest readiness command after the reduced-contract Round 0 summary, NCU topology work, and instrumentation audit refresh:
 
 ```bash
 .venv/bin/python scripts/build_track_b_e2e_readiness_manifest.py \
   --preflight-json output/track_b_e2e/round_0/preflight_audit.json \
-  --out /tmp/track_b_objective_audit_readiness.json
+  --out /tmp/track_b_objective_audit_current.json
 ```
 
-Result: exit code `1`, `decision="round0_blocked"`, `round0_ready=false`.
+Result: exit code `1`, `decision="round0_blocked"`, `round0_ready=false`, `git_head="a82578c"`.
 
 Current hard-gate evidence:
 

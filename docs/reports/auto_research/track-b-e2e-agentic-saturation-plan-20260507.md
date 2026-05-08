@@ -792,7 +792,8 @@ Committed scaffold commits through this status checkpoint:
 - `44ebbac Refresh Track B blocker ledger`
 - `a2db2a8 Refresh Track B readiness report`
 - `654eb7b Refresh Track B preflight audit`
-- Current checkpoint: `Refresh Track B instrumentation audits`
+- `a82578c Refresh Track B instrumentation audits`
+- Current checkpoint: `Refresh Track B objective audit`
 
 ## 12. Decision rules for ending the loop
 
