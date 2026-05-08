@@ -108,9 +108,21 @@ def _normalize_responses_output_items(value: Any) -> None:
     if value.get("type") == "reasoning" and "id" not in value:
         digest = hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
         value["id"] = f"rs_{digest}"
+    if value.get("type") == "function_call" and isinstance(value.get("arguments"), str):
+        value["arguments"] = _normalize_function_call_arguments(value["arguments"])
     for key in ("input", "output", "item", "response"):
         if key in value:
             _normalize_responses_output_items(value[key])
+
+
+def _normalize_function_call_arguments(arguments: str) -> str:
+    try:
+        decoded, end = json.JSONDecoder().raw_decode(arguments)
+    except json.JSONDecodeError:
+        return arguments
+    if not arguments[end:].strip():
+        return arguments
+    return json.dumps(decoded, separators=(",", ":"))
 
 
 def normalize_responses_sse_block(block: bytes) -> bytes:

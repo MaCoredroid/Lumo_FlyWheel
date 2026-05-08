@@ -100,6 +100,21 @@ def test_normalize_responses_response_payload_adds_reasoning_status() -> None:
     assert normalized["response"]["output"][0]["id"].startswith("rs_")
 
 
+def test_normalize_responses_response_payload_trims_function_call_argument_trailing_text() -> None:
+    payload = {
+        "type": "response.output_item.done",
+        "item": {
+            "type": "function_call",
+            "name": "exec_command",
+            "arguments": '{"cmd": "pwd"} trailing text',
+        },
+    }
+
+    normalized = normalize_responses_response_payload(payload)
+
+    assert normalized["item"]["arguments"] == '{"cmd":"pwd"}'
+
+
 def test_normalize_responses_sse_block_adds_reasoning_status() -> None:
     block = (
         b"event: response.completed\n"
@@ -111,6 +126,19 @@ def test_normalize_responses_sse_block_adds_reasoning_status() -> None:
     assert b'"status":"completed"' in normalized
     assert b'"id":"rs_' in normalized
     assert normalized.endswith(b"\n\n")
+
+
+def test_normalize_responses_sse_block_trims_function_call_argument_trailing_text() -> None:
+    block = (
+        b"event: response.output_item.done\n"
+        b'data: {"type":"response.output_item.done","item":{"type":"function_call","name":"exec_command",'
+        b'"arguments":"{\\"cmd\\": \\"pwd\\"} trailing text"}}\n'
+    )
+
+    normalized = normalize_responses_sse_block(block)
+
+    assert b'"arguments":"{\\"cmd\\":\\"pwd\\"}"' in normalized
+    assert b"trailing text" not in normalized
 
 
 def test_is_inference_path_only_allows_inference_endpoints() -> None:
