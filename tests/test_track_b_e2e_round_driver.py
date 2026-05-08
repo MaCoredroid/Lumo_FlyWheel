@@ -203,12 +203,14 @@ def test_round_driver_passes_vllm_side_channel_to_preflight(tmp_path: Path) -> N
             health_url="http://127.0.0.1:9950/health",
             metrics_url="http://127.0.0.1:9950/metrics",
             vllm_request_metrics_jsonl=str(side_channel),
+            codex_smoke_timeout_s=123.0,
         ),
         tmp_path / "preflight.json",
     )
 
     assert "--vllm-request-metrics-jsonl" in command
     assert command[command.index("--vllm-request-metrics-jsonl") + 1] == str(side_channel)
+    assert command[command.index("--codex-smoke-timeout-s") + 1] == "123.0"
 
 
 def test_round_driver_blocks_after_preflight_without_trace_correctness_artifact(monkeypatch, tmp_path: Path) -> None:

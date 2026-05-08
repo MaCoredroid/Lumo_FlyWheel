@@ -255,6 +255,8 @@ def _preflight_command(args: argparse.Namespace, preflight_out: Path) -> list[st
         getattr(args, "endpoint", "http://127.0.0.1:9950/v1"),
         "--codex-api-key",
         getattr(args, "api_key", "local"),
+        "--codex-smoke-timeout-s",
+        str(getattr(args, "codex_smoke_timeout_s", 180.0)),
     ]
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
@@ -469,6 +471,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "local"))
     parser.add_argument("--model", default="qwen3.5-27b")
     parser.add_argument("--timeout-s", type=float, default=900.0)
+    parser.add_argument("--codex-smoke-timeout-s", type=float, default=180.0)
     parser.add_argument("--vllm-request-metrics-jsonl", default="")
     parser.add_argument("--clock-skew-ms-p99", type=float, required=True)
     parser.add_argument("--trace-emitter-correctness-verified-at", required=True)
