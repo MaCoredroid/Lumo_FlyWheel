@@ -188,12 +188,14 @@ def test_ncu_profile_driver_runs_server_launch_target(monkeypatch, tmp_path: Pat
         task_commands.append(command)
         return _completed(command)
 
-    def fake_wait(url: str, *, timeout_s: float) -> None:
+    def fake_wait(url: str, process: FakeServer, *, stderr_path: Path, timeout_s: float) -> None:
+        assert process is not None
+        assert stderr_path == tmp_path / "ncu_long-text_server_stderr.log"
         ready_urls.append(url)
 
     monkeypatch.setattr(ncu_profiles, "_popen", fake_popen)
     monkeypatch.setattr(ncu_profiles, "_run", fake_run)
-    monkeypatch.setattr(ncu_profiles, "_wait_for_ready", fake_wait)
+    monkeypatch.setattr(ncu_profiles, "_wait_for_server_ready", fake_wait)
 
     rc = ncu_profiles.main(
         [
@@ -242,6 +244,70 @@ def test_ncu_profile_driver_runs_server_launch_target(monkeypatch, tmp_path: Pat
     metadata = json.loads((tmp_path / "ncu_long-text.json").read_text(encoding="utf-8"))
     assert metadata["profile_target"] == "server-launch"
     assert metadata["server_ready_url"] == "http://127.0.0.1:9951/health"
+
+
+def test_ncu_profile_driver_reports_server_launch_exit_before_ready(
+    monkeypatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+    task_commands: list[list[str]] = []
+
+    class ExitedServer:
+        returncode = 127
+
+        def poll(self) -> int:
+            return self.returncode
+
+        def terminate(self) -> None:
+            return None
+
+        def wait(self, timeout: float) -> int:
+            return self.returncode
+
+    def fake_popen(
+        command: list[str],
+        *,
+        stdout_path: Path,
+        stderr_path: Path,
+    ) -> ExitedServer:
+        stderr_path.write_text("/usr/bin/bash: line 1: vllm: command not found\n", encoding="utf-8")
+        return ExitedServer()
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        task_commands.append(command)
+        return _completed(command)
+
+    monkeypatch.setattr(ncu_profiles, "_popen", fake_popen)
+    monkeypatch.setattr(ncu_profiles, "_run", fake_run)
+
+    rc = ncu_profiles.main(
+        [
+            "--profile-target",
+            "server-launch",
+            "--archetype",
+            "long-text",
+            "--out-root",
+            str(tmp_path),
+            "--task-out-root",
+            str(tmp_path / "ncu_task_runs"),
+            "--server-launch-command",
+            "vllm serve",
+            "--server-ready-url",
+            "http://127.0.0.1:9951/health",
+            "--server-ready-timeout-s",
+            "30",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert not task_commands
+    assert "server exited before ready" in captured.err
+    assert "vllm: command not found" in captured.err
 
 
 def test_server_launch_command_formatter_preserves_json_braces() -> None:

@@ -291,6 +291,31 @@ def _wait_for_ready(url: str, *, timeout_s: float) -> None:
     raise RuntimeError(f"server did not become ready at {url}: {last_error}")
 
 
+def _wait_for_server_ready(
+    url: str,
+    process: subprocess.Popen[bytes],
+    *,
+    stderr_path: Path,
+    timeout_s: float,
+) -> None:
+    deadline = time.monotonic() + timeout_s
+    last_error = ""
+    while time.monotonic() < deadline:
+        returncode = process.poll()
+        if returncode is not None:
+            stderr_tail = stderr_path.read_text(encoding="utf-8", errors="replace")[-2000:] if stderr_path.is_file() else ""
+            detail = f": {stderr_tail}" if stderr_tail else ""
+            raise RuntimeError(f"server exited before ready at {url} with return code {returncode}{detail}")
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                if 200 <= response.status < 500:
+                    return
+        except (OSError, urllib.error.URLError) as exc:
+            last_error = str(exc)
+        time.sleep(1.0)
+    raise RuntimeError(f"server did not become ready at {url}: {last_error}")
+
+
 def _terminate_server(process: subprocess.Popen[bytes], *, timeout_s: float) -> None:
     if process.poll() is not None:
         return
@@ -312,7 +337,12 @@ def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
     )
     task_result: subprocess.CompletedProcess[str] | None = None
     try:
-        _wait_for_ready(args.server_ready_url, timeout_s=args.server_ready_timeout_s)
+        _wait_for_server_ready(
+            args.server_ready_url,
+            server,
+            stderr_path=_server_stderr_path(out_root, archetype),
+            timeout_s=args.server_ready_timeout_s,
+        )
         task_result = _run(_task_command(args, archetype))
         if task_result.returncode != 0:
             print(task_result.stderr, file=sys.stderr, end="")
