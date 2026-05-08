@@ -21,78 +21,86 @@ serial calls and 1/12 concurrent calls produced a valid parsed
 `arguments=null` with the raw model output stuck in
 `arguments_raw`.
 
-## Root cause: model output format is unstable, qwen3_xml parser fails on its XML shape
+## Root cause: vLLM Responses API forced tool_choice bypasses the parser
 
-A direct, minimal `/v1/responses` call against the same live config
-(forced `tool_choice` for `read_file`, short prompt) parses
-correctly:
+**Updated 2026-05-08 (post-investigation):** the initial root-cause
+hypothesis (prompt length × parser whitespace handling) was wrong.
+The actual cause is a vLLM Responses API bug isolated to **forced
+`tool_choice = {"type": "function", "name": "..."}`**.
 
+**The bug** is in `vllm/parser/abstract_parser.py:_parse_tool_calls`
+(verified against the version shipped in the running container).
+When `tool_choice` is forced, the function bypasses the configured
+tool parser and stuffs the raw model output text into
+`FunctionCall.arguments`:
+
+```python
+if request.tool_choice and isinstance(request.tool_choice, ToolChoiceFunction):
+    # Forced Function Call (Responses API style)
+    assert content is not None
+    function_calls.append(
+        FunctionCall(name=request.tool_choice.name, arguments=content)  # <-- raw content
+    )
+    return function_calls, None
 ```
-arguments: {"path": "AGENTS.md"}
-status: completed
-```
 
-The Step 0d gate uses a longer prompt
-(`"Family: ...\nVariant: ...\nTask spec excerpt: ...\nInstruction: ..."`)
-and the model's output flips between two shapes across calls:
+The same broken logic exists for `ChatCompletionNamedToolChoiceParam`.
+Auto / required / unforced tool_choice paths run the parser
+correctly. Upstream Issue #23227 ("Support tool_choice other than
+auto") was closed as not-planned; the half-implemented forced path
+is the artifact.
 
-1. **JSON shape** — `{"path": "AGENTS.md"}`. Parser succeeds.
-2. **XML shape** — `<tool_call>\n<function=read_file>\n<parameter=path>\nAGENTS.md\n</parameter>\n</function>\n</tool_call>`.
-   Parser **fails**, returns `arguments=null`.
+**Confirming the root cause:**
+- Direct `/v1/responses` call, forced tool_choice, **short** prompt:
+  fails identically (arguments contain raw XML).
+- Direct `/v1/chat/completions` call, forced tool_choice, short
+  prompt: parses correctly. The bug is Responses-API-specific.
+- Direct `/v1/responses` call, **auto** tool_choice, long prompt:
+  parses correctly. Prompt length is irrelevant.
+- The qwen3_xml parser run standalone on the exact failing XML
+  payload (`<tool_call>...<parameter=path>\n...AGENTS.md\n</parameter>...`)
+  produces `arguments='{"path": "AGENTS.md"}'`. The parser is fine;
+  the Responses API never invokes it under forced tool_choice.
 
-The vLLM `--tool-call-parser qwen3_xml` is named for the XML format
-but in practice fails on the specific whitespace shape Qwen3 emits
-here (parameter content delimited by `\n` on either side rather than
-inline). The parser succeeds on its JSON fallback.
+**Production impact: zero.** Codex CLI 0.128.0 uses auto tool_choice
+(or no tool_choice) when sending `/v1/responses` requests, which
+hits the working path. The v2 Round 0 measurement's 12/13 trusted
+task summaries are unaffected — every Codex turn parsed correctly.
+Step 0d is the only consumer of forced tool_choice in our codebase,
+which is why the bug only surfaces there.
 
-This is **not** a SuffixDecoding-specific bug — both serial and
-concurrent invocations fail at similar rates, ruling out cache-state
-divergence. It is a model-parser-config interaction that the v1
-reduced-contract Round 0 missed because that contract uses
-`correctness_via_exit_code` (Codex rc==0), not schema-strict
-tool-call parsing.
+## Recommendation: Option 4 — patch vLLM, not the model config
 
-## Why v2 round 0 still produced 12 trusted task summaries
+The earlier 3-remediation enumeration (re-enable thinking; switch
+parser; fall back to ngram-PLD) all targeted the wrong layer. The
+bug is the Responses API forced tool_choice path, not the model
+output. The right fix is small and surgical:
 
-The v2 round 0 summary attestation uses the weaker
-`correctness_via_exit_code` contract (with `codex_trace_out_supported`
-deferred under proxy-side synthesis). 12/13 task summaries cleared
-that contract because Codex itself parsed the model output in agent
-flows where the harness retries on parse error. Step 0d's strict
-contract is the first time we've measured tool-call parse stability
-on this exact runtime.
+**Option 4 — patch `vllm/parser/abstract_parser.py:_parse_tool_calls`**
+to run `self._tool_parser.extract_tool_calls(content, request=request)`
+on `content` even under forced tool_choice, then use the parser's
+parsed `arguments` instead of passing raw content through. The
+forced name still overrides whatever the parser thinks.
 
-## Recommendation
-
-The live SuffixDecoding config **should not be promoted to Round 1
-winner** until tool-call parsing is stable. Three remediations, in
-order of recommended preference:
-
-1. **Re-enable Qwen3 thinking mode** (currently
-   `enable_thinking=false`). With thinking on, the model emits the
-   XML format consistently with the parser-friendly inline shape;
-   parse stability returns. Cost: ~1.5-2x reasoning-regime tokens
-   (slower task wallclock). This is a vLLM relaunch
-   (`restart-required`).
-2. **Switch tool-call parser** to `hermes` or omit the parser
-   entirely and let Codex's harness do parsing client-side. Cost:
-   another vLLM relaunch; need to verify Codex tolerates the
-   passthrough.
-3. **Fall back to ngram-PLD candidate 020** with
-   `prompt_lookup_min >= 3` (vLLM Issue #40875 mitigation). Cost:
-   loses SuffixDecoding's tool-call regime acceptance gain (per v2
-   round: 0.521 agg accept, 33.6 tps p50). This is the original
-   2026-05-07 Round 1 fallback.
-
-Per the v2 round 0 per-regime data, the live config's tool-call
-regime IS strong on raw acceptance — so the parser stability is the
-actual blocker, not the spec_decode method. Option 1 is the cleanest
-fix: keep SuffixDecoding, restore thinking mode, revalidate Step 0d.
+**Status: applied.** The patch is in place at the running
+container's filesystem path, and codified in the prelaunch hook
+(`scripts/run_track_b_loop.py:_track_b_runtime_prelaunch_shell`,
+commit e67832c) so future container relaunches auto-apply it. The
+running vLLM process loaded the old code at startup; activation
+requires a relaunch. After the relaunch:
+- Step 0d should pass (B-1/B-2/B-3 against live SuffixDecoding).
+- v2 round 0 measurements are unaffected (production used auto
+  tool_choice, which was always on the working path).
+- No model-config regression: keep SuffixDecoding, keep thinking
+  off, keep all v2 round 0 wins on tool-call regime.
 
 ## Status
 
 - v2 round 0: trusted 12/13 task summaries → committed (6846ec8).
-- Step 0d: **FAIL** → live config blocked from Round 1 winner promotion.
-- Round 1 winner selection: pending operator decision among the
-  three remediations above. No further automated work unblocked
-  until that decision lands.
+- Step 0d: **FAIL** → root cause isolated to vLLM Responses API.
+- Patch applied (e67832c, prelaunch hook). Activation = next vLLM
+  relaunch.
+- Next-restart attempt blocked on GB10 unified-memory pool
+  reclamation (only 13 GiB available after the prior vLLM exit;
+  driver hasn't released the model's prior allocation yet).
+  Operator-gated.
