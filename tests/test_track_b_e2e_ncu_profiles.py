@@ -508,6 +508,14 @@ def test_ncu_profile_driver_rejects_no_kernel_warning(tmp_path: Path) -> None:
         ncu_profiles._validate_profile(profile)
 
 
+def test_ncu_profile_driver_rejects_application_error(tmp_path: Path) -> None:
+    profile = tmp_path / "ncu_long-text.csv"
+    profile.write_text("==ERROR== The application returned an error code (1).\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="application error"):
+        ncu_profiles._validate_profile(profile)
+
+
 def test_ncu_profile_driver_rejects_nonfinite_metric_value(tmp_path: Path) -> None:
     profile = tmp_path / "ncu_long-text.csv"
     text = _metric_csv().replace("gpu__time_duration.sum,1", "gpu__time_duration.sum,NaN")

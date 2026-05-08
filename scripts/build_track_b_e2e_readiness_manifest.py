@@ -306,6 +306,7 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
         size_bytes = path.stat().st_size if exists else 0
         text = path.read_text(encoding="utf-8", errors="replace") if exists else ""
         no_kernels_profiled = "No kernels were profiled" in text
+        application_error = "The application returned an error code" in text
         metric_values = _ncu_metric_values(text)
         metric_coverage = {metric: metric in text for metric in NCU_REQUIRED_METRICS}
         missing_metrics = [metric for metric, present in metric_coverage.items() if not present]
@@ -336,6 +337,7 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
             exists
             and size_bytes > 0
             and not no_kernels_profiled
+            and not application_error
             and not missing_metrics
             and not nonfinite_metrics
             and not metadata_reasons
@@ -345,6 +347,8 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
                 reasons.append(f"{archetype}_missing_or_empty")
             elif no_kernels_profiled:
                 reasons.append(f"{archetype}_no_kernels_profiled")
+            elif application_error:
+                reasons.append(f"{archetype}_application_error")
             elif missing_metrics:
                 reasons.append(f"{archetype}_missing_required_metrics")
             elif nonfinite_metrics:
@@ -366,6 +370,7 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
                 "runtime_config_hash": metadata.get("runtime_config_hash"),
                 "size_bytes": size_bytes,
                 "no_kernels_profiled": no_kernels_profiled,
+                "application_error": application_error,
                 "required_metric_coverage": metric_coverage,
                 "missing_metrics": missing_metrics,
                 "required_metric_values": metric_values,
