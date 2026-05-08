@@ -78,6 +78,10 @@ def _metadata_path(out_root: Path, archetype: str) -> Path:
     return out_root / f"ncu_{archetype}.json"
 
 
+def _failure_metadata_path(out_root: Path, archetype: str) -> Path:
+    return out_root / f"ncu_{archetype}_failure.json"
+
+
 def _server_stdout_path(out_root: Path, archetype: str) -> Path:
     return out_root / f"ncu_{archetype}_server_stdout.log"
 
@@ -286,6 +290,10 @@ def _write_profile_metadata(args: argparse.Namespace, archetype: str, command: l
     )
 
 
+def _display_path(path: Path) -> str:
+    return str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path)
+
+
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
@@ -391,6 +399,56 @@ def _server_returncode_ok(returncode: int | None) -> bool:
     return returncode in (0, -15, 143)
 
 
+def _write_profile_failure_metadata(
+    args: argparse.Namespace,
+    archetype: str,
+    command: list[str],
+    *,
+    reason: str,
+    error: str = "",
+    server_returncode: int | None = None,
+    task_returncode: int | None = None,
+) -> None:
+    out_root = Path(args.out_root)
+    profile_path = _profile_path(out_root, archetype)
+    metadata = {
+        "schema": "lumo.track_b.ncu_archetype_profile_failure.v1",
+        "recorded_at": _now(),
+        "round": args.round,
+        "archetype": archetype,
+        "task_id": ARCHETYPE_TASKS[archetype],
+        "runtime_config_hash": args.runtime_config_hash,
+        "profile_csv": _display_path(profile_path),
+        "server_stdout": _display_path(_server_stdout_path(out_root, archetype)),
+        "server_stderr": _display_path(_server_stderr_path(out_root, archetype)),
+        "required_metrics": list(NCU_REQUIRED_METRICS),
+        "profile_target": args.profile_target,
+        "reason": reason,
+        "error": error,
+        "server_returncode": server_returncode,
+        "task_returncode": task_returncode,
+        "server_launch_command": args.server_launch_command if args.profile_target in ("server-launch", "container-server-launch") else "",
+        "server_ready_url": args.server_ready_url if args.profile_target in ("server-launch", "container-server-launch") else "",
+        "container_name": args.container_name if args.profile_target == "container-server-launch" else "",
+        "container_profile_csv": _container_profile_csv(args, archetype) if args.profile_target == "container-server-launch" else "",
+        "container_server_stop_command": args.container_server_stop_command if args.profile_target == "container-server-launch" else "",
+        "deferred_instrumentation_checks": sorted(
+            check
+            for check, enabled in {
+                "codex_trace_out_supported": args.defer_codex_trace_out,
+                "vllm_request_metrics_join_available": args.defer_vllm_request_metrics_join,
+                "dcgm_profile_fields_available": args.defer_dcgm_profile_fields,
+            }.items()
+            if enabled
+        ),
+        "ncu_command": command,
+    }
+    _failure_metadata_path(out_root, archetype).write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
     out_root = Path(args.out_root)
     server_command = _server_ncu_command(args, archetype)
@@ -401,15 +459,34 @@ def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
     )
     task_result: subprocess.CompletedProcess[str] | None = None
     try:
-        _wait_for_server_ready(
-            args.server_ready_url,
-            server,
-            stderr_path=_server_stderr_path(out_root, archetype),
-            timeout_s=args.server_ready_timeout_s,
-        )
+        try:
+            _wait_for_server_ready(
+                args.server_ready_url,
+                server,
+                stderr_path=_server_stderr_path(out_root, archetype),
+                timeout_s=args.server_ready_timeout_s,
+            )
+        except Exception as exc:
+            _write_profile_failure_metadata(
+                args,
+                archetype,
+                server_command,
+                reason="server_not_ready",
+                error=str(exc),
+                server_returncode=server.returncode,
+            )
+            raise
         task_result = _run(_task_command(args, archetype))
         if task_result.returncode != 0:
             print(task_result.stderr, file=sys.stderr, end="")
+            _write_profile_failure_metadata(
+                args,
+                archetype,
+                server_command,
+                reason="task_failed",
+                task_returncode=task_result.returncode,
+                server_returncode=server.returncode,
+            )
             return task_result.returncode
     finally:
         _terminate_server(server, timeout_s=args.server_shutdown_timeout_s)
@@ -419,8 +496,27 @@ def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
             errors="replace",
         )
         print(server_stderr, file=sys.stderr, end="")
+        _write_profile_failure_metadata(
+            args,
+            archetype,
+            server_command,
+            reason="server_exit",
+            error=server_stderr[-2000:],
+            server_returncode=server.returncode,
+        )
         return int(server.returncode or 2)
-    _validate_profile(_profile_path(out_root, archetype))
+    try:
+        _validate_profile(_profile_path(out_root, archetype))
+    except Exception as exc:
+        _write_profile_failure_metadata(
+            args,
+            archetype,
+            server_command,
+            reason="profile_invalid",
+            error=str(exc),
+            server_returncode=server.returncode,
+        )
+        raise
     _write_profile_metadata(args, archetype, server_command)
     return 0
 
@@ -434,15 +530,34 @@ def _run_container_server_profile(args: argparse.Namespace, archetype: str) -> i
         stderr_path=_server_stderr_path(out_root, archetype),
     )
     try:
-        _wait_for_server_ready(
-            args.server_ready_url,
-            server,
-            stderr_path=_server_stderr_path(out_root, archetype),
-            timeout_s=args.server_ready_timeout_s,
-        )
+        try:
+            _wait_for_server_ready(
+                args.server_ready_url,
+                server,
+                stderr_path=_server_stderr_path(out_root, archetype),
+                timeout_s=args.server_ready_timeout_s,
+            )
+        except Exception as exc:
+            _write_profile_failure_metadata(
+                args,
+                archetype,
+                server_command,
+                reason="server_not_ready",
+                error=str(exc),
+                server_returncode=server.returncode,
+            )
+            raise
         task_result = _run(_task_command(args, archetype))
         if task_result.returncode != 0:
             print(task_result.stderr, file=sys.stderr, end="")
+            _write_profile_failure_metadata(
+                args,
+                archetype,
+                server_command,
+                reason="task_failed",
+                task_returncode=task_result.returncode,
+                server_returncode=server.returncode,
+            )
             return task_result.returncode
     finally:
         _stop_container_server(args)
@@ -453,9 +568,28 @@ def _run_container_server_profile(args: argparse.Namespace, archetype: str) -> i
             errors="replace",
         )
         print(server_stderr, file=sys.stderr, end="")
+        _write_profile_failure_metadata(
+            args,
+            archetype,
+            server_command,
+            reason="server_exit",
+            error=server_stderr[-2000:],
+            server_returncode=server.returncode,
+        )
         return int(server.returncode or 2)
     _copy_container_profile(args, archetype)
-    _validate_profile(_profile_path(out_root, archetype))
+    try:
+        _validate_profile(_profile_path(out_root, archetype))
+    except Exception as exc:
+        _write_profile_failure_metadata(
+            args,
+            archetype,
+            server_command,
+            reason="profile_invalid",
+            error=str(exc),
+            server_returncode=server.returncode,
+        )
+        raise
     _write_profile_metadata(args, archetype, server_command)
     return 0
 

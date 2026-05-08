@@ -308,6 +308,12 @@ def test_ncu_profile_driver_reports_server_launch_exit_before_ready(
     assert not task_commands
     assert "server exited before ready" in captured.err
     assert "vllm: command not found" in captured.err
+    failure = json.loads((tmp_path / "ncu_long-text_failure.json").read_text(encoding="utf-8"))
+    assert failure["schema"] == "lumo.track_b.ncu_archetype_profile_failure.v1"
+    assert failure["reason"] == "server_not_ready"
+    assert failure["server_returncode"] == 127
+    assert "vllm: command not found" in failure["error"]
+    assert failure["profile_target"] == "server-launch"
 
 
 def test_ncu_profile_driver_runs_container_server_launch_target(monkeypatch, tmp_path: Path) -> None:
