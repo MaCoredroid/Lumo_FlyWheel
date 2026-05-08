@@ -207,7 +207,63 @@ def test_write_chunked_stream_closes_cleanly_on_upstream_chunk_error() -> None:
 
     output = handler.wfile.getvalue()
     assert b"response.output_text.delta" in output
+    assert b"response.completed" in output
+    assert output.endswith(b"0\r\n\r\n")
+    assert upstream.closed is True
+
+
+def test_write_chunked_stream_emits_error_when_upstream_fails_before_events() -> None:
+    class _Handler:
+        def __init__(self) -> None:
+            self.wfile = io.BytesIO()
+
+    class _Upstream:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def iter_content(self, chunk_size: int):
+            assert chunk_size == 8192
+            raise requests.exceptions.ChunkedEncodingError("ended early")
+            yield b""
+
+        def close(self) -> None:
+            self.closed = True
+
+    handler = _Handler()
+    upstream = _Upstream()
+
+    _write_chunked_stream(handler, upstream)
+
+    output = handler.wfile.getvalue()
     assert b"upstream_stream_error" in output
+    assert output.endswith(b"0\r\n\r\n")
+    assert upstream.closed is True
+
+
+def test_write_chunked_stream_synthesizes_completion_when_upstream_omits_it() -> None:
+    class _Handler:
+        def __init__(self) -> None:
+            self.wfile = io.BytesIO()
+
+    class _Upstream:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def iter_content(self, chunk_size: int):
+            assert chunk_size == 8192
+            yield b"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n"
+
+        def close(self) -> None:
+            self.closed = True
+
+    handler = _Handler()
+    upstream = _Upstream()
+
+    _write_chunked_stream(handler, upstream)
+
+    output = handler.wfile.getvalue()
+    assert b"response.output_text.delta" in output
+    assert b"response.completed" in output
     assert output.endswith(b"0\r\n\r\n")
     assert upstream.closed is True
 

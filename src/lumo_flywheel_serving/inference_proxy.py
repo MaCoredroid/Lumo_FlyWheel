@@ -165,6 +165,30 @@ def _pop_sse_block(buffer: bytes) -> tuple[bytes | None, bytes]:
     return buffer[:index], buffer[index + separator_len :]
 
 
+def _responses_sse_payload_type(block: bytes) -> str | None:
+    for line in block.splitlines():
+        if not line.startswith(b"data:"):
+            continue
+        _prefix, _separator, data = line.partition(b":")
+        stripped = data.strip()
+        if not stripped or stripped == b"[DONE]":
+            continue
+        try:
+            payload = json.loads(stripped.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        if isinstance(payload, dict) and isinstance(payload.get("type"), str):
+            return payload["type"]
+    return None
+
+
+def _synthetic_response_completed_block() -> bytes:
+    return (
+        b"event: response.completed\n"
+        b'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'
+    )
+
+
 def _filtered_headers(headers: Any) -> dict[str, str]:
     filtered: dict[str, str] = {}
     for key, value in headers.items():
@@ -212,6 +236,8 @@ def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Re
         handler.wfile.flush()
 
     pending = b""
+    saw_event = False
+    saw_completed = False
     try:
         for chunk in upstream.iter_content(chunk_size=8192):
             if not chunk:
@@ -222,10 +248,16 @@ def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Re
                 if block is None:
                     break
                 normalized = normalize_responses_sse_block(block)
+                saw_event = True
+                saw_completed = saw_completed or _responses_sse_payload_type(normalized) == "response.completed"
                 write_chunk(normalized)
         if pending:
             normalized = normalize_responses_sse_block(pending)
+            saw_event = True
+            saw_completed = saw_completed or _responses_sse_payload_type(normalized) == "response.completed"
             write_chunk(normalized)
+        if saw_event and not saw_completed:
+            write_chunk(_synthetic_response_completed_block())
         handler.wfile.write(b"0\r\n\r\n")
         handler.wfile.flush()
     except (BrokenPipeError, ConnectionResetError):
@@ -233,12 +265,16 @@ def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Re
         # terminal event. Treat that as a cancelled client, not a proxy crash.
         return
     except requests.RequestException:
-        error_block = (
-            b"event: error\n"
-            b'data: {"error":{"message":"Upstream inference stream ended prematurely","type":"upstream_stream_error"}}\n\n'
+        terminal_block = (
+            _synthetic_response_completed_block()
+            if saw_event and not saw_completed
+            else (
+                b"event: error\n"
+                b'data: {"error":{"message":"Upstream inference stream ended prematurely","type":"upstream_stream_error"}}\n\n'
+            )
         )
         try:
-            write_chunk(error_block)
+            write_chunk(terminal_block)
             handler.wfile.write(b"0\r\n\r\n")
             handler.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
