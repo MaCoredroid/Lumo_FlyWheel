@@ -24,8 +24,12 @@ def _default_python() -> str:
 
 
 def _validate_codex_command_template(template: str) -> None:
-    if "{trace_out}" not in template:
-        raise ValueError("codex command template must include {trace_out}")
+    # The {trace_out} placeholder is no longer required. Trace emission is now
+    # produced by inference-proxy capture + runner-side synthesis, not by a
+    # Codex CLI flag. Templates that still include {trace_out} continue to
+    # work — the runner formats it to a file path that the proxy synthesis
+    # writes to.
+    return
 
 
 def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
