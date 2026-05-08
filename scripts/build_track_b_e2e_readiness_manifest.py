@@ -414,19 +414,29 @@ def _ncu_metric_values(text: str) -> dict[str, list[float]]:
     return values
 
 
-def _status(ok: bool, *, blocked: bool = False) -> str:
+def _status(ok: bool, *, blocked: bool = False, deferred: bool = False) -> str:
     if ok:
         return "complete"
     if blocked:
         return "blocked"
+    if deferred:
+        return "deferred"
     return "missing"
 
 
-def _step(step: str, requirement: str, evidence: dict[str, Any], ok: bool, *, blocked: bool = False) -> dict[str, Any]:
+def _step(
+    step: str,
+    requirement: str,
+    evidence: dict[str, Any],
+    ok: bool,
+    *,
+    blocked: bool = False,
+    deferred: bool = False,
+) -> dict[str, Any]:
     return {
         "step": step,
         "requirement": requirement,
-        "status": _status(ok, blocked=blocked),
+        "status": _status(ok, blocked=blocked, deferred=deferred),
         "evidence": evidence,
     }
 
@@ -435,6 +445,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     preflight = _load_json(Path(args.preflight_json)) if args.preflight_json else {}
     checks = preflight.get("checks") if isinstance(preflight.get("checks"), dict) else {}
     blockers = preflight.get("blocking_reasons") if isinstance(preflight.get("blocking_reasons"), list) else []
+    deferred_reasons = preflight.get("deferred_reasons") if isinstance(preflight.get("deferred_reasons"), list) else []
 
     trace_patch = _trace_patch_verification()
     trace_correctness_path = REPO_ROOT / "output" / "track_b_e2e" / "codex_trace_emitter_correctness.json"
@@ -465,11 +476,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "trace_correctness_verified": trace_correctness["ok"],
                 "trace_correctness": trace_correctness,
                 "codex_trace_out_supported": checks.get("codex_trace_out_supported", {}).get("ok"),
+                "deferred_by_preflight": "codex_trace_out_supported" in deferred_reasons,
             },
             trace_patch["ok"]
             and trace_correctness["ok"]
             and checks.get("codex_trace_out_supported", {}).get("ok") is True,
             blocked="codex_trace_out_supported" in blockers,
+            deferred="codex_trace_out_supported" in deferred_reasons,
         ),
         _step(
             "B",
@@ -493,11 +506,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     "profile_fields_unavailable_reasons"
                 ),
                 "telemetry_sources": checks.get("dcgm_sampler_runs", {}).get("telemetry_sources"),
+                "deferred_by_preflight": "dcgm_profile_fields_available" in deferred_reasons,
             },
             _exists("scripts/sample_dcgm_during_task.py")
             and checks.get("dcgm_sampler_runs", {}).get("ok") is True
             and checks.get("dcgm_profile_fields_available", {}).get("ok") is True,
             blocked="dcgm_profile_fields_available" in blockers,
+            deferred="dcgm_profile_fields_available" in deferred_reasons,
         ),
         _step(
             "C",
@@ -527,6 +542,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "vllm_request_metrics_side_channel_ok": checks.get("vllm_request_metrics_side_channel", {}).get("ok"),
                 "vllm_request_metrics_side_channel": checks.get("vllm_request_metrics_side_channel", {}),
                 "vllm_request_metrics_join_available": checks.get("vllm_request_metrics_join_available", {}).get("ok"),
+                "deferred_by_preflight": "vllm_request_metrics_join_available" in deferred_reasons,
             },
             _contains("src/lumo_flywheel_serving/metrics.py", "def compute_vllm_per_request_metrics")
             and checks.get("vllm_request_metrics_join_available", {}).get("ok") is True,
@@ -534,6 +550,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "vllm_request_metrics_join_available" in blockers
                 or "vllm_request_id_labels_exposed" in blockers
             ),
+            deferred="vllm_request_metrics_join_available" in deferred_reasons,
         ),
         _step(
             "E",
@@ -599,6 +616,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "plan": "docs/reports/auto_research/track-b-e2e-agentic-saturation-plan-20260507.md",
         "preflight_json": args.preflight_json,
         "blocking_reasons": blockers,
+        "deferred_reasons": deferred_reasons,
         "implementation_steps": steps,
         "hard_gates": hard_gates,
         "round0_ready": ready,

@@ -83,6 +83,50 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path, monkeypatch) 
     assert manifest["hard_gates"]["ncu_profiles_verified"] is False
 
 
+def test_readiness_manifest_reports_deferred_preflight_gaps(tmp_path: Path, monkeypatch) -> None:
+    preflight_path = tmp_path / "preflight.json"
+    deferred = [
+        "vllm_request_metrics_join_available",
+        "codex_trace_out_supported",
+        "dcgm_profile_fields_available",
+    ]
+    preflight_path.write_text(
+        json.dumps(
+            {
+                "round0_may_run": True,
+                "blocking_reasons": [],
+                "deferred_reasons": deferred,
+                "checks": {
+                    "codex_trace_out_supported": {"ok": False},
+                    "dcgm_sampler_runs": {"ok": True},
+                    "dcgm_profile_fields_available": {"ok": False},
+                    "pynvml_available": {"ok": True},
+                    "vllm_request_id_labels_exposed": {"ok": False},
+                    "vllm_request_metrics_side_channel": {"ok": False},
+                    "vllm_request_metrics_join_available": {"ok": False},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(readiness, "_round0_summary_verification", _missing_round0_summary)
+
+    manifest = readiness.build_manifest(Namespace(preflight_json=str(preflight_path), out=""))
+
+    assert manifest["round0_ready"] is False
+    assert manifest["deferred_reasons"] == deferred
+    statuses = {step["step"]: step["status"] for step in manifest["implementation_steps"]}
+    assert statuses["A"] == "deferred"
+    assert statuses["B"] == "deferred"
+    assert statuses["D"] == "deferred"
+    steps = {step["step"]: step for step in manifest["implementation_steps"]}
+    assert steps["A"]["evidence"]["deferred_by_preflight"] is True
+    assert steps["B"]["evidence"]["deferred_by_preflight"] is True
+    assert steps["D"]["evidence"]["deferred_by_preflight"] is True
+    assert manifest["hard_gates"]["all_implementation_steps_complete"] is False
+
+
 def test_round_proposal_prompt_uses_hard_gated_round_driver() -> None:
     prompt = (REPO_ROOT / "prompts" / "track_b_e2e_round_proposal.md").read_text(encoding="utf-8")
 
