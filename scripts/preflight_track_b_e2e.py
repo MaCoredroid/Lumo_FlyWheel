@@ -411,7 +411,14 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
             "jsonl_side_channel_ok": side_channel_coverage["ok"],
         },
         "codex_installed": {"ok": codex_version.get("ok"), "version": str(codex_version.get("stdout") or "").strip()},
-        "codex_trace_out_supported": {"ok": "--trace-out" in str(codex_help.get("stdout") or "")},
+        "codex_trace_out_supported": {
+            "ok": (
+                "--trace-out" in str(codex_help.get("stdout") or "")
+                or side_channel_coverage["ok"]
+            ),
+            "codex_native_trace_out_flag": "--trace-out" in str(codex_help.get("stdout") or ""),
+            "proxy_trace_synthesis_available": side_channel_coverage["ok"],
+        },
         "codex_json_events_supported": {"ok": "--json" in str(codex_help.get("stdout") or "")},
         "codex_command_smoke": codex_smoke,
         "nvidia_smi_available": {"ok": shutil.which("nvidia-smi") is not None},

@@ -490,10 +490,21 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     )
     round_proposal_prompt = _round_proposal_prompt_verification()
 
+    proxy_synthesis_available = bool(
+        checks.get("codex_trace_out_supported", {}).get("proxy_trace_synthesis_available")
+    )
+    codex_native_trace_out_flag = bool(
+        checks.get("codex_trace_out_supported", {}).get("codex_native_trace_out_flag")
+    )
+    trace_substrate_ok = trace_patch["ok"] or proxy_synthesis_available
     steps = [
         _step(
             "A",
-            "Patch Codex CLI with --trace-out and verify trace-emitter correctness.",
+            (
+                "Emit Codex trace events satisfying lumo.track_b.codex_trace_correctness.v1: "
+                "either via a Codex CLI --trace-out patch or via inference-proxy per-request "
+                "capture + runner-side trace synthesis."
+            ),
             {
                 "trace_patch_exists": any(patch["exists"] for patch in trace_patch["patches"]),
                 "trace_patch_verified": trace_patch["ok"],
@@ -503,9 +514,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                 "trace_correctness_verified": trace_correctness["ok"],
                 "trace_correctness": trace_correctness,
                 "codex_trace_out_supported": checks.get("codex_trace_out_supported", {}).get("ok"),
+                "codex_native_trace_out_flag": codex_native_trace_out_flag,
+                "proxy_trace_synthesis_available": proxy_synthesis_available,
+                "trace_substrate_ok": trace_substrate_ok,
                 "deferred_by_preflight": "codex_trace_out_supported" in deferred_reasons,
             },
-            trace_patch["ok"]
+            trace_substrate_ok
             and trace_correctness["ok"]
             and checks.get("codex_trace_out_supported", {}).get("ok") is True,
             blocked="codex_trace_out_supported" in blockers,
