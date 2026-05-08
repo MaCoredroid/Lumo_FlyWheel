@@ -67,6 +67,49 @@ def test_ncu_profile_driver_builds_named_archetype_command(monkeypatch, tmp_path
     assert metadata["task_id"] == "policy-aware-request-resolution/v1-clean-baseline"
 
 
+def test_ncu_profile_driver_propagates_deferred_instrumentation(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        profile_path = Path(command[command.index("--log-file") + 1])
+        profile_path.write_text(_metric_csv(), encoding="utf-8")
+        return _completed(command)
+
+    monkeypatch.setattr(ncu_profiles, "_run", fake_run)
+
+    rc = ncu_profiles.main(
+        [
+            "--archetype",
+            "tool-call-frame",
+            "--out-root",
+            str(tmp_path),
+            "--task-out-root",
+            str(tmp_path / "ncu_task_runs"),
+            "--codex-command-template",
+            "codex exec --json",
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--defer-codex-trace-out",
+            "--defer-vllm-request-metrics-join",
+            "--defer-dcgm-profile-fields",
+        ]
+    )
+
+    assert rc == 0
+    command = commands[0]
+    assert "--defer-codex-trace-out" in command
+    assert "--defer-vllm-request-metrics-join" in command
+    assert "--defer-dcgm-profile-fields" in command
+    metadata = json.loads((tmp_path / "ncu_tool-call-frame.json").read_text(encoding="utf-8"))
+    assert metadata["deferred_instrumentation_checks"] == [
+        "codex_trace_out_supported",
+        "dcgm_profile_fields_available",
+        "vllm_request_metrics_join_available",
+    ]
+
+
 def test_ncu_profile_driver_rejects_missing_metric(tmp_path: Path) -> None:
     profile = tmp_path / "ncu_long-text.csv"
     profile.write_text("Metric Name,Metric Value\ngpu__time_duration.sum,1\n", encoding="utf-8")

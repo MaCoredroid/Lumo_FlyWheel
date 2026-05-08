@@ -14,7 +14,21 @@ import build_track_b_e2e_readiness_manifest as readiness  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
+def _missing_round0_summary(_path: Path) -> dict[str, object]:
+    return {
+        "ok": False,
+        "trusted_task_count": None,
+        "trusted_unique_task_count": None,
+        "tasks_completed": None,
+        "tasks_correctness_passed": None,
+        "runtime_config_hash_mismatch_count": None,
+        "task_summary_schema_mismatch_count": None,
+        "task_summary_round_mismatch_count": None,
+        "reasons": ["summary_missing_or_invalid_json"],
+    }
+
+
+def test_readiness_manifest_reports_round0_blocked(tmp_path: Path, monkeypatch) -> None:
     preflight_path = tmp_path / "preflight.json"
     preflight_path.write_text(
         json.dumps(
@@ -38,6 +52,8 @@ def test_readiness_manifest_reports_round0_blocked(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+
+    monkeypatch.setattr(readiness, "_round0_summary_verification", _missing_round0_summary)
 
     manifest = readiness.build_manifest(Namespace(preflight_json=str(preflight_path), out=""))
 
@@ -103,7 +119,9 @@ def test_round_proposal_prompt_verification_rejects_legacy_direct_measurement(
     assert "forbidden_direct_repeat3_task_measurement_present" in result["reasons"]
 
 
-def test_readiness_manifest_requires_round0_artifacts_even_if_preflight_passes(tmp_path: Path) -> None:
+def test_readiness_manifest_requires_round0_artifacts_even_if_preflight_passes(
+    tmp_path: Path, monkeypatch
+) -> None:
     preflight_path = tmp_path / "preflight.json"
     preflight_path.write_text(
         json.dumps(
@@ -123,6 +141,8 @@ def test_readiness_manifest_requires_round0_artifacts_even_if_preflight_passes(t
         ),
         encoding="utf-8",
     )
+
+    monkeypatch.setattr(readiness, "_round0_summary_verification", _missing_round0_summary)
 
     manifest = readiness.build_manifest(Namespace(preflight_json=str(preflight_path), out=""))
 

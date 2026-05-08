@@ -37,8 +37,8 @@ def _default_python() -> str:
     return str(venv_python if venv_python.exists() else Path(sys.executable))
 
 
-def _validate_codex_command_template(template: str) -> None:
-    if "{trace_out}" not in template:
+def _validate_codex_command_template(template: str, *, require_trace_out: bool = True) -> None:
+    if require_trace_out and "{trace_out}" not in template:
         raise ValueError("codex command template must include {trace_out}")
 
 
@@ -158,6 +158,12 @@ def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
     ]
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
+    if args.defer_codex_trace_out:
+        command.append("--defer-codex-trace-out")
+    if args.defer_vllm_request_metrics_join:
+        command.append("--defer-vllm-request-metrics-join")
+    if args.defer_dcgm_profile_fields:
+        command.append("--defer-dcgm-profile-fields")
     return command
 
 
@@ -173,6 +179,15 @@ def _write_profile_metadata(args: argparse.Namespace, archetype: str, command: l
         "runtime_config_hash": args.runtime_config_hash,
         "profile_csv": str(profile_path.relative_to(REPO_ROOT)) if profile_path.is_relative_to(REPO_ROOT) else str(profile_path),
         "required_metrics": list(NCU_REQUIRED_METRICS),
+        "deferred_instrumentation_checks": sorted(
+            check
+            for check, enabled in {
+                "codex_trace_out_supported": args.defer_codex_trace_out,
+                "vllm_request_metrics_join_available": args.defer_vllm_request_metrics_join,
+                "dcgm_profile_fields_available": args.defer_dcgm_profile_fields,
+            }.items()
+            if enabled
+        ),
         "ncu_command": command,
     }
     _metadata_path(out_root, archetype).write_text(
@@ -193,7 +208,7 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def run_profiles(args: argparse.Namespace) -> int:
-    _validate_codex_command_template(args.codex_command_template)
+    _validate_codex_command_template(args.codex_command_template, require_trace_out=not args.defer_codex_trace_out)
     _validate_runtime_config_hash(args.runtime_config_hash)
     if shutil.which(args.ncu_bin) is None:
         raise RuntimeError(f"ncu binary not found: {args.ncu_bin}")
@@ -234,6 +249,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime-config-hash", required=True)
     parser.add_argument("--timeout-s", type=float, default=900.0)
     parser.add_argument("--vllm-request-metrics-jsonl", default="")
+    parser.add_argument("--defer-codex-trace-out", action="store_true")
+    parser.add_argument("--defer-vllm-request-metrics-join", action="store_true")
+    parser.add_argument("--defer-dcgm-profile-fields", action="store_true")
     parser.add_argument("--codex-command-template", required=True)
     args = parser.parse_args(argv)
     try:
