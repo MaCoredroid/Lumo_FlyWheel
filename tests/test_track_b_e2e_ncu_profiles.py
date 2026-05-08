@@ -110,6 +110,43 @@ def test_ncu_profile_driver_propagates_deferred_instrumentation(monkeypatch, tmp
     ]
 
 
+def test_ncu_profile_driver_normalizes_relative_output_roots(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        profile_path = Path(command[command.index("--log-file") + 1])
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        profile_path.write_text(_metric_csv(), encoding="utf-8")
+        return _completed(command)
+
+    monkeypatch.setattr(ncu_profiles, "_run", fake_run)
+
+    rc = ncu_profiles.main(
+        [
+            "--archetype",
+            "tool-call-frame",
+            "--out-root",
+            "profiles",
+            "--task-out-root",
+            "task-runs",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ]
+    )
+
+    assert rc == 0
+    command = commands[0]
+    assert command[command.index("--log-file") + 1] == str(tmp_path / "profiles" / "ncu_tool-call-frame.csv")
+    assert command[command.index("--out-root") + 1] == str(tmp_path / "task-runs")
+
+
 def test_ncu_profile_driver_rejects_missing_metric(tmp_path: Path) -> None:
     profile = tmp_path / "ncu_long-text.csv"
     profile.write_text("Metric Name,Metric Value\ngpu__time_duration.sum,1\n", encoding="utf-8")

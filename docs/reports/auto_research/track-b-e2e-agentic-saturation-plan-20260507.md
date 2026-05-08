@@ -576,6 +576,7 @@ Current revised deferred-check Round 0 restart state recorded on 2026-05-08:
 - A third `long-text` NCU probe reduced collection to `--launch-count 1`, kept `--launch-skip-before-match 0`, and shortened the task timeout to `300s`; it also remained attached past the timeout with `output/track_b_e2e/ncu_long-text.csv` still `0` bytes and `/tmp/track_b_ncu_onekernel_tmux.log` empty, then was stopped from tmux. The live topology explains why the original driver is weak here: `ncu --target-processes all` profiles the launched Codex/task process tree, while the actual GPU kernels are emitted by the already-running vLLM server process on port `9950` (`/usr/local/bin/vllm serve ... --port 9950`), outside that child process tree unless the server itself is launched under NCU or attached through an NCU launch/attach workflow.
 - A direct NCU attach probe against the live environment did not provide a safe arbitrary-PID attach path: `timeout 15 ncu --mode=attach --hostname 127.0.0.1 --port 49152 --target-processes all ...` exited `1` with `Invalid option --target-processes specified for --mode attach`. The NCU help text describes attach as pairing with an application previously launched by `ncu --mode=launch`, so the current live vLLM server would need to be relaunched under NCU control or replaced by a real server-side launch/attach workflow.
 - The NCU validators now report this failure mode explicitly. `scripts/run_track_b_e2e_ncu_profiles.py` rejects CSVs containing `No kernels were profiled`, and `scripts/build_track_b_e2e_readiness_manifest.py` reports `<archetype>_no_kernels_profiled` instead of reducing that evidence to generic missing metrics. Verification after this diagnostic tightening: `.venv/bin/python -m pytest tests/test_inference_proxy.py tests/test_metrics.py tests/test_track_b_codex_trace_correctness.py tests/test_track_b_dcgm_sampler.py tests/test_track_b_e2e_ncu_profiles.py tests/test_track_b_e2e_preflight.py tests/test_track_b_e2e_readiness_manifest.py tests/test_track_b_e2e_round_driver.py tests/test_track_b_e2e_runner.py tests/test_track_b_e2e_summary.py` returned `137 passed`.
+- The NCU driver now resolves `--out-root` and `--task-out-root` to absolute paths before launching Nsight Compute or the nested task runner, because an attempted relative fresh task root under NCU produced a false `No such file or directory` task failure. Verification after this path-normalization fix: the same focused suite returned `138 passed`.
 
 Revised deferred-check Round 0 start attempt recorded on 2026-05-07:
 
@@ -751,7 +752,8 @@ Committed scaffold commits through this status checkpoint:
 - `f06031a Record Track B NCU no-kernel blocker`
 - `80bd3e7 Record Track B NCU retry blocker`
 - `fdb4d3e Record Track B NCU topology blocker`
-- Current checkpoint: `Classify Track B NCU no-kernel profiles`
+- `37ccfce Classify Track B NCU no-kernel profiles`
+- Current checkpoint: `Normalize Track B NCU output roots`
 
 ## 12. Decision rules for ending the loop
 

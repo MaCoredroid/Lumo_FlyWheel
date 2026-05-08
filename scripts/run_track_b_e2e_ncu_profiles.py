@@ -214,9 +214,12 @@ def run_profiles(args: argparse.Namespace) -> int:
     _validate_runtime_config_hash(args.runtime_config_hash)
     if shutil.which(args.ncu_bin) is None:
         raise RuntimeError(f"ncu binary not found: {args.ncu_bin}")
-    out_root = Path(args.out_root)
+    out_root = Path(args.out_root).resolve()
+    task_out_root = Path(args.task_out_root).resolve()
+    args.out_root = str(out_root)
+    args.task_out_root = str(task_out_root)
     out_root.mkdir(parents=True, exist_ok=True)
-    Path(args.task_out_root).mkdir(parents=True, exist_ok=True)
+    task_out_root.mkdir(parents=True, exist_ok=True)
     archetypes = list(ARCHETYPE_TASKS) if args.archetype == "all" else [args.archetype]
     for archetype in archetypes:
         command = _ncu_command(args, archetype)
