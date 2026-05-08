@@ -165,7 +165,8 @@ def _pop_sse_block(buffer: bytes) -> tuple[bytes | None, bytes]:
     return buffer[:index], buffer[index + separator_len :]
 
 
-def _responses_sse_payload_type(block: bytes) -> str | None:
+def _responses_sse_payloads(block: bytes) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
     for line in block.splitlines():
         if not line.startswith(b"data:"):
             continue
@@ -176,16 +177,46 @@ def _responses_sse_payload_type(block: bytes) -> str | None:
         try:
             payload = json.loads(stripped.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            return None
-        if isinstance(payload, dict) and isinstance(payload.get("type"), str):
+            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    return payloads
+
+
+def _responses_sse_payload_type(block: bytes) -> str | None:
+    for payload in _responses_sse_payloads(block):
+        if isinstance(payload.get("type"), str):
             return payload["type"]
     return None
 
 
-def _synthetic_response_completed_block() -> bytes:
+def _update_synthetic_response_context(context: dict[str, Any], block: bytes) -> None:
+    for payload in _responses_sse_payloads(block):
+        response = payload.get("response")
+        if isinstance(response, dict):
+            for key in ("id", "model", "created_at"):
+                if key in response and response[key] is not None:
+                    context[key] = response[key]
+        response_id = payload.get("response_id")
+        if isinstance(response_id, str) and response_id:
+            context["id"] = response_id
+
+
+def _synthetic_response_completed_block(context: dict[str, Any] | None = None) -> bytes:
+    response: dict[str, Any] = {
+        "id": "resp_proxy_synthetic",
+        "status": "completed",
+        "output": [],
+    }
+    for key in ("id", "model", "created_at"):
+        if context and context.get(key) is not None:
+            response[key] = context[key]
+    payload = {"type": "response.completed", "response": response}
     return (
         b"event: response.completed\n"
-        b'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'
+        + b"data: "
+        + json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        + b"\n\n"
     )
 
 
@@ -238,6 +269,7 @@ def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Re
     pending = b""
     saw_event = False
     saw_completed = False
+    synthetic_response_context: dict[str, Any] = {}
     try:
         for chunk in upstream.iter_content(chunk_size=8192):
             if not chunk:
@@ -250,14 +282,16 @@ def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Re
                 normalized = normalize_responses_sse_block(block)
                 saw_event = True
                 saw_completed = saw_completed or _responses_sse_payload_type(normalized) == "response.completed"
+                _update_synthetic_response_context(synthetic_response_context, normalized)
                 write_chunk(normalized)
         if pending:
             normalized = normalize_responses_sse_block(pending)
             saw_event = True
             saw_completed = saw_completed or _responses_sse_payload_type(normalized) == "response.completed"
+            _update_synthetic_response_context(synthetic_response_context, normalized)
             write_chunk(normalized)
         if saw_event and not saw_completed:
-            write_chunk(_synthetic_response_completed_block())
+            write_chunk(_synthetic_response_completed_block(synthetic_response_context))
         handler.wfile.write(b"0\r\n\r\n")
         handler.wfile.flush()
     except (BrokenPipeError, ConnectionResetError):
@@ -266,7 +300,7 @@ def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Re
         return
     except requests.RequestException:
         terminal_block = (
-            _synthetic_response_completed_block()
+            _synthetic_response_completed_block(synthetic_response_context)
             if saw_event and not saw_completed
             else (
                 b"event: error\n"

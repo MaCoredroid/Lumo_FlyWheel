@@ -208,6 +208,7 @@ def test_write_chunked_stream_closes_cleanly_on_upstream_chunk_error() -> None:
     output = handler.wfile.getvalue()
     assert b"response.output_text.delta" in output
     assert b"response.completed" in output
+    assert b'"id":"resp_proxy_synthetic"' in output
     assert output.endswith(b"0\r\n\r\n")
     assert upstream.closed is True
 
@@ -264,6 +265,45 @@ def test_write_chunked_stream_synthesizes_completion_when_upstream_omits_it() ->
     output = handler.wfile.getvalue()
     assert b"response.output_text.delta" in output
     assert b"response.completed" in output
+    assert b'"id":"resp_proxy_synthetic"' in output
+    assert output.endswith(b"0\r\n\r\n")
+    assert upstream.closed is True
+
+
+def test_write_chunked_stream_synthesizes_completion_with_observed_response_id() -> None:
+    class _Handler:
+        def __init__(self) -> None:
+            self.wfile = io.BytesIO()
+
+    class _Upstream:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def iter_content(self, chunk_size: int):
+            assert chunk_size == 8192
+            yield (
+                b"event: response.created\n"
+                b'data: {"type":"response.created","response":{"id":"resp_real_123","model":"qwen3.5-27b",'
+                b'"created_at":1770000000,"status":"in_progress","output":[]}}\n\n'
+            )
+            yield (
+                b"event: response.output_text.delta\n"
+                b'data: {"type":"response.output_text.delta","response_id":"resp_real_123","delta":"ok"}\n\n'
+            )
+
+        def close(self) -> None:
+            self.closed = True
+
+    handler = _Handler()
+    upstream = _Upstream()
+
+    _write_chunked_stream(handler, upstream)
+
+    output = handler.wfile.getvalue()
+    assert b"response.completed" in output
+    assert b'"id":"resp_real_123"' in output
+    assert b'"model":"qwen3.5-27b"' in output
+    assert b'"created_at":1770000000' in output
     assert output.endswith(b"0\r\n\r\n")
     assert upstream.closed is True
 
