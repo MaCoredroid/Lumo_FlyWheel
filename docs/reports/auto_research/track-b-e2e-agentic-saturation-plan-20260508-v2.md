@@ -110,6 +110,36 @@ Roughly 1 in 3 to 1 in 2 Codex `exec` invocations against the local-proxy `respo
 
 **Mitigation:** `run_track_b_e2e_task.py --zero-token-retries 3`. Detects "no new bytes appended to the proxy capture during this task" and retries the codex subprocess. Tasks needing retry are tagged `zero_token_retry_cohort=true` in `runner_metadata.json` so round summaries can keep them in a separate cohort instead of silently equivalent.
 
+## Measured regime share (post-v2-Round-0 recalibration)
+
+The original spec sketched a 7-regime taxonomy (`prefill, plan, tool-call, file-edit, reasoning, summary, tool-exec-wait`) and an illustrative `regime_share` example weighted toward `plan` (~68%). The proxy capture's actual classifier emits a coarser 2-regime label (`tool-call` vs `reasoning`) per `/v1/responses` turn. Round 0 v2 measured 94 capture rows under the live runtime hash:
+
+| regime | rows | share | agg accept | p50 decode tps |
+|---|---:|---:|---:|---:|
+| `tool-call` | 84 | **89%** | 0.521 | 33.61 |
+| `reasoning` | 10 | **11%** | 0.209 | 10.24 |
+
+**This shifts the per-technique leverage analysis substantially.** The original spec implied reasoning was the largest leverage target. Measured: reasoning is 11% of rows on this 13-task sample, so any uplift on reasoning regime maps to at most 11% of absolute wallclock improvement, regardless of the regime-internal acceptance gain. Tool-call is 89% of rows and already at strong acceptance (0.521) on the live config — diminishing returns there.
+
+**Implications for Technique prioritization:**
+- Technique 3 (schema-aware tool drafter): tool-call regime is already strong; uplift is marginal.
+- Technique 2 (read_file priming): targets reasoning regime; absolute leverage capped at ~11% of wallclock.
+- Technique 1 (cross-turn ngram cache): orthogonal to regime; broader applicability.
+- Wallclock-shaped recommendation: harness-coupled techniques are no longer the largest near-term lever for this workload mix; per-frame wins on tool-call (already strong) yield more absolute time than per-frame wins on reasoning (small share). The largest open lever is **tool-exec-wait** time (not in proxy capture; needs a separate measurement), which the original spec called out but did not quantify.
+
+The 94-row sample is small; the 89/11 split should be re-validated when Round 1 lands a new config and re-measures.
+
 ## Frozen v1 reference
 
-The reduced-contract Round 0 at `output/track_b_e2e/round_0/round_summary.json` (median wallclock 95.023s, 13/13 trusted-via-exit-code, three deferred instrumentation checks, runtime_config_hash placeholder) is preserved as a frozen historical reference. The v2 Round 0 re-collection lands at `output/track_b_e2e/round_0_v2/` with full instrumentation + the real `runtime_config_hash`, leaving the v1 path untouched for audit lineage.
+The reduced-contract Round 0 at `output/track_b_e2e/round_0/round_summary.json` (median wallclock 95.023s, 13/13 trusted-via-exit-code, three deferred instrumentation checks, runtime_config_hash placeholder) is preserved as a frozen historical reference. The v2 Round 0 re-collection lands at `output/track_b_e2e_v2/round_0/` with full instrumentation + the real `runtime_config_hash`, leaving the v1 path untouched for audit lineage.
+
+## v2 Round 0 = canonical Round 1 reference baseline
+
+The v2 Round 0 baseline at `output/track_b_e2e_v2/round_0/round_summary.json` is the canonical reference for all Round 1 wallclock deltas. It is the cleanest dataset we will have until a Round 1 winner is selected:
+
+- 12 trusted task summaries + 1 diagnostic-only (skill-router run_02 hit a real Codex rc=1, kept as diagnostic per the truthful-measurement contract)
+- median wallclock 109.07s, aggregate 1309.67s
+- 94 proxy capture rows under runtime_config_hash `sha256:841fb0ea93184839dc7e85f93911f65ff385a3ed0fb9d9ff1250c4c510c4d542`
+- per-regime acceptance + decode_tps captured (see table above)
+- mid-flight Codex 0-token retry mitigation absorbed into 4-attempt repeats (55 retries fired across the round)
+- Step 0d B-1/B-2/B-3 ran against the same runtime and FAILED — see `track-b-step-0d-live-suffix-postmortem-20260508.md`. Round 1 winner promotion depends on resolving the forced-`tool_choice` parser bypass; patch landed via prelaunch hook in commit e67832c, activates on next vLLM relaunch.
