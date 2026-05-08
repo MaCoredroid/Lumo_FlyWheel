@@ -407,8 +407,16 @@ def _read_blockers(preflight_out: Path) -> str:
 
 
 def run_round(args: argparse.Namespace) -> int:
-    args.defer_preflight_checks = sorted(set(args.defer_preflight_checks or []))
-    unknown_defers = sorted(set(args.defer_preflight_checks) - DEFERABLE_PREFLIGHT_CHECKS)
+    deferred = set(args.defer_preflight_checks or [])
+    if args.vllm_request_metrics_jsonl:
+        # Proxy-synthesized trace + metrics join: schema-strict rules expect
+        # task_score and join evidence that only a Codex source patch could
+        # produce. Auto-defer those rules so summary attestation is honest
+        # about the substrate. Preflight still verifies the substrate is wired
+        # up; this only relaxes summary-level attestation.
+        deferred.update({"codex_trace_out_supported", "vllm_request_metrics_join_available"})
+    args.defer_preflight_checks = sorted(deferred)
+    unknown_defers = sorted(deferred - DEFERABLE_PREFLIGHT_CHECKS)
     if unknown_defers:
         raise ValueError(f"unsupported deferred preflight checks: {', '.join(unknown_defers)}")
     if "codex_trace_out_supported" not in args.defer_preflight_checks:
