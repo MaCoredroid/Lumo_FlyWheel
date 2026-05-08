@@ -790,7 +790,8 @@ Committed scaffold commits through this status checkpoint:
 - `7826c5c Record Track B NCU server blocker`
 - `51da1f7 Surface Track B NCU blocker in readiness`
 - `44ebbac Refresh Track B blocker ledger`
-- Current checkpoint: `Refresh Track B readiness report`
+- `a2db2a8 Refresh Track B readiness report`
+- Current checkpoint: `Refresh Track B preflight audit`
 
 ## 12. Decision rules for ending the loop
 
@@ -823,7 +824,7 @@ On termination, write `output/track_b_e2e/loop_closeout.md` summarizing the fina
 | `track-b-real-task-warmonly-pr39562-matrix-20260507.md` | Current evidence | Post-PR#39562 candidate matrix; 020/025/028 cleared the `9.0` gate at c1, 051 retired. |
 | `track_b_tool_call_throughput_closeout_20260507.md` | Current production runtime | Candidate-056 closeout; Round 0 baseline config. |
 | `track-b-concurrency-measurement-audit-20260506.md` | Reference | Established truthful-measurement rules. |
-| `track-b-e2e-round0-preflight-audit-20260507.md` | Current blocker record | Live Round 0 preflight failures and remediation requirements. |
+| `track-b-e2e-round0-preflight-audit-20260507.md` | Current blocker record | Records reduced-contract preflight status and full-readiness remediation requirements. |
 | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Current blocker record | Shows where Codex CLI must be patched for `--trace-out`. |
 | `track-b-e2e-readiness-manifest-20260507.md` | Current blocker record | Summarizes the machine-readable readiness manifest, reduced Round 0 summary, and `round0_ready=false` gate. |
 | `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Current blocker record | Shows vLLM request IDs exist in serving but not in Prometheus metric labels. |
