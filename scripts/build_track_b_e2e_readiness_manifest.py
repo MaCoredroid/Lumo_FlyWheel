@@ -288,6 +288,7 @@ def _round0_summary_verification(path: Path) -> dict[str, Any]:
         "min_trusted_task_count": ROUND0_MIN_TRUSTED_TASKS,
         "tasks_completed": tasks_completed,
         "tasks_correctness_passed": tasks_correctness_passed,
+        "runtime_config_hash": payload.get("runtime_config_hash"),
         "runtime_config_hash_mismatch_count": payload.get("runtime_config_hash_mismatch_count"),
         "task_summary_schema_mismatch_count": payload.get("task_summary_schema_mismatch_count"),
         "task_summary_round_mismatch_count": payload.get("task_summary_round_mismatch_count"),

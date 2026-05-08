@@ -782,7 +782,8 @@ Committed scaffold commits through this status checkpoint:
 - `a3ef240 Surface Track B NCU failure sidecars`
 - `049985c Copy Track B container NCU failure CSVs`
 - `cbed669 Refresh Track B NCU status ledger`
-- Current checkpoint: `Refresh Track B objective completion audit`
+- `833e991 Refresh Track B objective audit`
+- Current checkpoint: `Propagate Track B NCU runtime hash`
 
 ## 12. Decision rules for ending the loop
 
