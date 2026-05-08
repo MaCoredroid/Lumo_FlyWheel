@@ -45,11 +45,12 @@ def test_runner_rejects_conflicting_task_id_variant() -> None:
         runner._resolve_task_args("sqlalchemy-2-session-modernization/v2", "v3")
 
 
-def test_runner_requires_trace_out_in_command_template() -> None:
+def test_runner_accepts_command_templates_with_or_without_trace_out_placeholder() -> None:
+    # Trace emission is now produced by inference-proxy capture + runner-side
+    # synthesis, so the {trace_out} placeholder is optional in the template.
     runner._validate_codex_command_template("codex exec --trace-out {trace_out} --cwd {workspace}")
     runner._validate_codex_command_template("codex exec --json", require_trace_out=False)
-    with pytest.raises(ValueError, match="trace_out"):
-        runner._validate_codex_command_template("codex exec --cwd {workspace}")
+    runner._validate_codex_command_template("codex exec --cwd {workspace}")
 
 
 def test_runner_writes_deferred_vllm_metrics(tmp_path: Path) -> None:
@@ -124,6 +125,7 @@ def test_deferred_runner_preserves_codex_exit_code(monkeypatch, tmp_path: Path) 
     monkeypatch.setattr(runner, "_request", lambda *args, **kwargs: None)
     monkeypatch.setattr(runner, "_metrics_text", lambda url: "")
     monkeypatch.setattr(runner, "_run_sampler", lambda args, task_dir: None)
+    monkeypatch.setattr(runner, "_gpu_mem_snapshot", lambda: None)
 
     def fake_run(command, **kwargs):
         isolated_workspace = tmp_path / "out" / "round_0" / "family__variant" / "run_01" / "workspace"
@@ -259,7 +261,7 @@ def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    capture = runner._write_vllm_per_turn_from_jsonl(task_dir, source, runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    capture, captured_rows = runner._write_vllm_per_turn_from_jsonl(task_dir, source, runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
     payload = json.loads((task_dir / "vllm_per_turn.json").read_text(encoding="utf-8"))
     assert payload["runtime_config_hash"] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -318,7 +320,7 @@ def test_runner_normalizes_only_new_vllm_request_metrics_jsonl_rows(tmp_path: Pa
     )
     source.write_text(stale + fresh, encoding="utf-8")
 
-    capture = runner._write_vllm_per_turn_from_jsonl(
+    capture, captured_rows = runner._write_vllm_per_turn_from_jsonl(
         task_dir,
         source,
         start_offset=len(stale.encode("utf-8")),
