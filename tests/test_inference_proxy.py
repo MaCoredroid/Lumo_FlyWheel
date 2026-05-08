@@ -155,6 +155,46 @@ def test_write_chunked_stream_tolerates_broken_pipe() -> None:
     assert upstream.closed is True
 
 
+def test_proxy_streams_sse_without_buffering_upstream_content(monkeypatch, tmp_path: Path) -> None:
+    class _UpstreamResponse:
+        status_code = 200
+        headers = {"Content-Type": "text/event-stream"}
+
+        @property
+        def content(self) -> bytes:
+            raise AssertionError("SSE responses must not be buffered through .content")
+
+        def iter_content(self, chunk_size: int):
+            assert chunk_size == 8192
+            yield b'event: response.completed\ndata: {"type":"response.completed","response":{"output":[]}}\n\n'
+
+        def close(self) -> None:
+            return
+
+    def fake_post(*args: object, **kwargs: object) -> _UpstreamResponse:
+        assert kwargs["stream"] is True
+        return _UpstreamResponse()
+
+    monkeypatch.setattr("lumo_flywheel_serving.inference_proxy.requests.post", fake_post)
+    proxy, proxy_thread, proxy_url = _start_server(
+        build_proxy_handler("http://upstream.invalid", state_root=tmp_path / "state")
+    )
+    try:
+        response = requests.request(
+            "POST",
+            f"{proxy_url}/v1/responses",
+            json={"model": "qwen3.5-27b", "input": "stream"},
+            timeout=10,
+        )
+
+        assert response.status_code == 200
+        assert b"response.completed" in response.content
+    finally:
+        proxy.shutdown()
+        proxy_thread.join(timeout=5)
+        proxy.server_close()
+
+
 def _activate_request_shaping_bundle(
     *,
     state_root: Path,

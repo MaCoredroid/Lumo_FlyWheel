@@ -509,11 +509,11 @@ def build_proxy_handler(
 
             self.send_response(upstream.status_code)
             response_headers = _filtered_headers(upstream.headers)
-            response_content = upstream.content
             if upstream.headers.get("Content-Type", "").startswith("text/event-stream"):
                 response_headers["Transfer-Encoding"] = "chunked"
                 response_headers.pop("Content-Length", None)
             else:
+                response_content = upstream.content
                 if self.path == "/v1/responses" and upstream.headers.get("Content-Type", "").startswith("application/json"):
                     try:
                         parsed = json.loads(response_content.decode("utf-8"))
