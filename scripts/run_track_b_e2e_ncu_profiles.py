@@ -395,6 +395,16 @@ def _copy_container_profile(args: argparse.Namespace, archetype: str) -> None:
         raise RuntimeError(f"failed to copy container NCU profile for {archetype}")
 
 
+def _copy_container_profile_if_present(args: argparse.Namespace, archetype: str) -> str:
+    if args.profile_target != "container-server-launch":
+        return ""
+    try:
+        _copy_container_profile(args, archetype)
+    except Exception as exc:
+        return str(exc)
+    return ""
+
+
 def _server_returncode_ok(returncode: int | None) -> bool:
     return returncode in (0, -15, 143)
 
@@ -408,6 +418,7 @@ def _write_profile_failure_metadata(
     error: str = "",
     server_returncode: int | None = None,
     task_returncode: int | None = None,
+    profile_copy_error: str = "",
 ) -> None:
     out_root = Path(args.out_root)
     profile_path = _profile_path(out_root, archetype)
@@ -427,6 +438,9 @@ def _write_profile_failure_metadata(
         "error": error,
         "server_returncode": server_returncode,
         "task_returncode": task_returncode,
+        "profile_copy_error": profile_copy_error,
+        "profile_csv_exists": profile_path.is_file(),
+        "profile_csv_size_bytes": profile_path.stat().st_size if profile_path.is_file() else 0,
         "server_launch_command": args.server_launch_command if args.profile_target in ("server-launch", "container-server-launch") else "",
         "server_ready_url": args.server_ready_url if args.profile_target in ("server-launch", "container-server-launch") else "",
         "container_name": args.container_name if args.profile_target == "container-server-launch" else "",
@@ -467,6 +481,7 @@ def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
                 timeout_s=args.server_ready_timeout_s,
             )
         except Exception as exc:
+            profile_copy_error = _copy_container_profile_if_present(args, archetype)
             _write_profile_failure_metadata(
                 args,
                 archetype,
@@ -474,6 +489,7 @@ def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
                 reason="server_not_ready",
                 error=str(exc),
                 server_returncode=server.returncode,
+                profile_copy_error=profile_copy_error,
             )
             raise
         task_result = _run(_task_command(args, archetype))
@@ -491,6 +507,7 @@ def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
     finally:
         _terminate_server(server, timeout_s=args.server_shutdown_timeout_s)
     if not _server_returncode_ok(server.returncode):
+        profile_copy_error = _copy_container_profile_if_present(args, archetype)
         server_stderr = _server_stderr_path(out_root, archetype).read_text(
             encoding="utf-8",
             errors="replace",
@@ -503,6 +520,7 @@ def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
             reason="server_exit",
             error=server_stderr[-2000:],
             server_returncode=server.returncode,
+            profile_copy_error=profile_copy_error,
         )
         return int(server.returncode or 2)
     try:
@@ -538,6 +556,7 @@ def _run_container_server_profile(args: argparse.Namespace, archetype: str) -> i
                 timeout_s=args.server_ready_timeout_s,
             )
         except Exception as exc:
+            profile_copy_error = _copy_container_profile_if_present(args, archetype)
             _write_profile_failure_metadata(
                 args,
                 archetype,
@@ -545,6 +564,7 @@ def _run_container_server_profile(args: argparse.Namespace, archetype: str) -> i
                 reason="server_not_ready",
                 error=str(exc),
                 server_returncode=server.returncode,
+                profile_copy_error=profile_copy_error,
             )
             raise
         task_result = _run(_task_command(args, archetype))
@@ -563,6 +583,7 @@ def _run_container_server_profile(args: argparse.Namespace, archetype: str) -> i
         _stop_container_server(args)
         _terminate_server(server, timeout_s=args.server_shutdown_timeout_s)
     if not _server_returncode_ok(server.returncode):
+        profile_copy_error = _copy_container_profile_if_present(args, archetype)
         server_stderr = _server_stderr_path(out_root, archetype).read_text(
             encoding="utf-8",
             errors="replace",
@@ -575,6 +596,7 @@ def _run_container_server_profile(args: argparse.Namespace, archetype: str) -> i
             reason="server_exit",
             error=server_stderr[-2000:],
             server_returncode=server.returncode,
+            profile_copy_error=profile_copy_error,
         )
         return int(server.returncode or 2)
     _copy_container_profile(args, archetype)

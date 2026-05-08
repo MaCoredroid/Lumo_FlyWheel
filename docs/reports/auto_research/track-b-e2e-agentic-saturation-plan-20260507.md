@@ -589,6 +589,7 @@ Current revised deferred-check Round 0 restart state recorded on 2026-05-08:
 - NCU application-exit CSVs are now rejected explicitly. The validator reports `<archetype>_application_error` when the profile contains `The application returned an error code`, so the container OOM profile is not reduced to generic missing metrics.
 - Failed server-side NCU attempts now write a non-promoted `ncu_<archetype>_failure.json` sidecar with schema `lumo.track_b.ncu_archetype_profile_failure.v1`, the profile target, command, server/task return codes, stderr/stdout paths, deferred instrumentation flags, and failure reason. This preserves evidence for `server_not_ready`, `task_failed`, `server_exit`, and `profile_invalid` cases without satisfying the valid `ncu_<archetype>.json` metadata gate.
 - The readiness manifest now surfaces those non-promoted NCU failure sidecars under Step G as `failure_metadata_*` fields plus aggregate `failure_metadata_count` and `failure_reasons`, while still requiring valid `ncu_<archetype>.json` profile metadata and finite required metrics before `ncu_profiles_verified=true`.
+- Container-backed server-side NCU failures now try to copy the raw container CSV back to the host profile path before writing the failure sidecar. The failure sidecar records `profile_csv_exists`, `profile_csv_size_bytes`, and any `profile_copy_error`, preserving raw Nsight connect/error evidence for OOM or early-exit cases without promoting it as a valid profile.
 
 Revised deferred-check Round 0 start attempt recorded on 2026-05-07:
 

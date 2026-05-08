@@ -424,6 +424,80 @@ def test_ncu_profile_driver_runs_container_server_launch_target(monkeypatch, tmp
     assert metadata["container_profile_csv"] == "/tmp/track_b_ncu_long-text.csv"
 
 
+def test_ncu_profile_driver_copies_container_failure_profile(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+    run_commands: list[list[str]] = []
+
+    class ExitedServer:
+        returncode = 1
+
+        def poll(self) -> int:
+            return self.returncode
+
+        def terminate(self) -> None:
+            return None
+
+        def wait(self, timeout: float) -> int:
+            return self.returncode
+
+    def fake_popen(
+        command: list[str],
+        *,
+        stdout_path: Path,
+        stderr_path: Path,
+    ) -> ExitedServer:
+        stderr_path.write_text("CUDA error: out of memory\n", encoding="utf-8")
+        return ExitedServer()
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        run_commands.append(command)
+        if command[:2] == ["docker", "cp"]:
+            Path(command[3]).write_text("==ERROR== The application returned an error code (1).\n", encoding="utf-8")
+        return _completed(command)
+
+    monkeypatch.setattr(ncu_profiles, "_popen", fake_popen)
+    monkeypatch.setattr(ncu_profiles, "_run", fake_run)
+
+    rc = ncu_profiles.main(
+        [
+            "--profile-target",
+            "container-server-launch",
+            "--archetype",
+            "long-text",
+            "--out-root",
+            str(tmp_path),
+            "--task-out-root",
+            str(tmp_path / "ncu_task_runs"),
+            "--container-name",
+            "lumo-vllm-l0c-fp8-cutlass-run30",
+            "--container-profile-csv",
+            "/tmp/track_b_ncu_{archetype}.csv",
+            "--server-launch-command",
+            "vllm serve --served-model-name {model}",
+            "--server-ready-url",
+            "http://127.0.0.1:9951/health",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ]
+    )
+
+    assert rc == 2
+    assert [
+        "docker",
+        "cp",
+        "lumo-vllm-l0c-fp8-cutlass-run30:/tmp/track_b_ncu_long-text.csv",
+        str(tmp_path / "ncu_long-text.csv"),
+    ] in run_commands
+    failure = json.loads((tmp_path / "ncu_long-text_failure.json").read_text(encoding="utf-8"))
+    assert failure["reason"] == "server_not_ready"
+    assert failure["profile_target"] == "container-server-launch"
+    assert failure["profile_csv_exists"] is True
+    assert failure["profile_csv_size_bytes"] > 0
+    assert failure["profile_copy_error"] == ""
+
+
 def test_ncu_profile_driver_requires_container_name(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
 
