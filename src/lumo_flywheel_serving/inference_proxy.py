@@ -42,6 +42,12 @@ HOP_BY_HOP_HEADERS = {
     "upgrade",
 }
 INFERENCE_PATHS = {"/v1/responses", "/v1/chat/completions"}
+# /v1/models pass-through tested 2026-05-08 and reverted. Codex 0.128.0's
+# models_manager requires fields (slug, display_name, ...) vLLM does not emit;
+# enriching them piecewise made Codex strict-fail more often (the 403 path is
+# softer — Codex skips model-refresh and proceeds to /v1/responses normally).
+# Keep the empty set so the proxy falls back to 403 on GET /v1/models.
+INFERENCE_GET_PATHS: set[str] = set()
 ADMIN_PATHS = {"/admin/load_tuned_config", "/admin/invalidate"}
 CAMPAIGN_CLASSES = {"eval", "rollout"}
 REQUEST_CLASS_HEADERS = (
@@ -74,6 +80,23 @@ class AdmissionTicket(NamedTuple):
 
 def is_inference_path(path: str) -> bool:
     return path in INFERENCE_PATHS
+
+
+def is_inference_get_path(path: str) -> bool:
+    """GET-only paths the proxy may forward to upstream (read-only model discovery, etc.).
+
+    Scoped narrowly so the proxy's "inference paths only" guarantee still holds
+    for state-changing endpoints. Currently allows GET /v1/models so Codex's
+    model-discovery refresh succeeds; without this, Codex 0.128.0 enters a
+    degraded path where roughly 1 in 3 ``exec`` invocations returns
+    ``turn.completed`` with zero tokens despite making a real
+    ``/v1/responses`` call.
+    """
+
+    if not path:
+        return False
+    base = path.split("?", 1)[0]
+    return base in INFERENCE_GET_PATHS
 
 
 def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -762,7 +785,56 @@ def build_proxy_handler(
         protocol_version = "HTTP/1.1"
 
         def do_GET(self) -> None:  # noqa: N802
-            _write_json_error(self, 403, "Blocked by codex-bench-proxy: inference paths only")
+            if not is_inference_get_path(self.path):
+                _write_json_error(self, 403, "Blocked by codex-bench-proxy: inference paths only")
+                return
+            try:
+                upstream = requests.get(
+                    f"{upstream_base_url}{self.path}",
+                    headers=_filtered_headers(self.headers),
+                    timeout=15,
+                )
+            except requests.RequestException as exc:
+                _write_json_error(self, 502, f"Upstream model discovery failed: {exc}")
+                return
+            response_content = upstream.content
+            base_path = self.path.split("?", 1)[0]
+            if (
+                base_path == "/v1/models"
+                and upstream.status_code == 200
+                and upstream.headers.get("Content-Type", "").startswith("application/json")
+            ):
+                try:
+                    parsed = json.loads(response_content.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    parsed = None
+                if isinstance(parsed, dict) and isinstance(parsed.get("data"), list):
+                    # Codex 0.128.0 models_manager expects an outer "models" key
+                    # AND each entry to carry a "slug" alongside "id". vLLM's
+                    # OpenAI-compatible /v1/models response provides neither.
+                    enriched: list[Any] = []
+                    for entry in parsed["data"]:
+                        if isinstance(entry, dict):
+                            entry = dict(entry)
+                            if "slug" not in entry and isinstance(entry.get("id"), str):
+                                entry["slug"] = entry["id"]
+                            if "name" not in entry and isinstance(entry.get("id"), str):
+                                entry["name"] = entry["id"]
+                        enriched.append(entry)
+                    parsed["data"] = enriched
+                    parsed["models"] = enriched
+                    response_content = json.dumps(parsed).encode("utf-8")
+            self.send_response(upstream.status_code)
+            response_headers = _filtered_headers(upstream.headers)
+            response_headers["Content-Length"] = str(len(response_content))
+            for key, value in response_headers.items():
+                self.send_header(key, value)
+            self.end_headers()
+            try:
+                self.wfile.write(response_content)
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def do_POST(self) -> None:  # noqa: N802
             if self.path in ADMIN_PATHS:

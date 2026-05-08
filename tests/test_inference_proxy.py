@@ -147,6 +147,23 @@ def test_normalize_responses_sse_block_trims_function_call_argument_trailing_tex
     assert b"trailing text" not in normalized
 
 
+def test_proxy_get_v1_models_403s_so_codex_skips_model_refresh(tmp_path: Path) -> None:
+    """Verify GET /v1/models stays 403 — Codex 0.128.0 misbehaves more on a
+    partial-shape response than on an outright 403 (softer fallback path)."""
+
+    proxy, proxy_thread, proxy_url = _start_server(
+        build_proxy_handler("http://upstream.invalid", state_root=tmp_path / "state")
+    )
+    try:
+        response = requests.request("GET", f"{proxy_url}/v1/models?client_version=0.128.0", timeout=5)
+        assert response.status_code == 403
+        assert "inference paths only" in response.text
+    finally:
+        proxy.shutdown()
+        proxy_thread.join(timeout=5)
+        proxy.server_close()
+
+
 def test_is_inference_path_only_allows_inference_endpoints() -> None:
     assert is_inference_path("/v1/responses") is True
     assert is_inference_path("/v1/chat/completions") is True
