@@ -1109,6 +1109,102 @@ if importlib.util.find_spec('arctic_inference') is None:
     ])
 else:
     print('[TRACK-B-PRELAUNCH] arctic-inference already available')
+PY
+python3 - <<'PY'
+# Lumo Track B 2026-05-08: patch vllm/parser/abstract_parser.py so the
+# Responses API forced tool_choice path (ToolChoiceFunction +
+# ChatCompletionNamedToolChoiceParam) runs the configured tool parser on
+# `content` instead of stuffing the raw model output into FunctionCall.
+# Upstream Issue #23227 closed as not-planned; this is the minimal fix.
+from pathlib import Path
+
+path = Path('/usr/local/lib/python3.12/dist-packages/vllm/parser/abstract_parser.py')
+if not path.is_file():
+    raise RuntimeError(f'vLLM abstract_parser source missing: {path}')
+
+text = path.read_text(encoding='utf-8')
+marker = 'Local patch (Lumo Track B 2026-05-08)'
+if marker in text:
+    print('[TRACK-B-PRELAUNCH] forced tool_choice parser patch already present')
+else:
+    old = (
+        '        if request.tool_choice and isinstance(request.tool_choice, ToolChoiceFunction):\n'
+        '            # Forced Function Call (Responses API style)\n'
+        '            assert content is not None\n'
+        '            function_calls.append(\n'
+        '                FunctionCall(name=request.tool_choice.name, arguments=content)\n'
+        '            )\n'
+        '            return function_calls, None  # Clear content since tool is called.\n'
+        '\n'
+        '        if request.tool_choice and isinstance(\n'
+        '            request.tool_choice, ChatCompletionNamedToolChoiceParam\n'
+        '        ):\n'
+        '            # Forced Function Call (Chat Completion API style)\n'
+        '            assert content is not None\n'
+        '            function_calls.append(\n'
+        '                FunctionCall(name=request.tool_choice.function.name, arguments=content)\n'
+        '            )\n'
+        '            return function_calls, None  # Clear content since tool is called.\n'
+    )
+    new = (
+        '        if request.tool_choice and isinstance(request.tool_choice, ToolChoiceFunction):\n'
+        '            # Forced Function Call (Responses API style)\n'
+        '            #\n'
+        '            # Local patch (Lumo Track B 2026-05-08): when a tool parser is\n'
+        '            # configured, run it on `content` and use its parsed arguments\n'
+        '            # instead of passing the raw model output through verbatim. The\n'
+        '            # forced name still overrides whatever the parser thinks. This\n'
+        '            # fixes the case where Qwen3 emits a `<tool_call>...<parameter=\n'
+        '            # path>\\n...\\n</parameter>...` XML payload under forced choice\n'
+        '            # and the unparsed XML lands in `arguments` -- breaking\n'
+        '            # downstream JSON consumers (Codex CLI, schema-strict gates).\n'
+        '            assert content is not None\n'
+        '            arguments = content\n'
+        '            if self._tool_parser is not None:\n'
+        '                tool_call_info = self._tool_parser.extract_tool_calls(\n'
+        '                    content,\n'
+        '                    request=request,  # type: ignore\n'
+        '                )\n'
+        '                if (\n'
+        '                    tool_call_info is not None\n'
+        '                    and tool_call_info.tools_called\n'
+        '                    and tool_call_info.tool_calls\n'
+        '                ):\n'
+        '                    arguments = tool_call_info.tool_calls[0].function.arguments\n'
+        '            function_calls.append(\n'
+        '                FunctionCall(name=request.tool_choice.name, arguments=arguments)\n'
+        '            )\n'
+        '            return function_calls, None  # Clear content since tool is called.\n'
+        '\n'
+        '        if request.tool_choice and isinstance(\n'
+        '            request.tool_choice, ChatCompletionNamedToolChoiceParam\n'
+        '        ):\n'
+        '            # Forced Function Call (Chat Completion API style)\n'
+        '            #\n'
+        '            # Local patch (Lumo Track B 2026-05-08): same fix as the\n'
+        '            # ToolChoiceFunction branch above.\n'
+        '            assert content is not None\n'
+        '            arguments = content\n'
+        '            if self._tool_parser is not None:\n'
+        '                tool_call_info = self._tool_parser.extract_tool_calls(\n'
+        '                    content,\n'
+        '                    request=request,  # type: ignore\n'
+        '                )\n'
+        '                if (\n'
+        '                    tool_call_info is not None\n'
+        '                    and tool_call_info.tools_called\n'
+        '                    and tool_call_info.tool_calls\n'
+        '                ):\n'
+        '                    arguments = tool_call_info.tool_calls[0].function.arguments\n'
+        '            function_calls.append(\n'
+        '                FunctionCall(name=request.tool_choice.function.name, arguments=arguments)\n'
+        '            )\n'
+        '            return function_calls, None  # Clear content since tool is called.\n'
+    )
+    if old not in text:
+        raise RuntimeError('forced tool_choice patch target not found in abstract_parser.py')
+    path.write_text(text.replace(old, new), encoding='utf-8')
+    print('[TRACK-B-PRELAUNCH] applied forced tool_choice parser patch')
 PY"""
 
 
