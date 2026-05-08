@@ -540,6 +540,22 @@ def test_ncu_profile_verification_rejects_missing_required_metrics(tmp_path: Pat
     assert long_text["missing_metrics"] == ["gpu__time_duration.sum"]
 
 
+def test_ncu_profile_verification_reports_no_kernel_warning(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        text = _ncu_csv_text()
+        if archetype == "long-text":
+            text = "==WARNING== No kernels were profiled.\n"
+        (tmp_path / f"ncu_{archetype}.csv").write_text(text, encoding="utf-8")
+        _write_ncu_metadata(tmp_path, archetype)
+
+    result = readiness._ncu_profile_verification(tmp_path)
+
+    assert result["ok"] is False
+    assert "long-text_no_kernels_profiled" in result["reasons"]
+    long_text = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
+    assert long_text["no_kernels_profiled"] is True
+
+
 def test_ncu_profile_verification_rejects_nonfinite_required_metric_values(tmp_path: Path) -> None:
     for archetype in readiness.NCU_ARCHETYPES:
         text = _ncu_csv_text()

@@ -97,6 +97,8 @@ def _validate_profile(path: Path) -> None:
     if not path.is_file() or path.stat().st_size <= 0:
         raise RuntimeError(f"NCU profile missing or empty: {path}")
     text = path.read_text(encoding="utf-8", errors="replace")
+    if "No kernels were profiled" in text:
+        raise RuntimeError(f"NCU profile {path} contains no profiled kernels")
     values = _metric_values(text)
     missing = [metric for metric in NCU_REQUIRED_METRICS if metric not in text]
     if missing:

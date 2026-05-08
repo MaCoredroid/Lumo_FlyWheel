@@ -305,6 +305,7 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
         metadata = _load_json(metadata_path)
         size_bytes = path.stat().st_size if exists else 0
         text = path.read_text(encoding="utf-8", errors="replace") if exists else ""
+        no_kernels_profiled = "No kernels were profiled" in text
         metric_values = _ncu_metric_values(text)
         metric_coverage = {metric: metric in text for metric in NCU_REQUIRED_METRICS}
         missing_metrics = [metric for metric, present in metric_coverage.items() if not present]
@@ -331,10 +332,19 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
             metadata_reasons.append("runtime_config_hash_mismatch")
         if metadata.get("profile_csv") != expected_profile_csv:
             metadata_reasons.append("profile_csv_mismatch")
-        ok = exists and size_bytes > 0 and not missing_metrics and not nonfinite_metrics and not metadata_reasons
+        ok = (
+            exists
+            and size_bytes > 0
+            and not no_kernels_profiled
+            and not missing_metrics
+            and not nonfinite_metrics
+            and not metadata_reasons
+        )
         if not ok:
             if not exists or size_bytes <= 0:
                 reasons.append(f"{archetype}_missing_or_empty")
+            elif no_kernels_profiled:
+                reasons.append(f"{archetype}_no_kernels_profiled")
             elif missing_metrics:
                 reasons.append(f"{archetype}_missing_required_metrics")
             elif nonfinite_metrics:
@@ -355,6 +365,7 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
                 "required_metrics_metadata_match": metadata.get("required_metrics") == list(NCU_REQUIRED_METRICS),
                 "runtime_config_hash": metadata.get("runtime_config_hash"),
                 "size_bytes": size_bytes,
+                "no_kernels_profiled": no_kernels_profiled,
                 "required_metric_coverage": metric_coverage,
                 "missing_metrics": missing_metrics,
                 "required_metric_values": metric_values,
