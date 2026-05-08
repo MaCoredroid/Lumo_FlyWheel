@@ -301,8 +301,10 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
     for archetype in NCU_ARCHETYPES:
         path = output_dir / f"ncu_{archetype}.csv"
         metadata_path = output_dir / f"ncu_{archetype}.json"
+        failure_metadata_path = output_dir / f"ncu_{archetype}_failure.json"
         exists = path.is_file()
         metadata = _load_json(metadata_path)
+        failure_metadata = _load_json(failure_metadata_path)
         size_bytes = path.stat().st_size if exists else 0
         text = path.read_text(encoding="utf-8", errors="replace") if exists else ""
         no_kernels_profiled = "No kernels were profiled" in text
@@ -363,6 +365,17 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
                 "metadata_path": str(metadata_path.relative_to(REPO_ROOT)) if metadata_path.is_relative_to(REPO_ROOT) else str(metadata_path),
                 "metadata_exists": metadata_path.is_file(),
                 "metadata_reasons": metadata_reasons,
+                "failure_metadata_path": (
+                    str(failure_metadata_path.relative_to(REPO_ROOT))
+                    if failure_metadata_path.is_relative_to(REPO_ROOT)
+                    else str(failure_metadata_path)
+                ),
+                "failure_metadata_exists": failure_metadata_path.is_file(),
+                "failure_metadata_schema": failure_metadata.get("schema"),
+                "failure_reason": failure_metadata.get("reason"),
+                "failure_profile_target": failure_metadata.get("profile_target"),
+                "failure_server_returncode": failure_metadata.get("server_returncode"),
+                "failure_task_returncode": failure_metadata.get("task_returncode"),
                 "task_id": metadata.get("task_id"),
                 "expected_task_id": NCU_ARCHETYPE_TASKS[archetype],
                 "round": metadata.get("round"),
@@ -384,6 +397,12 @@ def _ncu_profile_verification(output_dir: Path, *, expected_runtime_config_hash:
         "required_metrics": list(NCU_REQUIRED_METRICS),
         "profile_count": sum(1 for profile in profiles if profile["ok"]),
         "expected_profile_count": len(NCU_ARCHETYPES),
+        "failure_metadata_count": sum(1 for profile in profiles if profile["failure_metadata_exists"]),
+        "failure_reasons": {
+            profile["archetype"]: profile["failure_reason"]
+            for profile in profiles
+            if profile["failure_metadata_exists"]
+        },
         "expected_runtime_config_hash": expected_runtime_config_hash,
         "reasons": reasons,
         "profiles": profiles,

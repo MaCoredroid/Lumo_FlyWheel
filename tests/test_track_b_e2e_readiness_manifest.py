@@ -619,6 +619,35 @@ def test_ncu_profile_verification_reports_application_error(tmp_path: Path) -> N
     assert long_text["application_error"] is True
 
 
+def test_ncu_profile_verification_reports_failure_sidecar(tmp_path: Path) -> None:
+    for archetype in readiness.NCU_ARCHETYPES:
+        (tmp_path / f"ncu_{archetype}.csv").write_text("", encoding="utf-8")
+    (tmp_path / "ncu_long-text_failure.json").write_text(
+        json.dumps(
+            {
+                "schema": "lumo.track_b.ncu_archetype_profile_failure.v1",
+                "reason": "server_not_ready",
+                "profile_target": "container-server-launch",
+                "server_returncode": 1,
+                "task_returncode": None,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = readiness._ncu_profile_verification(tmp_path)
+
+    assert result["ok"] is False
+    assert result["failure_metadata_count"] == 1
+    assert result["failure_reasons"] == {"long-text": "server_not_ready"}
+    long_text = next(profile for profile in result["profiles"] if profile["archetype"] == "long-text")
+    assert long_text["failure_metadata_exists"] is True
+    assert long_text["failure_metadata_schema"] == "lumo.track_b.ncu_archetype_profile_failure.v1"
+    assert long_text["failure_profile_target"] == "container-server-launch"
+    assert long_text["failure_server_returncode"] == 1
+
+
 def test_ncu_profile_verification_rejects_nonfinite_required_metric_values(tmp_path: Path) -> None:
     for archetype in readiness.NCU_ARCHETYPES:
         text = _ncu_csv_text()
