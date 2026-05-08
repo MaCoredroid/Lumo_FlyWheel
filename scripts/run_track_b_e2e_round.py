@@ -298,6 +298,9 @@ def _runner_command(args: argparse.Namespace) -> list[str]:
     ]
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
+    zero_token_retries = int(getattr(args, "zero_token_retries", 0) or 0)
+    if zero_token_retries > 0:
+        command.extend(["--zero-token-retries", str(zero_token_retries)])
     deferred = getattr(args, "defer_preflight_checks", []) or []
     if "codex_trace_out_supported" in deferred:
         command.append("--defer-codex-trace-out")
@@ -473,6 +476,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout-s", type=float, default=900.0)
     parser.add_argument("--codex-smoke-timeout-s", type=float, default=180.0)
     parser.add_argument("--vllm-request-metrics-jsonl", default="")
+    parser.add_argument(
+        "--zero-token-retries",
+        type=int,
+        default=0,
+        help="Forwarded to run_track_b_e2e_task.py per task; mitigates Codex 0.128.0's zero-token quirk.",
+    )
     parser.add_argument("--clock-skew-ms-p99", type=float, required=True)
     parser.add_argument("--trace-emitter-correctness-verified-at", required=True)
     parser.add_argument(

@@ -577,9 +577,6 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     metrics_pre = _metrics_text(args.metrics_url)
     (task_dir / "vllm_metrics_pre.txt").write_text(metrics_pre, encoding="utf-8")
 
-    sampler = _run_sampler(args, task_dir)
-    started_at = datetime.now(UTC)
-    started = time.monotonic()
     command = _format_command(
         args.codex_command_template,
         {
@@ -592,17 +589,45 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
             "task_dir": str(task_dir),
         },
     )
+    sampler = _run_sampler(args, task_dir)
+    started_at = datetime.now(UTC)
+    started = time.monotonic()
     result: subprocess.CompletedProcess[str] | None = None
+    zero_token_retry_count = 0
+    max_retries = max(0, int(getattr(args, "zero_token_retries", 0) or 0))
     try:
-        result = subprocess.run(
-            command,
-            cwd=workspace,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=args.timeout_s,
-            env={**os.environ, "OPENAI_API_KEY": args.api_key, "OPENAI_BASE_URL": args.endpoint},
-        )
+        for retry_index in range(max_retries + 1):
+            offset_before = (
+                vllm_request_metrics_jsonl.stat().st_size
+                if vllm_request_metrics_jsonl is not None and vllm_request_metrics_jsonl.is_file()
+                else 0
+            )
+            result = subprocess.run(
+                command,
+                cwd=workspace,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=args.timeout_s,
+                env={**os.environ, "OPENAI_API_KEY": args.api_key, "OPENAI_BASE_URL": args.endpoint},
+            )
+            # Detect Codex 0.128.0 zero-token quirk: codex exits 0 but never
+            # made a /v1/responses call (proxy capture file gained no bytes).
+            offset_after = (
+                vllm_request_metrics_jsonl.stat().st_size
+                if vllm_request_metrics_jsonl is not None and vllm_request_metrics_jsonl.is_file()
+                else 0
+            )
+            if vllm_request_metrics_jsonl is None or offset_after > offset_before:
+                break
+            if retry_index >= max_retries:
+                break
+            zero_token_retry_count += 1
+            print(
+                f"run_track_b_e2e_task.py: zero-token codex completion (attempt {retry_index + 1}); "
+                f"retrying ({retry_index + 1}/{max_retries})",
+                file=sys.stderr,
+            )
     finally:
         _stop_sampler(sampler)
     elapsed_s = time.monotonic() - started
@@ -668,6 +693,8 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "gpu_mem_post": gpu_mem_post,
         "ncu_mode": bool(args.ncu_mode),
         "codex_exit_code": result.returncode if result else None,
+        "zero_token_retry_count": zero_token_retry_count,
+        "zero_token_retry_cohort": zero_token_retry_count > 0,
         "deferred_instrumentation_checks": _deferred_instrumentation_checks(args),
     }
     (task_dir / "runner_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -723,6 +750,20 @@ def main() -> int:
     parser.add_argument("--defer-vllm-request-metrics-join", action="store_true")
     parser.add_argument("--defer-dcgm-profile-fields", action="store_true")
     parser.add_argument("--allow-missing-workspace-diagnostic", action="store_true")
+    parser.add_argument(
+        "--zero-token-retries",
+        type=int,
+        default=0,
+        help=(
+            "Maximum retries when Codex 0.128.0's zero-token quirk fires "
+            "(codex exits 0 but never made a /v1/responses call). Detected "
+            "via no new bytes in --vllm-request-metrics-jsonl. Default 0 "
+            "(no retry); set to 3 for round-level sweeps where this quirk "
+            "would dominate variance. Tasks needing retry are tagged "
+            "zero_token_retry_cohort=true so the round summary can keep "
+            "them in a separate cohort if desired."
+        ),
+    )
     parser.add_argument(
         "--vllm-request-metrics-jsonl",
         default="",

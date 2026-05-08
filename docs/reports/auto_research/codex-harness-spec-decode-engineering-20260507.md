@@ -3,6 +3,24 @@
 Generated: 2026-05-07
 Revised: 2026-05-06 (post-reproduction findings)
 Revised: 2026-05-07 (post-PR39562-stop-gap real-task matrix)
+Revised: 2026-05-08 (live runtime is SuffixDecoding; proxy-side instrumentation; Step 0d reframe)
+
+## Status update — 2026-05-08 live-runtime + instrumentation
+
+Three load-bearing facts surfaced from inspecting the running system; they change the framing of Step 0d and Steps 2/3 below:
+
+1. **SuffixDecoding is live, not pending.** The vLLM container `lumo-vllm-l0c-fp8-cutlass-run30` is running `speculative_config={"method":"suffix","num_speculative_tokens":12,"suffix_decoding_max_cached_requests":1000,"suffix_decoding_max_spec_factor":2.0,"suffix_decoding_max_tree_depth":32,"suffix_decoding_min_token_prob":0.05}`. `arctic-inference==0.1.2` was installed via the `ModelServer` prelaunch hook. Aggregate live `/metrics` shows `vllm:spec_decode_num_accepted_tokens_total / vllm:spec_decode_num_draft_tokens_total ≈ 51.4%`. **Step 2 (Pull SuffixDecoding from Snowflake ArcticInference) is DONE.** **Technique 1 has shipped.** The 020/025/028 ngram-PLD candidates are no longer the running baseline.
+2. **Step 0d reframes.** The original Step 0d wording ("Run B-1/B-2/B-3 on 020/025/028 against a tool-call-inclusive workload") referred to the ngram-PLD candidate set. The current Step 0d question is *correctness of the live `method=suffix, k=12, tree=32` config against a tool-call-inclusive workload*. The reduced-contract Round 0 (13 SWE tasks, median wallclock 95.023s) was measured under this config and all 13 tasks completed `correctness_via_exit_code` — but the schema-strict B-1/B-2/B-3 gates have not been run against this exact runtime. The 020/025/028 candidate ranking remains a useful Round 1 fallback if SuffixDecoding fails B-1/B-2/B-3.
+3. **Codex `--trace-out` and vLLM per-request metrics join are now produced by the inference proxy + runner-side synthesis** (see `track-b-e2e-proxy-side-instrumentation-20260508.md`). The schema `lumo.track_b.codex_trace_correctness.v1` is satisfied without a Codex CLI patch and without a vLLM source patch. The proxy emits per-request rows with `vllm_request_id`, `prompt_tokens`, `completion_tokens`, `prefill_sum_s`, `decode_sum_s`, `spec_decode_num_accepted_tokens`, `spec_decode_num_draft_tokens`, plus a regime classification heuristic. Round_1+ measurements can be done at per-turn granularity with a regime breakdown for free.
+
+**Recommended order from here:**
+
+- **Step 0d (revised):** B-1/B-2/B-3 correctness gate on the **live** SuffixDecoding config against the round_0 13-task workload (which already includes tool-call frames in tasks like `responses-sdk-adapter-cutover` and `multi-tool-transaction-repair`). If pass: declare the live config the Round 1 baseline and proceed to Step 4 (harness-coupled techniques as uplift). If fail: fall back to candidate 020 ngram-PLD and re-validate.
+- **Per-regime acceptance analysis (free pass):** the proxy capture rows already carry `regime` + `spec_decode_num_accepted_tokens` + `spec_decode_num_draft_tokens` per turn. Compute per-regime accepted/draft p50 from the captured rows. The diagnosis taxonomy in §6.5 of the parent agentic-saturation plan can fire on regime-level numbers without DCGM or Kineto. If `tool-call` regime is at >0.7 acceptance and `reasoning` is at <0.3, that's the prioritization signal for Techniques 2 (read_file priming) vs 3 (schema-aware tool drafter) — without a separate measurement pass.
+- **Step 2 (Pull SuffixDecoding):** strike-through DONE. Replace with "validate live SuffixDecoding config under B-1/B-2/B-3" — that is the new Step 0d framing.
+- **Step 4 (Wire Technique 1):** redirected at the *additional* cross-turn coupling on top of the shipped SuffixDecoding (session-scoped suffix tree extension, harness oracle wiring), not at the SuffixDecoding bring-up itself.
+
+**One open framing question:** the spec's pre-2026-05-08 text refers to "the post-PR#39562 c1 ngram-PLD real-task baseline" of `~11 tok/s`. The actually-shipped baseline is now SuffixDecoding at the same hardware × model. Decode-tps under SuffixDecoding has not been re-measured under the round_0 task workload at task-level granularity (only the aggregate counter is visible). This is now a free outcome of the round_0 v2 sweep that's pending in the proxy-side-instrumentation deliverable.
 
 Companion to:
 - `l0-warm-decode-quality-bounded-track-20260505.md` (Track B parent spec)
