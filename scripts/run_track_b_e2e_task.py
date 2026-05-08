@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import shlex
 import subprocess
 import sys
@@ -58,6 +59,25 @@ def _write_prompt(workspace: Path, prompt_path: Path) -> None:
 def _format_command(template: str, mapping: dict[str, str]) -> list[str]:
     rendered = template.format(**mapping)
     return shlex.split(rendered)
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _prepare_attempt_workspace(source_workspace: Path, task_dir: Path) -> Path:
+    attempt_workspace = task_dir / "workspace"
+    if attempt_workspace.exists():
+        raise RuntimeError(f"attempt workspace already exists: {attempt_workspace}")
+    shutil.copytree(
+        source_workspace,
+        attempt_workspace,
+        ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache"),
+    )
+    return attempt_workspace
 
 
 def _validate_codex_command_template(template: str, *, require_trace_out: bool = True) -> None:
@@ -351,14 +371,15 @@ def _write_missing_workspace_diagnostic(args: argparse.Namespace, family: str, v
 
 def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     _validate_runtime_config_hash(args.runtime_config_hash)
-    workspace = REPO_ROOT / "benchmark_blueprints" / "families" / family / "workspace_bundle" / variant
-    if not workspace.is_dir():
+    source_workspace = REPO_ROOT / "benchmark_blueprints" / "families" / family / "workspace_bundle" / variant
+    if not source_workspace.is_dir():
         if args.allow_missing_workspace_diagnostic:
-            _write_missing_workspace_diagnostic(args, family, variant, workspace)
+            _write_missing_workspace_diagnostic(args, family, variant, source_workspace)
             return 0
-        raise RuntimeError(f"workspace bundle missing: {workspace}")
+        raise RuntimeError(f"workspace bundle missing: {source_workspace}")
     task_dir = Path(args.out_root) / f"round_{args.round}" / f"{family}__{variant}" / f"run_{args.attempt:02d}"
     task_dir.mkdir(parents=True, exist_ok=True)
+    workspace = _prepare_attempt_workspace(source_workspace, task_dir)
     trace_out = task_dir / "codex_trace.jsonl"
     prompt_path = task_dir / "prompt.md"
     _write_prompt(workspace, prompt_path)
@@ -432,7 +453,9 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "variant": variant,
         "round": args.round,
         "attempt": args.attempt,
-        "workspace": str(workspace.relative_to(REPO_ROOT)),
+        "workspace": _display_path(workspace),
+        "source_workspace": _display_path(source_workspace),
+        "workspace_isolated": True,
         "trace_out": str(trace_out),
         "elapsed_s": elapsed_s,
         "runtime_config_hash": args.runtime_config_hash,

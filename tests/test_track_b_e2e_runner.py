@@ -118,11 +118,21 @@ def test_run_one_can_record_missing_workspace_diagnostic(tmp_path: Path) -> None
 def test_deferred_runner_preserves_codex_exit_code(monkeypatch, tmp_path: Path) -> None:
     workspace = tmp_path / "benchmark_blueprints" / "families" / "family" / "workspace_bundle" / "variant"
     workspace.mkdir(parents=True)
+    source_config = workspace / "runtime.toml"
+    source_config.write_text('wire_api = "chat_completions"\n', encoding="utf-8")
     monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(runner, "_request", lambda *args, **kwargs: None)
     monkeypatch.setattr(runner, "_metrics_text", lambda url: "")
     monkeypatch.setattr(runner, "_run_sampler", lambda args, task_dir: None)
-    monkeypatch.setattr(runner.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "failed"))
+
+    def fake_run(command, **kwargs):
+        isolated_workspace = tmp_path / "out" / "round_0" / "family__variant" / "run_01" / "workspace"
+        assert kwargs["cwd"] == isolated_workspace
+        assert str(isolated_workspace) in command
+        (kwargs["cwd"] / "runtime.toml").write_text('wire_api = "responses"\n', encoding="utf-8")
+        return subprocess.CompletedProcess(command, 1, "", "failed")
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
 
     args = Namespace(
         runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -136,7 +146,7 @@ def test_deferred_runner_preserves_codex_exit_code(monkeypatch, tmp_path: Path) 
         endpoint="http://127.0.0.1:9950/v1",
         model="qwen3.5-27b",
         timeout_s=1,
-        codex_command_template="codex exec --json",
+        codex_command_template="codex exec --json -C {workspace}",
         vllm_request_metrics_jsonl="",
         ncu_mode=False,
         defer_codex_trace_out=True,
@@ -148,12 +158,16 @@ def test_deferred_runner_preserves_codex_exit_code(monkeypatch, tmp_path: Path) 
     rc = runner.run_one(args, "family", "variant")
 
     assert rc == 1
+    assert source_config.read_text(encoding="utf-8") == 'wire_api = "chat_completions"\n'
     metadata = json.loads(
         (tmp_path / "out" / "round_0" / "family__variant" / "run_01" / "runner_metadata.json").read_text(
             encoding="utf-8"
         )
     )
     assert metadata["codex_exit_code"] == 1
+    assert metadata["workspace"] == "out/round_0/family__variant/run_01/workspace"
+    assert metadata["source_workspace"] == "benchmark_blueprints/families/family/workspace_bundle/variant"
+    assert metadata["workspace_isolated"] is True
 
 
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
