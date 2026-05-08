@@ -788,7 +788,8 @@ Committed scaffold commits through this status checkpoint:
 - `404f039 Guard Track B NCU runtime hash`
 - `571a3ca Fix Track B NCU doc drift`
 - `7826c5c Record Track B NCU server blocker`
-- Current checkpoint: `Surface Track B NCU blocker in readiness`
+- `51da1f7 Surface Track B NCU blocker in readiness`
+- Current checkpoint: `Refresh Track B blocker ledger`
 
 ## 12. Decision rules for ending the loop
 
