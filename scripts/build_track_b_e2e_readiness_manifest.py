@@ -590,6 +590,12 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "--server-launch-command")
                     and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "--server-ready-url")
                 ),
+                "ncu_profile_driver_container_server_launch_supported": (
+                    _contains("scripts/run_track_b_e2e_ncu_profiles.py", "container-server-launch")
+                    and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "--container-name")
+                    and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "--container-profile-csv")
+                    and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "docker")
+                ),
                 "ncu_profile_required_topology": "server-launch",
                 "ncu_profiles_verified": ncu_profiles["ok"],
                 "ncu_profiles": ncu_profiles,
