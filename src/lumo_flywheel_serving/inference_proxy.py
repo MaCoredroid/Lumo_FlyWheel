@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import threading
@@ -68,6 +69,7 @@ def is_inference_path(path: str) -> bool:
 
 def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
+    _normalize_responses_output_items(normalized)
     tools = normalized.get("tools")
     if not isinstance(tools, list):
         return normalized
@@ -86,6 +88,69 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
         normalized_tools.append(tool)
     normalized["tools"] = normalized_tools
     return normalized
+
+
+def normalize_responses_response_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    _normalize_responses_output_items(normalized)
+    return normalized
+
+
+def _normalize_responses_output_items(value: Any) -> None:
+    if isinstance(value, list):
+        for item in value:
+            _normalize_responses_output_items(item)
+        return
+    if not isinstance(value, dict):
+        return
+    if value.get("type") == "reasoning" and "status" not in value:
+        value["status"] = "completed"
+    if value.get("type") == "reasoning" and "id" not in value:
+        digest = hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+        value["id"] = f"rs_{digest}"
+    for key in ("input", "output", "item", "response"):
+        if key in value:
+            _normalize_responses_output_items(value[key])
+
+
+def normalize_responses_sse_block(block: bytes) -> bytes:
+    lines = block.splitlines()
+    normalized_lines: list[bytes] = []
+    changed = False
+    for line in lines:
+        if not line.startswith(b"data:"):
+            normalized_lines.append(line)
+            continue
+        prefix, separator, data = line.partition(b":")
+        stripped = data.strip()
+        if not stripped or stripped == b"[DONE]":
+            normalized_lines.append(line)
+            continue
+        try:
+            payload = json.loads(stripped.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            normalized_lines.append(line)
+            continue
+        if not isinstance(payload, dict):
+            normalized_lines.append(line)
+            continue
+        normalized = normalize_responses_response_payload(payload)
+        normalized_lines.append(prefix + separator + b" " + json.dumps(normalized, separators=(",", ":")).encode("utf-8"))
+        changed = True
+    if not changed:
+        return block + b"\n\n"
+    return b"\n".join(normalized_lines) + b"\n\n"
+
+
+def _pop_sse_block(buffer: bytes) -> tuple[bytes | None, bytes]:
+    lf_index = buffer.find(b"\n\n")
+    crlf_index = buffer.find(b"\r\n\r\n")
+    candidates = [index for index in (lf_index, crlf_index) if index >= 0]
+    if not candidates:
+        return None, buffer
+    index = min(candidates)
+    separator_len = 4 if buffer[index : index + 4] == b"\r\n\r\n" else 2
+    return buffer[:index], buffer[index + separator_len :]
 
 
 def _filtered_headers(headers: Any) -> dict[str, str]:
@@ -128,12 +193,25 @@ def _write_json_payload(handler: BaseHTTPRequestHandler, status: int, payload: d
 
 
 def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Response) -> None:
+    pending = b""
     try:
         for chunk in upstream.iter_content(chunk_size=8192):
             if not chunk:
                 continue
-            handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
-            handler.wfile.write(chunk)
+            pending += chunk
+            while True:
+                block, pending = _pop_sse_block(pending)
+                if block is None:
+                    break
+                normalized = normalize_responses_sse_block(block)
+                handler.wfile.write(f"{len(normalized):X}\r\n".encode("ascii"))
+                handler.wfile.write(normalized)
+                handler.wfile.write(b"\r\n")
+                handler.wfile.flush()
+        if pending:
+            normalized = normalize_responses_sse_block(pending)
+            handler.wfile.write(f"{len(normalized):X}\r\n".encode("ascii"))
+            handler.wfile.write(normalized)
             handler.wfile.write(b"\r\n")
             handler.wfile.flush()
         handler.wfile.write(b"0\r\n\r\n")
@@ -189,9 +267,20 @@ def _extract_request_class(payload: dict[str, Any] | None, headers: Any) -> str:
 
 
 def _normalize_request_shaping_policy(bundle_path: str | Path, bundle: Any) -> RequestShapingPolicy | None:
-    shaping = bundle.request_shaping
+    shaping = dict(bundle.request_shaping)
     if not shaping:
         return None
+    if (
+        set(shaping) == {"target_concurrency"}
+        and "concurrency_cap_eval" not in shaping
+        and "concurrency_cap_rollout" not in shaping
+        and "admission_queue_depth_max" not in shaping
+    ):
+        shaping = {
+            "concurrency_cap_eval": shaping["target_concurrency"],
+            "concurrency_cap_rollout": 0,
+            "admission_queue_depth_max": 0,
+        }
     issues: list[ValidationIssue] = []
     vllm_config = bundle.vllm_config
     max_num_seqs = int(vllm_config.get("max_num_seqs", 0) or 0)
@@ -420,11 +509,19 @@ def build_proxy_handler(
 
             self.send_response(upstream.status_code)
             response_headers = _filtered_headers(upstream.headers)
+            response_content = upstream.content
             if upstream.headers.get("Content-Type", "").startswith("text/event-stream"):
                 response_headers["Transfer-Encoding"] = "chunked"
                 response_headers.pop("Content-Length", None)
             else:
-                response_headers["Content-Length"] = str(len(upstream.content))
+                if self.path == "/v1/responses" and upstream.headers.get("Content-Type", "").startswith("application/json"):
+                    try:
+                        parsed = json.loads(response_content.decode("utf-8"))
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        parsed = None
+                    if isinstance(parsed, dict):
+                        response_content = json.dumps(normalize_responses_response_payload(parsed)).encode("utf-8")
+                response_headers["Content-Length"] = str(len(response_content))
             for key, value in response_headers.items():
                 self.send_header(key, value)
             self.end_headers()
@@ -437,7 +534,7 @@ def build_proxy_handler(
                 return
 
             try:
-                self.wfile.write(upstream.content)
+                self.wfile.write(response_content)
                 self.wfile.flush()
             finally:
                 admission.release(ticket)

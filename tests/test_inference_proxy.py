@@ -10,9 +10,12 @@ from pathlib import Path
 import requests
 
 from lumo_flywheel_serving.inference_proxy import (
+    _normalize_request_shaping_policy,
     _write_chunked_stream,
     is_inference_path,
     normalize_responses_request_payload,
+    normalize_responses_response_payload,
+    normalize_responses_sse_block,
     build_proxy_handler,
 )
 from lumo_flywheel_serving.tuned_config import RuntimeStateStore, make_tuned_config_bundle, persist_tuned_config_bundle
@@ -57,6 +60,57 @@ def test_normalize_responses_request_payload_preserves_existing_tool_shapes() ->
     normalized = normalize_responses_request_payload(payload)
 
     assert normalized == payload
+
+
+def test_normalize_responses_request_payload_adds_reasoning_status() -> None:
+    payload = {
+        "model": "qwen3.5-27b",
+        "input": [
+            {
+                "type": "reasoning",
+                "summary": [],
+                "content": [{"type": "reasoning_text", "text": "thinking"}],
+            }
+        ],
+    }
+
+    normalized = normalize_responses_request_payload(payload)
+
+    assert normalized["input"][0]["status"] == "completed"
+    assert normalized["input"][0]["id"].startswith("rs_")
+
+
+def test_normalize_responses_response_payload_adds_reasoning_status() -> None:
+    payload = {
+        "type": "response.completed",
+        "response": {
+            "output": [
+                {
+                    "type": "reasoning",
+                    "summary": [],
+                    "content": [{"type": "reasoning_text", "text": "thinking"}],
+                }
+            ]
+        },
+    }
+
+    normalized = normalize_responses_response_payload(payload)
+
+    assert normalized["response"]["output"][0]["status"] == "completed"
+    assert normalized["response"]["output"][0]["id"].startswith("rs_")
+
+
+def test_normalize_responses_sse_block_adds_reasoning_status() -> None:
+    block = (
+        b"event: response.completed\n"
+        b'data: {"type":"response.completed","response":{"output":[{"type":"reasoning","summary":[]}]}}\n'
+    )
+
+    normalized = normalize_responses_sse_block(block)
+
+    assert b'"status":"completed"' in normalized
+    assert b'"id":"rs_' in normalized
+    assert normalized.endswith(b"\n\n")
 
 
 def test_is_inference_path_only_allows_inference_endpoints() -> None:
@@ -131,6 +185,39 @@ def _activate_request_shaping_bundle(
     )
     bundle_path = persist_tuned_config_bundle(bundle, bundle_root)
     RuntimeStateStore(state_root).activate_bundle(bundle_path, bundle)
+
+
+def test_proxy_accepts_legacy_target_concurrency_request_shaping(tmp_path: Path) -> None:
+    bundle = make_tuned_config_bundle(
+        model_id="qwen3.5-27b",
+        family_id="proposal-ranking-manager-judgment",
+        weight_version_id="2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+        workload_distribution_id="prmj-v1-live",
+        vllm_config={
+            "max_num_seqs": 4,
+            "max_num_batched_tokens": 8192,
+            "enable_chunked_prefill": True,
+            "enable_prefix_caching": True,
+            "gpu_memory_utilization": 0.90,
+            "max_model_len": 131072,
+            "kv_cache_dtype": "fp8_e5m2",
+        },
+        request_shaping={"target_concurrency": 3},
+        objective={"metric": "eval_throughput", "value": 1.0},
+        measurement_trace_ref="measurement.json",
+        search_trace_ref="search.json",
+        baseline_bundle_id=None,
+        regression_guard={},
+        safety_rails={},
+    )
+    bundle_path = persist_tuned_config_bundle(bundle, tmp_path / "bundles")
+
+    policy = _normalize_request_shaping_policy(bundle_path, bundle)
+
+    assert policy is not None
+    assert policy.concurrency_cap_eval == 3
+    assert policy.concurrency_cap_rollout == 0
+    assert policy.admission_queue_depth_max == 0
 
 
 def _start_server(handler: type[BaseHTTPRequestHandler]) -> tuple[ThreadingHTTPServer, threading.Thread, str]:
