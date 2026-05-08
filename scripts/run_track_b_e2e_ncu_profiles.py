@@ -167,6 +167,8 @@ def _task_command(args: argparse.Namespace, archetype: str) -> list[str]:
         args.health_url,
         "--metrics-url",
         args.metrics_url,
+        "--reset-prefix-cache-url",
+        args.reset_prefix_cache_url,
         "--endpoint",
         args.endpoint,
         "--api-key",
@@ -367,6 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--launch-count", type=int, default=16)
     parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
     parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")
+    parser.add_argument("--reset-prefix-cache-url", default="http://127.0.0.1:9950/reset_prefix_cache")
     parser.add_argument("--endpoint", default="http://127.0.0.1:9950/v1")
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", "local"))
     parser.add_argument("--model", default="qwen3.5-27b")

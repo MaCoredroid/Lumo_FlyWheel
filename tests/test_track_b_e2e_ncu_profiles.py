@@ -56,6 +56,7 @@ def test_ncu_profile_driver_builds_named_archetype_command(monkeypatch, tmp_path
     assert command[command.index("--log-file") + 1] == str(tmp_path / "ncu_tool-call-frame.csv")
     assert command[command.index("--out-root") + 1] == str(tmp_path / "ncu_task_runs")
     assert command[command.index("--runtime-config-hash") + 1] == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    assert command[command.index("--reset-prefix-cache-url") + 1] == "http://127.0.0.1:9950/reset_prefix_cache"
     assert "policy-aware-request-resolution/v1-clean-baseline" in command
     assert "--no-dcgm" in command
     assert "--ncu-mode" in command
@@ -208,6 +209,14 @@ def test_ncu_profile_driver_runs_server_launch_target(monkeypatch, tmp_path: Pat
             "python serve.py --model {model}",
             "--server-ready-url",
             "http://127.0.0.1:9951/health",
+            "--health-url",
+            "http://127.0.0.1:9951/health",
+            "--metrics-url",
+            "http://127.0.0.1:9951/metrics",
+            "--reset-prefix-cache-url",
+            "http://127.0.0.1:9951/reset_prefix_cache",
+            "--endpoint",
+            "http://127.0.0.1:8023/v1",
             "--codex-command-template",
             "codex exec --json",
             "--runtime-config-hash",
@@ -226,6 +235,10 @@ def test_ncu_profile_driver_runs_server_launch_target(monkeypatch, tmp_path: Pat
     task_command = task_commands[0]
     assert task_command[0].endswith("python")
     assert "--ncu-mode" in task_command
+    assert task_command[task_command.index("--health-url") + 1] == "http://127.0.0.1:9951/health"
+    assert task_command[task_command.index("--metrics-url") + 1] == "http://127.0.0.1:9951/metrics"
+    assert task_command[task_command.index("--reset-prefix-cache-url") + 1] == "http://127.0.0.1:9951/reset_prefix_cache"
+    assert task_command[task_command.index("--endpoint") + 1] == "http://127.0.0.1:8023/v1"
     metadata = json.loads((tmp_path / "ncu_long-text.json").read_text(encoding="utf-8"))
     assert metadata["profile_target"] == "server-launch"
     assert metadata["server_ready_url"] == "http://127.0.0.1:9951/health"
