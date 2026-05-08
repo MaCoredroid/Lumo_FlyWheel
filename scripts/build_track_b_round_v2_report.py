@@ -176,14 +176,27 @@ def _markdown_report(
     lines.append("## §6.5 diagnosis (regime-level)")
     diagnoses = []
     regimes = per_regime.get("regimes", {})
-    for regime, stats in regimes.items():
+    for regime, stats in sorted(regimes.items()):
         agg = stats.get("accepted_per_draft_token_aggregate")
-        if isinstance(agg, (int, float)) and agg < 0.20:
-            diagnoses.append(f"- `{regime}`: **low-acceptance** (agg accepted/draft = {agg:.3f} < 0.20)")
-        elif isinstance(agg, (int, float)) and agg >= 0.50:
-            diagnoses.append(f"- `{regime}`: strong (agg = {agg:.3f}); SuffixDecoding carrying its weight here")
+        if not isinstance(agg, (int, float)):
+            diagnoses.append(f"- `{regime}`: no spec-decode counters captured")
+            continue
+        if agg < 0.20:
+            diagnoses.append(
+                f"- `{regime}`: **low-acceptance** (agg accepted/draft = {agg:.3f} < 0.20); "
+                "biggest headroom — Techniques 2/4 should target this regime first"
+            )
+        elif agg < 0.50:
+            diagnoses.append(
+                f"- `{regime}`: moderate (agg = {agg:.3f}); SuffixDecoding has some traction "
+                "but is not yet pulling its weight — Techniques 1/3 are reasonable next bets"
+            )
+        else:
+            diagnoses.append(
+                f"- `{regime}`: strong (agg = {agg:.3f}); SuffixDecoding carrying its weight here"
+            )
     if not diagnoses:
-        diagnoses.append("- (no diagnostic firings; all regimes between 0.20 and 0.50 acceptance)")
+        diagnoses.append("- (no regimes captured)")
     lines.extend(diagnoses)
 
     lines.append("")
@@ -255,6 +268,12 @@ def main() -> int:
     runtime_config_hash = args.runtime_config_hash or (
         (v2_summary or {}).get("runtime_config_hash") or ""
     )
+    if not runtime_config_hash and metadata_rows:
+        for row in metadata_rows:
+            candidate = row.get("runtime_config_hash")
+            if candidate:
+                runtime_config_hash = candidate
+                break
 
     payload = {
         "schema": "lumo.track_b.round_v2_report.v1",
