@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import signal
 import sys
 import time
@@ -71,6 +72,9 @@ def run(args: argparse.Namespace) -> int:
         _validate_runtime_config_hash(args.runtime_config_hash)
     elif not allow_unstamped_smoke:
         raise ValueError("--runtime-config-hash is required unless --allow-unstamped-smoke is set")
+    interval_s = float(args.interval_s)
+    if not math.isfinite(interval_s) or interval_s <= 0:
+        raise ValueError("--interval-s must be a finite positive number")
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     stop = False
@@ -84,6 +88,7 @@ def run(args: argparse.Namespace) -> int:
 
     sampler = NvmlSampler(args.gpu)
     started = time.monotonic()
+    next_sample_at = started
     samples = 0
     try:
         with out_path.open("a", encoding="utf-8") as handle:
@@ -97,7 +102,10 @@ def run(args: argparse.Namespace) -> int:
                     handle.flush()
                 if args.duration_s is not None and time.monotonic() - started >= args.duration_s:
                     break
-                time.sleep(args.interval_s)
+                next_sample_at += interval_s
+                sleep_s = next_sample_at - time.monotonic()
+                if sleep_s > 0:
+                    time.sleep(sleep_s)
             handle.flush()
     finally:
         sampler.close()

@@ -71,3 +71,55 @@ def test_dcgm_sampler_rejects_unstamped_measurement(tmp_path: Path) -> None:
         )
 
     assert not (tmp_path / "dcgm_samples.jsonl").exists()
+
+
+def test_dcgm_sampler_cadence_accounts_for_sample_overhead(monkeypatch, tmp_path: Path) -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+            self.sleeps: list[float] = []
+
+        def monotonic(self) -> float:
+            return self.now
+
+        def sleep(self, delay: float) -> None:
+            self.sleeps.append(delay)
+            self.now += delay
+
+    clock = FakeClock()
+
+    class FakeNvmlSampler:
+        def __init__(self, gpu: int) -> None:
+            self.gpu = gpu
+
+        def sample(self) -> dict[str, object]:
+            clock.now += 0.004
+            return {
+                "ts": "2026-05-07T21:30:00.000Z",
+                "gpu": self.gpu,
+                "telemetry_source": "nvml",
+                "profile_fields_available": False,
+            }
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(sampler, "NvmlSampler", FakeNvmlSampler)
+    monkeypatch.setattr(sampler.time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(sampler.time, "sleep", clock.sleep)
+
+    rc = sampler.run(
+        Namespace(
+            out=str(tmp_path / "dcgm_samples.jsonl"),
+            gpu=0,
+            interval_s=0.01,
+            duration_s=0.025,
+            flush_every=1,
+            runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            allow_unstamped_smoke=False,
+        )
+    )
+
+    assert rc == 0
+    assert clock.sleeps
+    assert all(delay == pytest.approx(0.006) for delay in clock.sleeps)
