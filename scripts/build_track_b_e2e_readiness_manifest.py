@@ -58,6 +58,7 @@ ROUND_PROPOSAL_REQUIRED_TEXT = {
 ROUND_PROPOSAL_FORBIDDEN_TEXT = {
     "direct_repeat3_task_measurement": "run_track_b_e2e_task.py --round {{round}} --tasks all --repeat 3",
 }
+NCU_SERVER_BLOCKER_REPORT = "docs/reports/auto_research/track-b-e2e-ncu-server-profiling-blocker-20260508.md"
 TRACE_PATCH_CANDIDATES = (
     "vendor/codex-cli/patches/trace_emitter.patch",
     "patches/codex/trace_emitter.patch",
@@ -623,6 +624,8 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
                     and _contains("scripts/run_track_b_e2e_ncu_profiles.py", "docker")
                 ),
                 "ncu_profile_required_topology": "server-launch",
+                "ncu_server_blocker_report": NCU_SERVER_BLOCKER_REPORT,
+                "ncu_server_blocker_report_exists": _exists(NCU_SERVER_BLOCKER_REPORT),
                 "ncu_profiles_verified": ncu_profiles["ok"],
                 "ncu_profiles": ncu_profiles,
             },
