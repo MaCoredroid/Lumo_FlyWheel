@@ -490,6 +490,11 @@ def main() -> int:
     parser.add_argument("--round", type=int, required=True)
     parser.add_argument("--attempt", type=int, default=1)
     parser.add_argument("--repeat", type=int, default=1, help="Number of independent attempts to run per task.")
+    parser.add_argument(
+        "--discard-cold-attempt-exit",
+        action="store_true",
+        help="Record run_01 artifacts but do not fail the process on its exit code; measured repeats still fail.",
+    )
     parser.add_argument("--out-root", default=str(REPO_ROOT / "output" / "track_b_e2e"))
     parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
     parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")
@@ -546,11 +551,13 @@ def main() -> int:
             base_attempt = args.attempt
             for offset in range(args.repeat):
                 args.attempt = base_attempt + offset
+                cold_discarded = args.discard_cold_attempt_exit and offset == 0
                 try:
-                    failures += 1 if run_one(args, family, variant) != 0 else 0
+                    rc = run_one(args, family, variant)
+                    failures += 1 if rc != 0 and not cold_discarded else 0
                 except Exception as exc:
                     print(f"{task_id} attempt {args.attempt}: {exc}", file=sys.stderr)
-                    failures += 1
+                    failures += 0 if cold_discarded else 1
             args.attempt = base_attempt
         return 1 if failures else 0
     if not args.family:
@@ -564,7 +571,9 @@ def main() -> int:
         base_attempt = args.attempt
         for offset in range(args.repeat):
             args.attempt = base_attempt + offset
-            failures += 1 if run_one(args, family, variant) != 0 else 0
+            rc = run_one(args, family, variant)
+            cold_discarded = args.discard_cold_attempt_exit and offset == 0
+            failures += 1 if rc != 0 and not cold_discarded else 0
         args.attempt = base_attempt
         return 1 if failures else 0
     except Exception as exc:

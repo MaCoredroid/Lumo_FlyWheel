@@ -170,6 +170,73 @@ def test_deferred_runner_preserves_codex_exit_code(monkeypatch, tmp_path: Path) 
     assert metadata["workspace_isolated"] is True
 
 
+def test_runner_can_discard_only_first_cold_attempt_exit(monkeypatch, tmp_path: Path) -> None:
+    calls: list[tuple[str, str, int]] = []
+    exits = iter([1, 0, 0])
+
+    def fake_run_one(args: Namespace, family: str, variant: str) -> int:
+        calls.append((family, variant, args.attempt))
+        return next(exits)
+
+    monkeypatch.setattr(runner, "run_one", fake_run_one)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_track_b_e2e_task.py",
+            "family",
+            "variant",
+            "--round",
+            "0",
+            "--repeat",
+            "3",
+            "--out-root",
+            str(tmp_path),
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--codex-command-template",
+            "codex exec --json",
+            "--defer-codex-trace-out",
+            "--discard-cold-attempt-exit",
+        ],
+    )
+
+    assert runner.main() == 0
+    assert calls == [("family", "variant", 1), ("family", "variant", 2), ("family", "variant", 3)]
+
+
+def test_runner_still_fails_measured_attempt_when_cold_discarded(monkeypatch, tmp_path: Path) -> None:
+    exits = iter([1, 1, 0])
+
+    def fake_run_one(args: Namespace, family: str, variant: str) -> int:
+        return next(exits)
+
+    monkeypatch.setattr(runner, "run_one", fake_run_one)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_track_b_e2e_task.py",
+            "family",
+            "variant",
+            "--round",
+            "0",
+            "--repeat",
+            "3",
+            "--out-root",
+            str(tmp_path),
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--codex-command-template",
+            "codex exec --json",
+            "--defer-codex-trace-out",
+            "--discard-cold-attempt-exit",
+        ],
+    )
+
+    assert runner.main() == 1
+
+
 def test_runner_normalizes_vllm_request_metrics_jsonl(tmp_path: Path) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()

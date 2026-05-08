@@ -292,6 +292,7 @@ def _runner_command(args: argparse.Namespace) -> list[str]:
         str(args.timeout_s),
         "--codex-command-template",
         args.codex_command_template,
+        "--discard-cold-attempt-exit",
     ]
     if args.vllm_request_metrics_jsonl:
         command.extend(["--vllm-request-metrics-jsonl", args.vllm_request_metrics_jsonl])
