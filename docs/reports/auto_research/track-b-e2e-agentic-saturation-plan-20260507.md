@@ -784,7 +784,8 @@ Committed scaffold commits through this status checkpoint:
 - `cbed669 Refresh Track B NCU status ledger`
 - `833e991 Refresh Track B objective audit`
 - `c0e06d8 Propagate Track B NCU runtime hash`
-- Current checkpoint: `Refresh Track B runtime hash audit`
+- `e6fe3d4 Refresh Track B runtime hash audit`
+- Current checkpoint: `Guard Track B NCU runtime hash`
 
 ## 12. Decision rules for ending the loop
 

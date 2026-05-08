@@ -477,9 +477,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     trace_correctness = _trace_correctness_verification(trace_correctness_path)
     round0_summary_path = REPO_ROOT / "output" / "track_b_e2e" / "round_0" / "round_summary.json"
     round0_summary = _round0_summary_verification(round0_summary_path)
+    round0_runtime_config_hash = round0_summary.get("runtime_config_hash")
     expected_ncu_runtime_config_hash = (
-        str(round0_summary.get("runtime_config_hash"))
-        if isinstance(round0_summary.get("runtime_config_hash"), str)
+        round0_runtime_config_hash
+        if _runtime_config_hash_valid(round0_runtime_config_hash)
         else ""
     )
     ncu_profiles = _ncu_profile_verification(

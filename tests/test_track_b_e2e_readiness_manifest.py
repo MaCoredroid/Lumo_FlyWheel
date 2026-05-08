@@ -433,6 +433,53 @@ def test_readiness_manifest_passes_round0_runtime_hash_to_ncu_verifier(tmp_path:
     assert steps["G"]["evidence"]["ncu_profiles"]["expected_runtime_config_hash"] == expected_hash
 
 
+def test_readiness_manifest_does_not_pass_invalid_round0_runtime_hash_to_ncu_verifier(
+    tmp_path: Path, monkeypatch
+) -> None:
+    preflight_path = tmp_path / "preflight.json"
+    preflight_path.write_text(
+        json.dumps({"round0_may_run": True, "blocking_reasons": [], "checks": {}}),
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_round0_summary(_path: Path) -> dict[str, object]:
+        return {
+            "ok": False,
+            "runtime_config_hash": "not-a-runtime-hash",
+            "trusted_task_count": 12,
+            "trusted_unique_task_count": 12,
+            "tasks_completed": 12,
+            "tasks_correctness_passed": 12,
+            "runtime_config_hash_mismatch_count": 0,
+            "task_summary_schema_mismatch_count": 0,
+            "task_summary_round_mismatch_count": 0,
+            "reasons": ["runtime_config_hash_invalid"],
+        }
+
+    def fake_ncu_profiles(_output_dir: Path, *, expected_runtime_config_hash: str = "") -> dict[str, object]:
+        captured["expected_runtime_config_hash"] = expected_runtime_config_hash
+        return {
+            "ok": False,
+            "profile_count": 0,
+            "expected_profile_count": len(readiness.NCU_ARCHETYPES),
+            "expected_runtime_config_hash": expected_runtime_config_hash,
+            "failure_metadata_count": 0,
+            "failure_reasons": {},
+            "profiles": [],
+            "reasons": ["long-text_missing_or_empty"],
+        }
+
+    monkeypatch.setattr(readiness, "_round0_summary_verification", fake_round0_summary)
+    monkeypatch.setattr(readiness, "_ncu_profile_verification", fake_ncu_profiles)
+
+    manifest = readiness.build_manifest(Namespace(preflight_json=str(preflight_path), out=""))
+
+    assert captured["expected_runtime_config_hash"] == ""
+    steps = {step["step"]: step for step in manifest["implementation_steps"]}
+    assert steps["G"]["evidence"]["ncu_profiles"]["expected_runtime_config_hash"] == ""
+
+
 def test_round0_summary_verification_rejects_existence_only_summary(tmp_path: Path) -> None:
     summary = tmp_path / "round_summary.json"
     summary.write_text(
