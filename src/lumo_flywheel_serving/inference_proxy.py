@@ -193,6 +193,12 @@ def _write_json_payload(handler: BaseHTTPRequestHandler, status: int, payload: d
 
 
 def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Response) -> None:
+    def write_chunk(chunk: bytes) -> None:
+        handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+        handler.wfile.write(chunk)
+        handler.wfile.write(b"\r\n")
+        handler.wfile.flush()
+
     pending = b""
     try:
         for chunk in upstream.iter_content(chunk_size=8192):
@@ -204,22 +210,27 @@ def _write_chunked_stream(handler: BaseHTTPRequestHandler, upstream: requests.Re
                 if block is None:
                     break
                 normalized = normalize_responses_sse_block(block)
-                handler.wfile.write(f"{len(normalized):X}\r\n".encode("ascii"))
-                handler.wfile.write(normalized)
-                handler.wfile.write(b"\r\n")
-                handler.wfile.flush()
+                write_chunk(normalized)
         if pending:
             normalized = normalize_responses_sse_block(pending)
-            handler.wfile.write(f"{len(normalized):X}\r\n".encode("ascii"))
-            handler.wfile.write(normalized)
-            handler.wfile.write(b"\r\n")
-            handler.wfile.flush()
+            write_chunk(normalized)
         handler.wfile.write(b"0\r\n\r\n")
         handler.wfile.flush()
     except (BrokenPipeError, ConnectionResetError):
         # Codex occasionally abandons an HTTP stream after it already has the
         # terminal event. Treat that as a cancelled client, not a proxy crash.
         return
+    except requests.RequestException:
+        error_block = (
+            b"event: error\n"
+            b'data: {"error":{"message":"Upstream inference stream ended prematurely","type":"upstream_stream_error"}}\n\n'
+        )
+        try:
+            write_chunk(error_block)
+            handler.wfile.write(b"0\r\n\r\n")
+            handler.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            return
     finally:
         upstream.close()
 

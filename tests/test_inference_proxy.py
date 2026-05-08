@@ -155,6 +155,35 @@ def test_write_chunked_stream_tolerates_broken_pipe() -> None:
     assert upstream.closed is True
 
 
+def test_write_chunked_stream_closes_cleanly_on_upstream_chunk_error() -> None:
+    class _Handler:
+        def __init__(self) -> None:
+            self.wfile = io.BytesIO()
+
+    class _Upstream:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def iter_content(self, chunk_size: int):
+            assert chunk_size == 8192
+            yield b"event: response.output_text.delta\ndata: {}\n\n"
+            raise requests.exceptions.ChunkedEncodingError("ended early")
+
+        def close(self) -> None:
+            self.closed = True
+
+    handler = _Handler()
+    upstream = _Upstream()
+
+    _write_chunked_stream(handler, upstream)
+
+    output = handler.wfile.getvalue()
+    assert b"response.output_text.delta" in output
+    assert b"upstream_stream_error" in output
+    assert output.endswith(b"0\r\n\r\n")
+    assert upstream.closed is True
+
+
 def test_proxy_streams_sse_without_buffering_upstream_content(monkeypatch, tmp_path: Path) -> None:
     class _UpstreamResponse:
         status_code = 200
