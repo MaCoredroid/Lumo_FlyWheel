@@ -1,10 +1,12 @@
 # Track B E2E vLLM Request Metrics Patch Surface Audit
 
-Generated: 2026-05-07
+Generated: 2026-05-08
 
 ## Summary
 
-Round 0 remains blocked on vLLM request correlation. The active vLLM server exposes aggregate Prometheus metrics for prompt tokens, generation tokens, request success, latency histograms, and spec decode counters, but those series are not labeled by `request_id` or `vllm_request_id`. The Track B parser can preserve request-id labels when they exist, but the live metrics endpoint does not emit them.
+Full-fidelity Round 0 remains blocked on vLLM request correlation. The active vLLM server exposes aggregate Prometheus metrics for prompt tokens, generation tokens, request success, latency histograms, and spec decode counters, but those series are not labeled by `request_id` or `vllm_request_id`. The Track B parser can preserve request-id labels when they exist, but the live metrics endpoint does not emit them.
+
+This check is explicitly deferred for the current user-directed reduced Round 0 contract. The reduced `output/track_b_e2e/round_0/round_summary.json` may therefore be trusted only with `vllm_request_metrics_join_available` listed under `deferred_instrumentation_checks`; it is not full Track B readiness.
 
 This means §5.1 of `track-b-e2e-agentic-saturation-plan-20260507.md` cannot be satisfied by configuration alone in the inspected source snapshot. A vLLM patch or a separate per-request JSONL side-channel is required before `vllm_per_turn.json` can be truthfully keyed to Codex turns.
 
@@ -67,6 +69,6 @@ If Prometheus request labels are still preferred, they should be behind an expli
 
 ## Readiness Impact
 
-`vllm_request_metrics_join_available=false` is a hard Round 0 blocker. The gate may pass through either request-labeled Prometheus metrics or a bounded request-keyed JSONL side-channel. For the JSONL path, at least one row must contain a request id and every required numeric request metric in the same row; field coverage spread across unrelated rows is rejected. The preflight, runner, and summary paths all fail closed on incomplete request rows and empty request-keyed joins. The Track B summary code must not infer per-turn vLLM metrics from aggregate deltas while multiple turns or tasks can contribute to the same process-level counters.
+`vllm_request_metrics_join_available=false` is a full-readiness blocker and a deferred gap in the reduced Round 0 summary. The gate may pass through either request-labeled Prometheus metrics or a bounded request-keyed JSONL side-channel. For the JSONL path, at least one row must contain a request id and every required numeric request metric in the same row; field coverage spread across unrelated rows is rejected. The preflight, runner, and summary paths all fail closed on incomplete request rows and empty request-keyed joins. The Track B summary code must not infer per-turn vLLM metrics from aggregate deltas while multiple turns or tasks can contribute to the same process-level counters.
 
 The existing Track B parser work remains useful: it will consume request-labeled metrics or a request-keyed JSON artifact once vLLM emits one. It is not sufficient by itself to make the live server ready.

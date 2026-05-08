@@ -440,7 +440,7 @@ The full sweep is 13 × 3 = 39 task runs. At an estimated 10-90 minutes per task
 | 11 | Generation-token-volume guard | If any task's aggregate completion_tokens exceeds 1.5× the median across the 3 runs, that run is rerun. | Auto-rerun once; if persists, flag for review. |
 | 12 | Spec_decode metrics captured | `vllm:spec_decode_num_accepted_tokens` and `vllm:spec_decode_num_draft_tokens` present in `vllm_per_turn.json` for every spec_decode-eligible turn. | Hard fail; missing metric means measurement protocol broken. |
 | 13 | No silent fallback to vanilla decode | `spec_decode_num_drafts_total`, `spec_decode_num_draft_tokens_total`, and `spec_decode_num_accepted_tokens_total` increment on every spec-decode-eligible plan/file-edit/tool-call turn (not on prefill). | Mark `silent_fallback_to_vanilla=true`; investigate config. |
-| 14 | Task transcript byte-equality with `--trace-out` disabled | Verified once at trace_emitter patch time, §4.3. Re-verified after every Codex CLI fork rebase. | Block all rounds until reverified. |
+| 14 | Task transcript byte-equality with `--trace-out` disabled | Verified once at trace_emitter patch time, §4.3. Re-verified after every Codex CLI fork rebase. | Block full-fidelity rounds until reverified; explicitly deferred for the current reduced Round 0 summary. |
 | 15 | Auto research agent does not modify the sample | `tasks_in_round` array hash matches Round 0's. | Hard fail; the agent has no authority to change the sample mid-loop. |
 
 Task summaries also reject trace identity and provenance mismatches: if `task_start.task_id` or `task_end.task_id` is present in `codex_trace.jsonl`, it must equal the summary's `family/variant` task ID, and any stamped `runtime_config_hash` in trace, runner, DCGM, or vLLM artifacts must match the summary hash.
@@ -514,17 +514,17 @@ Standardized so the auto research agent's recommendations are predictable and re
 | `prefill-dominated` | Prefill optimization | LMCache cross-task warm KV (Round 0 of engineering spec); `enable-prefix-caching` validation; chunked prefill tuning. |
 | `tool-exec-bound` | Out of scope | No intervention. Document as "Codex tool-execution latency, not Track B's decode optimization problem." |
 
-## 11. Implementation sequence (what gets built before Round 0 can run)
+## 11. Implementation sequence for full-fidelity readiness
 
 | Step | Output | Owner | Notes |
 |---|---|---|---|
-| A. Patch Codex CLI with `--trace-out` | `vendor/codex-cli/patches/trace_emitter.patch` + correctness verification artifact at §4.3 | one engineer, ~1 day | Block all rounds until correctness verified. |
+| A. Patch Codex CLI with `--trace-out` | `vendor/codex-cli/patches/trace_emitter.patch` + correctness verification artifact at §4.3 | one engineer, ~1 day | Block full-fidelity rounds until correctness verified; explicitly deferred for the current reduced Round 0 summary. |
 | B. DCGM/NVML 100 Hz sampler | `scripts/sample_dcgm_during_task.py` + `tests/test_track_b_dcgm_sampler.py` | one engineer, ~0.5 day | Use `pynvml` (DCGM via NVML namespace). |
 | C. E2E task runner | `scripts/run_track_b_e2e_task.py` | one engineer, ~1 day | Wraps cache reset → sampler start → Codex spawn → metrics capture → grader → summary join. |
 | D. Per-turn vLLM metric extension | `src/lumo_flywheel_serving/metrics.py` extension to capture `spec_decode_num_accepted_tokens`, `spec_decode_num_draft_tokens` and key by `vllm_request_id` | one engineer, ~0.5 day | Integration test against a known-shape task. |
 | E. Summary join + diagnosis rule | `scripts/build_track_b_e2e_summary.py` | one engineer, ~0.5 day | Implements §6 + §8 attestation + §9 caveat checks. |
 | F. Auto research agent prompt template | `prompts/track_b_e2e_round_proposal.md` | one engineer, ~0.5 day | Templated round-proposal markdown per §7.2. |
-| G. Round 0 dry run | `output/track_b_e2e/round_0/` populated and validated | one engineer, ~1 day (mostly waiting) | All 13 tasks × 1 cold run + 3 measured runs, plus 5 NCU archetype profiles. |
+| G. Full-fidelity Round 0 dry run | `output/track_b_e2e/round_0/` populated and validated | one engineer, ~1 day (mostly waiting) | All 13 tasks × 1 cold run + 3 measured runs, plus 5 NCU archetype profiles. The reduced 13-task summary exists; valid NCU profiles remain missing. |
 
 Total ramp before Round 1 can be authored: ~5 days serial, ~2-3 days with parallelism.
 
@@ -791,7 +791,8 @@ Committed scaffold commits through this status checkpoint:
 - `51da1f7 Surface Track B NCU blocker in readiness`
 - `44ebbac Refresh Track B blocker ledger`
 - `a2db2a8 Refresh Track B readiness report`
-- Current checkpoint: `Refresh Track B preflight audit`
+- `654eb7b Refresh Track B preflight audit`
+- Current checkpoint: `Refresh Track B instrumentation audits`
 
 ## 12. Decision rules for ending the loop
 
@@ -825,9 +826,9 @@ On termination, write `output/track_b_e2e/loop_closeout.md` summarizing the fina
 | `track_b_tool_call_throughput_closeout_20260507.md` | Current production runtime | Candidate-056 closeout; Round 0 baseline config. |
 | `track-b-concurrency-measurement-audit-20260506.md` | Reference | Established truthful-measurement rules. |
 | `track-b-e2e-round0-preflight-audit-20260507.md` | Current blocker record | Records reduced-contract preflight status and full-readiness remediation requirements. |
-| `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Current blocker record | Shows where Codex CLI must be patched for `--trace-out`. |
+| `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Current blocker record | Shows where Codex CLI must be patched for `--trace-out`, and records that the gap is deferred only for the reduced summary. |
 | `track-b-e2e-readiness-manifest-20260507.md` | Current blocker record | Summarizes the machine-readable readiness manifest, reduced Round 0 summary, and `round0_ready=false` gate. |
-| `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Current blocker record | Shows vLLM request IDs exist in serving but not in Prometheus metric labels. |
+| `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Current blocker record | Shows vLLM request IDs exist in serving but not in Prometheus metric labels, and records that the gap is deferred only for the reduced summary. |
 | `track-b-e2e-objective-completion-audit-20260507.md` | Current blocker record | Maps the user objective to concrete artifacts and records why the objective is not complete. |
 | `track-b-e2e-ncu-server-profiling-blocker-20260508.md` | Current blocker record | Records why valid NCU profiles require replacing or freeing the live server topology. |
 | `l0-warm-decode-quality-bounded-track-20260505.md` | Parent spec | Track B Round 1 framing; this plan is the e2e measurement instrument that should drive its next rounds. |

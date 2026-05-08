@@ -1,6 +1,6 @@
 # Track B E2E Codex Trace Patch Surface Audit
 
-Generated: 2026-05-07
+Generated: 2026-05-08
 
 Source inspected:
 
@@ -82,8 +82,10 @@ The minimum truthful patch is not just a new CLI flag or an adapter over `codex 
 1. `exec/src/lib.rs`, for task/session/turn lifecycle events.
 2. `core/src/client.rs`, for the upstream request id and token usage as the Responses stream completes.
 
-The trace sink must write JSONL without changing normal event processing, stdout/stderr behavior, or token/tool outputs. The correctness artifact at `output/track_b_e2e/codex_trace_emitter_correctness.json` must still compare `--trace-out` enabled and disabled transcripts byte-for-byte before Round 0 can run.
+The trace sink must write JSONL without changing normal event processing, stdout/stderr behavior, or token/tool outputs. The correctness artifact at `output/track_b_e2e/codex_trace_emitter_correctness.json` must still compare `--trace-out` enabled and disabled transcripts byte-for-byte before full-fidelity Round 0 can run.
 
 ## Current Blocker
 
-No `--trace-out` patch artifact is landed yet. Round 0 remains blocked even though the patch surface is now identified. The next implementation step is to create a fork/patch under `patches/codex/` or `vendor/codex-cli/patches/` against the inspected Rust files, build the native binary, and run the byte-equality verification from the plan's §4.3.
+No `--trace-out` patch artifact is landed yet. This check is explicitly deferred for the current user-directed reduced Round 0 contract, which is why `output/track_b_e2e/round_0/round_summary.json` may be trusted only with `codex_trace_out_supported` listed under `deferred_instrumentation_checks`.
+
+It remains a full-readiness blocker: the current readiness manifest reports Step A as `deferred`, `trace_correctness_verified=false`, and `round0_ready=false`. The next implementation step for full fidelity is to create a fork/patch under `patches/codex/` or `vendor/codex-cli/patches/` against the inspected Rust files, build the native binary, and run the byte-equality verification from the plan's §4.3.
