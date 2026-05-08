@@ -199,12 +199,20 @@ def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
     return [*_ncu_prefix(args, archetype), "--", *_task_command(args, archetype)]
 
 
+def _format_server_launch_command(template: str, args: argparse.Namespace, archetype: str) -> str:
+    replacements = {
+        "{archetype}": archetype,
+        "{model}": args.model,
+        "{runtime_config_hash}": args.runtime_config_hash,
+    }
+    rendered = template
+    for placeholder, value in replacements.items():
+        rendered = rendered.replace(placeholder, value)
+    return rendered
+
+
 def _server_ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
-    server_command = args.server_launch_command.format(
-        archetype=archetype,
-        model=args.model,
-        runtime_config_hash=args.runtime_config_hash,
-    )
+    server_command = _format_server_launch_command(args.server_launch_command, args, archetype)
     return [*_ncu_prefix(args, archetype), "--", "bash", "-lc", server_command]
 
 

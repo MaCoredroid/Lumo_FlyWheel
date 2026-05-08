@@ -244,6 +244,28 @@ def test_ncu_profile_driver_runs_server_launch_target(monkeypatch, tmp_path: Pat
     assert metadata["server_ready_url"] == "http://127.0.0.1:9951/health"
 
 
+def test_server_launch_command_formatter_preserves_json_braces() -> None:
+    args = ncu_profiles.argparse.Namespace(
+        model="qwen3.5-27b",
+        runtime_config_hash="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+
+    rendered = ncu_profiles._format_server_launch_command(
+        (
+            "vllm serve --served-model-name {model} "
+            "--default-chat-template-kwargs '{\"enable_thinking\": false}' "
+            "--tag {archetype} --hash {runtime_config_hash}"
+        ),
+        args,
+        "long-text",
+    )
+
+    assert "--served-model-name qwen3.5-27b" in rendered
+    assert "--tag long-text" in rendered
+    assert "--hash sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in rendered
+    assert "'{\"enable_thinking\": false}'" in rendered
+
+
 def test_ncu_profile_driver_requires_server_launch_command(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
 
