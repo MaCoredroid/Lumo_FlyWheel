@@ -147,6 +147,115 @@ def test_ncu_profile_driver_normalizes_relative_output_roots(
     assert command[command.index("--out-root") + 1] == str(tmp_path / "task-runs")
 
 
+def test_ncu_profile_driver_runs_server_launch_target(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+    server_commands: list[list[str]] = []
+    task_commands: list[list[str]] = []
+    ready_urls: list[str] = []
+
+    class FakeServer:
+        def __init__(self) -> None:
+            self.returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = -15
+
+        def wait(self, timeout: float) -> int:
+            self.returncode = -15 if self.returncode is None else self.returncode
+            return self.returncode
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    def fake_popen(
+        command: list[str],
+        *,
+        stdout_path: Path,
+        stderr_path: Path,
+    ) -> FakeServer:
+        server_commands.append(command)
+        profile_path = Path(command[command.index("--log-file") + 1])
+        profile_path.write_text(_metric_csv(), encoding="utf-8")
+        stdout_path.write_text("", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        return FakeServer()
+
+    def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+        task_commands.append(command)
+        return _completed(command)
+
+    def fake_wait(url: str, *, timeout_s: float) -> None:
+        ready_urls.append(url)
+
+    monkeypatch.setattr(ncu_profiles, "_popen", fake_popen)
+    monkeypatch.setattr(ncu_profiles, "_run", fake_run)
+    monkeypatch.setattr(ncu_profiles, "_wait_for_ready", fake_wait)
+
+    rc = ncu_profiles.main(
+        [
+            "--profile-target",
+            "server-launch",
+            "--archetype",
+            "long-text",
+            "--out-root",
+            str(tmp_path),
+            "--task-out-root",
+            str(tmp_path / "ncu_task_runs"),
+            "--server-launch-command",
+            "python serve.py --model {model}",
+            "--server-ready-url",
+            "http://127.0.0.1:9951/health",
+            "--codex-command-template",
+            "codex exec --json",
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--defer-codex-trace-out",
+            "--defer-vllm-request-metrics-join",
+            "--defer-dcgm-profile-fields",
+        ]
+    )
+
+    assert rc == 0
+    assert ready_urls == ["http://127.0.0.1:9951/health"]
+    server_command = server_commands[0]
+    assert server_command[0] == "ncu"
+    assert server_command[-3:] == ["bash", "-lc", "python serve.py --model qwen3.5-27b"]
+    task_command = task_commands[0]
+    assert task_command[0].endswith("python")
+    assert "--ncu-mode" in task_command
+    metadata = json.loads((tmp_path / "ncu_long-text.json").read_text(encoding="utf-8"))
+    assert metadata["profile_target"] == "server-launch"
+    assert metadata["server_ready_url"] == "http://127.0.0.1:9951/health"
+
+
+def test_ncu_profile_driver_requires_server_launch_command(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(ncu_profiles.shutil, "which", lambda binary: f"/usr/bin/{binary}")
+
+    rc = ncu_profiles.main(
+        [
+            "--profile-target",
+            "server-launch",
+            "--archetype",
+            "long-text",
+            "--out-root",
+            str(tmp_path),
+            "--task-out-root",
+            str(tmp_path / "ncu_task_runs"),
+            "--server-ready-url",
+            "http://127.0.0.1:9951/health",
+            "--codex-command-template",
+            "codex exec --trace-out {trace_out}",
+            "--runtime-config-hash",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ]
+    )
+
+    assert rc == 2
+
+
 def test_ncu_profile_driver_rejects_missing_metric(tmp_path: Path) -> None:
     profile = tmp_path / "ncu_long-text.csv"
     profile.write_text("Metric Name,Metric Value\ngpu__time_duration.sum,1\n", encoding="utf-8")

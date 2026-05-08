@@ -9,6 +9,9 @@ import os
 import shutil
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -52,12 +55,29 @@ def _validate_runtime_config_hash(runtime_config_hash: str) -> None:
         raise ValueError("--runtime-config-hash must be a sha256:<64-hex-digest> value")
 
 
+def _validate_server_launch_args(args: argparse.Namespace) -> None:
+    if args.profile_target != "server-launch":
+        return
+    if not args.server_launch_command:
+        raise ValueError("--server-launch-command is required with --profile-target server-launch")
+    if not args.server_ready_url:
+        raise ValueError("--server-ready-url is required with --profile-target server-launch")
+
+
 def _profile_path(out_root: Path, archetype: str) -> Path:
     return out_root / f"ncu_{archetype}.csv"
 
 
 def _metadata_path(out_root: Path, archetype: str) -> Path:
     return out_root / f"ncu_{archetype}.json"
+
+
+def _server_stdout_path(out_root: Path, archetype: str) -> Path:
+    return out_root / f"ncu_{archetype}_server_stdout.log"
+
+
+def _server_stderr_path(out_root: Path, archetype: str) -> Path:
+    return out_root / f"ncu_{archetype}_server_stderr.log"
 
 
 def _now() -> str:
@@ -108,11 +128,9 @@ def _validate_profile(path: Path) -> None:
         raise RuntimeError(f"NCU profile {path} has no finite values for required metrics: {', '.join(nonfinite)}")
 
 
-def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
+def _ncu_prefix(args: argparse.Namespace, archetype: str) -> list[str]:
     out_root = Path(args.out_root)
-    task_out_root = Path(args.task_out_root)
-    task_id = ARCHETYPE_TASKS[archetype]
-    command = [
+    return [
         args.ncu_bin,
         "--target-processes",
         "all",
@@ -127,7 +145,13 @@ def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
         "--csv",
         "--log-file",
         str(_profile_path(out_root, archetype)),
-        "--",
+    ]
+
+
+def _task_command(args: argparse.Namespace, archetype: str) -> list[str]:
+    task_out_root = Path(args.task_out_root)
+    task_id = ARCHETYPE_TASKS[archetype]
+    command = [
         args.python,
         str(REPO_ROOT / "scripts" / "run_track_b_e2e_task.py"),
         task_id,
@@ -169,6 +193,19 @@ def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
     return command
 
 
+def _ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
+    return [*_ncu_prefix(args, archetype), "--", *_task_command(args, archetype)]
+
+
+def _server_ncu_command(args: argparse.Namespace, archetype: str) -> list[str]:
+    server_command = args.server_launch_command.format(
+        archetype=archetype,
+        model=args.model,
+        runtime_config_hash=args.runtime_config_hash,
+    )
+    return [*_ncu_prefix(args, archetype), "--", "bash", "-lc", server_command]
+
+
 def _write_profile_metadata(args: argparse.Namespace, archetype: str, command: list[str]) -> None:
     out_root = Path(args.out_root)
     profile_path = _profile_path(out_root, archetype)
@@ -181,6 +218,9 @@ def _write_profile_metadata(args: argparse.Namespace, archetype: str, command: l
         "runtime_config_hash": args.runtime_config_hash,
         "profile_csv": str(profile_path.relative_to(REPO_ROOT)) if profile_path.is_relative_to(REPO_ROOT) else str(profile_path),
         "required_metrics": list(NCU_REQUIRED_METRICS),
+        "profile_target": args.profile_target,
+        "server_launch_command": args.server_launch_command if args.profile_target == "server-launch" else "",
+        "server_ready_url": args.server_ready_url if args.profile_target == "server-launch" else "",
         "deferred_instrumentation_checks": sorted(
             check
             for check, enabled in {
@@ -209,9 +249,82 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _popen(command: list[str], *, stdout_path: Path, stderr_path: Path) -> subprocess.Popen[bytes]:
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_handle = stdout_path.open("wb")
+    stderr_handle = stderr_path.open("wb")
+    try:
+        return subprocess.Popen(
+            command,
+            cwd=REPO_ROOT,
+            stdout=stdout_handle,
+            stderr=stderr_handle,
+            env=os.environ.copy(),
+        )
+    except Exception:
+        stdout_handle.close()
+        stderr_handle.close()
+        raise
+
+
+def _wait_for_ready(url: str, *, timeout_s: float) -> None:
+    deadline = time.monotonic() + timeout_s
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                if 200 <= response.status < 500:
+                    return
+        except (OSError, urllib.error.URLError) as exc:
+            last_error = str(exc)
+        time.sleep(1.0)
+    raise RuntimeError(f"server did not become ready at {url}: {last_error}")
+
+
+def _terminate_server(process: subprocess.Popen[bytes], *, timeout_s: float) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=timeout_s)
+
+
+def _run_server_profile(args: argparse.Namespace, archetype: str) -> int:
+    out_root = Path(args.out_root)
+    server_command = _server_ncu_command(args, archetype)
+    server = _popen(
+        server_command,
+        stdout_path=_server_stdout_path(out_root, archetype),
+        stderr_path=_server_stderr_path(out_root, archetype),
+    )
+    task_result: subprocess.CompletedProcess[str] | None = None
+    try:
+        _wait_for_ready(args.server_ready_url, timeout_s=args.server_ready_timeout_s)
+        task_result = _run(_task_command(args, archetype))
+        if task_result.returncode != 0:
+            print(task_result.stderr, file=sys.stderr, end="")
+            return task_result.returncode
+    finally:
+        _terminate_server(server, timeout_s=args.server_shutdown_timeout_s)
+    if server.returncode not in (0, -15):
+        server_stderr = _server_stderr_path(out_root, archetype).read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+        print(server_stderr, file=sys.stderr, end="")
+        return int(server.returncode or 2)
+    _validate_profile(_profile_path(out_root, archetype))
+    _write_profile_metadata(args, archetype, server_command)
+    return 0
+
+
 def run_profiles(args: argparse.Namespace) -> int:
     _validate_codex_command_template(args.codex_command_template, require_trace_out=not args.defer_codex_trace_out)
     _validate_runtime_config_hash(args.runtime_config_hash)
+    _validate_server_launch_args(args)
     if shutil.which(args.ncu_bin) is None:
         raise RuntimeError(f"ncu binary not found: {args.ncu_bin}")
     out_root = Path(args.out_root).resolve()
@@ -222,6 +335,11 @@ def run_profiles(args: argparse.Namespace) -> int:
     task_out_root.mkdir(parents=True, exist_ok=True)
     archetypes = list(ARCHETYPE_TASKS) if args.archetype == "all" else [args.archetype]
     for archetype in archetypes:
+        if args.profile_target == "server-launch":
+            rc = _run_server_profile(args, archetype)
+            if rc != 0:
+                return rc
+            continue
         command = _ncu_command(args, archetype)
         result = _run(command)
         if result.returncode != 0:
@@ -244,6 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--python", default=_default_python())
     parser.add_argument("--ncu-bin", default="ncu")
+    parser.add_argument("--profile-target", choices=["task-wrapper", "server-launch"], default="task-wrapper")
     parser.add_argument("--launch-skip-before-match", type=int, default=200)
     parser.add_argument("--launch-count", type=int, default=16)
     parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
@@ -257,6 +376,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--defer-codex-trace-out", action="store_true")
     parser.add_argument("--defer-vllm-request-metrics-join", action="store_true")
     parser.add_argument("--defer-dcgm-profile-fields", action="store_true")
+    parser.add_argument(
+        "--server-launch-command",
+        default="",
+        help=(
+            "Shell command to launch the profiled server under NCU when "
+            "--profile-target server-launch is used. Supports {archetype}, "
+            "{model}, and {runtime_config_hash} placeholders."
+        ),
+    )
+    parser.add_argument("--server-ready-url", default="")
+    parser.add_argument("--server-ready-timeout-s", type=float, default=600.0)
+    parser.add_argument("--server-shutdown-timeout-s", type=float, default=30.0)
     parser.add_argument("--codex-command-template", required=True)
     args = parser.parse_args(argv)
     try:
