@@ -1075,6 +1075,68 @@ def _runtime_server(args: argparse.Namespace) -> ModelServer:
 
 def _track_b_runtime_prelaunch_shell() -> str:
     return r"""python3 - <<'PY'
+# Lumo Track B 2026-05-08: GPU memory hygiene before the next vLLM
+# launch. GB10 unifies GPU memory with system RAM; the NVIDIA driver
+# can retain prior-process allocations across container exits even
+# when nvidia-smi reports no running processes. If the previous vLLM
+# process leaked memory, /proc/meminfo MemAvailable will be lower
+# than the gpu_memory_utilization request would need, and engine
+# init will fail with `Free memory on device cuda:0 (X/Y GiB) on
+# startup is less than desired GPU memory utilization`. Wait briefly
+# for the driver to release; if it doesn't, fail loud with operator
+# instructions.
+import os
+import time
+
+MIN_AVAILABLE_GIB = float(os.environ.get('LUMO_TRACK_B_MIN_FREE_GIB', '40'))
+WAIT_TIMEOUT_S = int(os.environ.get('LUMO_TRACK_B_FREE_WAIT_S', '300'))
+
+def _meminfo_available_gib():
+    with open('/proc/meminfo', 'r', encoding='utf-8') as fh:
+        for line in fh:
+            if line.startswith('MemAvailable:'):
+                kib = int(line.split()[1])
+                return kib / 1024 / 1024
+    return 0.0
+
+# Best-effort drop_caches if we can write it (root inside container).
+# Harmless if it fails -- it just reduces the chance the wait-loop
+# helps.
+try:
+    with open('/proc/sys/vm/drop_caches', 'w', encoding='utf-8') as fh:
+        fh.write('3\n')
+    print('[TRACK-B-PRELAUNCH] dropped page cache')
+except (OSError, PermissionError):
+    print('[TRACK-B-PRELAUNCH] could not drop page cache (no SYS_ADMIN); continuing')
+
+start = time.monotonic()
+last_log = -10
+avail = _meminfo_available_gib()
+while avail < MIN_AVAILABLE_GIB:
+    elapsed = time.monotonic() - start
+    if elapsed >= WAIT_TIMEOUT_S:
+        raise RuntimeError(
+            f'Track B prelaunch: only {avail:.1f} GiB available after '
+            f'{int(elapsed)}s wait (need {MIN_AVAILABLE_GIB:.0f} GiB). '
+            f'GB10 unified-memory pool not released by NVIDIA driver. '
+            f'Operator action: reload nvidia kernel modules '
+            f'(sudo rmmod nvidia_uvm; sudo modprobe nvidia_uvm) or '
+            f'reboot host. Set LUMO_TRACK_B_MIN_FREE_GIB lower if '
+            f'launching with reduced gpu_memory_utilization.'
+        )
+    if elapsed - last_log >= 30:
+        print(
+            f'[TRACK-B-PRELAUNCH] waiting for GPU memory: '
+            f'{avail:.1f} GiB available, need {MIN_AVAILABLE_GIB:.0f} GiB '
+            f'(elapsed {int(elapsed)}s, timeout {WAIT_TIMEOUT_S}s)'
+        )
+        last_log = elapsed
+    time.sleep(5)
+    avail = _meminfo_available_gib()
+
+print(f'[TRACK-B-PRELAUNCH] GPU memory ready: {avail:.1f} GiB available')
+PY
+python3 - <<'PY'
 from pathlib import Path
 
 path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/single_type_kv_cache_manager.py')
