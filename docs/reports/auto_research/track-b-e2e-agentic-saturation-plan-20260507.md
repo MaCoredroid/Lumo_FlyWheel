@@ -789,7 +789,8 @@ Committed scaffold commits through this status checkpoint:
 - `571a3ca Fix Track B NCU doc drift`
 - `7826c5c Record Track B NCU server blocker`
 - `51da1f7 Surface Track B NCU blocker in readiness`
-- Current checkpoint: `Refresh Track B blocker ledger`
+- `44ebbac Refresh Track B blocker ledger`
+- Current checkpoint: `Refresh Track B readiness report`
 
 ## 12. Decision rules for ending the loop
 
@@ -824,7 +825,7 @@ On termination, write `output/track_b_e2e/loop_closeout.md` summarizing the fina
 | `track-b-concurrency-measurement-audit-20260506.md` | Reference | Established truthful-measurement rules. |
 | `track-b-e2e-round0-preflight-audit-20260507.md` | Current blocker record | Live Round 0 preflight failures and remediation requirements. |
 | `track-b-e2e-codex-trace-patch-surface-audit-20260507.md` | Current blocker record | Shows where Codex CLI must be patched for `--trace-out`. |
-| `track-b-e2e-readiness-manifest-20260507.md` | Current blocker record | Defines the machine-readable readiness manifest and `round0_ready=false` gate. |
+| `track-b-e2e-readiness-manifest-20260507.md` | Current blocker record | Summarizes the machine-readable readiness manifest, reduced Round 0 summary, and `round0_ready=false` gate. |
 | `track-b-e2e-vllm-request-metrics-patch-surface-audit-20260507.md` | Current blocker record | Shows vLLM request IDs exist in serving but not in Prometheus metric labels. |
 | `track-b-e2e-objective-completion-audit-20260507.md` | Current blocker record | Maps the user objective to concrete artifacts and records why the objective is not complete. |
 | `track-b-e2e-ncu-server-profiling-blocker-20260508.md` | Current blocker record | Records why valid NCU profiles require replacing or freeing the live server topology. |
