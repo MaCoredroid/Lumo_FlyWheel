@@ -1174,6 +1174,25 @@ if importlib.util.find_spec('arctic_inference') is None:
     ])
 else:
     print('[TRACK-B-PRELAUNCH] arctic-inference already available')
+
+# LMCache (Round 0 Step 1) -- KV reuse across requests; foundation
+# for the cumulative cache-hit target. --no-build-isolation is
+# required because LMCache's setup.py imports torch from the
+# pip-build-env, which on this NVIDIA pytorch 26.01 image conflicts
+# with the container's pre-installed torch (dlpack_exchange_api).
+if importlib.util.find_spec('lmcache') is None:
+    print('[TRACK-B-PRELAUNCH] installing lmcache for KV cache reuse')
+    subprocess.check_call([
+        sys.executable,
+        '-m',
+        'pip',
+        'install',
+        '--disable-pip-version-check',
+        '--no-build-isolation',
+        'lmcache==0.4.4',
+    ])
+else:
+    print('[TRACK-B-PRELAUNCH] lmcache already available')
 PY
 python3 - <<'PY'
 # Lumo Track B 2026-05-08: patch vllm/parser/abstract_parser.py so the
