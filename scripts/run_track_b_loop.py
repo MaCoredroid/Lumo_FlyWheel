@@ -1099,16 +1099,16 @@ def _meminfo_available_gib():
                 return kib / 1024 / 1024
     return 0.0
 
-# Best-effort drop_caches if we can write it (root inside container).
-# Harmless if it fails -- it just reduces the chance the wait-loop
-# helps.
-try:
-    with open('/proc/sys/vm/drop_caches', 'w', encoding='utf-8') as fh:
-        fh.write('3\n')
-    print('[TRACK-B-PRELAUNCH] dropped page cache')
-except (OSError, PermissionError):
-    print('[TRACK-B-PRELAUNCH] could not drop page cache (no SYS_ADMIN); continuing')
-
+# Note on the actual recovery path: the proven memory-collection
+# command on this host is `sync; echo 3 > /proc/sys/vm/drop_caches;
+# swapoff -a || true; swapon -a || true` (recovers ~90+ GiB after a
+# vLLM teardown). It runs HOST-SIDE and needs root via
+# LUMO_SUDO_PASSWORD; ModelServer._recover_host_memory() in
+# src/lumo_flywheel_serving/model_server.py invokes it automatically
+# at vLLM lifecycle boundaries. This block is the in-container
+# guardrail: it CANNOT free memory itself (no SYS_ADMIN), but it
+# fails loud if the host recovery did not happen or was not enough,
+# rather than letting vllm serve crash mid-init.
 start = time.monotonic()
 last_log = -10
 avail = _meminfo_available_gib()
@@ -1118,11 +1118,14 @@ while avail < MIN_AVAILABLE_GIB:
         raise RuntimeError(
             f'Track B prelaunch: only {avail:.1f} GiB available after '
             f'{int(elapsed)}s wait (need {MIN_AVAILABLE_GIB:.0f} GiB). '
-            f'GB10 unified-memory pool not released by NVIDIA driver. '
-            f'Operator action: reload nvidia kernel modules '
-            f'(sudo rmmod nvidia_uvm; sudo modprobe nvidia_uvm) or '
-            f'reboot host. Set LUMO_TRACK_B_MIN_FREE_GIB lower if '
-            f'launching with reduced gpu_memory_utilization.'
+            f'Host-memory recovery did not free enough. Operator '
+            f'actions: (1) ensure LUMO_SUDO_PASSWORD is set so '
+            f'ModelServer._recover_host_memory() can run; (2) run '
+            f'the recovery sequence directly: '
+            f'sudo sync; sudo echo 3 > /proc/sys/vm/drop_caches; '
+            f'sudo swapoff -a; sudo swapon -a; '
+            f'(3) lower LUMO_TRACK_B_MIN_FREE_GIB and reduce '
+            f'gpu_memory_utilization correspondingly.'
         )
     if elapsed - last_log >= 30:
         print(
