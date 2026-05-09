@@ -16,6 +16,8 @@ ModelServer. Steps 5-9 still gated on vLLM rebuilds.
 | f0f82ab | Round 2 applicability analyzer + v2 Round 0 report |
 | 90dc8b5 | T1 phase 1: proxy injects `lumo_sess_<id>__` X-Request-Id |
 | 2911641 | T1 phase 2: prelaunch wraps SuffixDecodingCache per-session |
+| 8b82a50 | Round 2 progress doc: T1 ship-ready |
+| ac81374 | T3 phase 1: schema-aware drafter decision core |
 
 End-to-end verified against the live Round 1 baseline
 (`lumo-vllm-track-b-suffix`): a sidecar proxy at port 8033 emits
@@ -94,17 +96,39 @@ reduction = 33% of corpus decode. Actual reduction depends on
 intra-session n-gram acceptance rates which we don't have data
 for yet.
 
+## T3 phase 1 — decision core ready
+
+`src/lumo_flywheel_serving/schema_aware_drafter.py` (commit ac81374)
+exposes `propose(snapshot, recent_text) -> DraftProposal | None`:
+given an oracle snapshot with `expected_tool_call` + `tool_schemas`
+and the model's recent decoded text, returns the next deterministic
+text chunk the schema implies. Tokenizer-free; the eventual vLLM-
+side integrator (phases 2-3) wraps it in a token encoder + composite
+drafting policy.
+
+Three Codex / Qwen3 XML anchors are catalogued: forced-name region
+(confidence 1.0), first-required-property opener (0.9), and
+string-property opening quote (0.8). Parallel set for the OpenAI
+Responses-API JSON dialect. 14 unit tests cover the anchor sequencing,
+required-vs-fallback property selection, and the unknown-dialect
+falls-through-to-suffix contract.
+
 ## What an operator can do next
 
-1. **Schedule Technique 3 (schema-aware tool drafter)** as the
-   biggest-payoff next step. Needs XGrammar-2's `traverse_draft_tree`
-   primitive (already in our XGrammar 0.2.0 build) plus a new
-   proposer that consumes `tool_schemas` + `expected_tool_call`
-   from the oracle. Likely requires 1 vLLM rebuild iteration —
-   the new proposer module needs the spec_decode coordinator's
-   dispatch table extended; that table is generated at vLLM build
-   time.
-2. **Skip T2/T4** in the first Round 2 cut. T2 has too little
+1. **Activate T1**: relaunch vLLM through `ModelServer` so the
+   prelaunch wrapper takes effect. Re-run the v2 sweep, diff
+   the applicability JSON. This is the smallest-risk Round 2
+   experiment available today.
+2. **Ship T3 phase 2 (vLLM-side integration)**: the cleanest
+   approach without a vLLM rebuild is a FastAPI middleware
+   (added via prelaunch patch to vLLM's app constructor) that
+   stashes the parsed `X-Lumo-Oracle` header in a per-request
+   in-process dict keyed by request_id; `SuffixDecodingProposer.
+   propose()` reads from this dict, computes the schema-aware
+   proposal alongside the suffix draft, and returns whichever
+   has higher confidence. ~1-2 days of careful work, all
+   prelaunch-applied.
+3. **Skip T2/T4** in the first Round 2 cut. T2 has too little
    coverage to justify the integration cost; T4 lacks an emitter.
 
 ## What did NOT ship
@@ -124,12 +148,14 @@ for yet.
 
 ## Test posture
 
-- 60 unit tests + 1 docker-gated integration test pass:
+- 74 unit tests + 1 docker-gated integration test pass:
   - `test_inference_proxy.py` (42: 29 prior + 13 new for oracle
     synthesis + session-prefixed X-Request-Id)
   - `test_vllm_harness_oracle.py` (10: round-trip, isolation, defaults)
   - `test_build_track_b_round2_applicability.py` (8: technique
     gating, math)
+  - `test_schema_aware_drafter.py` (14: dialect dispatch, anchor
+    sequencing, required-list priority, type-driven proposals)
   - `test_vllm_t1_session_scoped_suffix_decoding_patch.py` (1
     integration: applies patch in transient `lumo-flywheel-vllm`
     container, exercises session partitioning, asserts idempotency)
