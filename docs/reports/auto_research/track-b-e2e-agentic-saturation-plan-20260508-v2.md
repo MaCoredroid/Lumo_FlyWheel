@@ -130,17 +130,21 @@ The original spec sketched a 7-regime taxonomy (`prefill, plan, tool-call, file-
 **Tool-exec-wait correction (2026-05-09)**: this section originally
 claimed tool-exec-wait was the largest open lever. Direct measurement
 via `scripts/build_track_b_tool_exec_wait.py` against the v2 Round 0
-capture refutes that claim:
+capture refutes that claim. After tightening the intra-task gap
+threshold from 60s to 30s (60s incorrectly counted inter-task setup
+as tool-exec-wait):
 
 | Bucket | Aggregate (s) | Share |
 |---|---:|---:|
-| Prefill (vLLM-side) | 1976.4 | 58% |
-| Decode (vLLM-side) | 990.4 | 29% |
-| Tool-exec-wait (host-side, between Codex turns) | 419.1 | **12%** |
+| Prefill (vLLM-side) | 1976.4 | **62%** |
+| Decode (vLLM-side) | 990.4 | 31% |
+| Tool-exec-wait (host-side, between Codex turns) | 210.5 | **7%** |
 
-Tool-exec-wait p50 = 0.144s (most apply_patch/write_file/read_file
-calls are sub-150ms). The long tail is real (p99 = 43s, max = 55s)
-but accounts for less than 100s of the round's aggregate time.
+Tool-exec-wait p50 = 0.138s (most apply_patch/write_file/read_file
+calls are sub-150ms). p90 = 6.5s, p99 = 15.3s, max = 16.6s. Outlier
+analysis (`/tmp/tool_wait_outliers.py`) showed gaps >30s are
+inter-task setup (workspace bootstrap, git apply baseline), not
+real tool-exec-wait inside an agent task.
 
 **The actual largest open lever is prefill**: prefill is 2× decode's
 wallclock contribution. Levers:

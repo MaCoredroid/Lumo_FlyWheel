@@ -67,12 +67,19 @@ def _quantile(values: list[float], q: float) -> float | None:
     return points[idx]
 
 
-def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def aggregate(rows: list[dict[str, Any]], intra_task_gap_threshold_s: float = 30.0) -> dict[str, Any]:
     """Compute tool-exec-wait gaps by inferring the boundaries between
     consecutive Codex turns from request timestamps. Adjacent rows
-    (sorted by ts_request_received) belong to the same agent task if
-    their gap is < 60s -- 60s is well above any reasonable tool-exec
-    wait but well below the inter-task gap during sweeps."""
+    (sorted by ts_request_received) are treated as being inside the
+    same agent task when their gap is < intra_task_gap_threshold_s.
+
+    The threshold defaults to 30s because: (a) typical Codex tools
+    (apply_patch, write_file, exec_command, read_file) complete in
+    sub-200ms; (b) measured p99 of attributed gaps was ~17s, well
+    under 30s; (c) sweep-level inter-task gaps include setup like
+    `git apply` baseline + workspace bootstrap, which run 30-60s.
+    Earlier analysis at 60s included those as 'tool-exec-wait',
+    inflating the share by ~2x."""
     enriched: list[dict[str, Any]] = []
     for row in rows:
         ts_recv = _parse_ts(row.get("ts_request_received"))
@@ -93,12 +100,11 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
         })
     enriched.sort(key=lambda r: r["ts_recv"])
 
-    INTRA_TASK_GAP_S = 60.0
     gaps: list[float] = []
     by_regime: dict[str, list[float]] = {}
     for prev, curr in zip(enriched, enriched[1:]):
         gap_s = (curr["ts_recv"] - prev["ts_done"]).total_seconds()
-        if gap_s < 0 or gap_s > INTRA_TASK_GAP_S:
+        if gap_s < 0 or gap_s > intra_task_gap_threshold_s:
             continue
         gaps.append(gap_s)
         # Attribute the wait to the regime of the PRIOR turn (the turn
@@ -119,7 +125,7 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "schema": SCHEMA,
         "row_count": len(enriched),
-        "intra_task_gap_threshold_s": INTRA_TASK_GAP_S,
+        "intra_task_gap_threshold_s": intra_task_gap_threshold_s,
         "tool_exec_wait_gap_count": len(gaps),
         "tool_exec_wait_sum_s": tool_wait_sum,
         "tool_exec_wait_p50_s": _quantile(sorted(gaps), 0.50),
