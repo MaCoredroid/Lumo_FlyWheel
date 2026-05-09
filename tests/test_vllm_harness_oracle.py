@@ -10,15 +10,21 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from lumo_flywheel_serving.inference_proxy import (
     encode_oracle_snapshot_header,
     synthesize_oracle_snapshot,
 )
 from lumo_flywheel_serving.vllm_harness_oracle import (
     DEFAULT_SUFFIX_TREE_CAP_MB,
+    ORACLE_HEADER,
+    ORACLE_REGISTRY,
     ORACLE_SCHEMA,
     HarnessOracleSnapshot,
+    OracleRegistry,
     encode_oracle_header,
+    install_fastapi_middleware,
     parse_oracle_header,
 )
 
@@ -156,3 +162,133 @@ def test_module_can_load_in_isolation() -> None:
     assert src.startswith('"""Harness-oracle skeleton')
     assert "ORACLE_SCHEMA" in src
     assert "ORACLE_SCHEMA = " in src and ORACLE_SCHEMA in src
+
+
+# ---- Oracle registry tests --------------------------------------
+
+
+def _make_snapshot(session_id: str = "sess_x") -> HarnessOracleSnapshot:
+    return HarnessOracleSnapshot(
+        session_id=session_id,
+        turn_index=0,
+        is_session_open=True,
+        dialect="codex",
+    )
+
+
+def test_oracle_registry_register_and_lookup_round_trip() -> None:
+    reg = OracleRegistry()
+    snap = _make_snapshot()
+    reg.register("rid-1", snap)
+    assert reg.lookup("rid-1") is snap
+    assert len(reg) == 1
+
+
+def test_oracle_registry_lookup_unknown_returns_none() -> None:
+    reg = OracleRegistry()
+    assert reg.lookup("missing") is None
+    assert reg.lookup(None) is None  # type: ignore[arg-type]
+
+
+def test_oracle_registry_unregister_removes_entry() -> None:
+    reg = OracleRegistry()
+    reg.register("rid-1", _make_snapshot())
+    reg.unregister("rid-1")
+    assert reg.lookup("rid-1") is None
+    assert len(reg) == 0
+
+
+def test_oracle_registry_lru_evicts_oldest_when_bounded() -> None:
+    reg = OracleRegistry(max_entries=2)
+    reg.register("a", _make_snapshot("a"))
+    reg.register("b", _make_snapshot("b"))
+    reg.register("c", _make_snapshot("c"))
+    assert reg.lookup("a") is None
+    assert reg.lookup("b") is not None
+    assert reg.lookup("c") is not None
+
+
+def test_oracle_registry_lookup_promotes_recent_use() -> None:
+    reg = OracleRegistry(max_entries=2)
+    reg.register("a", _make_snapshot("a"))
+    reg.register("b", _make_snapshot("b"))
+    # Touch "a" so it's most-recently-used.
+    assert reg.lookup("a") is not None
+    reg.register("c", _make_snapshot("c"))
+    # "b" should evict, not "a".
+    assert reg.lookup("a") is not None
+    assert reg.lookup("b") is None
+    assert reg.lookup("c") is not None
+
+
+def test_oracle_registry_register_ignores_invalid_request_id() -> None:
+    reg = OracleRegistry()
+    reg.register("", _make_snapshot())  # type: ignore[arg-type]
+    reg.register(None, _make_snapshot())  # type: ignore[arg-type]
+    assert len(reg) == 0
+
+
+def test_oracle_registry_clear_removes_all_entries() -> None:
+    reg = OracleRegistry()
+    reg.register("a", _make_snapshot("a"))
+    reg.register("b", _make_snapshot("b"))
+    reg.clear()
+    assert len(reg) == 0
+
+
+def test_install_fastapi_middleware_idempotent_and_captures_oracle() -> None:
+    fastapi = pytest.importorskip("fastapi")
+    starlette_testclient = pytest.importorskip("starlette.testclient")
+
+    app = fastapi.FastAPI()
+
+    captured: dict[str, HarnessOracleSnapshot | None] = {}
+
+    @app.get("/probe")
+    def _probe(request: fastapi.Request) -> dict[str, str]:
+        rid = request.headers.get("X-Request-Id") or ""
+        captured["from_registry"] = ORACLE_REGISTRY.lookup(rid)
+        return {"ok": "yes"}
+
+    install_fastapi_middleware(app)
+    install_fastapi_middleware(app)  # idempotent
+
+    snap = _make_snapshot("sess_xyz")
+    header_value = encode_oracle_header(snap)
+    request_id = "lumo_sess_sess_xyz__fixture"
+
+    ORACLE_REGISTRY.clear()
+    client = starlette_testclient.TestClient(app)
+    response = client.get(
+        "/probe",
+        headers={"X-Request-Id": request_id, ORACLE_HEADER: header_value},
+    )
+    assert response.status_code == 200
+
+    # Inside the handler, registry contained the snapshot.
+    seen = captured.get("from_registry")
+    assert seen is not None
+    assert seen.session_id == "sess_xyz"
+    assert seen.dialect == "codex"
+    # Middleware unregisters on response completion.
+    assert ORACLE_REGISTRY.lookup(request_id) is None
+
+
+def test_install_fastapi_middleware_skips_when_no_oracle_header() -> None:
+    fastapi = pytest.importorskip("fastapi")
+    starlette_testclient = pytest.importorskip("starlette.testclient")
+
+    app = fastapi.FastAPI()
+
+    @app.get("/probe")
+    def _probe(request: fastapi.Request) -> dict[str, str]:
+        return {"ok": "yes"}
+
+    install_fastapi_middleware(app)
+
+    ORACLE_REGISTRY.clear()
+    client = starlette_testclient.TestClient(app)
+    response = client.get("/probe", headers={"X-Request-Id": "rid"})
+    assert response.status_code == 200
+    assert ORACLE_REGISTRY.lookup("rid") is None
+    assert len(ORACLE_REGISTRY) == 0

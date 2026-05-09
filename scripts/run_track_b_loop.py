@@ -1074,6 +1074,17 @@ def _runtime_server(args: argparse.Namespace) -> ModelServer:
 
 
 def _track_b_runtime_prelaunch_shell() -> str:
+    oracle_module_body = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "lumo_flywheel_serving"
+        / "vllm_harness_oracle.py"
+    ).read_text(encoding="utf-8")
+    if "ORACLE_MODULE_EOF" in oracle_module_body:
+        raise RuntimeError(
+            "vllm_harness_oracle.py contains the prelaunch heredoc terminator; "
+            "rename ORACLE_MODULE_EOF to keep the embed safe."
+        )
     return r"""python3 - <<'PY'
 # Lumo Track B 2026-05-08: GPU memory hygiene before the next vLLM
 # launch. GB10 unifies GPU memory with system RAM; the NVIDIA driver
@@ -1367,19 +1378,18 @@ else:
     text += (
         '\n\n'
         '# T1_SESSION_SCOPING_APPLIED router class -- appended by Lumo prelaunch hook.\n'
+        '# Per-session SuffixDecodingCache router. Implements the subset of\n'
+        '# SuffixDecodingCache that SuffixDecodingProposer.propose consumes:\n'
+        '# active_requests, cached_requests, start_request,\n'
+        '# add_active_response, stop_request, evict_cached_response,\n'
+        '# speculate. Each call routes to the per-session cache identified\n'
+        '# by parsing the lumo_sess_<session_id>__ prefix on req_id.\n'
+        '# Non-prefixed traffic routes to the __default__ bucket so\n'
+        '# existing behaviour is preserved bit-for-bit when no Lumo\n'
+        '# proxy is in front. Comments rather than a triple-quoted\n'
+        '# docstring intentional -- the outer Python r-string that\n'
+        '# wraps the bash heredoc cannot tolerate embedded triple-quotes.\n'
         'class _SessionRoutedSuffixDecodingCache:\n'
-        '    """Per-session SuffixDecodingCache router.\n'
-        '\n'
-        '    Implements the subset of SuffixDecodingCache that\n'
-        '    ``SuffixDecodingProposer.propose`` consumes:\n'
-        '    ``active_requests``, ``cached_requests``, ``start_request``,\n'
-        '    ``add_active_response``, ``stop_request``,\n'
-        '    ``evict_cached_response``, ``speculate``. Each call routes\n'
-        '    to the per-session cache identified by parsing the\n'
-        '    ``lumo_sess_<session_id>__`` prefix on ``req_id``.\n'
-        '    Non-prefixed traffic routes to the ``__default__`` bucket\n'
-        '    so existing behaviour is preserved bit-for-bit when no\n'
-        '    Lumo proxy is in front."""\n'
         '\n'
         '    _PREFIX = "lumo_sess_"\n'
         '    _SEP = "__"\n'
@@ -1458,6 +1468,49 @@ else:
     )
     path.write_text(text, encoding='utf-8')
     print('[TRACK-B-PRELAUNCH] applied T1 session scoping wrapper')
+PY
+cat > /usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/lumo_oracle_registry.py <<'ORACLE_MODULE_EOF'
+""" + oracle_module_body + r"""ORACLE_MODULE_EOF
+python3 - <<'PY'
+# T3 phase 2 (2026-05-09): install the X-Lumo-Oracle FastAPI middleware
+# into vLLM's build_app so /v1/responses requests stash their parsed
+# oracle in lumo_oracle_registry.ORACLE_REGISTRY, keyed by X-Request-Id.
+# T3 phase 3 (composite drafting in SuffixDecodingProposer.propose) will
+# read from the same registry; landing the producer side first keeps
+# the changes paged.
+from pathlib import Path
+
+ap = Path('/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/api_server.py')
+if not ap.is_file():
+    raise RuntimeError(f'vLLM api_server.py missing: {ap}')
+text = ap.read_text(encoding='utf-8')
+sentinel = '# T3_ORACLE_MIDDLEWARE_APPLIED'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] T3 oracle middleware install hook already present')
+else:
+    old = (
+        '    app = sagemaker_standards_bootstrap(app)\n'
+        '    return app\n'
+    )
+    new = (
+        '    app = sagemaker_standards_bootstrap(app)\n'
+        '    # T3_ORACLE_MIDDLEWARE_APPLIED -- Lumo Track B Round 2 (2026-05-09)\n'
+        '    # Defensive try/except so a missing/broken oracle module never\n'
+        '    # crashes vLLM startup; absence reverts to the un-instrumented path.\n'
+        '    try:\n'
+        '        from vllm.v1.spec_decode.lumo_oracle_registry import install_fastapi_middleware as _lumo_oracle_install\n'
+        '        _lumo_oracle_install(app)\n'
+        '    except Exception as _lumo_exc:  # pragma: no cover -- defensive\n'
+        '        import logging as _logging\n'
+        '        _logging.getLogger(__name__).warning(\n'
+        '            \"Lumo oracle middleware install failed: %s\", _lumo_exc\n'
+        '        )\n'
+        '    return app\n'
+    )
+    if old not in text:
+        raise RuntimeError('build_app return-app pattern not found in api_server.py')
+    ap.write_text(text.replace(old, new), encoding='utf-8')
+    print('[TRACK-B-PRELAUNCH] applied T3 oracle middleware install hook')
 PY"""
 
 

@@ -153,3 +153,122 @@ def encode_oracle_header(snapshot: HarnessOracleSnapshot) -> str:
         out["plan_fingerprint"] = snapshot.plan_fingerprint
     out["suffix_tree_cap_mb"] = snapshot.suffix_tree_cap_mb
     return json.dumps(out, separators=(",", ":"), sort_keys=True)
+
+
+# ---- Oracle registry -- T3 phase 2 foundation ---------------------
+#
+# Module-level dict the FastAPI middleware (patched into vLLM's
+# build_app via the prelaunch hook) writes to on each /v1/responses
+# request, and that ``SuffixDecodingProposer.propose()`` reads from
+# once T3 phase 3's composite drafting integration ships. Keyed by
+# the session-prefixed ``X-Request-Id`` the proxy emits, so a single
+# lookup in propose() (which already has ``req_id``) recovers the
+# parsed oracle without re-parsing the JSON header per decode step.
+#
+# Eviction: simple bounded LRU. The registry should always be small
+# (one entry per concurrent request) so a generous bound + insertion-
+# order eviction is sufficient. Cleanup of finished requests happens
+# explicitly via ``unregister`` from the request-finalize middleware
+# path; the bound is just a safety net for crashed requests.
+
+import collections
+import threading
+
+_REGISTRY_DEFAULT_MAX_ENTRIES = 4096
+
+
+class OracleRegistry:
+    """Thread-safe, LRU-bounded {request_id: HarnessOracleSnapshot} map.
+
+    Concurrency: vLLM's FastAPI handlers run on the asyncio event loop
+    while ``SuffixDecodingProposer.propose()`` runs on a separate
+    worker (the model runner). A plain ``threading.Lock`` is enough;
+    we never hold it across an await."""
+
+    def __init__(self, max_entries: int = _REGISTRY_DEFAULT_MAX_ENTRIES) -> None:
+        self._max_entries = max_entries
+        self._entries: "collections.OrderedDict[str, HarnessOracleSnapshot]" = (
+            collections.OrderedDict()
+        )
+        self._lock = threading.Lock()
+
+    def register(self, request_id: str, snapshot: HarnessOracleSnapshot) -> None:
+        if not isinstance(request_id, str) or not request_id:
+            return
+        with self._lock:
+            self._entries[request_id] = snapshot
+            self._entries.move_to_end(request_id)
+            while len(self._entries) > self._max_entries:
+                self._entries.popitem(last=False)
+
+    def lookup(self, request_id: str) -> HarnessOracleSnapshot | None:
+        if not isinstance(request_id, str):
+            return None
+        with self._lock:
+            snap = self._entries.get(request_id)
+            if snap is not None:
+                self._entries.move_to_end(request_id)
+            return snap
+
+    def unregister(self, request_id: str) -> None:
+        if not isinstance(request_id, str):
+            return
+        with self._lock:
+            self._entries.pop(request_id, None)
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._entries)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
+
+# Singleton — the module-level dict the middleware and propose()
+# share. Importers should treat this as read-mostly data; mutation
+# is the middleware's responsibility.
+ORACLE_REGISTRY = OracleRegistry()
+
+
+def install_fastapi_middleware(app: Any) -> None:
+    """Register the X-Lumo-Oracle harvesting middleware on a FastAPI app.
+
+    Idempotent: re-registering the same middleware on the same app is
+    a no-op (we tag the app with ``app.state.lumo_oracle_middleware =
+    True``). The middleware reads X-Lumo-Oracle + X-Request-Id from
+    every inbound request and stashes the parsed snapshot in
+    ``ORACLE_REGISTRY``; on response completion it unregisters so the
+    map stays bounded.
+
+    Designed to be applied via vLLM's prelaunch hook, which patches
+    ``vllm/entrypoints/openai/api_server.py``'s ``build_app`` to call
+    this helper after vLLM's own middlewares are in place. The
+    registration order doesn't matter because all we do is a
+    parse + dict-insert (no transformation of request/response data).
+    """
+
+    if getattr(getattr(app, "state", None), "lumo_oracle_middleware", False):
+        return
+    registry = ORACLE_REGISTRY
+
+    @app.middleware("http")
+    async def _lumo_oracle_capture(request: Any, call_next: Any) -> Any:
+        request_id = request.headers.get("X-Request-Id")
+        if not request_id:
+            return await call_next(request)
+        oracle_value = request.headers.get(ORACLE_HEADER)
+        if oracle_value:
+            snapshot = parse_oracle_header(oracle_value)
+            if not snapshot.is_empty:
+                registry.register(request_id, snapshot)
+        try:
+            return await call_next(request)
+        finally:
+            registry.unregister(request_id)
+
+    if getattr(app, "state", None) is not None:
+        try:
+            app.state.lumo_oracle_middleware = True
+        except Exception:
+            pass
