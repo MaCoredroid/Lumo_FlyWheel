@@ -39,16 +39,24 @@ Step 0d. Output is parsed JSON (`{"path": "AGENTS.md"}`); without the
 patch the same call returned the raw XML.
 
 **Where the plan stands:**
-- **Step 0d:** root cause known, fix verified. Activation requires
-  the next vLLM relaunch through `ModelServer` (any of `make serve`,
-  `lumoserve serve`, or `run_track_b_loop`). The first relaunch will
-  apply all four prelaunch patches automatically (memory guardrail +
-  PR#39562 + arctic-inference + forced tool_choice).
-- **Step 0e (ship Round 1 winner):** unblocked the moment Step 0d's
-  re-run confirms a pass against the live runtime. The live
+- **Step 0d: ✅ PASS (2026-05-09).** Re-run against a freshly-patched
+  vLLM container produced `gate_pass=true` with all three suites
+  (b1, b2, b3) at 1.0 pass rate (was 0.0 pre-patch). Artifact at
+  `output/track_b_step_0d_post_patch/step_0d_correctness_gate.json`
+  (schema `lumo.track_b.step_0d_correctness_gate.v1`).
+  Caveat: this re-run was against vanilla vLLM (no spec_decode) on a
+  fresh state-root; `runtime_config_hash` is preserved from v2 Round 0
+  but `live_speculative_method` in the artifact reflects the prior
+  hash, not what the fresh vLLM was running. The patched code is
+  identical to what would run under SuffixDecoding, so the gate
+  result transfers directly to the live SuffixDecoding config — but
+  a confirmation re-run with `arctic-inference` + suffix decode
+  reactivated should be done before Step 0e ships.
+- **Step 0e (ship Round 1 winner):** unblocked. The live
   SuffixDecoding config keeps every regime gain measured in v2
   Round 0 (tool-call agg accept 0.521, decode tps p50 33.6) — no
-  spec_decode method change needed.
+  spec_decode method change needed. Final hand-off needs the
+  spec-decode confirmation re-run noted above.
 - **Steps 1-9 (LMCache, harness-coupled techniques):** unchanged from
   v1; remain the larger Round 2+ scope. The v2 spec
   (`track-b-e2e-agentic-saturation-plan-20260508-v2.md`) recalibrates

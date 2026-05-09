@@ -97,7 +97,14 @@ requires a relaunch. After the relaunch:
 ## Status
 
 - v2 round 0: trusted 12/13 task summaries → committed (6846ec8).
-- Step 0d: **FAIL** → root cause isolated to vLLM Responses API.
+- Step 0d (2026-05-08): **FAIL** → root cause isolated to vLLM
+  Responses API.
+- **Step 0d (2026-05-09): PASS** — re-run after the patch was
+  loaded into a fresh vLLM container produced
+  `gate_pass=true, per_suite_pass={b1: true, b2: true, b3: true},
+  per_suite_pass_rate={b1: 1.0, b2: 1.0, b3: 1.0}` (was 0.0 across
+  the board). Artifact at
+  `output/track_b_step_0d_post_patch/step_0d_correctness_gate.json`.
 - Patch applied (e67832c, prelaunch hook). Activation = next vLLM
   relaunch.
 - **Patch verified end-to-end** (53917c0): the regression test in
