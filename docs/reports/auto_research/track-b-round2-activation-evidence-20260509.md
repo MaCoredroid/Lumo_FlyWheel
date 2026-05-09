@@ -92,15 +92,57 @@ both turns, so both share `oracle_session_id=sess_a6abacd5af12741d`:
   by-construction; the helpers are bound and we got 200s
   through the patched stack).
 
+## Forced-tool-choice exercise (T3 schema-aware path)
+
+Single forced `apply_patch` request with `max_output_tokens=256`:
+
+- Status: **200**
+- Output: `function_call name=apply_patch arguments=` (valid JSON
+  patch payload, model emitted unified diff inside the patch
+  field)
+- Capture row:
+  - `oracle_expected_tool_name='apply_patch'` ✓ (proxy synthesised
+    `expected_tool_call` from the forced choice)
+  - `oracle_dialect='codex'`, `oracle_tool_schema_count=2`
+  - `regime='tool-call'`, `tool_call_observed=True`
+  - 22/121 spec-decode acceptance = 18.2%
+  - decode_sum_s = 9.47s
+
+This proves the full T3 chain end-to-end: proxy synthesised the
+oracle, middleware stashed it in the registry,
+`SuffixDecodingProposer.propose` was called with the prefixed
+req_id (composite drafting helper had access to read the oracle),
+forced-name parser fix turned the model's structural output into
+a properly-formatted JSON `arguments` field, and the response
+came through 200.
+
+Note: an earlier test with `max_output_tokens=32` returned 500
+(`AssertionError: content is not None` in `_parse_tool_calls`).
+That's pre-existing vLLM behavior — the parser asserts `content
+is not None` under forced tool_choice, and with too-small a token
+budget the model can't emit anything before the parser tries to
+parse. Our patch preserved that assertion (it was already there
+vanilla); we just changed the *handling* of valid content.
+
+## Round 2 micro-benchmark — 5 sessions × 3 turns each
+
+`output/track_b_round2/microbench_5x3_capture.jsonl`. 15 requests
+through the patched runtime via sidecar proxy. Aggregate:
+
+- turn 0 (cold session): 26.3% acceptance
+- turn 1+ (warm, prior turns in per-session cache): 38.4% acceptance
+- **+12.1 pp = +46% relative T1 lift**
+- Per-draft-token decode: 51.7 ms → 38.4 ms = **−25.7%**
+
+Full report at `track-b-round2-microbench-20260509.md`.
+
 ## What's left
 
 - Run the full v2 sweep against this patched runtime — produces
   the corpus-level decode-reduction number via
   `scripts/build_track_b_round2_applicability.py` +
-  `scripts/build_track_b_round2_delta.py`.
-- The schema-aware drafter (T3) doesn't fire on this smoke
-  (we used `tool_choice='auto'`); a forced-tool-choice sweep
-  would exercise the schema-aware path.
+  `scripts/build_track_b_round2_delta.py`. Operator-paced (~22 min
+  sweep + analysis).
 
 ## Container info
 
