@@ -37,6 +37,19 @@ TRACK_B_RUNTIME_CONFIG_HASH_ENV = "LUMO_TRACK_B_RUNTIME_CONFIG_HASH"
 LUMO_ORACLE_HEADER = "X-Lumo-Oracle"
 LUMO_ORACLE_SCHEMA = "lumo.harness_oracle_snapshot.v1"
 
+# Session-prefixed X-Request-Id encoding for Round 2 Technique 1
+# (cross-turn ngram session scoping). vLLM's
+# ``serving.OpenAIServing._base_request_id`` already promotes
+# ``X-Request-Id`` to the engine-side ``req_id`` that
+# ``SuffixDecodingProposer.propose()`` keys its caches on. By
+# prefixing every Codex /v1/responses call with this format, the
+# downstream session-scoped wrapper around SuffixDecodingCache
+# (lands in the prelaunch hook on next vLLM relaunch) can parse
+# session_id back out of the req_id and route to a per-session
+# suffix tree. Format is documented + parseable both ends.
+LUMO_REQUEST_ID_PREFIX = "lumo_sess_"
+LUMO_REQUEST_ID_SEP = "__"
+
 HOP_BY_HOP_HEADERS = {
     "connection",
     "content-length",
@@ -352,6 +365,37 @@ def synthesize_oracle_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
 
 def encode_oracle_snapshot_header(snapshot: dict[str, Any]) -> str:
     return json.dumps(snapshot, separators=(",", ":"), sort_keys=True)
+
+
+def encode_session_request_id(session_id: str, original_id: str | None = None) -> str:
+    """Build the X-Request-Id value vLLM consumes for session routing.
+
+    Format: ``lumo_sess_<session_id>__<original_id>``. The ``original_id``
+    is the existing X-Request-Id the harness sent (preserved for log
+    correlation) or a fresh hex token when the harness sent none.
+    Caller is responsible for ensuring ``session_id`` does not contain
+    the separator ``__``.
+    """
+
+    suffix = original_id if original_id else hashlib.sha256(
+        session_id.encode("utf-8") + str(time.time_ns()).encode("ascii")
+    ).hexdigest()[:16]
+    return f"{LUMO_REQUEST_ID_PREFIX}{session_id}{LUMO_REQUEST_ID_SEP}{suffix}"
+
+
+def parse_session_request_id(req_id: str | None) -> str | None:
+    """Inverse of ``encode_session_request_id``.
+
+    Returns the session_id substring or ``None`` for non-session-prefixed
+    request ids. Tolerant of malformed input — never raises."""
+
+    if not isinstance(req_id, str) or not req_id.startswith(LUMO_REQUEST_ID_PREFIX):
+        return None
+    rest = req_id[len(LUMO_REQUEST_ID_PREFIX):]
+    sep_idx = rest.find(LUMO_REQUEST_ID_SEP)
+    if sep_idx <= 0:
+        return None
+    return rest[:sep_idx]
 
 
 def normalize_responses_sse_block(block: bytes) -> bytes:
@@ -1067,6 +1111,12 @@ def build_proxy_handler(
                 headers["Content-Type"] = "application/json"
                 oracle_snapshot = synthesize_oracle_snapshot(request_json)
                 headers[LUMO_ORACLE_HEADER] = encode_oracle_snapshot_header(oracle_snapshot)
+                session_id_for_routing = oracle_snapshot.get("session_id")
+                if isinstance(session_id_for_routing, str):
+                    headers["X-Request-Id"] = encode_session_request_id(
+                        session_id_for_routing,
+                        original_id=self.headers.get("X-Request-Id"),
+                    )
             elif self.path == "/v1/chat/completions":
                 try:
                     parsed_json = json.loads(raw_body.decode("utf-8"))

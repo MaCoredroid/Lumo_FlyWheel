@@ -13,6 +13,8 @@ import requests
 from lumo_flywheel_serving.inference_proxy import (
     LUMO_ORACLE_HEADER,
     LUMO_ORACLE_SCHEMA,
+    LUMO_REQUEST_ID_PREFIX,
+    LUMO_REQUEST_ID_SEP,
     TRACK_B_REQUEST_METRICS_PRODUCER,
     TRACK_B_REQUEST_METRICS_SCHEMA,
     TrackBRequestMetricsCapture,
@@ -21,11 +23,13 @@ from lumo_flywheel_serving.inference_proxy import (
     _normalize_request_shaping_policy,
     _write_chunked_stream,
     encode_oracle_snapshot_header,
+    encode_session_request_id,
     is_inference_path,
     normalize_responses_request_payload,
     normalize_responses_response_payload,
     normalize_responses_sse_block,
     build_proxy_handler,
+    parse_session_request_id,
     synthesize_oracle_snapshot,
 )
 from lumo_flywheel_serving.tuned_config import RuntimeStateStore, make_tuned_config_bundle, persist_tuned_config_bundle
@@ -1043,3 +1047,32 @@ def test_proxy_forwards_oracle_header_upstream(monkeypatch, tmp_path: Path) -> N
     assert snap["dialect"] == "codex"
     assert snap["turn_index"] == 0
     assert snap["session_id"].startswith("sess_")
+    assert "X-Request-Id" in captured_headers
+    assert captured_headers["X-Request-Id"].startswith(LUMO_REQUEST_ID_PREFIX)
+    assert parse_session_request_id(captured_headers["X-Request-Id"]) == snap["session_id"]
+
+
+def test_encode_session_request_id_round_trips() -> None:
+    rid = encode_session_request_id("sess_abc123", original_id="external-uuid-1")
+    assert rid == f"{LUMO_REQUEST_ID_PREFIX}sess_abc123{LUMO_REQUEST_ID_SEP}external-uuid-1"
+    assert parse_session_request_id(rid) == "sess_abc123"
+
+
+def test_encode_session_request_id_synthesises_suffix_when_no_original() -> None:
+    rid = encode_session_request_id("sess_xyz", original_id=None)
+    assert rid.startswith(f"{LUMO_REQUEST_ID_PREFIX}sess_xyz{LUMO_REQUEST_ID_SEP}")
+    suffix = rid[len(f"{LUMO_REQUEST_ID_PREFIX}sess_xyz{LUMO_REQUEST_ID_SEP}"):]
+    assert len(suffix) == 16
+    assert all(c in "0123456789abcdef" for c in suffix)
+
+
+def test_parse_session_request_id_returns_none_for_unprefixed() -> None:
+    assert parse_session_request_id(None) is None
+    assert parse_session_request_id("plain-uuid") is None
+    assert parse_session_request_id("") is None
+    assert parse_session_request_id(f"{LUMO_REQUEST_ID_PREFIX}__suffix-only") is None
+
+
+def test_parse_session_request_id_handles_separator_in_suffix() -> None:
+    rid = f"{LUMO_REQUEST_ID_PREFIX}sess_aaa{LUMO_REQUEST_ID_SEP}has{LUMO_REQUEST_ID_SEP}more__seps"
+    assert parse_session_request_id(rid) == "sess_aaa"
