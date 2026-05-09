@@ -1180,6 +1180,14 @@ else:
 # required because LMCache's setup.py imports torch from the
 # pip-build-env, which on this NVIDIA pytorch 26.01 image conflicts
 # with the container's pre-installed torch (dlpack_exchange_api).
+#
+# Post-install we uninstall nixl + nixl-cu12: lmcache pulls them
+# transitively for distributed L2 cache support. The CUDA 12 wheel
+# fails to load on this CUDA 13 image (libcudart.so.12 missing),
+# and vLLM unconditionally imports nixl_ep via the Quark-quant
+# init path -- so leaving nixl-cu12 installed crashes vllm serve
+# at engine init. We don't use distributed L2 (remote_url: "" in
+# the LMCache config), so dropping nixl-cu12 is safe.
 if importlib.util.find_spec('lmcache') is None:
     print('[TRACK-B-PRELAUNCH] installing lmcache for KV cache reuse')
     subprocess.check_call([
@@ -1193,6 +1201,20 @@ if importlib.util.find_spec('lmcache') is None:
     ])
 else:
     print('[TRACK-B-PRELAUNCH] lmcache already available')
+
+if importlib.util.find_spec('nixl_ep') is not None:
+    print('[TRACK-B-PRELAUNCH] removing nixl/nixl-cu12 (CUDA 12 binaries on CUDA 13 image)')
+    subprocess.check_call([
+        sys.executable,
+        '-m',
+        'pip',
+        'uninstall',
+        '-y',
+        'nixl',
+        'nixl-cu12',
+    ])
+else:
+    print('[TRACK-B-PRELAUNCH] nixl already absent')
 PY
 python3 - <<'PY'
 # Lumo Track B 2026-05-08: patch vllm/parser/abstract_parser.py so the
