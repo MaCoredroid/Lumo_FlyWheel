@@ -880,8 +880,8 @@ def test_synthesize_oracle_snapshot_first_turn_codex() -> None:
             {"role": "user", "content": "fix the bug in foo.py"},
         ],
         "tools": [
-            {"type": "function", "name": "shell", "parameters": {}},
-            {"type": "function", "name": "apply_patch", "parameters": {}},
+            {"type": "function", "name": "shell", "parameters": {"type": "object"}},
+            {"type": "function", "name": "apply_patch", "parameters": {"type": "object"}},
         ],
     }
     snap = synthesize_oracle_snapshot(payload)
@@ -890,6 +890,53 @@ def test_synthesize_oracle_snapshot_first_turn_codex() -> None:
     assert snap["turn_index"] == 0
     assert snap["session_id"].startswith("sess_")
     assert len(snap["session_id"]) == len("sess_") + 16
+    assert snap["is_session_open"] is True
+    assert snap["suffix_tree_cap_mb"] == 100
+    assert [s["name"] for s in snap["tool_schemas"]] == ["shell", "apply_patch"]
+    assert "expected_tool_call" not in snap
+
+
+def test_synthesize_oracle_snapshot_extracts_forced_tool_choice() -> None:
+    payload = {
+        "input": [{"role": "user", "content": "patch this"}],
+        "tools": [
+            {"type": "function", "name": "shell", "parameters": {"type": "object"}},
+            {"type": "function", "name": "apply_patch", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}},
+        ],
+        "tool_choice": {"type": "function", "function": {"name": "apply_patch"}},
+    }
+    snap = synthesize_oracle_snapshot(payload)
+    assert snap["expected_tool_call"]["name"] == "apply_patch"
+    assert snap["expected_tool_call"]["schema"]["properties"]["path"]["type"] == "string"
+
+
+def test_synthesize_oracle_snapshot_session_not_open_after_turn0() -> None:
+    payload = {
+        "input": [
+            {"role": "user", "content": "go"},
+            {"type": "function_call", "name": "shell"},
+        ],
+    }
+    snap = synthesize_oracle_snapshot(payload)
+    assert snap["turn_index"] == 1
+    assert snap["is_session_open"] is False
+
+
+def test_extract_tool_schemas_handles_nested_function_form() -> None:
+    payload = {
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "exec_command",
+                    "parameters": {"type": "object", "properties": {"cmd": {"type": "array"}}},
+                },
+            }
+        ],
+    }
+    snap = synthesize_oracle_snapshot(payload)
+    assert snap["tool_schemas"][0]["name"] == "exec_command"
+    assert snap["tool_schemas"][0]["parameters"]["properties"]["cmd"]["type"] == "array"
 
 
 def test_synthesize_oracle_snapshot_session_id_stable_across_turns() -> None:

@@ -259,23 +259,95 @@ def _count_turn_index(payload: dict[str, Any]) -> int:
     return turns
 
 
+def _extract_tool_schemas(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Pull JSON-schema tool definitions out of a /v1/responses payload.
+
+    Schema-aware drafter (Technique 3) consumes these to drive XGrammar-2
+    forced-token drafting. Output shape per entry:
+    ``{"name": str, "parameters": <json schema>}`` — flat, since the
+    Responses API emits both "type": "function" wrapped and flattened
+    forms. Keeps only fields the drafter needs; description is dropped.
+    """
+
+    tools = payload.get("tools")
+    if not isinstance(tools, list):
+        return []
+    schemas: list[dict[str, Any]] = []
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        name: Any = tool.get("name")
+        params: Any = tool.get("parameters")
+        if not isinstance(name, str):
+            fn = tool.get("function")
+            if isinstance(fn, dict):
+                name = fn.get("name")
+                params = fn.get("parameters", params)
+        if not isinstance(name, str) or not name:
+            continue
+        entry: dict[str, Any] = {"name": name}
+        if isinstance(params, dict):
+            entry["parameters"] = params
+        schemas.append(entry)
+    return schemas
+
+
+def _extract_expected_tool_call(
+    payload: dict[str, Any], schemas: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """If tool_choice forces a specific function, return ``{name, schema}``.
+
+    Forced-tool turns are 100% predictable on the function-name slot —
+    schema-aware drafter pre-fills the name region with confidence 1.0.
+    """
+
+    tc = payload.get("tool_choice")
+    forced_name: str | None = None
+    if isinstance(tc, dict):
+        if tc.get("type") == "function":
+            fn = tc.get("function")
+            if isinstance(fn, dict) and isinstance(fn.get("name"), str):
+                forced_name = fn["name"]
+            elif isinstance(tc.get("name"), str):
+                forced_name = tc["name"]
+    if forced_name is None:
+        return None
+    matched = next(
+        (s for s in schemas if s.get("name") == forced_name),
+        {"name": forced_name},
+    )
+    return {"name": forced_name, "schema": matched.get("parameters")}
+
+
 def synthesize_oracle_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
     """Build an X-Lumo-Oracle snapshot from a /v1/responses payload.
 
-    Phase-1 fields only — schema documented in
-    track-b-harness-oracle-api-skeleton-20260509.md. Subsequent phases add
-    structural slots (apply_patch path, plan step idx, file primer head)
-    once the Codex-side emitter ships.
+    Schema documented in
+    track-b-harness-oracle-api-skeleton-20260509.md. Computed entirely
+    from the inbound payload — no Codex source change required for any
+    field below. Fields not robustly extractable proxy-side
+    (``primed_texts``, ``plan_fingerprint``) are left out; they need
+    Codex-side emission to be useful and the drafter tolerates absence.
     """
 
     anchor = _first_user_text(payload)
     session_id = "sess_" + hashlib.sha256(anchor.encode("utf-8", errors="replace")).hexdigest()[:16]
-    return {
+    turn_index = _count_turn_index(payload)
+    tool_schemas = _extract_tool_schemas(payload)
+    expected = _extract_expected_tool_call(payload, tool_schemas)
+    snap: dict[str, Any] = {
         "schema": LUMO_ORACLE_SCHEMA,
         "session_id": session_id,
-        "turn_index": _count_turn_index(payload),
+        "turn_index": turn_index,
         "dialect": _detect_dialect(payload),
+        "is_session_open": turn_index == 0,
+        "suffix_tree_cap_mb": 100,
     }
+    if tool_schemas:
+        snap["tool_schemas"] = tool_schemas
+    if expected is not None:
+        snap["expected_tool_call"] = expected
+    return snap
 
 
 def encode_oracle_snapshot_header(snapshot: dict[str, Any]) -> str:
@@ -569,6 +641,12 @@ def _build_request_metrics_row(
         row["oracle_session_id"] = oracle_snapshot.get("session_id")
         row["oracle_turn_index"] = oracle_snapshot.get("turn_index")
         row["oracle_dialect"] = oracle_snapshot.get("dialect")
+        row["oracle_is_session_open"] = bool(oracle_snapshot.get("is_session_open"))
+        row["oracle_tool_schema_count"] = len(oracle_snapshot.get("tool_schemas") or [])
+        expected = oracle_snapshot.get("expected_tool_call")
+        row["oracle_expected_tool_name"] = (
+            expected.get("name") if isinstance(expected, dict) else None
+        )
     return row
 
 
