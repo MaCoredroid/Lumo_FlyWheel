@@ -1,0 +1,10 @@
+# Track B LMCache config -- local-CPU L1 only, no L2 until we measure
+# eviction rate. See docs/reports/auto_research/track-b-lmcache-integration-staged-20260509.md
+chunk_size: 256
+local_cpu: True
+max_local_cpu_size: 30
+remote_url: ""
+remote_serde: ""
+pipelined_backend: False
+save_decode_cache: False
+enable_blending: False
