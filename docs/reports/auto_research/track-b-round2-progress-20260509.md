@@ -27,6 +27,9 @@ out of Round 2 scope per the v2 applicability analysis.
 | 6eb4d32 | T3 phase 2: oracle middleware drop + api_server install hook |
 | 2c078aa | Round 2 progress doc: T3 phase 2 ship-ready |
 | 8d4c4a0 | T3 phase 3: composite drafting in SuffixDecodingProposer.propose |
+| 3f4f354 | Round 2 progress doc: T3 fully ship-ready |
+| 6af3943 | Round 2 delta script — baseline vs patched applicability |
+| 814ac01 | Round 2 activation checker |
 
 End-to-end verified against the live Round 1 baseline
 (`lumo-vllm-track-b-suffix`): a sidecar proxy at port 8033 emits
@@ -152,25 +155,68 @@ T1 in one pass. Verify with the prelaunch log lines:
 `applied T3 oracle middleware install hook`,
 `applied T3 composite drafting wrapper`.
 
-## Round 2 measurement plan
+## Round 2 operator runbook
 
-Single relaunch activates the full T1 + T3 stack. To measure:
+Single relaunch activates the full T1 + T3 stack. End-to-end
+measurement is now four scripted steps:
 
-1. Run the v2 Round 0 sweep against the patched runtime with
-   per-request capture enabled.
-2. Compare to the v2 Round 0 baseline
-   (`output/track_b_round2/applicability_v2_round0.json`):
-   - Aggregate `decode_sum_s` (T1+T3 ceiling: ~285s reduction =
-     ~14.6% of corpus wallclock).
-   - `accepted_per_draft_token` per regime — the T3 ceiling
-     would push tool-call regime acceptance toward ~1.0 on the
-     forced-name + structural-prefix slots.
-   - Per-task wallclock — T1's session-scoping benefit shows up
-     across ALL turns; T3's schema-aware win is concentrated on
-     the tool-call regime turns (94% of v2 Round 0 traffic).
-3. Re-run `scripts/build_track_b_round2_applicability.py`
-   against the new capture. The `T3_schema_aware_tool_drafter`
-   ceiling becomes a measured number, not a target.
+```bash
+# 1. Relaunch vLLM through ModelServer. The prelaunch chain runs
+#    automatically; expected log lines (in vllm_qwen3.5-27b.log):
+#    - applied PR39562 KV allocator stop-gap
+#    - applied forced tool_choice parser patch
+#    - applied T1 session scoping wrapper
+#    - applied T3 oracle middleware install hook
+#    - applied T3 composite drafting wrapper
+make serve  # or python scripts/run_track_b_loop.py ...
+
+# 2. Verify all six prelaunch sentinels landed in the live
+#    container. Exits non-zero with actionable diagnostics if
+#    any patch is missing.
+python scripts/check_track_b_round2_activation.py \
+  --container lumo-vllm-track-b-suffix \
+  --output output/track_b_round2/activation_post_relaunch.json
+
+# 3. Run the v2 Round 0 sweep against the patched runtime.
+#    The proxy's per-request capture writes oracle_session_id +
+#    oracle_dialect + oracle_tool_schema_count to each row.
+python scripts/run_track_b_loop.py ...   # whatever the v2 sweep entrypoint is
+
+# 4. Build the post-patch applicability JSON, then diff against
+#    the Round 0 baseline. Headline goes to stdout.
+python scripts/build_track_b_round2_applicability.py \
+  --input output/track_b_e2e_v2_post_patch \
+  --output output/track_b_round2/applicability_v2_round_patched.json \
+  --print
+
+python scripts/build_track_b_round2_delta.py \
+  --baseline output/track_b_round2/applicability_v2_round0.json \
+  --patched  output/track_b_round2/applicability_v2_round_patched.json \
+  --output   output/track_b_round2/delta_v2_round0_to_patched.json \
+  --print
+```
+
+The delta script's headline answers Round 2's gating question:
+"Did the T1 + T3 patches actually move corpus decode time?"
+
+## Round 2 measurement targets
+
+Theoretical ceilings on the v2 Round 0 corpus
+(`output/track_b_round2/applicability_v2_round0.json`):
+
+- T1 alone: 98 s decode reduction = 33% of corpus decode = ~5%
+  of corpus wallclock.
+- T3 alone: 187 s decode reduction = 63% of corpus decode = ~9.6%
+  of corpus wallclock.
+- Combined ceiling (T1 + T3 don't fight for the same time):
+  ~285 s decode reduction = ~14.6% of corpus wallclock.
+
+Actual reduction depends on per-technique acceptance rates the
+sweep will measure for the first time. T3 is forced-token-style
+drafting on the structural-prefix region only; the gain in absolute
+seconds is bounded by how many tokens each anchor saves (codex
+anchor 1: ~10 tokens; anchor 2: ~5 tokens; anchor 3: 1 token —
+roughly 16 tokens per tool-call turn at confidence ≥0.8).
 
 ## What an operator can do next
 
@@ -198,7 +244,7 @@ Single relaunch activates the full T1 + T3 stack. To measure:
 
 ## Test posture
 
-- 85 unit tests + 5 docker-gated integration tests pass:
+- 97 unit tests + 5 docker-gated integration tests pass:
   - `test_inference_proxy.py` (42: oracle synthesis + session-
     prefixed X-Request-Id)
   - `test_vllm_harness_oracle.py` (18: snapshot round-trip,
@@ -219,6 +265,12 @@ Single relaunch activates the full T1 + T3 stack. To measure:
   - `test_vllm_t3_composite_drafting_patch.py` (1: T3 phase 3
     patches apply, propose-helpers are bound, schema-aware
     bail-out paths return None cleanly, idempotent re-application)
+  - `test_build_track_b_round2_delta.py` (7: headline math,
+    measured-vs-ceiling, regime-level aggregation, technique-
+    newly-fires, CLI failure paths)
+  - `test_check_track_b_round2_activation.py` (9: sentinel
+    parsing, exists check, partial-failure aggregation, JSON
+    output shape, exit-code mapping)
 - Round 1 baseline (`lumo-vllm-track-b-suffix`) is up and serving
   traffic on 127.0.0.1:9950. No regressions from this session's
   changes — T1's vLLM-side patch fires only on the next relaunch
