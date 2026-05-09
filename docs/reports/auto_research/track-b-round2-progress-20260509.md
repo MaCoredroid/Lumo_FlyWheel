@@ -1,9 +1,9 @@
 # Track B Round 2 — progress as of 2026-05-09
 
 **Status:** Step 3 (harness oracle API + skeleton) shipped end-to-end.
-Steps 4-9 (per-technique drafter implementations) are gated on
-vLLM source rebuilds (30-60 min each) and properly out of single-
-session scope.
+**Step 4 (Technique 1: cross-turn ngram session scoping) ship-ready
+without rebuild** — activates on next vLLM relaunch through
+ModelServer. Steps 5-9 still gated on vLLM rebuilds.
 
 ## Shipped this session
 
@@ -14,6 +14,8 @@ session scope.
 | eb27444 | Step 3 phase 2: extended synthesis (is_session_open, tool_schemas, expected_tool_call) |
 | 059addc | Step 3 phase 3: vLLM-side harness_oracle.py skeleton module |
 | f0f82ab | Round 2 applicability analyzer + v2 Round 0 report |
+| 90dc8b5 | T1 phase 1: proxy injects `lumo_sess_<id>__` X-Request-Id |
+| 2911641 | T1 phase 2: prelaunch wraps SuffixDecodingCache per-session |
 
 End-to-end verified against the live Round 1 baseline
 (`lumo-vllm-track-b-suffix`): a sidecar proxy at port 8033 emits
@@ -58,21 +60,51 @@ Step 3-5 (rebuild + measurement) are operator-paced — each needs
 a dedicated baseline relaunch + a Track B sweep, ~3-4 hours of
 runtime per technique iteration.
 
+## T1 is ship-ready — measurement plan
+
+Both halves of Technique 1 are committed:
+
+- **Proxy** (commit 90dc8b5): every `/v1/responses` call going
+  through `lumo_flywheel_serving.inference_proxy` now carries
+  `X-Request-Id: lumo_sess_<session_id>__<suffix>`.
+- **vLLM** (commit 2911641): the prelaunch hook idempotently
+  rewrites `vllm/v1/spec_decode/suffix_decoding.py` to wrap
+  `self.suffix_cache` in `_SessionRoutedSuffixDecodingCache` —
+  per-session sub-caches keyed by parsing the same prefix.
+
+T1 activates on the **next vLLM relaunch** (operator-gated through
+`ModelServer`). Until then, the running Round 1 baseline still
+runs the un-partitioned cache.
+
+To measure T1's effect once activated:
+1. Relaunch vLLM (`ModelServer.start` or `make serve`). Confirm
+   prelaunch log shows `applied T1 session scoping wrapper`.
+2. Run the v2 Round 0 sweep against the patched runtime.
+3. Diff aggregate decode_sum_s and spec_decode_num_accepted_tokens
+   per task vs the v2 Round 0 baseline (capture in
+   `output/track_b_round2/applicability_v2_round0.json`).
+   Headline acceptance metric: aggregate
+   `accepted_per_draft_token` across tool-call-regime turns.
+4. Run `scripts/build_track_b_round2_applicability.py` against
+   the new capture and compare T1's "decode_sum_s_covered" before
+   vs after — this is the corpus-level measurement.
+
+Theoretical ceiling at the v2 spec's 1.5× target = 98 s decode
+reduction = 33% of corpus decode. Actual reduction depends on
+intra-session n-gram acceptance rates which we don't have data
+for yet.
+
 ## What an operator can do next
 
-1. **Land Technique 1 (cross-turn ngram session scoping)** as
-   commit #1 of Round 2: it's the smallest delta (extends
-   existing SuffixDecoding's suffix tree to be keyed by
-   session_id) and the proxy already provides session_id. Expected
-   measurement: T1 ceiling is 33% of corpus decode = ~10% of
-   wallclock; the actual figure depends on cross-turn n-gram
-   acceptance rates we don't have data for yet.
-2. **Schedule Technique 3 (schema-aware tool drafter)** as the
+1. **Schedule Technique 3 (schema-aware tool drafter)** as the
    biggest-payoff next step. Needs XGrammar-2's `traverse_draft_tree`
    primitive (already in our XGrammar 0.2.0 build) plus a new
    proposer that consumes `tool_schemas` + `expected_tool_call`
-   from the oracle.
-3. **Skip T2/T4** in the first Round 2 cut. T2 has too little
+   from the oracle. Likely requires 1 vLLM rebuild iteration —
+   the new proposer module needs the spec_decode coordinator's
+   dispatch table extended; that table is generated at vLLM build
+   time.
+2. **Skip T2/T4** in the first Round 2 cut. T2 has too little
    coverage to justify the integration cost; T4 lacks an emitter.
 
 ## What did NOT ship
@@ -92,13 +124,19 @@ runtime per technique iteration.
 
 ## Test posture
 
-- 56 tests pass across:
-  - `test_inference_proxy.py` (38: 29 prior + 9 new oracle synthesis)
+- 60 unit tests + 1 docker-gated integration test pass:
+  - `test_inference_proxy.py` (42: 29 prior + 13 new for oracle
+    synthesis + session-prefixed X-Request-Id)
   - `test_vllm_harness_oracle.py` (10: round-trip, isolation, defaults)
-  - `test_build_track_b_round2_applicability.py` (8: technique gating, math)
+  - `test_build_track_b_round2_applicability.py` (8: technique
+    gating, math)
+  - `test_vllm_t1_session_scoped_suffix_decoding_patch.py` (1
+    integration: applies patch in transient `lumo-flywheel-vllm`
+    container, exercises session partitioning, asserts idempotency)
 - Round 1 baseline (`lumo-vllm-track-b-suffix`) is up and serving
   traffic on 127.0.0.1:9950. No regressions from this session's
-  changes (proxy work is sidecar; vLLM-side module unloaded).
+  changes — T1's vLLM-side patch fires only on the next relaunch
+  through `ModelServer`'s prelaunch chain.
 
 ## Files added/changed
 
