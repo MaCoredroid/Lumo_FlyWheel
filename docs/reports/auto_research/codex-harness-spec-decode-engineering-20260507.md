@@ -5,6 +5,48 @@ Revised: 2026-05-06 (post-reproduction findings)
 Revised: 2026-05-07 (post-PR39562-stop-gap real-task matrix)
 Revised: 2026-05-08 (live runtime is SuffixDecoding; proxy-side instrumentation; Step 0d reframe)
 Revised: 2026-05-09 (Step 0d root cause + patch verified end-to-end)
+Revised: 2026-05-09 (Round 2 T1 + T3 + T2-producer ship-ready)
+
+## Status update — 2026-05-09 Round 2 ship-ready
+
+The full Round 2 stack ships end-to-end as prelaunch patches against
+the existing `lumo-flywheel-vllm:26.01-py3-v0.19.0` image — no vLLM
+rebuild needed. Closeout report:
+`track-b-round2-shipped-20260509.md`. Headline:
+
+- **Step 3 (harness oracle API skeleton)** — done. Proxy synthesises
+  X-Lumo-Oracle from the inbound payload (session_id, turn_index,
+  dialect, is_session_open, tool_schemas, expected_tool_call,
+  primed_texts). vLLM-side `lumo_oracle_registry` module is dropped
+  via prelaunch and consumed by a FastAPI middleware that stashes
+  per-request snapshots keyed by X-Request-Id.
+- **Step 4 (T1: cross-turn ngram session scoping)** — done. The
+  proxy injects `X-Request-Id: lumo_sess_<id>__<uuid>`, vLLM's
+  `_base_request_id` promotes it to the engine req_id, and the
+  prelaunch-patched `SuffixDecodingProposer` wraps
+  `arctic_inference.SuffixDecodingCache` in a per-session router.
+- **Step 8 (T3: schema-aware tool drafter)** — done in three
+  prelaunch-applied phases. Decision core (text → DraftProposal),
+  middleware/registry (header → in-process snapshot keyed by
+  request_id), composite drafting (`SuffixDecodingProposer.propose`
+  consults `_lumo_try_schema_aware_draft` first, falls through to
+  suffix-decoding's content statistics on miss). Tokenizer
+  round-trip safety guards against drafts the model never accepts.
+- **Step 6 (T2: read_file priming)** — producer side done.
+  Consumer side deferred until v2 post-patch capture confirms
+  oracle_primed_text_count is high enough on real Codex traffic
+  to justify the integration cost.
+- **Steps 5/9 (T5 lifecycle, T4 plan-structure)** — out of Round
+  2 scope. T5 is bookkeeping covered by `is_session_open`. T4
+  needs a Codex source emitter we don't have.
+- **Steps 11-14 (measurement)** — toolchain ready
+  (`scripts/check_track_b_round2_activation.py`,
+  `scripts/build_track_b_round2_applicability.py`,
+  `scripts/build_track_b_round2_delta.py`). Awaiting an
+  operator-gated `ModelServer` relaunch + post-patch v2 sweep
+  to produce the measured numbers.
+
+99 unit tests + 5 docker-gated integration tests pass.
 
 ## Status update — 2026-05-09 Step 0d root cause and verified fix
 
