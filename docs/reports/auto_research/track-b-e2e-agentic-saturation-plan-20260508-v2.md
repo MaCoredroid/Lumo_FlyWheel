@@ -125,7 +125,42 @@ The original spec sketched a 7-regime taxonomy (`prefill, plan, tool-call, file-
 - Technique 3 (schema-aware tool drafter): tool-call regime is already strong; uplift is marginal.
 - Technique 2 (read_file priming): targets reasoning regime; absolute leverage capped at ~11% of wallclock.
 - Technique 1 (cross-turn ngram cache): orthogonal to regime; broader applicability.
-- Wallclock-shaped recommendation: harness-coupled techniques are no longer the largest near-term lever for this workload mix; per-frame wins on tool-call (already strong) yield more absolute time than per-frame wins on reasoning (small share). The largest open lever is **tool-exec-wait** time (not in proxy capture; needs a separate measurement), which the original spec called out but did not quantify.
+- Wallclock-shaped recommendation: harness-coupled techniques are no longer the largest near-term lever for this workload mix; per-frame wins on tool-call (already strong) yield more absolute time than per-frame wins on reasoning (small share).
+
+**Tool-exec-wait correction (2026-05-09)**: this section originally
+claimed tool-exec-wait was the largest open lever. Direct measurement
+via `scripts/build_track_b_tool_exec_wait.py` against the v2 Round 0
+capture refutes that claim:
+
+| Bucket | Aggregate (s) | Share |
+|---|---:|---:|
+| Prefill (vLLM-side) | 1976.4 | 58% |
+| Decode (vLLM-side) | 990.4 | 29% |
+| Tool-exec-wait (host-side, between Codex turns) | 419.1 | **12%** |
+
+Tool-exec-wait p50 = 0.144s (most apply_patch/write_file/read_file
+calls are sub-150ms). The long tail is real (p99 = 43s, max = 55s)
+but accounts for less than 100s of the round's aggregate time.
+
+**The actual largest open lever is prefill**: prefill is 2× decode's
+wallclock contribution. Levers:
+- LMCache + cross-session KV reuse (Round 2 Step 1, install +
+  wired-in).
+- Higher prefix-cache hit rate (Track B's combined 3-5× cache-hit
+  cumulative target was already this).
+- Reducing per-turn prompt growth (the agent's appended-tool-output
+  + appended-tool-result pattern grows the prompt linearly with
+  turn count; chunked prefill helps but doesn't eliminate).
+
+Decode-side levers (Techniques 1-5 in this plan) have an absolute
+wallclock ceiling of ~990s out of the ~2762s round wallclock, i.e.
+~36% of the round's vLLM-side cost. Even 2× decode acceleration
+saves ~14% of round wallclock.
+
+Prefill acceleration via cross-session KV reuse, by contrast, has a
+58% wallclock ceiling. **Round 2's near-term highest-leverage work
+is LMCache integration, not Techniques 2-5.** Per-technique decode
+acceleration remains valuable as an additive on top.
 
 The 94-row sample is small; the 89/11 split should be re-validated when Round 1 lands a new config and re-measures.
 
