@@ -4,6 +4,67 @@ Generated: 2026-05-07
 Revised: 2026-05-06 (post-reproduction findings)
 Revised: 2026-05-07 (post-PR39562-stop-gap real-task matrix)
 Revised: 2026-05-08 (live runtime is SuffixDecoding; proxy-side instrumentation; Step 0d reframe)
+Revised: 2026-05-09 (Step 0d root cause + patch verified end-to-end)
+
+## Status update — 2026-05-09 Step 0d root cause and verified fix
+
+The 2026-05-08 Step 0d run failed all three suites at 0.0 pass rate
+against the live runtime. Investigation traced the failure to a vLLM
+Responses API bug: `vllm/parser/abstract_parser.py:_parse_tool_calls`
+bypasses the configured tool parser when `tool_choice` is forced
+(`ToolChoiceFunction` or `ChatCompletionNamedToolChoiceParam`) and
+stuffs the raw model output into `FunctionCall.arguments`. Upstream
+Issue #23227 closed as not-planned.
+
+Production impact: zero. Codex CLI 0.128.0 uses auto `tool_choice` on
+`/v1/responses`, which hits the working path. The v2 Round 0
+measurement's 12/13 trusted task summaries parsed correctly. Step 0d
+is the only consumer of forced `tool_choice` in our codebase, which
+is why the bug only surfaces there.
+
+Patch landed in commit e67832c via the `ModelServer` prelaunch hook
+(`scripts/run_track_b_loop.py:_track_b_runtime_prelaunch_shell`). When
+the configured tool parser exists and `tool_choice` is forced, the
+patch runs `extract_tool_calls(content, request)` and uses the
+parsed arguments. The forced name still overrides whatever the parser
+thinks. Idempotent: applies on every container launch, no-ops if
+already present.
+
+Verified end-to-end (commit 53917c0): regression test in
+`tests/test_vllm_forced_tool_choice_patch.py` runs the patched
+function in a transient `lumo-flywheel-vllm:26.01-py3-v0.19.0`
+container with the actual `qwen3_reasoning_parser` and
+`qwen3xml_tool_parser`, against the exact failing payload from
+Step 0d. Output is parsed JSON (`{"path": "AGENTS.md"}`); without the
+patch the same call returned the raw XML.
+
+**Where the plan stands:**
+- **Step 0d:** root cause known, fix verified. Activation requires
+  the next vLLM relaunch through `ModelServer` (any of `make serve`,
+  `lumoserve serve`, or `run_track_b_loop`). The first relaunch will
+  apply all four prelaunch patches automatically (memory guardrail +
+  PR#39562 + arctic-inference + forced tool_choice).
+- **Step 0e (ship Round 1 winner):** unblocked the moment Step 0d's
+  re-run confirms a pass against the live runtime. The live
+  SuffixDecoding config keeps every regime gain measured in v2
+  Round 0 (tool-call agg accept 0.521, decode tps p50 33.6) — no
+  spec_decode method change needed.
+- **Steps 1-9 (LMCache, harness-coupled techniques):** unchanged from
+  v1; remain the larger Round 2+ scope. The v2 spec
+  (`track-b-e2e-agentic-saturation-plan-20260508-v2.md`) recalibrates
+  per-technique leverage against the measured 89% tool-call /
+  11% reasoning regime split, which makes Technique 2 / 3 less
+  load-bearing than v1 implied and surfaces tool-exec-wait as the
+  largest open lever.
+
+Companion docs added 2026-05-08/09:
+- `track-b-step-0d-live-suffix-postmortem-20260508.md` (root cause +
+  verification)
+- `track-b-e2e-round0-v2-report-20260508.md` (v2 Round 0 baseline,
+  canonical for Round 1 deltas)
+- `track-b-e2e-proxy-side-instrumentation-20260508.md` (substrate
+  rationale)
+- `track-b-e2e-kineto-pivot-staged-20260508.md` (Step B staged diff)
 
 ## Status update — 2026-05-08 live-runtime + instrumentation
 
