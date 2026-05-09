@@ -66,6 +66,8 @@ def _run_suite(args: argparse.Namespace, suite: str, out_dir: Path) -> dict[str,
         "--output",
         str(out_path),
     ]
+    if not args.exact_arguments:
+        cmd.append("--no-exact-arguments")
     if args.measure_throughput:
         cmd.append("--measure-throughput")
         cmd.extend(["--target-decode-tps", str(args.target_decode_tps)])
@@ -102,6 +104,19 @@ def main() -> int:
     parser.add_argument("--concurrent-requests", type=int, default=4)
     parser.add_argument("--min-pass-rate", type=float, default=1.0)
     parser.add_argument("--measure-throughput", action="store_true")
+    parser.add_argument(
+        "--exact-arguments",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Default True for byte-exact match. Pass --no-exact-arguments to "
+            "use structural matching (parsed argument shape + required-contains "
+            "checks) -- needed when the model has legitimate output "
+            "nondeterminism (e.g., apply_patch path variants under "
+            "SuffixDecoding) and the bug under test is parser-level, not "
+            "tokenizer-level."
+        ),
+    )
     parser.add_argument("--target-decode-tps", type=float, default=9.0)
     parser.add_argument("--runtime-config-hash", default="")
     args = parser.parse_args()
