@@ -1,9 +1,75 @@
-# Track B Round 2 Step 1 — LMCache integration staged
+# Track B Round 2 Step 1 — LMCache integration staged + BLOCKED
 
 **Date:** 2026-05-09
 **Status:** install + import working in the running vLLM container
-(`bc4bd9c`); vLLM-side wiring + cache backend config staged here for
-operator-driven next vLLM relaunch.
+(`bc4bd9c`); vLLM-side wiring **BLOCKED** by an upstream
+incompatibility on Qwen3.5-27B's hybrid attention.
+
+## Blocker — hybrid KV cache spec unification
+
+After applying the staged wiring (`--kv-transfer-config` pointing
+at `LMCacheConnectorV1Dynamic` + `LMCACHE_CONFIG_FILE` env +
+`docker/lmcache_configs/track_b.yaml`) and bringing the container
+up cleanly through every prelaunch step, vLLM's engine init fails:
+
+```
+File ".../vllm/v1/core/kv_cache_utils.py", line 1216,
+    in unify_hybrid_kv_cache_specs
+    raise ValueError(...)
+ValueError: Hybrid KV cache manager is disabled but failed to convert
+    the KV cache specs to one unified type.
+```
+
+**Root cause:** vLLM 0.19's `KVTransferConfig` path disables the
+hybrid KV cache manager and tries to unify all layers' KV specs to
+a single type. Qwen3.5-27B is a hybrid model — full-attention
+layers and GDN linear-attention layers have different KV cache
+shapes (block size, head count, dtype). They cannot be unified
+without losing model correctness.
+
+The unification is a vLLM-side requirement of the kv_transfer
+contract; LMCache itself doesn't impose it. Any kv_transfer
+connector (NIXL, LMCache, or a custom one) hits the same
+constraint on hybrid models.
+
+**Confirmed reproduction:** commit cd9cff4 prelaunch fires all four
+patches cleanly (memory ✓, PR#39562 ✓, arctic-inference ✓, LMCache
+install ✓, nixl removal ✓, parser patch ✓). The failure is
+strictly at engine-init time, after model weights are loaded, when
+vLLM walks the per-layer KV specs.
+
+## Workarounds (all out of session scope)
+
+1. **Patch vLLM to allow hybrid KV with kv_transfer**: requires
+   teaching the LMCache connector path to handle multi-spec KV
+   layouts. Multi-week vLLM source work.
+2. **Use a non-hybrid model**: drops Qwen3.5-27B → loses every
+   regime measurement we just shipped against this exact model
+   (v2 Round 0 baseline is invalidated for Round 2 deltas).
+3. **Wait for vLLM upstream**: hybrid + kv_transfer support is
+   tracked in vLLM issues; not on the 0.19 → 0.20 roadmap as far
+   as I can find.
+
+## Where this leaves Round 2
+
+The prefill-is-king finding (62% of round wallclock) still stands
+as Round 2's largest open lever. Without LMCache, the levers are
+narrower:
+
+- vLLM's built-in `--enable-prefix-caching` is already on; this is
+  the only intra-process prefix-cache mechanism we have.
+- Cross-session KV reuse is blocked until either (a) we move off
+  the hybrid model, or (b) vLLM hybrid + kv_transfer support
+  lands.
+
+Round 2's near-term work shifts to decode-side techniques (Steps
+3-9 in the harness-coupled spec). Decode is 31% of round wallclock
+on the v2 baseline; the technique stack's 2-3× decode acceleration
+target translates to ~10-20% e2e wallclock improvement, not the
+3-5× cumulative target the v1 spec optimistically projected
+(which assumed LMCache compounded with decode-side wins).
+
+## Stage 1 of 2: vLLM kv-transfer-config (non-applicable until blocker resolves)
 
 ## Why LMCache now (re-prioritized)
 
