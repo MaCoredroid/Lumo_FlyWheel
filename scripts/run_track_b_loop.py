@@ -1311,6 +1311,153 @@ else:
         raise RuntimeError('forced tool_choice patch target not found in abstract_parser.py')
     path.write_text(text.replace(old, new), encoding='utf-8')
     print('[TRACK-B-PRELAUNCH] applied forced tool_choice parser patch')
+PY
+python3 - <<'PY'
+# Lumo Track B Round 2 T1 (2026-05-09): partition the SuffixDecodingCache
+# by session_id parsed from the request id prefix `lumo_sess_<id>__`.
+# The proxy already injects this prefix on /v1/responses calls (commit
+# 90dc8b5). vLLM's _base_request_id promotes X-Request-Id to the engine's
+# req_id, which SuffixDecodingProposer.propose() keys its caches on.
+# This patch wraps the single suffix_cache in a router that dispatches
+# to per-session SuffixDecodingCache instances; non-prefixed traffic
+# routes to the `__default__` bucket so existing behaviour is preserved
+# for non-Codex flows.
+from pathlib import Path
+
+path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/suffix_decoding.py')
+if not path.is_file():
+    raise RuntimeError(f'vLLM SuffixDecoding adapter missing: {path}')
+
+text = path.read_text(encoding='utf-8')
+sentinel = '# T1_SESSION_SCOPING_APPLIED'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] T1 session scoping already present')
+else:
+    old = (
+        '        # Lazy import to avoid error when Suffix Decoding is not used.\n'
+        '        from arctic_inference.suffix_decoding import SuffixDecodingCache\n'
+        '\n'
+        '        # Initialize and empty cache. This object will take care of caching request\n'
+        '        # outputs, evicting old requests, and manages the per-prompt suffix trees.\n'
+        '        self.suffix_cache = SuffixDecodingCache(\n'
+        '            max_tree_depth=config.suffix_decoding_max_tree_depth,\n'
+        '            max_cached_requests=config.suffix_decoding_max_cached_requests,\n'
+        '        )\n'
+    )
+    new = (
+        '        # Lazy import to avoid error when Suffix Decoding is not used.\n'
+        '        from arctic_inference.suffix_decoding import SuffixDecodingCache\n'
+        '\n'
+        '        # T1_SESSION_SCOPING_APPLIED -- Lumo Track B Round 2 (2026-05-09).\n'
+        '        # The router presents the same surface as SuffixDecodingCache (used\n'
+        '        # by ``propose`` below) but partitions per-session by parsing the\n'
+        '        # ``lumo_sess_<id>__`` request-id prefix the proxy emits.\n'
+        '        self.suffix_cache = _SessionRoutedSuffixDecodingCache(\n'
+        '            cache_factory=lambda: SuffixDecodingCache(\n'
+        '                max_tree_depth=config.suffix_decoding_max_tree_depth,\n'
+        '                max_cached_requests=config.suffix_decoding_max_cached_requests,\n'
+        '            ),\n'
+        '            max_tree_depth=config.suffix_decoding_max_tree_depth,\n'
+        '            max_cached_requests=config.suffix_decoding_max_cached_requests,\n'
+        '        )\n'
+    )
+    if old not in text:
+        raise RuntimeError('SuffixDecodingProposer cache instantiation pattern not found')
+    text = text.replace(old, new)
+    text += (
+        '\n\n'
+        '# T1_SESSION_SCOPING_APPLIED router class -- appended by Lumo prelaunch hook.\n'
+        'class _SessionRoutedSuffixDecodingCache:\n'
+        '    """Per-session SuffixDecodingCache router.\n'
+        '\n'
+        '    Implements the subset of SuffixDecodingCache that\n'
+        '    ``SuffixDecodingProposer.propose`` consumes:\n'
+        '    ``active_requests``, ``cached_requests``, ``start_request``,\n'
+        '    ``add_active_response``, ``stop_request``,\n'
+        '    ``evict_cached_response``, ``speculate``. Each call routes\n'
+        '    to the per-session cache identified by parsing the\n'
+        '    ``lumo_sess_<session_id>__`` prefix on ``req_id``.\n'
+        '    Non-prefixed traffic routes to the ``__default__`` bucket\n'
+        '    so existing behaviour is preserved bit-for-bit when no\n'
+        '    Lumo proxy is in front."""\n'
+        '\n'
+        '    _PREFIX = "lumo_sess_"\n'
+        '    _SEP = "__"\n'
+        '    _DEFAULT = "__default__"\n'
+        '\n'
+        '    def __init__(self, *, cache_factory, max_tree_depth, max_cached_requests):\n'
+        '        self._cache_factory = cache_factory\n'
+        '        self._max_tree_depth = max_tree_depth\n'
+        '        self._max_cached_requests = max_cached_requests\n'
+        '        self._caches = {}\n'
+        '        self._req_to_session = {}\n'
+        '\n'
+        '    @property\n'
+        '    def max_tree_depth(self):\n'
+        '        return self._max_tree_depth\n'
+        '\n'
+        '    @property\n'
+        '    def max_cached_requests(self):\n'
+        '        return self._max_cached_requests\n'
+        '\n'
+        '    @property\n'
+        '    def session_count(self):\n'
+        '        return len(self._caches)\n'
+        '\n'
+        '    @property\n'
+        '    def active_requests(self):\n'
+        '        result = set()\n'
+        '        for cache in self._caches.values():\n'
+        '            result.update(cache.active_requests)\n'
+        '        return result\n'
+        '\n'
+        '    @property\n'
+        '    def cached_requests(self):\n'
+        '        result = set()\n'
+        '        for cache in self._caches.values():\n'
+        '            result.update(cache.cached_requests)\n'
+        '        return result\n'
+        '\n'
+        '    def _session_for(self, req_id):\n'
+        '        if isinstance(req_id, str) and req_id.startswith(self._PREFIX):\n'
+        '            rest = req_id[len(self._PREFIX):]\n'
+        '            sep_idx = rest.find(self._SEP)\n'
+        '            if sep_idx > 0:\n'
+        '                return rest[:sep_idx]\n'
+        '        return self._DEFAULT\n'
+        '\n'
+        '    def _cache_for(self, req_id):\n'
+        '        sess = self._req_to_session.get(req_id)\n'
+        '        if sess is None:\n'
+        '            sess = self._session_for(req_id)\n'
+        '            self._req_to_session[req_id] = sess\n'
+        '        cache = self._caches.get(sess)\n'
+        '        if cache is None:\n'
+        '            cache = self._cache_factory()\n'
+        '            self._caches[sess] = cache\n'
+        '        return cache\n'
+        '\n'
+        '    def start_request(self, req_id, prompt_token_ids):\n'
+        '        return self._cache_for(req_id).start_request(req_id, prompt_token_ids)\n'
+        '\n'
+        '    def add_active_response(self, req_id, sampled_ids):\n'
+        '        return self._cache_for(req_id).add_active_response(req_id, sampled_ids)\n'
+        '\n'
+        '    def speculate(self, req_id, pattern, **kwargs):\n'
+        '        return self._cache_for(req_id).speculate(req_id, pattern, **kwargs)\n'
+        '\n'
+        '    def stop_request(self, req_id):\n'
+        '        cache = self._cache_for(req_id)\n'
+        '        try:\n'
+        '            return cache.stop_request(req_id)\n'
+        '        finally:\n'
+        '            self._req_to_session.pop(req_id, None)\n'
+        '\n'
+        '    def evict_cached_response(self, req_id):\n'
+        '        return self._cache_for(req_id).evict_cached_response(req_id)\n'
+    )
+    path.write_text(text, encoding='utf-8')
+    print('[TRACK-B-PRELAUNCH] applied T1 session scoping wrapper')
 PY"""
 
 
