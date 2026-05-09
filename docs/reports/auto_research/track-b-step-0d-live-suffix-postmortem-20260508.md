@@ -100,7 +100,20 @@ requires a relaunch. After the relaunch:
 - Step 0d: **FAIL** → root cause isolated to vLLM Responses API.
 - Patch applied (e67832c, prelaunch hook). Activation = next vLLM
   relaunch.
-- Next-restart attempt blocked on GB10 unified-memory pool
-  reclamation (only 13 GiB available after the prior vLLM exit;
-  driver hasn't released the model's prior allocation yet).
-  Operator-gated.
+- **Patch verified end-to-end** (53917c0): the regression test in
+  `tests/test_vllm_forced_tool_choice_patch.py` runs the patched
+  function in a transient lumo-flywheel-vllm container with the
+  actual `qwen3_reasoning_parser` and `qwen3xml_tool_parser`,
+  against the exact failing XML payload from Step 0d. The patched
+  output is `arguments='{"path": "AGENTS.md"}'` (parsed JSON);
+  without the patch, `arguments` is the raw XML. Test ~5s when the
+  vLLM image is present; skipped otherwise.
+- Memory hygiene: GB10 unified-memory pool retained ~91 GiB after
+  the prior vLLM exit (driver-side, not visible in `ps`). The proven
+  host-memory recovery sequence already exists in
+  `ModelServer._recover_host_memory` (`sync; echo 3 >
+  /proc/sys/vm/drop_caches; swapoff -a; swapon -a` with
+  `LUMO_SUDO_PASSWORD`) and ran cleanly from the CLI: 19 → 110 GiB
+  available. The in-container prelaunch is now a guardrail-only
+  check (commit a59770a); it can't drop caches itself, but it fails
+  loud if the host recovery wasn't run.
