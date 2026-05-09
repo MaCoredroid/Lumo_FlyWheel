@@ -29,6 +29,14 @@ TRACK_B_REQUEST_METRICS_PRODUCER = "track_b_vllm_request_metrics_patch"
 TRACK_B_REQUEST_METRICS_OUT_ENV = "LUMO_TRACK_B_REQUEST_METRICS_OUT"
 TRACK_B_RUNTIME_CONFIG_HASH_ENV = "LUMO_TRACK_B_RUNTIME_CONFIG_HASH"
 
+# Harness oracle header — see
+# docs/reports/auto_research/track-b-harness-oracle-api-skeleton-20260509.md
+# for the full snapshot schema. Phase 1 (this code) synthesises the minimum
+# set the drafter needs (session_id, turn_index, dialect) directly from the
+# /v1/responses payload — no Codex source change, no vLLM rebuild.
+LUMO_ORACLE_HEADER = "X-Lumo-Oracle"
+LUMO_ORACLE_SCHEMA = "lumo.harness_oracle_snapshot.v1"
+
 HOP_BY_HOP_HEADERS = {
     "connection",
     "content-length",
@@ -155,6 +163,123 @@ def _normalize_function_call_arguments(arguments: str) -> str:
     if not arguments[end:].strip():
         return arguments
     return json.dumps(decoded, separators=(",", ":"))
+
+
+def _first_user_text(payload: dict[str, Any]) -> str:
+    """Return the first user-visible message text from a /v1/responses payload.
+
+    Stable anchor for synthesising a session id: invariant across every turn
+    of the same conversation because the Codex harness re-sends the full
+    transcript on each request. Falls back to ``instructions`` then a
+    JSON-serialised hash of the whole payload if nothing matches.
+    """
+
+    instructions = payload.get("instructions")
+    user_anchor: str = ""
+    inputs = payload.get("input")
+    if isinstance(inputs, list):
+        for item in inputs:
+            if not isinstance(item, dict):
+                continue
+            if item.get("role") != "user":
+                continue
+            content = item.get("content")
+            if isinstance(content, str):
+                user_anchor = content
+                break
+            if isinstance(content, list):
+                parts: list[str] = []
+                for inner in content:
+                    if isinstance(inner, dict):
+                        text = inner.get("text") or inner.get("input_text")
+                        if isinstance(text, str):
+                            parts.append(text)
+                if parts:
+                    user_anchor = "\n".join(parts)
+                    break
+    elif isinstance(inputs, str):
+        user_anchor = inputs
+    if user_anchor:
+        return user_anchor
+    if isinstance(instructions, str) and instructions:
+        return instructions
+    return json.dumps(payload, sort_keys=True, default=str)[:4096]
+
+
+def _detect_dialect(payload: dict[str, Any]) -> str:
+    """Identify the harness dialect.
+
+    Codex's request signature is the ``shell`` + ``apply_patch`` tool pair;
+    if either is present we mark the request as the Codex dialect so the
+    drafter can dispatch dialect-specific structural drafters
+    (e.g. apply_patch path priming). All other shapes get ``openai`` —
+    the Responses API generic dialect.
+    """
+
+    tools = payload.get("tools")
+    if isinstance(tools, list):
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            name = tool.get("name")
+            if not isinstance(name, str):
+                fn = tool.get("function")
+                if isinstance(fn, dict):
+                    name = fn.get("name")
+            if isinstance(name, str) and name in {"shell", "apply_patch", "exec_command", "container.exec"}:
+                return "codex"
+    return "openai"
+
+
+def _count_turn_index(payload: dict[str, Any]) -> int:
+    """Number of completed assistant turns in the input transcript.
+
+    Counts function_call items (one per tool invocation the assistant has
+    issued so far) plus assistant ``message`` items. The new turn the
+    request is asking for is *not* yet in the input, so ``len(prior) ==``
+    its 0-indexed position.
+    """
+
+    inputs = payload.get("input")
+    if not isinstance(inputs, list):
+        return 0
+    turns = 0
+    for item in inputs:
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if item_type in {"function_call", "tool_call"}:
+            turns += 1
+            continue
+        if item_type == "message" and item.get("role") == "assistant":
+            turns += 1
+            continue
+        if item_type is None and item.get("role") == "assistant":
+            turns += 1
+    return turns
+
+
+def synthesize_oracle_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
+    """Build an X-Lumo-Oracle snapshot from a /v1/responses payload.
+
+    Phase-1 fields only — schema documented in
+    track-b-harness-oracle-api-skeleton-20260509.md. Subsequent phases add
+    structural slots (apply_patch path, plan step idx, file primer head)
+    once the Codex-side emitter ships.
+    """
+
+    anchor = _first_user_text(payload)
+    session_id = "sess_" + hashlib.sha256(anchor.encode("utf-8", errors="replace")).hexdigest()[:16]
+    return {
+        "schema": LUMO_ORACLE_SCHEMA,
+        "session_id": session_id,
+        "turn_index": _count_turn_index(payload),
+        "dialect": _detect_dialect(payload),
+    }
+
+
+def encode_oracle_snapshot_header(snapshot: dict[str, Any]) -> str:
+    return json.dumps(snapshot, separators=(",", ":"), sort_keys=True)
 
 
 def normalize_responses_sse_block(block: bytes) -> bytes:
@@ -411,6 +536,7 @@ def _build_request_metrics_row(
     ts_first_byte: float | None,
     ts_completed: float,
     saw_completed: bool,
+    oracle_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     usage = response_observed.get("usage") if isinstance(response_observed.get("usage"), dict) else {}
     prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
@@ -439,6 +565,10 @@ def _build_request_metrics_row(
         "saw_response_completed": bool(saw_completed),
         "metrics_snapshot_collected": bool(metrics_before) and bool(metrics_after),
     }
+    if oracle_snapshot is not None:
+        row["oracle_session_id"] = oracle_snapshot.get("session_id")
+        row["oracle_turn_index"] = oracle_snapshot.get("turn_index")
+        row["oracle_dialect"] = oracle_snapshot.get("dialect")
     return row
 
 
@@ -848,6 +978,7 @@ def build_proxy_handler(
             payload = raw_body
             headers = _filtered_headers(self.headers)
             request_json: dict[str, Any] | None = None
+            oracle_snapshot: dict[str, Any] | None = None
             if self.path == "/v1/responses":
                 try:
                     request_json = json.loads(raw_body.decode("utf-8"))
@@ -856,6 +987,8 @@ def build_proxy_handler(
                     return
                 payload = json.dumps(normalize_responses_request_payload(request_json)).encode("utf-8")
                 headers["Content-Type"] = "application/json"
+                oracle_snapshot = synthesize_oracle_snapshot(request_json)
+                headers[LUMO_ORACLE_HEADER] = encode_oracle_snapshot_header(oracle_snapshot)
             elif self.path == "/v1/chat/completions":
                 try:
                     parsed_json = json.loads(raw_body.decode("utf-8"))
@@ -936,6 +1069,7 @@ def build_proxy_handler(
                         metrics_before=metrics_before,
                         capture_state=capture_state,
                         ts_request_received=ts_request_received,
+                        oracle_snapshot=oracle_snapshot,
                     )
                 return
 
@@ -972,6 +1106,7 @@ def build_proxy_handler(
                         metrics_before=metrics_before,
                         capture_state=capture_state_local,
                         ts_request_received=ts_request_received,
+                        oracle_snapshot=oracle_snapshot,
                     )
             finally:
                 admission.release(ticket)
@@ -985,6 +1120,7 @@ def build_proxy_handler(
             metrics_before: dict[str, float],
             capture_state: dict[str, Any],
             ts_request_received: float,
+            oracle_snapshot: dict[str, Any] | None = None,
         ) -> None:
             try:
                 ts_completed = time.time()
@@ -1004,6 +1140,7 @@ def build_proxy_handler(
                     ts_first_byte=capture_state.get("ts_first_byte"),
                     ts_completed=ts_completed,
                     saw_completed=bool(capture_state.get("saw_response_completed")),
+                    oracle_snapshot=oracle_snapshot,
                 )
                 if not row.get("request_id"):
                     return

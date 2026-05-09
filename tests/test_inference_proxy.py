@@ -11,6 +11,8 @@ import pytest
 import requests
 
 from lumo_flywheel_serving.inference_proxy import (
+    LUMO_ORACLE_HEADER,
+    LUMO_ORACLE_SCHEMA,
     TRACK_B_REQUEST_METRICS_PRODUCER,
     TRACK_B_REQUEST_METRICS_SCHEMA,
     TrackBRequestMetricsCapture,
@@ -18,11 +20,13 @@ from lumo_flywheel_serving.inference_proxy import (
     _extract_response_metadata,
     _normalize_request_shaping_policy,
     _write_chunked_stream,
+    encode_oracle_snapshot_header,
     is_inference_path,
     normalize_responses_request_payload,
     normalize_responses_response_payload,
     normalize_responses_sse_block,
     build_proxy_handler,
+    synthesize_oracle_snapshot,
 )
 from lumo_flywheel_serving.tuned_config import RuntimeStateStore, make_tuned_config_bundle, persist_tuned_config_bundle
 
@@ -866,3 +870,129 @@ def test_proxy_does_not_emit_capture_when_env_unset(monkeypatch, tmp_path: Path)
         proxy.shutdown()
         proxy_thread.join(timeout=5)
         proxy.server_close()
+
+
+def test_synthesize_oracle_snapshot_first_turn_codex() -> None:
+    payload = {
+        "model": "qwen3.5-27b",
+        "instructions": "You are Codex.",
+        "input": [
+            {"role": "user", "content": "fix the bug in foo.py"},
+        ],
+        "tools": [
+            {"type": "function", "name": "shell", "parameters": {}},
+            {"type": "function", "name": "apply_patch", "parameters": {}},
+        ],
+    }
+    snap = synthesize_oracle_snapshot(payload)
+    assert snap["schema"] == LUMO_ORACLE_SCHEMA
+    assert snap["dialect"] == "codex"
+    assert snap["turn_index"] == 0
+    assert snap["session_id"].startswith("sess_")
+    assert len(snap["session_id"]) == len("sess_") + 16
+
+
+def test_synthesize_oracle_snapshot_session_id_stable_across_turns() -> None:
+    base = {
+        "model": "qwen3.5-27b",
+        "input": [{"role": "user", "content": "hello"}],
+    }
+    turn0 = synthesize_oracle_snapshot(base)
+    turn1 = synthesize_oracle_snapshot({
+        **base,
+        "input": [
+            {"role": "user", "content": "hello"},
+            {"type": "function_call", "name": "shell", "arguments": "{}"},
+            {"type": "function_call_output", "output": "ok"},
+        ],
+    })
+    assert turn0["session_id"] == turn1["session_id"]
+    assert turn0["turn_index"] == 0
+    assert turn1["turn_index"] == 1
+
+
+def test_synthesize_oracle_snapshot_counts_assistant_messages() -> None:
+    payload = {
+        "input": [
+            {"role": "user", "content": "go"},
+            {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "ok"}]},
+            {"type": "function_call", "name": "shell"},
+        ],
+    }
+    assert synthesize_oracle_snapshot(payload)["turn_index"] == 2
+
+
+def test_synthesize_oracle_snapshot_dialect_openai_when_no_codex_tools() -> None:
+    payload = {
+        "input": [{"role": "user", "content": "hi"}],
+        "tools": [{"type": "function", "name": "lookup_weather"}],
+    }
+    assert synthesize_oracle_snapshot(payload)["dialect"] == "openai"
+
+
+def test_synthesize_oracle_snapshot_handles_string_input() -> None:
+    snap = synthesize_oracle_snapshot({"input": "the long anchor"})
+    assert snap["session_id"].startswith("sess_")
+    assert snap["turn_index"] == 0
+
+
+def test_synthesize_oracle_snapshot_distinct_sessions_distinct_ids() -> None:
+    a = synthesize_oracle_snapshot({"input": [{"role": "user", "content": "alpha"}]})
+    b = synthesize_oracle_snapshot({"input": [{"role": "user", "content": "beta"}]})
+    assert a["session_id"] != b["session_id"]
+
+
+def test_encode_oracle_snapshot_header_is_compact_json() -> None:
+    snap = {"schema": LUMO_ORACLE_SCHEMA, "session_id": "sess_abc", "turn_index": 3, "dialect": "codex"}
+    encoded = encode_oracle_snapshot_header(snap)
+    assert " " not in encoded  # compact separators
+    decoded = json.loads(encoded)
+    assert decoded == snap
+
+
+def test_proxy_forwards_oracle_header_upstream(monkeypatch, tmp_path: Path) -> None:
+    captured_headers: dict[str, str] = {}
+
+    class _UpstreamResp:
+        status_code = 200
+        headers = {"Content-Type": "application/json"}
+        content = b'{"id":"resp_1","output":[],"usage":{}}'
+
+        def iter_content(self, chunk_size: int):
+            yield self.content
+
+        def close(self) -> None:
+            return
+
+    def fake_post(*args: object, **kwargs: object) -> _UpstreamResp:
+        captured_headers.update(kwargs.get("headers") or {})
+        return _UpstreamResp()
+
+    monkeypatch.setattr("lumo_flywheel_serving.inference_proxy.requests.post", fake_post)
+
+    proxy, proxy_thread, proxy_url = _start_server(
+        build_proxy_handler("http://upstream.invalid", state_root=tmp_path / "state")
+    )
+    try:
+        response = requests.request(
+            "POST",
+            f"{proxy_url}/v1/responses",
+            json={
+                "model": "qwen3.5-27b",
+                "input": [{"role": "user", "content": "fix it"}],
+                "tools": [{"type": "function", "name": "shell"}],
+            },
+            timeout=10,
+        )
+        assert response.status_code == 200
+    finally:
+        proxy.shutdown()
+        proxy_thread.join(timeout=5)
+        proxy.server_close()
+
+    assert LUMO_ORACLE_HEADER in captured_headers
+    snap = json.loads(captured_headers[LUMO_ORACLE_HEADER])
+    assert snap["schema"] == LUMO_ORACLE_SCHEMA
+    assert snap["dialect"] == "codex"
+    assert snap["turn_index"] == 0
+    assert snap["session_id"].startswith("sess_")
