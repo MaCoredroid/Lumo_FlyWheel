@@ -73,6 +73,17 @@ CHECKS: list[dict] = [
         "kind": "exists",
         "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/lumo_schema_aware_drafter.py",
     },
+    {
+        "name": "t2_t4_composite_drafting_patch",
+        "kind": "sentinel",
+        "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/suffix_decoding.py",
+        "sentinel": "T2_T4_COMPOSITE_DRAFTING_APPLIED",
+    },
+    {
+        "name": "t4_plan_structure_drafter_module_present",
+        "kind": "exists",
+        "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/lumo_plan_structure_drafter.py",
+    },
 ]
 
 

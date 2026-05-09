@@ -1087,6 +1087,12 @@ def _track_b_runtime_prelaunch_shell() -> str:
             "schema_aware_drafter.py contains the prelaunch heredoc terminator; "
             "rename SCHEMA_DRAFTER_MODULE_EOF to keep the embed safe."
         )
+    plan_drafter_body = (src_root / "plan_structure_drafter.py").read_text(encoding="utf-8")
+    if "PLAN_DRAFTER_MODULE_EOF" in plan_drafter_body:
+        raise RuntimeError(
+            "plan_structure_drafter.py contains the prelaunch heredoc terminator; "
+            "rename PLAN_DRAFTER_MODULE_EOF to keep the embed safe."
+        )
     return r"""python3 - <<'PY'
 # Lumo Track B 2026-05-08: GPU memory hygiene before the next vLLM
 # launch. GB10 unifies GPU memory with system RAM; the NVIDIA driver
@@ -1650,6 +1656,206 @@ else:
     )
     path.write_text(text, encoding='utf-8')
     print('[TRACK-B-PRELAUNCH] applied T3 composite drafting wrapper')
+PY
+cat > /usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/lumo_plan_structure_drafter.py <<'PLAN_DRAFTER_MODULE_EOF'
+""" + plan_drafter_body + r"""PLAN_DRAFTER_MODULE_EOF
+python3 - <<'PY'
+# T2 consumer + T4 plan-structure pre-drafter (2026-05-09):
+# - T2 consumer: at session-open, ingest oracle.primed_texts into the
+#   per-session SuffixDecodingCache so subsequent turns' speculation
+#   sees the file content as if it had been a prior agent response.
+# - T4: heuristic plan-structure pre-drafter -- counts plan emissions
+#   per session, activates after >=3 same-shape emissions, proposes
+#   structural skeleton tokens on detected re-emission triggers.
+# Both helpers chain after the T3 schema-aware path; if neither
+# fires, propose() falls through to suffix-decoding's existing
+# self.suffix_cache.speculate call.
+from pathlib import Path
+
+path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/suffix_decoding.py')
+if not path.is_file():
+    raise RuntimeError(f'vLLM SuffixDecoding adapter missing: {path}')
+
+text = path.read_text(encoding='utf-8')
+sentinel = '# T2_T4_COMPOSITE_DRAFTING_APPLIED'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] T2+T4 composite drafting already present')
+else:
+    init_old = (
+        '        # T3_COMPOSITE_DRAFTING_APPLIED -- Lumo Track B Round 2 (2026-05-09)\n'
+        '        self._lumo_vllm_config = vllm_config\n'
+        '        self._lumo_cached_tokenizer = None\n'
+        '        self._lumo_tokenizer_load_attempted = False\n'
+    )
+    init_new = (
+        '        # T3_COMPOSITE_DRAFTING_APPLIED -- Lumo Track B Round 2 (2026-05-09)\n'
+        '        self._lumo_vllm_config = vllm_config\n'
+        '        self._lumo_cached_tokenizer = None\n'
+        '        self._lumo_tokenizer_load_attempted = False\n'
+        '        # T2_T4_COMPOSITE_DRAFTING_APPLIED -- Lumo Track B Round 2 (2026-05-09)\n'
+        '        self._lumo_plan_registries = {}\n'
+        '        self._lumo_primed_sessions = set()\n'
+    )
+    if init_old not in text:
+        raise RuntimeError('T3-extended __init__ pattern not found (apply T3 phase 3 first)')
+    text = text.replace(init_old, init_new)
+
+    speculate_old = (
+        '            _lumo_schema_tokens = self._lumo_try_schema_aware_draft(\n'
+        '                req_id, pattern, _lumo_max_spec\n'
+        '            )\n'
+        '            if _lumo_schema_tokens:\n'
+        '                draft_token_ids.append(_lumo_schema_tokens)\n'
+        '                continue\n'
+        '            draft = self.suffix_cache.speculate(\n'
+    )
+    speculate_new = (
+        '            self._lumo_maybe_ingest_primed_texts(req_id)\n'
+        '            _lumo_schema_tokens = self._lumo_try_schema_aware_draft(\n'
+        '                req_id, pattern, _lumo_max_spec\n'
+        '            )\n'
+        '            if _lumo_schema_tokens:\n'
+        '                draft_token_ids.append(_lumo_schema_tokens)\n'
+        '                continue\n'
+        '            _lumo_plan_tokens = self._lumo_try_plan_structure_draft(\n'
+        '                req_id, pattern, _lumo_max_spec\n'
+        '            )\n'
+        '            if _lumo_plan_tokens:\n'
+        '                draft_token_ids.append(_lumo_plan_tokens)\n'
+        '                continue\n'
+        '            draft = self.suffix_cache.speculate(\n'
+    )
+    if speculate_old not in text:
+        raise RuntimeError('T3-extended speculate-call pattern not found (apply T3 phase 3 first)')
+    text = text.replace(speculate_old, speculate_new)
+
+    text += (
+        '\n\n'
+        '# T2_T4_COMPOSITE_DRAFTING_APPLIED helpers (Lumo Track B Round 2).\n'
+        '# T2 consumer + T4 plan-structure drafter, bound class-level so\n'
+        '# the propose() patch above can call them.\n'
+        'def _lumo_session_id_from_req(self, req_id):\n'
+        '    if isinstance(req_id, str) and req_id.startswith(\"lumo_sess_\"):\n'
+        '        rest = req_id[len(\"lumo_sess_\"):]\n'
+        '        sep = rest.find(\"__\")\n'
+        '        if sep > 0:\n'
+        '            return rest[:sep]\n'
+        '    return None\n'
+        '\n'
+        'def _lumo_maybe_ingest_primed_texts(self, req_id):\n'
+        '    # T2 consumer: ingest primed_texts once per session into the\n'
+        '    # per-session SuffixDecodingCache global tree, so later turns\n'
+        '    # see the primer content as if it had been a prior response.\n'
+        '    sess = self._lumo_session_id_from_req(req_id)\n'
+        '    if sess is None or sess in self._lumo_primed_sessions:\n'
+        '        return\n'
+        '    try:\n'
+        '        from vllm.v1.spec_decode.lumo_oracle_registry import ORACLE_REGISTRY\n'
+        '    except Exception:\n'
+        '        return\n'
+        '    oracle = ORACLE_REGISTRY.lookup(req_id)\n'
+        '    if oracle is None or not oracle.primed_texts:\n'
+        '        return\n'
+        '    tokenizer = self._lumo_get_tokenizer()\n'
+        '    if tokenizer is None:\n'
+        '        return\n'
+        '    self._lumo_primed_sessions.add(sess)\n'
+        '    for i, primed in enumerate(oracle.primed_texts):\n'
+        '        try:\n'
+        '            text_str = primed.get(\"text\") if isinstance(primed, dict) else None\n'
+        '            if not isinstance(text_str, str) or not text_str:\n'
+        '                continue\n'
+        '            tokens = tokenizer.encode(text_str, add_special_tokens=False)\n'
+        '            if not tokens:\n'
+        '                continue\n'
+        '            primer_id = f\"lumo_primer_{sess}_{i}\"\n'
+        '            cache = self.suffix_cache._cache_for(primer_id)\n'
+        '            cache.start_request(primer_id, tokens)\n'
+        '            cache.add_active_response(primer_id, list(tokens))\n'
+        '            cache.stop_request(primer_id)\n'
+        '        except Exception:\n'
+        '            continue\n'
+        '\n'
+        'def _lumo_try_plan_structure_draft(self, req_id, pattern, max_spec_tokens):\n'
+        '    # T4: in-loop observe + gate on per-session emission_count >= 3.\n'
+        '    if max_spec_tokens <= 0:\n'
+        '        return None\n'
+        '    try:\n'
+        '        from vllm.v1.spec_decode.lumo_plan_structure_drafter import (\n'
+        '            propose as _plan_propose, PlanRegistry, PlanFingerprint,\n'
+        '        )\n'
+        '    except Exception:\n'
+        '        return None\n'
+        '    sess = self._lumo_session_id_from_req(req_id)\n'
+        '    if sess is None:\n'
+        '        return None\n'
+        '    tokenizer = self._lumo_get_tokenizer()\n'
+        '    if tokenizer is None:\n'
+        '        return None\n'
+        '    registry = self._lumo_plan_registries.get(sess)\n'
+        '    if registry is None:\n'
+        '        registry = PlanRegistry()\n'
+        '        self._lumo_plan_registries[sess] = registry\n'
+        '    try:\n'
+        '        recent_text = tokenizer.decode(list(pattern), skip_special_tokens=False)\n'
+        '    except Exception:\n'
+        '        return None\n'
+        '    # In-loop observation: detect plan emissions in recent text.\n'
+        '    # Mitigates double-counting by tracking last fingerprint per\n'
+        '    # session -- only increments when fingerprint changes.\n'
+        '    try:\n'
+        '        if not hasattr(self, \"_lumo_last_plan_fp\"):\n'
+        '            self._lumo_last_plan_fp = {}\n'
+        '        # Observe only the LAST 4KB of recent_text -- a recently\n'
+        '        # completed plan emission is in the tail by construction.\n'
+        '        tail = recent_text[-4096:]\n'
+        '        new_fp = PlanFingerprint.fingerprint(tail)\n'
+        '        if new_fp.is_plan_shaped() and self._lumo_last_plan_fp.get(sess) != new_fp:\n'
+        '            registry.counts[new_fp] = registry.counts.get(new_fp, 0) + 1\n'
+        '            self._lumo_last_plan_fp[sess] = new_fp\n'
+        '    except Exception:\n'
+        '        pass\n'
+        '    if not registry.counts:\n'
+        '        return None\n'
+        '    try:\n'
+        '        proposal = _plan_propose(registry, recent_text)\n'
+        '        if proposal is None or not proposal.text:\n'
+        '            return None\n'
+        '        encoded = tokenizer.encode(proposal.text, add_special_tokens=False)\n'
+        '        if not encoded:\n'
+        '            return None\n'
+        '        if tokenizer.decode(encoded, skip_special_tokens=False) != proposal.text:\n'
+        '            return None\n'
+        '        return list(encoded[:max_spec_tokens])\n'
+        '    except Exception:\n'
+        '        return None\n'
+        '\n'
+        'def _lumo_observe_completion_for_plan_registry(self, req_id, completion_text):\n'
+        '    # Called externally when a turn completes -- updates the\n'
+        '    # per-session plan registry from the model output text.\n'
+        '    sess = self._lumo_session_id_from_req(req_id)\n'
+        '    if sess is None:\n'
+        '        return\n'
+        '    try:\n'
+        '        from vllm.v1.spec_decode.lumo_plan_structure_drafter import PlanRegistry\n'
+        '    except Exception:\n'
+        '        return\n'
+        '    registry = self._lumo_plan_registries.get(sess)\n'
+        '    if registry is None:\n'
+        '        registry = PlanRegistry()\n'
+        '        self._lumo_plan_registries[sess] = registry\n'
+        '    try:\n'
+        '        registry.observe(completion_text)\n'
+        '    except Exception:\n'
+        '        pass\n'
+        '\n'
+        'SuffixDecodingProposer._lumo_session_id_from_req = _lumo_session_id_from_req\n'
+        'SuffixDecodingProposer._lumo_maybe_ingest_primed_texts = _lumo_maybe_ingest_primed_texts\n'
+        'SuffixDecodingProposer._lumo_try_plan_structure_draft = _lumo_try_plan_structure_draft\n'
+        'SuffixDecodingProposer._lumo_observe_completion_for_plan_registry = _lumo_observe_completion_for_plan_registry\n'
+    )
+    path.write_text(text, encoding='utf-8')
+    print('[TRACK-B-PRELAUNCH] applied T2+T4 composite drafting wrapper')
 PY"""
 
 
