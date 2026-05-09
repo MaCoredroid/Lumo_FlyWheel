@@ -86,16 +86,20 @@ def _technique_applies(row: dict[str, Any]) -> dict[str, bool]:
     """
 
     regime = row.get("regime")
+    primed_text_count = row.get("oracle_primed_text_count")
     return {
         # T1 fires on every turn — SuffixDecoding already runs everywhere
         # and the cross-turn extension just changes how the suffix tree
         # is partitioned.
         "T1_cross_turn_ngram": True,
-        # T2 (read_file priming) is most useful on reasoning turns where
-        # the model is reading file contents. Tool-call turns also see
-        # primed text but are dominated by name/argument decoding which
-        # T3 covers. Use reasoning regime as the conservative proxy.
-        "T2_read_file_priming": regime in {"reasoning", "summary"},
+        # T2 (read_file priming) fires when the proxy has populated
+        # primed_texts on the oracle (commit fb79a86 onward). Falls
+        # back to reasoning/summary regime for older captures that
+        # predate proxy primed_texts synthesis.
+        "T2_read_file_priming": (
+            (isinstance(primed_text_count, (int, float)) and primed_text_count > 0)
+            or (primed_text_count is None and regime in {"reasoning", "summary"})
+        ),
         # T3 fires when this turn is a tool-call regime turn — the
         # forced/auto tool_choice produces a structured emission the
         # schema-aware drafter can pre-fill. ``tool_call_observed`` is

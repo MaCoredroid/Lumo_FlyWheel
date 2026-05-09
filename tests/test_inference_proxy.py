@@ -926,6 +926,117 @@ def test_synthesize_oracle_snapshot_session_not_open_after_turn0() -> None:
     assert snap["is_session_open"] is False
 
 
+def test_synthesize_oracle_snapshot_extracts_primed_texts_from_file_reads() -> None:
+    file_content = "x" * 500  # > _PRIMED_TEXTS_MIN_OUTPUT_CHARS
+    payload = {
+        "input": [
+            {"role": "user", "content": "look at foo.py"},
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "shell",
+                "arguments": '{"cmd":["cat","src/foo.py"]}',
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": file_content,
+            },
+        ],
+        "tools": [{"type": "function", "name": "shell"}],
+    }
+    snap = synthesize_oracle_snapshot(payload)
+    assert "primed_texts" in snap
+    assert len(snap["primed_texts"]) == 1
+    primed = snap["primed_texts"][0]
+    assert primed["source_tag"] == "file:src/foo.py"
+    assert primed["text"] == file_content
+    assert primed["ttl_turns"] == 32
+
+
+def test_synthesize_oracle_snapshot_skips_primed_texts_below_min_size() -> None:
+    payload = {
+        "input": [
+            {"role": "user", "content": "look at foo.py"},
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "shell",
+                "arguments": '{"cmd":["cat","tiny.py"]}',
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": "short",  # < 200 chars
+            },
+        ],
+    }
+    snap = synthesize_oracle_snapshot(payload)
+    assert "primed_texts" not in snap
+
+
+def test_synthesize_oracle_snapshot_ignores_non_file_read_shell_calls() -> None:
+    payload = {
+        "input": [
+            {"role": "user", "content": "do something"},
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "shell",
+                "arguments": '{"cmd":["echo","hello world"]}',
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": "x" * 1000,
+            },
+        ],
+    }
+    snap = synthesize_oracle_snapshot(payload)
+    assert "primed_texts" not in snap
+
+
+def test_synthesize_oracle_snapshot_caps_primed_texts_count() -> None:
+    file_content = "y" * 500
+    inputs = [{"role": "user", "content": "go"}]
+    for i in range(15):
+        inputs.append(
+            {
+                "type": "function_call",
+                "call_id": f"call_{i}",
+                "name": "shell",
+                "arguments": f'{{"cmd":["cat","f{i}.py"]}}',
+            }
+        )
+        inputs.append(
+            {
+                "type": "function_call_output",
+                "call_id": f"call_{i}",
+                "output": file_content,
+            }
+        )
+    snap = synthesize_oracle_snapshot({"input": inputs})
+    assert len(snap["primed_texts"]) == 8  # _PRIMED_TEXTS_MAX
+
+
+def test_synthesize_oracle_snapshot_truncates_primed_text_max_chars() -> None:
+    huge = "z" * 200000  # > _PRIMED_TEXT_MAX_CHARS (65536)
+    payload = {
+        "input": [
+            {"role": "user", "content": "go"},
+            {
+                "type": "function_call",
+                "call_id": "c1",
+                "name": "shell",
+                "arguments": '{"cmd":["cat","big.txt"]}',
+            },
+            {"type": "function_call_output", "call_id": "c1", "output": huge},
+        ],
+    }
+    snap = synthesize_oracle_snapshot(payload)
+    assert len(snap["primed_texts"][0]["text"]) == 65536
+
+
 def test_extract_tool_schemas_handles_nested_function_form() -> None:
     payload = {
         "tools": [

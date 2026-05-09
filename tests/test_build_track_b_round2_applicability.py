@@ -117,6 +117,38 @@ def test_build_report_t4_disabled_by_default(tmp_path: Path) -> None:
     assert "T4_plan_structure_predrafting" not in report["techniques"]
 
 
+def test_build_report_t2_uses_oracle_primed_count_when_present(tmp_path: Path) -> None:
+    rows = [
+        _row(regime="tool-call", oracle_primed_text_count=2, decode_sum_s=10.0),
+        _row(regime="tool-call", oracle_primed_text_count=0, decode_sum_s=10.0),
+        _row(regime="reasoning", oracle_primed_text_count=0, tool_call_observed=False, decode_sum_s=5.0),
+    ]
+    _write_jsonl(tmp_path / "vllm_request_metrics.jsonl", rows)
+    report = analyzer.build_report([tmp_path / "vllm_request_metrics.jsonl"])
+    t2 = report["techniques"]["T2_read_file_priming"]
+    # Only the first row has primed_text_count > 0; the reasoning row has
+    # primed_count=0 so it does NOT fall back to the regime proxy
+    # (proxy only applies when the field is absent entirely).
+    assert t2["turns_covered"] == 1
+    assert t2["decode_sum_s_covered"] == pytest.approx(10.0)
+
+
+def test_build_report_t2_falls_back_to_regime_when_field_absent(tmp_path: Path) -> None:
+    rows = [
+        _row(regime="tool-call", decode_sum_s=10.0),  # no primed_text_count field
+        _row(regime="reasoning", tool_call_observed=False, decode_sum_s=5.0),
+    ]
+    # Strip the oracle_primed_text_count field entirely.
+    for row in rows:
+        row.pop("oracle_primed_text_count", None)
+    _write_jsonl(tmp_path / "vllm_request_metrics.jsonl", rows)
+    report = analyzer.build_report([tmp_path / "vllm_request_metrics.jsonl"])
+    t2 = report["techniques"]["T2_read_file_priming"]
+    # Reasoning regime falls through; tool-call doesn't.
+    assert t2["turns_covered"] == 1
+    assert t2["decode_sum_s_covered"] == pytest.approx(5.0)
+
+
 def test_main_writes_report_file(tmp_path: Path) -> None:
     _write_jsonl(tmp_path / "vllm_request_metrics.jsonl", [_row()])
     out = tmp_path / "report.json"

@@ -332,15 +332,109 @@ def _extract_expected_tool_call(
     return {"name": forced_name, "schema": matched.get("parameters")}
 
 
+# Heuristics for detecting file-read tool calls in a Codex transcript.
+# Codex emits ``shell`` calls whose ``cmd`` is a list like
+# ``["cat", "path/to/file.py"]`` or ``["sed", "-n", "1,200p", "path"]``.
+# Their function_call_output is the file content. We use these to
+# populate ``primed_texts`` on the oracle so a future T2 drafter can
+# fold them into the per-session suffix tree.
+_FILE_READ_FIRST_TOKENS = {
+    "cat", "head", "tail", "less", "more", "bat", "sed", "awk", "grep",
+}
+_PRIMED_TEXTS_MAX = 8
+_PRIMED_TEXT_MAX_CHARS = 65536
+_PRIMED_TEXTS_MIN_OUTPUT_CHARS = 200
+
+
+def _looks_like_file_read(call_arguments: Any) -> tuple[bool, str | None]:
+    """Heuristically classify a Codex shell-tool argument string.
+
+    Returns ``(is_file_read, derived_path)``. Conservative -- false
+    positives just bloat the primer cache and the drafter weights
+    primer hits by source_tag freshness anyway.
+    """
+
+    if not isinstance(call_arguments, str):
+        return False, None
+    try:
+        parsed = json.loads(call_arguments)
+    except json.JSONDecodeError:
+        return False, None
+    cmd = parsed.get("cmd") if isinstance(parsed, dict) else None
+    if isinstance(cmd, list) and cmd:
+        head_tok = cmd[0] if isinstance(cmd[0], str) else ""
+        if head_tok.lower() in _FILE_READ_FIRST_TOKENS:
+            for tok in reversed(cmd):
+                if isinstance(tok, str) and (
+                    "/" in tok or tok.endswith((".py", ".md", ".rs", ".ts", ".tsx", ".json", ".yaml", ".yml", ".sh"))
+                ):
+                    return True, tok
+            return True, None
+    return False, None
+
+
+def _extract_primed_texts(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Pull file-read primer candidates out of the prior turns.
+
+    For each ``function_call`` whose arguments look like a file-read
+    shell command, pair it with the corresponding
+    ``function_call_output`` (matched by ``call_id``) and emit a
+    primer entry with the file content as ``text`` and the inferred
+    path as ``source_tag``. Capped at ``_PRIMED_TEXTS_MAX`` entries
+    and each ``text`` is truncated to ``_PRIMED_TEXT_MAX_CHARS``.
+    """
+
+    inputs = payload.get("input")
+    if not isinstance(inputs, list):
+        return []
+    # First pass: index function_call_output by call_id for O(1) join.
+    outputs_by_call: dict[str, str] = {}
+    for item in inputs:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "function_call_output":
+            continue
+        call_id = item.get("call_id")
+        out = item.get("output")
+        if isinstance(call_id, str) and isinstance(out, str):
+            outputs_by_call[call_id] = out
+
+    primed: list[dict[str, Any]] = []
+    for item in inputs:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "function_call":
+            continue
+        if item.get("name") not in {"shell", "exec_command", "container.exec"}:
+            continue
+        is_read, path = _looks_like_file_read(item.get("arguments"))
+        if not is_read:
+            continue
+        call_id = item.get("call_id")
+        out = outputs_by_call.get(call_id) if isinstance(call_id, str) else None
+        if not isinstance(out, str) or len(out) < _PRIMED_TEXTS_MIN_OUTPUT_CHARS:
+            continue
+        primed.append(
+            {
+                "text": out[:_PRIMED_TEXT_MAX_CHARS],
+                "source_tag": f"file:{path}" if path else f"shell:{call_id}",
+                "ttl_turns": 32,
+                "max_chars": _PRIMED_TEXT_MAX_CHARS,
+            }
+        )
+        if len(primed) >= _PRIMED_TEXTS_MAX:
+            break
+    return primed
+
+
 def synthesize_oracle_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
     """Build an X-Lumo-Oracle snapshot from a /v1/responses payload.
 
     Schema documented in
     track-b-harness-oracle-api-skeleton-20260509.md. Computed entirely
     from the inbound payload — no Codex source change required for any
-    field below. Fields not robustly extractable proxy-side
-    (``primed_texts``, ``plan_fingerprint``) are left out; they need
-    Codex-side emission to be useful and the drafter tolerates absence.
+    field below. ``plan_fingerprint`` is left out; it needs Codex-side
+    emission to be useful and the drafter tolerates absence.
     """
 
     anchor = _first_user_text(payload)
@@ -348,6 +442,7 @@ def synthesize_oracle_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
     turn_index = _count_turn_index(payload)
     tool_schemas = _extract_tool_schemas(payload)
     expected = _extract_expected_tool_call(payload, tool_schemas)
+    primed_texts = _extract_primed_texts(payload)
     snap: dict[str, Any] = {
         "schema": LUMO_ORACLE_SCHEMA,
         "session_id": session_id,
@@ -360,6 +455,8 @@ def synthesize_oracle_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         snap["tool_schemas"] = tool_schemas
     if expected is not None:
         snap["expected_tool_call"] = expected
+    if primed_texts:
+        snap["primed_texts"] = primed_texts
     return snap
 
 
@@ -691,6 +788,7 @@ def _build_request_metrics_row(
         row["oracle_expected_tool_name"] = (
             expected.get("name") if isinstance(expected, dict) else None
         )
+        row["oracle_primed_text_count"] = len(oracle_snapshot.get("primed_texts") or [])
     return row
 
 
