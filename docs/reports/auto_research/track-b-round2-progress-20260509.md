@@ -3,7 +3,12 @@
 **Status:** Step 3 (harness oracle API + skeleton) shipped end-to-end.
 **Step 4 (Technique 1: cross-turn ngram session scoping) ship-ready
 without rebuild** — activates on next vLLM relaunch through
-ModelServer. Steps 5-9 still gated on vLLM rebuilds.
+ModelServer. **Step 8 (Technique 3: schema-aware tool drafter)
+ship-ready end-to-end without rebuild** — three prelaunch patches
+deliver the producer (proxy oracle synthesis), the registry
+(FastAPI middleware), and the consumer (composite drafting in
+SuffixDecodingProposer.propose). Steps 5/6/9 (T2/T4/T5) remain
+out of Round 2 scope per the v2 applicability analysis.
 
 ## Shipped this session
 
@@ -20,6 +25,8 @@ ModelServer. Steps 5-9 still gated on vLLM rebuilds.
 | ac81374 | T3 phase 1: schema-aware drafter decision core |
 | dc0eb29 | Round 2 progress doc: T3 phase 1 ship-ready |
 | 6eb4d32 | T3 phase 2: oracle middleware drop + api_server install hook |
+| 2c078aa | Round 2 progress doc: T3 phase 2 ship-ready |
+| 8d4c4a0 | T3 phase 3: composite drafting in SuffixDecodingProposer.propose |
 
 End-to-end verified against the live Round 1 baseline
 (`lumo-vllm-track-b-suffix`): a sidecar proxy at port 8033 emits
@@ -115,38 +122,63 @@ Responses-API JSON dialect. 14 unit tests cover the anchor sequencing,
 required-vs-fallback property selection, and the unknown-dialect
 falls-through-to-suffix contract.
 
-## T3 phase 2 — oracle middleware ship-ready
+## T3 phase 3 — composite drafting ship-ready
 
-`vllm_harness_oracle.OracleRegistry` is the producer-side data
-plane the future T3 phase 3 reads from. `install_fastapi_middleware`
-hooks vLLM's FastAPI app to harvest `X-Lumo-Oracle` headers per
-request and stash the parsed snapshot keyed by `X-Request-Id`
-(unbinding on response completion to keep the registry bounded).
+The final piece. SuffixDecodingProposer.propose now consults
+`_lumo_try_schema_aware_draft` BEFORE falling through to the
+existing `self.suffix_cache.speculate` call. The helper:
 
-Activation: the next vLLM relaunch through `ModelServer` runs the
-extended prelaunch chain. After relaunch the registry is populated
-in real time — no behavioural delta yet because no consumer reads
-from it.
+- Looks up the oracle in `lumo_oracle_registry.ORACLE_REGISTRY`
+  keyed by `req_id` (populated by the T3 phase 2 middleware).
+- Lazy-loads a tokenizer from
+  `vllm_config.model_config.tokenizer` on first use; cached.
+- Decodes the recent token pattern to text, calls
+  `lumo_schema_aware_drafter.propose(snapshot, recent_text)`,
+  and encodes the proposal back to tokens.
+- Tokenizer round-trip safety: the encoded tokens are only
+  forwarded as the draft if `decode(encoded) == proposal_text`
+  exactly. Models tokenise XML-tag boundaries differently;
+  without this guard we'd emit drafts the model never accepts.
+
+Exception-defensive at every step — any failure returns `None`
+and the existing suffix-decoding path runs unchanged. Helpers
+are bound class-level after the file body so the patch is
+single-file (subclassing would require patching
+`gpu_model_runner.py` too, doubling the patch surface).
+
+Activation: next vLLM relaunch fires all three T3 phases plus
+T1 in one pass. Verify with the prelaunch log lines:
+`applied T1 session scoping wrapper`,
+`applied T3 oracle middleware install hook`,
+`applied T3 composite drafting wrapper`.
+
+## Round 2 measurement plan
+
+Single relaunch activates the full T1 + T3 stack. To measure:
+
+1. Run the v2 Round 0 sweep against the patched runtime with
+   per-request capture enabled.
+2. Compare to the v2 Round 0 baseline
+   (`output/track_b_round2/applicability_v2_round0.json`):
+   - Aggregate `decode_sum_s` (T1+T3 ceiling: ~285s reduction =
+     ~14.6% of corpus wallclock).
+   - `accepted_per_draft_token` per regime — the T3 ceiling
+     would push tool-call regime acceptance toward ~1.0 on the
+     forced-name + structural-prefix slots.
+   - Per-task wallclock — T1's session-scoping benefit shows up
+     across ALL turns; T3's schema-aware win is concentrated on
+     the tool-call regime turns (94% of v2 Round 0 traffic).
+3. Re-run `scripts/build_track_b_round2_applicability.py`
+   against the new capture. The `T3_schema_aware_tool_drafter`
+   ceiling becomes a measured number, not a target.
 
 ## What an operator can do next
 
-1. **Activate T1 + T3 phase 2**: a single vLLM relaunch through
-   `ModelServer` activates both. Verify the prelaunch log lines
-   `applied T1 session scoping wrapper` and `applied T3 oracle
-   middleware install hook`. Re-run the v2 sweep with capture
-   on; diff `decode_sum_s` per regime. T3 phase 2 alone is a
-   no-op on decode time (the oracle just lands in a dict);
-   T1 alone gives the cross-turn-ngram scoping benefit.
-2. **Ship T3 phase 3 (composite drafting in propose)**: the
-   final piece. SuffixDecodingProposer.propose looks up the
-   oracle from `lumo_oracle_registry.ORACLE_REGISTRY` keyed by
-   `req_id`, fetches the model's recent text via a tokenizer
-   passed in by gpu_model_runner, calls `schema_aware_drafter.
-   propose(snapshot, recent_text)`, and returns the higher-
-   confidence draft. The hardest piece of T3 — needs careful
-   tokenizer plumbing (vanilla `SuffixDecodingProposer.__init__`
-   doesn't take one). ~1-2 days, prelaunch-applicable.
-3. **Skip T2/T4** in the first Round 2 cut. T2 has too little
+1. **Single relaunch activates Round 2**: one
+   `ModelServer` relaunch fires T1 + T3 phases 1/2/3. No code
+   changes needed; the prelaunch chain handles everything
+   idempotently.
+2. **Skip T2/T4** in the first Round 2 cut. T2 has too little
    coverage to justify the integration cost; T4 lacks an emitter.
 
 ## What did NOT ship
@@ -166,7 +198,7 @@ from it.
 
 ## Test posture
 
-- 84 unit tests + 4 docker-gated integration tests pass:
+- 85 unit tests + 5 docker-gated integration tests pass:
   - `test_inference_proxy.py` (42: oracle synthesis + session-
     prefixed X-Request-Id)
   - `test_vllm_harness_oracle.py` (18: snapshot round-trip,
@@ -180,10 +212,13 @@ from it.
   - `test_vllm_t1_session_scoped_suffix_decoding_patch.py` (1
     integration: T1 wrapper applied in transient container)
   - `test_vllm_t3_oracle_middleware_patch.py` (2: prelaunch-shell
-    syntax-import regression guard + container-side T3 patch
-    application)
+    syntax-import regression guard + container-side T3 phase 2
+    patch application)
   - `test_vllm_oracle_middleware_integration.py` (1: middleware
     fires inside vLLM image, registry round-trips)
+  - `test_vllm_t3_composite_drafting_patch.py` (1: T3 phase 3
+    patches apply, propose-helpers are bound, schema-aware
+    bail-out paths return None cleanly, idempotent re-application)
 - Round 1 baseline (`lumo-vllm-track-b-suffix`) is up and serving
   traffic on 127.0.0.1:9950. No regressions from this session's
   changes — T1's vLLM-side patch fires only on the next relaunch
