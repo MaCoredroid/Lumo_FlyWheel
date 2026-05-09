@@ -28,9 +28,16 @@ at 1.0 and decay as we move further from a known anchor.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .vllm_harness_oracle import HarnessOracleSnapshot
+# Type-only import keeps this module byte-for-byte droppable into
+# vLLM's spec_decode dir (where ``vllm_harness_oracle`` is sibling-
+# named ``lumo_oracle_registry`` and the relative import path
+# wouldn't resolve). At runtime the snapshot is duck-typed -- we only
+# read ``.is_empty``, ``.dialect``, and ``.expected_tool_call`` so any
+# object exposing those attributes works.
+if TYPE_CHECKING:
+    from .vllm_harness_oracle import HarnessOracleSnapshot
 
 CODEX_TOOL_CALL_OPEN = "<tool_call>"
 CODEX_NAME_OPEN = "<name>"

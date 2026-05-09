@@ -1074,16 +1074,18 @@ def _runtime_server(args: argparse.Namespace) -> ModelServer:
 
 
 def _track_b_runtime_prelaunch_shell() -> str:
-    oracle_module_body = (
-        Path(__file__).resolve().parent.parent
-        / "src"
-        / "lumo_flywheel_serving"
-        / "vllm_harness_oracle.py"
-    ).read_text(encoding="utf-8")
+    src_root = Path(__file__).resolve().parent.parent / "src" / "lumo_flywheel_serving"
+    oracle_module_body = (src_root / "vllm_harness_oracle.py").read_text(encoding="utf-8")
     if "ORACLE_MODULE_EOF" in oracle_module_body:
         raise RuntimeError(
             "vllm_harness_oracle.py contains the prelaunch heredoc terminator; "
             "rename ORACLE_MODULE_EOF to keep the embed safe."
+        )
+    schema_drafter_body = (src_root / "schema_aware_drafter.py").read_text(encoding="utf-8")
+    if "SCHEMA_DRAFTER_MODULE_EOF" in schema_drafter_body:
+        raise RuntimeError(
+            "schema_aware_drafter.py contains the prelaunch heredoc terminator; "
+            "rename SCHEMA_DRAFTER_MODULE_EOF to keep the embed safe."
         )
     return r"""python3 - <<'PY'
 # Lumo Track B 2026-05-08: GPU memory hygiene before the next vLLM
@@ -1511,6 +1513,143 @@ else:
         raise RuntimeError('build_app return-app pattern not found in api_server.py')
     ap.write_text(text.replace(old, new), encoding='utf-8')
     print('[TRACK-B-PRELAUNCH] applied T3 oracle middleware install hook')
+PY
+cat > /usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/lumo_schema_aware_drafter.py <<'SCHEMA_DRAFTER_MODULE_EOF'
+""" + schema_drafter_body + r"""SCHEMA_DRAFTER_MODULE_EOF
+python3 - <<'PY'
+# T3 phase 3 (2026-05-09): wire the schema-aware drafter into
+# SuffixDecodingProposer.propose so tool-call regime turns get a
+# schema-driven structural proposal first, falling back to the
+# existing suffix-decoding draft when no oracle is present, no
+# expected_tool_call is set, the tokenizer round-trip fails, or
+# any step raises. Defensive throughout -- absence is silence.
+from pathlib import Path
+
+path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/suffix_decoding.py')
+if not path.is_file():
+    raise RuntimeError(f'vLLM SuffixDecoding adapter missing: {path}')
+
+text = path.read_text(encoding='utf-8')
+sentinel = '# T3_COMPOSITE_DRAFTING_APPLIED'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] T3 composite drafting already present')
+else:
+    init_old = (
+        '    def __init__(self, vllm_config: VllmConfig):\n'
+        '        config = vllm_config.speculative_config\n'
+        '        assert config is not None, \"Speculative config must be set\"\n'
+    )
+    init_new = (
+        '    def __init__(self, vllm_config: VllmConfig):\n'
+        '        config = vllm_config.speculative_config\n'
+        '        assert config is not None, \"Speculative config must be set\"\n'
+        '        # T3_COMPOSITE_DRAFTING_APPLIED -- Lumo Track B Round 2 (2026-05-09)\n'
+        '        self._lumo_vllm_config = vllm_config\n'
+        '        self._lumo_cached_tokenizer = None\n'
+        '        self._lumo_tokenizer_load_attempted = False\n'
+    )
+    if init_old not in text:
+        raise RuntimeError('SuffixDecodingProposer.__init__ pattern not found')
+    text = text.replace(init_old, init_new)
+
+    speculate_old = (
+        '            draft = self.suffix_cache.speculate(\n'
+        '                req_id,\n'
+        '                pattern,\n'
+        '                max_spec_tokens=min(\n'
+        '                    self.num_speculative_tokens, self.max_model_len - num_tokens - 1\n'
+        '                ),\n'
+        '                max_spec_factor=self.max_spec_factor,\n'
+        '                min_token_prob=self.min_token_prob,\n'
+        '            )\n'
+        '\n'
+        '            draft_token_ids.append(draft.token_ids)\n'
+    )
+    speculate_new = (
+        '            _lumo_max_spec = min(\n'
+        '                self.num_speculative_tokens, self.max_model_len - num_tokens - 1\n'
+        '            )\n'
+        '            _lumo_schema_tokens = self._lumo_try_schema_aware_draft(\n'
+        '                req_id, pattern, _lumo_max_spec\n'
+        '            )\n'
+        '            if _lumo_schema_tokens:\n'
+        '                draft_token_ids.append(_lumo_schema_tokens)\n'
+        '                continue\n'
+        '            draft = self.suffix_cache.speculate(\n'
+        '                req_id,\n'
+        '                pattern,\n'
+        '                max_spec_tokens=_lumo_max_spec,\n'
+        '                max_spec_factor=self.max_spec_factor,\n'
+        '                min_token_prob=self.min_token_prob,\n'
+        '            )\n'
+        '\n'
+        '            draft_token_ids.append(draft.token_ids)\n'
+    )
+    if speculate_old not in text:
+        raise RuntimeError('SuffixDecodingProposer.propose speculate-call pattern not found')
+    text = text.replace(speculate_old, speculate_new)
+
+    text += (
+        '\n\n'
+        '# T3_COMPOSITE_DRAFTING_APPLIED helper methods (Lumo Track B Round 2).\n'
+        '# Bound onto SuffixDecodingProposer below so the propose() patch\n'
+        '# above can call them. Class-level monkey-patch keeps the patch\n'
+        '# all-in-one-file (the alternative -- subclassing -- requires\n'
+        '# patching gpu_model_runner.py too).\n'
+        'def _lumo_get_tokenizer(self):\n'
+        '    if self._lumo_tokenizer_load_attempted:\n'
+        '        return self._lumo_cached_tokenizer\n'
+        '    self._lumo_tokenizer_load_attempted = True\n'
+        '    try:\n'
+        '        from transformers import AutoTokenizer\n'
+        '        path = getattr(self._lumo_vllm_config.model_config, \"tokenizer\", None)\n'
+        '        if not path:\n'
+        '            return None\n'
+        '        self._lumo_cached_tokenizer = AutoTokenizer.from_pretrained(\n'
+        '            path, trust_remote_code=False\n'
+        '        )\n'
+        '    except Exception:\n'
+        '        self._lumo_cached_tokenizer = None\n'
+        '    return self._lumo_cached_tokenizer\n'
+        '\n'
+        'def _lumo_try_schema_aware_draft(self, req_id, pattern, max_spec_tokens):\n'
+        '    # Quick bail-outs before doing any per-step work.\n'
+        '    if max_spec_tokens <= 0:\n'
+        '        return None\n'
+        '    try:\n'
+        '        from vllm.v1.spec_decode.lumo_oracle_registry import ORACLE_REGISTRY\n'
+        '        from vllm.v1.spec_decode.lumo_schema_aware_drafter import propose as _drafter_propose\n'
+        '    except Exception:\n'
+        '        return None\n'
+        '    oracle = ORACLE_REGISTRY.lookup(req_id)\n'
+        '    if oracle is None or oracle.expected_tool_call is None:\n'
+        '        return None\n'
+        '    tokenizer = self._lumo_get_tokenizer()\n'
+        '    if tokenizer is None:\n'
+        '        return None\n'
+        '    try:\n'
+        '        recent_text = tokenizer.decode(list(pattern), skip_special_tokens=False)\n'
+        '        proposal = _drafter_propose(oracle, recent_text)\n'
+        '        if proposal is None or not proposal.text:\n'
+        '            return None\n'
+        '        encoded = tokenizer.encode(proposal.text, add_special_tokens=False)\n'
+        '        if not encoded:\n'
+        '            return None\n'
+        '        # Tokenizer round-trip safety: only forward the tokens if\n'
+        '        # decoding them gives back the exact proposal text. Models\n'
+        '        # tokenise XML-tag boundaries weirdly; without this guard\n'
+        '        # we would emit drafts the model never accepts.\n'
+        '        if tokenizer.decode(encoded, skip_special_tokens=False) != proposal.text:\n'
+        '            return None\n'
+        '        return list(encoded[:max_spec_tokens])\n'
+        '    except Exception:\n'
+        '        return None\n'
+        '\n'
+        'SuffixDecodingProposer._lumo_get_tokenizer = _lumo_get_tokenizer\n'
+        'SuffixDecodingProposer._lumo_try_schema_aware_draft = _lumo_try_schema_aware_draft\n'
+    )
+    path.write_text(text, encoding='utf-8')
+    print('[TRACK-B-PRELAUNCH] applied T3 composite drafting wrapper')
 PY"""
 
 
