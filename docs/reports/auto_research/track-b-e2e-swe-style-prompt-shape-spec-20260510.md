@@ -1,7 +1,7 @@
 # Track B E2E — SWE-Style Prompt Shape Fix
 
 Generated: 2026-05-10
-Status: spec, pre-implementation
+Status: **RETRACTED 2026-05-10** — see §11. Original spec preserved §§1–10 for audit.
 
 Companion to:
 - `track-b-e2e-agentic-saturation-plan-20260508-v2.md` (parent saturation plan; this changes the §3 sample shape)
@@ -203,3 +203,86 @@ Each run captures: `prompt_tokens` (turn 0), total wallclock, decode_sum_s, deco
 Phase 3 (single-attempt 13-task sweep) and Phase 4 (full 13×4 baseline) only commit to one prompt shape after Phase 2's two-variant smoke is reviewed. The v4 builder accepts `--prompt-shape v4-dirlist | v4-nohint` so the chosen variant is a runtime flag, not an irreversible code path. v3 builder remains available via `--prompt-shape v3` indefinitely.
 
 Phase 1 implementation work is unblocked by these decisions and can start now. Phase 2 measurements report to Mark before Phase 3 runs.
+
+## 11. Retraction and revision (2026-05-10, post-measurement)
+
+§§1–10 above are preserved unchanged for audit-trail integrity. This section retracts the §1 hypothesis after a direct measurement of the existing Round 3 v3 capture artifacts (no new instrumentation needed) and reframes Phase 1 around the actual prefill driver.
+
+### 11.1 What §1 claimed (under-the-table)
+
+§1's working model:
+- e2e runner materializes the workspace bundle into the request prompt
+- Initial prompt is "~5000+ tokens", every turn re-prefills that bundle plus growing transcript
+- Bundle removal would drop initial prompt to ≤1500 tokens and shift decode share from ~10% to 30–45%
+
+This conflated **two different code paths** with the same `_build_prompt` name:
+- `scripts/measure_track_b_real_content_task.py::_build_prompt` (legacy CNB-55 *warm-only* probe) — does inline `release_notes/` + `repo_inventory/` files, ~5000+ tokens. **Not used by the e2e sweep.**
+- `scripts/run_track_b_e2e_task.py::_write_prompt` (the actual e2e runner) — only writes `AGENTS.md` + `.scenario_variant`. The real `prompt.md` for `transcript-merge-regression/v1` in `output/track_b_e2e_v3/round_3/.../run_01/prompt.md` is **498 bytes / ~150 tokens**, not 5000.
+
+§1's premise was wrong from the start; the e2e runner was already close to the proposed v4 shape before the spec was written.
+
+### 11.2 What the v3 capture actually shows
+
+Sources used (no new measurement needed): `/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl` (per-turn proxy capture, 30 turns inside the v3 sweep window) and `output/track_b_e2e_v3/round_3/*/run_*/vllm_metrics_{pre,post}.txt` (per-task vLLM Prometheus diffs, all 52 runs).
+
+| Metric | Measured | Spec assumed |
+|---|---:|---:|
+| Decode share (aggregate over v3 sweep window, 30 turns) | **8.1%** | ~10% (close, but for the wrong reason) |
+| Median per-turn `prompt_tokens` | **69,516** | ≥5000 (from §1, actual is ~14× larger) |
+| Median per-turn `completion_tokens` | **102** | not stated |
+| Σ prefill_s in window | **1,629.5 s** | not stated |
+| Σ decode_s in window | **143.9 s** | not stated |
+| Token-level prefix-cache hit rate, all 52 runs | **34.8%** | not stated |
+| Codex turns per run (median across 52 runs) | **1** | spec implied ~3 (current) → 5–10 (v4) |
+| Runs that produced 0 output tokens (Codex 0.128.0 zero-token quirk) | **34/52 (65%)** | not addressed |
+
+Per-run cache-hit pattern (from per-task `vllm_metrics_{pre,post}.txt` diffs):
+
+| Run shape | Hit rate | Mechanism |
+|---|---:|---|
+| Single-turn run (1 request, 69 K prompt) | 0.0% | turn 1 always cold — the runner calls `--reset-prefix-cache` per task |
+| Two-turn run (139 K prompt) | ~49.5% | turn 2 fully hits turn 1's cached prefix |
+| Three-turn run (209 K prompt) | ~66% | turns 2+3 hit |
+| Four-turn run (279 K prompt) | ~74% | turns 2–4 hit |
+| Five-turn run (348 K prompt) | ~79% | turns 2–5 hit |
+
+Each turn after the first adds **only ~1.8 K cold-compute tokens** (`local_compute` delta per extra turn ≈ 1.8 K vs `local_cache_hit` delta ≈ 68.7 K). The cache is healthy — the agent transcript barely grows across turns.
+
+**The actual prefill driver is the ~70 K-token codex CLI initial system prompt** (tool inventory, MCP descriptions, sandbox/model-provider config, plus our 150-token user message) that codex sends on turn 1. At ~770 tok/s prefill throughput that's ~90 s, paid once per task because the runner resets the prefix cache before every task.
+
+### 11.3 Why v4 prompt-shape change cannot move decode share
+
+The v4-dirlist variant changes `prompt.md` from 150 tokens → ~250–500 tokens (1 line per top-level entry × 6–12 entries). The v4-nohint variant keeps it at ~150 tokens. Either way, the actual per-turn prompt the model sees is dominated by codex's ~70 K-token system prompt, which neither variant changes. The expected wallclock or decode-share movement is < 1 % — well below measurement noise.
+
+### 11.4 Real levers (priority order, replacing §3's projection)
+
+1. **Trim codex CLI's initial system prompt (highest leverage).** ~70 K tokens of tool definitions, MCP server descriptions, sandbox/model-provider docs and config that prefill at ~770 tok/s = ~90 s of pure overhead per task before the agent does anything. Investigate which codex 0.128.0 flags / config knobs reduce the inventory (e.g. `-c skill_set=...`, fewer MCP servers, narrower model-provider definition). Even a 50 % reduction = ~45 s/task wallclock saved across all 13 tasks.
+2. **Stop resetting prefix cache between tasks.** `scripts/run_track_b_e2e_task.py:569` posts `/reset_prefix_cache` per task. With reset removed, task N's turn 1 would hit task N-1's cached codex system prompt → first-turn prefill drops from ~90 s to <2 s for tasks 2..N. The "isolation" rationale is real but the cost is ~52 × 88 s = ~76 minutes per sweep. Consider a single per-round reset, or per-cohort reset.
+3. **Fix Codex 0.128.0 zero-token quirk.** 34/52 (65 %) v3 runs sent the request, vLLM spent ~90 s on prefill, codex aborted before getting tokens back. These runs still pay full prefill cost but produce no usable output. The runner has `--zero-token-retries` already (`run_track_b_e2e_task.py:768`) but it defaults to 0; setting it to 3 for the next sweep would roughly 2× the effective sample density.
+4. **Codex transcript compaction (lowest priority).** Per-turn transcript growth is ~1.8 K tokens — small relative to the 70 K initial system prompt and the ~68.7 K cached prefix per warm turn. Compacting the transcript saves at most a few seconds per multi-turn task; not the bottleneck.
+
+### 11.5 Phase reframing
+
+| Original phase | Status | Replacement |
+|---|---|---|
+| Phase 1 — implement v4 builder | **WITHDRAWN** | v4 prompt shape doesn't address the bottleneck. No code change. |
+| Phase 2 — single-task v3-vs-v4-dirlist-vs-v4-nohint smoke | **WITHDRAWN** | Same. |
+| Phase 3 — 13-task v4 sweep | **WITHDRAWN** | Same. |
+| Phase 4 — full Round 4 v4 baseline | **WITHDRAWN** | Same. |
+| Phase 5 — promote v4 as canonical | **WITHDRAWN** | v3 sample shape stays canonical. |
+
+New Phase 1 — **Codex initial-system-prompt forensics** (≤ 1 hour). Capture the verbatim `/v1/responses` `input` field of one fresh `codex exec` call (e.g. via proxy log + `LUMO_TRACK_B_LOG_REQUEST_BODY=1` env var on the proxy) for `transcript-merge-regression/v1`. Inventory what's in the 70 K — tool descriptions, MCP server definitions, model-provider config, sandbox docs. Identify which codex flags or config blocks would shrink it. Output: list of codex-config knobs to A/B in Phase 2.
+
+New Phase 2 — **Codex-config A/B on one task** (≤ 30 min). Run `transcript-merge-regression/v1` twice: baseline (current 70 K system prompt) vs reduced-inventory (smallest viable codex config). Capture initial-prompt size, first-turn prefill_s, decode share. Decision criterion: reduced config produces same exit code and ≥30 % first-turn prefill reduction → adopt for sweep.
+
+New Phase 3 — **Cache-reset policy A/B on the 13-task sample** (≤ 30 min). Two single-attempt sweeps under the Phase-2-chosen config: per-task reset (current) vs single-reset-at-sweep-start. Compare aggregate wallclock and aggregate cache hit rate. Decision criterion: single-reset preserves correctness on all 13 → adopt.
+
+New Phase 4 — **Zero-token retry default change** (≤ 5 min code, included in Phase 5). Set runner default `--zero-token-retries=3` so 65 % of runs aren't wasted prefill.
+
+New Phase 5 — **Round 4 baseline under the revised configuration** (≤ 30 min). 13 × 4 sweep with: reduced codex config (Phase 2 winner), single-reset cache policy (Phase 3 winner), zero-token-retries=3, otherwise identical to v3 collection. Lands at `output/track_b_e2e_v3.1/round_4/` (still v3 *prompt shape*, but with the configuration changes that actually move decode share).
+
+### 11.6 Audit notes
+
+- The "decode is ~10 %" figure in `track-b-round3-e2e-v3-closeout-20260510.md:83` was a **back-calculation** from the gap between microbench acceleration and end-to-end speedup, not a direct measurement. The 8.1 % direct measurement above corroborates it from the other direction.
+- Per-turn metrics in `output/track_b_e2e_v3/round_3/.../vllm_per_turn.json` are all `deferred:true` — that artifact was never populated for the v3 sweep. Future sweeps should not defer this; the proxy capture file is the working source.
+- The `--reset-prefix-cache` policy was inherited from the warm-only probe in `measure_track_b_real_content_task.py` (where isolation is the right call because each call is one independent measurement). It was carried over into the agent runner without the same justification, and it imposes a ~90 s/task tax that dominates the sweep wallclock.
