@@ -603,15 +603,28 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
                 if vllm_request_metrics_jsonl is not None and vllm_request_metrics_jsonl.is_file()
                 else 0
             )
-            result = subprocess.run(
-                command,
-                cwd=workspace,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=args.timeout_s,
-                env={**os.environ, "OPENAI_API_KEY": args.api_key, "OPENAI_BASE_URL": args.endpoint},
-            )
+            # Codex CLI 0.128.0 hangs when stdout/stderr are
+            # subprocess.PIPE (TTY/output-buffer detection edge case;
+            # blocks waiting for a tty-style write target). Route
+            # through real files in the task_dir so the process can
+            # complete and we still capture full stdout/stderr.
+            stdout_path = task_dir / "codex_stdout.log"
+            stderr_path = task_dir / "codex_stderr.log"
+            with stdout_path.open("w", encoding="utf-8") as out_fh, stderr_path.open(
+                "w", encoding="utf-8"
+            ) as err_fh:
+                result = subprocess.run(
+                    command,
+                    cwd=workspace,
+                    text=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=out_fh,
+                    stderr=err_fh,
+                    timeout=args.timeout_s,
+                    env={**os.environ, "OPENAI_API_KEY": args.api_key, "OPENAI_BASE_URL": args.endpoint},
+                )
+            result.stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
+            result.stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
             # Detect Codex 0.128.0 zero-token quirk: codex exits 0 but never
             # made a /v1/responses call (proxy capture file gained no bytes).
             offset_after = (

@@ -8,6 +8,32 @@ Revised: 2026-05-09 (Step 0d root cause + patch verified end-to-end)
 Revised: 2026-05-09 (Round 2 T1 + T3 + T2-producer ship-ready)
 Revised: 2026-05-10 (Round 3 second relaunch — T2 consumer + T4 pre-drafter validated)
 Revised: 2026-05-10 (Round 3 closeout — 4-point ablation lands clean per-technique deltas)
+Revised: 2026-05-10 (Round 3 e2e v3 sweep — −12.5% median wallclock vs v2 Round 0)
+
+## Status update — 2026-05-10 Round 3 e2e v3 sweep — Track 3 PASSES
+
+Full v2 sample (13 tasks × 4 repeats = 52 task runs) through the
+Round 3 patched runtime (T1+T2+T3+T4 active). Same sample hash as
+v2 Round 0 baseline.
+
+| Metric | v2 Round 0 | v3 Round 3 | Δ |
+|---|---:|---:|---:|
+| Median wallclock | 109.07 s | **95.44 s** | **−12.5%** |
+| Aggregate wallclock | 1309.67 s | 1256.97 s | −4.0% |
+| Tasks correctness_passed | 13/13 | 13/13 | (same) |
+
+**−12.5% median clears the >8% ship threshold.** Every family
+improves; 7/13 families clear −10%; 12/13 clear −5%.
+
+Per-family deltas range from −0.4%
+(responsive-checkout-visual-regression) to −16.5%
+(plugin-scaffold-alignment) — see
+`track-b-round3-e2e-v3-closeout-20260510.md`. Three live-fix
+commits enabled the sweep
+(`68bf096`/`ad8b0e8`/`a1abc98`/`uncommitted`); see closeout for
+the issues encountered + resolutions.
+
+**This closes the Track 3 measurement gate the spec calls for.**
 
 ## Status update — 2026-05-10 Round 3 closeout — clean ablation
 
