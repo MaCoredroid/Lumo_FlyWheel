@@ -178,6 +178,7 @@ def _codex_command_smoke(args: argparse.Namespace) -> dict[str, Any]:
                 command,
                 cwd=workspace,
                 text=True,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=args.codex_smoke_timeout_s,
