@@ -6,6 +6,37 @@ Revised: 2026-05-07 (post-PR39562-stop-gap real-task matrix)
 Revised: 2026-05-08 (live runtime is SuffixDecoding; proxy-side instrumentation; Step 0d reframe)
 Revised: 2026-05-09 (Step 0d root cause + patch verified end-to-end)
 Revised: 2026-05-09 (Round 2 T1 + T3 + T2-producer ship-ready)
+Revised: 2026-05-10 (Round 3 second relaunch — T2 consumer + T4 pre-drafter validated)
+
+## Status update — 2026-05-10 Round 3 second-relaunch validation
+
+A second relaunch shipped the **T2 consumer side** and **T4
+plan-structure pre-drafter** as in-place prelaunch patches plus an
+**in-loop plan-emission observer** in `SuffixDecodingProposer`.
+Three measurements taken against the second-relaunch runtime:
+
+- **Activation receipt:** 8/8 sentinels PASS, including
+  `t2_t4_composite_drafting_patch` and the new
+  `lumo_plan_structure_drafter.py` module-presence check.
+- **5×3 micro-benchmark (T1+T2+T3+T4):** aggregate acceptance
+  **57.3%**, vs first-relaunch (T1 only) **33.8%**. +23.5 pp
+  absolute, +59% accepted-token count on the same workload.
+- **T4 multi-emission driver (4 turns):** turn 3 (post 3 prior
+  emissions, T4 activated) acceptance **52.9%**, vs turn 0 (cold)
+  **31.3%**. +21.6 pp absolute, +69% relative.
+
+Track 2 ablation env-vars (`LUMO_DISABLE_T{2,3,4}`) are now wired
+at the top of each prelaunch-installed helper, so the spec's
+6-point per-technique ablation can be driven by relaunch config
+alone (no code changes per ablation point).
+
+Closeout doc:
+`track-b-round3-second-relaunch-measurements-20260510.md`. Round 3
+ships every Round 2 technique in a stable activation chain and
+produces the within-session evidence the spec asked for. Open work
+remaining in scope is the operator-paced full v2 sweep (corpus-level
+tok/s + B-1/B-2/B-3 quality gates) and the 6-point Track 2 ablation
+runs (six relaunches × ~8 min each).
 
 ## Status update — 2026-05-09 Round 2 ship-ready
 

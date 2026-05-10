@@ -19,7 +19,7 @@ import time
 
 import requests
 
-URL = "http://127.0.0.1:8033/v1/responses"
+URL = "http://127.0.0.1:8022/v1/responses"
 HEADERS = {"Authorization": "Bearer EMPTY", "Content-Type": "application/json"}
 
 # Five distinct first-user-messages -> five distinct session_ids.
