@@ -7,6 +7,31 @@ Revised: 2026-05-08 (live runtime is SuffixDecoding; proxy-side instrumentation;
 Revised: 2026-05-09 (Step 0d root cause + patch verified end-to-end)
 Revised: 2026-05-09 (Round 2 T1 + T3 + T2-producer ship-ready)
 Revised: 2026-05-10 (Round 3 second relaunch — T2 consumer + T4 pre-drafter validated)
+Revised: 2026-05-10 (Round 3 closeout — 4-point ablation lands clean per-technique deltas)
+
+## Status update — 2026-05-10 Round 3 closeout — clean ablation
+
+Final-of-round measurement: 4-point cumulative ablation through
+the file-based runtime-flag mechanism (one relaunch lands the
+flag, all four points run with no further relaunches).
+Headline numbers — 5×3 microbench acceptance rate per point:
+
+| Point | Disabled | Rate | Δ |
+|---|---|---|---|
+| A (T1 only) | T2, T3, T4 | 33.5% | — |
+| B (+T2) | T3, T4 | 56.0% | +22.5 pp |
+| C (+T2+T3) | T4 | 70.3% | +14.3 pp |
+| D (all on) | none | 78.9% | +8.6 pp |
+
+**+45.4 pp absolute, +135% relative** as the stack layers.
+Per-technique deltas are monotonic and clean. Closeout doc:
+`track-b-round3-closeout-20260510.md`.
+
+**What's now operator-blocked only:**
+- Full v2 corpus sweep (corpus-level tok/s + B-1/B-2/B-3 quality
+  gates).
+- LMCache cross-session KV reuse (vLLM 0.19 hybrid-cache
+  incompatibility, documented separately).
 
 ## Status update — 2026-05-10 Round 3 second-relaunch validation
 
