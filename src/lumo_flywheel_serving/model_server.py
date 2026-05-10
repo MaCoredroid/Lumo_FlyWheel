@@ -828,6 +828,7 @@ class ModelServer:
             f"VLLM_LOGGING_LEVEL={'DEBUG' if enable_request_logging else 'INFO'}",
             *self._batch_invariant_env_args(),
             *self._triton_debug_env_args(),
+            *self._track_b_ablation_env_args(),
             *kernel_activation_env_args,
             *self._p2b_debug_export_env_args(),
             *self._cutlass_overlay_env_args(),
@@ -864,6 +865,15 @@ class ModelServer:
     def _triton_debug_env_args() -> list[str]:
         args: list[str] = []
         for name in ("TRITON_PRINT_AUTOTUNING", "MLIR_ENABLE_DUMP", "TRITON_DEBUG"):
+            value = os.environ.get(name)
+            if value is not None and value != "":
+                args.extend(["-e", f"{name}={value}"])
+        return args
+
+    @staticmethod
+    def _track_b_ablation_env_args() -> list[str]:
+        args: list[str] = []
+        for name in ("LUMO_DISABLE_T2", "LUMO_DISABLE_T3", "LUMO_DISABLE_T4"):
             value = os.environ.get(name)
             if value is not None and value != "":
                 args.extend(["-e", f"{name}={value}"])
