@@ -84,6 +84,24 @@ CHECKS: list[dict] = [
         "kind": "exists",
         "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/lumo_plan_structure_drafter.py",
     },
+    {
+        "name": "runtime_speculative_config_suffix",
+        "kind": "runtime_log",
+        # vLLM's EngineCore initializer logs the SpeculativeConfig at
+        # startup. If the launcher came up with a TunedConfigBundle that
+        # had an empty spec_decode dict, this line will be absent (and
+        # 'speculative_config=None' will be present instead). Catches
+        # the entire-stack-silently-broken regression where every patch
+        # sentinel still PASSes but the engine never speculates.
+        "marker": "method='suffix'",
+        "absent_marker": "speculative_config=None",
+    },
+    {
+        "name": "runtime_track_b_disabled_helper",
+        "kind": "sentinel",
+        "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/suffix_decoding.py",
+        "sentinel": "def _lumo_track_b_disabled",
+    },
 ]
 
 
@@ -125,6 +143,28 @@ def _check_exists(container: str, path: str) -> tuple[bool, str]:
     return False, f"file missing at {path}"
 
 
+def _check_runtime_log(container: str, marker: str, absent_marker: str | None) -> tuple[bool, str]:
+    """Check that the engine startup log contains ``marker`` (and, if
+    given, does NOT contain ``absent_marker``). Used to gate runtime
+    config that source-file sentinels can't observe — e.g. the
+    presence of ``method='suffix'`` in the EngineCore init line."""
+
+    proc = subprocess.run(
+        ["docker", "logs", container],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    log_text = (proc.stdout or "") + (proc.stderr or "")
+    has_marker = marker in log_text
+    has_absent = bool(absent_marker) and absent_marker in log_text
+    if has_marker and not has_absent:
+        return True, f"runtime marker {marker!r} present"
+    if has_absent:
+        return False, f"runtime regression: {absent_marker!r} present in startup log"
+    return False, f"runtime marker {marker!r} not found in startup log"
+
+
 def shell_escape(value: str) -> str:
     return "'" + value.replace("'", "'\\''") + "'"
 
@@ -137,14 +177,20 @@ def run_checks(container: str) -> tuple[bool, list[dict]]:
             ok, detail = _check_sentinel(container, check["path"], check["sentinel"])
         elif check["kind"] == "exists":
             ok, detail = _check_exists(container, check["path"])
+        elif check["kind"] == "runtime_log":
+            ok, detail = _check_runtime_log(
+                container, check["marker"], check.get("absent_marker")
+            )
         else:
             ok, detail = False, f"unknown check kind: {check['kind']}"
         results.append(
             {
                 "name": check["name"],
                 "kind": check["kind"],
-                "path": check["path"],
+                "path": check.get("path"),
                 "sentinel": check.get("sentinel"),
+                "marker": check.get("marker"),
+                "absent_marker": check.get("absent_marker"),
                 "passed": ok,
                 "detail": detail,
             }
