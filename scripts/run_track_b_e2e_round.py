@@ -23,6 +23,14 @@ def _default_python() -> str:
     return str(venv_python if venv_python.exists() else Path(sys.executable))
 
 
+def _reset_cache_once(args: argparse.Namespace) -> None:
+    """Single round-start /reset_prefix_cache POST. Used by --warmup-policy round_start."""
+    import requests  # noqa: PLC0415
+    headers = {"Authorization": f"Bearer {args.api_key}"} if args.api_key else None
+    r = requests.post(args.reset_prefix_cache_url, headers=headers, timeout=30)
+    r.raise_for_status()
+
+
 def _validate_codex_command_template(template: str) -> None:
     # The {trace_out} placeholder is no longer required. Trace emission is now
     # produced by inference-proxy capture + runner-side synthesis, not by a
@@ -305,6 +313,19 @@ def _runner_command(args: argparse.Namespace) -> list[str]:
     zero_token_retries = int(getattr(args, "zero_token_retries", 0) or 0)
     if zero_token_retries > 0:
         command.extend(["--zero-token-retries", str(zero_token_retries)])
+    if getattr(args, "warmup_system_prompt_json", "") and args.warmup_policy == "per_task":
+        # per_task policy: forward warmup to each per-task runner
+        command.extend(["--warmup-system-prompt-json", args.warmup_system_prompt_json])
+        command.extend(["--warmup-hit-rate-threshold", str(args.warmup_hit_rate_threshold)])
+        command.extend(["--warmup-timeout-s", str(args.warmup_timeout_s)])
+    if args.warmup_policy == "round_start":
+        # round_start policy: codex prefix is pre-warmed at sweep start and
+        # MUST NOT be evicted by per-task /reset_prefix_cache calls. Pin the
+        # round-level system_prompt hash for rule-19 stability checks.
+        command.extend([
+            "--reset-prefix-cache-url", "",
+            "--round-start-system-prompt-json", args.warmup_system_prompt_json or "",
+        ])
     deferred = getattr(args, "defer_preflight_checks", []) or []
     if "codex_trace_out_supported" in deferred:
         command.append("--defer-codex-trace-out")
@@ -387,7 +408,13 @@ def _round_summary_command(args: argparse.Namespace, round_dir: Path) -> list[st
 
 
 def _reject_existing_round_outputs(round_dir: Path) -> None:
-    allowed = {"preflight_audit.json"}
+    allowed = {
+        "preflight_audit.json",
+        # Pre-staged Round 4a artifacts — copied in by the operator before the
+        # sweep so the round-start warmup-pass has its system-prompt source:
+        "codex_system_prompt.json",
+        "codex_system_prompt_decomposition.json",
+    }
     stale = sorted(path for path in round_dir.iterdir() if path.name not in allowed)
     if stale:
         rel = ", ".join(str(path.relative_to(round_dir)) for path in stale[:5])
@@ -444,10 +471,84 @@ def run_round(args: argparse.Namespace) -> int:
             args.trace_emitter_correctness_verified_at,
         )
 
+    # Round 4a — copy the codex_system_prompt.json artifact into the round
+    # directory so rule 18 ("System-prompt decomposition recorded for round")
+    # has its evidence in-place, and run the warmup-pass ONCE at round start
+    # so the codex CLI static prefix lives in the prefix cache for the whole
+    # sweep. Per-task cache reset and per-task warmup are intentionally OFF
+    # in this mode — the codex prefix behaves like a forever-cached entry
+    # that production traffic would naturally maintain.
+    canonical_system_prompt_hash: str | None = None
+    if args.warmup_system_prompt_json:
+        src_sp = Path(args.warmup_system_prompt_json)
+        if not src_sp.is_file():
+            raise RuntimeError(f"warmup-system-prompt-json missing: {src_sp}")
+        dest_sp = round_dir / "codex_system_prompt.json"
+        if dest_sp.resolve() != src_sp.resolve():
+            dest_sp.write_text(src_sp.read_text(encoding="utf-8"), encoding="utf-8")
+        src_dec = src_sp.parent / "codex_system_prompt_decomposition.json"
+        if src_dec.is_file():
+            dest_dec = round_dir / "codex_system_prompt_decomposition.json"
+            if dest_dec.resolve() != src_dec.resolve():
+                dest_dec.write_text(src_dec.read_text(encoding="utf-8"), encoding="utf-8")
+        canonical_system_prompt_hash = json.loads(dest_sp.read_text(encoding="utf-8")).get("static_content_hash")
+
+        if args.warmup_policy == "round_start":
+            # Reset the cache once, then prime + verify it. After this, every
+            # per-task codex call hits the warm prefix; per-task reset and
+            # per-task warmup are skipped (see _runner_command + below).
+            if args.reset_prefix_cache_url:
+                _reset_cache_once(args)
+            warmup_out = round_dir / "round_warmup_pass.json"
+            warmup_cmd = [
+                args.python,
+                str(REPO_ROOT / "scripts" / "run_track_b_e2e_warmup.py"),
+                "--system-prompt-json", str(dest_sp),
+                "--endpoint", args.endpoint,
+                "--metrics-url", args.metrics_url,
+                "--api-key", args.api_key,
+                "--model", args.model,
+                "--mode", "both",
+                "--hit-rate-threshold", str(args.warmup_hit_rate_threshold),
+                "--timeout-s", str(args.warmup_timeout_s),
+                "--out", str(warmup_out),
+            ]
+            warmup_proc = _run(warmup_cmd)
+            if warmup_proc.returncode != 0:
+                print(warmup_proc.stderr, file=sys.stderr, end="")
+                raise RuntimeError(
+                    f"round-start warmup-pass failed (rule 17): rc={warmup_proc.returncode}; "
+                    f"see {warmup_out}"
+                )
+
     runner = _run(_runner_command(args))
     if runner.returncode != 0:
         print(runner.stderr, file=sys.stderr, end="")
         return runner.returncode
+
+    if args.warmup_system_prompt_json:
+        # Rule 19: system-prompt content_hash must be stable across all attempts.
+        # Source of canonical hash:
+        #   - per_task warmup-pass: each runner_metadata.warmup_pass.system_prompt_content_hash
+        #   - round_start warmup-pass: round_start_system_prompt_content_hash recorded by runner
+        sp_artifact = json.loads((round_dir / "codex_system_prompt.json").read_text(encoding="utf-8"))
+        canonical_hash = sp_artifact.get("static_content_hash")
+        if not canonical_hash:
+            raise RuntimeError(
+                "rule 18: round codex_system_prompt.json missing static_content_hash"
+            )
+        per_attempt_hashes: dict[str, str | None] = {}
+        for run_meta in round_dir.glob("*__*/run_*/runner_metadata.json"):
+            meta = json.loads(run_meta.read_text(encoding="utf-8"))
+            warmup = meta.get("warmup_pass") or {}
+            recorded_hash = warmup.get("system_prompt_content_hash") or meta.get("round_start_system_prompt_content_hash")
+            per_attempt_hashes[str(run_meta.relative_to(round_dir))] = recorded_hash
+        mismatches = {k: v for k, v in per_attempt_hashes.items() if v != canonical_hash}
+        if mismatches:
+            mismatch_summary = json.dumps({"canonical": canonical_hash, "mismatches": mismatches}, indent=2)
+            raise RuntimeError(
+                f"rule 19 failure: codex_system_prompt static_content_hash mismatch across attempts:\n{mismatch_summary}"
+            )
 
     for task_id in _tasks():
         measured_attempts = range(2, args.repeat + 1)
@@ -491,8 +592,41 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--zero-token-retries",
         type=int,
-        default=0,
-        help="Forwarded to run_track_b_e2e_task.py per task; mitigates Codex 0.128.0's zero-token quirk.",
+        default=3,
+        help=(
+            "Forwarded to run_track_b_e2e_task.py per task; mitigates Codex 0.128.0's zero-token quirk. "
+            "Default 3 since Round 4a (rule from track-b-e2e-round4a-measurement-protocol-spec)."
+        ),
+    )
+    parser.add_argument(
+        "--warmup-system-prompt-json",
+        default="",
+        help=(
+            "Path to a codex_system_prompt.json artifact (schema "
+            "lumo.track_b.codex_system_prompt.v1). When supplied, every task "
+            "executes a warmup-pass before the codex spawn so the static "
+            "Codex CLI system prompt is cached. Required for Round 4a per "
+            "truthful-measurement rules 17-19."
+        ),
+    )
+    parser.add_argument("--warmup-hit-rate-threshold", type=float, default=0.95)
+    parser.add_argument("--warmup-timeout-s", type=float, default=300.0)
+    parser.add_argument(
+        "--warmup-policy",
+        choices=["round_start", "per_task", "off"],
+        default="round_start",
+        help=(
+            "round_start (default, Round 4a v2): warmup-pass once at sweep start, "
+            "per-task /reset_prefix_cache disabled — codex prefix lives in cache "
+            "for the whole sweep, mimicking production. "
+            "per_task: legacy Round 4a v1 — warmup-pass + reset before each task. "
+            "off: no warmup-pass; preserves v3 behavior."
+        ),
+    )
+    parser.add_argument(
+        "--reset-prefix-cache-url",
+        default="http://127.0.0.1:9950/reset_prefix_cache",
+        help="Cache-reset endpoint. With round_start policy, called once at sweep start.",
     )
     parser.add_argument("--clock-skew-ms-p99", type=float, required=True)
     parser.add_argument("--trace-emitter-correctness-verified-at", required=True)

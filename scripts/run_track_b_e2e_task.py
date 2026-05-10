@@ -68,6 +68,69 @@ def _display_path(path: Path) -> str:
         return str(path)
 
 
+def _read_round_start_system_prompt_hash(path: str) -> str | None:
+    if not path:
+        return None
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8")).get("static_content_hash")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _run_warmup_pass(
+    *,
+    system_prompt_json: Path,
+    endpoint: str,
+    metrics_url: str,
+    api_key: str,
+    model: str,
+    hit_rate_threshold: float,
+    timeout_s: float,
+    out_path: Path,
+) -> dict[str, Any]:
+    """Run scripts/run_track_b_e2e_warmup.py as a subprocess. Returns the
+    parsed warmup_pass artifact written to ``out_path`` (and the
+    subprocess's stdout summary). Raises if the subprocess exits non-zero
+    or the artifact is malformed.
+
+    Truthful-measurement rule 17: warmup-pass must execute and the second
+    (verify) call's prefix-cache hit rate must be ≥ hit_rate_threshold.
+    """
+
+    cmd = [
+        sys.executable,
+        str(REPO_ROOT / "scripts" / "run_track_b_e2e_warmup.py"),
+        "--system-prompt-json", str(system_prompt_json),
+        "--endpoint", endpoint,
+        "--metrics-url", metrics_url,
+        "--api-key", api_key,
+        "--model", model,
+        "--mode", "both",
+        "--hit-rate-threshold", str(hit_rate_threshold),
+        "--timeout-s", str(timeout_s),
+        "--out", str(out_path),
+    ]
+    result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_s + 60)
+    if not out_path.is_file():
+        raise RuntimeError(
+            f"warmup-pass produced no artifact at {out_path}; "
+            f"rc={result.returncode}; stderr={result.stderr[-500:]!r}"
+        )
+    artifact = json.loads(out_path.read_text(encoding="utf-8"))
+    summary = {
+        "passed": bool(artifact.get("passed")),
+        "system_prompt_content_hash": artifact.get("system_prompt_content_hash"),
+        "verify_hit_rate": (artifact.get("verify") or {}).get("hit_rate"),
+        "verify_wall_s": (artifact.get("verify") or {}).get("wall_s"),
+        "prime_wall_s": (artifact.get("prime") or {}).get("wall_s"),
+        "fail_reason": artifact.get("fail_reason"),
+        "executed_at": artifact.get("ts"),
+        "subprocess_returncode": result.returncode,
+        "artifact_path": str(out_path),
+    }
+    return summary
+
+
 def _prepare_attempt_workspace(source_workspace: Path, task_dir: Path) -> Path:
     attempt_workspace = task_dir / "workspace"
     if attempt_workspace.exists():
@@ -568,6 +631,23 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
     _request("GET", args.health_url)
     if args.reset_prefix_cache_url:
         _request("POST", args.reset_prefix_cache_url, api_key=args.api_key, timeout=30)
+    warmup_pass: dict[str, Any] | None = None
+    if getattr(args, "warmup_system_prompt_json", ""):
+        warmup_pass = _run_warmup_pass(
+            system_prompt_json=Path(args.warmup_system_prompt_json),
+            endpoint=args.endpoint,
+            metrics_url=args.metrics_url,
+            api_key=args.api_key,
+            model=args.model,
+            hit_rate_threshold=args.warmup_hit_rate_threshold,
+            timeout_s=args.warmup_timeout_s,
+            out_path=task_dir / "warmup_pass.json",
+        )
+        if not warmup_pass.get("passed", False):
+            raise RuntimeError(
+                f"warmup-pass failed (rule 17): {warmup_pass.get('fail_reason') or 'unknown'}; "
+                f"verify_hit_rate={warmup_pass.get('verify_hit_rate')}"
+            )
     gpu_mem_pre = _gpu_mem_snapshot()
     vllm_request_metrics_jsonl = Path(args.vllm_request_metrics_jsonl) if args.vllm_request_metrics_jsonl else None
     vllm_request_metrics_start_offset = (
@@ -710,6 +790,11 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
         "zero_token_retry_count": zero_token_retry_count,
         "zero_token_retry_cohort": zero_token_retry_count > 0,
         "deferred_instrumentation_checks": _deferred_instrumentation_checks(args),
+        "warmup_pass": warmup_pass,
+        "warmup_system_prompt_json": args.warmup_system_prompt_json or None,
+        "round_start_system_prompt_json": args.round_start_system_prompt_json or None,
+        "round_start_system_prompt_content_hash": _read_round_start_system_prompt_hash(args.round_start_system_prompt_json),
+        "reset_prefix_cache_per_task": bool(args.reset_prefix_cache_url),
     }
     (task_dir / "runner_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if not trace_out.is_file():
@@ -786,6 +871,40 @@ def main() -> int:
             "the runner normalizes it into vllm_per_turn.json instead of "
             "requiring request_id labels in Prometheus."
         ),
+    )
+    parser.add_argument(
+        "--round-start-system-prompt-json",
+        default="",
+        help=(
+            "Path to the round-level codex_system_prompt.json (Round 4a v2 / "
+            "round_start warmup policy). When supplied, the per-task runner "
+            "records the system_prompt_content_hash in runner_metadata so "
+            "rule 19 stability check can verify cross-attempt equality, but "
+            "does NOT itself run a warmup-pass — the round driver handled it."
+        ),
+    )
+    parser.add_argument(
+        "--warmup-system-prompt-json",
+        default="",
+        help=(
+            "Path to a codex_system_prompt.json artifact (schema "
+            "lumo.track_b.codex_system_prompt.v1). When supplied, the runner "
+            "executes the warmup-pass before each codex spawn so the static "
+            "Codex CLI system prompt is cached. Required for Round 4a per "
+            "truthful-measurement rule 17."
+        ),
+    )
+    parser.add_argument(
+        "--warmup-hit-rate-threshold",
+        type=float,
+        default=0.95,
+        help="Minimum prefix_cache hit rate on the warmup verify call (rule 17 threshold).",
+    )
+    parser.add_argument(
+        "--warmup-timeout-s",
+        type=float,
+        default=300.0,
+        help="Per-call timeout for the warmup-pass /v1/responses POST.",
     )
     parser.add_argument(
         "--codex-command-template",

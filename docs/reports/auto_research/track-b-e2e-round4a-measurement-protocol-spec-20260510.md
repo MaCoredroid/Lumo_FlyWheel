@@ -1,7 +1,7 @@
 # Track B E2E — Round 4a Measurement-Protocol Fix
 
 Generated: 2026-05-10
-Status: active spec, pre-implementation
+Status: active spec, mid-implementation (Phase 4 smoke complete; architecture amended — see §15)
 
 Companion to:
 - `track-b-e2e-swe-style-prompt-shape-spec-20260510.md` (retracted v4 prompt-shape spec; this doc supersedes its §§1–10 with the corrected diagnosis from its §11)
@@ -194,6 +194,56 @@ The Round 4a measurement is therefore closer to production reality than v3 was, 
 - `scripts/run_track_b_e2e_task.py:768` (`--zero-token-retries` — flag exists but default is 0)
 - `/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl` (proxy capture used for the §1 predicate measurement)
 
----
+## 15. Architecture amendment — round-start warmup, cache lives forever (2026-05-10, post-Phase-4)
 
-*This spec defines Round 4a as a measurement-protocol fix that eliminates the cold-turn-1 prefill cost and the Codex zero-token quirk's contribution to wallclock variance, without changing any test content. Round 4b (drafter work — MTP test, reasoning-regime intervention, etc.) runs against the Round 4a baseline once it lands.*
+Single-task smoke (4 attempts on `transcript-merge-regression/v1` with the §5 per-task warmup architecture) revealed the per-task warmup is wasteful overhead, not a measurement protocol fix:
+
+| Attempt | warmup_prime_s | verify_hit_rate | codex_elapsed_s | total_elapsed_s |
+|---|---:|---:|---:|---:|
+| 1 | 83.8 | 0.992 | ~30 | 114.6 |
+| 2 | 83.6 | 0.992 | ~20 | 103.2 |
+| 3 | 83.3 | 0.992 | (zero-token × 3) | 109.4 |
+| 4 | 84.4 | 0.992 | ~18 | 102.1 |
+
+Warmup-pass costs ~84s per task. On a 13×4 sweep that's 13 × 4 × 84 = **~73 minutes** of warmup overhead — pure waste, since the codex prefix is byte-identical across every task.
+
+**The codex CLI system prompt should behave like a forever-cached entry on the vLLM model server: created once when vLLM boots (or once at sweep start), maintained by the natural touch from every codex call, never explicitly evicted.** Production replicas of this workload would naturally develop this property as session traffic warms the cache. The per-task `--reset-prefix-cache` policy carried over from `measure_track_b_real_content_task.py` actively defeats this, paying a cold prefill on every single task for no measurement-quality reason.
+
+### 15.1 Revised architecture (Round 4a v2)
+
+| Step | Round 4a v1 (per-task) | Round 4a v2 (round-start) |
+|---|---|---|
+| Pre-sweep | preflight only | **NEW**: capture/decompose codex system prompt → reset cache once → warmup-pass once (verify hit rate ≥ 0.95) |
+| Per-task `/reset_prefix_cache` | yes (~0s, instant) | **disabled** — codex prefix must persist |
+| Per-task warmup-pass | yes (~84s × N) | disabled — round-start warmup did the priming |
+| Per-task isolation guarantee | per-task cache reset | per-task workspace bundle hash difference (the only per-task content that hits the model is the workspace tail; cross-task tail collision is impossible because `manifest_lock.json` content_hashes differ) |
+| Rule 5 (cache reset) | "before each task" | **amended**: "before round start, then warmup-pass primes; per-task tail isolation by workspace-bundle hash difference" |
+| Rule 17 (warmup executed) | per task | **amended**: "warmup-pass executed at round start, recorded in round_warmup_pass.json with verify hit rate ≥ 0.95" |
+| Rule 18 (decomposition recorded) | unchanged | unchanged |
+| Rule 19 (system_prompt hash stable) | per-attempt warmup_pass.system_prompt_content_hash compared | **amended**: per-attempt runner_metadata.round_start_system_prompt_content_hash compared (inherited from round-level artifact); same stability guarantee |
+| Wallclock overhead | ~84s × N tasks | ~84s × 1 round |
+
+### 15.2 Implementation
+
+`scripts/run_track_b_e2e_round.py` gains `--warmup-policy {round_start, per_task, off}`, default `round_start`. When `round_start`:
+- Round driver runs `_reset_cache_once` then `scripts/run_track_b_e2e_warmup.py --mode both` once before the per-task runner spawns. Output: `round_dir/round_warmup_pass.json`.
+- Round driver passes `--reset-prefix-cache-url ""` and `--round-start-system-prompt-json <path>` to the per-task runner.
+- Per-task runner: skips `_reset_cache_once`; reads `round_start_system_prompt_content_hash` and records it in `runner_metadata.json` for rule-19 verification.
+
+Backward compatibility:
+- `--warmup-policy per_task` reproduces the §§5–7 design. Useful for diagnostics if cache-pinning hypothesis ever needs re-validation.
+- `--warmup-policy off` reproduces v3 behavior (no warmup, per-task reset). Preserved so v3 sample collection can still reproduce.
+
+### 15.3 Why this preserves measurement integrity
+
+The original §5 rationale for per-task isolation was: "cross-task cache contamination would let an agent cherry-pick wins by ordering tasks to inherit favorable cache state." Examining what would actually be contaminated:
+
+- The codex CLI static prefix (~64K tokens, instructions + tools) is identical across all tasks. **Contamination here is desired** — it's exactly the production parallel.
+- The per-task tail (~3K tokens per turn 1: env_context cwd + workspace AGENTS.md tail + first user message + chat-template wrappers) is per-task. With every task having a different workspace bundle path (different cwd), different `AGENTS.md` content, different `.scenario_variant`, the **per-task tail content has no cross-task overlap to cherry-pick from**. Even if all 13 tasks shared a common 100-token suffix to the codex prefix (they don't, but for argument's sake), evicting that suffix from cache between tasks would save <0.5s of prefill — irrelevant noise.
+- Codex's transcript growth is task-specific and accrues at ~1.8K tokens/turn warm hit + ~few-hundred cold tail, again with no cross-task collision opportunity.
+
+The per-task reset was conservative-by-default; v2 makes the default match the actual measurement need.
+
+### 15.4 Phase-6 sweep uses v2 architecture
+
+Round 4a baseline (Phase 6 in §10 sequencing) runs with `--warmup-policy round_start`. Output: `output/track_b_e2e_v4a/round_0/`. Expected vs Round 4a v1 (per-task): ~73 minutes saved per round, decode share unchanged or slightly higher (cache stays warmer across the round, so warm-turn hit rates trend toward 100%), task correctness unchanged.
