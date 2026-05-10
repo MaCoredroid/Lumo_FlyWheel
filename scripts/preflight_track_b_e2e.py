@@ -173,25 +173,37 @@ def _codex_command_smoke(args: argparse.Namespace) -> dict[str, Any]:
         path = shutil.which(command[0])
         if path is None:
             return {"ok": False, "reason": "not_found", "command": redacted_command}
+        # Codex CLI 0.128.0 hangs when its stdout is a subprocess.PIPE
+        # (likely a TTY/output-buffer detection edge case where the
+        # logger blocks waiting for a tty-style write). Routing stdout
+        # and stderr through real files lets the process complete in
+        # the few seconds it should take.
+        stdout_path = root / "codex_smoke_stdout.log"
+        stderr_path = root / "codex_smoke_stderr.log"
         try:
-            result = subprocess.run(
-                command,
-                cwd=workspace,
-                text=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=args.codex_smoke_timeout_s,
-                env={**os.environ, "OPENAI_API_KEY": args.codex_api_key, "OPENAI_BASE_URL": args.codex_endpoint},
-            )
+            with stdout_path.open("w", encoding="utf-8") as out_fh, stderr_path.open(
+                "w", encoding="utf-8"
+            ) as err_fh:
+                result = subprocess.run(
+                    command,
+                    cwd=workspace,
+                    text=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=out_fh,
+                    stderr=err_fh,
+                    timeout=args.codex_smoke_timeout_s,
+                    env={**os.environ, "OPENAI_API_KEY": args.codex_api_key, "OPENAI_BASE_URL": args.codex_endpoint},
+                )
         except subprocess.TimeoutExpired:
             return {"ok": False, "reason": "timeout", "command": redacted_command}
+        stdout_text = stdout_path.read_text(encoding="utf-8", errors="replace")
+        stderr_text = stderr_path.read_text(encoding="utf-8", errors="replace")
         return {
             "ok": result.returncode == 0,
             "returncode": result.returncode,
             "command": redacted_command,
-            "stdout_tail": result.stdout[-2000:],
-            "stderr_tail": result.stderr[-2000:],
+            "stdout_tail": stdout_text[-2000:],
+            "stderr_tail": stderr_text[-2000:],
             "trace_out_created": trace_out.is_file(),
         }
 
