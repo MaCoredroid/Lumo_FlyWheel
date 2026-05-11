@@ -1,6 +1,6 @@
 # Track B Round 4a Closeout — Measurement-Protocol Fix
 
-Generated: 2026-05-10
+Generated: 2026-05-10 (amended 2026-05-11 with two-number framing — see §11)
 Status: PASS (acceptance criteria §9 met or exceeded)
 
 Companion to:
@@ -10,10 +10,14 @@ Companion to:
 
 ## 1. Headline
 
+Two numbers, each answering a different question — see §11 for the framing rationale and the per-cohort detail. **For technique comparison (Round 4b drafter work) anchor on clean wallclock; for deployability decisions report operational alongside.**
+
 | Metric | v3 (Round 3) | v4a v2 (Round 4a) | Δ |
 |---|---:|---:|---:|
-| Median wallclock | 95.4 s | **19.4 s** | **−79.7 %** |
-| Aggregate wallclock | 1,257 s | **236 s** | **−81.2 %** |
+| **Clean** sample-median wallclock (rc=0 attempts only) | 104.3 s | **15.6 s** | **−85.0 %** |
+| **Operational** sample-median wallclock (all measured attempts) | 95.4 s | **19.4 s** | −79.7 % |
+| Operational aggregate (sum of per-task medians, all 13 tasks) | 1,257 s | **236 s** | −81.2 % |
+| Clean aggregate (sum of per-task medians, clean-eligible tasks only) | 1,072 s (10 tasks) | **193 s** (11 tasks) | −82.0 % |
 | Aggregate decode share | **8.1 %** (measured) | **66.8 %** | **+58.7 pp** |
 | Tool-call regime decode share | 7.8 % | 66.2 % | +58.4 pp |
 | Reasoning regime decode share | 82.7 % | 76.1 % | −6.6 pp |
@@ -21,6 +25,8 @@ Companion to:
 | Tasks completed | 13 / 13 | 13 / 13 | 0 |
 | Sample hash | `98c5e2bf...` | match | match |
 | Runtime config hash | `sha256:ec34a299...` | match | match |
+
+Side-finding: in v3 the **clean median is *higher* than operational** because zero-token failures and successes both paid the same ~90 s cold prefill, and the quirk-affected cluster was if anything slightly faster than the longer real-work attempts. In v4a the inversion is normal — quirk failures do add ~3.8 s to the per-task median because each failed retry pays its own per-task-tail prefill (~5-10 s each).
 
 **Round 4a is now the canonical baseline for Round 4b drafter work.** v3 outputs preserved at `output/track_b_e2e_v3/round_3/` for historical comparison.
 
@@ -162,3 +168,93 @@ OPENAI_API_KEY=EMPTY .venv/bin/python scripts/run_track_b_e2e_round.py --round <
 - Per-task v3 baseline (preserved): `output/track_b_e2e_v3/round_3/`
 - Codex timeout runbook: `docs/runbook/track-b-codex-timeout-config.md`
 - Per-turn proxy capture: `/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl` (continuous; v4a turns are entries with `ts_request_received` between `2026-05-10T21:55:16Z` and `2026-05-10T22:15:43Z`)
+- Two-number summary artifact (added 2026-05-11): `output/track_b_e2e_v4a/round_0/round_summary_clean.json` (schema `lumo.track_b.e2e_round_summary_clean.v1`)
+
+## 11. Two-number framing — clean vs operational wallclock (added 2026-05-11)
+
+### 11.1 The two numbers
+
+The Codex 0.128.0 zero-token quirk (closeout §6) still fires at non-trivial rates even with round-start warmup. To stop it from corrupting Round 4b drafter comparisons while remaining honest about deployability, we report two numbers per round, each answering a different question.
+
+| Metric | Definition | What it answers |
+|---|---|---|
+| **Clean wallclock** | sample median (and per-task aggregate) over attempts where `zero_token_retry_count == 0` AND codex emitted real output | Underlying inference performance — drafter, prefill, regime mix. Use this for round-over-round technique comparison. |
+| **Operational wallclock** | sample median (and per-task aggregate) over every measured attempt, including failed retries | Deployment reality — what a user running this Codex version experiences. Use this for "should we ship X" decisions. |
+
+The runner has always recorded `zero_token_retry_count` in `runner_metadata.json`. The new authoritative classifier (§11.2) also reads `codex_stdout.log` to verify the attempt actually produced output, so the distinction holds even on v3 where `--zero-token-retries=0`.
+
+Cohort labels in the new artifact:
+- **clean** — first attempt succeeded, real output produced
+- **retry_recovered** — codex aborted with zero output one or more times, then a subsequent retry succeeded
+- **retry_exhausted** — all 4 codex spawns (1 + 3 retries) returned zero output; no real codex work happened
+- **zero_token_no_retry** — v3 case: `--zero-token-retries=0`, codex aborted with zero output, no retry attempted
+
+### 11.2 Implementation
+
+`scripts/build_track_b_e2e_clean_wallclock_summary.py` is a recompute pass (no re-run of any task). Walks `output/track_b_e2e_<x>/round_<N>/*__*/run_*/runner_metadata.json`, classifies each measured attempt (cold attempt 1 is excluded per existing convention), produces `round_summary_clean.json` next to the existing `round_summary.json`. Schema: `lumo.track_b.e2e_round_summary_clean.v1`.
+
+Output includes per-task rows with both medians and the cohort breakdown so a reader can see which tasks the clean median is built from. Tasks with zero clean attempts in the measured cohort are listed at the round level and excluded from the clean sample median (so the metric isn't fabricated from quirk-affected attempts).
+
+The "quirk_overhead" field reports the difference apples-to-apples — operational aggregate restricted to the same task set as clean (excluding the zero-clean tasks), minus clean aggregate. This isolates the real per-task wallclock cost of the quirk from the structural fact that some tasks happened to never produce a clean attempt.
+
+### 11.3 Caveats (documented inline in the artifact)
+
+- **"Clean" still includes server-side prefill cost from someone else's failed retry.** vLLM has no signal that codex disconnected mid-SSE, so it pays full prefill on retry-exhausted attempts too. Those server-seconds are not double-counted into the clean attempts that follow them — clean reports per-attempt user-visible wallclock only.
+- **Don't anchor solely on clean.** If a Round 4b config makes the quirk worse (e.g., MTP-1 changes streaming-event shape and codex flips more often), clean-only reporting would hide that regression. Always report both.
+- **The classifier requires output_tokens to be inspectable.** For runs without `codex_stdout.log` (none in our pipeline today, but possible if logging changes), the script falls back to `zero_token_retry_count` alone, which under-detects v3-style zero-token attempts.
+
+### 11.4 Two-number numbers across the v3 and v4a baselines
+
+| Metric | v3 (Round 3) | v4a (Round 4a) |
+|---|---:|---:|
+| Operational sample-median wallclock | 95.4 s | 19.4 s |
+| Clean sample-median wallclock | **104.3 s** | **15.6 s** |
+| Operational aggregate (sum-of-per-task-medians, all 13 tasks) | 1,257 s | 236 s |
+| Clean aggregate (sum-of-per-task-medians, clean-eligible tasks) | 1,072 s (10 tasks) | 193 s (11 tasks) |
+| Tasks with zero clean measured attempts | 3 / 13 (`multi-tool-transaction-repair`, `plugin-scaffold-alignment`, `responses-sdk-adapter-cutover`) | 2 / 13 (`responses-sdk-adapter-cutover`, `skill-router-contract-upgrade`) |
+| Cohort.clean attempts | 14 / 39 (36 %) | 18 / 39 (46 %) |
+| Cohort.retry_recovered attempts | 0 (no retries configured) | 16 / 39 (41 %) |
+| Cohort.retry_exhausted attempts (no real output) | 25 / 39 (64 %) | 5 / 39 (13 %) |
+
+Reading these together:
+
+- **The "decode share 8 % → 67 %" headline understated the underlying technique improvement.** Clean median improved 104 s → 15.6 s = **−85 %**, vs operational's −80 %. That extra 5 pp is the Codex-quirk-noise that the operational number was absorbing.
+- **The Round 4a measurement protocol fix didn't only shift wallclock — it dramatically improved attempt success rate too.** Cohort.clean rate went 36 % → 46 % and cohort.retry_exhausted went 64 % → 13 %, even though the underlying Codex bug is unchanged. Round-start warmup eliminating cold prefill makes the SSE-stream conditions less likely to trigger the quirk in the first place. Worth more investigation but not blocking.
+- **Two tasks remain quirk-fragile in v4a** (`responses-sdk-adapter-cutover`, `skill-router-contract-upgrade`). They need a Codex-side fix or a higher --repeat to become reliably measurable. Until then, treat their operational medians as upper bounds and exclude them from clean aggregate (which the script does automatically).
+
+### 11.5 Reproduce
+
+```bash
+# Re-run the clean-wallclock pass (idempotent, no re-measurement)
+.venv/bin/python scripts/build_track_b_e2e_clean_wallclock_summary.py \
+  --round-dir output/track_b_e2e_v4a/round_0 --max-retries 3
+.venv/bin/python scripts/build_track_b_e2e_clean_wallclock_summary.py \
+  --round-dir output/track_b_e2e_v3/round_3 --max-retries 0
+```
+
+Outputs: `round_summary_clean.json` next to each existing `round_summary.json`.
+
+### 11.6 What this enables for Round 4b
+
+When measuring drafter A vs drafter B (or any technique change), report:
+
+```
+                       drafter_A       drafter_B
+clean_sample_median    <X> s           <Y> s          ← headline
+operational_median     <X'> s          <Y'> s         ← deployability
+clean_decode_share     <P>%            <Q>%
+quirk_rate             <%>             <%>            ← regression check
+```
+
+Anchor the win/loss call on `clean_sample_median`. If `quirk_rate` differs materially between A and B, investigate before publishing — that's a confound that can swap the apparent winner.
+
+### 11.7 Why a Codex-side fix is deferred
+
+The zero-token quirk is upstream-known. Issue patterns matching our symptom shape:
+
+- `openai/codex-plugin-cc#264` — "streaming `.output` drain disconnects mid-turn"
+- `NousResearch/hermes-agent#5732` — "Codex Responses stream completes with empty output after tool-call events"
+- `NousResearch/hermes-agent#5736` — "openai-codex provider returns empty response.output from agent loop"
+- `openai/codex#11502` — repeated stream-disconnect thread on 0.128.x
+
+Track B is not the only consumer hitting it. Two reasons we don't block on a fix: (a) `--zero-token-retries=3` is sufficient to recover correctness in 13/13 tasks, and (b) clean wallclock isolates technique work from quirk variance. We will revisit if a Codex 0.129+ release lands a fix or if a workaround surfaces upstream.
