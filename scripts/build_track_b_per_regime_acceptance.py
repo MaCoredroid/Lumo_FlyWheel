@@ -132,6 +132,12 @@ def load_rows(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _fmt(value: float | None, spec: str, width: int) -> str:
+    if value is None:
+        return f"{'n/a':>{width}}"
+    return f"{format(value, spec):>{width}}"
+
+
 def format_table(summary: dict[str, Any]) -> str:
     header = f"{'regime':<14} {'rows':>5} {'agg accept':>11} {'p50 accept':>11} {'p50 tps':>9} {'tokens out':>11}"
     lines = [header, "-" * len(header)]
@@ -141,16 +147,16 @@ def format_table(summary: dict[str, Any]) -> str:
         tps = stats.get("decode_tps_p50")
         lines.append(
             f"{regime:<14} {stats['row_count']:>5} "
-            f"{agg if agg is None else f'{agg:.3f}':>11} "
-            f"{p50 if p50 is None else f'{p50:.3f}':>11} "
-            f"{tps if tps is None else f'{tps:.2f}':>9} "
+            f"{_fmt(agg, '.3f', 11)} "
+            f"{_fmt(p50, '.3f', 11)} "
+            f"{_fmt(tps, '.2f', 9)} "
             f"{stats['completion_tokens_total']:>11}"
         )
     lines.append("-" * len(header))
     agg = summary.get("aggregate_accepted_per_draft_token")
     lines.append(
         f"{'AGGREGATE':<14} {summary['row_count']:>5} "
-        f"{agg if agg is None else f'{agg:.3f}':>11}"
+        f"{_fmt(agg, '.3f', 11)}"
     )
     return "\n".join(lines)
 
