@@ -265,3 +265,244 @@ find output/track_b_e2e_v4a/round_0/transcript-merge-regression__v1-clean-baseli
 - Prompt per attempt: `output/track_b_e2e_v4a*/round_*/*/run_*/prompt.md`
 - Runner metadata (including `codex_exit_code`, `codex_command_template`, `elapsed_s`): `output/track_b_e2e_v4a*/round_*/*/run_*/runner_metadata.json`
 - Codex command template (verbatim): see Round 4a closeout §9 reproduce block
+
+## 10. Fix-investigation addendum (added 2026-05-11, post-audit)
+
+Tried the hypotheses in §6.2 against a freshly cloned
+`incident-evidence-synthesis/run_03` workspace. The investigation produced
+one important **correction** to the audit headline and one **refined
+diagnosis** of where the agent loop actually breaks down.
+
+### 10.1 Correction — codex `exec` DOES iterate (the audit's "1 turn"
+was a misreading of the event model)
+
+The bench-proxy capture's per-call request count is the ground truth for
+"how many model calls per task." Recomputed across all 52 v4a runs:
+
+| Inference calls per run | Run count |
+|---:|---:|
+| 0 | 3 |
+| 1 | 14 |
+| 2 | 15 |
+| 3 | 11 |
+| 4 | 5 |
+| 5 | 2 |
+| 6 | 2 |
+
+**Mean: 2.29 model calls per run.** So codex IS making multiple model
+calls per task — the agent loop is functioning structurally.
+
+What I misread earlier: in the codex_stdout event stream, `turn.started`
+/ `turn.completed` brackets ONE codex *task* (one user message and all
+the model calls + tool executions it triggers), not one model call. The
+codex "turn" is the *outer* agent loop, not a single LLM round. Inside
+one `turn.started → turn.completed` bracket, codex can issue multiple
+`/v1/responses` calls — each model call → each tool execution →
+back-feed → next model call. The stdout shows all the tool calls of the
+turn as flat `item.completed command_execution` events.
+
+Concrete example: `fanout-fullstack-release-blocker/run_02` had 1 codex
+turn, 5 inference calls, 5 tool executions (5 `cat`/`find` invocations).
+Each LLM round emitted one read-only shell command, the result fed
+back, next round emitted the next command, ... after 5 rounds the
+model emitted no more tool calls and codex finished the turn.
+
+**The audit's §1 headline ("mean turns 1.00") is still factually
+correct for codex-turn-level events**, but the framing implied "1 model
+call per task." The real number is 2.29 model calls per task.
+
+### 10.2 Refined diagnosis — the model gives up, not codex
+
+With codex iterating up to 6 times per task, the bottleneck is **what
+the model emits per iteration**. The pattern across all 208 runs:
+
+- Per iteration: one read-only command (`cat`, `find`, `ls`, `head`).
+- After 1-5 iterations: the model emits no more tool calls, the codex
+  turn closes, and codex exits.
+- Zero `apply_patch` calls across all 208 runs.
+- Zero text in `agent_message` items (model emits the structural
+  wrapper but no commentary).
+
+So the model:
+1. Reads `prompt.md` (turn 1).
+2. Maybe runs `find` or `ls` to look around (turn 2-4).
+3. Maybe `cat`s a few files (turn 5).
+4. Decides it's done and emits no further tool call.
+
+It never writes a file. It never plans (the `update_plan` tool is
+available but unused). It never tries `apply_patch` even though the
+system prompt instructs it to. It produces no agent-message text.
+
+**This is a model-capability failure, not a codex-loop failure.**
+qwen3.5-27b is responding to "Read the task prompt and complete it"
+by reading the prompt and then halting — it does not enter the
+autonomous-coding mode the Codex CLI's tool surface is designed for.
+The most directly comparable signal: the system prompt explicitly tells
+the model `Use the apply_patch tool to edit files` with a literal
+JSON example, and 208/208 runs ignore it.
+
+### 10.3 Captured request body — what codex actually sends to the model
+
+Using `scripts/capture_codex_request_body.py` against a fresh codex
+invocation revealed the full request shape. Key parameters:
+
+| Field | Value | Notes |
+|---|---|---|
+| `model` | `qwen3.5-27b` | Local OSS, proxied via 8022 |
+| `max_output_tokens` | `null` | No token limit — model decides when to stop |
+| `max_tool_calls` | `null` | No tool-call cap |
+| `parallel_tool_calls` | `false` | Sequential only |
+| `tool_choice` | `auto` | Model chooses whether to call tools |
+| `temperature` | `null` | Uses provider default (~0.6) |
+| `reasoning` | `null` | Reasoning effort not specified |
+| `stream` | `true` | SSE streaming |
+| Tools | 24 | `exec_command`, `update_plan`, `view_image`, sub-agent suite, MCP connectors (github/gmail/drive/calendar/notion), web_search, image_generation |
+| Instructions | 20,771 chars | Canonical Codex CLI system prompt |
+| Input | 3 messages | Permissions/skills/plugins block + AGENTS.md + env context, then the user message |
+
+The user message is literally: `Read the task prompt at /tmp/.../prompt.md and complete it in this workspace.`
+
+There is **no `apply_patch` tool in the tool list**. The Codex CLI
+expects the model to invoke apply_patch via `exec_command(cmd="apply_patch <<EOF ... EOF")` (per the system prompt's
+instructional example). qwen3.5-27b never attempts this.
+
+### 10.4 Direct replay against vLLM confirms the model self-stops
+
+Replaying the captured request body directly against vLLM (with
+`max_output_tokens=2048` to rule out token limits) returned:
+
+```
+status: completed                          ← model decided it was done
+incomplete_details: None                   ← NOT truncated
+usage: input=69927 output=58 reasoning=0
+output[0] type=reasoning: "I need to read the task prompt first to understand what needs to be done."
+output[1] type=function_call name=exec_command arguments={"cmd": "cat /tmp/.../prompt.md"}
+```
+
+The model emits 58 tokens total: one short reasoning sentence and one
+`cat prompt.md` tool call. It explicitly signals `status: completed`
+— the model considers this a complete response. There is no token
+limit forcing this; the model voluntarily stops after one tool call.
+
+In the agent loop, codex then feeds the cat output back. Looking at
+multi-call runs (mean 2.29), the model continues this pattern: one
+tool call per round, terminating after 1-5 rounds with no apply_patch
+ever attempted.
+
+### 10.5 Fix candidates tested
+
+Tested 7 variants against the same `incident-evidence-synthesis`
+workspace. **Variants A2 and C (RUST_LOG=info) both showed the same
+1-tool-per-call pattern.** Variants B, D, E, F, G, H, I, J, K all
+either reproduced the pattern, hit vLLM SSE decode errors when
+bypassing the bench proxy, or got stuck pre-inference (rc=124 timeout
+with 0 proxy calls).
+
+| Variant | Change | Outcome |
+|---|---|---|
+| A2 | Baseline reproduction (current template) | 1 turn, 1 tool call (`cat`), 74 output tokens, 0 patches, 0 files written. Reproduced. |
+| B | + `--dangerously-bypass-approvals-and-sandbox` | rc=0 but 0 proxy calls, 0 tokens (suspected codex CLI session-state issue after this flag, see §10.6) |
+| C | + `RUST_LOG=info` | Same as A2. Tracing didn't change behavior. |
+| D | + sandbox bypass + stronger user prompt | rc=0, 0 proxy calls |
+| E | Direct vLLM endpoint (bypass bench proxy) | SSE decode error — bench proxy is structurally required |
+| F | Direct vLLM + autonomous prompt | Same SSE error |
+| G | Inline full prompt + explicit apply_patch heredoc instruction | Hung 7 min, 0 proxy calls, killed |
+| H | Compact strong prompt | Hung 4 min, rc=124, 0 proxy calls |
+| I | `--ephemeral` + baseline prompt | rc=124, 2 stdout lines, 0 proxy calls |
+| J | + `OPENAI_BASE_URL` env (matching runner exactly) | rc=0 but 0 proxy calls |
+| K | `--ignore-user-config` + explicit sandbox/approval | rc=124, 0 proxy calls |
+
+None of the prompt-strengthening variants successfully got the model
+to write files, because after variant A2 the codex CLI entered an
+intermittent broken state in my session (variants B-K all failed to
+reach the proxy entirely). The A2 success establishes that the
+current command template DOES make at least one inference call when
+codex is in a clean state.
+
+### 10.6 Aside — codex CLI intermittent hang after first run
+
+In my session, codex `exec` consistently entered a broken state after
+the first successful invocation, with subsequent invocations producing
+no proxy calls and exiting either rc=124 (timeout) or rc=0 with just
+the empty `thread.started → turn.started → turn.completed` skeleton
+(input_tokens=0, output_tokens=0). The codex stderr showed only the
+expected `/v1/models 403` warning. This may be specific to my host
+state (potentially `~/.codex/state_5.sqlite` accumulating something,
+or the codex CLI not handling rapid sequential `exec` invocations
+cleanly without a session reset). The Track B sweep runner avoids this
+because each task is a fresh subprocess in an isolated workspace with
+its own session, but it's worth noting for anyone trying to
+hand-validate fixes interactively.
+
+### 10.7 Updated recommended fix sequence
+
+Given the refined diagnosis (model is the bottleneck, not the codex
+loop), priority order changes:
+
+1. **Verify with a stronger model first.** Before any harness changes,
+   run the same v4a measurement protocol with a known-strong agentic
+   coding model (e.g., gpt-5.5 via cloud, or a larger local model if
+   available). Acceptance criterion: at least 3/13 tasks produce ≥ 1
+   `apply_patch` call and ≥ 1 written artifact. If a stronger model
+   doesn't change behavior, the issue is in the harness; if it does,
+   the issue is qwen3.5-27b for this workload.
+2. **Wire family graders into round summary** (unchanged from §6.3).
+   Required regardless of model choice — without this, the next
+   regression hides.
+3. **If the stronger-model test confirms qwen3.5-27b is the
+   bottleneck:** options are (a) prompt-engineer the user message
+   harder (system-prompt-level instructions to use apply_patch
+   aggressively — needs codex CLI work to inject), (b) finetune
+   qwen3.5-27b on agentic-loop traces, (c) use a different OSS
+   model that has agentic tuning, (d) accept qwen3.5-27b's limits
+   and report results against its actual behavior with milestone
+   scoring.
+4. **Re-baseline only after the model question is settled.** Until
+   then, all wallclock comparisons are between configurations that
+   produce no real agent work.
+
+### 10.8 What the audit still gets right
+
+- 208 / 208 runs produced zero `apply_patch` calls and zero files
+  written. The benchmark is producing no real agent output. **This
+  finding is unchanged.**
+- `tasks_correctness_deferred_to_exit_code: 13` is still the
+  load-bearing shortcut that lets this state persist undetected.
+- Round 3 / 4a / 4b wallclock measurements are still measuring "codex
+  reads prompt, runs 1-5 reads, exits." The mechanism is now better
+  understood: codex IS iterating, but per-iteration the model emits
+  one read-only command and the cumulative behavior is trivially short
+  exploration with no writes.
+- Stop optimization rounds until the model question is settled and
+  graders are wired in.
+
+### 10.9 Reproduce the corrected proxy-call-count metric
+
+```bash
+.venv/bin/python -c "
+import json, collections
+from pathlib import Path
+from datetime import datetime, timezone, timedelta
+
+proxy_rows = [json.loads(l) for l in open('/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl') if l.strip()]
+
+base = Path('output/track_b_e2e_v4a/round_0')
+calls = []
+for task_dir in base.glob('*__v1-clean-baseline'):
+    for run_dir in sorted(task_dir.glob('run_*')):
+        m = json.loads((run_dir / 'runner_metadata.json').read_text())
+        end_iso = m.get('recorded_at'); elapsed = float(m.get('elapsed_s', 0))
+        if not end_iso: continue
+        end_t = datetime.fromisoformat(end_iso.replace('Z','+00:00'))
+        start_t = end_t - timedelta(seconds=elapsed + 5)
+        end_pad = end_t + timedelta(seconds=2)
+        n = sum(1 for r in proxy_rows if r.get('ts_request_received','')
+                and start_t <= datetime.fromisoformat(r['ts_request_received'].replace('Z','+00:00')) <= end_pad)
+        calls.append(n)
+dist = collections.Counter(calls)
+print('per-run inference call distribution:', dict(sorted(dist.items())))
+print(f'mean: {sum(calls)/len(calls):.2f}')
+"
+```
+
+Expected output: distribution `{0: 3, 1: 14, 2: 15, 3: 11, 4: 5, 5: 2, 6: 2}`, mean ~2.29.
