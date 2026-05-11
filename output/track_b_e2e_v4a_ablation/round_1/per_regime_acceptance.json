@@ -1,0 +1,37 @@
+{
+  "aggregate_accepted_per_draft_token": 0.5452313643803005,
+  "aggregate_spec_decode_num_accepted_tokens": 7329,
+  "aggregate_spec_decode_num_draft_tokens": 13442,
+  "regimes": {
+    "reasoning": {
+      "accepted_per_draft_token_aggregate": 0.2141119221411192,
+      "accepted_per_draft_token_p50": 0.21428571428571427,
+      "accepted_per_draft_token_p90": 0.3962962962962963,
+      "completion_tokens_total": 174,
+      "decode_sum_s_total": 15.941251982934773,
+      "decode_tps_aggregate": 10.915077447258739,
+      "decode_tps_p50": 10.93375901483691,
+      "decode_tps_p90": 19.35246206039272,
+      "prompt_tokens_total": 556482,
+      "row_count": 8,
+      "spec_decode_num_accepted_tokens_total": 88,
+      "spec_decode_num_draft_tokens_total": 411
+    },
+    "tool-call": {
+      "accepted_per_draft_token_aggregate": 0.5556749290154247,
+      "accepted_per_draft_token_p50": 0.5590855908559086,
+      "accepted_per_draft_token_p90": 0.7796610169491526,
+      "completion_tokens_total": 8604,
+      "decode_sum_s_total": 269.88846146222204,
+      "decode_tps_aggregate": 31.87983640865786,
+      "decode_tps_p50": 34.984977578503596,
+      "decode_tps_p90": 48.90379188883557,
+      "prompt_tokens_total": 5445351,
+      "row_count": 78,
+      "spec_decode_num_accepted_tokens_total": 7241,
+      "spec_decode_num_draft_tokens_total": 13031
+    }
+  },
+  "row_count": 86,
+  "schema": "lumo.track_b.per_regime_acceptance.v1"
+}

@@ -1,0 +1,41 @@
+{
+  "aggregate_wallclock_s": 259.634,
+  "auto_research_agent_recommendation": "n/a",
+  "config_delta_vs_prior_round": "ablation point \u2014 runtime flags differ from prior round; container/sample/runtime_config_hash unchanged",
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "diagnosis_distribution": {
+    "mixed": 13
+  },
+  "diagnostic_aggregate_wallclock_s": 0,
+  "diagnostic_median_wallclock_s": null,
+  "diagnostic_only": false,
+  "diagnostic_task_count": 0,
+  "duplicate_trusted_task_ids": [],
+  "hypothesis": "Round 4b ablation point c_t1_t2_t3: cumulative technique enablement on v4a measurement protocol. T-flag state via runtime flags file.",
+  "median_wallclock_s": 20.301,
+  "next_round_proposal": "see closeout",
+  "regime_share_aggregate": {},
+  "round": 3,
+  "runtime_config_hash": "sha256:ec34a2999b1331919cd3fcf503ff2aa529ece0134c2dbbbe6bb17d1b6651303d",
+  "runtime_config_hash_mismatch_count": 0,
+  "runtime_config_hash_mismatch_task_ids": [],
+  "sample_hash": "98c5e2bf79687b7f7f1f0d88bfcbb6179f5ded30576d34de8dac81fb144d2d1b",
+  "sample_hash_mismatch_count": 0,
+  "schema": "lumo.track_b.e2e_round_summary.v1",
+  "task_summary_round_mismatch_count": 0,
+  "task_summary_round_mismatch_task_ids": [],
+  "task_summary_schema_mismatch_count": 0,
+  "task_summary_schema_mismatch_task_ids": [],
+  "tasks_completed": 13,
+  "tasks_correctness_deferred_to_exit_code": 13,
+  "tasks_correctness_passed": 13,
+  "trusted_task_count": 13,
+  "trusted_unique_task_count": 13,
+  "unexpected_trusted_task_ids": [],
+  "untrusted_task_count": 0,
+  "wallclock_delta_vs_prior_round_s": null
+}

@@ -1,0 +1,287 @@
+{
+  "clean": {
+    "aggregate_wallclock_s": 170.642,
+    "caveat": "'Clean' means 'no quirk overhead visible in this attempt's runner elapsed_s'. The vLLM server still pays prefill cost on failed-retry codex calls in OTHER attempts; that server-side cost is not attributed back to clean attempts.",
+    "definition": "Same aggregation as operational, but per-task medians are computed only over attempts where zero_token_retry_count==0. Tasks with zero clean attempts are excluded from sample_median and from aggregate. Anchors technique comparison without quirk-incidence variance.",
+    "sample_median_wallclock_s": 16.186,
+    "sum_of_all_clean_attempts_s": 268.359,
+    "tasks_excluded_from_sample_median": [
+      "fanout-fullstack-release-blocker/v1-clean-baseline",
+      "multi-tool-transaction-repair/v1-clean-baseline",
+      "skill-router-contract-upgrade/v1-clean-baseline"
+    ]
+  },
+  "cohort_counts": {
+    "anomaly": 0,
+    "clean": 16,
+    "retry_exhausted": 8,
+    "retry_recovered": 15,
+    "zero_token_no_retry": 0
+  },
+  "cohort_pct_of_measured_attempts": {
+    "anomaly": 0.0,
+    "clean": 41.0,
+    "retry_exhausted": 20.5,
+    "retry_recovered": 38.5,
+    "zero_token_no_retry": 0.0
+  },
+  "computed_at": "2026-05-11T04:59:53Z",
+  "max_retries_assumed": 3,
+  "operational": {
+    "aggregate_wallclock_s": 253.682,
+    "definition": "sample_median = median across per-task medians (matches existing round_summary.json semantics). aggregate = sum of per-task medians (proxies sample wallclock for one pass through 13 tasks at per-task representative cost). sum_of_all_measured_attempts = total runner subprocess seconds (3 attempts/task \u00d7 13 tasks).",
+    "sample_median_wallclock_s": 19.421,
+    "sum_of_all_measured_attempts_s": 862.751
+  },
+  "per_task": [
+    {
+      "clean_attempt_count": 1,
+      "clean_attempt_elapsed_s": [
+        22.413
+      ],
+      "clean_median_wallclock_s": 22.413,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        22.413,
+        38.599,
+        19.819
+      ],
+      "operational_median_wallclock_s": 22.413,
+      "retry_exhausted_attempt_count": 1,
+      "retry_recovered_attempt_count": 1,
+      "task_id": "dead-flag-reachability-audit/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 0,
+      "clean_attempt_elapsed_s": [],
+      "clean_median_wallclock_s": null,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        20.275,
+        21.143,
+        24.922
+      ],
+      "operational_median_wallclock_s": 21.143,
+      "retry_exhausted_attempt_count": 2,
+      "retry_recovered_attempt_count": 1,
+      "task_id": "fanout-fullstack-release-blocker/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 2,
+      "clean_attempt_elapsed_s": [
+        12.989,
+        18.849
+      ],
+      "clean_median_wallclock_s": 15.919,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        23.303,
+        12.989,
+        18.849
+      ],
+      "operational_median_wallclock_s": 18.849,
+      "retry_exhausted_attempt_count": 0,
+      "retry_recovered_attempt_count": 1,
+      "task_id": "incident-evidence-synthesis/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 0,
+      "clean_attempt_elapsed_s": [],
+      "clean_median_wallclock_s": null,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        19.371,
+        22.459,
+        19.421
+      ],
+      "operational_median_wallclock_s": 19.421,
+      "retry_exhausted_attempt_count": 3,
+      "retry_recovered_attempt_count": 0,
+      "task_id": "multi-tool-transaction-repair/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 1,
+      "clean_attempt_elapsed_s": [
+        15.596
+      ],
+      "clean_median_wallclock_s": 15.596,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        15.173,
+        15.596,
+        20.473
+      ],
+      "operational_median_wallclock_s": 15.596,
+      "retry_exhausted_attempt_count": 1,
+      "retry_recovered_attempt_count": 1,
+      "task_id": "plugin-scaffold-alignment/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 3,
+      "clean_attempt_elapsed_s": [
+        23.837,
+        12.531,
+        22.929
+      ],
+      "clean_median_wallclock_s": 22.929,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        23.837,
+        12.531,
+        22.929
+      ],
+      "operational_median_wallclock_s": 22.929,
+      "retry_exhausted_attempt_count": 0,
+      "retry_recovered_attempt_count": 0,
+      "task_id": "policy-aware-request-resolution/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 2,
+      "clean_attempt_elapsed_s": [
+        16.483,
+        22.296
+      ],
+      "clean_median_wallclock_s": 19.389,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        25.905,
+        16.483,
+        22.296
+      ],
+      "operational_median_wallclock_s": 22.296,
+      "retry_exhausted_attempt_count": 0,
+      "retry_recovered_attempt_count": 1,
+      "task_id": "release-note-to-plan-translation/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 1,
+      "clean_attempt_elapsed_s": [
+        12.1
+      ],
+      "clean_median_wallclock_s": 12.1,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        16.436,
+        12.1,
+        22.258
+      ],
+      "operational_median_wallclock_s": 16.436,
+      "retry_exhausted_attempt_count": 0,
+      "retry_recovered_attempt_count": 2,
+      "task_id": "responses-sdk-adapter-cutover/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 3,
+      "clean_attempt_elapsed_s": [
+        16.918,
+        16.452,
+        9.123
+      ],
+      "clean_median_wallclock_s": 16.452,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        16.918,
+        16.452,
+        9.123
+      ],
+      "operational_median_wallclock_s": 16.452,
+      "retry_exhausted_attempt_count": 0,
+      "retry_recovered_attempt_count": 0,
+      "task_id": "responsive-checkout-visual-regression/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 1,
+      "clean_attempt_elapsed_s": [
+        12.536
+      ],
+      "clean_median_wallclock_s": 12.536,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        115.734,
+        12.536,
+        21.932
+      ],
+      "operational_median_wallclock_s": 21.932,
+      "retry_exhausted_attempt_count": 0,
+      "retry_recovered_attempt_count": 2,
+      "task_id": "security-audit-hotfix-remediation/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 0,
+      "clean_attempt_elapsed_s": [],
+      "clean_median_wallclock_s": null,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        17.34,
+        15.926,
+        21.662
+      ],
+      "operational_median_wallclock_s": 17.34,
+      "retry_exhausted_attempt_count": 0,
+      "retry_recovered_attempt_count": 3,
+      "task_id": "skill-router-contract-upgrade/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 1,
+      "clean_attempt_elapsed_s": [
+        11.617
+      ],
+      "clean_median_wallclock_s": 11.617,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        13.956,
+        26.614,
+        11.617
+      ],
+      "operational_median_wallclock_s": 13.956,
+      "retry_exhausted_attempt_count": 0,
+      "retry_recovered_attempt_count": 2,
+      "task_id": "sqlalchemy-2-session-modernization/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    },
+    {
+      "clean_attempt_count": 1,
+      "clean_attempt_elapsed_s": [
+        21.689
+      ],
+      "clean_median_wallclock_s": 21.689,
+      "measured_attempt_count": 3,
+      "operational_attempt_elapsed_s": [
+        24.918,
+        26.754,
+        21.689
+      ],
+      "operational_median_wallclock_s": 24.918,
+      "retry_exhausted_attempt_count": 1,
+      "retry_recovered_attempt_count": 1,
+      "task_id": "transcript-merge-regression/v1-clean-baseline",
+      "zero_token_no_retry_attempt_count": 0
+    }
+  ],
+  "quirk_overhead": {
+    "aggregate_s": 25.135,
+    "definition": "Apples-to-apples: sum operational per-task medians restricted to the same task set as clean (i.e., excluding tasks with zero clean attempts), then subtract clean.aggregate_wallclock_s. Approximates user-visible cost of the Codex 0.128.0 zero-token quirk on a per-task representative basis.",
+    "operational_aggregate_clean_eligible_s": 195.777,
+    "pct_of_operational_aggregate": 12.84
+  },
+  "round_dir": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_ablation/round_1",
+  "schema": "lumo.track_b.e2e_round_summary_clean.v1",
+  "task_count": 13,
+  "tasks_with_clean_attempt_count": 10,
+  "tasks_with_no_clean_attempt": [
+    "fanout-fullstack-release-blocker/v1-clean-baseline",
+    "multi-tool-transaction-repair/v1-clean-baseline",
+    "skill-router-contract-upgrade/v1-clean-baseline"
+  ]
+}

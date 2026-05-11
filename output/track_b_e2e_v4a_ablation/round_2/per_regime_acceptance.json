@@ -1,0 +1,51 @@
+{
+  "aggregate_accepted_per_draft_token": 0.551397997928892,
+  "aggregate_spec_decode_num_accepted_tokens": 7987,
+  "aggregate_spec_decode_num_draft_tokens": 14485,
+  "regimes": {
+    "reasoning": {
+      "accepted_per_draft_token_aggregate": 0.26705653021442494,
+      "accepted_per_draft_token_p50": 0.3,
+      "accepted_per_draft_token_p90": 0.4613333333333334,
+      "completion_tokens_total": 222,
+      "decode_sum_s_total": 15.20913556497544,
+      "decode_tps_aggregate": 14.59649031673014,
+      "decode_tps_p50": 14.643129932953677,
+      "decode_tps_p90": 30.0185491363026,
+      "prompt_tokens_total": 628164,
+      "row_count": 9,
+      "spec_decode_num_accepted_tokens_total": 137,
+      "spec_decode_num_draft_tokens_total": 513
+    },
+    "tool-call": {
+      "accepted_per_draft_token_aggregate": 0.5618379616375608,
+      "accepted_per_draft_token_p50": 0.577922077922078,
+      "accepted_per_draft_token_p90": 0.7696834026223217,
+      "completion_tokens_total": 9264,
+      "decode_sum_s_total": 282.6331378053874,
+      "decode_tps_aggregate": 32.777472846722276,
+      "decode_tps_p50": 36.195824736754396,
+      "decode_tps_p90": 48.09233408715674,
+      "prompt_tokens_total": 5935338,
+      "row_count": 85,
+      "spec_decode_num_accepted_tokens_total": 7850,
+      "spec_decode_num_draft_tokens_total": 13972
+    },
+    "unknown": {
+      "accepted_per_draft_token_aggregate": null,
+      "accepted_per_draft_token_p50": null,
+      "accepted_per_draft_token_p90": null,
+      "completion_tokens_total": 1,
+      "decode_sum_s_total": 0,
+      "decode_tps_aggregate": null,
+      "decode_tps_p50": null,
+      "decode_tps_p90": null,
+      "prompt_tokens_total": 69756,
+      "row_count": 1,
+      "spec_decode_num_accepted_tokens_total": 0,
+      "spec_decode_num_draft_tokens_total": 0
+    }
+  },
+  "row_count": 95,
+  "schema": "lumo.track_b.per_regime_acceptance.v1"
+}
