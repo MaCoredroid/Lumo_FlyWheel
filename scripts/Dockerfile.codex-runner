@@ -1,0 +1,27 @@
+# Codex task runner sandbox.
+# Each Track B v4a_v2 attempt spawns one container from this image with
+# the attempt's workspace bind-mounted as /workspace. Filesystem outside
+# /workspace is the container's read-only base layer + ephemeral fs;
+# bind-mount is the only path back to the host. Network is host (so codex
+# can reach the bench proxy on 127.0.0.1:8022 and the model can fetch
+# packages / browse the web / install tools mid-task).
+FROM python:3.12-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nodejs npm git curl wget ca-certificates bash sudo \
+        build-essential pkg-config \
+        jq less procps file \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @openai/codex@0.128.0
+
+# Standard scientific deps the v4a tasks commonly touch
+RUN python -m pip install --no-cache-dir --upgrade pip \
+ && python -m pip install --no-cache-dir \
+        pytest pytest-asyncio \
+        requests pyyaml tomli \
+        sqlalchemy alembic
+
+WORKDIR /workspace
+ENV PYTHONUNBUFFERED=1

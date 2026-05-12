@@ -18,7 +18,14 @@ WARMUP_SP_JSON="output/track_b_e2e_v4a/round_0/codex_system_prompt.json"
 ENDPOINT="http://127.0.0.1:8022/v1"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-CODEX_TEMPLATE='codex exec --json --skip-git-repo-check -C {workspace} -c '"'"'model_provider="local-proxy"'"'"' -c '"'"'model_providers.local-proxy={{name="local-proxy",base_url="{endpoint}",env_key="OPENAI_API_KEY",wire_api="responses",stream_idle_timeout_ms=600000}}'"'"' -c '"'"'model_reasoning_effort="high"'"'"' -c '"'"'model_supports_reasoning_summaries=true'"'"' -c '"'"'model_reasoning_summary="auto"'"'"' --model {model} "Read the task prompt at {prompt_file} and complete it in this workspace."'
+# Each codex attempt runs inside a `codex-runner:v1` container. The
+# attempt's workspace is bind-mounted to /workspace; --network=host gives
+# codex access to the proxy on 127.0.0.1:8022 and the open internet
+# (apt/pip/curl/etc. usable from inside the task). Filesystem outside
+# /workspace is the container's ephemeral overlay — codex cannot see the
+# host's main repo, other attempts' workspaces, or any docs/reports.
+UID_GID="$(id -u):$(id -g)"
+CODEX_TEMPLATE='docker run --rm --network=host -u '"$UID_GID"' -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c '"'"'model_provider="local-proxy"'"'"' -c '"'"'model_providers.local-proxy={{name="local-proxy",base_url="{endpoint}",env_key="OPENAI_API_KEY",wire_api="responses",stream_idle_timeout_ms=600000}}'"'"' -c '"'"'model_reasoning_effort="high"'"'"' -c '"'"'model_supports_reasoning_summaries=true'"'"' -c '"'"'model_reasoning_summary="auto"'"'"' --model {model} "Read the task prompt at /workspace/AGENTS.md and complete it in this workspace."'
 
 # Ensure runtime flags = all on (T2/T3/T4 enabled).
 docker exec lumo-vllm-track-b-suffix bash -lc 'printf "%s" "{\"T2\": false, \"T3\": false, \"T4\": false}" > /tmp/lumo_track_b_runtime_flags.json && cat /tmp/lumo_track_b_runtime_flags.json'
