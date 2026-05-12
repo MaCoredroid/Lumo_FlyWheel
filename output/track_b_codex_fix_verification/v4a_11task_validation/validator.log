@@ -1,0 +1,59 @@
+Running 13 tasks ...
+
+[1/13] dead-flag-reachability-audit starting at 03:43:21
+  -> tools=28 apply_patch=0 msgs=4 files=5 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[2/13] fanout-fullstack-release-blocker starting at 03:58:21
+  -> tools=32 apply_patch=0 msgs=7 files=9 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[3/13] incident-evidence-synthesis starting at 04:13:21
+  -> tools=24 apply_patch=0 msgs=14 files=2 out_tok=4251 rc=0 status=WROTE_FILES (761s)
+
+[4/13] multi-tool-transaction-repair starting at 04:26:02
+  -> tools=33 apply_patch=0 msgs=27 files=19 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[5/13] plugin-scaffold-alignment starting at 04:41:02
+  -> tools=23 apply_patch=0 msgs=15 files=6 out_tok=2448 rc=0 status=WROTE_FILES (742s)
+
+[6/13] policy-aware-request-resolution starting at 04:53:24
+  -> tools=37 apply_patch=0 msgs=23 files=8 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[7/13] release-note-to-plan-translation starting at 05:08:24
+  -> tools=24 apply_patch=0 msgs=5 files=8 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[8/13] responses-sdk-adapter-cutover starting at 05:23:24
+  -> tools=29 apply_patch=0 msgs=15 files=18 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[9/13] responsive-checkout-visual-regression starting at 05:38:24
+  -> tools=24 apply_patch=0 msgs=4 files=3 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[10/13] security-audit-hotfix-remediation starting at 05:53:24
+  -> tools=22 apply_patch=0 msgs=3 files=3 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[11/13] skill-router-contract-upgrade starting at 06:08:24
+  -> tools=18 apply_patch=0 msgs=5 files=10 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[12/13] sqlalchemy-2-session-modernization starting at 06:23:24
+  -> tools=20 apply_patch=0 msgs=2 files=18 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+[13/13] transcript-merge-regression starting at 06:38:24
+  -> tools=19 apply_patch=0 msgs=4 files=11 out_tok=0 rc=124 status=WROTE_FILES (900s)
+
+=== SUMMARY ===
+task                                       tools patch msgs files out_tok status              
+dead-flag-reachability-audit                  28     0    4     5       0 WROTE_FILES         
+fanout-fullstack-release-blocker              32     0    7     9       0 WROTE_FILES         
+incident-evidence-synthesis                   24     0   14     2    4251 WROTE_FILES         
+multi-tool-transaction-repair                 33     0   27    19       0 WROTE_FILES         
+plugin-scaffold-alignment                     23     0   15     6    2448 WROTE_FILES         
+policy-aware-request-resolution               37     0   23     8       0 WROTE_FILES         
+release-note-to-plan-translation              24     0    5     8       0 WROTE_FILES         
+responses-sdk-adapter-cutover                 29     0   15    18       0 WROTE_FILES         
+responsive-checkout-visual-regression         24     0    4     3       0 WROTE_FILES         
+security-audit-hotfix-remediation             22     0    3     3       0 WROTE_FILES         
+skill-router-contract-upgrade                 18     0    5    10       0 WROTE_FILES         
+sqlalchemy-2-session-modernization            20     0    2    18       0 WROTE_FILES         
+transcript-merge-regression                   19     0    4    11       0 WROTE_FILES         
+
+Tasks that wrote >=1 file: 13 / 13
+Summary: /tmp/qwen_proxy_validation/summary.json

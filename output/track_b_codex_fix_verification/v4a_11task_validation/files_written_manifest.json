@@ -1,0 +1,158 @@
+{
+  "dead-flag-reachability-audit": {
+    "real_files_count": 5,
+    "real_files": [
+      "artifacts/cleanup.patchplan.md",
+      "artifacts/flag_audit.md",
+      "artifacts/reachability_matrix.json",
+      "brief/flag_audit.json",
+      "brief_input.json"
+    ]
+  },
+  "fanout-fullstack-release-blocker": {
+    "real_files_count": 7,
+    "real_files": [
+      "apps/admin/src/components/ReleaseGateForm.tsx",
+      "apps/admin/src/lib/api.ts",
+      "artifacts/dom/release_gate_capture.json",
+      "artifacts/report/integration_report.md",
+      "docs/runbooks/release_gating.md",
+      "services/api/src/review_state.py",
+      "services/api/src/routes/releases.py"
+    ]
+  },
+  "incident-evidence-synthesis": {
+    "real_files_count": 2,
+    "real_files": [
+      "packet/findings.json",
+      "packet/incident_packet.md"
+    ]
+  },
+  "multi-tool-transaction-repair": {
+    "real_files_count": 2,
+    "real_files": [
+      "docs/transaction_ops.md",
+      "services/transactions/workflow.py"
+    ]
+  },
+  "policy-aware-request-resolution": {
+    "real_files_count": 3,
+    "real_files": [
+      "brief/manager_brief.json",
+      "brief/manager_brief.md",
+      "brief_input.json"
+    ]
+  },
+  "release-note-to-plan-translation": {
+    "real_files_count": 3,
+    "real_files": [
+      "brief/manager_brief.json",
+      "brief/manager_brief.md",
+      "brief_input.json"
+    ]
+  },
+  "responses-sdk-adapter-cutover": {
+    "real_files_count": 64,
+    "real_files": [
+      ".git/COMMIT_EDITMSG",
+      ".git/HEAD",
+      ".git/config",
+      ".git/description",
+      ".git/hooks/applypatch-msg.sample",
+      ".git/hooks/commit-msg.sample",
+      ".git/hooks/fsmonitor-watchman.sample",
+      ".git/hooks/post-update.sample",
+      ".git/hooks/pre-applypatch.sample",
+      ".git/hooks/pre-commit.sample",
+      ".git/hooks/pre-merge-commit.sample",
+      ".git/hooks/pre-push.sample",
+      ".git/hooks/pre-rebase.sample",
+      ".git/hooks/pre-receive.sample",
+      ".git/hooks/prepare-commit-msg.sample",
+      ".git/hooks/push-to-checkout.sample",
+      ".git/hooks/sendemail-validate.sample",
+      ".git/hooks/update.sample",
+      ".git/index",
+      ".git/info/exclude",
+      ".git/logs/HEAD",
+      ".git/logs/refs/heads/master",
+      ".git/objects/0b/1576f6c3103a5063b6753807dafccd58a4a8c8",
+      ".git/objects/10/b80095ca8f1b7217d59f55e260896aa786008b",
+      ".git/objects/14/9dfc6ff0916ebf73a9a9435d9915b8f8ffdb76",
+      ".git/objects/19/9727344ab025a72305bff09344cb7045505fbb",
+      ".git/objects/20/967d315ffd3f7efea910c6ef9fcb270397f470",
+      ".git/objects/23/8dbb1451829a8210c42afecbc99550ffac3660",
+      ".git/objects/2b/bfce4e0419ddab01a85cf4619feafd9393467b",
+      ".git/objects/37/7a8267cad165c3fece8250feef5cb4326c39ef",
+      ".git/objects/56/46bc7e25c2bf44308e06d8c1ae561451630987",
+      ".git/objects/5a/d8b4d30dda6a88666acf7983c69edd5f3c7741",
+      ".git/objects/5f/b35d94f8a1aa22d99fe899d4a4182f136a823d",
+      ".git/objects/65/5e225c3e73322a2cc175635b39cd1feba17836",
+      ".git/objects/67/b03971e0bb544f174f35251991ba07b2c2d744",
+      ".git/objects/76/9aedef5e7a0feb388ffb3cc92dd8988422da7f",
+      ".git/objects/7d/fea8a7362e4d129389d4b4164bfc2147cb43ec",
+      ".git/objects/85/220618996a39cf11e3dc7117c45252bcd8621f",
+      ".git/objects/85/fe0f4aca55af7855cf3d5578496a7677800157",
+      ".git/objects/8f/173b7c03c65d2426bf56625540b2dd389525ea",
+      ".git/objects/98/cfcd6d2cbb1fa2db1d140e74faf7cbec1b121c",
+      ".git/objects/a0/e6415e01e5f442a5d06ae0852cba7399b5455b",
+      ".git/objects/a7/158647eb49b2d413a3e25a624e18c883ccdaa8",
+      ".git/objects/ab/0a9d66fdfa15c9f2d41aaefd6ccc8a03016d90",
+      ".git/objects/b5/528daaa6ee5866f4941026274bfa9817d2e8d1",
+      ".git/objects/b5/6c190e01116f2ddc1c240547bc4e0b202a7869",
+      ".git/objects/c3/2bbae49175dd4fec371f26d555cbf66d474395",
+      ".git/objects/c7/931843161bb98756a7274e0ca15d79ad486efc",
+      ".git/objects/d1/863d5206a401307f6aaa1d6e168546d3c02c25",
+      ".git/objects/db/86dc12bcaf8e3e7f23b1adb10d3bdb15a3f515",
+      ".git/objects/db/a030a34486afc78b3f6135ef45bbda4cb787b6",
+      ".git/objects/e3/95466e34d840be46f53f39acfca1742b37a67e",
+      ".git/objects/e6/5d72816aede0ee29f273129789174e2b4bfd64",
+      ".git/objects/e8/80d5f15d6ef2ebf317ec5db9e58282c38c22d9",
+      ".git/objects/ea/ca10877a4df4116bf7e2065bcdeec5df8e1b2a",
+      ".git/objects/f1/6e0451b96f683b187642fe915f186f5918d307",
+      ".git/objects/fb/347dd64da0ea8831285ce0e1433b73490f294b",
+      ".git/refs/heads/master",
+      "config/runtime.toml",
+      "docs/migrations/responses-cutover.md",
+      "src/incident_handoff/adapter.py",
+      "src/incident_handoff/client.py",
+      "src/incident_handoff/render.py",
+      "src/incident_handoff/replay.py"
+    ]
+  },
+  "responsive-checkout-visual-regression": {
+    "real_files_count": 3,
+    "real_files": [
+      "apps/storefront/styles/checkout.css",
+      "docs/checkout_mobile_qa.md",
+      "tests/e2e/test_checkout_mobile.py"
+    ]
+  },
+  "security-audit-hotfix-remediation": {
+    "real_files_count": 4,
+    "real_files": [
+      "audit/triage_note.json",
+      "repo/export_api/storage.py",
+      "repo/ops/deploy_hotfix.json",
+      "repo/tests/test_hotfix_regressions.py"
+    ]
+  },
+  "sqlalchemy-2-session-modernization": {
+    "real_files_count": 5,
+    "real_files": [
+      "app/admin_cli.py",
+      "app/api.py",
+      "app/repository.py",
+      "app/worker.py",
+      "docs/deploy/sqlalchemy2-cutover.md"
+    ]
+  },
+  "transcript-merge-regression": {
+    "real_files_count": 3,
+    "real_files": [
+      "replay/incident_summary.py",
+      "replay/merge.py",
+      "reports/incidents/transcript-merge.md"
+    ]
+  }
+}

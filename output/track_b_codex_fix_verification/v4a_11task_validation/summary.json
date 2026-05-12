@@ -1,0 +1,287 @@
+{
+  "tasks": [
+    {
+      "task": "dead-flag-reachability-audit",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 28,
+      "apply_patch": 0,
+      "msgs_with_text": 4,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 5,
+      "new_files": [
+        "brief_input.json",
+        "artifacts/flag_audit.md",
+        "artifacts/reachability_matrix.json",
+        "artifacts/cleanup.patchplan.md",
+        "brief/flag_audit.json"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "fanout-fullstack-release-blocker",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 32,
+      "apply_patch": 0,
+      "msgs_with_text": 7,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 9,
+      "new_files": [
+        "artifacts/report/integration_report.md",
+        "artifacts/dom/release_gate_capture.json",
+        "services/api/src/review_state.py",
+        "services/api/src/routes/releases.py",
+        "services/api/src/__pycache__/review_state.cpython-312.pyc",
+        "services/api/src/routes/__pycache__/releases.cpython-312.pyc",
+        "apps/admin/src/lib/api.ts",
+        "apps/admin/src/components/ReleaseGateForm.tsx",
+        "docs/runbooks/release_gating.md"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "incident-evidence-synthesis",
+      "rc": 0,
+      "elapsed_s": 760.8,
+      "tool_calls": 24,
+      "apply_patch": 0,
+      "msgs_with_text": 14,
+      "input_tokens": 1844896,
+      "output_tokens": 4251,
+      "files_written": 2,
+      "new_files": [
+        "packet/findings.json",
+        "packet/incident_packet.md"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "multi-tool-transaction-repair",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 33,
+      "apply_patch": 0,
+      "msgs_with_text": 27,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 19,
+      "new_files": [
+        ".pytest_cache/README.md",
+        ".pytest_cache/CACHEDIR.TAG",
+        ".pytest_cache/.gitignore",
+        "docs/transaction_ops.md",
+        "services/transactions/workflow.py",
+        "services/__pycache__/__init__.cpython-312.pyc",
+        "services/transactions/__pycache__/__init__.cpython-312.pyc",
+        "services/transactions/__pycache__/workflow.cpython-312.pyc",
+        "services/billing/__pycache__/__init__.cpython-312.pyc",
+        "services/billing/__pycache__/ledger.cpython-312.pyc",
+        "services/notifications/__pycache__/__init__.cpython-312.pyc",
+        "services/notifications/__pycache__/queue.cpython-312.pyc"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "plugin-scaffold-alignment",
+      "rc": 0,
+      "elapsed_s": 742.1,
+      "tool_calls": 23,
+      "apply_patch": 0,
+      "msgs_with_text": 15,
+      "input_tokens": 1835584,
+      "output_tokens": 2448,
+      "files_written": 6,
+      "new_files": [
+        ".pytest_cache/README.md",
+        ".pytest_cache/CACHEDIR.TAG",
+        ".pytest_cache/.gitignore",
+        "tests/__pycache__/test_marketplace_alignment.cpython-312-pytest-9.0.3.pyc",
+        "tests/__pycache__/test_plugin_manifest.cpython-312-pytest-9.0.3.pyc",
+        ".pytest_cache/v/cache/nodeids"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "policy-aware-request-resolution",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 37,
+      "apply_patch": 0,
+      "msgs_with_text": 23,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 8,
+      "new_files": [
+        "brief_input.json",
+        ".pytest_cache/README.md",
+        ".pytest_cache/CACHEDIR.TAG",
+        ".pytest_cache/.gitignore",
+        "brief/manager_brief.md",
+        "brief/manager_brief.json",
+        "tests/__pycache__/test_policy_resolution.cpython-312-pytest-9.0.3.pyc",
+        ".pytest_cache/v/cache/nodeids"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "release-note-to-plan-translation",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 24,
+      "apply_patch": 0,
+      "msgs_with_text": 5,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 8,
+      "new_files": [
+        "brief_input.json",
+        "brief/manager_brief.md",
+        "brief/manager_brief.json",
+        "tests/.pytest_cache/README.md",
+        "tests/.pytest_cache/CACHEDIR.TAG",
+        "tests/.pytest_cache/.gitignore",
+        "tests/__pycache__/test_plan_brief.cpython-312-pytest-9.0.3.pyc",
+        "tests/.pytest_cache/v/cache/nodeids"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "responses-sdk-adapter-cutover",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 29,
+      "apply_patch": 0,
+      "msgs_with_text": 15,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 18,
+      "new_files": [
+        "config/runtime.toml",
+        ".pytest_cache/README.md",
+        ".pytest_cache/CACHEDIR.TAG",
+        ".pytest_cache/.gitignore",
+        "src/incident_handoff/render.py",
+        "src/incident_handoff/replay.py",
+        "src/incident_handoff/adapter.py",
+        "src/incident_handoff/client.py",
+        "src/incident_handoff/__pycache__/__init__.cpython-312.pyc",
+        "src/incident_handoff/__pycache__/replay.cpython-312.pyc",
+        "src/incident_handoff/__pycache__/render.cpython-312.pyc",
+        "src/incident_handoff/__pycache__/adapter.cpython-312.pyc"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "responsive-checkout-visual-regression",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 24,
+      "apply_patch": 0,
+      "msgs_with_text": 4,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 3,
+      "new_files": [
+        "docs/checkout_mobile_qa.md",
+        "tests/e2e/test_checkout_mobile.py",
+        "apps/storefront/styles/checkout.css"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "security-audit-hotfix-remediation",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 22,
+      "apply_patch": 0,
+      "msgs_with_text": 3,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 3,
+      "new_files": [
+        "audit/triage_note.json",
+        "repo/ops/deploy_hotfix.json",
+        "repo/export_api/storage.py"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "skill-router-contract-upgrade",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 18,
+      "apply_patch": 0,
+      "msgs_with_text": 5,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 10,
+      "new_files": [
+        ".pytest_cache/README.md",
+        ".pytest_cache/CACHEDIR.TAG",
+        ".pytest_cache/.gitignore",
+        "tests/__pycache__/conftest.cpython-312-pytest-9.0.3.pyc",
+        "tests/__pycache__/test_skill_router.cpython-312-pytest-9.0.3.pyc",
+        "tests/__pycache__/test_router_contract.cpython-312-pytest-9.0.3.pyc",
+        "tests/__pycache__/test_docs_visible.cpython-312-pytest-9.0.3.pyc",
+        ".pytest_cache/v/cache/nodeids",
+        "router/__pycache__/__init__.cpython-312.pyc",
+        "router/__pycache__/skill_router.cpython-312.pyc"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "sqlalchemy-2-session-modernization",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 20,
+      "apply_patch": 0,
+      "msgs_with_text": 2,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 18,
+      "new_files": [
+        ".pytest_cache/README.md",
+        ".pytest_cache/CACHEDIR.TAG",
+        ".pytest_cache/.gitignore",
+        "app/repository.py",
+        "app/worker.py",
+        "app/api.py",
+        "app/admin_cli.py",
+        "tests/__pycache__/test_api.cpython-312-pytest-9.0.3.pyc",
+        "tests/__pycache__/test_worker.cpython-312-pytest-9.0.3.pyc",
+        "tests/__pycache__/test_admin_cli.cpython-312-pytest-9.0.3.pyc",
+        ".pytest_cache/v/cache/nodeids",
+        ".pytest_cache/v/cache/lastfailed"
+      ],
+      "status": "WROTE_FILES"
+    },
+    {
+      "task": "transcript-merge-regression",
+      "rc": 124,
+      "elapsed_s": 900.0,
+      "tool_calls": 19,
+      "apply_patch": 0,
+      "msgs_with_text": 4,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files_written": 11,
+      "new_files": [
+        "replay/merge.py",
+        "replay/incident_summary.py",
+        "tests/__pycache__/__init__.cpython-312.pyc",
+        "tests/__pycache__/test_incident_summary.cpython-312.pyc",
+        "tests/__pycache__/test_render.cpython-312.pyc",
+        "tests/__pycache__/test_merge.cpython-312.pyc",
+        "replay/__pycache__/__init__.cpython-312.pyc",
+        "replay/__pycache__/merge.cpython-312.pyc",
+        "replay/__pycache__/render.cpython-312.pyc",
+        "replay/__pycache__/incident_summary.cpython-312.pyc",
+        "reports/incidents/transcript-merge.md"
+      ],
+      "status": "WROTE_FILES"
+    }
+  ]
+}

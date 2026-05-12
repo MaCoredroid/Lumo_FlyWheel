@@ -1757,9 +1757,19 @@ def build_proxy_handler(
                     non_streaming_parsed = parsed
                 # Auto-continue retry loop (Qwen3 #1817 / Qwen3.5-9B #10 workaround):
                 # qwen3.5-27b in thinking mode sometimes plans tool calls in
-                # reasoning and then fails to emit them — generating a response
-                # claiming "I will do X" but with no function_call in output.
-                # Detect that and inject a "continue" user message, re-call.
+                # reasoning/text ("Now let me create X") and then fails to emit
+                # them — response has no function_call. We auto-inject a
+                # "continue" user message and re-call. Triggers whenever the
+                # response has no function_call AT ALL (the agent needs a tool
+                # call to make progress on a coding task; text-only responses
+                # are always the bug). Bounded by max_retries.
+                #
+                # If the model is GENUINELY done (final answer), the next
+                # response after the "continue" prompt would still have no
+                # function_call and would either (a) fire another retry with
+                # the same empty output, or (b) finally emit a final answer
+                # in text. Either way the worst case is N+1 extra inference
+                # calls, not infinite looping.
                 if (
                     os.environ.get("LUMO_PROXY_AUTO_CONTINUE", "").lower() in {"1", "true", "yes"}
                     and isinstance(non_streaming_parsed, dict)
@@ -1767,7 +1777,7 @@ def build_proxy_handler(
                     max_retries = int(os.environ.get("LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES", "3"))
                     continue_message = os.environ.get(
                         "LUMO_PROXY_AUTO_CONTINUE_MESSAGE",
-                        "continue",
+                        "continue with the tool call you described",
                     )
                     retries_remaining = max_retries
                     while retries_remaining > 0:
@@ -1776,16 +1786,7 @@ def build_proxy_handler(
                             isinstance(it, dict) and it.get("type") == "function_call"
                             for it in out_items
                         )
-                        has_real_text = False
-                        for it in out_items:
-                            if not isinstance(it, dict):
-                                continue
-                            if it.get("type") == "message":
-                                for c in it.get("content", []) or []:
-                                    if isinstance(c, dict) and (c.get("text") or "").strip():
-                                        has_real_text = True
-                                        break
-                        if has_function_call or has_real_text:
+                        if has_function_call:
                             break  # legitimate output, no continue needed
                         # Synthesize the "continue" follow-up
                         retries_remaining -= 1
