@@ -849,6 +849,34 @@ def _write_chunked_stream(
     saw_event = False
     saw_completed = False
     synthetic_response_context: dict[str, Any] = {}
+    # TEMP DEBUG: dump raw SSE blocks to LUMO_PROXY_SSE_DUMP_DIR if set.
+    _sse_dump_dir = os.environ.get("LUMO_PROXY_SSE_DUMP_DIR")
+    _sse_dump_fh = None
+    if _sse_dump_dir:
+        try:
+            import pathlib as _pl
+            _pl.Path(_sse_dump_dir).mkdir(parents=True, exist_ok=True)
+            _sse_dump_fh = open(
+                f"{_sse_dump_dir}/sse_{int(time.time()*1000)}.raw", "wb"
+            )
+        except Exception:
+            _sse_dump_fh = None
+
+    # Track which function_call output items have been announced via
+    # output_item.added during streaming. vLLM's qwen3_xml tool parser
+    # emits function_call_arguments.delta WITHOUT a preceding
+    # output_item.added for the function_call item, using the previous
+    # message item's id. Codex's streaming parser silently drops these,
+    # so the tool call never reaches the agent loop even though the
+    # final response.completed lists it. We compensate by synthesizing
+    # output_item.added + function_call_arguments.done + output_item.done
+    # for any function_call in response.completed.output that wasn't
+    # announced earlier — emitted right before forwarding the
+    # response.completed event. (Lumo Track B benchmark-validity §13.4
+    # diagnosis; vLLM upstream Issues #39056, #41182 same bug family.)
+    seen_function_call_added_ids: set[str] = set()
+    current_response_id_for_synth: str | None = None
+    next_synth_output_index = 0
     try:
         for chunk in upstream.iter_content(chunk_size=8192):
             if not chunk:
@@ -859,12 +887,105 @@ def _write_chunked_stream(
                 if block is None:
                     break
                 normalized = normalize_responses_sse_block(block)
+                if _sse_dump_fh is not None:
+                    _sse_dump_fh.write(b"=== block ===\n")
+                    _sse_dump_fh.write(normalized)
+                    _sse_dump_fh.flush()
                 saw_event = True
-                saw_completed = saw_completed or _responses_sse_payload_type(normalized) == "response.completed"
+                block_payload_type = _responses_sse_payload_type(normalized)
+                saw_completed = saw_completed or block_payload_type == "response.completed"
                 _update_synthetic_response_context(synthetic_response_context, normalized)
+                # Track function_call output_item.added emissions.
+                for payload in _responses_sse_payloads(normalized):
+                    pt = payload.get("type")
+                    if pt == "response.output_item.added":
+                        item = payload.get("item", {}) or {}
+                        if item.get("type") == "function_call":
+                            fc_id = item.get("id")
+                            if isinstance(fc_id, str):
+                                seen_function_call_added_ids.add(fc_id)
+                        oi = payload.get("output_index")
+                        if isinstance(oi, int) and oi + 1 > next_synth_output_index:
+                            next_synth_output_index = oi + 1
+                    elif pt == "response.created":
+                        resp = payload.get("response", {}) or {}
+                        rid = resp.get("id")
+                        if isinstance(rid, str):
+                            current_response_id_for_synth = rid
                 if capture_state is not None:
                     for payload in _responses_sse_payloads(normalized):
                         _extract_response_metadata(payload, capture_state)
+                # If this is response.completed and the upstream skipped emitting
+                # output_item.added for function_call items present in the final
+                # output array, synthesize them now BEFORE forwarding the
+                # response.completed block.
+                if block_payload_type == "response.completed":
+                    for payload in _responses_sse_payloads(normalized):
+                        resp = payload.get("response", {}) or {}
+                        output_items = resp.get("output", []) or []
+                        for idx, item in enumerate(output_items):
+                            if not isinstance(item, dict):
+                                continue
+                            if item.get("type") != "function_call":
+                                continue
+                            fc_id = item.get("id")
+                            if not isinstance(fc_id, str):
+                                continue
+                            if fc_id in seen_function_call_added_ids:
+                                continue
+                            # Build synthetic stream events for this missing function_call.
+                            call_id = item.get("call_id") or f"call_{fc_id}"
+                            name = item.get("name") or "exec_command"
+                            args = item.get("arguments") or ""
+                            base_item = {
+                                "id": fc_id,
+                                "type": "function_call",
+                                "call_id": call_id,
+                                "name": name,
+                                "arguments": args,
+                                "status": "in_progress",
+                            }
+                            added_payload = {
+                                "type": "response.output_item.added",
+                                "sequence_number": -1,
+                                "output_index": next_synth_output_index,
+                                "item": base_item,
+                            }
+                            args_done_payload = {
+                                "type": "response.function_call_arguments.done",
+                                "sequence_number": -1,
+                                "output_index": next_synth_output_index,
+                                "item_id": fc_id,
+                                "arguments": args,
+                                "name": name,
+                            }
+                            done_item = dict(base_item)
+                            done_item["status"] = "completed"
+                            done_payload = {
+                                "type": "response.output_item.done",
+                                "sequence_number": -1,
+                                "output_index": next_synth_output_index,
+                                "item": done_item,
+                            }
+                            for synth_event in ("response.output_item.added", "response.function_call_arguments.done", "response.output_item.done"):
+                                synth_payload = {
+                                    "response.output_item.added": added_payload,
+                                    "response.function_call_arguments.done": args_done_payload,
+                                    "response.output_item.done": done_payload,
+                                }[synth_event]
+                                synth_block = (
+                                    b"event: " + synth_event.encode("utf-8")
+                                    + b"\ndata: "
+                                    + json.dumps(synth_payload, separators=(",", ":")).encode("utf-8")
+                                    + b"\n\n"
+                                )
+                                if _sse_dump_fh is not None:
+                                    _sse_dump_fh.write(b"=== synth (PR39055-Lumo) ===\n")
+                                    _sse_dump_fh.write(synth_block)
+                                    _sse_dump_fh.flush()
+                                write_chunk(synth_block)
+                            seen_function_call_added_ids.add(fc_id)
+                            next_synth_output_index += 1
                 write_chunk(normalized)
         if pending:
             normalized = normalize_responses_sse_block(pending)
@@ -886,6 +1007,9 @@ def _write_chunked_stream(
     except (BrokenPipeError, ConnectionResetError):
         # Codex occasionally abandons an HTTP stream after it already has the
         # terminal event. Treat that as a cancelled client, not a proxy crash.
+        if _sse_dump_fh is not None:
+            try: _sse_dump_fh.close()
+            except Exception: pass
         return
     except requests.RequestException:
         terminal_block = (
@@ -904,6 +1028,9 @@ def _write_chunked_stream(
             return
     finally:
         upstream.close()
+        if _sse_dump_fh is not None:
+            try: _sse_dump_fh.close()
+            except Exception: pass
 
 
 def _read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:

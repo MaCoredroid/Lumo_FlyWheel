@@ -1142,3 +1142,244 @@ Pre-conditions worth filing on vLLM after this session:
 - [vLLM PR #39055 — parser-side fix promoting XML tool calls out of reasoning](https://github.com/vllm-project/vllm/pull/39055) — the patch
 - [vLLM Issue #36769 — Qwen3.5 tool parser substring crash](https://github.com/vllm-project/vllm/issues/36769) — related streaming-path family
 - [Qwen3-Coder blog post — agentic coding focus](https://qwenlm.github.io/blog/qwen3-coder/) — alternative anchor model candidate
+
+## 14. Streaming-protocol bug + proxy synthesis fix (2026-05-12, after §13)
+
+The user pushed back on §13's "model-capability gap" framing, citing
+Qwen3.5-27B's SWE-Bench score and several vLLM streaming-bug issues
+that match Track B's failure shape. The pushback was correct.
+Diagnostic dump of the bench proxy's raw SSE output exposed a new
+**vLLM streaming-protocol bug** that PR #39055 doesn't address.
+
+### 14.1 What the SSE dump showed
+
+Instrumented the bench proxy with `LUMO_PROXY_SSE_DUMP_DIR` to record
+every raw SSE block as it leaves vLLM. Reran the codex+qwen test and
+inspected the dump for a turn that codex marked as "ended without a
+tool call." Event sequence (from `sse_1778552156927.raw`):
+
+```
+ 0: response.created
+ 1: response.in_progress
+ 2: response.output_item.added       item_type=reasoning  id=8c7353…
+ 3-19: reasoning_text events
+20: response.reasoning_part.done
+21: response.output_item.done        item_type=reasoning
+22: response.output_item.added       item_type=MESSAGE    id=19587a…
+23: response.content_part.added      item_id=19587a…
+24-31: response.output_text.delta    item_id=19587a…  (8 deltas of text)
+32-38: response.function_call_arguments.delta  item_id=19587a…  (7 deltas of '{"cmd":"cat …"}')
+39: response.completed
+      output: [
+        type=reasoning  id=rs_9a0e…
+        type=message    id=msg_8fba…
+        type=function_call id=fc_9b0e…  name=exec_command args='{"cmd":"cat …"}'
+      ]
+```
+
+**Three smoking guns:**
+
+1. The seven `function_call_arguments.delta` events at positions 32-38
+   use **the message item's `id` (`19587a…`)**, not a function_call id.
+2. **No `output_item.added` for a function_call is emitted** anywhere
+   in the stream — only the `message` item was announced via
+   `output_item.added`.
+3. The final `response.completed` event nonetheless contains a
+   `function_call` item with its own `id` (`fc_9b0e…`) and `name`
+   (`exec_command`) — the tool call existed in the model's output but
+   was never properly framed in the streaming events.
+
+Codex's streaming parser receives arguments-for-a-message-item, can't
+match them to any registered function_call, and silently drops them.
+The tool call never reaches the agent loop. Codex then sees no tool
+calls in the streaming events and exits the turn.
+
+### 14.2 Root cause — in vLLM's serving.py
+
+`_process_simple_streaming_events` in
+`vllm/entrypoints/openai/responses/serving.py` (~line 1645):
+
+```python
+if delta_message.tool_calls and delta_message.tool_calls[0].function:
+    if delta_message.tool_calls[0].function.arguments:
+        yield ResponseFunctionCallArgumentsDeltaEvent(
+            item_id=current_item_id,  # <-- BUG: still the message item's id
+            ...
+        )
+    elif delta_message.tool_calls[0].function.name:
+        # ... emit text.done + content_part.done + output_item.done for message
+        # ... then emit output_item.added for the new function_call
+        current_item_id = random_uuid()  # transition to new id
+        current_tool_call_name = function.name
+        # ... emit output_item.added (function_call)
+```
+
+The `arguments` branch fires before any transition events are emitted.
+If the qwen3_xml tool parser's first delta for a tool call contains
+both `name` and `arguments` (or only `arguments`), the `arguments`
+branch is hit, the args delta is emitted with the wrong `item_id`, and
+the message→function_call transition events (`output_item.done` for
+message, `output_item.added` for function_call) are never emitted.
+
+This is the same shape as vLLM Issue #41182 ("Only content before tool
+call obtained") and #27641 ("Streaming tool call randomly failed") —
+items in the same persistent class of streaming-tool-call bugs vLLM
+Issue #10589 tracks.
+
+### 14.3 Fix — proxy-side synthesis of missing events
+
+Modified `inference_proxy.py:_write_chunked_stream` to track which
+function_call items have been announced via `output_item.added` during
+the stream. When `response.completed` arrives, walk its `output` array
+and check for `function_call` items not in the seen set. For each
+missing one, synthesize three SSE events just before forwarding
+`response.completed`:
+
+1. `response.output_item.added` — item with the function_call's id,
+   name, full arguments (from `response.completed.output`), status
+   `in_progress`.
+2. `response.function_call_arguments.done` — final args payload.
+3. `response.output_item.done` — same item, status `completed`.
+
+The broken `function_call_arguments.delta` events with the
+message-item's id are still forwarded (codex's parser silently ignores
+them because they reference an unknown function_call item id). The
+synthesized events arrive AFTER them but BEFORE `response.completed`,
+giving codex's parser the registration it needs to construct the tool
+call.
+
+Implementation detail: tracks `next_synth_output_index` to avoid
+colliding with vLLM's output_index numbering. Each missing function_call
+gets a fresh index.
+
+### 14.4 Test result — 3 tool calls vs 1 baseline (with reasoning-effort=high)
+
+Same `incident-evidence-synthesis/v1` workspace, fresh codex run with
+all three patches in place (chat template + PR #39055 +
+streaming-event guard + proxy synthesis fix):
+
+| Metric | Audit baseline | §12 | §13 PR#39055 | §14 + proxy synth | gpt-5.5 ref |
+|---|---:|---:|---:|---:|---:|
+| Codex turns | 1 | 1 | 1 | 1 | 1 |
+| Inference proxy calls | 1 | 1 | 5 | 5 | n/a |
+| **Tool calls in codex turn** | 1 | 1 | 4 | **3** | 20 |
+| `apply_patch` calls | 0 | 0 | 0 | 0 | 0 (heredocs) |
+| Files produced | 0/2 | 0/2 | 0/2 | 0/2 | 2/2 |
+| Synth blocks fired (proxy) | n/a | n/a | n/a | **9** | n/a |
+
+The proxy synthesis fix **does fire correctly** (9 synth blocks across
+3 of the 5 turns — confirming the streaming bug was firing on those
+specific turns and the synthesis recovered them). Tool calls executed:
+`cat prompt.md`, `find workspace/corpus,queries`, `cat queries/incidence_request.md`.
+
+### 14.5 Residual — a different "model stops" pattern on the 5th turn
+
+The 5th turn's response.completed (from `sse_1778552740374.raw`) has:
+
+- `output: [reasoning, message]` — **no function_call at all**
+- Reasoning text: `"Now I need to read all the corpus files to understand the incident details and create the required packet."`
+- Message text: `"\n\n"`
+- usage: `output_tokens=25`, `status=completed` (NOT `incomplete: max_output_tokens`)
+
+The model explicitly says "Now I need to read all the corpus files"
+and then emits 2 chars of whitespace and stops — voluntarily, no
+truncation. This is qualitatively different from the §14.1 bug
+(which was a parser issue): in this turn the model truly chose not to
+emit a tool call.
+
+Two hypotheses for this residual:
+
+1. **Codex-transcript-shape interaction.** The previous turns' tool
+   calls were assembled into the transcript using the synthesized
+   `function_call` items (with `id=fc_…` from response.completed,
+   not the message `id=19587a…` used during streaming). If codex's
+   transcript builder uses the streaming item_id (which referenced
+   the message) instead of the synthesized id, qwen sees inconsistent
+   `function_call` ↔ `function_call_output` pairings on subsequent
+   turns and progressively loses track.
+2. **Voluntary stop on this specific prompt shape.** qwen3.5-27b may
+   genuinely emit "I need to do more" then stop with this combination
+   of system prompt, tool list, and context. Different from a parser
+   bug — a model-tuning gap.
+
+These are differentiable with one more experiment: convert codex's
+streaming request to non-streaming upstream (PR #39055 promotion path
+handles this correctly), then re-emit synthetic streaming to codex.
+If the residual disappears: confirms it's another streaming-related
+issue. If the residual persists: confirms model-side voluntary stop.
+**Not done in this session** — deferred to a follow-up.
+
+### 14.6 What this changes about the qwen3.5-27b judgment
+
+The §13 framing "qwen3.5-27b explores but doesn't write" was
+**premature**. With the proxy synthesis fix in place, the model
+clearly executes multiple iterative tool calls. The remaining residual
+is much narrower than "model can't do agentic coding" — it's "model
+stops on the 5th turn after stating intent to continue."
+
+External evidence the model CAN do agentic coding:
+
+- Qwen's own SWE-Bench reports use an internal scaffold with bash + file-edit tools — different harness, same model, 72.4 score.
+- Unsloth's "Run Qwen3.5 Locally With Claude Code" tutorial documents qwen3.5-27b working in Claude Code's loop. Different harness.
+- An NVIDIA DGX Spark / GB10 forum thread (same hardware) reports qwen3.5-27b-Claude-4.6-Opus-Reasoning-Distilled (an AWQ variant) working agentically on the same hardware.
+
+So the §11.5/§13.7 recommendation "swap to Qwen3-Coder-30B-A3B" is no
+longer the obvious next step. The next step is **debug the §14.5
+residual** to learn whether it's a transcript-shape bug (proxy-fixable)
+or a model-tuning gap (model-swap warranted).
+
+### 14.7 Updated recommended sequence
+
+1. **Investigate §14.5 residual** — proxy modification to convert
+   streaming-in / non-streaming-upstream / synthetic-streaming-out.
+   Tests whether qwen3.5-27b emits a tool call when given the same
+   conversation through the non-streaming code path. ~30-45 min.
+2. **If non-streaming bypass works:** qwen3.5-27b is unblocked.
+   Re-baseline v4a, run Round 4b ablation against the working
+   harness. The proxy stays as our normalization layer indefinitely;
+   pursue upstream vLLM PRs for the underlying serving.py and
+   streaming-parser bugs.
+3. **If non-streaming bypass also stops short:** investigate further
+   (prompt engineering, tool definition shape, max_tool_calls config)
+   before concluding model swap is needed.
+4. **Wire family graders** — independent, required regardless (§11.5.2).
+5. **Loosen acceptance criterion** — independent, required (§11.5.1).
+
+### 14.8 Filing upstream bugs (revised)
+
+- **vLLM `_process_simple_streaming_events` emits `function_call_arguments.delta`
+  events with the previous message item's `item_id` and never emits
+  `output_item.added` for the function_call.** This is a serving-layer
+  bug in `vllm/entrypoints/openai/responses/serving.py`. Reproduction:
+  `--model qwen3.5-27b --reasoning-parser qwen3 --tool-call-parser qwen3_xml --reasoning-effort=high`,
+  send a streaming request with tools, the model emits a tool call
+  preceded by some message text. Patch direction: in the
+  `if delta_message.tool_calls[0].function.arguments:` branch, also
+  check for `function.name` and emit the message→function_call
+  transition events before the args delta. See §13.3 Patch 2 for the
+  related `UnboundLocalError` workaround in the same function.
+- `reasoning_output_tokens=0` mis-attribution (already filed in §13.8).
+
+### 14.9 Artifacts (this session)
+
+- `src/lumo_flywheel_serving/inference_proxy.py` — proxy synthesis
+  patch in `_write_chunked_stream` (gated by track of seen
+  function_call ids; synthesizes missing output_item.added +
+  arguments_done + output_item.done events before response.completed).
+- `/tmp/streaming_test/sse_dump/` — raw SSE blocks from the §13 test
+  (before proxy synthesis fix; shows the bug).
+- `/tmp/streaming_test/sse_dump2/` — raw SSE blocks from the §14 test
+  (after proxy synthesis fix; shows synthesis events).
+- `/tmp/streaming_test/tee_proxy.py` — independent tee proxy used
+  during debugging (not part of the fix).
+
+### 14.10 Sources
+
+- [vLLM Issue #41182 — Only content before tool call obtained](https://github.com/vllm-project/vllm/issues/41182) — same shape
+- [vLLM Issue #27641 — Streaming tool call randomly failed with gpt-oss](https://github.com/vllm-project/vllm/issues/27641) — same family
+- [vLLM Issue #10589 — Streaming output error of tool calling not resolved](https://github.com/vllm-project/vllm/issues/10589) — meta-tracking
+- [vLLM Issue #31501 — stream-interval > 1 loses tool call arguments](https://github.com/vllm-project/vllm/issues/31501) — ruled out for us (we use default 1)
+- [LiteLLM #21090 — Responses API streaming drops function_call events through proxy](https://github.com/BerriAI/litellm/issues/21090) — same diagnostic shape, different vendor
+- [Unsloth gist — Run Qwen3.5 with Claude Code](https://gist.github.com/kibotu/a009f00414b7c10fb1c74e603d7838c0) — proof model works agentically with different harness
+- [NVIDIA DGX Spark forum — Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2-AWQ success](https://forums.developer.nvidia.com/t/success-with-quanttrio-qwen3-5-27b-claude-4-6-opus-reasoning-distilled-v2-awq/365416) — same hardware, working
+- [QwenLM/qwen-code — Qwen's own agent CLI](https://github.com/QwenLM/qwen-code) — alternative harness for validation

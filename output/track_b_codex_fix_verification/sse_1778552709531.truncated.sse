@@ -1,0 +1,44 @@
+=== block ===
+event: response.created
+data: {"response":{"id":"resp_bdc4ec88ad4a0f70","created_at":1778552709,"incomplete_details":null,"instructions":null,"metadata":null,"model":"qwen3.5-27b","object":"response","output":[],"parallel_tool_calls":true,"temperature":0.6,"tool_choice":"auto","tools":[],"top_p":0.95,"background":false,"max_output_tokens":10,"max_tool_calls":null,"previous_response_id":null,"prompt":null,"reasoning":null,"service_tier":"auto","status":"in_progress","text":null,"top_logprobs":null,"truncation":"disabled","usage":null,"user":null,"kv_transfer_params":null,"input_messages":null,"output_messages":null},"sequence_number":0,"type":"response.created"}
+
+=== block ===
+event: response.in_progress
+data: {"response":{"id":"resp_bdc4ec88ad4a0f70","created_at":1778552709,"incomplete_details":null,"instructions":null,"metadata":null,"model":"qwen3.5-27b","object":"response","output":[],"parallel_tool_calls":true,"temperature":0.6,"tool_choice":"auto","tools":[],"top_p":0.95,"background":false,"max_output_tokens":10,"max_tool_calls":null,"previous_response_id":null,"prompt":null,"reasoning":null,"service_tier":"auto","status":"in_progress","text":null,"top_logprobs":null,"truncation":"disabled","usage":null,"user":null,"kv_transfer_params":null,"input_messages":null,"output_messages":null},"sequence_number":1,"type":"response.in_progress"}
+
+=== block ===
+event: response.output_item.added
+data: {"item":{"id":"acd8064505b0774b","summary":[],"type":"reasoning","content":null,"encrypted_content":null,"status":"in_progress"},"output_index":0,"sequence_number":2,"type":"response.output_item.added"}
+
+=== block ===
+event: response.reasoning_part.added
+data: {"content_index":0,"item_id":"acd8064505b0774b","output_index":0,"part":{"text":"","type":"reasoning_text"},"sequence_number":3,"type":"response.reasoning_part.added"}
+
+=== block ===
+event: response.reasoning_text.delta
+data: {"content_index":0,"delta":"Thinking","item_id":"acd8064505b0774b","output_index":0,"sequence_number":4,"type":"response.reasoning_text.delta"}
+
+=== block ===
+event: response.reasoning_text.delta
+data: {"content_index":0,"delta":" Process:\n\n","item_id":"acd8064505b0774b","output_index":0,"sequence_number":5,"type":"response.reasoning_text.delta"}
+
+=== block ===
+event: response.reasoning_text.delta
+data: {"content_index":0,"delta":"1.  **Analyze","item_id":"acd8064505b0774b","output_index":0,"sequence_number":6,"type":"response.reasoning_text.delta"}
+
+=== block ===
+event: response.reasoning_text.done
+data: {"content_index":0,"item_id":"acd8064505b0774b","output_index":0,"sequence_number":7,"text":"Thinking Process:\n\n1.  **Analyze","type":"response.reasoning_text.done"}
+
+=== block ===
+event: response.reasoning_part.done
+data: {"content_index":0,"item_id":"acd8064505b0774b","output_index":0,"part":{"text":"Thinking Process:\n\n1.  **Analyze","type":"reasoning_text"},"sequence_number":8,"type":"response.reasoning_part.done"}
+
+=== block ===
+event: response.output_item.done
+data: {"item":{"id":"acd8064505b0774b","summary":[],"type":"reasoning","content":[{"text":"Thinking Process:\n\n1.  **Analyze","type":"reasoning_text"}],"encrypted_content":null,"status":"completed"},"output_index":0,"sequence_number":9,"type":"response.output_item.done"}
+
+=== block ===
+event: response.completed
+data: {"response":{"id":"resp_bdc4ec88ad4a0f70","created_at":1778552709,"incomplete_details":{"reason":"max_output_tokens"},"instructions":null,"metadata":null,"model":"qwen3.5-27b","object":"response","output":[{"id":"rs_ad62a696af2923a0","summary":[],"type":"reasoning","content":[{"text":"Thinking Process:\n\n1.  **Analyze","type":"reasoning_text"}],"encrypted_content":null,"status":null}],"parallel_tool_calls":true,"temperature":0.6,"tool_choice":"auto","tools":[],"top_p":0.95,"background":false,"max_output_tokens":10,"max_tool_calls":null,"previous_response_id":null,"prompt":null,"reasoning":null,"service_tier":"auto","status":"incomplete","text":null,"top_logprobs":null,"truncation":"disabled","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0,"input_tokens_per_turn":[],"cached_tokens_per_turn":[]},"output_tokens":10,"output_tokens_details":{"reasoning_tokens":0,"tool_output_tokens":0,"output_tokens_per_turn":[],"tool_output_tokens_per_turn":[]},"total_tokens":22},"user":null,"kv_transfer_params":null,"input_messages":null,"output_messages":null},"sequence_number":10,"type":"response.completed"}
+
