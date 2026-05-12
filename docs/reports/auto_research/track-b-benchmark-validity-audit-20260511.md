@@ -1660,3 +1660,206 @@ choice (gpt-5.5 or Qwen3-Coder-30B-A3B).
 - [vLLM OpenAI Responses Client With Tools](https://docs.vllm.ai/en/latest/examples/online_serving/openai_responses_client_with_tools/) — canonical examples (single-turn, no multi-turn validation issues exposed)
 - [llamastack #3456](https://github.com/llamastack/llama-stack/issues/3456) — same family validation-error shape for `function.arguments` field
 - [OpenAI Responses API types](https://github.com/openai/openai-python/blob/main/src/openai/types/responses/response_input_item_param.py) — the Pydantic union vLLM validates against
+
+## 17. Auto-continue workaround → end-to-end SUCCESS on qwen3.5-27b (2026-05-12)
+
+### 17.1 Root cause located in upstream issue tracker
+
+The §16 residual ("model voluntarily stops on certain turn shapes") is
+a **documented Qwen3 issue with a canonical workaround**. The exact
+match upstream:
+
+- [Qwen3 #1817](https://github.com/QwenLM/Qwen3/issues/1817) — "Thinking mode
+  plans tool calls but fails to execute them ~60% of the time
+  (Qwen3-32B-AWQ + vLLM)". Direct quote: *"the model reasons through
+  what it would find from a web search, never stops to actually make
+  the call, and generates a response based on its own reasoning rather
+  than retrieved data."*
+- [Qwen3.5-9B HF discussion #10](https://huggingface.co/Qwen/Qwen3.5-9B/discussions/10)
+  — "Tool call stops in middle of the conversation, doesn't finish
+  the complete task." Includes the canonical workaround (auto-continue).
+
+Both report the same shape Track B was hitting: thinking-mode model
+produces reasoning content that *plans* the next action, then emits an
+empty assistant message and exits without making the function call.
+The §16.5 framing ("residual is now narrower: model behavior") matched
+this exactly.
+
+The Catch-22 that makes this hard to fix at the inference layer:
+
+| Setting | Streaming | Outcome |
+|---|---|---|
+| `enable_thinking=true` | true | Model plans-but-doesn't-act ~60% (Qwen3 #1817) |
+| `enable_thinking=false` | true | Tool calls leak into content as raw XML, never parsed (vLLM #20611) |
+| `enable_thinking=true` | false | Plans-but-doesn't-act, but at least no parser bug |
+| `enable_thinking=false` | false | Tool calls work but model over-triggers on knowledge queries |
+
+Track B uses streaming (codex CLI) and `reasoning_effort=high` (thinking
+on), landing us squarely in the first row.
+
+### 17.2 Canonical workaround — auto-continue
+
+The HF discussion #10 prescribes: when the model returns `finish_reason=stop`
+with no `tool_calls` and empty/whitespace content, inject a "continue"
+user message and re-call. The model then continues correctly.
+
+Implemented in `inference_proxy.py` behind `LUMO_PROXY_AUTO_CONTINUE=1`:
+
+```python
+# After the non-streaming response arrives, in the bypass path:
+while retries_remaining > 0:
+    has_function_call = any(it.get("type") == "function_call" for it in output)
+    has_real_text = any(
+        it.get("type") == "message"
+        and any((c.get("text") or "").strip() for c in it.get("content", []))
+        for it in output
+    )
+    if has_function_call or has_real_text:
+        break  # legitimate output
+    # Inject the previous reasoning/message items + a "continue" user msg
+    retry_input = list(original_input)
+    for it in output: retry_input.append(it)
+    retry_input.append({
+        "type": "message", "role": "user",
+        "content": [{"type": "input_text", "text": "continue"}],
+    })
+    # Re-call vLLM with the augmented input
+    retry_resp = requests.post(..., data=json.dumps({**req, "input": retry_input}))
+    # Merge: keep prior output items + append new ones
+    non_streaming_parsed["output"] = prior_output + new_output
+    retries_remaining -= 1
+```
+
+Configurable via `LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES` (default 3) and
+`LUMO_PROXY_AUTO_CONTINUE_MESSAGE` (default `"continue"`).
+
+### 17.3 End-to-end test — FIRST SUCCESS on qwen3.5-27b
+
+Same `incident-evidence-synthesis/v1` workspace, codex + bypass +
+normalization + auto-continue:
+
+| Metric | Audit baseline | §14 synth fix | §16 normalization | **§17 + auto-continue** | gpt-5.5 ref |
+|---|---:|---:|---:|---:|---:|
+| Codex turns | 1 | 1 | 1 | 1 | 1 |
+| Inference proxy calls | 1 | 5 | 3-5 | **many** | n/a |
+| **Tool calls executed** | **1** | **3-4** | **2-4** | **11** | **20** |
+| Agent messages with text | 0 | 0 | 2 | **3** | 8 |
+| Cumulative output tokens | 74 | 301 | ~300 | **1,586** | 3,653 |
+| **`apply_patch` calls** | **0** | **0** | **0** | 0 (used heredoc) | 0 (used heredoc) |
+| **Workspace files written** | **0/2** | **0/2** | **0/2** | **2/2** | **2/2** |
+
+Both required artifacts produced with substantively correct content:
+
+**`packet/findings.json`** — structured incident analysis:
+- `incident_id: "INC-2047"`
+- `triggering_condition`: bulk-refund without idempotency keys
+- `failed_guardrail`: `idempotency-required` skipped due to `legacy_batch_header`
+- `highest_confidence_follow_up_action`: reject + remove bypass
+- `unresolved_ambiguity`: queue worker replay theory (not confirmed)
+
+**`packet/incident_packet.md`** — narrative writeup with sections
+Summary / Triggering Condition / Failed Guardrail / Follow-Up Action /
+Unresolved Ambiguity, each with evidence-source citations. Matches the
+substantive content gpt-5.5 produced in §11.1.
+
+Commands executed during the run:
+
+```
+1. cat prompt.md
+2. cat queries/incidence_request.md
+3. find corpus/ -type f
+4. cat corpus/logs/api_gateway_2026-05-01.log
+5. cat corpus/timeline/incident_timeline.md
+6. cat corpus/tickets/TICKET-8729.md
+7. cat corpus/tickets/TICKET-8721.md
+8. cat corpus/remediation/notes.md
+9. mkdir -p packet
+10. cat > packet/incident_packet.md <<'EOF' ... EOF
+11. cat > packet/findings.json <<'EOF' ... EOF
+```
+
+The auto-continue fired at the right moment: after exploration, when
+the model said "Now I need to read all the corpus files" but didn't
+emit a tool call, the proxy injected `"continue"` and got back the
+actual tool call. The agent then completed the task.
+
+### 17.4 Complete stack of patches required
+
+Track B's qwen3.5-27b harness now works with these four layered fixes:
+
+| Section | Patch | What it fixes |
+|---|---|---|
+| §13 | vLLM PR #39055 + streaming-event guard | XML tool calls trapped in `reasoning` after promotion → now reach codex |
+| §14 | Proxy synthesis of missing `output_item.added` | Streaming events emit `function_call_arguments.delta` with wrong item_id → synthesize correct events from `response.completed` |
+| §16 | Proxy input normalization | Non-streaming `/v1/responses` validation rejects codex transcript (missing `id`/`status`/`annotations`) → add deterministic fields |
+| §17 | Proxy auto-continue | Qwen3 thinking-mode plans-but-doesn't-act ~60% of the time → detect empty stop and inject `"continue"` |
+
+All four are necessary. Removing any one degrades the test to a
+specific intermediate failure mode (e.g., remove §17 → model stops
+after exploration; remove §16 → 912 validation errors on turn 3;
+remove §14 → tool calls lost in streaming events; remove §13 → no
+tool call iteration at all).
+
+### 17.5 What this changes about Track B's path forward
+
+The benchmark-validity audit's headline finding is **resolved at the
+serving layer**. qwen3.5-27b can drive codex's agentic loop on this
+workspace. The §5.1 open decision ("anchor model choice") is no longer
+forced — we can keep qwen3.5-27b without doing the Qwen3-Coder swap or
+falling back to gpt-5.5.
+
+Open follow-ups now narrower:
+
+1. **Validate on all 13 v4a tasks.** This session confirmed
+   `incident-evidence-synthesis`. The other 12 tasks may have
+   different failure modes. ~70 min for a full sweep.
+2. **Wire family graders** into round summary (§11.5.2 — still
+   required regardless).
+3. **Re-baseline v4a** with the complete patch stack. The current
+   v4a wallclock measurements (Round 4a, 4b) were measuring the
+   broken-harness behavior; they need re-measurement on the working
+   harness.
+4. **Upstream the proxy patches.** §13.8 / §14.8 / §15 / §17 each
+   correspond to filable upstream bugs/PRs. Once the proxy work
+   stabilizes here, those should be cleaned up and submitted to
+   vLLM / codex CLI.
+
+### 17.6 Proxy env vars summary
+
+The bench proxy at `127.0.0.1:8022` now supports these env vars
+(all opt-in, default-off):
+
+```
+LUMO_PROXY_NONSTREAM_BYPASS=1
+  Convert codex stream:true requests to upstream stream:false,
+  synthesize SSE response from non-streaming JSON. Required to apply
+  PR #39055 promotion path. (§15, §16)
+
+LUMO_PROXY_AUTO_CONTINUE=1
+  When the upstream response has no function_call and no real text,
+  inject a "continue" user message and re-call. Workaround for Qwen3
+  #1817 thinking-mode plan-but-don't-act. (§17)
+
+LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=N
+  Max number of auto-continue retries per inference call. Default 3.
+
+LUMO_PROXY_AUTO_CONTINUE_MESSAGE=<text>
+  Override the injected continue message. Default "continue".
+
+LUMO_PROXY_SSE_DUMP_DIR=/path
+  Debug: dump raw SSE blocks per response to this directory.
+
+LUMO_PROXY_REQUEST_DUMP_DIR=/path
+  Debug: dump every codex request body to this directory.
+```
+
+Current run config: `LUMO_PROXY_NONSTREAM_BYPASS=1 LUMO_PROXY_AUTO_CONTINUE=1 LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=5`.
+
+### 17.7 Sources
+
+- [Qwen3 #1817 — Thinking mode plans tool calls but fails to execute them ~60% of the time](https://github.com/QwenLM/Qwen3/issues/1817) — exact bug match
+- [Qwen3.5-9B HF discussion #10 — Tool call stops in middle of the conversation](https://huggingface.co/Qwen/Qwen3.5-9B/discussions/10) — canonical auto-continue workaround
+- [llama.cpp #20837 — Qwen3.5-9B stops after XML tool call with thinking enabled](https://github.com/ggml-org/llama.cpp/issues/20837) — same bug family in llama.cpp
+- [vLLM #20611 — Can't get tool_calls when stream=true + enable_thinking=false](https://github.com/vllm-project/vllm/issues/20611) — the Catch-22's other half
+- [QwenLM/qwen-code #176 — Tool calling does not work with qwen3-30b-a3b local](https://github.com/QwenLM/qwen-code/issues/176) — adjacent symptom
+- vLLM PRs #35687, #40861 (cumulative fixes around the thinking-mode/tool-calling interaction)

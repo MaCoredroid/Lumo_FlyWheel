@@ -1755,6 +1755,79 @@ def build_proxy_handler(
                     parsed = None
                 if isinstance(parsed, dict):
                     non_streaming_parsed = parsed
+                # Auto-continue retry loop (Qwen3 #1817 / Qwen3.5-9B #10 workaround):
+                # qwen3.5-27b in thinking mode sometimes plans tool calls in
+                # reasoning and then fails to emit them — generating a response
+                # claiming "I will do X" but with no function_call in output.
+                # Detect that and inject a "continue" user message, re-call.
+                if (
+                    os.environ.get("LUMO_PROXY_AUTO_CONTINUE", "").lower() in {"1", "true", "yes"}
+                    and isinstance(non_streaming_parsed, dict)
+                ):
+                    max_retries = int(os.environ.get("LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES", "3"))
+                    continue_message = os.environ.get(
+                        "LUMO_PROXY_AUTO_CONTINUE_MESSAGE",
+                        "continue",
+                    )
+                    retries_remaining = max_retries
+                    while retries_remaining > 0:
+                        out_items = non_streaming_parsed.get("output", []) or []
+                        has_function_call = any(
+                            isinstance(it, dict) and it.get("type") == "function_call"
+                            for it in out_items
+                        )
+                        has_real_text = False
+                        for it in out_items:
+                            if not isinstance(it, dict):
+                                continue
+                            if it.get("type") == "message":
+                                for c in it.get("content", []) or []:
+                                    if isinstance(c, dict) and (c.get("text") or "").strip():
+                                        has_real_text = True
+                                        break
+                        if has_function_call or has_real_text:
+                            break  # legitimate output, no continue needed
+                        # Synthesize the "continue" follow-up
+                        retries_remaining -= 1
+                        retry_req = dict(normalized_req)
+                        retry_input = list(retry_req.get("input", []))
+                        # Embed the previous reasoning + message items as assistant
+                        # turn outputs so the model has context for the continue.
+                        for it in out_items:
+                            if isinstance(it, dict):
+                                retry_input.append(it)
+                        retry_input.append({
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": continue_message}],
+                        })
+                        retry_req["input"] = retry_input
+                        retry_req = _normalize_input_for_nonstreaming(retry_req)
+                        retry_payload = json.dumps(retry_req).encode("utf-8")
+                        try:
+                            retry_resp = requests.post(
+                                f"{upstream_base_url}{self.path}",
+                                data=retry_payload,
+                                headers=headers,
+                                timeout=600,
+                                stream=False,
+                            )
+                            if retry_resp.status_code == 200:
+                                try:
+                                    retry_parsed = retry_resp.json()
+                                except json.JSONDecodeError:
+                                    retry_parsed = None
+                                if isinstance(retry_parsed, dict):
+                                    # Merge: keep accumulated output from prior calls,
+                                    # then append the new output items.
+                                    prev_output = list(non_streaming_parsed.get("output", []) or [])
+                                    new_output = list(retry_parsed.get("output", []) or [])
+                                    non_streaming_parsed = dict(retry_parsed)
+                                    non_streaming_parsed["output"] = prev_output + new_output
+                            else:
+                                break
+                        except requests.RequestException:
+                            break
                 response_headers["Transfer-Encoding"] = "chunked"
                 response_headers["Content-Type"] = "text/event-stream"
                 response_headers.pop("Content-Length", None)

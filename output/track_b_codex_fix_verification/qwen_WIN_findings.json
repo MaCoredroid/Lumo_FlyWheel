@@ -1,0 +1,31 @@
+{
+  "incident_id": "INC-2047",
+  "triggering_condition": {
+    "description": "Bulk-refund requests submitted without idempotency keys were accepted due to guardrail bypass",
+    "evidence_sources": [
+      "corpus/logs/api_gateway_2026-05-01.log",
+      "corpus/timeline/incident_timeline.md"
+    ]
+  },
+  "failed_guardrail": {
+    "name": "idempotency-required",
+    "failure_reason": "Guardrail was skipped due to legacy_batch_header",
+    "evidence_sources": [
+      "corpus/logs/api_gateway_2026-05-01.log",
+      "corpus/tickets/TICKET-8729.md"
+    ]
+  },
+  "highest_confidence_follow_up_action": {
+    "action": "Reject bulk-refund requests without idempotency keys and remove legacy_batch_header bypass before re-enabling endpoint",
+    "evidence_sources": [
+      "corpus/remediation/notes.md"
+    ]
+  },
+  "unresolved_ambiguity": {
+    "description": "Initial theory that queue worker replayed an old payment event after timeout has not been confirmed or ruled out",
+    "evidence_sources": [
+      "corpus/tickets/TICKET-8721.md",
+      "corpus/remediation/notes.md"
+    ]
+  }
+}
