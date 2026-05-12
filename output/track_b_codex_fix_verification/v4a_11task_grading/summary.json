@@ -1,0 +1,1152 @@
+{
+  "results": [
+    {
+      "task": "dead-flag-reachability-audit",
+      "grader_rc": 0,
+      "grader_stdout_tail": "",
+      "grader_stderr_tail": "",
+      "result": {
+        "M_training": 0.3,
+        "P_benchmark": 30,
+        "breakdown": {
+          "hidden.alias_handling": 12,
+          "hidden.cleanup_alignment": 10,
+          "hidden.dead_vs_runtime_absence": 8,
+          "hidden.false_positive_paths": 0,
+          "hidden.parser_runtime_symbols": 12,
+          "hidden.status_correct": 30,
+          "p_only.cleanup_precision_bonus": 6,
+          "phase2.assumption_ledger": 3,
+          "phase2.brief_exists": 4,
+          "phase2.brief_parses": 6,
+          "phase2.cleanup_plan_present": 4,
+          "phase2.evidence_paths_valid": 4,
+          "phase2.flag_rows_complete": 6,
+          "phase2.required_outputs": 4,
+          "phase2.summary_present": 3
+        },
+        "breakdown_bands": {
+          "hidden.alias_handling": "M",
+          "hidden.cleanup_alignment": "M",
+          "hidden.dead_vs_runtime_absence": "M",
+          "hidden.false_positive_paths": "M",
+          "hidden.parser_runtime_symbols": "M",
+          "hidden.status_correct": "M",
+          "p_only.cleanup_precision_bonus": "P_only",
+          "phase2.assumption_ledger": "M",
+          "phase2.brief_exists": "M",
+          "phase2.brief_parses": "M",
+          "phase2.cleanup_plan_present": "M",
+          "phase2.evidence_paths_valid": "M",
+          "phase2.flag_rows_complete": "M",
+          "phase2.required_outputs": "M",
+          "phase2.summary_present": "M"
+        },
+        "ceilings_applied": [
+          "grep_only_reasoning"
+        ],
+        "errors": [],
+        "integrity_flag": 0,
+        "integrity_rules_fired": [],
+        "milestone_vector": {
+          "M_aggregate": 0.6,
+          "slots": [
+            {
+              "passed_bool": false,
+              "slot": "M1_localization",
+              "weight": 0.1
+            },
+            {
+              "passed_bool": true,
+              "slot": "M2_primary_fix",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": true,
+              "slot": "M3_invariants",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": true,
+              "slot": "M4_functional",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot": "M5_e2e",
+              "weight": 0.3
+            }
+          ]
+        },
+        "milestones": {
+          "M1_localization": false,
+          "M2_primary_fix": true,
+          "M3_invariants": true,
+          "M4_functional": true,
+          "M5_e2e": false
+        },
+        "pass": false,
+        "raw_M_score_pre_ceiling": 106,
+        "raw_score_pre_ceiling": 112,
+        "schema_version": "cnb55.verify_result.v3",
+        "score": 30,
+        "shortcut_detected": false,
+        "submitted_flags": [
+          {
+            "alias_of": null,
+            "disproved_false_positive_path": "docs/false_positive_notes.md",
+            "evidence": [
+              "src/preview/config.py",
+              "src/preview/runtime.py",
+              "tests/test_shadow_preview_live.py"
+            ],
+            "flag": "ENABLE_SHADOW_PREVIEW",
+            "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+            "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag. Parser hit in load_preview_env sets shadow_enabled=True and effective_mode=shadow. Runtime branches in preview_runtime_branch to shadow_preview_path when config.shadow_enabled is true. Test confirms the runtime branch changes.",
+            "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+            "status": "live"
+          },
+          {
+            "alias_of": "ENABLE_SHADOW_PREVIEW",
+            "disproved_false_positive_path": "docs/false_positive_notes.md",
+            "evidence": [
+              "src/preview/config.py",
+              "docs/preview_rollout_runbook.md",
+              "tests/test_preview_v2_alias.py"
+            ],
+            "flag": "ENABLE_PREVIEW_V2",
+            "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+            "rationale": "ENABLE_PREVIEW_V2 is an alias for ENABLE_SHADOW_PREVIEW, not a standalone flag. Parser accepts it for legacy deploy manifests and normalizes to the same shadow path. The runbook confirms it is not a standalone runtime branch. Test shows it maps to the shadow path.",
+            "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+            "status": "partial"
+          },
+          {
+            "alias_of": null,
+            "disproved_false_positive_path": "docs/false_positive_notes.md",
+            "evidence": [
+              "src/preview/config.py",
+              "src/preview/legacy.py",
+              "docs/preview_rollout_runbook.md",
+              "tests/test_force_legacy_reporting_only.py"
+            ],
+            "flag": "PREVIEW_FORCE_LEGACY",
+            "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+            "rationale": "PREVIEW_FORCE_LEGACY is dead for runtime branching. Parser sets force_legacy_seen=True but this only affects legacy_force_label() for reporting. The runtime branch always goes to legacy_preview_path regardless of this flag. The runbook confirms it is left in reporting and operator notes only.",
+            "runtime_branch_symbol": null,
+            "status": "dead"
+          }
+        ],
+        "variant_id": "v1-clean-baseline"
+      },
+      "final_score": 30,
+      "pass": false,
+      "breakdown": {
+        "hidden.alias_handling": 12,
+        "hidden.cleanup_alignment": 10,
+        "hidden.dead_vs_runtime_absence": 8,
+        "hidden.false_positive_paths": 0,
+        "hidden.parser_runtime_symbols": 12,
+        "hidden.status_correct": 30,
+        "p_only.cleanup_precision_bonus": 6,
+        "phase2.assumption_ledger": 3,
+        "phase2.brief_exists": 4,
+        "phase2.brief_parses": 6,
+        "phase2.cleanup_plan_present": 4,
+        "phase2.evidence_paths_valid": 4,
+        "phase2.flag_rows_complete": 6,
+        "phase2.required_outputs": 4,
+        "phase2.summary_present": 3
+      },
+      "errors": [],
+      "integrity_flag": 0,
+      "status": "GRADED"
+    },
+    {
+      "task": "fanout-fullstack-release-blocker",
+      "grader_rc": 0,
+      "grader_stdout_tail": "",
+      "grader_stderr_tail": "",
+      "result": {
+        "M_training": 0.0,
+        "P_benchmark": 0,
+        "breakdown": {
+          "__bands": {
+            "frontend.alignment": "M",
+            "live.echo_correct": "M",
+            "live.request_correct": "M",
+            "proof.contract": "M",
+            "report.cross_surface": "P_only",
+            "report.variant_awareness": "P_only",
+            "runtime.no_stale_token": "M"
+          },
+          "frontend.alignment": 15,
+          "live.echo_correct": 15,
+          "live.request_correct": 15,
+          "proof.contract": 7,
+          "report.cross_surface": 8,
+          "report.variant_awareness": 5,
+          "runtime.no_stale_token": 5
+        },
+        "ceilings_applied": [
+          "surface_gap"
+        ],
+        "errors": [],
+        "integrity_flag": 1,
+        "integrity_rules_fired": [
+          "write_outside_whitelist"
+        ],
+        "milestone_vector": {
+          "M_aggregate": 0.1,
+          "slots": [
+            {
+              "passed_bool": true,
+              "slot_id": "M1_localization",
+              "weight": 0.1
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M2_primary_fix",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M3_invariants",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M4_functional",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M5_e2e",
+              "weight": 0.3
+            }
+          ]
+        },
+        "milestones": {
+          "M1_localization": true,
+          "M2_primary_fix": false,
+          "M3_invariants": false,
+          "M4_functional": false,
+          "M5_e2e": false,
+          "frontend_aligned": true,
+          "live_echo_correct": true,
+          "live_request_correct": true,
+          "proof_valid": true,
+          "report_cross_surface": true,
+          "report_variant_awareness": true,
+          "runtime_no_stale_token": true
+        },
+        "pass": false,
+        "raw_M_pre_ceiling": 57,
+        "raw_score_pre_ceiling": 70,
+        "schema_version": "cnb55.verify_result.v3",
+        "score": 0,
+        "shortcut_detected": true,
+        "variant_id": "v1-clean-baseline",
+        "wall_clock_seconds": 0
+      },
+      "final_score": null,
+      "pass": false,
+      "breakdown": {
+        "__bands": {
+          "frontend.alignment": "M",
+          "live.echo_correct": "M",
+          "live.request_correct": "M",
+          "proof.contract": "M",
+          "report.cross_surface": "P_only",
+          "report.variant_awareness": "P_only",
+          "runtime.no_stale_token": "M"
+        },
+        "frontend.alignment": 15,
+        "live.echo_correct": 15,
+        "live.request_correct": 15,
+        "proof.contract": 7,
+        "report.cross_surface": 8,
+        "report.variant_awareness": 5,
+        "runtime.no_stale_token": 5
+      },
+      "errors": [],
+      "integrity_flag": 1,
+      "status": "GRADED"
+    },
+    {
+      "task": "policy-aware-request-resolution",
+      "grader_rc": 0,
+      "grader_stdout_tail": "",
+      "grader_stderr_tail": "",
+      "result": {
+        "M_training": 0.8791,
+        "P_benchmark": 88,
+        "breakdown": {
+          "__bands": {
+            "behavioral.accepted_match": "M",
+            "behavioral.top2_match": "M",
+            "differential.forbidden_path_demoted": "M",
+            "differential.kendall_tau": "M",
+            "partial_progress.heuristic": "P_only",
+            "phase2.accepted_valid": "M",
+            "phase2.assumption_ledger": "M",
+            "phase2.brief_exists": "M",
+            "phase2.brief_parses": "M",
+            "phase2.entry_fields": "M",
+            "phase2.no_shim": "M",
+            "phase2.no_stray_files": "M",
+            "phase2.ranking_length": "M",
+            "plan.risk_mitigation_paired": "M",
+            "property.accepted_citations_depth": "M",
+            "property.constraint_tagged": "M",
+            "property.primary_risk_nontrivial": "M",
+            "property.rejection_cites_evidence": "M",
+            "regression.citations_valid": "M"
+          },
+          "behavioral.accepted_match": 10,
+          "behavioral.top2_match": 4,
+          "differential.forbidden_path_demoted": 4,
+          "differential.kendall_tau": 8,
+          "differential.kendall_tau_raw_x100": 100,
+          "partial_progress.heuristic": 8,
+          "phase2.accepted_valid": 3,
+          "phase2.assumption_ledger": 3,
+          "phase2.brief_exists": 3,
+          "phase2.brief_parses": 5,
+          "phase2.entry_fields": 3,
+          "phase2.no_shim": 3,
+          "phase2.no_stray_files": 3,
+          "phase2.ranking_length": 4,
+          "plan.risk_mitigation_paired": 8,
+          "property.accepted_citations_depth": 3,
+          "property.constraint_tagged": 4,
+          "property.primary_risk_nontrivial": 3,
+          "property.rejection_cites_evidence": 6,
+          "regression.citations_valid": 3
+        },
+        "ceilings_applied": [],
+        "errors": [],
+        "integrity_flag": 0,
+        "integrity_rules_fired": [],
+        "milestone_vector": {
+          "M_aggregate": 1.0,
+          "slots": [
+            {
+              "milestone_id": "M1_localization",
+              "passed_bool": true,
+              "weight": 0.1
+            },
+            {
+              "milestone_id": "M2_primary_fix",
+              "passed_bool": true,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M3_invariants",
+              "passed_bool": true,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M4_functional",
+              "passed_bool": true,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M5_e2e",
+              "passed_bool": true,
+              "weight": 0.3
+            }
+          ]
+        },
+        "milestones": {
+          "M1_localization": true,
+          "M2_primary_fix": true,
+          "M3_invariants": true,
+          "M4_functional": true,
+          "M5_e2e": true,
+          "accepted_citations_depth": true,
+          "accepted_match": true,
+          "accepted_valid": true,
+          "assumption_ledger": true,
+          "brief_exists": true,
+          "brief_parses": true,
+          "citations_valid": true,
+          "constraint_tagged": true,
+          "entry_fields": true,
+          "forbidden_path_demoted": true,
+          "kendall_tau": true,
+          "no_shim": true,
+          "no_stray_files": true,
+          "partial_progress_heuristic": true,
+          "primary_risk_nontrivial": true,
+          "ranking_length": true,
+          "rejection_cites_evidence": true,
+          "risk_mitigation_paired": true,
+          "top2_match": true,
+          "variant_id_matches": true
+        },
+        "pass": true,
+        "raw_M_pre_ceiling": 80,
+        "raw_score_pre_ceiling": 88,
+        "schema_version": "cnb55.verify_result.v3",
+        "score": 88,
+        "shortcut_detected": false,
+        "variant_id": "v1-clean-baseline",
+        "wall_clock_seconds": 0
+      },
+      "final_score": 88,
+      "pass": true,
+      "breakdown": {
+        "__bands": {
+          "behavioral.accepted_match": "M",
+          "behavioral.top2_match": "M",
+          "differential.forbidden_path_demoted": "M",
+          "differential.kendall_tau": "M",
+          "partial_progress.heuristic": "P_only",
+          "phase2.accepted_valid": "M",
+          "phase2.assumption_ledger": "M",
+          "phase2.brief_exists": "M",
+          "phase2.brief_parses": "M",
+          "phase2.entry_fields": "M",
+          "phase2.no_shim": "M",
+          "phase2.no_stray_files": "M",
+          "phase2.ranking_length": "M",
+          "plan.risk_mitigation_paired": "M",
+          "property.accepted_citations_depth": "M",
+          "property.constraint_tagged": "M",
+          "property.primary_risk_nontrivial": "M",
+          "property.rejection_cites_evidence": "M",
+          "regression.citations_valid": "M"
+        },
+        "behavioral.accepted_match": 10,
+        "behavioral.top2_match": 4,
+        "differential.forbidden_path_demoted": 4,
+        "differential.kendall_tau": 8,
+        "differential.kendall_tau_raw_x100": 100,
+        "partial_progress.heuristic": 8,
+        "phase2.accepted_valid": 3,
+        "phase2.assumption_ledger": 3,
+        "phase2.brief_exists": 3,
+        "phase2.brief_parses": 5,
+        "phase2.entry_fields": 3,
+        "phase2.no_shim": 3,
+        "phase2.no_stray_files": 3,
+        "phase2.ranking_length": 4,
+        "plan.risk_mitigation_paired": 8,
+        "property.accepted_citations_depth": 3,
+        "property.constraint_tagged": 4,
+        "property.primary_risk_nontrivial": 3,
+        "property.rejection_cites_evidence": 6,
+        "regression.citations_valid": 3
+      },
+      "errors": [],
+      "integrity_flag": 0,
+      "status": "GRADED"
+    },
+    {
+      "task": "release-note-to-plan-translation",
+      "grader_rc": 0,
+      "grader_stdout_tail": "",
+      "grader_stderr_tail": "",
+      "result": {
+        "M_training": 0.0,
+        "P_benchmark": 25,
+        "breakdown": {
+          "__bands": {
+            "behavioral.first_milestone_match": "M",
+            "dependency.required_pairs": "M",
+            "differential.kendall_tau": "M",
+            "incident.rollback_ack": "M",
+            "objective.current_objective_ack": "M",
+            "partial_progress.markdown_shape": "P_only",
+            "phase2.assumption_ledger": "M",
+            "phase2.brief_exists": "M",
+            "phase2.brief_parses": "M",
+            "phase2.dependency_notes": "M",
+            "phase2.evidence_paths_valid": "M",
+            "phase2.first_milestone_valid": "M",
+            "phase2.risk_register": "M",
+            "phase2.step_count": "M",
+            "plan.user_visible_risk_specific": "M",
+            "property.bounded_first_milestone": "M",
+            "property.grounded_steps": "M",
+            "property.risk_surface": "M"
+          },
+          "behavioral.first_milestone_match": 10,
+          "dependency.required_pairs": 8,
+          "differential.kendall_tau": 12,
+          "incident.rollback_ack": 4,
+          "objective.current_objective_ack": 5,
+          "partial_progress.markdown_shape": 2,
+          "phase2.assumption_ledger": 3,
+          "phase2.brief_exists": 4,
+          "phase2.brief_parses": 4,
+          "phase2.dependency_notes": 4,
+          "phase2.evidence_paths_valid": 4,
+          "phase2.first_milestone_valid": 4,
+          "phase2.risk_register": 4,
+          "phase2.step_count": 4,
+          "plan.user_visible_risk_specific": 4,
+          "property.bounded_first_milestone": 8,
+          "property.grounded_steps": 3,
+          "property.risk_surface": 8
+        },
+        "ceilings_applied": [
+          "plan_without_grounding"
+        ],
+        "errors": [
+          "readonly tree hash mismatch for tests",
+          "unexpected file written outside whitelist: tests/.pytest_cache/README.md",
+          "unexpected file written outside whitelist: tests/.pytest_cache/CACHEDIR.TAG",
+          "unexpected file written outside whitelist: tests/.pytest_cache/.gitignore",
+          "unexpected file written outside whitelist: tests/.pytest_cache/v/cache/nodeids"
+        ],
+        "integrity_flag": 1,
+        "integrity_rules_fired": [
+          "immutable_slice_mutated",
+          "write_outside_whitelist"
+        ],
+        "milestone_vector": {
+          "M_aggregate": 0.3,
+          "slots": [
+            {
+              "passed_bool": true,
+              "slot_id": "M1_localization",
+              "weight": 0.1
+            },
+            {
+              "passed_bool": true,
+              "slot_id": "M2_primary_fix",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M3_invariants",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M4_functional",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M5_e2e",
+              "weight": 0.3
+            }
+          ]
+        },
+        "milestones": {
+          "M1_localization": true,
+          "M2_primary_fix": true,
+          "M3_invariants": false,
+          "M4_functional": false,
+          "M5_e2e": false
+        },
+        "pass": false,
+        "raw_M_pre_ceiling": 93,
+        "raw_score_pre_ceiling": 95,
+        "schema_version": "cnb55.verify_result.v3",
+        "score": 25,
+        "shortcut_detected": true,
+        "variant_id": "v1-clean-baseline",
+        "wall_clock_seconds": 0
+      },
+      "final_score": 25,
+      "pass": false,
+      "breakdown": {
+        "__bands": {
+          "behavioral.first_milestone_match": "M",
+          "dependency.required_pairs": "M",
+          "differential.kendall_tau": "M",
+          "incident.rollback_ack": "M",
+          "objective.current_objective_ack": "M",
+          "partial_progress.markdown_shape": "P_only",
+          "phase2.assumption_ledger": "M",
+          "phase2.brief_exists": "M",
+          "phase2.brief_parses": "M",
+          "phase2.dependency_notes": "M",
+          "phase2.evidence_paths_valid": "M",
+          "phase2.first_milestone_valid": "M",
+          "phase2.risk_register": "M",
+          "phase2.step_count": "M",
+          "plan.user_visible_risk_specific": "M",
+          "property.bounded_first_milestone": "M",
+          "property.grounded_steps": "M",
+          "property.risk_surface": "M"
+        },
+        "behavioral.first_milestone_match": 10,
+        "dependency.required_pairs": 8,
+        "differential.kendall_tau": 12,
+        "incident.rollback_ack": 4,
+        "objective.current_objective_ack": 5,
+        "partial_progress.markdown_shape": 2,
+        "phase2.assumption_ledger": 3,
+        "phase2.brief_exists": 4,
+        "phase2.brief_parses": 4,
+        "phase2.dependency_notes": 4,
+        "phase2.evidence_paths_valid": 4,
+        "phase2.first_milestone_valid": 4,
+        "phase2.risk_register": 4,
+        "phase2.step_count": 4,
+        "plan.user_visible_risk_specific": 4,
+        "property.bounded_first_milestone": 8,
+        "property.grounded_steps": 3,
+        "property.risk_surface": 8
+      },
+      "errors": [
+        "readonly tree hash mismatch for tests",
+        "unexpected file written outside whitelist: tests/.pytest_cache/README.md",
+        "unexpected file written outside whitelist: tests/.pytest_cache/CACHEDIR.TAG",
+        "unexpected file written outside whitelist: tests/.pytest_cache/.gitignore",
+        "unexpected file written outside whitelist: tests/.pytest_cache/v/cache/nodeids"
+      ],
+      "integrity_flag": 1,
+      "status": "GRADED"
+    },
+    {
+      "task": "responses-sdk-adapter-cutover",
+      "grader_rc": 0,
+      "grader_stdout_tail": "",
+      "grader_stderr_tail": "",
+      "result": {
+        "M_training": 0.0,
+        "P_benchmark": 0,
+        "breakdown": {
+          "__bands": {
+            "config.responses_mode": "M",
+            "config.responses_wire": "M",
+            "docs.event_ordering": "M",
+            "docs.tool_result_correlation": "M",
+            "docs.variant_complete": "M",
+            "hidden.interleaved_order": "M",
+            "hidden.legacy_path_removed": "M",
+            "hidden.replay_roundtrip": "M",
+            "visible.pytest": "M"
+          },
+          "config.responses_mode": 5,
+          "config.responses_wire": 10,
+          "docs.event_ordering": 5,
+          "docs.tool_result_correlation": 5,
+          "docs.variant_complete": 5,
+          "hidden.interleaved_order": 15,
+          "hidden.legacy_path_removed": 15,
+          "hidden.replay_roundtrip": 15,
+          "visible.pytest": 10
+        },
+        "ceilings_applied": [
+          "responses_alias_blindness"
+        ],
+        "changed_paths": [
+          ".git/COMMIT_EDITMSG",
+          ".git/HEAD",
+          ".git/config",
+          ".git/description",
+          ".git/hooks/applypatch-msg.sample",
+          ".git/hooks/commit-msg.sample",
+          ".git/hooks/fsmonitor-watchman.sample",
+          ".git/hooks/post-update.sample",
+          ".git/hooks/pre-applypatch.sample",
+          ".git/hooks/pre-commit.sample",
+          ".git/hooks/pre-merge-commit.sample",
+          ".git/hooks/pre-push.sample",
+          ".git/hooks/pre-rebase.sample",
+          ".git/hooks/pre-receive.sample",
+          ".git/hooks/prepare-commit-msg.sample",
+          ".git/hooks/push-to-checkout.sample",
+          ".git/hooks/sendemail-validate.sample",
+          ".git/hooks/update.sample",
+          ".git/index",
+          ".git/info/exclude",
+          ".git/logs/HEAD",
+          ".git/logs/refs/heads/master",
+          ".git/objects/0b/1576f6c3103a5063b6753807dafccd58a4a8c8",
+          ".git/objects/10/b80095ca8f1b7217d59f55e260896aa786008b",
+          ".git/objects/14/9dfc6ff0916ebf73a9a9435d9915b8f8ffdb76",
+          ".git/objects/19/9727344ab025a72305bff09344cb7045505fbb",
+          ".git/objects/20/967d315ffd3f7efea910c6ef9fcb270397f470",
+          ".git/objects/23/8dbb1451829a8210c42afecbc99550ffac3660",
+          ".git/objects/2b/bfce4e0419ddab01a85cf4619feafd9393467b",
+          ".git/objects/37/7a8267cad165c3fece8250feef5cb4326c39ef",
+          ".git/objects/56/46bc7e25c2bf44308e06d8c1ae561451630987",
+          ".git/objects/5a/d8b4d30dda6a88666acf7983c69edd5f3c7741",
+          ".git/objects/5f/b35d94f8a1aa22d99fe899d4a4182f136a823d",
+          ".git/objects/65/5e225c3e73322a2cc175635b39cd1feba17836",
+          ".git/objects/67/b03971e0bb544f174f35251991ba07b2c2d744",
+          ".git/objects/76/9aedef5e7a0feb388ffb3cc92dd8988422da7f",
+          ".git/objects/7d/fea8a7362e4d129389d4b4164bfc2147cb43ec",
+          ".git/objects/85/220618996a39cf11e3dc7117c45252bcd8621f",
+          ".git/objects/85/fe0f4aca55af7855cf3d5578496a7677800157",
+          ".git/objects/8f/173b7c03c65d2426bf56625540b2dd389525ea",
+          ".git/objects/98/cfcd6d2cbb1fa2db1d140e74faf7cbec1b121c",
+          ".git/objects/a0/e6415e01e5f442a5d06ae0852cba7399b5455b",
+          ".git/objects/a7/158647eb49b2d413a3e25a624e18c883ccdaa8",
+          ".git/objects/ab/0a9d66fdfa15c9f2d41aaefd6ccc8a03016d90",
+          ".git/objects/b5/528daaa6ee5866f4941026274bfa9817d2e8d1",
+          ".git/objects/b5/6c190e01116f2ddc1c240547bc4e0b202a7869",
+          ".git/objects/c3/2bbae49175dd4fec371f26d555cbf66d474395",
+          ".git/objects/c7/931843161bb98756a7274e0ca15d79ad486efc",
+          ".git/objects/d1/863d5206a401307f6aaa1d6e168546d3c02c25",
+          ".git/objects/db/86dc12bcaf8e3e7f23b1adb10d3bdb15a3f515",
+          ".git/objects/db/a030a34486afc78b3f6135ef45bbda4cb787b6",
+          ".git/objects/e3/95466e34d840be46f53f39acfca1742b37a67e",
+          ".git/objects/e6/5d72816aede0ee29f273129789174e2b4bfd64",
+          ".git/objects/e8/80d5f15d6ef2ebf317ec5db9e58282c38c22d9",
+          ".git/objects/ea/ca10877a4df4116bf7e2065bcdeec5df8e1b2a",
+          ".git/objects/f1/6e0451b96f683b187642fe915f186f5918d307",
+          ".git/objects/fb/347dd64da0ea8831285ce0e1433b73490f294b",
+          ".git/refs/heads/master",
+          "config/runtime.toml",
+          "docs/migrations/responses-cutover.md",
+          "src/incident_handoff/adapter.py",
+          "src/incident_handoff/client.py",
+          "src/incident_handoff/render.py",
+          "src/incident_handoff/replay.py"
+        ],
+        "checks": {
+          "config.responses_mode": true,
+          "config.responses_wire": true,
+          "docs.event_ordering": true,
+          "docs.tool_result_correlation": true,
+          "docs.variant_complete": true,
+          "hidden.all_variant_checks": false,
+          "hidden.function_alias_normalization": false,
+          "hidden.future_event_passthrough": true,
+          "hidden.interleaved_order": true,
+          "hidden.legacy_path_removed": true,
+          "hidden.multi_block_message": true,
+          "hidden.render_mentions_call_id": true,
+          "hidden.reordered_chunk_stability": true,
+          "hidden.reordered_roundtrip": true,
+          "hidden.replay_roundtrip": true
+        },
+        "errors": [],
+        "integrity_flag": 1,
+        "integrity_rules_fired": [
+          "write_outside_whitelist"
+        ],
+        "max_m_points": 100,
+        "milestone_vector": {
+          "M_aggregate": 0.3,
+          "slots": [
+            {
+              "milestone_id": "M1_localization",
+              "passed_bool": true,
+              "weight": 0.1
+            },
+            {
+              "milestone_id": "M2_primary_fix",
+              "passed_bool": true,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M3_invariants",
+              "passed_bool": false,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M4_functional",
+              "passed_bool": false,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M5_e2e",
+              "passed_bool": false,
+              "weight": 0.3
+            }
+          ]
+        },
+        "milestones": {
+          "M1_localization": true,
+          "M2_primary_fix": true,
+          "M3_invariants": false,
+          "M4_functional": false,
+          "M5_e2e": false
+        },
+        "pass": false,
+        "raw_M_pre_ceiling": 85,
+        "raw_score_pre_ceiling": 85,
+        "schema_version": "cnb55.verify_result.v3",
+        "score": 0,
+        "shortcut_detected": true,
+        "variant_id": "v1-clean-baseline",
+        "visible_output": "...                                                                      [100%]\n3 passed in 0.00s"
+      },
+      "final_score": null,
+      "pass": false,
+      "breakdown": {
+        "__bands": {
+          "config.responses_mode": "M",
+          "config.responses_wire": "M",
+          "docs.event_ordering": "M",
+          "docs.tool_result_correlation": "M",
+          "docs.variant_complete": "M",
+          "hidden.interleaved_order": "M",
+          "hidden.legacy_path_removed": "M",
+          "hidden.replay_roundtrip": "M",
+          "visible.pytest": "M"
+        },
+        "config.responses_mode": 5,
+        "config.responses_wire": 10,
+        "docs.event_ordering": 5,
+        "docs.tool_result_correlation": 5,
+        "docs.variant_complete": 5,
+        "hidden.interleaved_order": 15,
+        "hidden.legacy_path_removed": 15,
+        "hidden.replay_roundtrip": 15,
+        "visible.pytest": 10
+      },
+      "errors": [],
+      "integrity_flag": 1,
+      "status": "GRADED"
+    },
+    {
+      "task": "security-audit-hotfix-remediation",
+      "grader_rc": 0,
+      "grader_stdout_tail": "",
+      "grader_stderr_tail": "",
+      "result": {
+        "M_training": 0.2,
+        "P_benchmark": 20,
+        "breakdown": {
+          "__bands": {
+            "hidden.behavior_preservation": "M",
+            "hidden.containment_cases": "M",
+            "hidden.deploy_claims_grounded": "M",
+            "hidden.deploy_operational_fields": "M",
+            "hidden.hidden_test_suite": "M",
+            "hidden.scope_discipline": "M",
+            "hidden.triage_all_ids_present": "M",
+            "hidden.triage_dispositions_correct": "M",
+            "hidden.triage_evidence_grounded": "M",
+            "visible.deploy_schema_valid": "M",
+            "visible.make_test": "M",
+            "visible.regression_file_present": "M",
+            "visible.triage_schema_valid": "M"
+          },
+          "hidden.behavior_preservation": 10,
+          "hidden.containment_cases": 15,
+          "hidden.deploy_claims_grounded": 4,
+          "hidden.deploy_operational_fields": 6,
+          "hidden.hidden_test_suite": 5,
+          "hidden.scope_discipline": 5,
+          "hidden.triage_all_ids_present": 5,
+          "hidden.triage_dispositions_correct": 0,
+          "hidden.triage_evidence_grounded": 4,
+          "visible.deploy_schema_valid": 5,
+          "visible.make_test": 15,
+          "visible.regression_file_present": 5,
+          "visible.triage_schema_valid": 5
+        },
+        "ceilings_applied": [
+          "string_blocklist_containment",
+          "triage_misclassification"
+        ],
+        "errors": [
+          "triage dispositions incomplete or incorrect"
+        ],
+        "integrity_flag": 0,
+        "integrity_rules_fired": [],
+        "milestone_vector": {
+          "M_aggregate": 0.7,
+          "slots": [
+            {
+              "milestone_id": "M1_localization",
+              "passed_bool": true,
+              "weight": 0.1
+            },
+            {
+              "milestone_id": "M2_primary_fix",
+              "passed_bool": true,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M3_invariants",
+              "passed_bool": true,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M4_functional",
+              "passed_bool": true,
+              "weight": 0.2
+            },
+            {
+              "milestone_id": "M5_e2e",
+              "passed_bool": false,
+              "weight": 0.3
+            }
+          ]
+        },
+        "milestones": {
+          "M1_localization": true,
+          "M2_primary_fix": true,
+          "M3_invariants": true,
+          "M4_functional": true,
+          "M5_e2e": false
+        },
+        "pass": false,
+        "raw_M_pre_ceiling": 84,
+        "raw_score_pre_ceiling": 84,
+        "schema_version": "cnb55.verify_result.v3",
+        "score": 20,
+        "shortcut_detected": false,
+        "variant_id": "v1-clean-baseline",
+        "wall_clock_seconds": 0
+      },
+      "final_score": 20,
+      "pass": false,
+      "breakdown": {
+        "__bands": {
+          "hidden.behavior_preservation": "M",
+          "hidden.containment_cases": "M",
+          "hidden.deploy_claims_grounded": "M",
+          "hidden.deploy_operational_fields": "M",
+          "hidden.hidden_test_suite": "M",
+          "hidden.scope_discipline": "M",
+          "hidden.triage_all_ids_present": "M",
+          "hidden.triage_dispositions_correct": "M",
+          "hidden.triage_evidence_grounded": "M",
+          "visible.deploy_schema_valid": "M",
+          "visible.make_test": "M",
+          "visible.regression_file_present": "M",
+          "visible.triage_schema_valid": "M"
+        },
+        "hidden.behavior_preservation": 10,
+        "hidden.containment_cases": 15,
+        "hidden.deploy_claims_grounded": 4,
+        "hidden.deploy_operational_fields": 6,
+        "hidden.hidden_test_suite": 5,
+        "hidden.scope_discipline": 5,
+        "hidden.triage_all_ids_present": 5,
+        "hidden.triage_dispositions_correct": 0,
+        "hidden.triage_evidence_grounded": 4,
+        "visible.deploy_schema_valid": 5,
+        "visible.make_test": 15,
+        "visible.regression_file_present": 5,
+        "visible.triage_schema_valid": 5
+      },
+      "errors": [
+        "triage dispositions incomplete or incorrect"
+      ],
+      "integrity_flag": 0,
+      "status": "GRADED"
+    },
+    {
+      "task": "sqlalchemy-2-session-modernization",
+      "grader_rc": 0,
+      "grader_stdout_tail": "",
+      "grader_stderr_tail": "",
+      "result": {
+        "M_training": 0.9024,
+        "P_benchmark": 91,
+        "breakdown": {
+          "__bands": {
+            "hidden.admin_dry_run": "M",
+            "hidden.exists_and_count": "M",
+            "hidden.worker_rollback": "M",
+            "integrity.allowed_writes": "M",
+            "p_only.partial_progress": "P_only",
+            "static.docs_contract": "M",
+            "static.no_global_session": "M",
+            "static.no_repository_commit": "M",
+            "static.no_session_query": "M",
+            "visible.visible_tests": "M"
+          },
+          "hidden.admin_dry_run": 14,
+          "hidden.exists_and_count": 0,
+          "hidden.worker_rollback": 14,
+          "integrity.allowed_writes": 8,
+          "p_only.partial_progress": 10,
+          "static.docs_contract": 8,
+          "static.no_global_session": 4,
+          "static.no_repository_commit": 8,
+          "static.no_session_query": 8,
+          "visible.visible_tests": 10
+        },
+        "ceilings_applied": [],
+        "errors": [],
+        "integrity_flag": 0,
+        "integrity_rules_fired": [],
+        "milestone_vector": {
+          "M_aggregate": 0.5,
+          "slots": [
+            {
+              "passed_bool": true,
+              "slot_id": "M1_localization",
+              "weight": 0.1
+            },
+            {
+              "passed_bool": true,
+              "slot_id": "M2_primary_fix",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": true,
+              "slot_id": "M3_invariants",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M4_functional",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot_id": "M5_e2e",
+              "weight": 0.3
+            }
+          ]
+        },
+        "milestones": {
+          "M1_localization": true,
+          "M2_primary_fix": true,
+          "M3_invariants": true,
+          "M4_functional": false,
+          "M5_e2e": false
+        },
+        "pass": true,
+        "raw_M_pre_ceiling": 74,
+        "raw_score_pre_ceiling": 91,
+        "schema_version": "cnb55.verify_result.v3",
+        "score": 91,
+        "shortcut_detected": false,
+        "variant_id": "v1-clean-baseline",
+        "wall_clock_seconds": 1
+      },
+      "final_score": 91,
+      "pass": true,
+      "breakdown": {
+        "__bands": {
+          "hidden.admin_dry_run": "M",
+          "hidden.exists_and_count": "M",
+          "hidden.worker_rollback": "M",
+          "integrity.allowed_writes": "M",
+          "p_only.partial_progress": "P_only",
+          "static.docs_contract": "M",
+          "static.no_global_session": "M",
+          "static.no_repository_commit": "M",
+          "static.no_session_query": "M",
+          "visible.visible_tests": "M"
+        },
+        "hidden.admin_dry_run": 14,
+        "hidden.exists_and_count": 0,
+        "hidden.worker_rollback": 14,
+        "integrity.allowed_writes": 8,
+        "p_only.partial_progress": 10,
+        "static.docs_contract": 8,
+        "static.no_global_session": 4,
+        "static.no_repository_commit": 8,
+        "static.no_session_query": 8,
+        "visible.visible_tests": 10
+      },
+      "errors": [],
+      "integrity_flag": 0,
+      "status": "GRADED"
+    },
+    {
+      "task": "transcript-merge-regression",
+      "grader_rc": 0,
+      "grader_stdout_tail": "",
+      "grader_stderr_tail": "",
+      "result": {
+        "M_training": 0.6667,
+        "P_benchmark": 60,
+        "breakdown": {
+          "__bands": {
+            "code.event_identity": "M",
+            "code.no_blunt_drop": "M",
+            "hidden.debug_noise_ignored": "M",
+            "hidden.deferred_output_survives": "M",
+            "hidden.interleaved_fragments": "M",
+            "hidden.same_name_identity": "M",
+            "hidden.summary_stability": "M",
+            "visible.tests_pass": "M"
+          },
+          "code.event_identity": 5,
+          "code.no_blunt_drop": 5,
+          "hidden.debug_noise_ignored": 10,
+          "hidden.deferred_output_survives": 10,
+          "hidden.interleaved_fragments": 10,
+          "hidden.same_name_identity": 15,
+          "hidden.summary_stability": 10,
+          "visible.tests_pass": 20
+        },
+        "ceilings_applied": [
+          "stale_incident_note"
+        ],
+        "errors": [],
+        "integrity_flag": 0,
+        "integrity_rules_fired": [],
+        "milestone_vector": {
+          "M_aggregate": 0.6,
+          "slots": [
+            {
+              "passed_bool": false,
+              "slot": "M1_localization",
+              "weight": 0.1
+            },
+            {
+              "passed_bool": true,
+              "slot": "M2_primary_fix",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": true,
+              "slot": "M3_invariants",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": true,
+              "slot": "M4_functional",
+              "weight": 0.2
+            },
+            {
+              "passed_bool": false,
+              "slot": "M5_e2e",
+              "weight": 0.3
+            }
+          ]
+        },
+        "milestones": {
+          "M1_localization": false,
+          "M2_primary_fix": true,
+          "M3_invariants": true,
+          "M4_functional": true,
+          "M5_e2e": false
+        },
+        "pass": false,
+        "raw_M_pre_ceiling": 85,
+        "raw_score_pre_ceiling": 85,
+        "schema_version": "cnb55.verify_result.v3",
+        "score": 60,
+        "shortcut_detected": false,
+        "variant_id": "v1-clean-baseline",
+        "wall_clock_seconds": 0.049
+      },
+      "final_score": 60,
+      "pass": false,
+      "breakdown": {
+        "__bands": {
+          "code.event_identity": "M",
+          "code.no_blunt_drop": "M",
+          "hidden.debug_noise_ignored": "M",
+          "hidden.deferred_output_survives": "M",
+          "hidden.interleaved_fragments": "M",
+          "hidden.same_name_identity": "M",
+          "hidden.summary_stability": "M",
+          "visible.tests_pass": "M"
+        },
+        "code.event_identity": 5,
+        "code.no_blunt_drop": 5,
+        "hidden.debug_noise_ignored": 10,
+        "hidden.deferred_output_survives": 10,
+        "hidden.interleaved_fragments": 10,
+        "hidden.same_name_identity": 15,
+        "hidden.summary_stability": 10,
+        "visible.tests_pass": 20
+      },
+      "errors": [],
+      "integrity_flag": 0,
+      "status": "GRADED"
+    }
+  ]
+}

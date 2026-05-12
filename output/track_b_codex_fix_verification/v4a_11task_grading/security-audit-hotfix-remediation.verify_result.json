@@ -1,0 +1,88 @@
+{
+  "M_training": 0.2,
+  "P_benchmark": 20,
+  "breakdown": {
+    "__bands": {
+      "hidden.behavior_preservation": "M",
+      "hidden.containment_cases": "M",
+      "hidden.deploy_claims_grounded": "M",
+      "hidden.deploy_operational_fields": "M",
+      "hidden.hidden_test_suite": "M",
+      "hidden.scope_discipline": "M",
+      "hidden.triage_all_ids_present": "M",
+      "hidden.triage_dispositions_correct": "M",
+      "hidden.triage_evidence_grounded": "M",
+      "visible.deploy_schema_valid": "M",
+      "visible.make_test": "M",
+      "visible.regression_file_present": "M",
+      "visible.triage_schema_valid": "M"
+    },
+    "hidden.behavior_preservation": 10,
+    "hidden.containment_cases": 15,
+    "hidden.deploy_claims_grounded": 4,
+    "hidden.deploy_operational_fields": 6,
+    "hidden.hidden_test_suite": 5,
+    "hidden.scope_discipline": 5,
+    "hidden.triage_all_ids_present": 5,
+    "hidden.triage_dispositions_correct": 0,
+    "hidden.triage_evidence_grounded": 4,
+    "visible.deploy_schema_valid": 5,
+    "visible.make_test": 15,
+    "visible.regression_file_present": 5,
+    "visible.triage_schema_valid": 5
+  },
+  "ceilings_applied": [
+    "string_blocklist_containment",
+    "triage_misclassification"
+  ],
+  "errors": [
+    "triage dispositions incomplete or incorrect"
+  ],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.7,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": false,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 84,
+  "raw_score_pre_ceiling": 84,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 20,
+  "shortcut_detected": false,
+  "variant_id": "v1-clean-baseline",
+  "wall_clock_seconds": 0
+}

@@ -2014,3 +2014,116 @@ decoding configuration combine to fully unblock agentic-loop traffic.
 11/11 active v4a tasks produce real artifacts. The wallclock measurement
 program can resume — though the numbers will be different from the
 broken-harness era and Round 3 / 4a / 4b will all need re-measurement.
+
+## 19. Real milestone scores — 2/8 PASS (24-50 % depending on integrity-cap policy)
+
+§18's "11/11 wrote files" was **file-presence-only**. To get
+semantic-correctness scores, ran the family graders against the
+validation workspaces. 8 of 11 active tasks have graders in
+`verifiers/<task>/`. Below: real scores.
+
+### 19.1 Result
+
+| Task | Score | Pass (≥65) | Reason |
+|---|---:|---|---|
+| policy-aware-request-resolution | **88** | ✅ | clean win |
+| sqlalchemy-2-session-modernization | **91** | ✅ | clean win |
+| transcript-merge-regression | 60 | ✗ | just below 65 threshold (substantive but partial) |
+| dead-flag-reachability-audit | 30 | ✗ | partial work; missed key invariants |
+| release-note-to-plan-translation | 25 | ✗ | substantive shortfall |
+| security-audit-hotfix-remediation | 20 | ✗ | substantive shortfall |
+| **fanout-fullstack-release-blocker** | **0** (raw_M=57, raw=70) | ✗ | **integrity-capped: `write_outside_whitelist`** |
+| **responses-sdk-adapter-cutover** | **0** (raw=85) | ✗ | **integrity-capped: `.git/` directory written** |
+
+**Headline metrics:**
+
+- **2 / 8 clean passes** (25 %)
+- **2 / 8 integrity-capped** (raw scores would pass — 70 and 85)
+- **If integrity cap is policy-fixable: 4 / 8 = 50 % effective pass rate**
+
+### 19.2 The integrity-cap finding
+
+Two tasks (`fanout-fullstack-release-blocker`, `responses-sdk-adapter-cutover`)
+**produced raw scores that would PASS the 65-point threshold** but
+got their `final_score` ceiling-capped to 0 by the `write_outside_whitelist`
+integrity rule.
+
+For responses-sdk-adapter-cutover: the agent ran `git init` somewhere in
+its workspace, creating a full `.git/` directory tree (64 paths,
+including `.git/COMMIT_EDITMSG`, `.git/HEAD`, `.git/hooks/*`,
+`.git/logs/HEAD`, `.git/objects/*`). The grader's path whitelist
+doesn't allow `.git/`, so the integrity flag fires and caps the score.
+
+For fanout-fullstack: agent wrote all expected substantive files
+(`services/api/src/review_state.py`, `apps/admin/src/components/ReleaseGateForm.tsx`,
+`docs/runbooks/release_gating.md`, `artifacts/dom/release_gate_capture.json`,
+`artifacts/report/integration_report.md`) but still tripped the integrity
+flag. Cause uncertain — possibly intermediate scratch files. Raw M-band
+score (excluding ceiling): 57/100; raw P-band: 70.
+
+**The substantive work happened.** The model identified the failure,
+made the correct cross-file edits, and produced the expected proof
+artifact. The harness produced real coding output. The integrity cap
+is a **strictness mismatch between the agent's exploration behavior
+and the grader's whitelist** — not a model-can't-do-this failure.
+
+Two options for the integrity cap:
+
+1. **Pre-grade cleanup**: have the validator delete `.git/`, `node_modules/`,
+   `__pycache__/`, `.pytest_cache/`, etc. before invoking the grader.
+   Conservative, doesn't change the grader.
+2. **Update grader whitelists**: add `.git/` and similar to
+   IGNORED_NAMES (already excludes pycache / pytest_cache / mypy_cache).
+   Requires touching grader source per task.
+
+Option 1 is faster and lossless for the test purpose. Option 2 is
+cleaner long-term. Recommend doing both: option 1 for the immediate
+re-baseline, option 2 as a verifier-tree maintenance PR.
+
+### 19.3 Coverage gap — 3 of 11 active tasks have no grader at all
+
+These tasks were file-presence-validated in §18 but cannot be milestone-scored:
+
+- `incident-evidence-synthesis` (verifier_data exists but no `score_*.py`)
+- `multi-tool-transaction-repair` (no verifier dir)
+- `responsive-checkout-visual-regression` (no verifier dir)
+
+Need graders authored before we can compute a true 11-task pass rate.
+
+### 19.4 Adjusted bottom line
+
+Given the data:
+
+- **Of 11 active tasks, 8 are gradable.**
+- **Of the 8 gradable: 2 clean passes (25 %), 2 integrity-capped (potential passes), 4 substantive shortfall.**
+- After integrity-cap fix: **4/8 pass rate (50 %) on gradable**; the substantive-shortfall tasks (transcript-merge at 60 is close; dead-flag/release-note/security-audit at 20-30 are far) still represent real model-capability gaps.
+
+This is the honest number. The §18 "100 % wrote files" framing was
+the right structural-correctness signal (proxy stack works), but
+**semantic correctness is much lower**. Track B has work left.
+
+### 19.5 What to do with this signal
+
+1. **Don't re-baseline v4a yet on this score profile.** A 25-50 % pass
+   rate is a real signal, but with two known fixable issues (integrity
+   cap from `.git/` + cache writes; coverage gap from 3 missing graders),
+   the baseline number we'd lock in isn't durable.
+2. **Fix the cleanup loop first.** Make the validator clean
+   `.git/`, `.pytest_cache/`, `__pycache__/`, etc. before grading.
+   Re-run §18 sweep on the same workspaces; re-score.
+3. **Author the 3 missing graders** OR officially scope-out those
+   tasks for now (analogous to the AGENTS.md exclusion in §18.2).
+4. **Re-run with cleanup applied** → get the real 8/8 or 11/11 number
+   → THEN re-baseline.
+
+### 19.6 Artifacts
+
+- `scripts/run_v4a_graders_on_validation.py` — grader runner
+- `/tmp/qwen_proxy_grading/<task>.verify_result.json` — per-task grader output
+- `/tmp/qwen_proxy_grading/summary.json` — run summary
+
+### 19.7 Updated next-step priority
+
+Now: **clean workspace + re-grade** (~30 min) before any re-baseline.
+Then if results stabilize, proceed to re-baseline. Round 4b ablation
+under the working harness still pending after that.

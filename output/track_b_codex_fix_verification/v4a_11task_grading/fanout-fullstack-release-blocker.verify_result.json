@@ -1,0 +1,82 @@
+{
+  "M_training": 0.0,
+  "P_benchmark": 0,
+  "breakdown": {
+    "__bands": {
+      "frontend.alignment": "M",
+      "live.echo_correct": "M",
+      "live.request_correct": "M",
+      "proof.contract": "M",
+      "report.cross_surface": "P_only",
+      "report.variant_awareness": "P_only",
+      "runtime.no_stale_token": "M"
+    },
+    "frontend.alignment": 15,
+    "live.echo_correct": 15,
+    "live.request_correct": 15,
+    "proof.contract": 7,
+    "report.cross_surface": 8,
+    "report.variant_awareness": 5,
+    "runtime.no_stale_token": 5
+  },
+  "ceilings_applied": [
+    "surface_gap"
+  ],
+  "errors": [],
+  "integrity_flag": 1,
+  "integrity_rules_fired": [
+    "write_outside_whitelist"
+  ],
+  "milestone_vector": {
+    "M_aggregate": 0.1,
+    "slots": [
+      {
+        "passed_bool": true,
+        "slot_id": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": false,
+        "slot_id": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot_id": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot_id": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot_id": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": false,
+    "M3_invariants": false,
+    "M4_functional": false,
+    "M5_e2e": false,
+    "frontend_aligned": true,
+    "live_echo_correct": true,
+    "live_request_correct": true,
+    "proof_valid": true,
+    "report_cross_surface": true,
+    "report_variant_awareness": true,
+    "runtime_no_stale_token": true
+  },
+  "pass": false,
+  "raw_M_pre_ceiling": 57,
+  "raw_score_pre_ceiling": 70,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 0,
+  "shortcut_detected": true,
+  "variant_id": "v1-clean-baseline",
+  "wall_clock_seconds": 0
+}
