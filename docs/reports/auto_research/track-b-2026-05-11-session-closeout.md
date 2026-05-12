@@ -1,6 +1,7 @@
 # Track B Session Closeout — 2026-05-11 → 2026-05-12
 
 Status: **CLOSED, with one blocking operator decision left open.**
+Updated 2026-05-12 02:00 UTC after vLLM PR #39055 was applied and tested (§9).
 
 This session set out to run two queued Round 4b workstreams (per-regime
 acceptance + e2e ablation against v4a baseline). The work landed both
@@ -22,6 +23,8 @@ artifacts), and one external-published fix was attempted and falsified.
 | `3c52faf` | Audit §10 — codex iterates after all | Correction: codex DOES iterate (mean 2.29 proxy calls per v4a run). The audit's "1 turn" was a misreading of the event model. Bottleneck is model output per round, not codex loop. |
 | `03bf269` | Audit §11 — gpt-5.5 PASSES | gpt-5.5 high on the same workspace produced both required artifacts, 20 tool calls in one codex turn, 3,653 output tokens, 169 reasoning tokens. **Harness works.** Identified known qwen3.5/3.6 27B chat-template + tool-call-parser bug via NVIDIA DGX Spark forum (this machine) + 5 GitHub issues. |
 | `542c8e1` | Audit §12 — chat template fix DID NOT WORK | Swapped to enhanced template, patched for `role: developer`, re-tested. Same broken behavior: 1 turn, 1 cat call, 0 patches, 0 files. The documented fix targets one specific failure mode that's not the binding constraint on this corpus. |
+| `813825a` | Session closeout v1 | This document (initial). |
+| `c419729` | Audit §13 — PR #39055 + serving guard PARTIAL WIN | Applied vLLM PR #39055 + an UnboundLocalError workaround for the streaming-event path that surfaces post-PR-#39055. Codex now iterates with qwen (5 proxy calls vs 1, 4 tool calls vs 1, 301 output tokens vs 60). Tool calls reach the agent loop. But qwen3.5-27b still gives up after 4 read-only exploration commands without writing any file. Patches fix the parser; residual is model-capability gap. |
 
 All commits pushed to `origin/main`.
 
@@ -193,7 +196,131 @@ session). Each cycle is ~4 min wall, dominated by the model load
   — v4a baseline. The wallclock numbers there are now contextualized
   as cold-prefill-removal-on-degenerate-corpus.
 
-## 8. One-paragraph summary for anyone landing on this cold
+## 9. PR #39055 + serving guard — partial-win update (2026-05-12)
+
+After this closeout's v1 landed, the user's external research surfaced
+[vLLM Issue #39056](https://github.com/vllm-project/vllm/issues/39056)
+which describes the exact mechanism of Track B's failure mode:
+`qwen3_reasoning_parser` extracts everything before `</think>` into
+the `reasoning` field, while the downstream tool parser only inspects
+`content`. XML `<tool_call>` blocks emitted inside `<think>` (which
+qwen3.5-27b does reliably under `reasoning_effort=high`) never reach
+the tool parser, so OpenAI responses come back with empty `tool_calls`
+and codex reads that as "task complete" — exactly Track B's behavior.
+
+[vLLM PR #39055](https://github.com/vllm-project/vllm/pull/39055) is
+the open, unmerged parser-side fix: a 30-line addition to
+`qwen3_reasoning_parser.py` that promotes embedded tool-call XML out
+of `reasoning` into `content` before the tool parser runs.
+
+### 9.1 What was applied
+
+1. **PR #39055 verbatim** against the container's
+   `qwen3_reasoning_parser.py`. File went 147 → 182 lines.
+2. **A serving-events guard** in
+   `vllm/entrypoints/openai/responses/serving.py` that initializes
+   `current_tool_call_name = None` at the top of
+   `_process_simple_streaming_events` and guards the post-loop
+   emission on `tool_call_arguments and current_tool_call_name`.
+   This is a different layer of the same bug family as
+   [Issue #36769](https://github.com/vllm-project/vllm/issues/36769) —
+   surfaced immediately once PR #39055 started feeding tool-call XML
+   into the streaming parser (the parser sends
+   `function.arguments` before `function.name`, which is correct
+   per protocol but breaks the post-loop event emission that
+   assumed name was always assigned first).
+3. **Both patches added to the prelaunch script** in
+   `scripts/run_track_b_loop.py:_track_b_runtime_prelaunch_shell()`
+   so subsequent container relaunches via ModelServer preserve them.
+
+### 9.2 Test result on the same `incident-evidence-synthesis` workspace
+
+| Metric | Audit baseline | §12 (template only) | §13 (PR#39055 + guard) | gpt-5.5 reference |
+|---|---:|---:|---:|---:|
+| Codex turns | 1 | 1 | 1 | 1 |
+| **Inference proxy calls** | 1 | 1 | **5** | n/a (cloud) |
+| **Tool calls in codex turn** | 1 | 1 | **4** | 20 |
+| Output tokens (cumulative) | 74 | 60 | **301** | 3,653 |
+| `apply_patch` calls | 0 | 0 | 0 | 0 (used heredocs) |
+| Agent messages with text | 0 | 0 | 0 | 8 |
+| **Workspace files produced** | 0 / 2 | 0 / 2 | **0 / 2** | 2 / 2 |
+
+The patches fixed exactly what they were designed to fix. Codex now
+iterates with qwen3.5-27b. Tool calls reach the agent loop. The
+single-shot-then-exit pattern is broken.
+
+**The patches did NOT fix the residual.** qwen3.5-27b reads the
+prompt, lists files, reads the request body — then emits
+`agent_message text="\n\n"` and stops. No `apply_patch`, no writes,
+no commentary. The model explores enough to start the task but
+doesn't push through to action.
+
+### 9.3 What this changes about the open decision
+
+§5.1 (anchor model choice) is now reframed:
+
+- **(b) "Investigate qwen3.5-27b one-shot"** has been completed in
+  the parser direction: PR #39055 was the right fix at the right
+  layer, it works, and it isolates the residual cleanly as a
+  **model-capability gap** rather than a protocol/parser gap.
+- The new specific test: **swap to Qwen3-Coder-30B-A3B**
+  (purpose-built for agentic coding, trained with long-horizon RL on
+  multi-turn tool trajectories, MoE ~3B active per token, ~30 GiB
+  FP8 — fits GB10). Mechanically the same as the template swap from
+  §12.4: change `--model` and `served-model-name`, restart container
+  with the sudo recovery sequence. ~30-45 min wall.
+- If Qwen3-Coder works: that's the new harness anchor. The Track B
+  drafter focus stays meaningful (Qwen3-Coder is a qwen-family
+  model). Re-baseline v4a on it.
+- If Qwen3-Coder also stops short: fall back to gpt-5.5 as harness
+  anchor. Per §11.1, gpt-5.5 already proved end-to-end on this
+  workspace.
+
+### 9.4 Two upstream vLLM bugs worth filing
+
+- **`reasoning_output_tokens=0` mis-attribution post-PR-#39055**:
+  when the parser promotes tool-call XML out of `reasoning` into
+  `content`, the usage accounting doesn't update the reasoning vs
+  content token split. Total `output_tokens` is correct; the
+  reasoning sub-count drops to 0. Telemetry-only, doesn't affect
+  functionality.
+- **`UnboundLocalError: current_tool_call_name` in
+  `_process_simple_streaming_events`**: §13.3 Patch 2 is the
+  upstream-PR-ready workaround. Same shape as Issue #36769 but in
+  the OpenAI Responses streaming code, not the qwen3 tool parser
+  itself.
+
+### 9.5 Container state after §13
+
+The vLLM container `lumo-vllm-track-b-suffix` is currently running:
+
+- Enhanced + developer-patched chat template (from §12, md5
+  `7a6059bb08728e06d028cb27e96aa02e`)
+- PR #39055 applied to qwen3_reasoning_parser.py (147 → 182 lines)
+- Serving-events guard applied to
+  `entrypoints/openai/responses/serving.py`
+
+To revert ALL §12+§13 changes back to the v4a baseline runtime exactly:
+
+```bash
+set -a; source /home/mark/shared/lumoFlyWheel/.lumo.local.env; set +a
+cp docker/chat_templates/qwen3-openai-codex.jinja.backup-pre-enhanced-20260511 \
+   docker/chat_templates/qwen3-openai-codex.jinja
+# also remove the PR #39055 block from scripts/run_track_b_loop.py
+docker stop lumo-vllm-track-b-suffix
+printf '%s\n' "$LUMO_SUDO_PASSWORD" | sudo -S -p '' sync
+printf '%s\n' "$LUMO_SUDO_PASSWORD" | sudo -S -p '' sysctl -w vm.drop_caches=3
+printf '%s\n' "$LUMO_SUDO_PASSWORD" | sudo -S -p '' swapoff -a
+printf '%s\n' "$LUMO_SUDO_PASSWORD" | sudo -S -p '' swapon -a
+docker start lumo-vllm-track-b-suffix
+```
+
+But: the current container state is **strictly better than v4a
+baseline** for any qwen-on-Codex measurement — tool calls reach
+codex now. Revert only if you specifically want to reproduce the
+v4a `runtime_config_hash` for direct comparison purposes.
+
+## 10. One-paragraph summary for anyone landing on this cold
 
 Track B measures Codex CLI wallclock on 13 SWE-style tasks. This
 session ran a 4-point ablation against the v4a baseline expecting a
@@ -203,9 +330,17 @@ per task and exiting since at least Round 3, while every round
 summary reported `13/13 correctness` by deferring to `codex_exit_code
 == 0` rather than running family graders. Verified harness works by
 swapping qwen3.5-27b for gpt-5.5 on one task (produced real
-artifacts). Verified documented qwen chat-template fix does NOT
-unblock qwen on this hardware+workload. Decisions left for operator:
-pick anchor model (gpt-5.5 vs. continued qwen investigation vs.
-both), wire family graders into round summary regardless. No Round 5
-or further drafter work until one of these lands — the wallclock
-substrate is currently measuring nothing.
+artifacts). Tried two qwen unblock paths empirically: (§12) the
+NVIDIA-forum-recommended chat-template fix — did NOT help (wrong
+layer); (§13) vLLM PR #39055 parser-side fix + a streaming-event
+guard for the cascade UnboundLocalError — codex now iterates with
+qwen (5 proxy calls vs 1, 4 tool calls vs 1), but qwen3.5-27b still
+gives up after reading the prompt+request without writing any file.
+The parser bug is empirically fixed; the residual is now a clean
+model-capability gap. Decisions left for operator: (1) try
+Qwen3-Coder-30B-A3B as the new qwen-family anchor model (purpose-built
+for agentic coding, fits GB10), (2) wire family graders into round
+summary regardless, (3) if Qwen3-Coder also stops short, fall back to
+gpt-5.5 as harness anchor. No Round 5 or further drafter work until
+(1) or (3) lands — the wallclock substrate is currently measuring
+exploration-only behavior.
