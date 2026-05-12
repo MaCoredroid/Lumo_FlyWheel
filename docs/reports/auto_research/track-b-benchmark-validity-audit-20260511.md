@@ -734,3 +734,175 @@ Sources for §11.3:
 - [Qwen3.6-27B frequently stopped with empty tool call · QwenLM/Qwen3.6#150](https://github.com/QwenLM/Qwen3.6/issues/150)
 - [qwen3.5-enhanced.jinja (the fix template) · allanchan339/vLLM-Qwen3.5-27B](https://github.com/allanchan339/vLLM-Qwen3.5-27B/blob/main/qwen3.5-enhanced.jinja)
 - [Codex CLI Configuration Reference - OpenAI Developers](https://developers.openai.com/codex/config-reference)
+
+## 12. Chat-template fix attempt — empirically tested (2026-05-12) — DID NOT FIX
+
+The user requested an empirical test of the §11.4 recommended fix. The
+container was relaunched with the enhanced chat template; qwen3.5-27b
+was re-tested on the same `incident-evidence-synthesis` workspace; the
+fix DID NOT resolve the agentic-loop termination.
+
+### 12.1 What we changed
+
+The vLLM container `lumo-vllm-track-b-suffix` was already running with
+`--tool-call-parser qwen3_xml --reasoning-parser qwen3
+--enable-auto-tool-choice` (verified by inspecting the live launch_cmd
+in `/tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.5-27b.log`). So
+the parser side of the NVIDIA-forum recommendation was already in
+place; only the **chat template content** was different.
+
+The container's chat template was bind-mounted from
+`docker/chat_templates/qwen3-openai-codex.jinja` (155 lines, custom
+Lumo template). We replaced it with `qwen3.5-enhanced.jinja` (182 lines,
+from `allanchan339/vLLM-Qwen3-3.5-3.6-chat-template-fix`).
+
+Two small patches were needed to the enhanced template to work with
+Codex CLI's input shape:
+
+1. **Accept `role: "developer"` at message[0] alongside `role: "system"`**
+   (line 96, 104). Codex sends an initial permissions/skills/plugins
+   block as `role: developer` which the original enhanced template
+   didn't recognize.
+2. **Allow `role: "developer"` at non-first positions** (line 122-134),
+   rendering it as an inline `<|im_start|>system` block. vLLM's HF
+   renderer maps the request's `instructions` field to a synthetic
+   system message at position 0, then appends `input[]` items; this
+   pushes the developer message to position 1+, which the strict
+   "system message must be at the beginning" check rejected.
+
+Without these patches the template raises `ValueError: Unexpected
+message role` (first patch) or `ValueError: System message must be at
+the beginning` (second patch). With them, the template renders Codex's
+request shape correctly.
+
+Also enabled at the codex level (verified via capture proxy that
+`reasoning: {"effort": "high", "summary": "auto"}` is sent in the
+request body):
+
+```
+-c 'model_reasoning_effort="high"'
+-c 'model_supports_reasoning_summaries=true'
+-c 'model_reasoning_summary="auto"'
+```
+
+### 12.2 Operator notes — restart procedure
+
+The container restart needed a sudo recovery sequence because the
+GB10 unified-memory architecture leaks GPU memory across vLLM teardown
+(documented in the prelaunch script). Recipe:
+
+```bash
+set -a; source /home/mark/shared/lumoFlyWheel/.lumo.local.env; set +a
+docker stop lumo-vllm-track-b-suffix
+printf '%s\n' "$LUMO_SUDO_PASSWORD" | sudo -S -p '' sync
+printf '%s\n' "$LUMO_SUDO_PASSWORD" | sudo -S -p '' sysctl -w vm.drop_caches=3
+printf '%s\n' "$LUMO_SUDO_PASSWORD" | sudo -S -p '' swapoff -a
+printf '%s\n' "$LUMO_SUDO_PASSWORD" | sudo -S -p '' swapon -a
+docker start lumo-vllm-track-b-suffix
+# wait ~4 min for vLLM model load + warmup
+```
+
+Without the `drop_caches + swapoff/swapon` cycle, the prelaunch
+guardrail rejects the restart with "only 9 GiB available, need 40 GiB"
+(host page cache + driver-held allocations don't release on their own).
+
+**Inode trap when editing the bind-mounted template:** docker bind-
+mounts a *file* by inode, not by path. `cp` overwrites in place but
+the `Edit` tool writes-then-renames, which creates a new inode. After
+any `Edit` to the host template file, the container sees the stale
+inode (old contents) until a container restart re-resolves the bind
+mount. Solution: container restart after every template edit.
+
+### 12.3 Test result — same broken behavior
+
+| Metric | qwen3.5-27b old template | qwen3.5-27b enhanced+patched template |
+|---|---:|---:|
+| Codex turns | 1 | 1 |
+| Inference proxy calls | 1 | **1** |
+| Tool calls | 1 (`cat prompt.md`) | **1 (`cat prompt.md`)** |
+| `apply_patch` calls | 0 | **0** |
+| Agent messages with text | 0 | **0** |
+| Input tokens | 70,346 | 70,513 |
+| Output tokens | 74 | **60** |
+| Reasoning output tokens | 0 | **0** |
+| Workspace files written | 0 / 2 | **0 / 2** |
+
+Wallclock for the single proxy call: **96.4 seconds** for 60 output
+tokens — 0.6 tok/s. Either the model emitted lots of internal
+reasoning that the parser stripped (and `reasoning_output_tokens=0` is
+under-counted), or speculative decoding regressed dramatically with
+the new chat template (the latter is worth investigating but is not
+the blocker).
+
+**Same failure mode:** model reads `prompt.md` via a single `cat` call,
+gets the tool result back, then emits no more tool calls. Codex's
+agent loop terminates because there's nothing to feed back. Zero
+workspace mutations.
+
+### 12.4 Why the documented fix didn't generalize
+
+The NVIDIA forum thread reported success ("6-hour session, agent
+finished the task") on a different hardware setup (mixed RTX
+3090+4090, not GB10), a different quantization (AWQ recommended for
+their mixed-GPU rig, FP8 in our case), and a different workload
+(knowledge-graph extraction agent in `qwen_own_project`, not Codex
+CLI's SWE-style tasks). The chat template fix targets one specific
+failure mode — tool-call XML wrapper rendering — but doesn't address
+*why* qwen3.5-27b emits only one tool call per round when the codex
+CLI agentic loop expects iterative tool use.
+
+Comparison points:
+
+| Setup | Outcome |
+|---|---|
+| qwen3.5-27b + old template + qwen3_xml parser + codex exec | 1 tool call, no iteration (audit §1) |
+| qwen3.5-27b + **enhanced template** + qwen3_xml parser + codex exec + reasoning=high | 1 tool call, no iteration (this section) |
+| gpt-5.5 high + codex exec (cloud) | 20 tool calls in one turn, 2 artifacts written, real task completion (§11.1) |
+
+The harness is fine. The model is the bottleneck on this workload,
+regardless of chat template choice.
+
+### 12.5 What this means for the recommended sequence
+
+The §11.5 sequence is unchanged except:
+
+1. **Loosen acceptance criterion** — still required (gpt-5.5 used
+   heredoc writes, not `apply_patch` directly).
+2. **Wire family graders** — still required.
+3. **Operator decision on container relaunch** — now has empirical
+   evidence: chat-template swap alone doesn't unblock qwen3.5-27b.
+   The decision is no longer "try the documented fix"; it's now
+   either (a) accept that qwen3.5-27b cannot drive agentic coding on
+   this corpus and switch the harness anchor to gpt-5.5 or another
+   capable model, or (b) investigate **why** qwen3.5-27b's training
+   distribution gives one-shot rather than iterative tool calls on
+   Codex-shape prompts (separate research effort: prompt-engineering,
+   finetuning, or chain-of-thought scaffolding).
+4. **Re-baseline** — same as before, only after one of the above lands.
+
+### 12.6 Artifacts
+
+- Patched template (in repo): `docker/chat_templates/qwen3-openai-codex.jinja`
+  (md5 `7a6059bb08728e06d028cb27e96aa02e`, 182 lines, the enhanced
+  template + developer-role patches in §12.1).
+- Backup of pre-swap Lumo template: `docker/chat_templates/qwen3-openai-codex.jinja.backup-pre-enhanced-20260511`
+  (md5 `56683f4ccaee4c52c18687ae465bcbcb`, 155 lines, original Lumo).
+- Test workspace + stdout: `/tmp/codex_fix_test/var_qwen_fix/`
+- Captured request bodies confirming reasoning effort and developer role:
+  `/tmp/codex_fix_test/var_qwen_capture/request_body.json`,
+  `/tmp/codex_fix_test/var_cap/request_body.json`.
+- The bind-mounted host path is `docker/chat_templates/qwen3-openai-codex.jinja`;
+  container path `/opt/lumo/chat_templates/qwen3-openai-codex.jinja`.
+
+### 12.7 If you want to revert
+
+```bash
+cp docker/chat_templates/qwen3-openai-codex.jinja.backup-pre-enhanced-20260511 \
+   docker/chat_templates/qwen3-openai-codex.jinja
+# Then restart container per §12.2 (don't skip drop_caches step)
+```
+
+This restores the v4a baseline runtime exactly. Note: the v4a
+`runtime_config_hash` may not match anymore because vLLM may emit a
+new hash for non-config artifacts (recompiled CUDA graphs, fresh suffix
+index, etc.) — verify with a fresh `[VLLM-INIT] launch_cmd` log entry.
