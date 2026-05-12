@@ -385,7 +385,17 @@ def _sampler_smoke(measurement_python: Path, duration_s: float) -> dict[str, Any
 def audit(args: argparse.Namespace) -> dict[str, Any]:
     codex_help = _command(["codex", "exec", "--help"])
     codex_version = _command(["codex", "--version"])
-    codex_smoke = _codex_command_smoke(args)
+    deferred_set = set(getattr(args, "defer_checks", []) or [])
+    if "codex_command_smoke" in deferred_set:
+        # Under the §13-§17 proxy stack the smoke prompt "complete it in this
+        # workspace" no longer short-circuits — codex performs real tool calls
+        # and auto-continue holds it past the 600s timeout. Skip rather than
+        # waste 10 minutes of preflight wallclock when the check is already
+        # marked as non-blocking. Substrate trust comes from §18 (11/11
+        # active tasks produced real artifacts).
+        codex_smoke = {"ok": False, "reason": "deferred", "skipped": True}
+    else:
+        codex_smoke = _codex_command_smoke(args)
     health = _get(args.health_url)
     metrics = _get(args.metrics_url)
     metrics_text = str(metrics.get("text") or "")

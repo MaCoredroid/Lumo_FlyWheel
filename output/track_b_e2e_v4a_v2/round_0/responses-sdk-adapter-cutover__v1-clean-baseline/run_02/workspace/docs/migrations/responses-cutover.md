@@ -1,31 +1,34 @@
 # Responses Cutover
 
-## Overview
+Migrate from the legacy chat-wrapper path to Responses event semantics.
 
-This workspace has migrated from the legacy chat-wrapper path to Responses event semantics.
+## Changes
 
-## Key Changes
+- Wire API: `chat_completions` → `responses`
+- Transcript mode: `legacy_messages` → `responses_events`
 
-### Event Ordering
+## Event Ordering
 
-- Events are now consumed in strict chronological order as emitted by the Responses API.
-- The sequence of events (e.g., `response.created`, `output_item.added`, `tool_call`, `tool_call_output`) must be preserved during replay.
-- Do not reorder or batch events; each event must be applied in its original order to maintain correct state transitions.
+Events are processed in strict arrival order. The event stream maintains causal ordering:
 
-### Tool-Result Correlation
+1. `response.created` - Initial response event
+2. `response.output_item.added` - Each new item (message, tool call)
+3. `response.output_item.done` - Final response completion
 
-- Tool calls and their results are correlated via unique call identifiers (`call_id` or equivalent).
-- When replaying, ensure that each tool result is matched to its corresponding tool call using this identifier.
-- Do not assume positional correlation; always use the explicit call ID to pair calls with results.
+Replay must preserve this order; do not reorder or deduplicate events.
 
-### Replay Behavior
+## Tool-Result Correlation
 
-- Replay is event-sourced: state is reconstructed by applying the sequence of events, not by parsing rendered transcript text.
-- The transcript stores raw event objects, not rendered message text.
-- This ensures deterministic replay and preserves all intermediate state changes.
+Tool calls and their results are correlated via `call_id`:
 
-## Migration Notes
+- `response.function_call` events contain a `call_id`
+- `response.function_call_output` events reference the same `call_id`
 
-- The legacy message wrapper has been removed.
-- All code paths now expect Responses wire format and event-based transcripts.
-- Existing transcript fixtures remain unchanged; only the interpretation logic has been updated.
+When replaying:
+- Match tool results to calls using `call_id`
+- Preserve the temporal sequence of call → result
+- Do not attempt to rebuild state from rendered transcript text; use raw events
+
+## Replay
+
+Replay is event-sourced. Each event in the transcript represents a state transition. Process events sequentially to reconstruct conversation state.

@@ -10,10 +10,8 @@ def request_wire_config():
 
 
 def extract_response_items(response):
-    """
-    Extract items from a Responses API response.
+    """Extract items from Responses API response.
     
-    Returns the items array which contains messages, tool calls, and tool results
-    in the order they were emitted by the API.
+    Responses API returns items array directly, not nested in choices/message.
     """
-    return response.get("output", [])
+    return response.get("items", [])

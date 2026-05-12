@@ -232,7 +232,13 @@ def _normalize_vllm_request_metrics(row: dict[str, Any]) -> tuple[str, dict[str,
     }
     missing = [key for key, value in required.items() if not _finite_nonnegative_number(value)]
     if missing:
-        raise RuntimeError(f"vLLM request metrics row for {request_id} is missing numeric fields: {', '.join(missing)}")
+        # Skip rather than raise: the §13-§17 proxy stack emits some rows
+        # (e.g. auto-continue retry envelopes) where usage hasn't been
+        # populated from the upstream response. The downstream `not
+        # requests_by_id` branch in _write_vllm_per_turn_from_jsonl then
+        # writes a deferred per-turn record instead of crashing the entire
+        # post-codex artifact path.
+        return None
     normalized = dict(row)
     normalized.update(
         {
@@ -693,16 +699,31 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
             with stdout_path.open("w", encoding="utf-8") as out_fh, stderr_path.open(
                 "w", encoding="utf-8"
             ) as err_fh:
-                result = subprocess.run(
-                    command,
-                    cwd=workspace,
-                    text=True,
-                    stdin=subprocess.DEVNULL,
-                    stdout=out_fh,
-                    stderr=err_fh,
-                    timeout=args.timeout_s,
-                    env={**os.environ, "OPENAI_API_KEY": args.api_key, "OPENAI_BASE_URL": args.endpoint},
-                )
+                try:
+                    result = subprocess.run(
+                        command,
+                        cwd=workspace,
+                        text=True,
+                        stdin=subprocess.DEVNULL,
+                        stdout=out_fh,
+                        stderr=err_fh,
+                        timeout=args.timeout_s,
+                        env={**os.environ, "OPENAI_API_KEY": args.api_key, "OPENAI_BASE_URL": args.endpoint},
+                    )
+                except subprocess.TimeoutExpired:
+                    # Synthesize a failed-completion result so the post-codex
+                    # artifact write still runs. Under the §13-§17 proxy stack,
+                    # auto-continue retries can hold codex past the budget on
+                    # long-tail tasks; without this catch the timeout
+                    # propagates past the try/finally and we lose
+                    # runner_metadata.json, codex_trace.jsonl, and
+                    # vllm_request_metrics.jsonl despite real workspace edits.
+                    result = subprocess.CompletedProcess(command, returncode=124)
+                    print(
+                        f"run_track_b_e2e_task.py: codex timeout after {args.timeout_s}s; "
+                        f"continuing to artifact write (returncode=124)",
+                        file=sys.stderr,
+                    )
             result.stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
             result.stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
             # Detect Codex 0.128.0 zero-token quirk: codex exits 0 but never

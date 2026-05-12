@@ -16,6 +16,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 REQUEST_JOIN_JSONL_SCHEMA = "lumo.track_b.vllm_request_metrics.v1"
 REQUEST_JOIN_JSONL_PRODUCER = "track_b_vllm_request_metrics_patch"
 
+# Shrunk from 13 to 11 for v4a_v2 baseline (2026-05-12).
+# plugin-scaffold-alignment + skill-router-contract-upgrade excluded:
+# their workspace_bundle/v1-clean-baseline/ lacked AGENTS.md (now drafted)
+# AND lacked the seeded drift the task_spec describes — codex correctly
+# reports "task already complete" with no real artifacts to write.
+# Re-include after restoring scaffold drift to their bundles.
 TRACK_B_E2E_TASKS = [
     "responses-sdk-adapter-cutover/v1-clean-baseline",
     "transcript-merge-regression/v1-clean-baseline",
@@ -26,8 +32,6 @@ TRACK_B_E2E_TASKS = [
     "incident-evidence-synthesis/v1-clean-baseline",
     "policy-aware-request-resolution/v1-clean-baseline",
     "multi-tool-transaction-repair/v1-clean-baseline",
-    "skill-router-contract-upgrade/v1-clean-baseline",
-    "plugin-scaffold-alignment/v1-clean-baseline",
     "release-note-to-plan-translation/v1-clean-baseline",
     "fanout-fullstack-release-blocker/v1-clean-baseline",
 ]

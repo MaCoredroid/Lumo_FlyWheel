@@ -1,2 +1,2 @@
-wire_api = "responses"
-transcript_mode = "responses_events"
+wire_api = "chat_completions"
+transcript_mode = "legacy_messages"

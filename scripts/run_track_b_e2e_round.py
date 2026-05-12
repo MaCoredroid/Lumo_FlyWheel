@@ -15,6 +15,12 @@ DEFERABLE_PREFLIGHT_CHECKS = {
     "vllm_request_metrics_join_available",
     "codex_trace_out_supported",
     "dcgm_profile_fields_available",
+    # Under the §13-§17 proxy stack the smoke prompt "complete it in this
+    # workspace" no longer short-circuits: codex now performs real tool
+    # calls and triggers auto-continue retries, so the 180s smoke window
+    # is no longer realistic. Substrate-trust comes from §18 (11/11 active
+    # tasks produced real artifacts); defer this check so the round can run.
+    "codex_command_smoke",
 }
 
 

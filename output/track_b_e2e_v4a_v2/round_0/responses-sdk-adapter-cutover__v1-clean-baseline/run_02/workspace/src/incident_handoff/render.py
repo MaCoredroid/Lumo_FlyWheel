@@ -1,8 +1,7 @@
 def render_transcript(events):
-    """
-    Render events to a human-readable transcript format.
+    """Render events to transcript text, preserving tool-result correlation.
     
-    Preserves tool call and result correlation via call_id in the output.
+    Tool results include call_id to maintain correlation with tool calls.
     """
     lines = []
     for event in events:

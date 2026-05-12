@@ -1159,6 +1159,13 @@ def _synthesize_sse_stream_from_non_streaming_json(
             capture_state["response_id"] = response_id
             capture_state["model"] = response_model
             capture_state["saw_response_completed"] = True
+            # Propagate usage so the per-request metrics row has real
+            # prompt_tokens/completion_tokens instead of None. Without this,
+            # 96%+ of captured rows fail downstream normalization
+            # (_normalize_vllm_request_metrics) for missing numeric fields,
+            # forcing the per-task summary to a deferred state.
+            if isinstance(usage, dict):
+                capture_state["usage"] = usage
         handler.wfile.write(b"0\r\n\r\n")
         handler.wfile.flush()
     except (BrokenPipeError, ConnectionResetError):

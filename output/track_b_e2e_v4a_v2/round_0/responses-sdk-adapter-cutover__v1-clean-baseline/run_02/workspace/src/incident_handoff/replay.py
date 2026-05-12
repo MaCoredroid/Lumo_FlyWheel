@@ -1,9 +1,8 @@
 def serialize_events(events):
-    """
-    Serialize events for storage in the transcript.
+    """Serialize events preserving order and tool-result correlation.
     
-    Events are stored as raw event objects to preserve ordering and structure.
-    This enables event-sourced replay without rebuilding state from rendered text.
+    Each event is serialized as a pipe-delimited line. Tool calls and results
+    include call_id to maintain correlation.
     """
     lines = []
     for event in events:
@@ -18,11 +17,10 @@ def serialize_events(events):
 
 
 def replay_from_serialized(serialized):
-    """
-    Reconstruct events from serialized transcript data.
+    """Replay events from serialized form, preserving event order and call_ids.
     
-    Events are replayed in strict order as stored. Tool calls and results
-    are correlated via call_id, not by position.
+    Events are processed sequentially to reconstruct conversation state.
+    Tool call and result correlation is maintained via call_id.
     """
     events = []
     for line in serialized.splitlines():
@@ -43,22 +41,3 @@ def replay_from_serialized(serialized):
                 {"kind": "tool_result", "call_id": parts[1], "output": parts[2]}
             )
     return events
-
-
-def replay_events(event_list):
-    """
-    Apply a list of events in order for event-sourced replay.
-    
-    This function processes events sequentially, maintaining the exact order
-    they were emitted. Tool calls and results are preserved as-is for correlation.
-    
-    Args:
-        event_list: List of event dicts in chronological order.
-        
-    Returns:
-        List of processed events, maintaining original order.
-    """
-    result = []
-    for event in event_list:
-        result.append(event)
-    return result
