@@ -2127,3 +2127,72 @@ the right structural-correctness signal (proxy stack works), but
 Now: **clean workspace + re-grade** (~30 min) before any re-baseline.
 Then if results stabilize, proceed to re-baseline. Round 4b ablation
 under the working harness still pending after that.
+
+### 19.8 Cleanup + re-grade — durable number is 2/8 (not the optimistic 4/8)
+
+After cleaning `.git/`, `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`,
+`node_modules/` from each validation workspace and re-running graders:
+
+| Task | Pre-cleanup | Post-cleanup | Δ |
+|---|---:|---:|---:|
+| policy-aware-request-resolution | 88 ✓ | 88 ✓ | 0 |
+| sqlalchemy-2-session-modernization | 91 ✓ | 91 ✓ | 0 |
+| transcript-merge-regression | 60 | 60 | 0 |
+| dead-flag-reachability-audit | 30 | 30 | 0 |
+| **fanout-fullstack-release-blocker** | **0** (integrity-capped) | **25** (real) | +25 |
+| **responses-sdk-adapter-cutover** | **0** (integrity-capped) | **35** (real) | +35 |
+| release-note-to-plan-translation | 25 | 25 | 0 |
+| security-audit-hotfix-remediation | 20 | 20 | 0 |
+
+**Cleanup uncapped the 2 integrity-flagged tasks but neither was actually
+close to passing.** My §19.2 framing ("raw 70 and 85 — would have
+passed") confused the per-component breakdown with the final score.
+The actual post-cleanup scores are 25 and 35, far below the 65 pass
+threshold.
+
+**Durable pass rate: 2/8 = 25%** of gradable tasks. This is the true
+signal of qwen3.5-27b under the proxy stack on this corpus.
+
+The §19.5 recommendation to "re-grade before re-baselining" still
+stands — but the answer is now "the proxy stack works, the model
+passes 2/8 graded tasks, that's the new baseline." Re-baselining
+v4a wallclock can proceed with this as the known correctness floor.
+
+What this means for the broader audit conclusion:
+
+- **Proxy stack works** — 11/11 active tasks produce real artifacts.
+- **Model capability on this corpus** is much lower than file-presence
+  suggests — only 2/8 reach milestone-grade quality.
+- The other 6 graded tasks produce *something* (avg 35 score), they
+  just don't satisfy enough milestones. This is the agentic-coding
+  gap qwen3.5-27b has on Codex-shape prompts — even with the proxy
+  stack, the model writes outputs that don't capture all the
+  required invariants / cross-file correctness / edge cases.
+- gpt-5.5 reference (§11.1) presumably scores much higher; would be
+  worth confirming.
+
+### 19.9 What 25% means for Track B
+
+This is the new ground truth for the v4a corpus under qwen3.5-27b.
+Two implications:
+
+1. **Re-baseline v4a wallclock with the same `tasks_correctness_passed`
+   denominator.** The current Round 4a `round_summary.json` reports
+   13/13 correctness via the `deferred_to_exit_code` shortcut. The
+   real number is closer to 2/8 graded + 3 ungraded + 2 fixture-excluded.
+   The wallclock measurements are over the FULL set, not the passing
+   set. Round 4a's "−80% wallclock" still describes timing structure
+   — it doesn't claim 13/13 task completion in the new framing.
+2. **Round 4b ablation should keep `task_score` per task** so we can
+   see whether T2/T3/T4 affect not just wallclock but pass rate.
+   On a 2/8 pass rate, a +1 pass from a technique is real signal
+   (+12.5 pp). Worth measuring.
+
+### 19.10 Final committed numbers
+
+- 11/11 active tasks produce real workspace artifacts (file-presence)
+- 8/11 active tasks are gradable
+- **2/8 gradable tasks PASS milestone scoring (25%)**
+- 6/8 gradable tasks produce partial output (avg 32 score)
+- 3/11 active tasks have no grader (still file-presence only)
+- 2/13 v4a tasks excluded as fixture defects (missing AGENTS.md)
