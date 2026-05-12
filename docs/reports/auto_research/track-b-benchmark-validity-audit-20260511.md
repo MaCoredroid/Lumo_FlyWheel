@@ -1383,3 +1383,112 @@ or a model-tuning gap (model-swap warranted).
 - [Unsloth gist — Run Qwen3.5 with Claude Code](https://gist.github.com/kibotu/a009f00414b7c10fb1c74e603d7838c0) — proof model works agentically with different harness
 - [NVIDIA DGX Spark forum — Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2-AWQ success](https://forums.developer.nvidia.com/t/success-with-quanttrio-qwen3-5-27b-claude-4-6-opus-reasoning-distilled-v2-awq/365416) — same hardware, working
 - [QwenLM/qwen-code — Qwen's own agent CLI](https://github.com/QwenLM/qwen-code) — alternative harness for validation
+
+## 15. Non-streaming bypass attempt (2026-05-12) — blocked by separate vLLM input-validation bug
+
+§14.7 step 1 prescribed a non-streaming bypass to differentiate
+"codex-transcript-shape interaction" from "model voluntary stop."
+Implemented as `LUMO_PROXY_NONSTREAM_BYPASS=1` in the bench proxy:
+when codex sends `stream:true`, rewrite the upstream request to
+`stream:false`, buffer the JSON response, then synthesize an SSE
+stream from `response.output` back to codex. This sidesteps both
+the §13 streaming-event bug AND the §14 missing-output_item.added bug
+in one move, because the non-streaming path runs PR #39055's
+promotion logic correctly.
+
+### 15.1 Test result — bypass blocked by separate vLLM bug
+
+First two turns succeeded: codex made 2 tool calls (cat prompt + find
+workspace), and the model emitted **substantive agent_message text**
+for the first time on qwen: `"Now let me explore the workspace
+structure and read the necessary files."` (vs `"\n\n"` whitespace
+under all previous configs). That's a real signal — the bypass path
+is delivering more of the model's output to codex than the
+streaming path did.
+
+But the **3rd turn aborted** with a vLLM 400 error containing
+**912 "Field required" Pydantic validation errors**. The non-streaming
+`/v1/responses` route runs much stricter input validation than the
+streaming route:
+
+```
+event: response.created
+data: ... {"error":{"message":"212 validation errors:
+  {'type': 'string_type', 'loc': ('body', 'input', 'str'),
+   'msg': 'Input should be a valid string',
+   'input': [{'type': 'message', 'role': 'developer',
+              'content': [{'type': 'input_text', ...}]}]}
+... 912 'Field required' errors across other union variants
+```
+
+The streaming route accepts codex's transcript shape (mixed
+developer/user role messages with structured content). The
+non-streaming route's Pydantic validation tries to match each input
+item against many union types (message, function_call,
+function_call_output, reasoning, custom_tool_call, etc.) and rejects
+when no variant matches all required fields.
+
+This is a **separate vLLM bug**: the same input shape should be valid
+on both streaming and non-streaming routes. The asymmetric validation
+is the bug. Filing as a follow-up upstream issue.
+
+### 15.2 What we still learned
+
+Even though the bypass test aborted on turn 3, the 2 successful turns
+gave us new evidence: **with the non-streaming promotion path
+delivering the model's full output, qwen3.5-27b emits substantive text
+content** (the "Now let me explore the workspace..." message). That's
+a behavioral signal that this model does engage with the task — it
+wasn't engaging before because the streaming path was dropping its
+output.
+
+So the §14.5 residual ("model voluntarily stops on turn 5") looks
+**more likely to be a streaming-protocol artifact** than a model-side
+choice. We just can't fully verify with the bypass approach because
+vLLM's non-streaming validation rejects codex's transcript on later
+turns.
+
+### 15.3 What to do instead — alternative paths to validate the model
+
+Three paths in priority order:
+
+1. **Fix vLLM's non-streaming input validation upstream** (or write a
+   third proxy patch that normalizes codex's transcript to a shape the
+   non-streaming validator accepts). This is significant proxy work
+   — input-side normalization to handle the asymmetry between
+   streaming and non-streaming validators. Probably needs
+   role-mapping, content-shape coercion, missing-field defaults.
+   Several days of work.
+2. **Run qwen3.5-27b through a different harness** (Claude Code per
+   Unsloth's gist, or QwenLM's own `qwen-code`). Different harness =
+   different request shape — may not trigger either of the vLLM bugs
+   we've found. Validates the model's autonomous-coding capability
+   independent of codex CLI. ~1-2 hours.
+3. **Try Qwen3-Coder-30B-A3B** (the agentic-tuned MoE variant).
+   Different model, possibly emits tool calls in a way that doesn't
+   trigger the streaming bugs (e.g., no `<tool_call>` embedding inside
+   `<think>`). ~30-45 min on this hardware.
+
+The §14 proxy synthesis fix should stay in place either way — it's a
+real bug at the parser layer and the workaround is mechanical and
+correct.
+
+### 15.4 Current state of the bench proxy
+
+After this session, the bench proxy at `127.0.0.1:8022` is running
+**without** `LUMO_PROXY_NONSTREAM_BYPASS` set. The §14 synthesis fix
+is active (gated by detecting unannounced function_calls in
+`response.completed.output`). To re-enable bypass in the future:
+
+```bash
+LUMO_PROXY_NONSTREAM_BYPASS=1 .venv/bin/python -m lumo_flywheel_serving.inference_proxy ...
+```
+
+The bypass code path is preserved in `inference_proxy.py` for future
+use once the input-validation asymmetry is addressed.
+
+### 15.5 Source
+
+- This is novel finding for vLLM; no upstream issue exists yet that
+  exactly matches the streaming-vs-nonstream input-validation
+  asymmetry. Worth filing.

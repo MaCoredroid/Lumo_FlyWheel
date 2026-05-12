@@ -831,6 +831,275 @@ def _write_json_payload(handler: BaseHTTPRequestHandler, status: int, payload: d
     handler.wfile.write(body)
 
 
+def _synthesize_sse_stream_from_non_streaming_json(
+    handler: BaseHTTPRequestHandler,
+    response_json: dict[str, Any],
+    *,
+    capture_state: dict[str, Any] | None = None,
+) -> None:
+    """Emit a synthetic SSE stream from a non-streaming JSON response.
+
+    The bypass path: codex sends stream:true, we forward stream:false to
+    vLLM (so PR #39055's reasoning-parser promotion path runs, recovering
+    tool calls embedded in <think>), then we reconstruct what the streaming
+    events should have been and forward them to codex. This sidesteps both
+    the §13.3 streaming UnboundLocalError and the §14.1 wrong-item_id /
+    missing-output_item.added bug.
+    """
+
+    def write_chunk(chunk: bytes) -> None:
+        handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+        handler.wfile.write(chunk)
+        handler.wfile.write(b"\r\n")
+        handler.wfile.flush()
+        if capture_state is not None and capture_state.get("ts_first_byte") is None:
+            capture_state["ts_first_byte"] = time.time()
+
+    def emit_event(event_name: str, payload: dict[str, Any]) -> None:
+        block = (
+            b"event: " + event_name.encode("utf-8") + b"\n"
+            + b"data: " + json.dumps(payload, separators=(",", ":")).encode("utf-8") + b"\n\n"
+        )
+        if capture_state is not None:
+            if event_name in {"response.function_call_arguments.delta", "response.function_call_arguments.done"} or (
+                event_name == "response.output_item.added"
+                and isinstance(payload.get("item"), dict)
+                and payload["item"].get("type") == "function_call"
+            ):
+                capture_state["has_tool_call"] = True
+            elif event_name in {"response.output_text.delta", "response.output_text.done"}:
+                delta = payload.get("delta") or payload.get("text") or ""
+                if isinstance(delta, str):
+                    capture_state["text_chars"] = int(capture_state.get("text_chars", 0) or 0) + len(delta)
+        write_chunk(block)
+
+    try:
+        # Normalize and walk the response.
+        normalized_response = normalize_responses_response_payload(response_json)
+        response_id = normalized_response.get("id")
+        response_model = normalized_response.get("model")
+        created_at = normalized_response.get("created_at")
+        output_items = normalized_response.get("output", []) or []
+        usage = normalized_response.get("usage")
+        status = normalized_response.get("status", "completed")
+
+        # response.created — copy the response object with empty output / in_progress
+        stub_response = dict(normalized_response)
+        stub_response["output"] = []
+        stub_response["status"] = "in_progress"
+        stub_response["usage"] = None
+        sequence_number = 0
+
+        def next_seq() -> int:
+            nonlocal sequence_number
+            sequence_number += 1
+            return sequence_number
+
+        emit_event("response.created", {
+            "type": "response.created",
+            "sequence_number": next_seq(),
+            "response": stub_response,
+        })
+        emit_event("response.in_progress", {
+            "type": "response.in_progress",
+            "sequence_number": next_seq(),
+            "response": stub_response,
+        })
+
+        for output_index, item in enumerate(output_items):
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type")
+            item_id = item.get("id") or f"item_{output_index}"
+            if item_type == "reasoning":
+                # output_item.added (in_progress reasoning stub)
+                added_item = {
+                    "id": item_id,
+                    "type": "reasoning",
+                    "summary": item.get("summary", []),
+                    "content": None,
+                    "encrypted_content": item.get("encrypted_content"),
+                    "status": "in_progress",
+                }
+                emit_event("response.output_item.added", {
+                    "type": "response.output_item.added",
+                    "sequence_number": next_seq(),
+                    "output_index": output_index,
+                    "item": added_item,
+                })
+                # reasoning_part.added + text deltas + done events
+                contents = item.get("content") or []
+                for content_index, content in enumerate(contents):
+                    if not isinstance(content, dict):
+                        continue
+                    text = content.get("text", "") or ""
+                    emit_event("response.reasoning_part.added", {
+                        "type": "response.reasoning_part.added",
+                        "sequence_number": next_seq(),
+                        "output_index": output_index,
+                        "item_id": item_id,
+                        "content_index": content_index,
+                        "part": {"type": content.get("type", "reasoning_text"), "text": ""},
+                    })
+                    if text:
+                        emit_event("response.reasoning_text.delta", {
+                            "type": "response.reasoning_text.delta",
+                            "sequence_number": next_seq(),
+                            "output_index": output_index,
+                            "item_id": item_id,
+                            "content_index": content_index,
+                            "delta": text,
+                        })
+                    emit_event("response.reasoning_text.done", {
+                        "type": "response.reasoning_text.done",
+                        "sequence_number": next_seq(),
+                        "output_index": output_index,
+                        "item_id": item_id,
+                        "content_index": content_index,
+                        "text": text,
+                    })
+                    emit_event("response.reasoning_part.done", {
+                        "type": "response.reasoning_part.done",
+                        "sequence_number": next_seq(),
+                        "output_index": output_index,
+                        "item_id": item_id,
+                        "content_index": content_index,
+                        "part": {"type": content.get("type", "reasoning_text"), "text": text},
+                    })
+                done_item = dict(added_item)
+                done_item["content"] = contents
+                done_item["status"] = item.get("status", "completed")
+                emit_event("response.output_item.done", {
+                    "type": "response.output_item.done",
+                    "sequence_number": next_seq(),
+                    "output_index": output_index,
+                    "item": done_item,
+                })
+            elif item_type == "message":
+                contents = item.get("content") or []
+                added_item = {
+                    "id": item_id,
+                    "type": "message",
+                    "role": item.get("role", "assistant"),
+                    "content": [],
+                    "status": "in_progress",
+                }
+                emit_event("response.output_item.added", {
+                    "type": "response.output_item.added",
+                    "sequence_number": next_seq(),
+                    "output_index": output_index,
+                    "item": added_item,
+                })
+                for content_index, content in enumerate(contents):
+                    if not isinstance(content, dict):
+                        continue
+                    text = content.get("text", "") or ""
+                    emit_event("response.content_part.added", {
+                        "type": "response.content_part.added",
+                        "sequence_number": next_seq(),
+                        "output_index": output_index,
+                        "item_id": item_id,
+                        "content_index": content_index,
+                        "part": {"type": "output_text", "text": "", "annotations": [], "logprobs": []},
+                    })
+                    if text:
+                        emit_event("response.output_text.delta", {
+                            "type": "response.output_text.delta",
+                            "sequence_number": next_seq(),
+                            "output_index": output_index,
+                            "item_id": item_id,
+                            "content_index": content_index,
+                            "delta": text,
+                            "logprobs": [],
+                        })
+                    emit_event("response.output_text.done", {
+                        "type": "response.output_text.done",
+                        "sequence_number": next_seq(),
+                        "output_index": output_index,
+                        "item_id": item_id,
+                        "content_index": content_index,
+                        "text": text,
+                        "logprobs": [],
+                    })
+                    emit_event("response.content_part.done", {
+                        "type": "response.content_part.done",
+                        "sequence_number": next_seq(),
+                        "output_index": output_index,
+                        "item_id": item_id,
+                        "content_index": content_index,
+                        "part": {"type": "output_text", "text": text, "annotations": [], "logprobs": []},
+                    })
+                done_item = dict(added_item)
+                done_item["content"] = contents
+                done_item["status"] = item.get("status", "completed")
+                emit_event("response.output_item.done", {
+                    "type": "response.output_item.done",
+                    "sequence_number": next_seq(),
+                    "output_index": output_index,
+                    "item": done_item,
+                })
+            elif item_type == "function_call":
+                arguments = item.get("arguments", "") or ""
+                added_item = {
+                    "id": item_id,
+                    "type": "function_call",
+                    "call_id": item.get("call_id") or f"call_{item_id}",
+                    "name": item.get("name", ""),
+                    "arguments": "",
+                    "status": "in_progress",
+                }
+                emit_event("response.output_item.added", {
+                    "type": "response.output_item.added",
+                    "sequence_number": next_seq(),
+                    "output_index": output_index,
+                    "item": added_item,
+                })
+                if arguments:
+                    emit_event("response.function_call_arguments.delta", {
+                        "type": "response.function_call_arguments.delta",
+                        "sequence_number": next_seq(),
+                        "output_index": output_index,
+                        "item_id": item_id,
+                        "delta": arguments,
+                    })
+                emit_event("response.function_call_arguments.done", {
+                    "type": "response.function_call_arguments.done",
+                    "sequence_number": next_seq(),
+                    "output_index": output_index,
+                    "item_id": item_id,
+                    "name": item.get("name", ""),
+                    "arguments": arguments,
+                })
+                done_item = dict(added_item)
+                done_item["arguments"] = arguments
+                done_item["status"] = item.get("status", "completed")
+                emit_event("response.output_item.done", {
+                    "type": "response.output_item.done",
+                    "sequence_number": next_seq(),
+                    "output_index": output_index,
+                    "item": done_item,
+                })
+
+        # response.completed
+        completed_response = dict(normalized_response)
+        completed_response["output"] = output_items
+        completed_response["usage"] = usage
+        completed_response["status"] = status
+        emit_event("response.completed", {
+            "type": "response.completed",
+            "sequence_number": next_seq(),
+            "response": completed_response,
+        })
+        if capture_state is not None:
+            capture_state["response_id"] = response_id
+            capture_state["model"] = response_model
+            capture_state["saw_response_completed"] = True
+        handler.wfile.write(b"0\r\n\r\n")
+        handler.wfile.flush()
+    except (BrokenPipeError, ConnectionResetError):
+        return
+
+
 def _write_chunked_stream(
     handler: BaseHTTPRequestHandler,
     upstream: requests.Response,
@@ -1326,13 +1595,26 @@ def build_proxy_handler(
             headers = _filtered_headers(self.headers)
             request_json: dict[str, Any] | None = None
             oracle_snapshot: dict[str, Any] | None = None
+            # Set by the /v1/responses path when codex sends stream:true AND
+            # LUMO_PROXY_NONSTREAM_BYPASS=1; we rewrite to stream:false upstream
+            # so PR #39055's promotion path applies, then synthesize an SSE
+            # stream back to codex on the response.
+            nonstream_bypass_active = False
             if self.path == "/v1/responses":
                 try:
                     request_json = json.loads(raw_body.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     _write_json_error(self, 400, "Invalid JSON request body")
                     return
-                payload = json.dumps(normalize_responses_request_payload(request_json)).encode("utf-8")
+                normalized_req = normalize_responses_request_payload(request_json)
+                if (
+                    os.environ.get("LUMO_PROXY_NONSTREAM_BYPASS", "").lower() in {"1", "true", "yes"}
+                    and bool(normalized_req.get("stream"))
+                ):
+                    normalized_req = dict(normalized_req)
+                    normalized_req["stream"] = False
+                    nonstream_bypass_active = True
+                payload = json.dumps(normalized_req).encode("utf-8")
                 headers["Content-Type"] = "application/json"
                 oracle_snapshot = synthesize_oracle_snapshot(request_json)
                 headers[LUMO_ORACLE_HEADER] = encode_oracle_snapshot_header(oracle_snapshot)
@@ -1385,7 +1667,20 @@ def build_proxy_handler(
             response_headers = _filtered_headers(upstream.headers)
             response_content: bytes | None = None
             non_streaming_parsed: dict[str, Any] | None = None
-            if upstream.headers.get("Content-Type", "").startswith("text/event-stream"):
+            if nonstream_bypass_active:
+                # Codex thinks it asked for streaming. Buffer the upstream
+                # (non-streaming) JSON, normalize, then re-emit as SSE.
+                response_content_buf = upstream.content
+                try:
+                    parsed = json.loads(response_content_buf.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    parsed = None
+                if isinstance(parsed, dict):
+                    non_streaming_parsed = parsed
+                response_headers["Transfer-Encoding"] = "chunked"
+                response_headers["Content-Type"] = "text/event-stream"
+                response_headers.pop("Content-Length", None)
+            elif upstream.headers.get("Content-Type", "").startswith("text/event-stream"):
                 response_headers["Transfer-Encoding"] = "chunked"
                 response_headers.pop("Content-Length", None)
             else:
@@ -1408,6 +1703,27 @@ def build_proxy_handler(
                 if capture_active
                 else None
             )
+
+            if nonstream_bypass_active and isinstance(non_streaming_parsed, dict):
+                try:
+                    _synthesize_sse_stream_from_non_streaming_json(
+                        self,
+                        non_streaming_parsed,
+                        capture_state=capture_state,
+                    )
+                finally:
+                    admission.release(ticket)
+                if capture_active and capture_state is not None:
+                    self._emit_track_b_capture_row(
+                        capture=capture,
+                        request_class=request_class,
+                        upstream_status=upstream.status_code,
+                        metrics_before=metrics_before,
+                        capture_state=capture_state,
+                        ts_request_received=ts_request_received,
+                        oracle_snapshot=oracle_snapshot,
+                    )
+                return
 
             if response_headers.get("Transfer-Encoding") == "chunked":
                 try:
