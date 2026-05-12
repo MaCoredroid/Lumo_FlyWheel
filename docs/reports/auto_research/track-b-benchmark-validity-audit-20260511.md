@@ -1492,3 +1492,171 @@ use once the input-validation asymmetry is addressed.
 - This is novel finding for vLLM; no upstream issue exists yet that
   exactly matches the streaming-vs-nonstream input-validation
   asymmetry. Worth filing.
+
+## 16. Input normalization unblocks the bypass (2026-05-12)
+
+§15 left two paths open: fix vLLM input validation upstream, or
+write a proxy input normalizer. The proxy normalizer was the smaller
+work item and is now implemented + tested.
+
+### 16.1 Root cause of the §15 validation failure
+
+Captured codex's actual turn-3 request body and POSTed it to vLLM
+non-streaming directly. The 912 "Field required" errors decomposed
+into two specific shapes:
+
+| Codex's input item type | Fields codex emits | Fields non-streaming validator requires |
+|---|---|---|
+| `reasoning` | `type, summary, content, encrypted_content` | + **`id`** (required) |
+| `message` (assistant) | `type, role, content` | + **`id`**, + **`status`** (both required) |
+| `function_call` | `type, name, arguments, call_id` | (`id` optional, ok) |
+| `function_call_output` | `type, call_id, output` | (`id` optional, ok) |
+| `output_text` content part | `type, text` | + **`annotations`** (required, list) |
+
+Codex CLI's transcript builder strips `id`, `status`, and `annotations`
+fields when echoing prior-turn output items back into next-turn input.
+The streaming `/v1/responses` route tolerates this; the non-streaming
+route's strict Pydantic validation rejects it.
+
+### 16.2 Fix — `_normalize_input_for_nonstreaming` in the proxy
+
+Added a `_normalize_input_for_nonstreaming` helper in
+`inference_proxy.py`. When `LUMO_PROXY_NONSTREAM_BYPASS=1` is active,
+it walks the input list and re-introduces the stripped fields:
+
+- `reasoning` items: deterministic `rs_<sha256-16>` id from item content; default `summary=[]`, `status="completed"`.
+- `message` items with role=assistant: deterministic `msg_<sha256-16>` id; `status="completed"`; for each `output_text` content part, default `annotations=[]`.
+- `function_call` / `function_call_output` items: deterministic ids, default `status="completed"`.
+
+Deterministic ids matter so a re-emitted item from one turn matches
+the same id in the next turn's transcript (codex doesn't track them
+itself).
+
+After this fix:
+
+```
+Direct POST of captured turn-3 body to bypass proxy:
+  - response.status = "completed"
+  - output items: reasoning + 6× function_call (parallel)
+  - all function_calls are cat commands for corpus files
+```
+
+vLLM now accepts the input shape and the model emits **6 parallel
+function_calls** to read the remaining corpus files. The §15.1 ":1278
+list[union[EasyInputMessageParam, Message]" validation errors are
+gone.
+
+### 16.3 End-to-end codex test result
+
+Ran codex through the bypass + input-normalization proxy on the same
+`incident-evidence-synthesis` workspace:
+
+| Metric | Audit baseline | §14 synth fix | §16 bypass + normalization | gpt-5.5 ref |
+|---|---:|---:|---:|---:|
+| Codex turns | 1 | 1 | 1 | 1 |
+| Inference proxy calls | 1 | 5 | 3-5 (varies) | n/a |
+| Tool calls in codex turn | 1 | 3-4 | 2-4 (varies) | 20 |
+| **Agent messages with text** | **0** | **0** | **2** | **8** |
+| `apply_patch` calls | 0 | 0 | 0 | 0 |
+| Files produced | 0/2 | 0/2 | 0/2 | 2/2 |
+
+**The breakthrough:** for the first time on qwen3.5-27b through this
+harness, the model emits **substantive agent_message text** instead of
+just `"\n\n"` whitespace. Observed messages:
+
+- `"I'll start by reading the task prompt to understand what needs to be done."`
+- `"Now let me explore the workspace structure and read the necessary files."`
+
+These are real text outputs from the model that codex now displays.
+With the §14 fix alone, all agent messages had `text=""` — meaning the
+model's text outputs were being dropped somewhere in the streaming
+parser pipeline. With the bypass running PR #39055's non-streaming
+promotion path, those texts now reach codex.
+
+### 16.4 Residual: model voluntarily stops on certain turn shapes
+
+The bypass fix is structurally correct (vLLM accepts the input, codex
+gets the model's full output), but qwen3.5-27b still doesn't complete
+the task end-to-end. On certain turn shapes (typically after the model
+has done 2-4 exploration commands), the model emits:
+
+```
+reasoning: "Now I need to read all the corpus files and the incidence request..."
+message:   "\n\n"
+(no function_call)
+```
+
+Direct replay of the same request body produces the same output. So
+this is **deterministic model behavior**, not a streaming bug. Tested
+with `parallel_tool_calls=True` (no change) and with various input
+sizes (more prior turns → sometimes works, sometimes doesn't).
+
+This is the residual question for follow-up. Possibilities:
+
+1. **Prompt shape sensitivity.** qwen may stop on this specific
+   instruction format ("Read the task prompt at X and complete it in
+   this workspace"). A more directive user message ("Use exec_command
+   to read each file under corpus/, then use apply_patch to create the
+   required outputs") might keep the loop going.
+2. **Reasoning effort interaction.** `reasoning_effort=high` produces
+   long thinking before each tool call; at some point the model
+   "concludes" in reasoning rather than action. Testing `medium` or
+   `low` might change this.
+3. **Token budget / sequence-end signaling.** The model may be hitting
+   some internal early-stop heuristic on the codex tool surface that
+   doesn't fire on different harnesses.
+
+These are testable in follow-up but distinct from the parser/validator
+bugs we've now fixed.
+
+### 16.5 What this means for Track B
+
+Three parser-layer fixes have landed:
+
+- **§13** — PR #39055 + serving guard: tool calls reach codex (iteration unblocked)
+- **§14** — proxy synthesis of missing `output_item.added`: streaming events
+  use correct item_ids
+- **§16** — proxy input normalization for non-streaming bypass: vLLM accepts
+  codex's transcript shape on the non-streaming path
+
+After §16, the harness is **structurally working** with qwen3.5-27b.
+The residual is now narrower: the model on certain turn shapes voluntarily
+emits text without a tool call. This is a model-prompt interaction
+question, not a serving-stack bug.
+
+### 16.6 Recommended next experiment
+
+Lowest-cost follow-up: a single A/B test with a more directive user
+message (~30 min). Run codex with:
+
+```
+"You are an autonomous coding agent. Complete the task in
+/tmp/.../prompt.md by reading every required file, then writing the
+output artifacts using exec_command 'apply_patch <<EOF ...' or
+similar. Do not stop after reading; iterate to completion."
+```
+
+If qwen completes (apply_patch + artifacts): §16.4 case (1) confirmed
+— prompt shape is the residual.
+
+If qwen still stops: try `reasoning_effort=medium`. If still stops at
+2-4 turns: the residual is deeper, and we revisit anchor model
+choice (gpt-5.5 or Qwen3-Coder-30B-A3B).
+
+### 16.7 Artifacts (this session)
+
+- `src/lumo_flywheel_serving/inference_proxy.py`:
+  - `_normalize_input_for_nonstreaming()` — new helper
+  - `_synthesize_sse_stream_from_non_streaming_json()` — synthesizes SSE from non-streaming JSON response
+  - `LUMO_PROXY_NONSTREAM_BYPASS=1` env-var gate
+  - `LUMO_PROXY_REQUEST_DUMP_DIR` env-var debug capture
+- `/tmp/streaming_test/req_dump3/`, `/tmp/streaming_test/req_dump4/` — captured codex transcript request bodies (debug evidence)
+
+### 16.8 Sources for this round
+
+- [vLLM Recipes: Qwen3.5](https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html) — Qwen3.5 serving guidance (no 27B-specific entry)
+- [DataCamp: How to Run Qwen3.5-27B Locally](https://www.datacamp.com/tutorial/how-to-run-qwen3-5-27b-locally) — `--tool-call-parser qwen3_coder --reasoning-parser qwen3` recommended setup
+- [Medium: Run Codex with vLLM local models](https://medium.com/@luongnv89/how-to-run-claude-code-codex-with-local-models-via-llamacpp-ollama-lmstudio-and-vllm-2026-7d00ba7e63a4) — "vLLM exposes both Chat Completions and Responses API endpoints, so Codex connects without any extra adapter" (this turned out to be incomplete — input validation differs between streaming and non-streaming)
+- [vLLM OpenAI Responses Client With Tools](https://docs.vllm.ai/en/latest/examples/online_serving/openai_responses_client_with_tools/) — canonical examples (single-turn, no multi-turn validation issues exposed)
+- [llamastack #3456](https://github.com/llamastack/llama-stack/issues/3456) — same family validation-error shape for `function.arguments` field
+- [OpenAI Responses API types](https://github.com/openai/openai-python/blob/main/src/openai/types/responses/response_input_item_param.py) — the Pydantic union vLLM validates against

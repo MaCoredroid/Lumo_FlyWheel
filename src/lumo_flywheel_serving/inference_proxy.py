@@ -831,6 +831,71 @@ def _write_json_payload(handler: BaseHTTPRequestHandler, status: int, payload: d
     handler.wfile.write(body)
 
 
+def _normalize_input_for_nonstreaming(request_json: dict[str, Any]) -> dict[str, Any]:
+    """Coerce codex's transcript input into a shape vLLM's non-streaming validation accepts.
+
+    Codex strips ``id`` and ``status`` fields from echoed items when building
+    the next-turn transcript. The streaming /v1/responses route accepts this;
+    the non-streaming route's strict Pydantic validation rejects it (912+
+    "Field required" errors). This helper walks the ``input`` list and:
+
+      - Adds ``id`` to reasoning items (deterministic hash of content)
+      - Adds ``id`` and ``status`` to assistant ``message`` items
+      - Adds ``id`` to function_call items if missing
+
+    Only invoked when LUMO_PROXY_NONSTREAM_BYPASS=1.
+    """
+    out = dict(request_json)
+    items = out.get("input")
+    if not isinstance(items, list):
+        return out
+    new_items: list[dict[str, Any]] = []
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            new_items.append(item)
+            continue
+        item = dict(item)
+        item_type = item.get("type")
+        if item_type == "reasoning":
+            if not item.get("id"):
+                digest = hashlib.sha256(json.dumps(item, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+                item["id"] = f"rs_{digest}"
+            if "summary" not in item or item["summary"] is None:
+                item["summary"] = []
+            if "status" not in item:
+                item["status"] = "completed"
+        elif item_type == "message" and item.get("role") == "assistant":
+            if not item.get("id"):
+                digest = hashlib.sha256(json.dumps(item, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+                item["id"] = f"msg_{digest}"
+            if "status" not in item:
+                item["status"] = "completed"
+            # ResponseOutputTextParam requires `annotations` field.
+            content = item.get("content")
+            if isinstance(content, list):
+                new_content = []
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "output_text":
+                        c = dict(c)
+                        if "annotations" not in c or c["annotations"] is None:
+                            c["annotations"] = []
+                    new_content.append(c)
+                item["content"] = new_content
+        elif item_type == "function_call":
+            if not item.get("id"):
+                digest = hashlib.sha256(json.dumps(item, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+                item["id"] = f"fc_{digest}"
+            if "status" not in item:
+                item["status"] = "completed"
+        elif item_type == "function_call_output":
+            if not item.get("id"):
+                digest = hashlib.sha256(json.dumps(item, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+                item["id"] = f"fco_{digest}"
+        new_items.append(item)
+    out["input"] = new_items
+    return out
+
+
 def _synthesize_sse_stream_from_non_streaming_json(
     handler: BaseHTTPRequestHandler,
     response_json: dict[str, Any],
@@ -1606,6 +1671,16 @@ def build_proxy_handler(
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     _write_json_error(self, 400, "Invalid JSON request body")
                     return
+                # TEMP DEBUG: dump request bodies to LUMO_PROXY_REQUEST_DUMP_DIR
+                req_dump_dir = os.environ.get("LUMO_PROXY_REQUEST_DUMP_DIR")
+                if req_dump_dir:
+                    try:
+                        import pathlib as _pl
+                        _pl.Path(req_dump_dir).mkdir(parents=True, exist_ok=True)
+                        with open(f"{req_dump_dir}/req_{int(time.time()*1000)}.json", "wb") as _rf:
+                            _rf.write(raw_body)
+                    except Exception:
+                        pass
                 normalized_req = normalize_responses_request_payload(request_json)
                 if (
                     os.environ.get("LUMO_PROXY_NONSTREAM_BYPASS", "").lower() in {"1", "true", "yes"}
@@ -1613,6 +1688,9 @@ def build_proxy_handler(
                 ):
                     normalized_req = dict(normalized_req)
                     normalized_req["stream"] = False
+                    # Add required id/status fields that codex strips when echoing items
+                    # back in the transcript — non-streaming validation rejects them otherwise.
+                    normalized_req = _normalize_input_for_nonstreaming(normalized_req)
                     nonstream_bypass_active = True
                 payload = json.dumps(normalized_req).encode("utf-8")
                 headers["Content-Type"] = "application/json"
