@@ -906,3 +906,239 @@ This restores the v4a baseline runtime exactly. Note: the v4a
 `runtime_config_hash` may not match anymore because vLLM may emit a
 new hash for non-config artifacts (recompiled CUDA graphs, fresh suffix
 index, etc.) — verify with a fresh `[VLLM-INIT] launch_cmd` log entry.
+
+## 13. vLLM PR #39055 + serving guard — empirically PARTIAL WIN (2026-05-12)
+
+The user surfaced [vLLM Issue #39056](https://github.com/vllm-project/vllm/issues/39056)
+which describes the exact failure mode of Track B's measurement and points
+at [vLLM PR #39055](https://github.com/vllm-project/vllm/pull/39055) as
+the open, unmerged parser-side fix. This is a different layer of fix
+than §12 (which targeted input-side chat templating); PR #39055 targets
+**output-side response parsing**.
+
+### 13.1 The mechanism PR #39055 fixes
+
+With `--reasoning-parser qwen3` + `--tool-call-parser qwen3_xml`
+(or `qwen3_coder`), and `reasoning_effort` enabled, qwen3.5/3.6
+models emit XML `<tool_call>` blocks **inside** the `<think>...</think>`
+reasoning region. vLLM's response pipeline:
+
+1. `qwen3_reasoning_parser` extracts everything before `</think>` into
+   the `reasoning` field.
+2. The downstream tool parser inspects only the `content` field.
+3. `<tool_call>...</tool_call>` blocks that remained in `reasoning`
+   never reach the tool parser.
+4. The OpenAI response comes back with populated `reasoning` and empty
+   `tool_calls`.
+5. Codex sees `tool_calls=[]`, treats it as "task complete," exits the
+   agent loop after one round.
+
+PR #39055's fix is a 30-line addition to `qwen3_reasoning_parser.py`
+that scans the extracted reasoning text for embedded XML tool-call
+blocks, removes them from `reasoning`, and prepends them to `content`.
+The existing tool parser then sees them and emits them as proper
+`function_call` items.
+
+### 13.2 The §12 chat-template fix was the wrong layer
+
+§12 swapped in `qwen3.5-enhanced.jinja`, which fixed **input rendering**
+(how `<tool_call>` XML and `<think>` are emitted in the prompt context
+fed back to the model). That helps in some configurations but doesn't
+fix the **output parsing** bug PR #39055 targets. On Codex's
+`reasoning_effort=high` shape, qwen3.5-27b puts tool calls inside
+`<think>` reliably enough that the §12 fix alone produced no observed
+change in Track B's measurement.
+
+The NVIDIA forum's success report ("6-hour session") used the chat-
+template fix on a different workload that didn't trigger the
+output-side parsing bug as reliably. That's why their fix worked
+end-to-end for them but not for us.
+
+### 13.3 What I applied
+
+**Patch 1 — PR #39055 against `qwen3_reasoning_parser.py`**:
+verbatim from `patch-diff.githubusercontent.com/raw/vllm-project/vllm/pull/39055.diff`.
+File went 147 → 182 lines. The new `_split_embedded_tool_calls` static
+method gates the two return paths in `extract_reasoning`.
+
+**Patch 2 — streaming-event guard against
+`vllm/entrypoints/openai/responses/serving.py:1325`** (function
+`_process_simple_streaming_events`). A second bug surfaced immediately
+after Patch 1 took effect:
+
+```
+File "vllm/entrypoints/openai/responses/serving.py", line 1778, in _process_simple_streaming_events
+    name=current_tool_call_name,
+         ^^^^^^^^^^^^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'current_tool_call_name' where it is not associated with a value
+```
+
+This matches [vLLM Issue #36769](https://github.com/vllm-project/vllm/issues/36769)
+shape. Once PR #39055 promotes tool-call XML out of reasoning, the
+qwen3_xml parser sends streaming deltas where `function.arguments`
+arrives before `function.name`, breaking the post-loop event emission
+that assumed `current_tool_call_name` had been initialized in the
+first-delta branch.
+
+The workaround: initialize `current_tool_call_name = None` and
+`current_tool_call_id = None` at the top of
+`_process_simple_streaming_events`, and gate the post-loop
+`ResponseFunctionCallArgumentsDoneEvent` emission on
+`tool_call_arguments and current_tool_call_name` rather than
+`tool_call_arguments` alone. ~5 lines of source.
+
+Both patches were also added to `scripts/run_track_b_loop.py`'s
+`_track_b_runtime_prelaunch_shell()` so subsequent container relaunches
+via ModelServer preserve them.
+
+### 13.4 Test result — partial unblock
+
+Same `incident-evidence-synthesis/v1` workspace, same codex command
+template, container restarted with both patches:
+
+| Metric | qwen3.5-27b (audit baseline) | qwen3.5-27b + §12 (enhanced template) | qwen3.5-27b + PR#39055 + serving guard | gpt-5.5 high (reference) |
+|---|---:|---:|---:|---:|
+| Codex turns | 1 | 1 | 1 | 1 |
+| **Inference proxy calls** | 1 | 1 | **5** | n/a (cloud) |
+| **Tool calls in codex turn** | 1 | 1 | **4** | 20 |
+| `apply_patch` calls | 0 | 0 | 0 | 0 (used heredocs) |
+| Agent messages with text | 0 | 0 | 0 | 8 |
+| Output tokens (cumulative) | 74 | 60 | **301** | 3,653 |
+| Reasoning output tokens | 0 | 0 | **0** (telemetry bug, §13.6) | 169 |
+| **Workspace files written** | 0 / 2 | 0 / 2 | **0 / 2** | 2 / 2 |
+
+**Proxy call sequence from the post-patch run:**
+
+```
+01:06:27 in=70534 c=67  tool=True  wall=97.3s  (cold prefill + first tool)
+01:08:05 in=70750 c=79  tool=True  wall= 9.0s
+01:08:14 in=70914 c=73  tool=True  wall= 7.1s
+01:08:21 in=71123 c=57  tool=True  wall= 5.7s
+01:08:27 in=71282 c=25  tool=False wall= 3.9s   (model gives up, no more tool calls)
+```
+
+**Tool call sequence (commands the agent ran):**
+
+1. `cat prompt.md` — read the task spec
+2. `find corpus/ queries/ -type f -name "*.md" -o -name "*.json` — listing (rc=2, model emitted malformed bash with unterminated quote)
+3. `find corpus queries -type f` — listing (rc=0, succeeded)
+4. `cat queries/incidence_request.md` — read the request body
+
+Then the 5th model call emitted `agent_message text="\n\n"` and no more
+tool calls. Codex closed the turn. **No `apply_patch`, no file
+writes.**
+
+### 13.5 What this means
+
+**The patches FIXED what they were designed to fix.** Codex now
+iterates against qwen3.5-27b. Tool calls reach the agent loop. The
+single-shot-then-exit pattern is broken.
+
+**The patches did NOT fix the residual.** qwen3.5-27b explores the
+workspace (reads prompt, lists files, reads the request) and then
+**stops** without attempting any write. The residual is now a pure
+model-capability question, no longer a parser/template question.
+qwen3.5-27b on this corpus reads enough to start the task and doesn't
+take the next step (analyze, plan, write).
+
+This is exactly the option-b residual the §11.5 sequence anticipated,
+now empirically confirmed:
+
+- §11.5.3 (b) framing: "investigate **why** qwen3.5-27b's training
+  distribution gives one-shot rather than iterative tool calls on
+  Codex-shape prompts."
+- Updated framing post-§13: "investigate **why** qwen3.5-27b gives
+  up after 4 read-only exploration tool calls without attempting any
+  write." This is a different and arguably weaker claim — the
+  iteration mechanism works; the model just doesn't push through to
+  task completion. It's an agentic-tuning gap, not a
+  protocol/parsing gap.
+
+### 13.6 Observed vLLM telemetry bug (worth filing upstream)
+
+In every `turn.completed` event after the patches, `reasoning_output_tokens=0`
+even though the model was emitting reasoning content (reasoning effort
+was set to high, the captured request had
+`reasoning: {"effort": "high", "summary": "auto"}`, and the smoke test
+in §13.6.1 confirmed reasoning text was being produced). When PR #39055
+promotes tool-call XML out of `reasoning` into `content`, the upstream
+usage-accounting path doesn't appear to attribute those tokens
+correctly. The total output_tokens count is right, but the
+reasoning/content split is mis-attributed to 0/all. Cosmetic — doesn't
+affect behavior — but worth filing as a follow-up vLLM telemetry bug.
+
+#### 13.6.1 Smoke test that confirmed PR #39055 itself works
+
+Independent smoke test through the bench proxy with a tools-equipped
+request before running codex:
+
+```
+{"model":"qwen3.5-27b",
+ "instructions":"You are an autonomous coding agent.",
+ "input":[{"role":"user","content":[{"type":"input_text","text":"Read /tmp/.../prompt.md and tell me what is required."}]}],
+ "reasoning":{"effort":"high"},
+ "tools":[{"type":"function","name":"exec_command",...}],
+ "max_output_tokens":2048}
+```
+
+Response shape (post-patch):
+- `output[0] type=reasoning` — "The user wants me to read a file..."
+- `output[1] type=function_call` — `exec_command(cmd="cat .../prompt.md")`
+
+The tool call cleanly arrives in `function_call`, NOT trapped in
+`reasoning`. That's the PR #39055 expected behavior.
+
+### 13.7 Updated next-step sequence (re-prioritized)
+
+The path forward from here, in priority order:
+
+1. **Loosen acceptance criterion** to "any workspace mutation" rather
+   than `apply_patch` keyword count. Still required (§10.7).
+2. **Wire family graders into round summary** (§5.2 of session
+   closeout). Still required.
+3. **Try a stronger agentic-coding open model.** The user research
+   surfaced **Qwen3-Coder-30B-A3B** as a purpose-built alternative,
+   trained with long-horizon RL on multi-turn tool trajectories.
+   Should fit on GB10 (MoE, ~3B active per token, ~30 GiB FP8). Model
+   swap is mechanically the same as the template swap: change
+   `--model` and the served-model-name, restart container with the
+   sudo recovery dance. ~30-45 min wall to test.
+4. **If Qwen3-Coder works:** that's the new harness anchor. Re-baseline
+   v4a on it. Run Round 4b ablation against the new baseline. Round
+   1-3 wallclock numbers get re-measured.
+5. **If Qwen3-Coder also stops short:** the residual is a fundamental
+   open-model-on-Codex-CLI shape problem. At that point either (a)
+   accept gpt-5.5 as harness anchor, or (b) invest in agentic-loop
+   prompt engineering / finetuning. Most likely outcome (a) by then.
+
+### 13.8 Filing upstream bugs
+
+Pre-conditions worth filing on vLLM after this session:
+
+- **`reasoning_output_tokens=0` mis-attribution post-PR-#39055**:
+  promoted tool-call XML tokens get counted in `output_tokens` but
+  not separately tracked as reasoning vs content. Telemetry bug.
+  Doesn't block functionality.
+- **`UnboundLocalError: current_tool_call_name` in
+  `_process_simple_streaming_events`**: the same shape as Issue #36769
+  but in the OpenAI Responses streaming path, not the qwen3 tool
+  parser. Triggers when the qwen3_xml parser emits arguments-before-
+  name streaming deltas (which it does reliably post-PR-#39055). The
+  proper fix is to initialize the variable up-front and guard the
+  post-loop emission, which is what §13.3 Patch 2 does. Could be
+  PR-ready upstream.
+
+### 13.9 Artifacts
+
+- Patched parser: `/usr/local/lib/python3.12/dist-packages/vllm/reasoning/qwen3_reasoning_parser.py` (in container, 182 lines, PR #39055 applied)
+- Patched serving: `/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py` (in container, guard applied)
+- Prelaunch script source (persists across container relaunches): `scripts/run_track_b_loop.py` lines ~1178-1235 (PR #39055 patch block)
+- Test workspace + logs: `/tmp/codex_fix_test/var_qwen_pr39055_v2/`
+- Apply-script (for re-running the patch on a fresh container): `/tmp/qwen_chat_template_fix/apply_pr39055.py`
+
+### 13.10 Sources
+
+- [vLLM Issue #39056 — XML tool_call lost when emitted inside `<think>`](https://github.com/vllm-project/vllm/issues/39056) — the mechanism, in our exact shape
+- [vLLM PR #39055 — parser-side fix promoting XML tool calls out of reasoning](https://github.com/vllm-project/vllm/pull/39055) — the patch
+- [vLLM Issue #36769 — Qwen3.5 tool parser substring crash](https://github.com/vllm-project/vllm/issues/36769) — related streaming-path family
+- [Qwen3-Coder blog post — agentic coding focus](https://qwenlm.github.io/blog/qwen3-coder/) — alternative anchor model candidate

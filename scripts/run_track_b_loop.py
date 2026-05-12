@@ -1177,6 +1177,85 @@ else:
     raise RuntimeError(f'vLLM KV cache manager source missing: {path}')
 PY
 python3 - <<'PY'
+# PR39055 (vllm-project/vllm#39055): qwen3_reasoning_parser drops XML
+# tool calls emitted inside <think>. Without this patch, the
+# qwen3_reasoning_parser strips the <tool_call>...</tool_call> blocks
+# into the `reasoning` field, and the downstream qwen3_xml /
+# qwen3_coder tool parser never sees them. Codex CLI then receives a
+# response with tool_calls=[] and exits the agent loop after one
+# round. Track B benchmark-validity audit §13 (2026-05-12) verified
+# this is the binding constraint on qwen3.5-27b agentic-loop traffic.
+from pathlib import Path
+
+path = Path('/usr/local/lib/python3.12/dist-packages/vllm/reasoning/qwen3_reasoning_parser.py')
+if not path.is_file():
+    raise RuntimeError(f'vLLM qwen3 reasoning parser source missing: {path}')
+
+text = path.read_text(encoding='utf-8')
+if '_split_embedded_tool_calls' in text:
+    print('[TRACK-B-PRELAUNCH] PR39055 qwen3 reasoning parser tool-call recovery already present')
+else:
+    helper_block = (
+        '_EMBEDDED_TOOL_CALL_RE = __import__("re").compile(\n'
+        '    r"<tool_call>(.*?)</tool_call>|<tool_call>.*$",\n'
+        '    __import__("re").DOTALL,\n'
+        ')\n\n\n'
+    )
+    if 'class Qwen3ReasoningParser' not in text:
+        raise RuntimeError('PR39055 patch target Qwen3ReasoningParser not found')
+    text = text.replace('class Qwen3ReasoningParser', helper_block + 'class Qwen3ReasoningParser', 1)
+
+    method_block = (
+        '    @staticmethod\n'
+        '    def _split_embedded_tool_calls(\n'
+        '        reasoning,\n'
+        '        content,\n'
+        '    ):\n'
+        '        """Promote tool-call XML blocks out of reasoning into content."""\n'
+        '        if (\n'
+        '            not reasoning\n'
+        '            or "<tool_call>" not in reasoning\n'
+        '            or "<function=" not in reasoning\n'
+        '        ):\n'
+        '            return reasoning, content\n'
+        '        extracted_blocks = []\n'
+        '        def _collect_or_keep(match):\n'
+        '            block = match.group(0)\n'
+        '            if "<function=" not in block:\n'
+        '                return block\n'
+        '            extracted_blocks.append(block.strip())\n'
+        '            return ""\n'
+        '        remaining_reasoning = _EMBEDDED_TOOL_CALL_RE.sub(_collect_or_keep, reasoning)\n'
+        '        remaining_reasoning = remaining_reasoning.strip() or None\n'
+        '        if not extracted_blocks:\n'
+        '            return reasoning, content\n'
+        '        content_parts = ["\\n\\n".join(extracted_blocks)]\n'
+        '        if content:\n'
+        '            content_parts.append(content)\n'
+        '        merged_content = "\\n\\n".join(part for part in content_parts if part) or None\n'
+        '        return remaining_reasoning, merged_content\n\n'
+    )
+    sentinel_def = '    def extract_reasoning(\n'
+    if sentinel_def not in text:
+        raise RuntimeError('PR39055 patch insertion point (def extract_reasoning) not found')
+    text = text.replace(sentinel_def, method_block + sentinel_def, 1)
+
+    old_truncated = '            return model_output, None'
+    new_truncated = '            return self._split_embedded_tool_calls(model_output, None)'
+    if old_truncated not in text:
+        raise RuntimeError('PR39055 patch target (truncated-reasoning return) not found')
+    text = text.replace(old_truncated, new_truncated, 1)
+
+    old_normal = '        return reasoning, final_content'
+    new_normal = '        return self._split_embedded_tool_calls(reasoning, final_content)'
+    if old_normal not in text:
+        raise RuntimeError('PR39055 patch target (normal return) not found')
+    text = text.replace(old_normal, new_normal, 1)
+
+    path.write_text(text, encoding='utf-8')
+    print('[TRACK-B-PRELAUNCH] applied PR39055 qwen3 reasoning parser tool-call recovery')
+PY
+python3 - <<'PY'
 import importlib.util
 import subprocess
 import sys
