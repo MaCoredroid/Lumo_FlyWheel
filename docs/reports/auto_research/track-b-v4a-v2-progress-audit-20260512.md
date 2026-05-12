@@ -1,5 +1,22 @@
 # Track B v4a_v2 baseline — mid-pipeline audit (2026-05-12 ~20:30 UTC)
 
+> **2026-05-12 20:35 UTC retraction notice.** All per-attempt numbers
+> originally reported in this document (Task 1 wallclocks 1438 / 1339 /
+> 1800 / 1800 s; Task 2 wallclocks 938 / 1800 s) came from runs whose
+> codex subprocesses were not isolated from the main repo's `.git`. The
+> stray-commit incident (commits `e79cf77` .. `b4643c0`) is direct
+> evidence of codex inside Task 1's workspace operating against the
+> main repo's git state — meaning the model saw the repo's commit
+> history when it ran `git log`, and that contamination cannot be ruled
+> out for Task 1 or for Task 2 runs that finished before the watchdog
+> existed. Those round_0 results have been **deleted** and P2 has been
+> restarted from a clean state at 20:34Z with the .git watchdog
+> (10-second cadence, pid `876870`) already running. The patches and
+> root-cause analysis below remain valid; the wallclock table is
+> superseded — see "Live state at audit time" for current pipeline
+> status. Real numbers will land in a follow-up closeout after the
+> clean run completes.
+
 This report documents what has been run since the §19.10 closeout, what
 patches were required to get truthful instrumentation under the §13-§17
 proxy stack, and what numbers are flowing in right now. P2 is still
@@ -157,16 +174,17 @@ new commits stay local. Proper fix: the task runner should
 `git init -q` each workspace before spawning codex. Tracking this
 separately; not in P2's current run.
 
-## Live state at audit time
+## Live state at audit time (updated 20:35Z after retraction restart)
 
 | Field | Value |
 |---|---|
-| P2 driver pid | `848597` |
-| Total elapsed | ~2h 42min |
-| Tasks done | 1 / 11 (responses-sdk-adapter-cutover, all 4 attempts) |
-| Tasks in flight | transcript-merge-regression (run_03 active) |
-| Tasks pending | 9 |
-| Metrics capture rows | growing; current run is fully populated (`prompt_tokens` + `completion_tokens` present on every row) |
+| P2 driver pid | `877651` (clean restart) |
+| Started at | 2026-05-12T20:34Z |
+| Tasks done | 0 / 11 (preflight just cleared) |
+| Tasks in flight | none yet — warmup pass next |
+| Tasks pending | 11 |
+| Metrics capture | truncated; fresh capture begins with the first task |
+| Workspace .git watchdog | active (pid `876870`, 10s scan, ~2h 14m uptime) |
 | Cron loop | every 5 min (`81c57a06`) — auto-monitors and reports |
 
 ## What this round will produce
@@ -203,11 +221,12 @@ comparison.
 ## Audit checklist
 
 - [x] Corpus shrunk to 11 with rationale recorded in `TRACK_B_E2E_TASKS` header
-- [x] 4 harness instrumentation patches landed and verified live
-- [x] Stray-commit leak from codex agent reverted; cleanup commit on `main`
-- [x] Real per-attempt metadata flowing on the active run
-- [x] Token-count fields present on 100% of post-restart capture rows
+- [x] 4 harness instrumentation patches landed and verified live (validated on the now-retracted run; same code paths exercise on the clean restart)
+- [x] Stray-commit leak from codex agent reverted; cleanup commit on `main` (`cee6574`)
+- [x] Token-count fields present on 100% of post-restart capture rows (validated on retracted run; will re-validate on clean run as data arrives)
+- [x] Workspace `.git` watchdog active before first task spawn (10s cadence)
+- [ ] Real per-attempt metadata flowing on the **clean** run (preflight just cleared, no tasks yet)
 - [ ] Per-task `task_score` populated (deferred — post-hoc grader pass)
-- [ ] All 11 tasks × 4 attempts completed (in progress)
+- [ ] All 11 tasks × 4 attempts completed (clean run in progress)
 - [ ] Round summary regenerated and committed
 - [ ] P3 ablation launched against same corpus
