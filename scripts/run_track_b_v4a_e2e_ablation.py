@@ -39,16 +39,31 @@ CONTAINER = "lumo-vllm-track-b-suffix"
 FLAGS_PATH = "/tmp/lumo_track_b_runtime_flags.json"
 PROXY_CAPTURE_JSONL = "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl"
 WARMUP_SP_JSON = REPO_ROOT / "output/track_b_e2e_v4a/round_0/codex_system_prompt.json"
-RUNTIME_CONFIG_HASH = "sha256:ec34a2999b1331919cd3fcf503ff2aa529ece0134c2dbbbe6bb17d1b6651303d"
+# v4a_v2 era runtime_config_hash (computed from current vLLM init log;
+# includes PR #39055 reasoning-parser patches).
+RUNTIME_CONFIG_HASH = "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a"
 RESET_PREFIX_CACHE_URL = "http://127.0.0.1:9950/reset_prefix_cache"
 ENDPOINT = "http://127.0.0.1:8022/v1"
+# Docker-isolated codex per attempt (same template as launch_v4a_v2_round_0_baseline.sh).
+# `--user $(id -u):$(id -g)` written here as a fixed 1000:1000 since the
+# template is rendered at runtime; if uid:gid differ on a future host
+# the launcher script should be adapted.
 CODEX_TEMPLATE = (
-    "codex exec --json --skip-git-repo-check -C {workspace} "
+    "docker run --rm --network=host -u 1000:1000 "
+    "-v {workspace}:/workspace:rw "
+    "-e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp "
+    "-w /workspace codex-runner:v1 "
+    "codex exec --json --skip-git-repo-check "
+    "--dangerously-bypass-approvals-and-sandbox -C /workspace "
     "-c 'model_provider=\"local-proxy\"' "
     "-c 'model_providers.local-proxy={{name=\"local-proxy\","
     "base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\","
-    "wire_api=\"responses\",stream_idle_timeout_ms=300000}}' "
-    "--model {model} \"Read the task prompt at {prompt_file} and complete it in this workspace.\""
+    "wire_api=\"responses\",stream_idle_timeout_ms=600000}}' "
+    "-c 'model_reasoning_effort=\"high\"' "
+    "-c 'model_supports_reasoning_summaries=true' "
+    "-c 'model_reasoning_summary=\"auto\"' "
+    "--model {model} "
+    "\"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\""
 )
 
 # Cumulative ablation: each row adds one technique relative to the previous.
@@ -98,21 +113,26 @@ def run_sweep(label: str, out_root: Path, round_index: int, repeat: int) -> tupl
         "--trace-emitter-correctness-verified-at", now_iso(),
         "--protocol-hash-match",
         "--repeat", str(repeat),
+        "--timeout-s", "1800",
+        "--codex-smoke-timeout-s", "600",
         "--out-root", str(out_root),
         "--endpoint", ENDPOINT,
         "--vllm-request-metrics-jsonl", PROXY_CAPTURE_JSONL,
         "--hypothesis",
-            f"Round 4b ablation point {label}: cumulative technique enablement "
-            f"on v4a measurement protocol. T-flag state via runtime flags file.",
+            f"Round 4b ablation point {label} (v4a_v2 era): cumulative "
+            f"technique enablement on the 11-task v4a corpus under the "
+            f"§13-§17 proxy stack + docker-isolated codex. T-flag state "
+            f"via runtime flags file at {FLAGS_PATH}.",
         "--config-delta-vs-prior-round",
             "ablation point — runtime flags differ from prior round; "
-            "container/sample/runtime_config_hash unchanged",
+            "container/sample/runtime_config_hash unchanged from v4a_v2 D-point",
         "--auto-research-agent-recommendation", "n/a",
         "--next-round-proposal", "see closeout",
         "--defer-preflight-checks",
             "vllm_request_metrics_join_available",
             "codex_trace_out_supported",
             "dcgm_profile_fields_available",
+            "codex_command_smoke",
     ]
     env = os.environ.copy()
     env.setdefault("OPENAI_API_KEY", "EMPTY")
@@ -166,7 +186,7 @@ def slice_and_aggregate_regime(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Round 4b e2e ablation sweeps.")
-    parser.add_argument("--out-root", default="output/track_b_e2e_v4a_ablation",
+    parser.add_argument("--out-root", default="output/track_b_e2e_v4a_v2_ablation",
                         help="Where each point's round_<N>/ dir lands.")
     parser.add_argument("--repeat", type=int, default=4,
                         help="--repeat passed to run_track_b_e2e_round.py (>= 4).")
