@@ -1,0 +1,199 @@
+{
+  "codex_version": "0.128.0",
+  "model": "qwen3.5-27b",
+  "round": 0,
+  "runtime_config_hash": "sha256:ec34a2999b1331919cd3fcf503ff2aa529ece0134c2dbbbe6bb17d1b6651303d",
+  "schema": "lumo.track_b.codex_system_prompt_decomposition.v1",
+  "sections": [
+    {
+      "chars": 20771,
+      "content_hash": "sha256:0fae66723e9ba38083bd5a26f83f5c6c944954daaea3436084ab75eb8fdf46c8",
+      "kind": "field",
+      "name": "instructions",
+      "tokens": 4538
+    },
+    {
+      "chars": 236750,
+      "content_hash": "sha256:eef8698ef266245f75e798146a03356537dec00f897f3a7f45bd736b31575826",
+      "kind": "field",
+      "name": "tools",
+      "tokens": 59800,
+      "tool_count": 24
+    },
+    {
+      "chars": 12179,
+      "content_hash": "sha256:a4f33435fb509b9d6b24d3d0bbc335228176aa7e463105e8a18db71211ddeb16",
+      "kind": "input_role",
+      "name": "input.developer",
+      "role": "developer",
+      "tokens": 2750
+    },
+    {
+      "chars": 173,
+      "content_hash": "sha256:0028331a711895b812b871618f0dccac9a713af3b54092784ffdcfbd05a7cfe0",
+      "kind": "input_role",
+      "name": "input.env_context",
+      "role": "user",
+      "tokens": 64
+    },
+    {
+      "chars": 30,
+      "content_hash": "sha256:ef7e7ff96d04cdcdb9a405d5319bdc1b52adabc168eea9179dfc1352aad79231",
+      "kind": "input_role",
+      "name": "input.user_message",
+      "role": "user",
+      "tokens": 7
+    }
+  ],
+  "static_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "tool_breakdown": [
+    {
+      "chars": 2189,
+      "content_hash": "sha256:e8252a89e899dcdf77dabfce474b386fd4dc1a047ab16154f2d650b4577c4d79",
+      "name": "exec_command",
+      "tokens": 508
+    },
+    {
+      "chars": 709,
+      "content_hash": "sha256:69886b1c790fdb80848956b3f6ad50816a348afff273fd313c5e563a98a3cc5a",
+      "name": "write_stdin",
+      "tokens": 167
+    },
+    {
+      "chars": 669,
+      "content_hash": "sha256:79af3f8455ca34a816e9cba4ddf7921920ae08dc060935068ec5e2d6245cae55",
+      "name": "list_mcp_resources",
+      "tokens": 140
+    },
+    {
+      "chars": 757,
+      "content_hash": "sha256:1f5b1425e8f62a5c8d4e70ceb734f9eb45e4f7948df0d1cf70e9923f68d4bac9",
+      "name": "list_mcp_resource_templates",
+      "tokens": 151
+    },
+    {
+      "chars": 552,
+      "content_hash": "sha256:0918c2db09c6012593c8ef3f0a51a328fcc47ebae235fba896774f3142a510fb",
+      "name": "read_mcp_resource",
+      "tokens": 135
+    },
+    {
+      "chars": 664,
+      "content_hash": "sha256:118c23f54645ec1db450def7a065ed72b4598a494be100d77df21479dceef3f0",
+      "name": "update_plan",
+      "tokens": 174
+    },
+    {
+      "chars": 297,
+      "content_hash": "sha256:41bcaa7c6d80fdc6b9906b88152423afdfd094e1fdafb223de5fec58f21a8516",
+      "name": "get_goal",
+      "tokens": 69
+    },
+    {
+      "chars": 768,
+      "content_hash": "sha256:030b25f8f5d167378ccb736e0385c95125a53767cf14039b8c904af46bd546bd",
+      "name": "create_goal",
+      "tokens": 168
+    },
+    {
+      "chars": 887,
+      "content_hash": "sha256:38769e6f8372353e20ae6ec9db8cb8c1e39e067104b44ae634fade515718c906",
+      "name": "update_goal",
+      "tokens": 195
+    },
+    {
+      "chars": 1425,
+      "content_hash": "sha256:f4100b0df26d1b179aa323ba07c4cdfb5c4f619d2347f7e49e6dfd36b6e645eb",
+      "name": "request_user_input",
+      "tokens": 347
+    },
+    {
+      "chars": 4176,
+      "content_hash": "sha256:ffb271e27a7e9dd2963cb502b06676be21d6a99c79f6d7cce12715a49121d319",
+      "name": "tool_suggest",
+      "tokens": 954
+    },
+    {
+      "chars": 51,
+      "content_hash": "sha256:e4b2139948e864bea5d6ea3eba707ce9dbd3d5b6237a8cc9b92538535ca39f52",
+      "name": "<unknown>",
+      "tokens": 14
+    },
+    {
+      "chars": 52,
+      "content_hash": "sha256:119dc0708a470c7c8bb9b5e89a5b3f9904adac0e7cb71085dc0a6c52534fa003",
+      "name": "<unknown>",
+      "tokens": 14
+    },
+    {
+      "chars": 437,
+      "content_hash": "sha256:4b6f1118a5a6541bb14f8c3b18bda73deead738053f7811795719c25bf65c71b",
+      "name": "view_image",
+      "tokens": 106
+    },
+    {
+      "chars": 10203,
+      "content_hash": "sha256:f3268fba6e5b0ec0df6392cd8034cbb51809dd0b601c1ea5c3228b763815d582",
+      "name": "spawn_agent",
+      "tokens": 2131
+    },
+    {
+      "chars": 1560,
+      "content_hash": "sha256:0c37945cc4989071c9f3955ba806aac8de280bc890d6933b16b042b10eb3cfaf",
+      "name": "send_input",
+      "tokens": 370
+    },
+    {
+      "chars": 334,
+      "content_hash": "sha256:90fac7b4999282f1907a7bd57c227ba8d65a45ec6e038f5d57283443284c12d4",
+      "name": "resume_agent",
+      "tokens": 83
+    },
+    {
+      "chars": 773,
+      "content_hash": "sha256:b4dfd1dbf38cb97004ce8254ddb5c5067977f11eec4df59a376996d8e1d8b862",
+      "name": "wait_agent",
+      "tokens": 188
+    },
+    {
+      "chars": 486,
+      "content_hash": "sha256:4427e3dd27b9d3466b861ba0912e6c9b48b46facfccf6e1c09c6a4365bdf0461",
+      "name": "close_agent",
+      "tokens": 112
+    },
+    {
+      "chars": 63865,
+      "content_hash": "sha256:ac916b56dc0f8e031def4e3093c2617cb55bc304f2c25189b0b56b6b96bf5c3f",
+      "name": "mcp__codex_apps__github",
+      "tokens": 16121
+    },
+    {
+      "chars": 17447,
+      "content_hash": "sha256:18290a2f22866ff44056f6394805305982bcdb9acb782ab653e2f6b70c154a88",
+      "name": "mcp__codex_apps__gmail",
+      "tokens": 4174
+    },
+    {
+      "chars": 20967,
+      "content_hash": "sha256:a679910a224795f83671c651f27246313c1a1e5d6960d54ab60680d613b45907",
+      "name": "mcp__codex_apps__google_calendar",
+      "tokens": 5357
+    },
+    {
+      "chars": 43631,
+      "content_hash": "sha256:129e5158c4894d97b600b7f88b828314622d88db0b66515a86372ddb9fc2c8ef",
+      "name": "mcp__codex_apps__google_drive",
+      "tokens": 10408
+    },
+    {
+      "chars": 63803,
+      "content_hash": "sha256:7b5bf800578f8cfbae2e8148e0025668128e96195a1f644d66a23b62f40f421a",
+      "name": "mcp__codex_apps__notion",
+      "tokens": 17712
+    }
+  ],
+  "total_request_tokens_est": 67159,
+  "total_static_chars": 257524,
+  "total_static_tokens": 64340,
+  "ts": "2026-05-10T21:27:45Z"
+}

@@ -67,15 +67,11 @@
       "ok": true
     },
     "track_b_sample_workspaces_available": {
-      "available_task_count": 9,
-      "expected_task_count": 9,
+      "available_task_count": 7,
+      "expected_task_count": 7,
       "missing_task_ids": [],
       "ok": true,
       "task_coverage": {
-        "dead-flag-reachability-audit/v1-clean-baseline": {
-          "ok": true,
-          "path": "benchmark_blueprints/families/dead-flag-reachability-audit/workspace_bundle/v1-clean-baseline"
-        },
         "fanout-fullstack-release-blocker/v1-clean-baseline": {
           "ok": true,
           "path": "benchmark_blueprints/families/fanout-fullstack-release-blocker/workspace_bundle/v1-clean-baseline"
@@ -103,10 +99,6 @@
         "security-audit-hotfix-remediation/v1-clean-baseline": {
           "ok": true,
           "path": "benchmark_blueprints/families/security-audit-hotfix-remediation/workspace_bundle/v1-clean-baseline"
-        },
-        "sqlalchemy-2-session-modernization/v1-clean-baseline": {
-          "ok": true,
-          "path": "benchmark_blueprints/families/sqlalchemy-2-session-modernization/workspace_bundle/v1-clean-baseline"
         }
       }
     },
@@ -173,7 +165,7 @@
   "health_url": "http://127.0.0.1:9950/health",
   "measurement_python": "/home/mark/shared/lumoFlyWheel/.venv/bin/python",
   "metrics_url": "http://127.0.0.1:9950/metrics",
-  "recorded_at": "2026-05-13T01:07:19Z",
+  "recorded_at": "2026-05-13T06:46:38Z",
   "round0_may_run": true,
   "schema": "lumo.track_b.e2e_preflight_audit.v1"
 }

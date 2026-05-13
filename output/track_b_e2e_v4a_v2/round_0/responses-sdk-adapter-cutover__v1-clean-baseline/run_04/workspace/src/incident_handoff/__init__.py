@@ -1,1 +1,0 @@
-"""Incident handoff package."""
