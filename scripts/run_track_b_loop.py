@@ -1211,7 +1211,7 @@ else:
         '        reasoning,\n'
         '        content,\n'
         '    ):\n'
-        '        """Promote tool-call XML blocks out of reasoning into content."""\n'
+        "        '''Promote tool-call XML blocks out of reasoning into content.'''\n"
         '        if (\n'
         '            not reasoning\n'
         '            or "<tool_call>" not in reasoning\n'
