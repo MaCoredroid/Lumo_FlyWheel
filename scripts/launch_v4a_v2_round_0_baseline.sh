@@ -25,6 +25,10 @@ NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # /workspace is the container's ephemeral overlay — codex cannot see the
 # host's main repo, other attempts' workspaces, or any docs/reports.
 UID_GID="$(id -u):$(id -g)"
+# `--rm` already auto-removes the container on exit; the task runner's
+# TimeoutExpired handler now reaps any codex-runner:v1 container left
+# behind by a SIGKILL'd `docker run` (only one runs at a time because
+# the pipeline is serial). No --name needed.
 CODEX_TEMPLATE='docker run --rm --network=host -u '"$UID_GID"' -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c '"'"'model_provider="local-proxy"'"'"' -c '"'"'model_providers.local-proxy={{name="local-proxy",base_url="{endpoint}",env_key="OPENAI_API_KEY",wire_api="responses",stream_idle_timeout_ms=600000}}'"'"' -c '"'"'model_reasoning_effort="high"'"'"' -c '"'"'model_supports_reasoning_summaries=true'"'"' -c '"'"'model_reasoning_summary="auto"'"'"' --model {model} "Read the task prompt at /workspace/AGENTS.md and complete it in this workspace."'
 
 # Ensure runtime flags = all on (T2/T3/T4 enabled).

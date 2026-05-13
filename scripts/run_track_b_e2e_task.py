@@ -724,6 +724,36 @@ def run_one(args: argparse.Namespace, family: str, variant: str) -> int:
                         f"continuing to artifact write (returncode=124)",
                         file=sys.stderr,
                     )
+                    # Reap any orphan codex-runner:v1 docker container the
+                    # killed subprocess left behind. subprocess.run's SIGKILL
+                    # goes to the `docker run` client; Docker does not
+                    # propagate it into the container, so codex inside the
+                    # container keeps running, keeps making proxy requests,
+                    # and competes with the next attempt for GPU + KV cache
+                    # (observed 2026-05-13: nervous_tharp ran 37 min past
+                    # this point and contaminated the next attempt's
+                    # request_metrics.jsonl). The pipeline runs attempts
+                    # serially, so stopping every codex-runner:v1 here is
+                    # safe -- no concurrent legitimate container exists.
+                    try:
+                        live = subprocess.run(
+                            ["docker", "ps", "-q", "--filter", "ancestor=codex-runner:v1"],
+                            capture_output=True, text=True, timeout=10,
+                        ).stdout.strip().split()
+                        for cid in live:
+                            subprocess.run(["docker", "stop", "-t", "5", cid],
+                                           capture_output=True, timeout=15)
+                            subprocess.run(["docker", "rm", "-f", cid],
+                                           capture_output=True, timeout=10)
+                        if live:
+                            print(
+                                f"run_track_b_e2e_task.py: stopped {len(live)} "
+                                f"orphan codex-runner container(s) on timeout",
+                                file=sys.stderr,
+                            )
+                    except Exception as exc:
+                        print(f"run_track_b_e2e_task.py: docker reap failed: {exc}",
+                              file=sys.stderr)
             result.stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
             result.stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
             # Detect Codex 0.128.0 zero-token quirk: codex exits 0 but never
