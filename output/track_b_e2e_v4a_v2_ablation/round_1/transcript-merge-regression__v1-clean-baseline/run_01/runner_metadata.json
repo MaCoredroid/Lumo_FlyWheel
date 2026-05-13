@@ -1,0 +1,113 @@
+{
+  "attempt": 1,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 623.4467198630009,
+  "family": "transcript-merge-regression",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-13T21:28:13.327Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-13T21:17:49.843Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-13T21:28:13.330Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 1,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/transcript-merge-regression/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation/round_1/transcript-merge-regression__v1-clean-baseline/run_01/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 45,
+    "end_offset": 811019,
+    "normalized_request_count": 45,
+    "request_ids": [
+      "resp_811898c97c6b3500",
+      "resp_8179aea0f6655e8f",
+      "resp_81ce8e1d8249c895",
+      "resp_8278d0b7aa3b79b7",
+      "resp_831a77a2589cc5ae",
+      "resp_8325949082b4d2ae",
+      "resp_8b7197c1a4d43a42",
+      "resp_8d1cf04567ab1a1f",
+      "resp_8f589fffc37e25b1",
+      "resp_902322881a77b15a",
+      "resp_9104c58d3a3c9ac3",
+      "resp_918838ae48481a8b",
+      "resp_96af7d7a40b9711e",
+      "resp_98c0c2f864c0d1b4",
+      "resp_9ae542767cc128df",
+      "resp_9b269eebeb915482",
+      "resp_9c19be3c954d13e8",
+      "resp_9ccb88e9b49f28d7",
+      "resp_9ea43cd62977cec7",
+      "resp_9f450fb9d4c0c0a8",
+      "resp_a2c20445ec28555f",
+      "resp_a550d85d1d15e698",
+      "resp_a6953a38d5851e09",
+      "resp_a841d23557614b6c",
+      "resp_a8449201e6a38212",
+      "resp_a89fcb53f6b9974f",
+      "resp_a9f4ac4b58ef3e5f",
+      "resp_ad3ef27808af1c3b",
+      "resp_ae3d173447ca602b",
+      "resp_ae5b33729964efe1",
+      "resp_afb09c259d4703be",
+      "resp_b08ecd01299c8c0c",
+      "resp_b40f3fde8eee919a",
+      "resp_b4975086281292a9",
+      "resp_b4deae88dc7f4b26",
+      "resp_b5b573e14f768aca",
+      "resp_b6227884484d5ec8",
+      "resp_b667e1333f7ffc93",
+      "resp_b73bb8f27b4cb64b",
+      "resp_b7d94a1314241cab",
+      "resp_b89501946e243811",
+      "resp_b8ad95b8107899b8",
+      "resp_b8eef1496f6600ca",
+      "resp_ba24fe7d69fd928a",
+      "resp_bd59e80f51218623"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 765816
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_v4a_v2_ablation/round_1/transcript-merge-regression__v1-clean-baseline/run_01/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}
