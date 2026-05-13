@@ -1,0 +1,2 @@
+Viewport: 1440x900
+Observed: two-column checkout remains stable.

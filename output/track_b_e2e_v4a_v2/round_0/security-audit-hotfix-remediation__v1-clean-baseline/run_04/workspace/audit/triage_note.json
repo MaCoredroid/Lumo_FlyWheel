@@ -1,0 +1,55 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "cnb55-hotfix",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "The original _normalize_requested_path function performed only a single unquote pass, allowing double-encoded traversal sequences like %252e%252e%252f (../) to bypass the string-prefix '..' check. Additionally, absolute paths starting with '/' were stripped before validation. The fix implements iterative URL decoding until stable, validates the original path for absolute/drive-qualified patterns before normalization, and checks each path segment for '..' after full normalization.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/storage.py",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Same fix as SARIF-PY-TRAVERSAL-001 addresses the encoded separator and symlink escape vectors. Nested exports remain functional.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT key rotation is a separate concern; per appsec_review.md, do not fold into this hotfix.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-KEY-03",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/auth.py",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT material rotation deferred per appsec guidance; outside scope of path traversal hotfix.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ]
+    }
+  ]
+}

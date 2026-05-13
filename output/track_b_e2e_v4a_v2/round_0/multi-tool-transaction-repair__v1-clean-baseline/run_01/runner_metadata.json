@@ -1,0 +1,102 @@
+{
+  "attempt": 1,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 483.92454647179693,
+  "family": "multi-tool-transaction-repair",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 95,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 95"
+      }
+    ],
+    "recorded_at": "2026-05-13T11:44:07.193Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-13T11:36:03.236Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-13T11:44:07.195Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 0,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/multi-tool-transaction-repair/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2/round_0/multi-tool-transaction-repair__v1-clean-baseline/run_01/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 34,
+    "end_offset": 1364657,
+    "normalized_request_count": 34,
+    "request_ids": [
+      "resp_81c1b38d33999d36",
+      "resp_834c321d374c0878",
+      "resp_838ab0301ba621a1",
+      "resp_8593015e965157ab",
+      "resp_877ed2e1e0e93f7a",
+      "resp_89cc44b0db16e8a2",
+      "resp_8b0adecde238810d",
+      "resp_8c0248401bfc9ca1",
+      "resp_8f79aa5a156677f8",
+      "resp_91059c80fc9858dd",
+      "resp_921ffc49df518912",
+      "resp_937b314484253306",
+      "resp_9406f56765daea98",
+      "resp_973f5c69c34e597e",
+      "resp_97bfb0d01792e958",
+      "resp_9bdf1f948f4d11c4",
+      "resp_9d04e380562a953c",
+      "resp_a0a90a76611e47b1",
+      "resp_a47b35eb3ad6417f",
+      "resp_a4d200fa0ae596da",
+      "resp_a5ef1fbbaa236264",
+      "resp_a7e12842827cbd96",
+      "resp_a8d4e76383a8e60a",
+      "resp_aa5a478de7ef0d9f",
+      "resp_ab0157e641c0b524",
+      "resp_ad9d034490943695",
+      "resp_ae170f864f16f8b6",
+      "resp_ae9de6117f88839a",
+      "resp_b5b54783d9ad68e3",
+      "resp_b96d60377b7d7370",
+      "resp_b9e45ad0353636c4",
+      "resp_bc62adea80c42acd",
+      "resp_bcd978f620023de7",
+      "resp_be2a776facd05d9b"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 1330513
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_v4a_v2/round_0/multi-tool-transaction-repair__v1-clean-baseline/run_01/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}

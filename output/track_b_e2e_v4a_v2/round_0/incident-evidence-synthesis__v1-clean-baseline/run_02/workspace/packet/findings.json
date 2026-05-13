@@ -1,0 +1,15 @@
+{
+  "ranked_findings": [
+    {
+      "confidence": "high",
+      "finding": "bulk-refund requests accepted without idempotency keys due to legacy_batch_header bypass",
+      "evidence": ["TICKET-8729: duplicates have request_class=bulk-refund and no idempotency key", "timeline: idempotency guardrail skipped at 10:18 UTC due to legacy_batch_header"]
+    },
+    {
+      "confidence": "medium",
+      "finding": "single-refund API traffic did not duplicate because it includes idempotency keys",
+      "evidence": ["TICKET-8729: single-refund API traffic in same window includes idempotency keys and did not duplicate"]
+    }
+  ],
+  "unresolved_ambiguity": "worker replay was an early theory (TICKET-8721) but is not supported by final evidence as the primary trigger"
+}

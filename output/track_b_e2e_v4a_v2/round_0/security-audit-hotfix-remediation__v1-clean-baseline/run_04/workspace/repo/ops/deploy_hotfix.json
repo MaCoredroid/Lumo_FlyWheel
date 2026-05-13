@@ -1,0 +1,42 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55-hotfix",
+  "rollback_trigger": "Any regression in nested export paths or increase in ExportPathViolation rate for legitimate tenant exports",
+  "impact_scope": "export_api/storage.py only; no changes to auth, dependency, archive, or unrelated config",
+  "operator_verification_steps": [
+    "Verify resolve_export_path accepts nested paths like 'reports/partner-billing/2026-04/export.csv'",
+    "Verify resolve_export_path rejects '..%2fsecrets.csv' (single-encoded traversal)",
+    "Verify resolve_export_path rejects '%252e%252e%252fsecrets.csv' (double-encoded traversal)",
+    "Verify resolve_export_path rejects '/etc/passwd' (absolute path)",
+    "Verify resolve_export_path rejects 'C:\\\\temp\\\\secrets.csv' (drive-qualified path)",
+    "Run 'make test' and confirm all 4 existing tests pass"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested exports under tenant root remain valid"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Single-encoded traversal vectors are blocked"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal vectors are blocked"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Mixed slash traversal vectors are blocked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path escapes are blocked"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Drive-qualified path escapes are blocked"
+    }
+  ],
+  "release_freeze_ack": "This hotfix addresses only the export-path traversal vulnerability; JWT key rotation (SARIF-PY-AUTH-014, APPSEC-KEY-03) is deferred per appsec_review.md",
+  "incident_reference": "APPSEC-EXP-17"
+}

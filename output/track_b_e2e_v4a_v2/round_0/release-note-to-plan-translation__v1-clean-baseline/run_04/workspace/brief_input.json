@@ -1,0 +1,97 @@
+{
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline",
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "step_id": "RN-101",
+      "rank": 1,
+      "title": "Audit translator schema drift",
+      "summary": "Audit the translator schema drift before removing the legacy parser shim. The legacy shim currently masks schema drift in local smoke runs, so this audit must happen first to understand the full scope of schema issues.",
+      "bounded_deliverable": "Schema drift audit report documenting all translator schema inconsistencies",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "release_notes/release_notes_2026_04.md"
+      ]
+    },
+    {
+      "step_id": "RN-102",
+      "rank": 2,
+      "title": "Backfill dependency-graph fixtures",
+      "summary": "Backfill dependency-graph fixtures so the plan contract catches ordering regressions. The test plan_contract.py currently fails when new step ids are introduced without fixture updates.",
+      "bounded_deliverable": "Updated dependency-graph fixtures that pass plan_contract.py tests",
+      "evidence": [
+        "repo_inventory/test_inventory.md",
+        "release_notes/release_notes_2026_04.md"
+      ]
+    },
+    {
+      "step_id": "RN-103",
+      "rank": 3,
+      "title": "Enable dashboard summary behind kill switch",
+      "summary": "Enable the translated release-plan dashboard summary behind a kill switch after the schema is stable. The dashboard consumes the step-id schema produced by the translator and must not ship until fixtures reflect the new schema.",
+      "bounded_deliverable": "Dashboard summary enabled behind kill switch with canary validation",
+      "evidence": [
+        "repo_inventory/dependency_map.md",
+        "release_notes/release_notes_2026_04.md"
+      ]
+    },
+    {
+      "step_id": "RN-104",
+      "rank": 4,
+      "title": "Update operator runbook and launch checklist",
+      "summary": "Update the operator runbook and launch checklist after the summary path is proven in canary. The runbook only stabilizes after the rollout and rollback shape are known.",
+      "bounded_deliverable": "Updated operator runbook and launch checklist",
+      "evidence": [
+        "repo_inventory/dependency_map.md",
+        "release_notes/release_notes_2026_04.md"
+      ]
+    }
+  ],
+  "dependency_notes": [
+    {
+      "before": "RN-101",
+      "after": "RN-103",
+      "reason": "The translator schema audit must complete before the dashboard can be enabled, as the dashboard consumes the step-id schema"
+    },
+    {
+      "before": "RN-102",
+      "after": "RN-103",
+      "reason": "Dependency-graph fixtures must reflect the new schema before the dashboard summary can ship, otherwise the plan contract will fail on ordering regressions"
+    },
+    {
+      "before": "RN-103",
+      "after": "RN-104",
+      "reason": "The runbook only stabilizes after the rollout and rollback shape are known from canary validation of the dashboard summary"
+    }
+  ],
+  "primary_risk": {
+    "statement": "The release dashboard will render incorrect step ordering to users if the schema and fixtures are not aligned before enabling the dashboard summary",
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/dependency_map.md"
+    ],
+    "mitigations": [
+      "Enable dashboard summary behind a kill switch for controlled rollout",
+      "Validate schema stability before removing legacy parser shim",
+      "Use canary-only coverage to verify dashboard summary behavior before full rollout"
+    ]
+  },
+  "assumption_ledger": [
+    {
+      "topic": "Legacy parser shim removal timeline",
+      "status": "missing",
+      "note": "No explicit timeline provided for when the legacy parser shim will be removed after schema audit"
+    },
+    {
+      "topic": "Canary deployment criteria",
+      "status": "to_verify",
+      "note": "Specific success criteria for canary validation of dashboard summary are not documented"
+    },
+    {
+      "topic": "Schema drift scope",
+      "status": "observed",
+      "note": "Schema drift is masked by legacy shim in local smoke runs as documented in repo_state.md"
+    }
+  ]
+}

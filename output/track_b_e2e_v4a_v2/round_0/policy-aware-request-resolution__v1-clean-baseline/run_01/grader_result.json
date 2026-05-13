@@ -1,0 +1,116 @@
+{
+  "M_training": 0.8791,
+  "P_benchmark": 88,
+  "breakdown": {
+    "__bands": {
+      "behavioral.accepted_match": "M",
+      "behavioral.top2_match": "M",
+      "differential.forbidden_path_demoted": "M",
+      "differential.kendall_tau": "M",
+      "partial_progress.heuristic": "P_only",
+      "phase2.accepted_valid": "M",
+      "phase2.assumption_ledger": "M",
+      "phase2.brief_exists": "M",
+      "phase2.brief_parses": "M",
+      "phase2.entry_fields": "M",
+      "phase2.no_shim": "M",
+      "phase2.no_stray_files": "M",
+      "phase2.ranking_length": "M",
+      "plan.risk_mitigation_paired": "M",
+      "property.accepted_citations_depth": "M",
+      "property.constraint_tagged": "M",
+      "property.primary_risk_nontrivial": "M",
+      "property.rejection_cites_evidence": "M",
+      "regression.citations_valid": "M"
+    },
+    "behavioral.accepted_match": 10,
+    "behavioral.top2_match": 4,
+    "differential.forbidden_path_demoted": 4,
+    "differential.kendall_tau": 8,
+    "differential.kendall_tau_raw_x100": 100,
+    "partial_progress.heuristic": 8,
+    "phase2.accepted_valid": 3,
+    "phase2.assumption_ledger": 3,
+    "phase2.brief_exists": 3,
+    "phase2.brief_parses": 5,
+    "phase2.entry_fields": 3,
+    "phase2.no_shim": 3,
+    "phase2.no_stray_files": 3,
+    "phase2.ranking_length": 4,
+    "plan.risk_mitigation_paired": 8,
+    "property.accepted_citations_depth": 3,
+    "property.constraint_tagged": 4,
+    "property.primary_risk_nontrivial": 3,
+    "property.rejection_cites_evidence": 6,
+    "regression.citations_valid": 3
+  },
+  "ceilings_applied": [],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 1.0,
+    "slots": [
+      {
+        "milestone_id": "M1_localization",
+        "passed_bool": true,
+        "weight": 0.1
+      },
+      {
+        "milestone_id": "M2_primary_fix",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M3_invariants",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M4_functional",
+        "passed_bool": true,
+        "weight": 0.2
+      },
+      {
+        "milestone_id": "M5_e2e",
+        "passed_bool": true,
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": true,
+    "accepted_citations_depth": true,
+    "accepted_match": true,
+    "accepted_valid": true,
+    "assumption_ledger": true,
+    "brief_exists": true,
+    "brief_parses": true,
+    "citations_valid": true,
+    "constraint_tagged": true,
+    "entry_fields": true,
+    "forbidden_path_demoted": true,
+    "kendall_tau": true,
+    "no_shim": true,
+    "no_stray_files": true,
+    "partial_progress_heuristic": true,
+    "primary_risk_nontrivial": true,
+    "ranking_length": true,
+    "rejection_cites_evidence": true,
+    "risk_mitigation_paired": true,
+    "top2_match": true,
+    "variant_id_matches": true
+  },
+  "pass": true,
+  "raw_M_pre_ceiling": 80,
+  "raw_score_pre_ceiling": 88,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 88,
+  "shortcut_detected": false,
+  "variant_id": "v1-clean-baseline",
+  "wall_clock_seconds": 0
+}

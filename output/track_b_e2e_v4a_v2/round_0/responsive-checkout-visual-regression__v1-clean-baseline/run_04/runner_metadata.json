@@ -1,0 +1,98 @@
+{
+  "attempt": 4,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 541.7234790567309,
+  "family": "responsive-checkout-visual-regression",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 94,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 94"
+      }
+    ],
+    "recorded_at": "2026-05-13T09:14:32.533Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 95,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 95"
+      }
+    ],
+    "recorded_at": "2026-05-13T09:05:30.776Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-13T09:14:32.534Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 0,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/responsive-checkout-visual-regression/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2/round_0/responsive-checkout-visual-regression__v1-clean-baseline/run_04/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 30,
+    "end_offset": 547765,
+    "normalized_request_count": 30,
+    "request_ids": [
+      "resp_829e13bbc7f1ebc3",
+      "resp_83f30235f8899e75",
+      "resp_853b04907a37d06b",
+      "resp_8751a1560e1d467e",
+      "resp_8a5e1c5c16ce3a0a",
+      "resp_8aad91c4b15347b7",
+      "resp_91be281bbe1976e4",
+      "resp_94399f442cde1261",
+      "resp_965e419b70adafba",
+      "resp_96784917e39df902",
+      "resp_97eba7f4f01416ad",
+      "resp_98f5a947dea1448a",
+      "resp_9ae449e61b8c6fd4",
+      "resp_9b955c9791a100f2",
+      "resp_9d6e173c43764a1d",
+      "resp_9dbfd41dba23c58f",
+      "resp_9ed0b3956c6aec42",
+      "resp_9f965bc0927cbe97",
+      "resp_a2e9332c9425dcbc",
+      "resp_a3beda8985dcb9a3",
+      "resp_a3ec6b6ade10a8fe",
+      "resp_a51343f1f18f274d",
+      "resp_a73f90d29ea9c2a1",
+      "resp_a906d2d86b792f60",
+      "resp_ac9d771c8408b83d",
+      "resp_b28ed6644268da34",
+      "resp_b45829b510352c14",
+      "resp_b47bb233e365dcf7",
+      "resp_b548ac6bd3a6a82c",
+      "resp_baf8f9e4609644d4"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 517625
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_v4a_v2/round_0/responsive-checkout-visual-regression__v1-clean-baseline/run_04/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}

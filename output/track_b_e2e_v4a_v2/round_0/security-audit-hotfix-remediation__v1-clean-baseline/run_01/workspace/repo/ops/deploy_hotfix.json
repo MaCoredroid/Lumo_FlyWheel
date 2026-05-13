@@ -1,0 +1,22 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55.deploy_hotfix.v1",
+  "rollback_trigger": "Any increase in ExportPathViolation exceptions or nested export failures",
+  "impact_scope": "repo/export_api/storage.py path resolution logic only",
+  "operator_verification_steps": [
+    "Confirm existing nested exports still resolve correctly",
+    "Verify double-encoded traversal attempts are blocked",
+    "Check that absolute and drive-qualified paths are rejected",
+    "Monitor ExportPathViolation error rates post-deploy"
+  ],
+  "behavior_preservation_claims": [
+    {"sample_id": "REQ-legit-nested", "claim": "nested tenant exports remain functional"},
+    {"sample_id": "REQ-encoded-dotdot", "claim": "single-encoded traversal blocked"},
+    {"sample_id": "REQ-double-encoded", "claim": "double-encoded traversal blocked"},
+    {"sample_id": "REQ-mixed-slash", "claim": "backslash traversal blocked"},
+    {"sample_id": "REQ-absolute", "claim": "absolute paths blocked"},
+    {"sample_id": "REQ-drive-qualified", "claim": "drive-qualified paths blocked"}
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}

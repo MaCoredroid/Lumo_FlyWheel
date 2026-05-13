@@ -1,0 +1,46 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55.hotfix.path-traversal.2026-05-13",
+  "rollback_trigger": "ExportPathViolation rate >5% or tenant complaints on nested exports",
+  "impact_scope": "export_api/storage.py only; auth.py unchanged",
+  "operator_verification_steps": [
+    "Confirm nested exports still resolve: reports/partner-billing/2026-04/export.csv",
+    "Confirm encoded traversal blocked: ..%2fsecrets.csv",
+    "Confirm double-encoded traversal blocked: %252e%252e%252fsecrets.csv",
+    "Confirm mixed-slash traversal blocked: reports\\\\..\\\\..\\\\secrets.csv",
+    "Confirm absolute paths blocked: /etc/passwd",
+    "Confirm drive-qualified paths blocked: C:\\\\temp\\\\secrets.csv"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "expected": "allowed",
+      "claim": "Nested exports under tenant root remain functional"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "expected": "blocked",
+      "claim": "Percent-encoded parent traversal is rejected"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "expected": "blocked",
+      "claim": "Double-encoded separators are rejected after iterative decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "expected": "blocked",
+      "claim": "Mixed-slash traversal is normalized and rejected"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "expected": "blocked",
+      "claim": "Absolute paths are rejected"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "expected": "blocked",
+      "claim": "Drive-qualified paths are rejected"
+    }
+  ]
+}
