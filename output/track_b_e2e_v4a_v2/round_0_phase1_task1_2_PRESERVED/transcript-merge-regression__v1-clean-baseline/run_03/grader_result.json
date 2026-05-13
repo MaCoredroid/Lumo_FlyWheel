@@ -1,0 +1,73 @@
+{
+  "M_training": 0.8889,
+  "P_benchmark": 80,
+  "breakdown": {
+    "__bands": {
+      "code.event_identity": "M",
+      "code.no_blunt_drop": "M",
+      "hidden.debug_noise_ignored": "M",
+      "hidden.interleaved_fragments": "M",
+      "hidden.same_name_identity": "M",
+      "hidden.summary_stability": "M",
+      "note.core_boundary": "M",
+      "visible.tests_pass": "M"
+    },
+    "code.event_identity": 5,
+    "code.no_blunt_drop": 5,
+    "hidden.debug_noise_ignored": 10,
+    "hidden.interleaved_fragments": 10,
+    "hidden.same_name_identity": 15,
+    "hidden.summary_stability": 10,
+    "note.core_boundary": 5,
+    "visible.tests_pass": 20
+  },
+  "ceilings_applied": [],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.4,
+    "slots": [
+      {
+        "passed_bool": false,
+        "slot": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": false,
+        "slot": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": false,
+    "M2_primary_fix": false,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": false
+  },
+  "pass": true,
+  "raw_M_pre_ceiling": 80,
+  "raw_score_pre_ceiling": 80,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 80,
+  "shortcut_detected": false,
+  "variant_id": "v1-clean-baseline",
+  "wall_clock_seconds": 0.031
+}

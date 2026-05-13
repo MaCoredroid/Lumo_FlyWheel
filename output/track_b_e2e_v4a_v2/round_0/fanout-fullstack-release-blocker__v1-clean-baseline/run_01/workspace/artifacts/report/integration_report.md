@@ -1,34 +1,32 @@
-# Integration Report: Release Gating Rename
+# Integration Report: Release Gating Token Rename
 
 ## Summary
 
 Successfully migrated release gating from `manual_review` to `human_review_required` across backend, frontend, and documentation.
 
-## Changes Made
+## Changes Applied
 
 ### Backend (`services/api/src/`)
 
-- **review_state.py**: Updated `DEFAULT_APPROVAL_STATE` and `ACTIVE_APPROVAL_STATES` to use `human_review_required`. Added legacy compatibility mapping for `manual_review` -> `human_review_required`.
-- **routes/releases.py**: Updated default approval state and operator hint to reference `human_review_required`.
+- **review_state.py**: Updated `DEFAULT_APPROVAL_STATE` to `human_review_required`. Added legacy compatibility mapping for `manual_review` -> `human_review_required`.
+- **routes/releases.py**: Updated `build_release_gate_update` and `serialize_release_gate` now default to and echo `human_review_required`.
 
 ### Frontend (`apps/admin/src/`)
 
 - **components/`)
 
-- **ReleaseGateForm.tsx**: Updated `defaultGateState.approvalState` to `human_review_required`.
+- **ReleaseGateForm.tsx**: Changed `defaultGateState.approvalState` to `human_review_required`.
+- **lib/api.tsbuildReleaseGateRequest` now defaults to `human_review_required`.
 
-### Frontend (`apps/admin/src/lib/`)
+### Documentation (`docs/runbooks/`)
 
-- **api.ts**: Updated default approval state in `buildReleaseGateRequest` and `summarizeGateEcho` to `human_review_required`.
+- **release_gating.md**: Documented the token migration with retired token (`manual_review`), new token (`human_review_required`), and verification order.
 
-### Documentation updated.
+## Test Compatibility
 
-## Verification
+- Backend test `test_legacy_manual_review_normalizes()` verifies `manual_review` normalizes to `human_review_required`.
+- Frontend test `release-gate.spec.ts` verifies request body sends `human_review_required`.
 
-- Backend test `test_legacy_manual_review_normalizes` confirms `manual_review` maps to `human_review_required`.
-- Frontend test `release gate request posts approval_state` confirms request body sends `human_review_required`.
-- Proof artifact at `artifacts/dom/release_gate_capture.json` documents request/echo pair with matching token.
+## Proof Artifacts
 
-## Conclusion
-
-End-to-end coherence achieved: admin form, backend storage, and operator documentation all use `human_review_required`.
+- **artifacts/dom/release_gate_capture.json**: DOM/request proof showing request and server echo with `human_review_required`.

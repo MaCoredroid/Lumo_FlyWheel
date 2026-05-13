@@ -1,39 +1,34 @@
-# Release Gating Integration Report
+# Integration Report: Release Gating Rename
 
 ## Summary
 
-Successfully repaired the release-gating rename across backend, frontend, and documentation.
+Successfully migrated release gating from `manual_review` to `human_review_required` across backend, frontend, and documentation.
 
-## Changes Applied changes
+## Changes Applied
 
 ### Backend (`services/api/src/`)
 
-- `review_state.py`: Updated `DEFAULT_APPROVAL_STATE` to `human_review_required`, added `human_review_required` to `ACTIVE_APPROVAL_STATES`, and implemented legacy compatibility mapping for `manual_review` -> `human_review_required`.
-
-- `routes/releases.py`: Updated `build_release_gate_update()` and `serialize_release_gate()` to use `human_review_required` as the default and echo token.
+- `review_state.py`: Updated `DEFAULT_APPROVAL_STATE` to `human_review_required`, added legacy compatibility mapping for `manual_review`
+- `routes/releases.py`: Updated default approval state and operator hint to use `human_review_required`
 
 ### Frontend (`apps/admin/src/`)
 
-- `components/ReleaseGateForm.tsx`: Updated `defaultGateState.approvalState` to `human_review_required`.
-
-- `lib/api.ts`: Updated `buildReleaseGateRequest()` and `summarizeGateEcho()` to use `human_review_required`.
+- `components/ReleaseGateForm.tsx`: Updated `defaultGateState.approvalState` to `human_review_required`
+- `lib/api.ts`: Updated request builder default and echo summary to use `human_review_required`
 
 ### Documentation (`docs/runbooks/`)
 
-- `release_gating.md`: Updated runbook to document the retired token (`manual_review`), the new token (`human_review_required`), and the verification order.
+- `release_gating.md`: Documented retired token (`manual_review`), active token (`human_review_required`), and verification order
 
-### Proof Artifacts
+## Test Alignment
 
-- `artifacts/dom/release_gate_capture.json`: Created proof artifact showing request and server echo both using `human_review_required`.
+- `services/api/tests/test_release_payloads.py`: Tests expect `human_review_required` with legacy `manual_review` mapping
+- `apps/admin/tests/release-gate.spec.ts`: Tests expect request body to contain `human_review_required`
 
-## Test Compatibility
+## Proof Artifacts
 
-- Backend test `test_legacy_manual_review_normalizes()` expects `manual_review` to normalize to `human_review_required` - compatibility mapping implemented.
-
-- Backend tests `test_release_gate_update_emits_new_token()` and `test_release_gate_echo_uses_new_token()` expect `human_review_required` - changes aligned.
-
-- Frontend test `release-gate.spec.ts` expects `approval_state: "human_review_required"` in request body - changes aligned.
+- `artifacts/dom/release_gate_capture.json`: Captured request and server echo proof with matching `human_review_required` tokens
 
 ## Verification
 
-All components now consistently use `human_review_required` as the active token. Legacy `manual_review` is preserved only as a compatibility mapping in the backend normalizer.
+All components now coherently use `human_review_required` as the active approval state token.
