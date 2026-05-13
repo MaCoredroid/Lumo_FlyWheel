@@ -1,0 +1,185 @@
+{
+  "blocking_reasons": [],
+  "checks": {
+    "codex_command_smoke": {
+      "ok": false,
+      "reason": "deferred",
+      "skipped": true
+    },
+    "codex_installed": {
+      "ok": true,
+      "version": "codex-cli 0.128.0"
+    },
+    "codex_json_events_supported": {
+      "ok": true
+    },
+    "codex_trace_out_supported": {
+      "codex_native_trace_out_flag": false,
+      "ok": true,
+      "proxy_trace_synthesis_available": true
+    },
+    "dcgm_profile_fields_available": {
+      "missing_profile_fields": [
+        "dram_active_pct",
+        "sm_active_pct",
+        "sm_occupancy_pct",
+        "pipe_tensor_active_pct",
+        "pipe_fp16_active_pct"
+      ],
+      "observed_numeric_profile_fields": [],
+      "ok": false,
+      "profile_fields_available_sample_count": 0,
+      "profile_fields_unavailable_reasons": [
+        "nvml_fallback_only"
+      ],
+      "sample_count": 6
+    },
+    "dcgm_python_bindings_available": {
+      "modules": {
+        "dcgm_agent": false,
+        "dcgm_fields": false,
+        "pydcgm": false
+      },
+      "ok": false
+    },
+    "dcgm_sampler_runs": {
+      "ok": true,
+      "sample_count": 6,
+      "stderr": "",
+      "telemetry_sources": [
+        "nvml"
+      ]
+    },
+    "dcgmi_available": {
+      "ok": false
+    },
+    "ncu_available": {
+      "ok": true
+    },
+    "nvidia_smi_available": {
+      "ok": true
+    },
+    "pynvml_available": {
+      "ok": true,
+      "stderr": ""
+    },
+    "spec_decode_metrics_exposed": {
+      "ok": true
+    },
+    "track_b_sample_workspaces_available": {
+      "available_task_count": 11,
+      "expected_task_count": 11,
+      "missing_task_ids": [],
+      "ok": true,
+      "task_coverage": {
+        "dead-flag-reachability-audit/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/dead-flag-reachability-audit/workspace_bundle/v1-clean-baseline"
+        },
+        "fanout-fullstack-release-blocker/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/fanout-fullstack-release-blocker/workspace_bundle/v1-clean-baseline"
+        },
+        "incident-evidence-synthesis/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/incident-evidence-synthesis/workspace_bundle/v1-clean-baseline"
+        },
+        "multi-tool-transaction-repair/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/multi-tool-transaction-repair/workspace_bundle/v1-clean-baseline"
+        },
+        "policy-aware-request-resolution/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/policy-aware-request-resolution/workspace_bundle/v1-clean-baseline"
+        },
+        "release-note-to-plan-translation/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/release-note-to-plan-translation/workspace_bundle/v1-clean-baseline"
+        },
+        "responses-sdk-adapter-cutover/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/responses-sdk-adapter-cutover/workspace_bundle/v1-clean-baseline"
+        },
+        "responsive-checkout-visual-regression/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/responsive-checkout-visual-regression/workspace_bundle/v1-clean-baseline"
+        },
+        "security-audit-hotfix-remediation/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/security-audit-hotfix-remediation/workspace_bundle/v1-clean-baseline"
+        },
+        "sqlalchemy-2-session-modernization/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/sqlalchemy-2-session-modernization/workspace_bundle/v1-clean-baseline"
+        },
+        "transcript-merge-regression/v1-clean-baseline": {
+          "ok": true,
+          "path": "benchmark_blueprints/families/transcript-merge-regression/workspace_bundle/v1-clean-baseline"
+        }
+      }
+    },
+    "vllm_health": {
+      "ok": true,
+      "status_code": 200
+    },
+    "vllm_request_id_labels_exposed": {
+      "accepted_label_names": [
+        "request_id",
+        "vllm_request_id",
+        "request"
+      ],
+      "ok": false,
+      "required_metric_coverage": {
+        "vllm:generation_tokens_total": false,
+        "vllm:prompt_tokens_total": false,
+        "vllm:spec_decode_num_accepted_tokens_total": false,
+        "vllm:spec_decode_num_draft_tokens_total": false
+      }
+    },
+    "vllm_request_metrics_join_available": {
+      "jsonl_side_channel_ok": true,
+      "ok": true,
+      "prometheus_request_labels_ok": false
+    },
+    "vllm_request_metrics_side_channel": {
+      "accepted_field_aliases": {
+        "generation_tokens": [
+          "generation_tokens",
+          "completion_tokens"
+        ]
+      },
+      "invalid_request_metric_row_count": 0,
+      "ok": true,
+      "path": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+      "producer_row_count": 377,
+      "reason": "",
+      "request_id_seen": true,
+      "required_field_coverage": {
+        "generation_tokens": true,
+        "prompt_tokens": true,
+        "spec_decode_num_accepted_tokens": true,
+        "spec_decode_num_draft_tokens": true
+      },
+      "required_producer": "track_b_vllm_request_metrics_patch",
+      "required_schema": "lumo.track_b.vllm_request_metrics.v1",
+      "sample_count": 377,
+      "valid_request_metric_row_count": 377
+    }
+  },
+  "deferred_checks": [
+    "codex_command_smoke",
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "deferred_reasons": [
+    "codex_command_smoke",
+    "dcgm_profile_fields_available"
+  ],
+  "health_url": "http://127.0.0.1:9950/health",
+  "measurement_python": "/home/mark/shared/lumoFlyWheel/.venv/bin/python",
+  "metrics_url": "http://127.0.0.1:9950/metrics",
+  "recorded_at": "2026-05-13T19:55:34Z",
+  "round0_may_run": true,
+  "schema": "lumo.track_b.e2e_preflight_audit.v1"
+}
