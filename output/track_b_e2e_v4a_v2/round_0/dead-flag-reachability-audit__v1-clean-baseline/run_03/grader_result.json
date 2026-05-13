@@ -1,0 +1,134 @@
+{
+  "M_training": 0.3,
+  "P_benchmark": 30,
+  "breakdown": {
+    "hidden.alias_handling": 12,
+    "hidden.cleanup_alignment": 10,
+    "hidden.dead_vs_runtime_absence": 8,
+    "hidden.false_positive_paths": 0,
+    "hidden.parser_runtime_symbols": 12,
+    "hidden.status_correct": 30,
+    "p_only.cleanup_precision_bonus": 6,
+    "phase2.assumption_ledger": 3,
+    "phase2.brief_exists": 4,
+    "phase2.brief_parses": 6,
+    "phase2.cleanup_plan_present": 4,
+    "phase2.evidence_paths_valid": 4,
+    "phase2.flag_rows_complete": 6,
+    "phase2.required_outputs": 4,
+    "phase2.summary_present": 3
+  },
+  "breakdown_bands": {
+    "hidden.alias_handling": "M",
+    "hidden.cleanup_alignment": "M",
+    "hidden.dead_vs_runtime_absence": "M",
+    "hidden.false_positive_paths": "M",
+    "hidden.parser_runtime_symbols": "M",
+    "hidden.status_correct": "M",
+    "p_only.cleanup_precision_bonus": "P_only",
+    "phase2.assumption_ledger": "M",
+    "phase2.brief_exists": "M",
+    "phase2.brief_parses": "M",
+    "phase2.cleanup_plan_present": "M",
+    "phase2.evidence_paths_valid": "M",
+    "phase2.flag_rows_complete": "M",
+    "phase2.required_outputs": "M",
+    "phase2.summary_present": "M"
+  },
+  "ceilings_applied": [
+    "grep_only_reasoning"
+  ],
+  "errors": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "milestone_vector": {
+    "M_aggregate": 0.6,
+    "slots": [
+      {
+        "passed_bool": false,
+        "slot": "M1_localization",
+        "weight": 0.1
+      },
+      {
+        "passed_bool": true,
+        "slot": "M2_primary_fix",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M3_invariants",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": true,
+        "slot": "M4_functional",
+        "weight": 0.2
+      },
+      {
+        "passed_bool": false,
+        "slot": "M5_e2e",
+        "weight": 0.3
+      }
+    ]
+  },
+  "milestones": {
+    "M1_localization": false,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": false
+  },
+  "pass": false,
+  "raw_M_score_pre_ceiling": 106,
+  "raw_score_pre_ceiling": 112,
+  "schema_version": "cnb55.verify_result.v3",
+  "score": 30,
+  "shortcut_detected": false,
+  "submitted_flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag with both parser presence in load_preview_env and runtime reachability via preview_runtime_branch. It directly controls the shadow_preview_path branch in the live service router.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is a legacy alias accepted by the env parser for backward compatibility with old deploy manifests. It normalizes to ENABLE_SHADOW_PREVIEW and shares the same runtime branch, but is not a standalone flag with its own runtime path.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "tests/test_force_legacy_reporting_only.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY has parser presence and sets force_legacy_seen, but the live service does not branch on it anymore. It is retained only for reporting and operator notes via legacy_force_label. The test confirms the branch remains legacy_preview_path regardless of this flag.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ],
+  "variant_id": "v1-clean-baseline"
+}

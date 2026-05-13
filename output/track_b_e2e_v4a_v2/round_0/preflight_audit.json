@@ -15,8 +15,8 @@
     },
     "codex_trace_out_supported": {
       "codex_native_trace_out_flag": false,
-      "ok": true,
-      "proxy_trace_synthesis_available": true
+      "ok": false,
+      "proxy_trace_synthesis_available": false
     },
     "dcgm_profile_fields_available": {
       "missing_profile_fields": [
@@ -67,8 +67,8 @@
       "ok": true
     },
     "track_b_sample_workspaces_available": {
-      "available_task_count": 11,
-      "expected_task_count": 11,
+      "available_task_count": 9,
+      "expected_task_count": 9,
       "missing_task_ids": [],
       "ok": true,
       "task_coverage": {
@@ -96,10 +96,6 @@
           "ok": true,
           "path": "benchmark_blueprints/families/release-note-to-plan-translation/workspace_bundle/v1-clean-baseline"
         },
-        "responses-sdk-adapter-cutover/v1-clean-baseline": {
-          "ok": true,
-          "path": "benchmark_blueprints/families/responses-sdk-adapter-cutover/workspace_bundle/v1-clean-baseline"
-        },
         "responsive-checkout-visual-regression/v1-clean-baseline": {
           "ok": true,
           "path": "benchmark_blueprints/families/responsive-checkout-visual-regression/workspace_bundle/v1-clean-baseline"
@@ -111,10 +107,6 @@
         "sqlalchemy-2-session-modernization/v1-clean-baseline": {
           "ok": true,
           "path": "benchmark_blueprints/families/sqlalchemy-2-session-modernization/workspace_bundle/v1-clean-baseline"
-        },
-        "transcript-merge-regression/v1-clean-baseline": {
-          "ok": true,
-          "path": "benchmark_blueprints/families/transcript-merge-regression/workspace_bundle/v1-clean-baseline"
         }
       }
     },
@@ -137,8 +129,8 @@
       }
     },
     "vllm_request_metrics_join_available": {
-      "jsonl_side_channel_ok": true,
-      "ok": true,
+      "jsonl_side_channel_ok": false,
+      "ok": false,
       "prometheus_request_labels_ok": false
     },
     "vllm_request_metrics_side_channel": {
@@ -149,21 +141,21 @@
         ]
       },
       "invalid_request_metric_row_count": 0,
-      "ok": true,
+      "ok": false,
       "path": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
-      "producer_row_count": 48,
-      "reason": "",
-      "request_id_seen": true,
+      "producer_row_count": 0,
+      "reason": "missing_required_request_metrics",
+      "request_id_seen": false,
       "required_field_coverage": {
-        "generation_tokens": true,
-        "prompt_tokens": true,
-        "spec_decode_num_accepted_tokens": true,
-        "spec_decode_num_draft_tokens": true
+        "generation_tokens": false,
+        "prompt_tokens": false,
+        "spec_decode_num_accepted_tokens": false,
+        "spec_decode_num_draft_tokens": false
       },
       "required_producer": "track_b_vllm_request_metrics_patch",
       "required_schema": "lumo.track_b.vllm_request_metrics.v1",
-      "sample_count": 48,
-      "valid_request_metric_row_count": 48
+      "sample_count": 0,
+      "valid_request_metric_row_count": 0
     }
   },
   "deferred_checks": [
@@ -173,13 +165,15 @@
     "vllm_request_metrics_join_available"
   ],
   "deferred_reasons": [
+    "vllm_request_metrics_join_available",
+    "codex_trace_out_supported",
     "codex_command_smoke",
     "dcgm_profile_fields_available"
   ],
   "health_url": "http://127.0.0.1:9950/health",
   "measurement_python": "/home/mark/shared/lumoFlyWheel/.venv/bin/python",
   "metrics_url": "http://127.0.0.1:9950/metrics",
-  "recorded_at": "2026-05-12T20:51:12Z",
+  "recorded_at": "2026-05-13T01:07:19Z",
   "round0_may_run": true,
   "schema": "lumo.track_b.e2e_preflight_audit.v1"
 }

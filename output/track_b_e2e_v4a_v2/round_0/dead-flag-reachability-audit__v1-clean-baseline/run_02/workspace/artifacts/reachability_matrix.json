@@ -1,0 +1,47 @@
+{
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag that directly controls the shadow preview mode. When set to a truthy value, it sets shadow_enabled=True and effective_mode='shadow', causing preview_runtime_branch to return 'preview_runtime_branch:shadow_preview_path'. This is the canonical runtime branch for the preview feature.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "docs/preview_rollout_runbook.md",
+        "tests/test_preview_v2_alias.py"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is a legacy alias that normalizes to ENABLE_SHADOW_PREVIEW. It has parser presence and reaches the same runtime branch, but it is not a standalone flag\u2014it is explicitly documented as an alias for legacy deploy manifests. The parser_hit shows the normalization chain 'ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW'.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "docs/preview_rollout_runbook.md",
+        "tests/test_force_legacy_reporting_only.py"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY has parser presence (sets force_legacy_seen=True) but no runtime reachability. The runtime branch remains 'preview_runtime_branch:legacy_preview_path' regardless of this flag. It is used only for reporting via legacy_force_label() and operator notes. The test explicitly verifies the branch is legacy_preview_path even when the flag is set.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ]
+}
