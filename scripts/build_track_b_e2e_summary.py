@@ -23,23 +23,11 @@ REQUEST_JOIN_JSONL_PRODUCER = "track_b_vllm_request_metrics_patch"
 # reports "task already complete" with no real artifacts to write.
 # Re-include after restoring scaffold drift to their bundles.
 #
-# 2026-05-13 RESUME-ONLY temporary shrink: 4 tasks are commented out
-# because they are already done and preserved on disk:
-# - responses-sdk-adapter-cutover  -> round_0_phase1_task1_2_PRESERVED/ (P2 phase 1)
-# - transcript-merge-regression    -> round_0_phase1_task1_2_PRESERVED/ (P2 phase 1)
-# - dead-flag-reachability-audit   -> round_0_phase2_task3_4_PRESERVED/ (P2 phase 2)
-# - sqlalchemy-2-session-modernization -> round_0_phase2_task3_4_PRESERVED/
-# After this resume pipeline completes the remaining 7 tasks (phase 3),
-# RESTORE the 4 commented-out entries and merge all PRESERVED dirs back
-# into round_0/. See docs/reports/auto_research/track-b-v4a-v2-watchdog-
-# incident-20260513.md for phase 1's recovery procedure; the
-# preserve_thinking-experiment recovery (this commit) follows the same
-# pattern.
 TRACK_B_E2E_TASKS = [
-    # "responses-sdk-adapter-cutover/v1-clean-baseline",    # PRESERVED phase 1
-    # "transcript-merge-regression/v1-clean-baseline",      # PRESERVED phase 1
-    # "dead-flag-reachability-audit/v1-clean-baseline",     # PRESERVED phase 2
-    # "sqlalchemy-2-session-modernization/v1-clean-baseline", # PRESERVED phase 2
+    "responses-sdk-adapter-cutover/v1-clean-baseline",
+    "transcript-merge-regression/v1-clean-baseline",
+    "dead-flag-reachability-audit/v1-clean-baseline",
+    "sqlalchemy-2-session-modernization/v1-clean-baseline",
     "security-audit-hotfix-remediation/v1-clean-baseline",
     "responsive-checkout-visual-regression/v1-clean-baseline",
     "incident-evidence-synthesis/v1-clean-baseline",
