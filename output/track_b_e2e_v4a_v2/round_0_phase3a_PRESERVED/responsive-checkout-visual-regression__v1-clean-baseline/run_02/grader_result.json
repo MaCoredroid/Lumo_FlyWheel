@@ -1,0 +1,55 @@
+{
+  "schema": "cnb55.verify_result.v3",
+  "family": "responsive-checkout-visual-regression",
+  "variant": "v1-clean-baseline",
+  "score": 60,
+  "P_benchmark": 60,
+  "M_training": 0.6,
+  "M_aggregate": 0.5,
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": false,
+    "M5_e2e": false
+  },
+  "milestone_vector": [
+    1,
+    1,
+    1,
+    0,
+    0
+  ],
+  "breakdown": {
+    "M1.checkout_components_present": 5,
+    "M1.checkout_styles_present": 5,
+    "M2.mobile_test_added": 20,
+    "M3.no_global_sticky_disable": 15,
+    "M3.unit_tests_present": 5,
+    "M4.screenshots_count": 0,
+    "M4.qa_note_substantive": 0,
+    "M5.all_partials_present": 0,
+    "M5.no_integrity": 10
+  },
+  "bands": {
+    "M1.checkout_components_present": "M",
+    "M1.checkout_styles_present": "M",
+    "M2.mobile_test_added": "M",
+    "M3.no_global_sticky_disable": "M",
+    "M3.unit_tests_present": "M",
+    "M4.screenshots_count": "M",
+    "M4.qa_note_substantive": "M",
+    "M5.all_partials_present": "M",
+    "M5.no_integrity": "M"
+  },
+  "ceilings_applied": [
+    "browser_checks_unavailable"
+  ],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "errors": [],
+  "diagnostics": {
+    "unit_test_count": 2
+  },
+  "notes": "Browser-level hidden checks (CTA hit-test at 390x844, multi-breakpoint stability) require a Playwright/preview harness not present in this env. Ceiling applied at 70."
+}

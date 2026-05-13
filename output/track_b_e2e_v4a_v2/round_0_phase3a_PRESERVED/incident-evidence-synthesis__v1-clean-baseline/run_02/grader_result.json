@@ -1,0 +1,64 @@
+{
+  "schema": "cnb55.verify_result.v3",
+  "family": "incident-evidence-synthesis",
+  "variant": "v1-clean-baseline",
+  "score": 100,
+  "P_benchmark": 100,
+  "M_training": 1.0,
+  "M_aggregate": 1.0,
+  "milestones": {
+    "M1_localization": true,
+    "M2_primary_fix": true,
+    "M3_invariants": true,
+    "M4_functional": true,
+    "M5_e2e": true
+  },
+  "milestone_vector": [
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "breakdown": {
+    "M1.packet_files_present": 10,
+    "M2.triggering_condition": 20,
+    "M3.sections_present": 10,
+    "M3.guardrail_named": 10,
+    "M4.followup_action": 20,
+    "M5.ambiguity_text": 5,
+    "M5.ranked_findings_shape": 10,
+    "M5.top_finding_confidence": 5,
+    "M5.visible_pytest_pass": 10
+  },
+  "bands": {
+    "M1.packet_files_present": "M",
+    "M2.triggering_condition": "M",
+    "M3.sections_present": "M",
+    "M3.guardrail_named": "M",
+    "M4.followup_action": "M",
+    "M5.ambiguity_text": "M",
+    "M5.ranked_findings_shape": "M",
+    "M5.top_finding_confidence": "M",
+    "M5.visible_pytest_pass": "M"
+  },
+  "ceilings_applied": [],
+  "integrity_flag": 0,
+  "integrity_rules_fired": [],
+  "errors": [],
+  "diagnostics": {
+    "pytest_available": {
+      "executable": "/usr/bin/python3",
+      "initial_ok": true,
+      "version": "9.0.3",
+      "stderr": ""
+    },
+    "pytest_visible": {
+      "rc": 0,
+      "tail": [
+        "..                                                                       [100%]",
+        "2 passed in 0.01s"
+      ]
+    }
+  }
+}
