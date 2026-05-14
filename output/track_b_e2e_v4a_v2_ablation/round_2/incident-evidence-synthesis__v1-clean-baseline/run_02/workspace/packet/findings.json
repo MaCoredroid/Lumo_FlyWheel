@@ -1,0 +1,33 @@
+{
+  "ranked_findings": [
+    {
+      "finding": "idempotency-required guardrail was skipped due to legacy_batch_header bypass",
+      "confidence": "high",
+      "evidence": [
+        "Timeline: idempotency-required guardrail skipped due to legacy_batch_header at 10:18 UTC",
+        "TICKET-8729: every duplicate has request_class=bulk-refund and no idempotency key"
+      ]
+    },
+    {
+      "finding": "Bulk-refund requests accepted without idempotency keys caused duplicate refunds",
+      "confidence": "high",
+      "evidence": [
+        "Timeline: bulk refund requests accepted without idempotency keys at 10:17 UTC",
+        "TICKET-8729: Single-refund API traffic in the same window includes idempotency keys and did not duplicate"
+      ]
+    },
+    {
+      "finding": "Remove legacy_batch_header bypass before re-enabling bulk-refund endpoint",
+      "confidence": "medium",
+      "evidence": [
+        "Remediation notes: remove the legacy_batch_header bypass before re-enabling the endpoint"
+      ]
+    }
+  ],
+  "unresolved_ambiguity": {
+    "description": "Initial theory of queue worker replay (TICKET-8721) remains unconfirmed",
+    "evidence": [
+      "TICKET-8721: theory was opened before API gateway logs were available"
+    ]
+  }
+}

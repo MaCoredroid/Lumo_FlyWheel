@@ -1,0 +1,27 @@
+{
+  "ranked_findings": [
+    {
+      "finding": "Bulk refund requests accepted without idempotency keys caused duplicate refunds",
+      "confidence": "high",
+      "evidence": [
+        "timeline/incident_timeline.md: bulk refund requests accepted without idempotency keys at 10:17 UTC",
+        "tickets/TICKET-8729.md: every duplicate has request_class=bulk-refund and no idempotency key"
+      ]
+    },
+    {
+      "finding": "Idempotency-required guardrail was bypassed due to legacy_batch_header",
+      "confidence": "high",
+      "evidence": [
+        "timeline/incident_timeline.md: idempotency-required guardrail skipped due to legacy_batch_header at 10:18 UTC"
+      ]
+    },
+    {
+      "finding": "Bulk-refund endpoint must reject requests without idempotency keys and remove legacy_batch_header bypass",
+      "confidence": "high",
+      "evidence": [
+        "remediation/notes.md: bulk-refund requests must be rejected unless they include an idempotency key; remove the legacy_batch_header bypass before re-enabling the endpoint"
+      ]
+    }
+  ],
+  "unresolved_ambiguity": "Worker replay was an early theory (TICKET-8721) opened before API gateway logs were available, but final evidence points to missing idempotency keys as the primary cause"
+}
