@@ -1,0 +1,20 @@
+{
+  "ranked_findings": [
+    {
+      "finding": "bulk-refund requests accepted without idempotency keys",
+      "confidence": "high",
+      "evidence": ["timeline/incident_timeline.md: bulk refund requests accepted without idempotency keys at 10:17 UTC", "tickets/TICKET-8729.md: every duplicate has request_class=bulk-refund and no idempotency key"]
+    },
+    {
+      "finding": "idempotency-required guardrail skipped for legacy_batch_header",
+      "confidence": "high",
+      "evidence": ["timeline/incident_timeline.md: idempotency-required guardrail skipped due to legacy_batch_header at 10:18 UTC", "remediation/notes.md: remove the legacy_batch_header bypass before re-enabling the endpoint"]
+    },
+    {
+      "finding": "reject bulk-refund requests without idempotency keys and remove legacy_batch_header bypass",
+      "confidence": "high",
+      "evidence": ["remediation/notes.md: bulk-refund requests must be rejected unless they include an idempotency key"]
+    }
+  ],
+  "unresolved_ambiguity": "worker replay was an early symptom theory (TICKET-8721) but is not supported as the primary trigger by final evidence in TICKET-8729"
+}

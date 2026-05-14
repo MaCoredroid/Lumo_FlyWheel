@@ -1,0 +1,6 @@
+{
+  "triggering_condition": "bulk-refund requests accepted without idempotency keys",
+  "failed_guardrail": "idempotency-required skipped for legacy_batch_header",
+  "highest_confidence_followup": "reject bulk-refund requests without idempotency keys and remove the legacy_batch_header bypass",
+  "ambiguity": "worker replay was an early symptom theory but is not supported as the primary trigger by final evidence"
+}

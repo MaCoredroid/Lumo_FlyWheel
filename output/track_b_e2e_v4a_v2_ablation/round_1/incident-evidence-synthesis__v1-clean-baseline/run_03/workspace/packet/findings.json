@@ -1,0 +1,29 @@
+{
+  "ranked_findings": [
+    {
+      "finding": "The idempotency-required guardrail was bypassed via legacy_batch_header",
+      "confidence": "high",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: guardrail=idempotency-required decision=skipped reason=legacy_batch_header",
+        "corpus/timeline/incident_timeline.md: idempotency-required guardrail skipped due to legacy_batch_header"
+      ]
+    },
+    {
+      "finding": "Bulk-refund requests were accepted without idempotency keys",
+      "confidence": "high",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: request_class=bulk-refund idempotency_key=missing status=accepted",
+        "corpus/tickets/TICKET-8729.md: every duplicate has request_class=bulk-refund and no idempotency key"
+      ]
+    },
+    {
+      "finding": "Duplicate refunds were issued to three enterprise accounts",
+      "confidence": "high",
+      "evidence": [
+        "corpus/tickets/TICKET-8721.md: duplicate refunds observed for three enterprise accounts",
+        "corpus/timeline/incident_timeline.md: duplicate refunds reported"
+      ]
+    }
+  ],
+  "unresolved_ambiguity": "Initial theory (TICKET-8721) suggested worker replay investigation, but API gateway logs indicate the root cause was the guardrail bypass, not worker replay"
+}
