@@ -1,0 +1,90 @@
+{
+  "schema_version": "cnb55.flag_audit.v1",
+  "variant_id": "v1-clean-baseline",
+  "flags": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "status": "live",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py"
+      ],
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "rationale": "ENABLE_SHADOW_PREVIEW is a live flag with both parser presence and runtime reachability. The config.py parser sets shadow_enabled=true and effective_mode=shadow when this flag is truthy. The runtime.py preview_runtime_branch function returns 'preview_runtime_branch:shadow_preview_path' when config.shadow_enabled is true. The test test_shadow_preview_live.py validates this end-to-end behavior."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "status": "partial",
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "rationale": "ENABLE_PREVIEW_V2 is a partial flag - it has parser presence but is NOT a standalone runtime branch. The docs explicitly state it 'normalizes to the same shadow path and is not a standalone runtime branch'. It is an alias for ENABLE_SHADOW_PREVIEW, accepted only for legacy deploy manifests. The parser symbol shows the aliasing relationship with the arrow notation."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "status": "dead",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "tests/test_force_legacy_reporting_only.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "tests/test_force_legacy_reporting_only.py",
+      "rationale": "PREVIEW_FORCE_LEGACY is a dead flag - it has parser presence but NO runtime reachability. The docs state 'The live service does not branch on it anymore'. The test name 'test_force_legacy_flag_is_tracked_for_reporting_only' confirms it is only tracked for reporting. The legacy.py module only provides a label function (legacy_force_label) that does not affect runtime branching. The runtime.py preview_runtime_branch function does not check force_legacy_seen at all."
+    }
+  ],
+  "summary": {
+    "highest_operational_risk": "ENABLE_SHADOW_PREVIEW",
+    "note": "ENABLE_SHADOW_PREVIEW is the primary live flag controlling the preview runtime branch. ENABLE_PREVIEW_V2 is a deprecated alias that should be migrated away from. PREVIEW_FORCE_LEGACY is dead code that can be safely be removed from the parser after telemetry migration."
+  },
+  "cleanup_plan": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "action": "keep",
+      "blockers": [],
+      "rationale": "This is the primary live flag for the preview feature. It has full parser and runtime support."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "action": "deprecate",
+      "blockers": ["legacy deploy manifests"],
+      "rationale": "This is an alias for ENABLE_SHADOW_PREVIEW kept only for legacy deploy manifests. Should be deprecated with migration path."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "telemetry_first",
+      "blockers": ["operator notes dependency"],
+      "rationale": "This flag is dead for runtime but still used in reporting and operator notes. Collect telemetry before removal."
+    }
+  ],
+  "assumption_ledger": [
+    {
+      "status": "observed",
+      "topic": "parser_vs_runtime",
+      "note": "Parser presence does not guarantee runtime reachability"
+    },
+    {
+      "status": "observed",
+      "topic": "alias_distinction",
+      "note": "ENABLE_PREVIEW_V2 is an alias, not a standalone flag"
+    },
+    {
+      "status": "missing",
+      "topic": "operator_migration",
+      "note": "No timeline for PREVIEW_FORCE_LEGACY operator migration"
+    }
+  ]
+}

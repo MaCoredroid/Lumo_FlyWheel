@@ -1,0 +1,46 @@
+{
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is a live standalone flag with both parser presence and runtime reachability. When enabled, it sets shadow_enabled=true and effective_mode=shadow, causing preview_runtime_branch to return 'preview_runtime_branch:shadow_preview_path'. The test test_shadow_preview_live.py confirms this changes the runtime branch.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "tests/test_preview_v2_alias.py",
+      "evidence": [
+        "src/preview/config.py",
+        "docs/preview_rollout_runbook.md",
+        "tests/test_preview_v2_alias.py"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is a partial flag - it has parser presence but is only an alias that normalizes to ENABLE_SHADOW_PREVIEW. It is not a standalone runtime branch. The docs explicitly state it is accepted for legacy deploy manifests but normalizes to the same shadow path. Test confirms it maps to shadow path but is not independent.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "tests/test_force_legacy_reporting_only.py",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY is a dead flag - it has parser presence but NO runtime reachability. The docs explicitly state 'The live service does not branch on it anymore'. The test confirms that when PREVIEW_FORCE_LEGACY is set, the branch remains 'preview_runtime_branch:legacy_preview_path' (the default). It only affects legacy_force_label for reporting purposes.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ]
+}

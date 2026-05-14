@@ -1,0 +1,94 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Confirmed in config.py and runtime.py",
+      "status": "observed",
+      "topic": "ENABLE_SHADOW_PREVIEW live path"
+    },
+    {
+      "note": "Normalizes to shadow",
+      "status": "observed",
+      "topic": "ENABLE_PREVIEW_V2 alias behavior"
+    },
+    {
+      "note": "Unknown external systems that may read PREVIEW_FORCE_LEGACY",
+      "status": "missing",
+      "topic": "external telemetry consumers"
+    }
+  ],
+  "cleanup_plan": [
+    {
+      "action": "keep",
+      "blockers": [],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "rationale": "Primary live flag for shadow preview rollout. Must remain for operational control."
+    },
+    {
+      "action": "deprecate",
+      "blockers": [
+        "legacy deploy manifests"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "rationale": "Alias for ENABLE_SHADOW_PREVIEW. Can be removed after legacy deploy manifests migrate to use primary flag directly."
+    },
+    {
+      "action": "remove_after_migration",
+      "blockers": [
+        "telemetry consumers",
+        "operator notes"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "rationale": "Dead flag with no runtime effect. Remove after telemetry consumers and operator documentation updated to not expect this flag."
+    }
+  ],
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "config/defaults.toml"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag that directly enables shadow mode and causes effective_mode to become shadow and runtime branch to shadow_preview_path. Parser presence confirmed in config.py, runtime reachability confirmed in runtime.py, default value documented in defaults.toml.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py",
+        "config/defaults.toml"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is accepted by parser for legacy deploy manifests but normalizes to ENABLE_SHADOW_PREVIEW. It is not a standalone runtime branch - it is a live alias that maps to the same shadow path as the primary flag.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "tests/test_force_legacy_reporting_only.py",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "config/defaults.toml"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY is only tracked for reporting purposes. Parser presence exists but runtime branch remains legacy_preview_path regardless of flag value. The flag sets force_legacy_seen but does not alter runtime branching behavior.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ],
+  "schema_version": "cnb55.flag_audit.v1",
+  "summary": {
+    "highest_operational_risk": "PREVIEW_FORCE_LEGACY",
+    "note": "PREVIEW_FORCE_LEGACY is dead code that only affects telemetry labels. Removing it requires updating legacy.py and removing parser hit tracking in config.py. ENABLE_PREVIEW_V2 alias can be deprecated after legacy deploy manifests are migrated."
+  },
+  "variant_id": "v1-clean-baseline"
+}
