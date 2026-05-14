@@ -1,0 +1,42 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "cnb55-hotfix",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Implemented iterative URL decoding until stable to handle double/triple encoding, added PurePosixPath-based segment analysis to detect .. traversal, and enforced relative path requirement with resolved root containment check",
+      "evidence_paths": ["audit/audit.sarif", "artifacts/request_samples.json"]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/storage.py",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "The fix handles encoded separators and symlink escapes by fully normalizing paths and validating containment under tenant root using resolved paths",
+      "evidence_paths": ["audit/appsec_review.md", "audit/triage_matrix.csv"]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT key rotation is out of scope for this hotfix per appsec_review.md guidance",
+      "evidence_paths": ["audit/audit.sarif", "audit/appsec_review.md"]
+    },
+    {
+      "artifact_id": "APPSEC-KEY-03",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/auth.py",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT material rotation explicitly deferred per appsec_review.md; not folded into this hotfix",
+      "evidence_paths": ["audit/appsec_review.md", "audit/triage_matrix.csv"]
+    }
+  ]
+}

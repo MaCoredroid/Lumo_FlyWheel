@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+TRIAGE_VERSION = "cnb55.audit_triage.v1"
+DEPLOY_VERSION = "cnb55.deploy_hotfix.v1"
+
+def load(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+def validate_triage(doc: dict, root: Path) -> list[str]:
+    errors = []
+    if doc.get("schema_version") != TRIAGE_VERSION:
+        errors.append("triage schema_version mismatch")
+    if not isinstance(doc.get("items"), list) or not doc["items"]:
+        errors.append("triage items missing")
+        return errors
+    for item in doc["items"]:
+        for field in ("artifact_id", "source", "rule_or_file", "affected_path", "disposition", "rationale", "evidence_paths"):
+            if field not in item:
+                errors.append(f"triage item missing {field}")
+        evidence_paths = item.get("evidence_paths", [])
+        if not isinstance(evidence_paths, list) or len(evidence_paths) < 2:
+            errors.append(f"{item.get('artifact_id', 'unknown')} evidence_paths too short")
+            continue
+        for rel in evidence_paths:
+            if not (root / rel).exists():
+                errors.append(f"missing evidence path: {rel}")
+    return errors
+
+def validate_deploy(doc: dict, root: Path) -> list[str]:
+    errors = []
+    if doc.get("schema_version") != DEPLOY_VERSION:
+        errors.append("deploy schema_version mismatch")
+    for field in ("variant_id", "rollback_trigger", "impact_scope", "operator_verification_steps", "behavior_preservation_claims"):
+        if field not in doc:
+            errors.append(f"deploy note missing {field}")
+    if not isinstance(doc.get("operator_verification_steps"), list) or not doc["operator_verification_steps"]:
+        errors.append("operator_verification_steps must be non-empty list")
+    claims = doc.get("behavior_preservation_claims")
+    if not isinstance(claims, list) or not claims:
+        errors.append("behavior_preservation_claims must be non-empty list")
+    else:
+        sample_map = {row["sample_id"] for row in load(root / "artifacts" / "request_samples.json")}
+        for row in claims:
+            if row.get("sample_id") not in sample_map:
+                errors.append(f"unknown sample_id {row.get('sample_id')}")
+    return errors
+
+def main() -> int:
+    if len(sys.argv) != 4 or sys.argv[1] != "validate":
+        sys.stderr.write("usage: cnb55-hotfix-artifacts validate <triage_note.json> <deploy_hotfix.json>\n")
+        return 2
+    root = Path.cwd()
+    triage_path = root / sys.argv[2]
+    deploy_path = root / sys.argv[3]
+    triage = load(triage_path)
+    deploy = load(deploy_path)
+    errors = validate_triage(triage, root) + validate_deploy(deploy, root)
+    if errors:
+        sys.stderr.write(json.dumps({"errors": errors}, indent=2) + "\n")
+        return 1
+    sys.stdout.write(json.dumps({"ok": True}, indent=2) + "\n")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
