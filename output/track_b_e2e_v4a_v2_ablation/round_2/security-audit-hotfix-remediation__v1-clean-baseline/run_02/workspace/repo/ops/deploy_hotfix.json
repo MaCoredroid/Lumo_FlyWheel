@@ -1,0 +1,47 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "Any regression in nested export functionality or increase in 403 errors for legitimate tenant exports",
+  "impact_scope": "repo/export_api/storage.py - path traversal validation in resolve_export_path()",
+  "operator_verification_steps": [
+    "Verify nested exports still work: reports/partner-billing/2026-04/export.csv",
+    "Verify encoded traversal blocked: ..%2fsecrets.csv returns 403",
+    "Verify double-encoded traversal blocked: %252e%252e%252fsecrets.csv returns 403",
+    "Verify absolute paths blocked: /etc/passwd returns 403",
+    "Run make test and confirm all tests pass"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Allowed",
+      "note": "Nested exports under tenant root must remain functional"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Blocked",
+      "note": "Percent-encoded parent traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Blocked",
+      "note": "Double-encoded traversal sequences are blocked after iterative decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Blocked",
+      "note": "Mixed slash traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Blocked",
+      "note": "Absolute Unix paths are blocked"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Blocked",
+      "note": "Windows drive-qualified paths are blocked"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}

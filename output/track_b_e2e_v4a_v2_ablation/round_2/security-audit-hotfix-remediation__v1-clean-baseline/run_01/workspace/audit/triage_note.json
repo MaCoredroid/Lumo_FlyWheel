@@ -1,0 +1,55 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "v1-clean-baseline",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Path traversal via double-encoded sequences bypassed single unquote. Fixed by iterating decode until stable and checking Path.parts for traversal components instead of string substring match.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "APPSEC-EXP-17",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Same root cause as SARIF-PY-TRAVERSAL-001. The fix handles encoded separators and symlink escapes while preserving nested export functionality.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT rotation is a separate concern; explicitly out of scope per appsec_review.md",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-KEY-03",
+      "source": "appsec",
+      "rule_or_file": "APPSEC-KEY-03",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT material rotation is out of scope for this hotfix per appsec_review.md",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ]
+    }
+  ]
+}

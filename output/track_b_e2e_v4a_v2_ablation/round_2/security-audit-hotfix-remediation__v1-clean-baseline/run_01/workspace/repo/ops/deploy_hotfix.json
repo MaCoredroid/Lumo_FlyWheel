@@ -1,0 +1,22 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "Any increase in 403/404 error rates on /export endpoints exceeding 2x baseline, or reports of legitimate nested exports failing",
+  "impact_scope": "repo/export_api/storage.py only; no changes to auth, routes, or archive modules",
+  "operator_verification_steps": [
+    "Verify nested exports still work: GET /export?path=reports/partner-billing/2026-04/export.csv",
+    "Verify traversal blocked: GET /export?path=..%2fsecrets.csv returns 403",
+    "Verify double-encoded blocked: GET /export?path=%252e%252e%252fsecrets.csv returns 403",
+    "Verify absolute paths blocked: GET /export?path=/etc/passwd returns 403"
+  ],
+  "behavior_preservation_claims": [
+    {"sample_id": "REQ-legit-nested", "claim": "nested exports under tenant root continue to work"},
+    {"sample_id": "REQ-encoded-dotdot", "claim": "percent-encoded traversal blocked"},
+    {"sample_id": "REQ-double-encoded", "claim": "double-encoded traversal blocked"},
+    {"sample_id": "REQ-mixed-slash", "claim": "mixed slash traversal blocked"},
+    {"sample_id": "REQ-absolute", "claim": "absolute path escape blocked"},
+    {"sample_id": "REQ-drive-qualified", "claim": "drive-qualified path escape blocked"}
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55",
+  "rollback_trigger": "Any regression in export path resolution for valid nested paths or increase in 403 errors for legitimate tenant exports",
+  "impact_scope": "repo/export_api/storage.py only; affects export path resolution; routes.py unchanged",
+  "operator_verification_steps": [
+    "Verify nested tenant exports still resolve correctly (e.g., reports/partner-billing/2026-04/export.csv)",
+    "Confirm path traversal attempts are blocked with 403 response",
+    "Check double-encoded paths like %252e%252e%252fsecrets.csv are rejected",
+    "Validate absolute paths like /etc/passwd are blocked"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "expected": "allowed",
+      "verified": true
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "expected": "blocked",
+      "verified": true
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "expected": "blocked",
+      "verified": true
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "expected": "blocked",
+      "verified": true
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "expected": "blocked",
+      "verified": true
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "expected": "blocked",
+      "verified": true
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}
