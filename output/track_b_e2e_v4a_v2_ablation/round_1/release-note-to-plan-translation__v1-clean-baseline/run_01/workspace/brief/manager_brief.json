@@ -1,0 +1,87 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "No incident_context directory present; assuming no prior rollback invalidated the release note order.",
+      "status": "missing",
+      "topic": "incident_context"
+    },
+    {
+      "note": "No release_context directory present; assuming original release notes remain valid and unstale.",
+      "status": "missing",
+      "topic": "release_context"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "Schema drift must be audited before fixtures can be correctly backfilled; the legacy shim masks drift."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "Dashboard summary must not ship until dependency-graph fixtures reflect the new schema."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Runbook only stabilizes after rollout and rollback shape are known from canary validation."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Documented list of schema drift issues and decision on shim removal readiness.",
+      "evidence": [
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Identify all schema drift between translator output and expected step-id schema while the legacy parser shim is still in place, since the shim masks drift in local smoke runs.",
+      "title": "Audit translator schema drift before removing legacy parser shim"
+    },
+    {
+      "bounded_deliverable": "Updated fixtures in tests/plan_contract.py that pass with new schema.",
+      "evidence": [
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Add dependency-graph fixtures so the plan contract test catches ordering regressions when new step ids are introduced.",
+      "title": "Backfill dependency-graph fixtures for plan contract"
+    },
+    {
+      "bounded_deliverable": "Dashboard summary visible in canary behind feature flag.",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Enable the dashboard summary feature behind a kill switch now that the schema is stable and fixtures validate ordering.",
+      "title": "Enable translated release-plan dashboard summary behind kill switch"
+    },
+    {
+      "bounded_deliverable": "Updated runbook and launch checklist with proven procedures.",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Update operational documentation with rollout and rollback procedures once the summary path is proven in canary.",
+      "title": "Update operator runbook and launch checklist"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md"
+    ],
+    "mitigations": [
+      "Complete RN-101 audit before any schema changes",
+      "Pass RN-102 fixture tests to validate ordering contract",
+      "Keep RN-103 behind kill switch for canary-only exposure"
+    ],
+    "statement": "Dashboard renders incorrect step ordering to users if schema drift is not resolved before enabling the summary."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}
