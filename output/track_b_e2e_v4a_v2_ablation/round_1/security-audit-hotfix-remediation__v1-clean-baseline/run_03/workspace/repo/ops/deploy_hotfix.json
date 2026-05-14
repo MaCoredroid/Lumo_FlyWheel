@@ -1,0 +1,42 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55-export-path-traversal",
+  "rollback_trigger": "If any export API request that previously succeeded now returns 400 Bad Request, or if monitoring shows elevated error rates on /export endpoints.",
+  "impact_scope": "Only affects export_api/storage.py resolve_export_path function. Blocks path traversal attempts via URL encoding. Legitimate nested exports under tenant root continue to work.",
+  "operator_verification_steps": [
+    "Verify REQ-legit-nested sample passes (nested export under tenant root)",
+    "Verify REQ-encoded-dotdot sample is blocked (percent-encoded parent traversal)",
+    "Verify REQ-double-encoded sample is blocked (double-encoded traversal)",
+    "Verify REQ-mixed-slash sample is blocked (mixed slash traversal)",
+    "Verify REQ-absolute sample is blocked (absolute path escape)",
+    "Verify REQ-drive-qualified sample is blocked (drive-qualified path escape)"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested exports under tenant root continue to work"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded parent traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Mixed slash traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path escape is blocked"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Drive-qualified path escape is blocked"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55",
+  "rollback_trigger": "Any regression in nested export functionality or increase in 403 errors for legitimate tenant exports",
+  "impact_scope": "export_api/storage.py _normalize_requested_path function only",
+  "operator_verification_steps": [
+    "Verify nested exports still work: reports/partner-billing/2026-04/export.csv",
+    "Verify encoded traversal blocked: ..%2fsecrets.csv returns 403",
+    "Verify double-encoded traversal blocked: %252e%252e%252fsecrets.csv returns 403",
+    "Verify mixed-slash traversal blocked: reports\\\\..\\\\..\\\\secrets.csv returns 403",
+    "Verify absolute path blocked: /etc/passwd returns 403",
+    "Verify drive-qualified path blocked: C:\\\\temp\\\\secrets.csv returns 403"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "expected_allowed": true,
+      "note": "partner billing export must remain valid under the tenant root"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "expected_allowed": false,
+      "note": "percent-encoded parent traversal must be blocked"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "expected_allowed": false,
+      "note": "double-encoded separators must be blocked after iterative decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "expected_allowed": false,
+      "note": "mixed slash traversal must be blocked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "expected_allowed": false,
+      "note": "absolute path escape must be blocked"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "expected_allowed": false,
+      "note": "drive-qualified path escape must be blocked"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "cnb55-hotfix"
+}

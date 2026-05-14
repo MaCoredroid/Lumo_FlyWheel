@@ -1,0 +1,23 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Fixed double-encoding bypass in _normalize_requested_path by repeatedly unquoting until stable, then checking for path traversal components",
+      "evidence_paths": ["audit/audit.sarif", "artifacts/request_samples.json", "audit/appsec_review.md"]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/storage.py",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Exploit via encoded separators and symlink escapes now blocked by iterative unquote and traversal component check",
+      "evidence_paths": ["audit/appsec_review.md", "artifacts/request_samples.json", "audit/triage_matrix.csv"]
+    }
+  ]
+}

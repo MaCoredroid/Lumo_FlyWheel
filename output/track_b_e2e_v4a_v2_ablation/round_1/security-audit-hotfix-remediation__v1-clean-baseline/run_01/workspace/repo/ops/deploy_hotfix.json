@@ -1,0 +1,38 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55-hotfix-export-traversal",
+  "rollback_trigger": "If nested exports under tenant root fail or legitimate export paths are rejected",
+  "impact_scope": "repo/export_api/storage.py - _normalize_requested_path now iteratively decodes URL encoding until stable; resolve_export_path checks for .. components after normalization",
+  "operator_verification_steps": [
+    "Verify nested export paths like reports/partner-billing/2026-04/export.csv still resolve under tenant root",
+    "Verify encoded traversal attempts like ..%2fsecrets.csv are rejected",
+    "Verify double-encoded attempts like %252e%252e%252fsecrets.csv are rejected",
+    "Run make test and confirm all tests pass"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested exports under tenant root remain valid"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Single-encoded traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal is blocked after iterative decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Backslash-based traversal is normalized and blocked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute paths starting with / are blocked"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Windows drive-qualified paths are blocked"
+    }
+  ]
+}
