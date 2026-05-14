@@ -1,0 +1,108 @@
+{
+  "attempt": 2,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 706.3663189549989,
+  "family": "fanout-fullstack-release-blocker",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-14T09:46:57.505Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 96,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 96"
+      }
+    ],
+    "recorded_at": "2026-05-14T09:35:11.104Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-14T09:46:57.507Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 1,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/fanout-fullstack-release-blocker/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation/round_1/fanout-fullstack-release-blocker__v1-clean-baseline/run_02/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 40,
+    "end_offset": 4757129,
+    "normalized_request_count": 40,
+    "request_ids": [
+      "resp_81162c593e437fa1",
+      "resp_81457a0252707058",
+      "resp_8176c211fccd0d24",
+      "resp_81de2f8e65e24a22",
+      "resp_81ec5a242adefd78",
+      "resp_8250cc105a9d6360",
+      "resp_82e4c09d4b65a01c",
+      "resp_83d92f0081518d37",
+      "resp_8440efc4f3f2b398",
+      "resp_88a086d5ae3fdc47",
+      "resp_8bf39bbcefed9ff0",
+      "resp_8c606c33531b2596",
+      "resp_9147c4a05419b196",
+      "resp_9162e5d48a8d9511",
+      "resp_9339837ac2ff68ec",
+      "resp_944658d71118f1d4",
+      "resp_975cb79948984055",
+      "resp_97c24ca4d29e6294",
+      "resp_9811cffd441edffe",
+      "resp_9d5f882bcbd7d5bb",
+      "resp_9d93c504e3acea42",
+      "resp_9f2711663c773f97",
+      "resp_a114e1f00fb29ad6",
+      "resp_a170454894fa6d28",
+      "resp_a3fb3b8388949e2b",
+      "resp_a640ae2be17156ff",
+      "resp_a6e88ff655264fae",
+      "resp_a74ae20d75072cc8",
+      "resp_a9268b825b879f96",
+      "resp_ad523936a5a789d7",
+      "resp_ade6f862275a6c0d",
+      "resp_af34c84b7964d3a2",
+      "resp_b08812055dd6f6b1",
+      "resp_b0c1848dbc0ceaa0",
+      "resp_b14b27bca9924329",
+      "resp_b27ef7ab2ca0372c",
+      "resp_b3d8f81afdf0c64b",
+      "resp_b8f5677ba1f31962",
+      "resp_ba4138dafab3faeb",
+      "resp_baca1ef51847c5e7"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 4716968
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_v4a_v2_ablation/round_1/fanout-fullstack-release-blocker__v1-clean-baseline/run_02/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}

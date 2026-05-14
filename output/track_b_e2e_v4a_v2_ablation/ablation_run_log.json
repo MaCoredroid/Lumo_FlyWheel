@@ -1,0 +1,20 @@
+{
+  "schema": "lumo.track_b.round4b_ablation_run_log.v1",
+  "ts": "2026-05-14T10:46:58Z",
+  "container": "lumo-vllm-track-b-suffix",
+  "out_root": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation",
+  "repeat": 4,
+  "points": [
+    {
+      "label": "a_t1_only",
+      "flags": {
+        "T2": true,
+        "T3": true,
+        "T4": true
+      },
+      "rc": 1,
+      "start_ts": "2026-05-13T19:55:34Z",
+      "end_ts": "2026-05-14T10:46:58Z"
+    }
+  ]
+}

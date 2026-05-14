@@ -210,17 +210,29 @@ def main() -> int:
         raise SystemExit("FATAL: _lumo_track_b_disabled patch not present in container suffix_decoding.py")
 
     results: list[dict] = []
-    selected = [p for p in POINTS if args.only is None or p[0] == args.only]
-    for idx, (label, flags) in enumerate(selected, start=1):
+    # Use the POINTS-list index (1-based) as the round number so that
+    # `--only b_t1_t2` lands in round_2 / `--only c_t1_t2_t3` lands in
+    # round_3 -- not in round_1, which would collide with point a data.
+    for global_idx, (label, flags) in enumerate(POINTS, start=1):
+        if args.only is not None and label != args.only:
+            continue
+        idx = global_idx
         write_flags(flags)
         time.sleep(1)
         round_dir = out_root / f"round_{idx}"
         start_ts, end_ts, rc = run_sweep(label, out_root, idx, args.repeat)
         if rc != 0:
-            print(f"FATAL: sweep {label} returned rc={rc}; aborting.", flush=True)
-            results.append({"label": label, "flags": flags, "rc": rc,
-                            "start_ts": start_ts, "end_ts": end_ts})
-            break
+            # rc=1 is the round driver's "some attempts had non-zero exit"
+            # signal, which fires whenever any per-attempt subprocess timed
+            # out (rc=124). Timeouts are LEGITIMATE ablation data under the
+            # working harness -- per-attempt metadata + codex_trace are
+            # still written by the TimeoutExpired handler. Don't abort the
+            # ablation just because the model used the wall budget; the
+            # decode-side signal (vllm_request_metrics.jsonl) is what we
+            # need from each point.
+            print(f"WARNING: sweep {label} returned rc={rc} (likely "
+                  f"per-attempt timeouts); continuing to recompute + next "
+                  f"point.", flush=True)
         recompute_clean(round_dir)
         slice_and_aggregate_regime(label, start_ts, end_ts, round_dir)
         results.append({

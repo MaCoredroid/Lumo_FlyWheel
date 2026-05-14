@@ -1,0 +1,14 @@
+{
+  "schema_version": "cnb55.release_gate_capture.v1",
+  "variant_id": "v1-clean-baseline",
+  "seed_release_id": "rel-ship-0422",
+  "proof_type": "request_echo_pair",
+  "captured_request": {
+    "request_path": "/api/releases/rel-ship-0422/gate",
+    "approval_state": "human_review_required"
+  },
+  "server_echo": {
+    "echo_path": "/api/releases/rel-ship-0422",
+    "approval_state": "human_review_required"
+  }
+}
