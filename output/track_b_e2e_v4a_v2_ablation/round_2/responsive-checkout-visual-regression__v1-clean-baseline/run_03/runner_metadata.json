@@ -1,0 +1,94 @@
+{
+  "attempt": 3,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 448.9767790079932,
+  "family": "responsive-checkout-visual-regression",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-14T19:57:12.848Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 10,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 10"
+      }
+    ],
+    "recorded_at": "2026-05-14T19:49:43.837Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-14T19:57:12.849Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 2,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/responsive-checkout-visual-regression/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation/round_2/responsive-checkout-visual-regression__v1-clean-baseline/run_03/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 26,
+    "end_offset": 7881650,
+    "normalized_request_count": 26,
+    "request_ids": [
+      "resp_811978f55eb7a899",
+      "resp_83835b049482e2b9",
+      "resp_84af581bae0b529e",
+      "resp_866f2c0c57c8d45d",
+      "resp_8900156b30f49221",
+      "resp_8cced8adad03fb18",
+      "resp_8f892d4873859dc6",
+      "resp_90effb25eafabf76",
+      "resp_9191e5aa28089269",
+      "resp_941bd7aa286fe0c1",
+      "resp_9569a81e03ef2955",
+      "resp_9745f2a309782a16",
+      "resp_97634519421fcd27",
+      "resp_9aed0f88003cbe5c",
+      "resp_9ce8b01afc717e03",
+      "resp_9e43b3fc75262c77",
+      "resp_a1a991457b245e10",
+      "resp_a2c0ffabe1451162",
+      "resp_a9556bc2e98611c2",
+      "resp_aa63858506927a9e",
+      "resp_aabbfb366f073576",
+      "resp_b6cf47a0a53732f9",
+      "resp_ba4b3717160209ba",
+      "resp_ba695ec96321d68d",
+      "resp_bbed79a2da365be1",
+      "resp_bf84e457be434503"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 7855519
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_v4a_v2_ablation/round_2/responsive-checkout-visual-regression__v1-clean-baseline/run_03/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}
