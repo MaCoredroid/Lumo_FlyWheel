@@ -1,0 +1,91 @@
+{
+  "attempt": 2,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 366.8004459569929,
+  "family": "responses-sdk-adapter-cutover",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-14T11:29:05.877Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-14T11:22:59.039Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-14T11:29:05.879Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 2,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/responses-sdk-adapter-cutover/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation/round_2/responses-sdk-adapter-cutover__v1-clean-baseline/run_02/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 23,
+    "end_offset": 5090016,
+    "normalized_request_count": 23,
+    "request_ids": [
+      "resp_835d156ee0534c88",
+      "resp_83f1d07401b0614b",
+      "resp_869adbe95199ff5d",
+      "resp_86d860d47d1d74b1",
+      "resp_88c47de78adc9ae6",
+      "resp_900592572c3e3387",
+      "resp_935e09c228d2cd0d",
+      "resp_962180babf19ac0b",
+      "resp_99e970b7a676f795",
+      "resp_a098202119f2c95c",
+      "resp_a0f148c229eec5e4",
+      "resp_a194f5ceeed8392e",
+      "resp_a8d3d514614003b8",
+      "resp_a8e0036e53faa526",
+      "resp_a90b6960fd32050d",
+      "resp_af3742f7989c3118",
+      "resp_b0ae3bdaf3502a48",
+      "resp_b154d9e1190d75a0",
+      "resp_b20f579be63f53b1",
+      "resp_b64eaac45f22d769",
+      "resp_b8b9b28798837fec",
+      "resp_ba51f52e45b92946",
+      "resp_bb3a6a2e9328244f"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 5066911
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_v4a_v2_ablation/round_2/responses-sdk-adapter-cutover__v1-clean-baseline/run_02/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}

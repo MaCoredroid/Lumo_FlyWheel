@@ -1,0 +1,103 @@
+{
+  "attempt": 3,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 443.5455377340113,
+  "family": "responses-sdk-adapter-cutover",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-14T11:36:29.488Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-14T11:29:05.907Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-14T11:36:29.490Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 2,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/responses-sdk-adapter-cutover/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation/round_2/responses-sdk-adapter-cutover__v1-clean-baseline/run_03/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 35,
+    "end_offset": 5125141,
+    "normalized_request_count": 35,
+    "request_ids": [
+      "resp_8263c0055fe50b05",
+      "resp_83b19a350af74d29",
+      "resp_842dd0a670abae80",
+      "resp_85f75281023af2b9",
+      "resp_85f8927bb6aabd2d",
+      "resp_8749e6904f08db0e",
+      "resp_8c1673a8b1fbcd8e",
+      "resp_8c9cc01c7725a641",
+      "resp_8d7fa4aa136f7bf4",
+      "resp_8f5b70a2ab29f260",
+      "resp_8f8be6d5b58b767b",
+      "resp_90a6f9e6c846fd6c",
+      "resp_932685d9f83fa4b3",
+      "resp_9554130f8eaf251f",
+      "resp_96f78fc10a326b6d",
+      "resp_9bdc19b6ba89507c",
+      "resp_a08e19b376f93cb9",
+      "resp_a11fd4641d9f669d",
+      "resp_a28b5cc2aa2b25c2",
+      "resp_a2dfd6aa004a5290",
+      "resp_a3312f04362d3ac5",
+      "resp_a3c71b3026a6d22c",
+      "resp_a62ba6a9b2d390fe",
+      "resp_a9fac40bcd19d968",
+      "resp_aa069fc6eb47e5d9",
+      "resp_ac7d1e3d812b1069",
+      "resp_b1102cb3af1e109a",
+      "resp_b13974a1e1eeaece",
+      "resp_b15ba85cceef891b",
+      "resp_b20d39b4b0455475",
+      "resp_b41487c91d530de8",
+      "resp_b93d7434bebd3d79",
+      "resp_ba0f24e25eb18779",
+      "resp_bd210e6c6c4d075e",
+      "resp_bf9111433e48d79b"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 5090016
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_v4a_v2_ablation/round_2/responses-sdk-adapter-cutover__v1-clean-baseline/run_03/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}
