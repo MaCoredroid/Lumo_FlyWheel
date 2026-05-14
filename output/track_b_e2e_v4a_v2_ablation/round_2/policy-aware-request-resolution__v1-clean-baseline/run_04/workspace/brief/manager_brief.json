@@ -1,0 +1,100 @@
+{
+  "accepted": "P2",
+  "assumption_ledger": [
+    {
+      "note": "No release_context directory present; no active freeze suspending vendor replay exceptions.",
+      "status": "observed",
+      "topic": "release_freeze_window"
+    },
+    {
+      "note": "No incident_context directory present; no prior rollback invalidating the P2 path.",
+      "status": "observed",
+      "topic": "incident_rollback"
+    },
+    {
+      "note": "Privacy and security teams must be available to complete reviews within operational SLA.",
+      "status": "to_verify",
+      "topic": "approval_availability"
+    },
+    {
+      "note": "Audit ticket must be created and linked before exception activation per audit_log_rules.md.",
+      "status": "to_verify",
+      "topic": "audit_ticketing"
+    },
+    {
+      "note": "Sandbox environment isolation guarantees for the vendor sandbox are not documented in current runbooks.",
+      "status": "missing",
+      "topic": "vendor_sandbox_isolation"
+    }
+  ],
+  "primary_risk": {
+    "mitigations": [
+      "Require explicit privacy review sign-off before activation",
+      "Require explicit security review sign-off before activation",
+      "Link to audit ticket AUD-8821 before enabling access",
+      "Enforce 24-hour hard expiry with automatic revocation",
+      "Scope access to sandbox-only environment, no production tokens"
+    ],
+    "statement": "Granting vendor sandbox access to redacted replay traces creates exposure to C3 customer data if controls fail."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "repo_evidence/policies/access_policy_v2_1.md",
+        "repo_evidence/runbooks/request_resolution_runbook_current.md"
+      ],
+      "constraint_tags": [
+        "policy",
+        "privacy",
+        "security",
+        "operational"
+      ],
+      "proposal_id": "P2",
+      "rank": 1,
+      "summary": "Redacted sandbox export with dual approval aligns with access-policy v2.1 narrow exception path."
+    },
+    {
+      "citations": [
+        "repo_evidence/policies/access_policy_v2_1.md",
+        "proposals/P4.md"
+      ],
+      "constraint_tags": [
+        "policy",
+        "operational"
+      ],
+      "proposal_id": "P4",
+      "rank": 2,
+      "summary": "Sanitized sample bundle is policy-safe but less useful when P2 exception path is available."
+    },
+    {
+      "citations": [
+        "repo_evidence/policies/access_policy_v2_1.md",
+        "proposals/P1.md"
+      ],
+      "constraint_tags": [
+        "policy",
+        "operational"
+      ],
+      "proposal_id": "P1",
+      "rank": 3,
+      "summary": "Denial over-corrects when a narrower policy-compliant path exists under v2.1."
+    },
+    {
+      "citations": [
+        "repo_evidence/policies/access_policy_v2_1.md",
+        "repo_evidence/tooling/local_admin_tool.md",
+        "repo_evidence/policies/data_handling_matrix.md"
+      ],
+      "constraint_tags": [
+        "policy",
+        "security",
+        "privacy"
+      ],
+      "proposal_id": "P3",
+      "rank": 4,
+      "summary": "Direct production token violates policy by bypassing dual-approval and audit requirements."
+    }
+  ],
+  "schema_version": "cnb55.manager_brief.v2",
+  "variant_id": "v1-clean-baseline"
+}

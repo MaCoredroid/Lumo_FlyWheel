@@ -1,0 +1,95 @@
+{
+  "accepted": "P2",
+  "assumption_ledger": [
+    {
+      "note": "Privacy team must be available to sign off within the 24-hour window.",
+      "status": "to_verify",
+      "topic": "privacy review availability"
+    },
+    {
+      "note": "Security team must be available to sign off within the 24-hour window.",
+      "status": "to_verify",
+      "topic": "security review availability"
+    },
+    {
+      "note": "Unknown if vendor sandbox can accept the redacted replay package format.",
+      "status": "missing",
+      "topic": "vendor sandbox capacity"
+    },
+    {
+      "note": "Audit ticket must be created before exception activation per audit_log_rules.md.",
+      "status": "observed",
+      "topic": "audit ticket creation"
+    }
+  ],
+  "primary_risk": {
+    "mitigations": [
+      "Require privacy and security review sign-off before activation",
+      "Enforce 24-hour expiry with automatic revocation",
+      "Tie access to audit ticket for full traceability",
+      "Use redacted sandbox package only, no direct production tokens"
+    ],
+    "statement": "Granting third-party access to C3 customer replay data creates privacy and security exposure risk if controls fail."
+  },
+  "ranking": [
+    {
+      "citations": [
+        "repo_evidence/policies/access_policy_v2_1.md",
+        "repo_evidence/runbooks/request_resolution_runbook_current.md",
+        "proposals/P2.md"
+      ],
+      "constraint_tags": [
+        "policy",
+        "privacy",
+        "security",
+        "operational"
+      ],
+      "proposal_id": "P2",
+      "rank": 1,
+      "summary": "Approve redacted sandbox export with dual approval and audit. Matches access-policy v2.1 narrow path."
+    },
+    {
+      "citations": [
+        "proposals/P4.md",
+        "repo_evidence/policies/data_handling_matrix.md"
+      ],
+      "constraint_tags": [
+        "policy",
+        "privacy"
+      ],
+      "proposal_id": "P4",
+      "rank": 2,
+      "summary": "Provide sanitized sample bundle only. Policy-safe but less useful when P2 path is available."
+    },
+    {
+      "citations": [
+        "proposals/P1.md",
+        "repo_evidence/policies/access_policy_v2_1.md"
+      ],
+      "constraint_tags": [
+        "policy"
+      ],
+      "proposal_id": "P1",
+      "rank": 3,
+      "summary": "Deny request outright. Over-corrects when policy allows a compliant narrower path."
+    },
+    {
+      "citations": [
+        "proposals/P3.md",
+        "repo_evidence/policies/access_policy_v2_1.md",
+        "repo_evidence/tooling/local_admin_tool.md",
+        "repo_evidence/tooling/audit_log_rules.md"
+      ],
+      "constraint_tags": [
+        "policy",
+        "security",
+        "operational"
+      ],
+      "proposal_id": "P3",
+      "rank": 4,
+      "summary": "Direct local override token. Forbidden by policy v2.1\u2014bypasses dual-approval and audit requirements."
+    }
+  ],
+  "schema_version": "cnb55.manager_brief.v2",
+  "variant_id": "v1-clean-baseline"
+}
