@@ -1,20 +1,21 @@
 {
   "schema": "lumo.track_b.round4b_ablation_run_log.v1",
-  "ts": "2026-05-14T10:46:58Z",
+  "ts": "2026-05-15T20:40:38Z",
   "container": "lumo-vllm-track-b-suffix",
   "out_root": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation",
   "repeat": 4,
   "points": [
     {
-      "label": "a_t1_only",
+      "label": "c_t1_t2_t3",
       "flags": {
-        "T2": true,
-        "T3": true,
+        "T2": false,
+        "T3": false,
         "T4": true
       },
       "rc": 1,
-      "start_ts": "2026-05-13T19:55:34Z",
-      "end_ts": "2026-05-14T10:46:58Z"
+      "start_ts": "2026-05-15T03:51:20Z",
+      "end_ts": "2026-05-15T20:40:37Z",
+      "round_dir": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation/round_3"
     }
   ]
 }
