@@ -1,0 +1,22 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55-hotfix",
+  "rollback_trigger": "Any regression in export API availability or increase in 403 errors on legitimate tenant exports",
+  "impact_scope": "export_api/storage.py only; no changes to auth, dependencies, or archive code",
+  "operator_verification_steps": [
+    "Confirm nested exports still resolve correctly (e.g., reports/partner-billing/2026-04/export.csv)",
+    "Verify encoded traversal attempts are rejected with 403",
+    "Check double-encoded payloads are blocked",
+    "Validate absolute paths remain rejected"
+  ],
+  "behavior_preservation_claims": [
+    {"sample_id": "REQ-legit-nested", "claim": "nested exports under tenant root remain functional"},
+    {"sample_id": "REQ-encoded-dotdot", "claim": "encoded traversal blocked"},
+    {"sample_id": "REQ-double-encoded", "claim": "double-encoded traversal blocked"},
+    {"sample_id": "REQ-mixed-slash", "claim": "mixed slash traversal blocked"},
+    {"sample_id": "REQ-absolute", "claim": "absolute paths blocked"},
+    {"sample_id": "REQ-drive-qualified", "claim": "drive-qualified paths blocked"}
+  ],
+  "release_freeze_ack": "This hotfix addresses only the path traversal vulnerability; JWT rotation deferred",
+  "incident_reference": "APPSEC-EXP-17, SARIF-PY-TRAVERSAL-001"
+}

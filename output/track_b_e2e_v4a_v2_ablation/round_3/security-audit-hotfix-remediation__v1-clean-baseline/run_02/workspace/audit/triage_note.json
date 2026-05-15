@@ -1,0 +1,54 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "cnb55.path-traversal.hotfix.2026.05.15",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Implemented iterative percent-decoding to handle double/multi-encoded payloads and component-wise traversal detection using split for path segments. Path containment verified via Path.relative_to for canonical root anchoring.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/storage.py",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Same fix addresses encoded separators and symlink escapes via canonical resolution and relative_to containment check.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT key rotation is out of scope for this hotfix per appsec_review.md guidance.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-KEY-03",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/auth.py",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT key rotation deferred per appsec_review.md: rotate JWT material later; do not fold into this hotfix.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ]
+    }
+  ]
+}

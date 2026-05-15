@@ -1,0 +1,56 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "cnb55-hotfix",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Path traversal via double-encoded separators bypassed single unquote(). Fixed by iterative decoding until stable, then rejecting .. components after full decode.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT key rotation is out of scope for this hotfix per appsec_review.md",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "APPSEC-EXP-17",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fixed",
+      "rationale": "Same root cause as SARIF-PY-TRAVERSAL-001; iterative decode and component validation blocks encoded traversal",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-KEY-03",
+      "source": "appsec",
+      "rule_or_file": "APPSEC-KEY-03",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "deferred",
+      "rationale": "JWT material rotation deferred per appsec_review.md",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    }
+  ]
+}

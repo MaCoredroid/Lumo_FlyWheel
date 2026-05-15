@@ -1,0 +1,48 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "Any regression in nested export paths or increase in path traversal violations above baseline",
+  "impact_scope": "repo/export_api/storage.py: _normalize_requested_path now iteratively decodes URL-encoded paths",
+  "operator_verification_steps": [
+    "Verify nested exports still work: reports/partner-billing/2026-04/export.csv",
+    "Verify encoded traversal is blocked: ..%2fsecrets.csv",
+    "Verify double-encoded traversal is blocked: %252e%252e%252fsecrets.csv",
+    "Verify mixed slash traversal is blocked: reports\\\\..\\\\..\\\\secrets.csv",
+    "Verify absolute path is blocked: /etc/passwd",
+    "Run make test and confirm all tests pass"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested export path is allowed",
+      "expected": true
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded parent traversal is blocked",
+      "expected": false
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded separators are blocked after iterative decoding",
+      "expected": false
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Mixed slash traversal is blocked",
+      "expected": false
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path escape is blocked",
+      "expected": false
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Drive-qualified path escape is blocked",
+      "expected": false
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}

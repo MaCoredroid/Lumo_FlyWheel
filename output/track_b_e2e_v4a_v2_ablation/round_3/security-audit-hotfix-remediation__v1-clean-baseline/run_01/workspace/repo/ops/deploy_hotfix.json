@@ -1,0 +1,41 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55",
+  "rollback_trigger": "Any test failure in test_storage.py or test_routes.py, or regression in export API error rate exceeding baseline",
+  "impact_scope": "repo/export_api/storage.py only - path validation logic in _normalize_requested_path and resolve_export_path",
+  "operator_verification_steps": [
+    "Run make test and verify all 4 tests pass",
+    "Verify double-encoded traversal %252e%252e%252f is blocked",
+    "Verify nested exports like reports/partner-billing/2026-04/export.csv still work",
+    "Verify absolute paths like /etc/passwd are rejected",
+    "Run cnb55-hotfix-artifacts validate to confirm artifacts"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested tenant exports remain functional after fix"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded parent traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal sequences are blocked"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Mixed slash traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path escapes are blocked"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Windows drive-qualified paths are blocked"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "cnb55"
+}
