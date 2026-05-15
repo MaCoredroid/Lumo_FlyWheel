@@ -1,0 +1,87 @@
+{
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline",
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "step_id": "RN-101",
+      "rank": 1,
+      "title": "Audit translator schema drift",
+      "summary": "Audit and document schema drift in the translator before removing the legacy parser shim. This reduces ambiguity about what the translator produces.",
+      "bounded_deliverable": "Schema drift audit report identifying differences between current translator output and expected step-id schema",
+      "evidence": ["repo_inventory/repo_state.md"]
+    },
+    {
+      "step_id": "RN-102",
+      "rank": 2,
+      "title": "Backfill dependency-graph fixtures",
+      "summary": "Update dependency-graph fixtures so the plan contract catches ordering regressions when new step ids are introduced.",
+      "bounded_deliverable": "Updated fixtures in tests/plan_contract.py that pass with new step ids",
+      "evidence": ["repo_inventory/test_inventory.md", "release_notes/release_notes_2026_04.md"]
+    },
+    {
+      "step_id": "RN-103",
+      "rank": 3,
+      "title": "Enable dashboard summary behind kill switch",
+      "summary": "Enable the translated release-plan dashboard summary behind a kill switch after the schema is stable and fixtures are in place.",
+      "bounded_deliverable": "Dashboard summary feature flag enabled in canary with kill switch available",
+      "evidence": ["repo_inventory/dependency_map.md"]
+    },
+    {
+      "step_id": "RN-104",
+      "rank": 4,
+      "title": "Update operator runbook and launch checklist",
+      "summary": "Update the operator runbook and launch checklist after the summary path is proven in canary.",
+      "bounded_deliverable": "Updated runbook documenting rollout and rollback procedures",
+      "evidence": ["repo_inventory/dependency_map.md"]
+    }
+  ],
+  "dependency_notes": [
+    {
+      "before": "RN-101",
+      "after": "RN-102",
+      "reason": "Translator schema must be audited and stabilized before fixtures can be correctly updated"
+    },
+    {
+      "before": "RN-102",
+      "after": "RN-103",
+      "reason": "Dashboard summary depends on step-id schema and fixtures; fixtures must reflect new schema before dashboard can render correctly"
+    },
+    {
+      "before": "RN-103",
+      "after": "RN-104",
+      "reason": "Runbook requires knowledge of rollout and rollback shape which is only known after dashboard is proven in canary"
+    }
+  ],
+  "primary_risk": {
+    "statement": "Dashboard renders incorrect or unstable step ordering to users if schema drift is not audited and fixtures are not updated before enabling the summary",
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "repo_inventory/dependency_map.md"
+    ],
+    "mitigations": [
+      "Audit schema drift first (RN-101) to understand what the translator actually produces",
+      "Backfill fixtures (RN-102) before enabling dashboard to ensure plan contract catches ordering issues",
+      "Use kill switch (RN-103) to disable dashboard quickly if issues appear in canary",
+      "Keep legacy parser shim in place until schema audit is complete"
+    ]
+  },
+  "assumption_ledger": [
+    {
+      "topic": "Legacy parser shim removal",
+      "status": "missing",
+      "note": "No explicit release note for removing the shim; audit (RN-101) must inform whether removal is safe"
+    },
+    {
+      "topic": "Kill switch availability",
+      "status": "to_verify",
+      "note": "Kill switch infrastructure needs verification for RN-103"
+    },
+    {
+      "topic": "Canary environment",
+      "status": "to_verify",
+      "note": "Canary deployment path needs verification for RN-103 and RN-104 validation"
+    }
+  ]
+}
