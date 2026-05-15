@@ -1,0 +1,112 @@
+{
+  "attempt": 2,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 841.8661808659963,
+  "family": "responsive-checkout-visual-regression",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 96,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 96"
+      }
+    ],
+    "recorded_at": "2026-05-15T12:44:50.794Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-15T12:30:48.892Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-15T12:44:50.797Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 3,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5ae88ac4e10201f83a617e2bda3f1c07da4c7217c80db5482d317a79dd93b43a",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/responsive-checkout-visual-regression/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a_v2_ablation/round_3/responsive-checkout-visual-regression__v1-clean-baseline/run_02/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 44,
+    "end_offset": 12976444,
+    "normalized_request_count": 44,
+    "request_ids": [
+      "resp_83709eca1bdaf78d",
+      "resp_83ae2fadfc0cf386",
+      "resp_85446c03a0613c73",
+      "resp_85963e8824b768f1",
+      "resp_85e49387dc9e24f1",
+      "resp_86b1af10a7e998a0",
+      "resp_88b2aaa82252584e",
+      "resp_89f4fa3c3ae37956",
+      "resp_8b7ff63b75c8dbb7",
+      "resp_8d73f14e471d23e3",
+      "resp_8e4f3e3ae97595b1",
+      "resp_8f42936b305399d2",
+      "resp_91d8ba7ceea123c9",
+      "resp_95f95cdcc10df2d0",
+      "resp_978fc8db227d35e0",
+      "resp_980025b92704277f",
+      "resp_9bdc4698f4418bc0",
+      "resp_9c50abc37eb34b7a",
+      "resp_9c6e33c1504ec18a",
+      "resp_9eacadb2aaf74e47",
+      "resp_9fbe31c95ae2308c",
+      "resp_a4314c6cde7f530b",
+      "resp_a4d84718955ebb0d",
+      "resp_a51850850f893570",
+      "resp_a6f89e26a2591d39",
+      "resp_a8d8b3a42fead168",
+      "resp_aa6be43925b6eb5a",
+      "resp_aa9ef1a525ae5d3c",
+      "resp_abde0a4404e449ef",
+      "resp_adb286d29f97535c",
+      "resp_ade611ca87bf22fa",
+      "resp_ae8ac79ace1a5597",
+      "resp_aee4ef455be3a1f3",
+      "resp_af2a745194933e71",
+      "resp_b02620bff79b4d8b",
+      "resp_b2855238238358a6",
+      "resp_b2c104d8b51ce10a",
+      "resp_b3de97f6e19b16b0",
+      "resp_b45b2ff4eed50385",
+      "resp_b5c2b8c043686d86",
+      "resp_bb8084dc71778cad",
+      "resp_bbbf7ef68ac6dc56",
+      "resp_bdd33ffac2df95fe",
+      "resp_be8c70eb0675887b"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 12932197
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_v4a_v2_ablation/round_3/responsive-checkout-visual-regression__v1-clean-baseline/run_02/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}
