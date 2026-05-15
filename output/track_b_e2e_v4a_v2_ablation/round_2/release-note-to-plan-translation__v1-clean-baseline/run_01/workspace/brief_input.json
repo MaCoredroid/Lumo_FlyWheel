@@ -1,0 +1,82 @@
+{
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline",
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "step_id": "RN-101",
+      "rank": 1,
+      "title": "Audit translator schema drift",
+      "summary": "Identify schema drift before removing shim",
+      "bounded_deliverable": "Schema drift audit report",
+      "evidence": [
+        "repo_inventory/repo_state.md"
+      ]
+    },
+    {
+      "step_id": "RN-102",
+      "rank": 2,
+      "title": "Backfill dependency-graph fixtures",
+      "summary": "Add fixtures for new schema",
+      "bounded_deliverable": "Updated fixtures",
+      "evidence": [
+        "repo_inventory/test_inventory.md"
+      ]
+    },
+    {
+      "step_id": "RN-103",
+      "rank": 3,
+      "title": "Enable dashboard summary",
+      "summary": "Enable dashboard behind kill switch",
+      "bounded_deliverable": "Dashboard in canary",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ]
+    },
+    {
+      "step_id": "RN-104",
+      "rank": 4,
+      "title": "Update runbook",
+      "summary": "Document rollout procedures",
+      "bounded_deliverable": "Updated runbook",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ]
+    }
+  ],
+  "dependency_notes": [
+    {
+      "before": "RN-101",
+      "after": "RN-102",
+      "reason": "Audit before backfill"
+    },
+    {
+      "before": "RN-102",
+      "after": "RN-103",
+      "reason": "Fixtures before dashboard"
+    },
+    {
+      "before": "RN-103",
+      "after": "RN-104",
+      "reason": "Canary before runbook"
+    }
+  ],
+  "primary_risk": {
+    "statement": "Dashboard shows wrong order if schema drift not resolved",
+    "evidence": [
+      "repo_inventory/repo_state.md"
+    ],
+    "mitigations": [
+      "Audit first",
+      "Fixtures second",
+      "Kill switch third"
+    ]
+  },
+  "assumption_ledger": [
+    {
+      "topic": "drift_scope",
+      "status": "missing",
+      "note": "Unknown until audit"
+    }
+  ]
+}

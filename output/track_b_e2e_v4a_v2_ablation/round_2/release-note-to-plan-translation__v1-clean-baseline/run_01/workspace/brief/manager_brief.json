@@ -1,0 +1,82 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Unknown until audit",
+      "status": "missing",
+      "topic": "drift_scope"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "Audit before backfill"
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "Fixtures before dashboard"
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Canary before runbook"
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Schema drift audit report",
+      "evidence": [
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Identify schema drift before removing shim",
+      "title": "Audit translator schema drift"
+    },
+    {
+      "bounded_deliverable": "Updated fixtures",
+      "evidence": [
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Add fixtures for new schema",
+      "title": "Backfill dependency-graph fixtures"
+    },
+    {
+      "bounded_deliverable": "Dashboard in canary",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Enable dashboard behind kill switch",
+      "title": "Enable dashboard summary"
+    },
+    {
+      "bounded_deliverable": "Updated runbook",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Document rollout procedures",
+      "title": "Update runbook"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md"
+    ],
+    "mitigations": [
+      "Audit first",
+      "Fixtures second",
+      "Kill switch third"
+    ],
+    "statement": "Dashboard shows wrong order if schema drift not resolved"
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}
