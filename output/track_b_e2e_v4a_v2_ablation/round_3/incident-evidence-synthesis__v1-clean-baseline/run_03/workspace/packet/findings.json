@@ -1,0 +1,20 @@
+{
+  "ranked_findings": [
+    {
+      "finding": "Bulk-refund requests were accepted without idempotency keys",
+      "confidence": "high",
+      "evidence": ["corpus/timeline/incident_timeline.md", "corpus/tickets/TICKET-8729.md"]
+    },
+    {
+      "finding": "Idempotency guardrail was skipped due to legacy_batch_header bypass",
+      "confidence": "high",
+      "evidence": ["corpus/timeline/incident_timeline.md", "corpus/remediation/notes.md"]
+    },
+    {
+      "finding": "Worker replay theory is not supported by final evidence",
+      "confidence": "medium",
+      "evidence": ["corpus/tickets/TICKET-8721.md", "corpus/tickets/TICKET-8729.md"]
+    }
+  ],
+  "unresolved_ambiguity": "Worker replay was an early symptom theory but is not supported as the primary trigger by final evidence"
+}

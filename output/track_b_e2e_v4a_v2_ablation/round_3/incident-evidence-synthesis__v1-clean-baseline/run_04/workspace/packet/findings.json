@@ -1,0 +1,23 @@
+{
+  "ranked_findings": [
+    {
+      "finding": "Bulk-refund requests accepted without idempotency keys due to legacy_batch_header bypass",
+      "confidence": "high",
+      "evidence": [
+        "api_gateway_2026-05-01.log: guardrail=idempotency-required decision=skipped reason=legacy_batch_header",
+        "api_gateway_2026-05-01.log: request_class=bulk-refund idempotency_key=missing status=accepted",
+        "TICKET-8729: every duplicate has request_class=bulk-refund and no idempotency key"
+      ]
+    },
+    {
+      "finding": "Duplicate refunds reported for enterprise accounts",
+      "confidence": "high",
+      "evidence": [
+        "incident_timeline.md: 10:25 UTC duplicate refunds reported",
+        "TICKET-8721: duplicate refunds observed for three enterprise accounts",
+        "TICKET-8729: duplicate refunds observed"
+      ]
+    }
+  ],
+  "unresolved_ambiguity": "Initial theory of queue worker replay (TICKET-8721) not confirmed; evidence points to missing idempotency keys as root cause rather than worker replay"
+}
