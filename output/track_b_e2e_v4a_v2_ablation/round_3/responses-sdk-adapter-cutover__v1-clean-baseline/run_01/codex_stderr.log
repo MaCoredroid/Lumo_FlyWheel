@@ -1,0 +1,4 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-15T03:53:31.728169Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "[{\"step\": \"Update config/runtime.toml to Responses wire path\", \"status\": \"in_progress\"}, {\"step\": \"Update migration docs for event ordering and tool-result correlation\", \"status\": \"pending\"}]", expected a sequence at line 1 column 218
+2026-05-15T03:53:35.841012Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "[{\"step\": \"Update config/runtime.toml to Responses wire path\", \"status\": \"in_progress\"}, {\"step\": \"Update migration docs for event ordering and tool-result correlation\", \"status\": \"pending\"}]", expected a sequence at line 1 column 218
