@@ -1,0 +1,46 @@
+{
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is a live standalone flag. The parser in config.py sets shadow_enabled=true and effective_mode=shadow when this env var is truthy. The runtime branch in runtime.py checks config.shadow_enabled and returns the shadow_preview_path. This is the primary flag controlling preview mode.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_preview_v2_alias.py"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is a live alias, not a standalone flag. The parser accepts it for legacy deploy manifests and normalizes it to the same shadow path as ENABLE_SHADOW_PREVIEW. The runbook explicitly states it is not a standalone runtime branch.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "tests/test_force_legacy_reporting_only.py"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY is a dead flag. While the parser tracks it in force_legacy_seen, the runtime branch in runtime.py does not check this value at all. The runbook confirms the live service does not branch on it anymore - it is left only for reporting and operator notes.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ]
+}

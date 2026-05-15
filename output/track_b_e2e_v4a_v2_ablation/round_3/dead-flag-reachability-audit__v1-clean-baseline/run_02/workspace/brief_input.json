@@ -1,0 +1,80 @@
+{
+  "schema_version": "cnb55.flag_audit.v1",
+  "variant_id": "v1-clean-baseline",
+  "flags": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "status": "live",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py"
+      ],
+      "disproved_false_positive_path": "src/preview/runtime.py",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag controlling preview runtime. When enabled, it sets shadow_enabled=true causing preview_runtime_branch to return shadow_preview_path."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "status": "partial",
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py"
+      ],
+      "disproved_false_positive_path": "src/preview/config.py",
+      "rationale": "ENABLE_PREVIEW_V2 is a legacy alias that normalizes to ENABLE_SHADOW_PREVIEW. It has parser presence and routes to shadow_preview_path but is not a standalone flag."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "status": "dead",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py"
+      ],
+      "disproved_false_positive_path": "src/preview/runtime.py",
+      "rationale": "PREVIEW_FORCE_LEGACY is dead code. It is parsed and sets force_legacy_seen for reporting only. The runtime branch in preview_runtime_branch does not check this flag at all."
+    }
+  ],
+  "summary": {
+    "highest_operational_risk": "ENABLE_SHADOW_PREVIEW",
+    "note": "ENABLE_SHADOW_PREVIEW is the only standalone live flag. ENABLE_PREVIEW_V2 is a legacy alias. PREVIEW_FORCE_LEGACY is dead and can be safely removed."
+  },
+  "cleanup_plan": [
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "docs_cleanup",
+      "rationale": "Flag is dead, parser presence does not provide runtime value",
+      "blockers": []
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "remove_after_migration",
+      "rationale": "force_legacy_seen field is unused by runtime",
+      "blockers": []
+    }
+  ],
+  "assumption_ledger": [
+    {
+      "status": "missing",
+      "topic": "PREVIEW_FORCE_LEGACY runtime usage",
+      "note": "No evidence of PREVIEW_FORCE_LEGACY being used in runtime branching"
+    },
+    {
+      "status": "observed",
+      "topic": "parser presence",
+      "note": "Parser presence does not imply runtime reachability"
+    },
+    {
+      "status": "observed",
+      "topic": "ENABLE_PREVIEW_V2",
+      "note": "ENABLE_PREVIEW_V2 classified as partial due to alias nature"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "schema_version": "cnb55.flag_audit.v1",
+  "variant_id": "v1-clean-baseline",
+  "flags": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "status": "live",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py"
+      ],
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag. The parser in config.py sets shadow_enabled=True and effective_mode='shadow'. The runtime.py branches on config.shadow_enabled to shadow_preview_path. The runbook confirms this is the live preview router branch."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "status": "partial",
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "rationale": "ENABLE_PREVIEW_V2 is parsed but is an alias that normalizes to ENABLE_SHADOW_PREVIEW. The runbook states it is accepted for legacy deploy manifests but is not a standalone runtime branch. It shares the same runtime branch as ENABLE_SHADOW_PREVIEW."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "status": "dead",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "src/preview/runtime.py",
+      "rationale": "PREVIEW_FORCE_LEGACY is parsed and sets force_legacy_seen=True but does not affect runtime branching. The runtime.py preview_runtime_branch function only checks config.shadow_enabled, ignoring force_legacy_seen. The runbook confirms it is left in reporting and operator notes only."
+    }
+  ],
+  "summary": {
+    "highest_operational_risk": "PREVIEW_FORCE_LEGACY",
+    "note": "PREVIEW_FORCE_LEGACY presents the highest risk because operators may believe it forces legacy mode when it only affects reporting labels. The flag appears functional but has no runtime effect on the live service path."
+  },
+  "cleanup_plan": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "action": "keep",
+      "blockers": [],
+      "rationale": "Primary live flag controlling the preview router. Essential for runtime branching."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "action": "deprecate",
+      "blockers": ["legacy deploy manifests"],
+      "rationale": "Alias flag that normalizes to ENABLE_SHADOW_PREVIEW. Can be deprecated once legacy manifests are migrated."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "docs_cleanup",
+      "blockers": ["operator notes may reference this flag"],
+      "rationale": "Flag is dead for runtime but may be referenced in operator documentation. Clean up docs before removing parser."
+    }
+  ],
+  "assumption_ledger": [
+    {
+      "status": "observed",
+      "topic": "runtime_branching",
+      "note": "runtime.py only branches on shadow_enabled"
+    },
+    {
+      "status": "observed",
+      "topic": "alias_behavior",
+      "note": "ENABLE_PREVIEW_V2 maps to same path as ENABLE_SHADOW_PREVIEW"
+    },
+    {
+      "status": "missing",
+      "topic": "external_deploy_manifests",
+      "note": "Cannot verify legacy deploy manifest usage in production"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag that controls the shadow preview feature. The parser reads it in load_preview_env, sets shadow_enabled to true, and the runtime branches to shadow_preview_path when enabled. This is confirmed by the test and runbook documentation.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is a legacy alias that normalizes to ENABLE_SHADOW_PREVIEW in the parser. It does not have a standalone runtime branch - it maps to the same shadow_preview_path. The runbook confirms it is accepted for legacy deploy manifests but is not a standalone runtime branch.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "tests/test_force_legacy_reporting_only.py"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY is parsed and tracked for reporting only. The parser sets force_legacy_seen but the runtime does not branch on it. The runbook confirms the live service does not branch on it anymore - it is left in reporting and operator notes only.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "No evidence of PREVIEW_FORCE_LEGACY being used in runtime branching",
+      "status": "missing",
+      "topic": "PREVIEW_FORCE_LEGACY runtime usage"
+    },
+    {
+      "note": "Parser presence does not imply runtime reachability",
+      "status": "observed",
+      "topic": "parser presence"
+    },
+    {
+      "note": "ENABLE_PREVIEW_V2 classified as partial due to alias nature",
+      "status": "observed",
+      "topic": "ENABLE_PREVIEW_V2"
+    }
+  ],
+  "cleanup_plan": [
+    {
+      "action": "docs_cleanup",
+      "blockers": [],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "rationale": "Flag is dead, parser presence does not provide runtime value"
+    },
+    {
+      "action": "remove_after_migration",
+      "blockers": [],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "rationale": "force_legacy_seen field is unused by runtime"
+    }
+  ],
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "src/preview/runtime.py",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag controlling preview runtime. When enabled, it sets shadow_enabled=true causing preview_runtime_branch to return shadow_preview_path.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "src/preview/config.py",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is a legacy alias that normalizes to ENABLE_SHADOW_PREVIEW. It has parser presence and routes to shadow_preview_path but is not a standalone flag.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "src/preview/runtime.py",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY is dead code. It is parsed and sets force_legacy_seen for reporting only. The runtime branch in preview_runtime_branch does not check this flag at all.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ],
+  "schema_version": "cnb55.flag_audit.v1",
+  "summary": {
+    "highest_operational_risk": "ENABLE_SHADOW_PREVIEW",
+    "note": "ENABLE_SHADOW_PREVIEW is the only standalone live flag. ENABLE_PREVIEW_V2 is a legacy alias. PREVIEW_FORCE_LEGACY is dead and can be safely removed."
+  },
+  "variant_id": "v1-clean-baseline"
+}

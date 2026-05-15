@@ -1,0 +1,43 @@
+{
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag. The parser in config.py sets shadow_enabled=True and effective_mode='shadow'. The runtime.py branches on config.shadow_enabled to shadow_preview_path. The runbook confirms this is the live preview router branch.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "evidence": [
+        "src/preview/config.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "rationale": "ENABLE_PREVIEW_V2 is parsed but is an alias that normalizes to ENABLE_SHADOW_PREVIEW. The runbook states it is accepted for legacy deploy manifests but is not a standalone runtime branch. It shares the same runtime branch as ENABLE_SHADOW_PREVIEW.",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "src/preview/runtime.py",
+      "evidence": [
+        "src/preview/config.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "rationale": "PREVIEW_FORCE_LEGACY is parsed and sets force_legacy_seen=True but does not affect runtime branching. The runtime.py preview_runtime_branch function only checks config.shadow_enabled, ignoring force_legacy_seen. The runbook confirms it is left in reporting and operator notes only.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ]
+}

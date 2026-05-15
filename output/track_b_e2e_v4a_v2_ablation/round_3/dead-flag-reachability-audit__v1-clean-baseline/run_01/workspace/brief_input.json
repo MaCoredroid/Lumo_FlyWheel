@@ -1,0 +1,77 @@
+{
+  "schema_version": "cnb55.flag_audit.v1",
+  "variant_id": "v1-clean-baseline",
+  "flags": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "status": "live",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": ["src/preview/config.py", "src/preview/runtime.py", "tests/test_shadow_preview_live.py"],
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag that controls the shadow preview feature. The parser reads it in load_preview_env, sets shadow_enabled to true, and the runtime branches to shadow_preview_path when enabled. This is confirmed by the test and runbook documentation."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "status": "partial",
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": ["src/preview/config.py", "tests/test_preview_v2_alias.py", "docs/preview_rollout_runbook.md"],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "ENABLE_PREVIEW_V2 is a legacy alias that normalizes to ENABLE_SHADOW_PREVIEW in the parser. It does not have a standalone runtime branch - it maps to the same shadow_preview_path. The runbook confirms it is accepted for legacy deploy manifests but is not a standalone runtime branch."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "status": "dead",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "evidence": ["src/preview/config.py", "src/preview/legacy.py", "tests/test_force_legacy_reporting_only.py"],
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "rationale": "PREVIEW_FORCE_LEGACY is parsed and tracked for reporting only. The parser sets force_legacy_seen but the runtime does not branch on it. The runbook confirms the live service does not branch on it anymore - it is left in reporting and operator notes only."
+    }
+  ],
+  "summary": {
+    "highest_operational_risk": "ENABLE_SHADOW_PREVIEW",
+    "note": "ENABLE_SHADOW_PREVIEW is the primary control for the live shadow preview feature. ENABLE_PREVIEW_V2 is a deprecated alias. PREVIEW_FORCE_LEGACY is dead - parser present but no runtime reachability."
+  },
+  "cleanup_plan": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "action": "keep",
+      "blockers": [],
+      "rationale": "Primary live flag - do not remove"
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "action": "deprecate",
+      "blockers": ["legacy deploy manifests"],
+      "rationale": "Legacy alias still needed for backward compatibility but should be deprecated in favor of ENABLE_SHADOW_PREVIEW"
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "docs_cleanup",
+      "blockers": [],
+      "rationale": "Parser symbol can be removed once reporting is migrated"
+    }
+  ],
+  "assumption_ledger": [
+    {
+      "status": "observed",
+      "topic": "parser_vs_runtime",
+      "note": "Parser presence does not imply runtime reachability"
+    },
+    {
+      "status": "observed",
+      "topic": "alias_behavior",
+      "note": "ENABLE_PREVIEW_V2 normalizes to ENABLE_SHADOW_PREVIEW"
+    },
+    {
+      "status": "missing",
+      "topic": "migration_timeline",
+      "note": "No timeline for removing legacy alias"
+    }
+  ]
+}
