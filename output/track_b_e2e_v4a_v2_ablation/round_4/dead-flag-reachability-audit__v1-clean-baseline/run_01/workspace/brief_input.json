@@ -1,0 +1,96 @@
+{
+  "schema_version": "cnb55.flag_audit.v1",
+  "variant_id": "v1-clean-baseline",
+  "flags": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "status": "live",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the primary live flag. Parser sets shadow_enabled=true and effective_mode=shadow. Runtime branches on config.shadow_enabled to shadow_preview_path. Test confirms branch changes. Runbook confirms this is the live preview router branch."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "status": "partial",
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "ENABLE_PREVIEW_V2 is a live alias, not a standalone flag. Parser accepts it for legacy deploy manifests and normalizes to the same shadow path as ENABLE_SHADOW_PREVIEW. Runbook explicitly states it is not a standalone runtime branch."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "status": "dead",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_force_legacy_reporting_only.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "PREVIEW_FORCE_LEGACY is dead - parser present but no runtime branching. Runbook explicitly states 'The live service does not branch on it anymore.' Test name 'test_force_legacy_flag_is_tracked_for_reporting_only' confirms it only sets force_legacy_seen for reporting/telemetry purposes. Runtime never checks this flag."
+    }
+  ],
+  "summary": {
+    "highest_operational_risk": "PREVIEW_FORCE_LEGACY",
+    "note": "PREVIEW_FORCE_LEGACY is a dead flag with parser presence but no runtime reachability. It may cause confusion for operators who see the flag in config but it has no effect on runtime behavior. ENABLE_PREVIEW_V2 is a live alias that should be documented clearly to avoid being mistaken as a standalone flag."
+  },
+  "cleanup_plan": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "action": "keep",
+      "blockers": [],
+      "rationale": "Primary live flag controlling preview rollout. Essential for runtime branching logic."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "action": "deprecate",
+      "blockers": ["legacy deploy manifests"],
+      "rationale": "Live alias for backward compatibility. Deprecate after legacy manifests migrate to ENABLE_SHADOW_PREVIEW."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "remove_after_migration",
+      "blockers": ["operator notes", "reporting dashboards"],
+      "rationale": "Dead flag with no runtime effect. Remove after migrating operator notes and telemetry dashboards to stop referencing it."
+    }
+  ],
+  "assumption_ledger": [
+    {
+      "status": "observed",
+      "topic": "ENABLE_SHADOW_PREVIEW live status",
+      "note": "Confirmed via config.py parser and runtime.py branch"
+    },
+    {
+      "status": "observed",
+      "topic": "ENABLE_PREVIEW_V2 alias status",
+      "note": "Confirmed via runbook and test naming"
+    },
+    {
+      "status": "observed",
+      "topic": "PREVIEW_FORCE_LEGACY dead status",
+      "note": "Runbook states live service does not branch on it"
+    },
+    {
+      "status": "missing",
+      "topic": "deploy manifest inventory",
+      "note": "No inventory of legacy manifests using ENABLE_PREVIEW_V2"
+    }
+  ]
+}
