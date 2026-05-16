@@ -1,0 +1,24 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55-hotfix",
+  "rollback_trigger": "If export API error rate exceeds 1% or legitimate nested exports fail validation.",
+  "impact_scope": "Only affects repo/export_api/storage.py _normalize_requested_path function; no changes to auth, routes, or other modules.",
+  "operator_verification_steps": [
+    "Confirm resolve_export_path rejects double-encoded traversal: %252e%252e%252fsecrets.csv",
+    "Confirm resolve_export_path rejects single-encoded traversal: ..%2fsecrets.csv",
+    "Confirm resolve_export_path rejects mixed-slash traversal: reports\\\\..\\\\..\\\\secrets.csv",
+    "Confirm resolve_export_path rejects absolute paths: /etc/passwd",
+    "Confirm resolve_export_path allows legitimate nested exports: reports/partner-billing/2026-04/export.csv",
+    "Run make test and verify all existing tests pass"
+  ],
+  "behavior_preservation_claims": [
+    {"sample_id": "REQ-legit-nested", "claim": "Nested exports under tenant root continue to work"},
+    {"sample_id": "REQ-encoded-dotdot", "claim": "Single-encoded traversal attempts remain blocked"},
+    {"sample_id": "REQ-double-encoded", "claim": "Multi-encoded traversal attempts now blocked"},
+    {"sample_id": "REQ-mixed-slash", "claim": "Mixed slash traversal attempts blocked"},
+    {"sample_id": "REQ-absolute", "claim": "Absolute paths remain blocked"},
+    {"sample_id": "REQ-drive-qualified", "claim": "Drive-qualified paths remain blocked"}
+  ],
+  "release_freeze_ack": "This hotfix addresses only the path traversal vulnerability in storage.py. JWT key rotation (SARIF-PY-AUTH-014, APPSEC-KEY-03) is explicitly deferred per appsec_review.md guidance.",
+  "incident_reference": "APPSEC-EXP-17, SARIF-PY-TRAVERSAL-001"
+}

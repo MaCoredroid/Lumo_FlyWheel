@@ -1,0 +1,41 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55",
+  "rollback_trigger": "Any regression in export functionality or increase in ExportPathViolation exceptions for legitimate paths",
+  "impact_scope": "Export API path resolution in repo/export_api/storage.py; affects all tenant export operations",
+  "operator_verification_steps": [
+    "Verify nested export paths still resolve correctly (e.g., reports/partner-billing/2026-04/export.csv)",
+    "Confirm encoded traversal attempts are rejected (e.g., ..%2fsecrets.csv)",
+    "Confirm double-encoded traversal attempts are rejected (e.g., %252e%252e%252fsecrets.csv)",
+    "Verify absolute paths are still blocked (e.g., /etc/passwd)",
+    "Run make test to ensure existing tests pass"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested export paths within tenant root remain allowed"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded parent traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal is blocked after recursive decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Mixed slash traversal attempts are blocked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path escapes are blocked"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Drive-qualified path escapes are blocked"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55-export-path-traversal",
+  "rollback_trigger": "Any regression in nested export paths or increase in 403 errors on legitimate tenant exports",
+  "impact_scope": "export_api/storage.py resolve_export_path function; affects all tenant export operations",
+  "operator_verification_steps": [
+    "Deploy hotfix to staging environment",
+    "Run test suite: make test",
+    "Verify REQ-legit-nested sample still resolves correctly",
+    "Verify REQ-encoded-dotdot, REQ-double-encoded, REQ-mixed-slash, REQ-absolute, REQ-drive-qualified are all rejected",
+    "Monitor 403 error rates for 15 minutes post-deploy",
+    "Promote to production if all checks pass"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested exports under tenant root remain functional"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded parent traversal is rejected"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal is rejected after iterative decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Mixed backslash/forward-slash traversal is rejected"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path escapes are rejected"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Drive-qualified path escapes are rejected"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}

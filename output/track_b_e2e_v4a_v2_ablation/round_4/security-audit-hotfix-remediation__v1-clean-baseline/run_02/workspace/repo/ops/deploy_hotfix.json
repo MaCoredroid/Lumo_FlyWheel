@@ -1,0 +1,47 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55-hotfix-export-traversal",
+  "rollback_trigger": "Any regression in export functionality or increase in 5xx errors on export endpoints",
+  "impact_scope": "export_api/storage.py: _normalize_requested_path now recursively decodes URL-encoded paths; resolve_export_path strengthened to reject parent directory segments",
+  "operator_verification_steps": [
+    "Verify existing nested exports still work: reports/partner-billing/2026-04/export.csv",
+    "Confirm double-encoded traversal blocked: %252e%252e%252fsecrets.csv",
+    "Confirm mixed-slash traversal blocked: reports\\..\\..\\secrets.csv",
+    "Confirm absolute path blocked: /etc/passwd",
+    "Run make test to validate all existing tests pass"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "expected": "allowed",
+      "claim": "Nested tenant exports under root remain functional"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "expected": "blocked",
+      "claim": "Single-encoded parent traversal is rejected"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "expected": "blocked",
+      "claim": "Double-encoded parent traversal is rejected after recursive decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "expected": "blocked",
+      "claim": "Backslash-based traversal is normalized and rejected"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "expected": "blocked",
+      "claim": "Absolute paths starting with / are rejected"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "expected": "blocked",
+      "claim": "Drive-qualified Windows paths are normalized and rejected"
+    }
+  ],
+  "release_freeze_ack": "This is a security hotfix for path traversal; freeze other changes until validation complete",
+  "incident_reference": "APPSEC-EXP-17 / SARIF-PY-TRAVERSAL-001"
+}
