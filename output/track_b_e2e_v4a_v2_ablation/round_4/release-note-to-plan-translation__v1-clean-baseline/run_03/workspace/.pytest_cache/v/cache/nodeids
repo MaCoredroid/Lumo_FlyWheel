@@ -1,0 +1,8 @@
+[
+  "tests/test_plan_brief.py::test_brief_files_exist",
+  "tests/test_plan_brief.py::test_dependency_notes_reference_known_steps",
+  "tests/test_plan_brief.py::test_first_milestone_matches_rank_1",
+  "tests/test_plan_brief.py::test_ordered_steps_are_contiguous",
+  "tests/test_plan_brief.py::test_primary_risk_and_assumptions_present",
+  "tests/test_plan_brief.py::test_variant_matches_marker"
+]
