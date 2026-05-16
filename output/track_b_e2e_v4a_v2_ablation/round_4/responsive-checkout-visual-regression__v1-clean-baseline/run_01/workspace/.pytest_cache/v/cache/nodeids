@@ -1,0 +1,7 @@
+[
+  "tests/e2e/test_checkout_desktop.py::test_desktop_checkout_still_uses_two_columns",
+  "tests/e2e/test_checkout_mobile.py::test_mobile_checkout_bar_has_zindex",
+  "tests/e2e/test_checkout_mobile.py::test_mobile_checkout_has_bottom_padding",
+  "tests/e2e/test_checkout_mobile.py::test_mobile_checkout_summary_sticky_without_negative_margin",
+  "tests/unit/test_checkout_copy.py::test_checkout_primary_cta_copy_is_present"
+]
