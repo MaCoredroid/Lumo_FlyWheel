@@ -1,0 +1,5 @@
+[
+  "services/api/tests/test_release_payloads.py::test_legacy_manual_review_normalizes",
+  "services/api/tests/test_release_payloads.py::test_release_gate_echo_uses_new_token",
+  "services/api/tests/test_release_payloads.py::test_release_gate_update_emits_new_token"
+]
