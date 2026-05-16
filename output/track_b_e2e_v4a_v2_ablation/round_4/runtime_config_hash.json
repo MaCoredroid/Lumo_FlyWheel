@@ -1,0 +1,35 @@
+{
+  "fields": {
+    "enforce_eager": false,
+    "git_hash": "unknown",
+    "gpu_memory_utilization": 0.9,
+    "kernel_runtime_activation": {
+      "activation_id": "03c2dca7a4aeb76d",
+      "env": {},
+      "kernel_selection": {},
+      "launch_args": [],
+      "resolved": {
+        "attention_backend": "vllm-auto",
+        "cuda_graph_capture": "vllm-default",
+        "deltanet_kernel": "vllm-auto",
+        "fp8_gemm_kernel": "vllm-auto",
+        "torch_compile_mode": "vllm-default"
+      },
+      "restart_required": false,
+      "supported": true,
+      "unsupported_knobs": []
+    },
+    "kv_cache_dtype": "auto",
+    "max_model_len": 131072,
+    "model_id": "qwen3.5-27b",
+    "quantization": "fp8",
+    "served_model_name": "qwen3.5-27b",
+    "tuned_config_id": "712fd011-4b16-4051-9e8c-875405b70f5b",
+    "vllm_version": "0.19.0",
+    "weight_version_id": "2e1b21350ce589fcaafbb3c7d7eac526a7aed582",
+    "wire_api": "responses"
+  },
+  "log_path": "/tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.5-27b.log",
+  "runtime_config_hash": "sha256:d74f4e581cb01dd9d837e75ebdd7897510ec91eb7178b92166ec0284584d172c",
+  "schema": "lumo.track_b.runtime_config_hash.v1"
+}

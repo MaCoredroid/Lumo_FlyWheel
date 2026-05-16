@@ -21,6 +21,12 @@ DEFERABLE_PREFLIGHT_CHECKS = {
     # is no longer realistic. Substrate-trust comes from §18 (11/11 active
     # tasks produced real artifacts); defer this check so the round can run.
     "codex_command_smoke",
+    # The all-off vanilla round (round_4) relaunches vLLM with no
+    # speculative_config, so vllm:spec_decode_* metrics are genuinely not
+    # exposed -- absence is correct, not a fault. Deferrable so that round
+    # can run; rounds with spec decode active still require it (it is only
+    # deferred when explicitly passed via --defer-preflight-checks).
+    "spec_decode_metrics_exposed",
 }
 
 
