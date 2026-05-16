@@ -1,0 +1,56 @@
+{
+  "ranked_findings": [
+    {
+      "title": "Guardrail bypass caused duplicate refunds",
+      "confidence": "high",
+      "description": "The idempotency-required guardrail was skipped due to legacy_batch_header, allowing bulk-refund requests without idempotency keys to be processed",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: guardrail=idempotency-required decision=skipped reason=legacy_batch_header",
+        "corpus/timeline/incident_timeline.md: idempotency-required guardrail skipped due to legacy_batch_header",
+        "corpus/tickets/TICKET-8729.md: every duplicate has request_class=bulk-refund and no idempotency key"
+      ]
+    },
+    {
+      "title": "Bulk-refund requests accepted without idempotency keys",
+      "confidence": "high",
+      "description": "At 10:17 UTC, bulk-refund requests were accepted with missing idempotency keys",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: request_class=bulk-refund idempotency_key=missing status=accepted",
+        "corpus/timeline/incident_timeline.md: bulk refund requests accepted without idempotency keys"
+      ]
+    },
+    {
+      "title": "Duplicate refunds affected enterprise accounts",
+      "confidence": "medium",
+      "description": "Three enterprise accounts received duplicate refunds",
+      "evidence": [
+        "corpus/tickets/TICKET-8721.md: duplicate refunds observed for three enterprise accounts",
+        "corpus/timeline/incident_timeline.md: duplicate refunds reported"
+      ]
+    }
+  ],
+  "unresolved_ambiguity": {
+    "description": "Initial theory of queue worker replay vs. actual cause (missing idempotency validation)",
+    "initial_theory": "Queue worker replayed old payment event after timeout",
+    "clarified_cause": "Missing idempotency key validation due to guardrail bypass",
+    "status": "clarified"
+  },
+  "incident_id": "INC-2047",
+  "triggering_condition": {
+    "description": "Bulk-refund requests accepted without idempotency keys",
+    "timestamp": "2026-05-01T10:17:00Z"
+  },
+  "failed_guardrail": {
+    "name": "idempotency-required",
+    "decision": "skipped",
+    "reason": "legacy_batch_header",
+    "timestamp": "2026-05-01T10:18:02Z"
+  },
+  "follow_up_action": {
+    "priority": "highest",
+    "actions": [
+      "Reject bulk-refund requests without idempotency key",
+      "Remove legacy_batch_header bypass before re-enabling endpoint"
+    ]
+  }
+}

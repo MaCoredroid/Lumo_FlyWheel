@@ -1,0 +1,20 @@
+{
+  "ranked_findings": [
+    {
+      "finding": "Bulk-refund requests accepted without idempotency keys due to legacy_batch_header bypass",
+      "confidence": "high",
+      "evidence": ["corpus/timeline/incident_timeline.md", "corpus/tickets/TICKET-8729.md"]
+    },
+    {
+      "finding": "Idempotency-required guardrail was skipped at 10:18 UTC",
+      "confidence": "high",
+      "evidence": ["corpus/timeline/incident_timeline.md"]
+    },
+    {
+      "finding": "Duplicate refunds affected three enterprise accounts",
+      "confidence": "high",
+      "evidence": ["corpus/tickets/TICKET-8721.md", "corpus/tickets/TICKET-8729.md"]
+    }
+  ],
+  "unresolved_ambiguity": "Initial queue worker replay theory (TICKET-8721) was opened before API gateway logs were available; evidence from TICKET-8729 supersedes this theory"
+}
