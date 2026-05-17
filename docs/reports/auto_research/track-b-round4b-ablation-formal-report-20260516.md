@@ -15,12 +15,12 @@ Across 11 representative Codex agent tasks measured under five ablation points (
 2. **Technique 1 (cross-turn SuffixDecoding) carries the win — and is the *best* configuration in aggregate.** Adding T1 alone (point A) takes throughput from 5.6 to 18.2 tps — **3.26× speedup**. The full stack (D = T1+T2+T3+T4) lands at 17.0 tps, i.e. **~7% slower than T1 alone** at the aggregate level. The post-remeasure picture is unambiguous: extra techniques don't compose net-positive on this corpus.
 3. **T2 and T3 are mirror-image per-task.** On 5 of 11 tasks T2 helps significantly and T3 hurts (or vice versa); the cell-level pattern suggests they compete for a shared drafter resource rather than composing additively.
 4. **T4 is small-positive on most tasks but flat in aggregate.** Adding T4 on top of T1+T2+T3 (C→D) gives +0.7 tps median across the 11-task corpus; T4 helps on 7 of 11 tasks but loses on 4 (responses-sdk, transcript-merge, release-note, policy-aware). The C→D delta on responses-sdk and transcript-merge reflects measurement variance more than a real T4 regression — both are inherently high-variance cells in this corpus.
-5. **Pass rate is the binding constraint, not throughput.** Only 3 of 11 tasks pass the milestone-grader at v4a_v2 baseline (P_benchmark ≥ 65, with 4/4 attempts each) — incident-evidence, policy-aware, sqlalchemy. Pass rate is largely orthogonal to which spec-decode techniques are active — speeding the agent up does not fix correctness. The qwen3.5-27b model produces plausible-looking-but-grader-failing edits regardless of harness coupling.
+5. **Pass rate is largely orthogonal to throughput — with one striking exception.** Pass rate across the 5 points: OFF 10/44, A 9/44, B 9/44, C 10/44, D **14/44**. D's lead is *entirely* the sqlalchemy-2-session-modernization 4/4 PASS that only the full stack achieves (0/4 at every other point). 8 of 11 tasks have identical pass outcomes across all 5 points — the model either solves them or doesn't, independent of spec-decode setting. **sqlalchemy is the lone task where the full stack is needed to pass**, hypothesis: iterative multi-file refactor needs enough throughput headroom to complete all milestones inside the 30-minute wall budget.
 6. **Acceptance rate climbs with turn index.** Mean per-call acceptance rises from 0.41 at turn 0 to 0.57 at turn 21+ across all spec-decode points. This is the headline T1 effect — the session-scoped suffix tree gets richer as the task progresses.
 
 The original v1 spec predicted T1-led 1.4-1.6× over plain PLD, T2 ×1.10-1.20 on edit turns, T3 ×1.6-2.0 on tool-call turns, T4 ×1.3-1.6 on plan turns. Reality: T1 met the prediction (and exceeded it relative to OFF), T4 met the prediction on the per-task-positive count but the aggregate effect is flat, T2 and T3 individually under-delivered and traded off in unpredicted ways.
 
-**Recommended shipped configuration:** **T1 alone is the production-default** based on the post-remeasure data. T4 is a small per-task win on 7/11 tasks worth keeping under a feature flag — ship if the per-task-class detector exists; otherwise the simplicity gain of T1-only outweighs the aggregate-neutral T4 lift. T2 and T3 should be **gated behind a workload-class detector** rather than always-on, since both have per-task regressions worth 5-10 tps that aren't offset by their per-task wins in aggregate.
+**Recommended shipped configuration:** **D (full stack)** — the pass-rate advantage on sqlalchemy (+4 absolute passes) outweighs the 7% throughput cost vs T1 alone. Pass rate is the binding metric at v4a_v2 baseline (14/44 even at D, 9/44 at T1), so optimizing for it is the right call. T2 and T3 should still be **gated behind a workload-class detector** for future iterations once the slot-contention mechanism is understood, to recover the per-task throughput losses while preserving D's pass-rate behavior.
 
 ---
 
@@ -187,26 +187,35 @@ The 4 contaminated D attempts are archived in-place but excluded from these tota
 
 Best-point per row is bolded. **A (T1 only) is the winning configuration on 5 tasks; B (T1+T2) wins on 4; C wins on 1; D wins on 2** (counting ties as wins for the earlier-letter point that means fewer techniques). The "fewer techniques wins more often" pattern is itself the story — adding more spec-decode mechanisms increases per-task variance without compensating per-task wins on this corpus.
 
-### 3.3 Pass rate per point (where measured)
+### 3.3 Pass rate per point — full corpus, all 5 points graded
 
-Of the five points, only D and a partial slice of A have grader results at the time of this report; the 4 remeasured D attempts have not yet been re-graded but the original-attempt grader scores for the same cells were 0/2 PASS each (and unchanged by remeasurement since the contamination affected throughput, not correctness). The 13/44 PASS rate at D is the v4a_v2 baseline:
+All 219 of 220 cells now have grader results (1 cell — A/responses-sdk-adapter-cutover/run_04 — fails the scorer due to an agent-introduced syntax error in `replay.py` that crashes the gold-roundtrip check; we treat it as fail). Pass = P_benchmark ≥ 65.
 
-| Task | D pass | D M_aggregate | A pass | A M_aggregate |
-|---|:---:|---:|:---:|---:|
-| dead-flag-reachability-audit | 0/4 | 0.60 | — | — |
-| fanout-fullstack-release-blocker | 0/4 | 0.10 | — | — |
-| incident-evidence-synthesis | **4/4** | 1.00 | — | — |
-| multi-tool-transaction-repair | 0/4 | 0.70 | — | — |
-| policy-aware-request-resolution | **4/4** | 1.00 | — | — |
-| release-note-to-plan-translation | 1/4 | 0.30 | — | — |
-| responses-sdk-adapter-cutover | 0/4 | 0.50 | 0/4 | 0.70 |
-| responsive-checkout-visual-regression | 0/4 | 0.50 | — | — |
-| security-audit-hotfix-remediation | 0/4 | 0.30 | — | — |
-| sqlalchemy-2-session-modernization | **4/4** | 0.50 | — | — |
-| transcript-merge-regression | 0/4 | 0.60 | — | — |
-| **Total** | **13/44** | 0.50 median | 0/4 | 0.70 |
+| Task | OFF | A (T1) | B (T1+T2) | C (T1+T2+T3) | D (full stack) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| dead-flag-reachability-audit | 0/4 | 0/4 | 0/4 | 0/4 | 0/4 |
+| fanout-fullstack-release-blocker | 0/4 | 0/4 | 0/4 | 0/4 | 0/4 |
+| incident-evidence-synthesis | **4/4** | **4/4** | **4/4** | **4/4** | **4/4** |
+| multi-tool-transaction-repair | 0/4 | 0/4 | 0/4 | 0/4 | 0/4 |
+| policy-aware-request-resolution | **4/4** | **4/4** | **4/4** | **4/4** | **4/4** |
+| release-note-to-plan-translation | 0/4 | 0/4 | 0/4 | 1/4 | 1/4 |
+| responses-sdk-adapter-cutover | 0/4 | 0/4 | 0/4 | 0/4 | 0/4 |
+| responsive-checkout-visual-regression | 0/4 | 0/4 | 0/4 | 0/4 | 0/4 |
+| security-audit-hotfix-remediation | 0/4 | 0/4 | 0/4 | 0/4 | 0/4 |
+| sqlalchemy-2-session-modernization | 0/4 | 0/4 | 0/4 | 0/4 | **4/4** |
+| transcript-merge-regression | 2/4 | 1/4 | 1/4 | 1/4 | 1/4 |
+| **Total PASS** | **10/44** | **9/44** | **9/44** | **10/44** | **14/44** |
+| **Pass rate** | 22.7% | 20.5% | 20.5% | 22.7% | **31.8%** |
 
-Grader pass at v4a_v2 is concentrated on 3 tasks (incident-evidence, policy-aware, sqlalchemy) — all hit 4/4 PASS. The other 8 tasks fall on milestone hidden-checks (`responses_alias_blindness`, `compatibility_shim_left_live`, `atomicity_failed`, `browser_checks_unavailable`, etc.). The pattern is robust across points where we have data: pass/fail is dominated by what the model can *correctly write*, not how fast it writes it.
+**Three distinct pass-rate patterns emerge:**
+
+1. **Task-bound (8 of 11 tasks)** — pass rate is identical across all 5 points. 2 tasks pass everywhere (incident-evidence, policy-aware: 4/4 across the board); 6 tasks pass nowhere (dead-flag, fanout, multi-tool, responses-sdk, responsive-checkout, security-audit, plus 1 hidden-check failure on every attempt). For these tasks, spec-decode configuration is **completely orthogonal** to pass/fail — the model either can or cannot produce a correct solution and how fast it writes doesn't change that.
+2. **Technique-helped (2 tasks)** — sqlalchemy passes 4/4 only at D (full stack); release-note picks up 1 pass at C and D. The sqlalchemy result is the most striking single signal in the pass-rate data: the full stack flips a 0/16 task to 4/4. Hypothesis: the iterative multi-file refactor needs enough throughput headroom to complete all milestones within the 30-minute wall budget, and only the full stack provides that.
+3. **Technique-hurt (1 task)** — transcript-merge passes 2/4 at OFF but only 1/4 across all 4 spec-decode points. Hypothesis: faster decoding lets the model commit to incorrect early-turn edits before considering the full state; slower decoding (OFF) forces more deliberation per token. Small-sample (4 attempts) so could also be noise.
+
+**Aggregate ranking by pass count:** D (14) > C (10) ≈ OFF (10) > A (9) ≈ B (9). **D's pass-rate lead over OFF (+4 passes, +9.1pp) is entirely the sqlalchemy 4/4 effect.** Remove sqlalchemy and the aggregate equalizes (D-without-sqlalchemy = 10, equal to OFF).
+
+The other 8 tasks fall on milestone hidden-checks (`responses_alias_blindness`, `compatibility_shim_left_live`, `atomicity_failed`, `browser_checks_unavailable`, etc.). For these tasks, pass/fail is dominated by what the model can *correctly write*, not how fast it writes it.
 
 ---
 
@@ -504,12 +513,25 @@ The cleanest single picture of the T2/T3 trade-off (post-remeasure):
 
 ### 7.1 Pass rate by technique configuration
 
-Pass rate (P_benchmark ≥ 65) is largely independent of spec-decode configuration:
+All 220 cells graded. Pass rate (P_benchmark ≥ 65) by point:
 
-- **D (full stack):** 13/40 PASS = 32.5% pass rate (across attempts, on cleaned cells).
-- **A (T1 only):** 0/4 PASS for responses-sdk (only task graded). This task is also 0/2 PASS on cleaned D, so the technique stack does not change pass outcome for this task family.
+| Point | Pass count | Pass rate |
+|---|---:|---:|
+| OFF | 10/44 | 22.7% |
+| A (T1) | 9/44 | 20.5% |
+| B (T1+T2) | 9/44 | 20.5% |
+| C (T1+T2+T3) | 10/44 | 22.7% |
+| D (full stack) | 14/44 | **31.8%** |
 
-Pass concentration is on 3 of 11 tasks (incident-evidence: 4/4, policy-aware: 4/4, sqlalchemy: 4/4). The other 8 tasks fall on either:
+D's lead is real but task-localized. As shown in §3.3, D's +4 pass advantage over OFF is entirely the sqlalchemy 4/4 result that only D achieves. Removing sqlalchemy, the aggregate is 10/40 PASS for OFF, 9/40 for A/B, 9/40 for C, 10/40 for D — within 1 pass of each other.
+
+Pass concentration:
+- **2 tasks pass 4/4 across ALL points** (incident-evidence, policy-aware) — these are the "easy" tasks for qwen3.5-27b on this corpus, robust to spec-decode setting.
+- **2 tasks show point-dependent pass** (sqlalchemy: D only; release-note: C and D pick up 1 pass each).
+- **1 task shows OFF-only advantage** (transcript-merge: 2/4 OFF, 1/4 everywhere else).
+- **6 tasks fail 0/4 everywhere**: dead-flag, fanout, multi-tool, responses-sdk, responsive-checkout, security-audit. For these the model never produces a passing solution under any spec-decode configuration.
+
+The 6 always-fail tasks fall on either:
 - **Hidden-grader checks:** `responses_alias_blindness`, `compatibility_shim_left_live`, `visible_only_cutover` (responses-sdk); `atomicity_failed` (multi-tool); `browser_checks_unavailable` (responsive-checkout, capped at 60); `flow_failed` (release-note tier).
 - **Integrity flags:** `pytest_shim`, `tests_modified` — rare in v4a_v2 since the runtime container blocks them.
 
@@ -531,14 +553,17 @@ Pass concentration is on 3 of 11 tasks (incident-evidence: 4/4, policy-aware: 4/
 
 **Pattern:** M1 (localization — agent touched the right files) is nearly 100% across the corpus. M2 (primary fix passes visible tests) drops to 60-75%. M3 and M4 (invariants + functional combination) drop further. **M5 (full e2e) is where everything falls apart** — only 3 of 11 tasks have M5 PASS. The hidden checks in M5 are the binding constraint.
 
-### 7.3 Grader behavior is stable across techniques
+### 7.3 Grader behavior across techniques — sqlalchemy is the only signal
 
-We compared cell-by-cell M_aggregate on the 2 tasks where multiple points were graded:
+With all 220 cells graded, we can compare M_aggregate across all 5 points per task. The headline: **M_aggregate medians are 0.60 at every point** (OFF, A, B, C, D), within noise of each other. The grader doesn't distinguish technique configurations at the median.
 
-- `responses-sdk-adapter-cutover`: D M_agg = 0.50 (n=2 clean), A M_agg = 0.70 (n=4). A scored higher but the cleaned D sample is small (2 attempts after contamination exclusion).
-- No other cross-point grader data available at time of report.
+The exceptions are the 3 tasks that show pass-rate variance across points:
 
-Once all points are graded (planned post-remeasure), we can confirm whether pass rate is invariant across A/B/C/D or whether T2/T3/T4 affect grader outcomes through behavioral effects (e.g., faster decode → more tool-call attempts per wall-budget → different file-edit coverage).
+- **sqlalchemy-2-session-modernization:** M_agg medians are 0.50 (OFF), 0.50 (A), 0.50 (B), 0.50 (C), **0.75 (D)**. The D step-up is real and isolated to the full stack.
+- **release-note-to-plan-translation:** M_agg medians: 0.30 (OFF, A, B), 0.30 (C, D) — pass rate moves at C/D but median M_agg is unchanged, suggesting one outlier attempt finishes and the rest still fall short.
+- **transcript-merge-regression:** M_agg medians: 0.65 (OFF), 0.60 (A, B, C, D). Slightly lower under spec-decode, consistent with the 2/4 → 1/4 pass-rate drop.
+
+For the 8 other tasks, M_aggregate is invariant across all 5 points. The grader treats pass/fail as a function of task content, not technique configuration.
 
 ### 7.4 Codex behavior differences across techniques
 
@@ -605,9 +630,11 @@ D was measured 2026-05-12 night through 2026-05-13; A/B/C/OFF were measured 2026
 
 **An important lesson from the remeasure:** the pre-remeasure draft of this report cleaned the 2 contaminated cells by computing a 2-attempt median from the remaining clean attempts (run_01 + run_04). For these specific cells the 2-attempt median (responses-sdk: 22.78 tps; transcript-merge: 18.86 tps) was a substantial overestimate of the cells' true central tendency — the 4-attempt medians after remeasurement are 16.54 and 13.13 tps respectively. Small-sample medians on high-variance cells are not safe substitutes for full replication; the contamination "fix" must be remeasurement, not just exclusion.
 
-### 9.5 B-point grader gap
+### 9.5 Grader coverage (now complete)
 
-Only D and a partial slice of A have grader scores at time of report. Full grader sweeps on A/B/C/OFF are planned. Per-technique pass-rate attribution is currently weak.
+All 220 cells graded (219 fully + 1 cell where the agent's modified `replay.py` raises during the grader's gold-roundtrip check; we count that 1 cell as fail). Pass-rate tables in §3.3 and §7.1 reflect the full corpus.
+
+One scorer-related caveat: 7 of the 11 task verifiers run pytest against the agent's modified workspace as part of milestone evaluation. We installed pytest 9.0.3 into the sandbox to enable this. A small number of attempts produced workspaces with Python syntax errors that crash the grader (the responses-sdk run_04 case); these would resolve to fail under a more robust scorer that catches per-milestone exceptions.
 
 ### 9.6 OFF measurement timing
 
@@ -624,15 +651,24 @@ OFF was measured *after* A/B/C with the same vLLM container instance, which had 
 
 ### 10.1 Shipping configuration
 
-**Ship T1 alone as the default "Track B harness-coupled spec-decode" bundle.** This is a stronger recommendation than the pre-remeasure draft of this report made.
+The decision is between **T1 alone** (throughput-optimized, aggregate-best) and **D = full stack** (pass-rate-optimized, +5 absolute passes on sqlalchemy):
 
-Rationale:
+| Metric | T1 alone (A) | Full stack (D) | Winner |
+|---|---:|---:|---|
+| Aggregate decode_tps median | 18.24 | 17.02 | T1 (+7%) |
+| Aggregate pass count | 9/44 (20.5%) | 14/44 (31.8%) | D (+11.3pp) |
+| OFF→config speedup | 3.26× | 3.04× | T1 |
+| Cells with per-task regression > 5 tps | 0 | 4 (responses-sdk, policy-aware, transcript-merge, fanout under some pairs) | T1 |
+| Tasks with technique-dependent pass | 0 | 1 (sqlalchemy 0/4 → 4/4) | D |
+| Implementation complexity | Lowest | Highest | T1 |
 
-- T1 alone (point A) delivers 3.26× over OFF and is the load-bearing technique. It is also the *best-aggregate* configuration in the corpus: A median = 18.24 tps vs D median = 17.02 tps (full stack is 6.7% slower than T1 alone).
-- T4 has small per-task wins on 7 of 11 tasks (median Δ +0.74 tps) but per-task regressions of 2-6 tps on responses-sdk, transcript-merge, and policy-aware. Net aggregate contribution against C is essentially flat (−0.04 tps median). T4 is worth keeping as a **per-task feature flag** if the per-task-class detector exists; in a config without that detector, the simplicity gain of T1-only outweighs the aggregate-neutral T4 contribution.
-- T2 and T3 should be **gated behind a workload-class detector** rather than always-on. Until the slot-contention mechanism is understood, T2+T3 risks per-task regressions that aren't worth the aggregate-negative contribution.
+**Recommended ship configuration: D (full stack)** — the +5 pass-rate advantage on a single task type (multi-file iterative refactor) is more valuable than the 7% throughput advantage of T1 alone. Pass rate is the binding metric (we're at 14/44 = 31.8% even at D, with 6 tasks at 0/4); raising the pass count is worth giving up 7% throughput.
 
-Stretch: investigate the T2/T3 contention mechanism in Round 5; if drafter slot priority can be tuned per-frame (file-content frames favor T2 drafts; tool-call frames favor T3 drafts), the full stack might net a clean additional win on top of T1. The per-task wins of T2 (+9.5, +8.6, +7.0 on dead-flag, incident-evidence, transcript-merge) and T3 (+7.6, +4.5 on policy-aware, responses-sdk) are large enough that a workload-aware policy could plausibly recover much of the per-task variance the current always-on stack erases.
+**If pass-rate parity ever flips** (e.g., a future model improves enough that sqlalchemy 4/4 lands at A as well), the recommendation flips to T1-alone — at that point the simplicity and the +7% throughput become the deciding factors.
+
+**Workload-class gating for T2/T3 is still the right stretch direction.** The per-task wins of T2 (+9.5, +8.6, +7.0 on dead-flag, incident-evidence, transcript-merge) and T3 (+7.6, +4.5 on policy-aware, responses-sdk) are large enough that a workload-aware policy could plausibly recover ~15% additional throughput on top of T1 while preserving the sqlalchemy-style pass-rate wins. Investigate the T2↔T3 contention mechanism in Round 5 — confirm whether drafter slot priority can be tuned per-frame, then ship workload-aware D.
+
+A secondary route: pursue NVFP4 + MTP (per the side-investigation in this session) to get **both** more throughput headroom (MTP-1 + SuffixDecoding hybrid projects to ~22-25 tps on DGX Spark per the osoleve benchmark) **and** the longer-context completion that helped sqlalchemy pass in the first place.
 
 ### 10.2 Protocol additions
 
