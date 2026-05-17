@@ -9,431 +9,566 @@
 <meta property="og:description" content="220-cell ablation. 3.04× decode speedup on Qwen 3.5-27B / DGX Spark. T1 carries the win; T2 & T3 mirror each other.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Tinos:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --cream: #F1ECE2;
-    --cream-2: #ECE5D6;
-    --paper: #FBF8F1;
-    --ink: #1F1B16;
-    --ink-2: #3A332B;
-    --muted: #6F665A;
-    --rule: #C9BFA8;
-    --rule-soft: #DCD3BD;
-    --accent: #B85C2C;     /* terracotta */
-    --accent-2: #8E4F2A;
-    --accent-soft: #E9D7C2;
-    --green: #4F6B3A;
-    --red: #A33C2C;
-    --blue: #3C5A78;
-    --serif-body: "Lora", "Charter", "Iowan Old Style", Georgia, serif;
-    --serif-heading: "Tinos", "Source Serif Pro", "Georgia", serif;
-    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --bg:        #fafaf7;
+    --paper:     #ffffff;
+    --panel:     #f4f3ee;
+    --ink:       #161513;
+    --ink-2:     #2c2a26;
+    --ink-3:     #4a4742;
+    --muted:     #76726b;
+    --muted-2:   #a09c93;
+    --rule:      #e4e1d8;
+    --rule-2:    #d4d0c4;
+    --accent:    #2f6f4f;   /* forest green */
+    --accent-2:  #1f4e37;   /* deeper green */
+    --accent-soft: #e3eee7;
+    --warm:      #b8651f;   /* warm copper for highlights */
+    --danger:    #b03a2e;
+    --info:      #3b5b8c;
+
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-display: "Fraunces", "Source Serif Pro", Georgia, serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
+
   * { box-sizing: border-box; }
-  html, body { background: var(--cream); color: var(--ink); }
+  html, body { background: var(--bg); color: var(--ink); }
+  html { scroll-behavior: smooth; }
   body {
-    font-family: var(--serif-body);
-    font-size: 17px;
-    line-height: 1.62;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.65;
     margin: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    color: var(--ink-2);
   }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 56px 28px 96px; }
-  header.masthead { border-bottom: 1px solid var(--rule); padding-bottom: 28px; margin-bottom: 36px; }
-  .eyebrow {
-    font-family: var(--serif-heading);
-    font-size: 12.5px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
+  ::selection { background: rgba(47, 111, 79, 0.18); }
+
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 64px 28px 96px;
+  }
+
+  /* ── Header ── */
+  .top-strip {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 28px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--rule);
+    display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .top-strip .left { display: flex; align-items: center; gap: 10px; }
+  .top-strip .chip {
+    display: inline-block;
     color: var(--accent-2);
-    margin-bottom: 14px;
+    background: var(--accent-soft);
+    border: 1px solid #c8dccf;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.02em;
   }
+  .top-strip .sep { color: var(--rule-2); }
+  .top-strip a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+  .top-strip a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+  header.masthead { margin-bottom: 8px; }
   h1.title {
-    font-family: var(--serif-heading);
-    font-weight: 700;
-    font-size: 38px;
-    line-height: 1.18;
-    letter-spacing: -0.01em;
-    margin: 0 0 14px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 42px;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+    margin: 0 0 18px;
     color: var(--ink);
+    font-optical-sizing: auto;
   }
   .subtitle {
-    font-family: var(--serif-heading);
+    font-family: var(--font-display);
+    font-weight: 500;
     font-style: italic;
-    font-size: 19px;
-    color: var(--ink-2);
-    margin: 0 0 20px;
+    font-size: 21px;
+    color: var(--ink-3);
+    margin: 0 0 26px;
     line-height: 1.4;
-  }
-  .byline {
-    font-size: 14.5px;
-    color: var(--muted);
-  }
-  .byline a { color: var(--accent-2); text-decoration: none; border-bottom: 1px dotted var(--accent-2); }
-  .byline a:hover { color: var(--accent); }
-  h2 {
-    font-family: var(--serif-heading);
-    font-weight: 700;
-    font-size: 26px;
-    margin: 56px 0 12px;
-    color: var(--ink);
+    max-width: 64ch;
     letter-spacing: -0.005em;
   }
+  .byline {
+    font-size: 14px;
+    color: var(--muted);
+    display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center;
+  }
+  .byline strong { color: var(--ink); font-weight: 600; }
+  .byline a { color: var(--accent-2); text-decoration: none; border-bottom: 1px solid transparent; }
+  .byline a:hover { border-bottom-color: var(--accent); }
+  .byline .sep { color: var(--rule-2); }
+
+  /* ── Type ── */
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 28px;
+    margin: 64px 0 16px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    display: flex; align-items: baseline; gap: 14px;
+  }
   h2 .num {
-    color: var(--accent);
-    font-weight: 400;
-    margin-right: 12px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--muted);
+    background: transparent;
+    border-bottom: 1px solid var(--rule-2);
+    padding: 0 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
   }
   h3 {
-    font-family: var(--serif-heading);
-    font-weight: 700;
+    font-family: var(--font-display);
+    font-weight: 600;
     font-size: 18.5px;
-    margin: 32px 0 6px;
-    color: var(--ink-2);
+    margin: 36px 0 8px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
   }
-  p { margin: 0 0 14px; }
-  p.lede {
-    font-size: 19px;
-    color: var(--ink-2);
-    line-height: 1.55;
-  }
-  strong { color: var(--ink); }
-  em { color: var(--ink-2); }
-  code, kbd, .mono {
-    font-family: var(--mono);
+
+  p { margin: 0 0 16px; color: var(--ink-2); }
+  p.lede { font-size: 19px; color: var(--ink); line-height: 1.55; max-width: 60ch; }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: var(--ink-2); font-style: italic; }
+
+  a { color: var(--accent-2); text-decoration: none; border-bottom: 1px solid rgba(47, 111, 79, 0.25); transition: border-color .15s, color .15s; }
+  a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+  code, .mono {
+    font-family: var(--font-mono);
     font-size: 0.86em;
-    background: var(--cream-2);
-    padding: 1px 5px;
+    background: var(--panel);
+    color: var(--ink-2);
+    padding: 1.5px 6px;
     border-radius: 3px;
+    border: 1px solid var(--rule);
   }
   pre {
     background: var(--paper);
     border: 1px solid var(--rule);
-    border-radius: 4px;
-    padding: 14px 16px;
+    border-radius: 6px;
+    padding: 14px 18px;
     overflow-x: auto;
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 13px;
-    line-height: 1.55;
+    line-height: 1.7;
+    color: var(--ink-2);
+    margin: 14px 0 22px;
   }
-  pre code { background: transparent; padding: 0; }
-  a { color: var(--accent-2); }
-  hr { border: 0; border-top: 1px solid var(--rule-soft); margin: 32px 0; }
+  pre code { background: transparent; padding: 0; border: 0; color: var(--ink-2); }
+  pre .com { color: var(--muted); font-style: italic; }
 
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 36px 0; }
+
+  /* ── TL;DR card ── */
   .tldr {
     background: var(--paper);
     border: 1px solid var(--rule);
     border-left: 3px solid var(--accent);
-    padding: 24px 26px 14px;
-    margin: 12px 0 36px;
-    border-radius: 2px;
+    border-radius: 4px;
+    padding: 26px 28px 18px;
+    margin: 28px 0 36px;
+    position: relative;
   }
-  .tldr h3 {
-    font-size: 13px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--accent-2);
-    margin: 0 0 14px;
-    font-family: var(--serif-heading);
-    font-weight: 700;
-  }
-  .tldr p { font-size: 16.5px; }
-  .tldr ul { margin: 0 0 14px 0; padding-left: 22px; }
-  .tldr li { margin-bottom: 8px; }
-
-  .kpi-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    margin: 24px 0 8px;
-  }
-  .kpi {
-    background: var(--paper);
-    border: 1px solid var(--rule);
-    padding: 14px 16px 12px;
-    border-radius: 3px;
-  }
-  .kpi .v {
-    font-family: var(--serif-heading);
-    font-weight: 700;
-    font-size: 26px;
-    color: var(--accent);
-    line-height: 1.15;
-    letter-spacing: -0.01em;
-  }
-  .kpi .l {
-    font-size: 12.5px;
-    color: var(--muted);
-    letter-spacing: 0.02em;
-    margin-top: 4px;
-  }
-  @media (max-width: 720px) {
-    .kpi-row { grid-template-columns: repeat(2, 1fr); }
-    h1.title { font-size: 30px; }
-    .wrap { padding: 36px 20px 64px; }
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 18px 0 8px;
-    font-size: 14.5px;
-    font-feature-settings: "tnum" 1;
-  }
-  th, td {
-    padding: 7px 10px;
-    text-align: left;
-    border-bottom: 1px solid var(--rule-soft);
-  }
-  th {
-    font-family: var(--serif-heading);
-    font-weight: 700;
-    font-size: 13px;
-    color: var(--ink-2);
-    border-bottom: 1px solid var(--ink-2);
-    background: transparent;
-  }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tr:hover td { background: rgba(184, 92, 44, 0.04); }
-  .bold-row td { font-weight: 600; background: var(--cream-2) !important; }
-  .win { color: var(--green); font-weight: 600; }
-  .lose { color: var(--red); font-weight: 600; }
-  .meh { color: var(--muted); }
-
-  .chart-wrap {
-    background: var(--paper);
-    border: 1px solid var(--rule);
-    border-radius: 3px;
-    padding: 18px 20px 14px;
-    margin: 22px 0 8px;
-  }
-  .chart-wrap .cap {
-    font-family: var(--serif-heading);
-    font-style: italic;
-    font-size: 13.5px;
-    color: var(--muted);
-    margin-top: 8px;
-    line-height: 1.45;
-  }
-
-  figure { margin: 24px 0; }
-  figcaption {
-    font-family: var(--serif-heading);
-    font-style: italic;
-    font-size: 13.5px;
-    color: var(--muted);
-    margin-top: 8px;
-  }
-
-  .pull {
-    border-left: 3px solid var(--accent);
-    padding: 6px 0 6px 18px;
-    margin: 18px 0;
-    font-family: var(--serif-heading);
-    font-style: italic;
-    color: var(--ink-2);
-    font-size: 18px;
-    line-height: 1.45;
-  }
-
-  ul.tight, ol.tight { margin: 0 0 14px 0; padding-left: 22px; }
-  ul.tight li, ol.tight li { margin-bottom: 6px; }
-
-  .tag {
-    display: inline-block;
-    font-family: var(--serif-heading);
+  .tldr-label {
+    font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--accent-2);
-    border: 1px solid var(--accent-soft);
-    background: var(--cream-2);
-    padding: 2px 8px;
-    border-radius: 999px;
-    margin-right: 6px;
-    vertical-align: middle;
+    font-weight: 600;
+    margin-bottom: 12px;
   }
+  .tldr p.lede { margin: 0 0 18px; max-width: none; }
+  .tldr ul { margin: 16px 0 4px 0; padding-left: 22px; }
+  .tldr ul li { margin-bottom: 10px; color: var(--ink-2); }
+  .tldr ul li::marker { color: var(--accent); }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 20px 0 6px;
+  }
+  .kpi {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 14px 16px 12px;
+  }
+  .kpi .v {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 28px;
+    color: var(--accent-2);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi .l {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  @media (max-width: 720px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    h1.title { font-size: 32px; }
+    .subtitle { font-size: 18px; }
+    .wrap { padding: 36px 18px 64px; }
+    .masthead { padding: 0; }
+    h2 { font-size: 23px; }
+  }
+
+  /* ── Pills under masthead ── */
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 24px 0 8px; }
+  .pill {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    padding: 3px 9px;
+    border-radius: 999px;
+  }
+
+  /* ── TOC ── */
+  .toc {
+    border-left: 2px solid var(--rule);
+    padding: 6px 0 6px 18px;
+    margin: 36px 0 20px;
+    font-size: 14px;
+  }
+  .toc-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .toc ol {
+    list-style: none;
+    padding: 0; margin: 0;
+    columns: 2; column-gap: 26px;
+  }
+  .toc li { margin: 4px 0; color: var(--muted); font-family: var(--font-mono); font-size: 12.5px; }
+  .toc li a { color: var(--ink-2); border: 0; }
+  .toc li a:hover { color: var(--accent); }
+  .toc li .n { color: var(--muted-2); margin-right: 8px; }
+  @media (max-width: 720px) { .toc ol { columns: 1; } }
+
+  /* ── Tables ── */
+  .table-wrap { overflow-x: auto; margin: 20px 0 8px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    padding: 9px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink-2);
+  }
+  th {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    background: transparent;
+    border-bottom: 1.5px solid var(--ink);
+  }
+  tr:hover td { background: var(--paper); }
+  td.num, th.num { text-align: right; font-family: var(--font-mono); font-size: 13.5px; }
+  .bold-row td {
+    background: var(--accent-soft) !important;
+    color: var(--ink);
+    border-top: 1px solid var(--accent);
+    border-bottom: 1px solid var(--accent);
+  }
+  .bold-row td strong { color: var(--accent-2); }
+  .win { color: var(--accent); font-weight: 600; }
+  .lose { color: var(--danger); font-weight: 600; }
+  .meh { color: var(--muted); }
+  td code { font-size: 13px; }
+
+  /* ── Charts ── */
+  .chart-wrap {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 20px 22px 16px;
+    margin: 24px 0 8px;
+  }
+  .chart-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .chart-head .id {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .chart-head .id b { font-weight: 600; color: var(--accent-2); }
+  .chart-head .axis {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  /* CRITICAL: fixed-height container — Chart.js with maintainAspectRatio:false needs a bounded box. */
+  .chart-box { position: relative; width: 100%; }
+  .chart-box.h-sm { height: 260px; }
+  .chart-box.h-md { height: 460px; }
+  .chart-cap {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 12px;
+    line-height: 1.55;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    font-style: italic;
+  }
+  .chart-cap b { color: var(--ink-2); font-style: normal; font-weight: 600; }
+  .chart-fallback { display: none; padding: 12px 0; color: var(--muted); font-size: 13px; }
+  .no-charts .chart-fallback { display: block; }
+  .no-charts canvas { display: none; }
+
+  /* ── Pull quote ── */
+  .pull {
+    border-left: 3px solid var(--accent);
+    padding: 6px 0 6px 20px;
+    margin: 22px 0;
+    font-family: var(--font-display);
+    font-style: italic;
+    color: var(--ink);
+    font-size: 19px;
+    line-height: 1.45;
+    letter-spacing: -0.005em;
+  }
+
+  ul.tight, ol.tight { margin: 0 0 16px 0; padding-left: 22px; }
+  ul.tight li, ol.tight li { margin-bottom: 8px; color: var(--ink-2); }
+  ol.tight li::marker { color: var(--accent); font-weight: 600; }
+  ul.tight li::marker { color: var(--accent); }
 
   details {
     background: var(--paper);
     border: 1px solid var(--rule);
-    border-radius: 3px;
-    padding: 12px 16px;
+    border-radius: 4px;
+    padding: 12px 18px;
     margin: 14px 0;
   }
   details summary {
     cursor: pointer;
-    font-family: var(--serif-heading);
-    font-weight: 600;
-    color: var(--ink-2);
+    color: var(--ink);
     list-style: none;
+    user-select: none;
+    font-weight: 500;
+    font-size: 14.5px;
   }
   details summary::-webkit-details-marker { display: none; }
   details summary::before {
-    content: "▸";
-    color: var(--accent);
-    margin-right: 8px;
-    display: inline-block;
-    transition: transform 0.15s ease;
+    content: '+'; color: var(--accent); margin-right: 10px;
+    display: inline-block; transition: transform .15s; font-weight: 600;
   }
-  details[open] summary::before { transform: rotate(90deg); }
+  details[open] summary::before { content: '−'; }
   details[open] { padding-bottom: 16px; }
 
-  footer {
-    margin-top: 64px;
-    padding-top: 24px;
-    border-top: 1px solid var(--rule);
-    font-size: 13.5px;
-    color: var(--muted);
-  }
-  footer a { color: var(--accent-2); }
-
-  .toc {
-    background: transparent;
-    border-left: 1px solid var(--rule);
-    padding: 4px 0 4px 18px;
-    margin: 28px 0 12px;
-    font-size: 14.5px;
-    color: var(--muted);
-  }
-  .toc ol { padding-left: 22px; margin: 0; }
-  .toc li { margin: 3px 0; }
-  .toc a { color: var(--ink-2); text-decoration: none; }
-  .toc a:hover { color: var(--accent); }
-
   .note {
-    font-size: 14px;
+    font-size: 13.5px;
     color: var(--muted);
     font-style: italic;
   }
 
-  /* Anchored section headings */
+  /* ── Footer ── */
+  footer {
+    margin-top: 80px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  footer a { color: var(--accent-2); border-bottom-color: rgba(47, 111, 79, 0.25); }
+  footer p { color: var(--muted); margin-bottom: 4px; }
+
   h2[id], h3[id] { scroll-margin-top: 16px; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-<header class="masthead">
-  <div class="eyebrow">Lumo FlyWheel · Track B · Round 4b · 2026-05-17</div>
-  <h1 class="title">Codex-Harness-Coupled Speculative Decoding for Qwen 3.5-27B on DGX&nbsp;Spark</h1>
-  <p class="subtitle">A five-point ablation of a four-technique speculative-decoding stack across 220 cells of a real coding-agent workload.</p>
-  <div class="byline">
-    <strong>Mark Ma</strong> &middot;
-    <a href="mailto:coredroid0401@gmail.com">coredroid0401@gmail.com</a> &middot;
+<div class="top-strip">
+  <div class="left">
+    <span class="chip">Track&nbsp;B · Round&nbsp;4b</span>
+    <span class="sep">·</span>
+    <span>May&nbsp;17,&nbsp;2026</span>
+  </div>
+  <div>
     <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">github.com/MaCoredroid/Lumo_FlyWheel</a>
+  </div>
+</div>
+
+<header class="masthead">
+  <h1 class="title">Codex-Harness-Coupled Speculative Decoding for Qwen&nbsp;3.5-27B on DGX&nbsp;Spark</h1>
+  <p class="subtitle">A five-point ablation of a four-technique speculative-decoding stack, across 220 cells of a real coding-agent workload — and a closer look at what actually composes.</p>
+  <div class="byline">
+    <strong>Mark Ma</strong>
+    <span class="sep">·</span>
+    <a href="mailto:coredroid0401@gmail.com">coredroid0401@gmail.com</a>
+    <span class="sep">·</span>
+    <span>ML systems / inference</span>
   </div>
 </header>
 
+<div class="tag-row">
+  <span class="pill">vLLM 0.19</span>
+  <span class="pill">Arctic Inference 0.1.2</span>
+  <span class="pill">Qwen 3.5-27B FP8</span>
+  <span class="pill">GB10 · sm_120</span>
+  <span class="pill">Codex CLI 0.128.0</span>
+  <span class="pill">220 cells</span>
+</div>
+
 <section class="tldr" id="tldr">
-  <h3>TL;DR — read this if nothing else</h3>
-  <p class="lede">A four-technique speculative-decoding stack, co-designed with the agent harness, lifts decode throughput on a 27B-parameter coding agent from <strong>5.6 → 17.0 tokens/s</strong> on a single consumer-Blackwell GPU. That's a <strong>3.04× speedup</strong> at unchanged FP8 weights — and, more interestingly, it converts one of eleven benchmark tasks from <strong>0/4 → 4/4 pass</strong> by giving an iterative multi-file refactor enough headroom to finish.</p>
+  <div class="tldr-label">Summary</div>
+  <p class="lede">A four-technique speculative-decoding stack, co-designed with the agent harness, lifts decode throughput on a 27B coding agent from <strong>5.6 → 17.0 tokens per second</strong> on a single consumer-Blackwell GPU. That is a <strong>3.04× speedup</strong> at unchanged FP8 weights — and, more interestingly, it converts one of eleven benchmark tasks from <strong>0 / 4 → 4 / 4 pass</strong> by giving an iterative multi-file refactor enough headroom to finish.</p>
   <div class="kpi-row">
-    <div class="kpi"><div class="v">3.04×</div><div class="l">decode throughput vs. baseline (full stack)</div></div>
-    <div class="kpi"><div class="v">17.0 tps</div><div class="l">median per-call decode (was 5.6 tps)</div></div>
-    <div class="kpi"><div class="v">+9.1pp</div><div class="l">absolute pass-rate lift (22.7 → 31.8%)</div></div>
-    <div class="kpi"><div class="v">220</div><div class="l">cells × ~7.7M telemetry samples</div></div>
+    <div class="kpi"><div class="v">3.04×</div><div class="l">decode tps vs.<br>base decode</div></div>
+    <div class="kpi"><div class="v">17.0</div><div class="l">tokens / sec median<br>(was 5.6)</div></div>
+    <div class="kpi"><div class="v">+9.1pp</div><div class="l">pass-rate lift<br>22.7 → 31.8%</div></div>
+    <div class="kpi"><div class="v">220</div><div class="l">cells · ~7.7M<br>telemetry samples</div></div>
   </div>
-  <p style="margin-top:16px;">The headline number is one half of the story. The other half — <em>which</em> techniques carry the win, and why most of them don't compose — is what makes this an engineering result rather than a benchmark number.</p>
-  <ul class="tight">
-    <li><strong>T1 alone is the throughput winner</strong> (3.26× over baseline). Adding T2+T3+T4 on top of T1 is net <em>negative</em> for throughput in aggregate (−7%) — but flips a single hard task from fail to pass, which is why the full stack still ships.</li>
-    <li><strong>T2 and T3 are mirror images</strong> on 5/11 tasks: when one helps, the other hurts by roughly the same amount. That's the most interesting empirical finding here; it implies they compete for a shared drafter-slot budget rather than tapping orthogonal sources of acceptable drafts, as the original design assumed.</li>
-    <li><strong>Pass rate is largely orthogonal to throughput.</strong> 8/11 tasks pass-or-fail identically across all five spec-decode configurations. The model either solves them or doesn't; how fast it writes doesn't change that.</li>
+  <p style="margin-top:18px;">The headline number is one half of the story. The other half — <em>which</em> techniques carry the win, and why most of them don't compose — is what makes this an engineering result rather than a benchmark number.</p>
+  <ul>
+    <li><strong>T1 alone is the throughput winner</strong> (3.26× over baseline). Layering T2 + T3 + T4 on top of T1 is net <em>negative</em> for throughput in aggregate (−7%) — but flips a single hard task from fail to pass, which is why the full stack still ships.</li>
+    <li><strong>T2 and T3 are mirror images</strong> on 5 of 11 tasks: when one helps, the other hurts by roughly the same amount. They appear to compete for a shared drafter-slot budget rather than tapping orthogonal sources of acceptable drafts, as the original design assumed.</li>
+    <li><strong>Pass rate is largely orthogonal to throughput.</strong> 8 of 11 tasks pass or fail identically across all five spec-decode configurations — the model either solves them or it doesn't; how fast it writes doesn't change that.</li>
   </ul>
 </section>
 
-<nav class="toc">
+<nav class="toc" aria-label="Table of contents">
+  <div class="toc-label">Contents</div>
   <ol>
-    <li><a href="#why">Why this matters</a></li>
-    <li><a href="#stack">The four-technique stack</a></li>
-    <li><a href="#design">Experimental design</a></li>
-    <li><a href="#results">Headline results</a></li>
-    <li><a href="#per-tech">Per-technique decomposition</a></li>
-    <li><a href="#mirror">The mirror-image finding</a></li>
-    <li><a href="#telemetry">Hardware telemetry &amp; contamination</a></li>
-    <li><a href="#validity">Limitations &amp; threats to validity</a></li>
-    <li><a href="#shipping">Shipping decision</a></li>
-    <li><a href="#about">About this work</a></li>
+    <li><span class="n">01</span><a href="#why">Why this matters</a></li>
+    <li><span class="n">02</span><a href="#stack">The four-technique stack</a></li>
+    <li><span class="n">03</span><a href="#design">Experimental design</a></li>
+    <li><span class="n">04</span><a href="#results">Headline results</a></li>
+    <li><span class="n">05</span><a href="#per-tech">Per-technique decomposition</a></li>
+    <li><span class="n">06</span><a href="#mirror">The mirror-image finding</a></li>
+    <li><span class="n">07</span><a href="#telemetry">Hardware telemetry &amp; contamination</a></li>
+    <li><span class="n">08</span><a href="#validity">Limitations &amp; threats to validity</a></li>
+    <li><span class="n">09</span><a href="#shipping">Shipping decision</a></li>
+    <li><span class="n">10</span><a href="#about">About this work</a></li>
   </ol>
 </nav>
 
-<h2 id="why"><span class="num">1</span>Why this matters</h2>
+<h2 id="why"><span class="num">01</span>Why this matters</h2>
 
-<p>Coding agents are inference-bound. Each turn replays a multi-thousand-token context; many turns repeat structural patterns (JSON tool-call skeletons, file paths, function names, plan templates). A 27B model on a single consumer Blackwell GPU (DGX Spark, sm_120) decodes at ~5–6 tokens/s under base settings — slow enough that ~75% of attempts run out the 30-minute wall budget before the agent finishes the task. The agent loses on the clock, not on correctness.</p>
+<p>Coding agents are inference-bound. Each turn replays a multi-thousand-token context; many turns repeat structural patterns (JSON tool-call skeletons, file paths, function names, plan templates). A 27B model on a single consumer Blackwell GPU (DGX Spark, sm_120) decodes at ~5–6 tokens per second under base settings — slow enough that roughly three quarters of attempts run out the 30-minute wall budget before the agent finishes the task. The agent loses on the clock, not on correctness.</p>
 
 <p>Speculative decoding promises to fix that. The hard part is making it actually compose with the harness. A generic spec-decode setting that ignores the agent's session state and tool-call structure leaves most of the available draft-acceptance on the floor. Conversely, a stack that over-couples to the harness produces techniques that fight each other inside the verifier's per-step token budget — which is exactly what this experiment found.</p>
 
 <p>The contribution of this work is not just <em>"we got 3×."</em> It is the per-technique decomposition that lets future iterations know which knobs to leave alone and which to gate on workload.</p>
 
-<h2 id="stack"><span class="num">2</span>The four-technique stack</h2>
+<h2 id="stack"><span class="num">02</span>The four-technique stack</h2>
 
 <p>The Round-4b configuration extends vLLM 0.19 with Snowflake Arctic Inference 0.1.2's <code>SuffixDecoding</code> backbone, then layers three harness-coupled drafters on top. (A fifth technique, T5, handles drafter lifecycle and is operational rather than throughput-bearing — out of scope here.)</p>
 
+<div class="table-wrap">
 <table>
   <thead>
-    <tr><th>Technique</th><th>What it does</th><th>Originally predicted lift</th><th>Measured lift</th></tr>
+    <tr><th>ID</th><th>Technique</th><th>What it does</th><th class="num">Predicted</th><th class="num">Measured</th></tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>T1</strong> &mdash; cross-turn SuffixDecoding</td>
+      <td><code>T1</code></td>
+      <td>cross-turn SuffixDecoding</td>
       <td>Per-session suffix tree spanning all prior turns of an agent task.</td>
-      <td>1.4–1.6× over plain PLD</td>
-      <td class="win">3.26× over base decode</td>
+      <td class="num">1.4–1.6×</td>
+      <td class="num win">3.26×</td>
     </tr>
     <tr>
-      <td><strong>T2</strong> &mdash; <code>read_file</code> proactive priming</td>
+      <td><code>T2</code></td>
+      <td><code>read_file</code> proactive priming</td>
       <td>When the agent reads a file, fold its content into the session's suffix tree as drafts.</td>
-      <td>×1.10–1.20 on edit turns</td>
-      <td class="meh">net −1.5% aggregate; bimodal per-task (×0.7 to ×1.58)</td>
+      <td class="num">×1.10–1.20</td>
+      <td class="num meh">−1.5% agg</td>
     </tr>
     <tr>
-      <td><strong>T3</strong> &mdash; schema-aware tool-call drafter</td>
+      <td><code>T3</code></td>
+      <td>schema-aware tool-call drafter</td>
       <td>FSM (ToolSpec + XGrammar-2) alternates deterministic schema-token filling with free-text speculation.</td>
-      <td>×1.6–2.0 on tool-call turns</td>
-      <td class="meh">net −5.0% aggregate; per-task ×0.6 to ×1.55</td>
+      <td class="num">×1.6–2.0</td>
+      <td class="num meh">−5.0% agg</td>
     </tr>
     <tr>
-      <td><strong>T4</strong> &mdash; plan-structure pre-drafter</td>
+      <td><code>T4</code></td>
+      <td>plan-structure pre-drafter</td>
       <td>Fingerprints structural tokens (separators, headers, numbering) across plan emissions; pre-drafts them on subsequent turns.</td>
-      <td>×1.03–1.08 weighted aggregate</td>
-      <td class="win">+4.3% aggregate; positive on 7/11 tasks</td>
+      <td class="num">×1.03–1.08</td>
+      <td class="num win">+4.3% agg</td>
     </tr>
   </tbody>
 </table>
+</div>
 
-<p class="note" style="margin-top:10px;">T1 is structural &mdash; the per-session router around <code>SuffixDecodingCache</code> &mdash; and cannot be toggled without relaunching the inference container. T2, T3, T4 toggle at request time via a JSON flag file the prelaunch helpers consult: <code>/tmp/lumo_track_b_runtime_flags.json</code>.</p>
+<p class="note">T1 is structural — the per-session router around <code>SuffixDecodingCache</code> — and cannot be toggled without relaunching the inference container. T2, T3, T4 toggle at request time via a JSON flag file the prelaunch helpers consult: <code>/tmp/lumo_track_b_runtime_flags.json</code>.</p>
 
-<h2 id="design"><span class="num">3</span>Experimental design</h2>
+<h2 id="design"><span class="num">03</span>Experimental design</h2>
 
 <h3>3.1 Five-point cumulative ablation</h3>
 
 <p>To attribute lift to each technique I run a strict prefix ablation: each point adds the next technique on top of the previous, with <strong>OFF</strong> as no-spec-decode baseline.</p>
 
+<div class="table-wrap">
 <table>
   <thead>
     <tr><th>Point</th><th>Stack</th><th>What's on</th></tr>
   </thead>
   <tbody>
-    <tr><td><strong>OFF</strong></td><td>base decode</td><td>no <code>speculative_config</code> at all (separate vLLM relaunch)</td></tr>
-    <tr><td><strong>A</strong></td><td>T1</td><td>cross-turn SuffixDecoding only</td></tr>
-    <tr><td><strong>B</strong></td><td>T1 + T2</td><td>add file-read priming</td></tr>
-    <tr><td><strong>C</strong></td><td>T1 + T2 + T3</td><td>add schema-aware drafter</td></tr>
-    <tr><td><strong>D</strong></td><td>T1 + T2 + T3 + T4</td><td>full stack: add plan-structure pre-drafter</td></tr>
+    <tr><td><code>OFF</code></td><td>base decode</td><td>no <code>speculative_config</code> at all (separate vLLM relaunch)</td></tr>
+    <tr><td><code>A</code></td><td>T1</td><td>cross-turn SuffixDecoding only</td></tr>
+    <tr><td><code>B</code></td><td>T1 + T2</td><td>add file-read priming</td></tr>
+    <tr><td><code>C</code></td><td>T1 + T2 + T3</td><td>add schema-aware drafter</td></tr>
+    <tr><td><code>D</code></td><td>T1 + T2 + T3 + T4</td><td>full stack: add plan-structure pre-drafter</td></tr>
   </tbody>
 </table>
+</div>
 
 <h3>3.2 Corpus and scale</h3>
-
 <p>Eleven CNB-55-style benchmark families covering a representative spread of Codex workloads, each measured at every point with four attempts on a 30-minute wall budget:</p>
-
 <p><strong>5 points × 11 tasks × 4 attempts = 220 cells</strong>, ~7.7M DCGM/NVML samples, 20,623 per-request metric rows captured at the proxy.</p>
 
 <details>
   <summary>The 11-task corpus (workload type)</summary>
-  <table style="margin-top:10px;">
+  <div class="table-wrap" style="margin-top:10px;">
+  <table>
     <tbody>
       <tr><td><code>dead-flag-reachability-audit</code></td><td>Code analysis / refactor</td></tr>
       <tr><td><code>fanout-fullstack-release-blocker</code></td><td>Multi-file release coordination</td></tr>
@@ -448,9 +583,11 @@
       <tr><td><code>transcript-merge-regression</code></td><td>State reconciliation</td></tr>
     </tbody>
   </table>
+  </div>
 </details>
 
 <h3>3.3 Hardware &amp; runtime</h3>
+<div class="table-wrap">
 <table>
   <tbody>
     <tr><td>GPU</td><td>NVIDIA GB10 (DGX Spark, sm_120 / consumer Blackwell)</td></tr>
@@ -463,6 +600,7 @@
     <tr><td>Runtime config hash</td><td><code>sha256:5ae88ac4…</code> (frozen across all 220 cells)</td></tr>
   </tbody>
 </table>
+</div>
 
 <h3>3.4 Metric definitions</h3>
 <p>To remove ambiguity about what is being optimized:</p>
@@ -472,160 +610,169 @@
   <li><strong>P_benchmark</strong> = 0–100 score from a deterministic per-family grader. <strong>Pass = P ≥ 65</strong>.</li>
 </ul>
 
-<h2 id="results"><span class="num">4</span>Headline results</h2>
+<h2 id="results"><span class="num">04</span>Headline results</h2>
 
 <h3>4.1 Per-point aggregate</h3>
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
-      <th>Point</th>
-      <th class="num">n cells</th>
-      <th class="num">decode_tps (median)</th>
-      <th class="num">speedup vs OFF</th>
-      <th class="num">accept rate</th>
-      <th class="num">pass count</th>
+      <th>Point</th><th class="num">n</th><th class="num">decode_tps</th><th class="num">Speedup</th><th class="num">Accept</th><th class="num">Pass</th>
     </tr>
   </thead>
   <tbody>
-    <tr><td><strong>OFF</strong></td><td class="num">44</td><td class="num">5.59</td><td class="num">1.00×</td><td class="num">—</td><td class="num">10 / 44 (22.7%)</td></tr>
-    <tr><td><strong>A</strong> &middot; T1</td><td class="num">44</td><td class="num"><strong>18.24</strong></td><td class="num win">3.26×</td><td class="num">0.471</td><td class="num">9 / 44 (20.5%)</td></tr>
-    <tr><td><strong>B</strong> &middot; T1+T2</td><td class="num">44</td><td class="num">17.96</td><td class="num">3.21×</td><td class="num">0.555</td><td class="num">9 / 44 (20.5%)</td></tr>
-    <tr><td><strong>C</strong> &middot; T1+T2+T3</td><td class="num">44</td><td class="num">17.06</td><td class="num">3.05×</td><td class="num">0.554</td><td class="num">10 / 44 (22.7%)</td></tr>
-    <tr class="bold-row"><td><strong>D</strong> &middot; full stack</td><td class="num">44</td><td class="num">17.02</td><td class="num">3.04×</td><td class="num">0.517</td><td class="num"><strong>14 / 44 (31.8%)</strong></td></tr>
+    <tr><td><code>OFF</code></td><td class="num">44</td><td class="num">5.59</td><td class="num">1.00×</td><td class="num meh">—</td><td class="num">10 / 44 · 22.7%</td></tr>
+    <tr><td><code>A</code> · T1</td><td class="num">44</td><td class="num"><strong>18.24</strong></td><td class="num win">3.26×</td><td class="num">0.471</td><td class="num">9 / 44 · 20.5%</td></tr>
+    <tr><td><code>B</code> · T1+T2</td><td class="num">44</td><td class="num">17.96</td><td class="num">3.21×</td><td class="num">0.555</td><td class="num">9 / 44 · 20.5%</td></tr>
+    <tr><td><code>C</code> · T1+T2+T3</td><td class="num">44</td><td class="num">17.06</td><td class="num">3.05×</td><td class="num">0.554</td><td class="num">10 / 44 · 22.7%</td></tr>
+    <tr class="bold-row"><td><code>D</code> · full stack</td><td class="num">44</td><td class="num">17.02</td><td class="num">3.04×</td><td class="num">0.517</td><td class="num"><strong>14 / 44 · 31.8%</strong></td></tr>
   </tbody>
 </table>
+</div>
 
 <div class="chart-wrap">
-  <canvas id="chartAgg" height="180"></canvas>
-  <div class="cap">Figure 1. Per-point decode throughput. A (T1 alone) is the aggregate winner; layering more techniques is monotonically slightly worse, but D wins on pass count.</div>
+  <div class="chart-head">
+    <span class="id">Figure <b>1</b> &middot; per-point decode throughput</span>
+    <span class="axis">y: tokens / second (median)</span>
+  </div>
+  <div class="chart-box h-sm"><canvas id="chartAgg"></canvas></div>
+  <div class="chart-fallback">[chart didn't load — see the table above for the same numbers]</div>
+  <div class="chart-cap"><b>Figure 1.</b> A (T1 alone) is the aggregate winner; layering more techniques is monotonically slightly worse, but D wins on pass count.</div>
 </div>
 
 <h3>4.2 Per-task decode_tps</h3>
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
-      <th>Task</th>
-      <th class="num">OFF</th>
-      <th class="num">A</th>
-      <th class="num">B</th>
-      <th class="num">C</th>
-      <th class="num">D</th>
+      <th>Task</th><th class="num">OFF</th><th class="num">A</th><th class="num">B</th><th class="num">C</th><th class="num">D</th>
     </tr>
   </thead>
   <tbody>
-    <tr><td>dead-flag-reachability-audit</td><td class="num">5.59</td><td class="num">18.24</td><td class="num win">27.71</td><td class="num">17.06</td><td class="num">27.70</td></tr>
-    <tr><td>fanout-fullstack-release-blocker</td><td class="num">6.10</td><td class="num win">17.85</td><td class="num">17.19</td><td class="num">15.94</td><td class="num">16.59</td></tr>
-    <tr><td>incident-evidence-synthesis</td><td class="num">4.71</td><td class="num">21.19</td><td class="num win">29.83</td><td class="num">19.76</td><td class="num">24.16</td></tr>
-    <tr><td>multi-tool-transaction-repair</td><td class="num">3.66</td><td class="num">15.32</td><td class="num">14.74</td><td class="num">15.09</td><td class="num win">17.02</td></tr>
-    <tr><td>policy-aware-request-resolution</td><td class="num">5.65</td><td class="num">20.22</td><td class="num">13.76</td><td class="num win">21.38</td><td class="num">16.19</td></tr>
-    <tr><td>release-note-to-plan-translation</td><td class="num">5.18</td><td class="num win">24.99</td><td class="num">23.90</td><td class="num">24.06</td><td class="num">22.11</td></tr>
-    <tr><td>responses-sdk-adapter-cutover</td><td class="num">5.38</td><td class="num win">23.48</td><td class="num">17.96</td><td class="num">22.49</td><td class="num">16.54</td></tr>
-    <tr><td>responsive-checkout-visual-regression</td><td class="num">5.75</td><td class="num win">15.91</td><td class="num">13.94</td><td class="num">13.27</td><td class="num">15.90</td></tr>
-    <tr><td>security-audit-hotfix-remediation</td><td class="num">5.99</td><td class="num">17.33</td><td class="num">16.61</td><td class="num">16.43</td><td class="num win">17.17</td></tr>
-    <tr><td>sqlalchemy-2-session-modernization</td><td class="num">5.80</td><td class="num">28.06</td><td class="num win">30.19</td><td class="num">28.13</td><td class="num">29.40</td></tr>
-    <tr><td>transcript-merge-regression</td><td class="num">5.52</td><td class="num">15.38</td><td class="num win">22.35</td><td class="num">15.88</td><td class="num">13.13</td></tr>
+    <tr><td><code>dead-flag-reachability-audit</code></td><td class="num">5.59</td><td class="num">18.24</td><td class="num win">27.71</td><td class="num">17.06</td><td class="num">27.70</td></tr>
+    <tr><td><code>fanout-fullstack-release-blocker</code></td><td class="num">6.10</td><td class="num win">17.85</td><td class="num">17.19</td><td class="num">15.94</td><td class="num">16.59</td></tr>
+    <tr><td><code>incident-evidence-synthesis</code></td><td class="num">4.71</td><td class="num">21.19</td><td class="num win">29.83</td><td class="num">19.76</td><td class="num">24.16</td></tr>
+    <tr><td><code>multi-tool-transaction-repair</code></td><td class="num">3.66</td><td class="num">15.32</td><td class="num">14.74</td><td class="num">15.09</td><td class="num win">17.02</td></tr>
+    <tr><td><code>policy-aware-request-resolution</code></td><td class="num">5.65</td><td class="num">20.22</td><td class="num">13.76</td><td class="num win">21.38</td><td class="num">16.19</td></tr>
+    <tr><td><code>release-note-to-plan-translation</code></td><td class="num">5.18</td><td class="num win">24.99</td><td class="num">23.90</td><td class="num">24.06</td><td class="num">22.11</td></tr>
+    <tr><td><code>responses-sdk-adapter-cutover</code></td><td class="num">5.38</td><td class="num win">23.48</td><td class="num">17.96</td><td class="num">22.49</td><td class="num">16.54</td></tr>
+    <tr><td><code>responsive-checkout-visual-regression</code></td><td class="num">5.75</td><td class="num win">15.91</td><td class="num">13.94</td><td class="num">13.27</td><td class="num">15.90</td></tr>
+    <tr><td><code>security-audit-hotfix-remediation</code></td><td class="num">5.99</td><td class="num">17.33</td><td class="num">16.61</td><td class="num">16.43</td><td class="num win">17.17</td></tr>
+    <tr><td><code>sqlalchemy-2-session-modernization</code></td><td class="num">5.80</td><td class="num">28.06</td><td class="num win">30.19</td><td class="num">28.13</td><td class="num">29.40</td></tr>
+    <tr><td><code>transcript-merge-regression</code></td><td class="num">5.52</td><td class="num">15.38</td><td class="num win">22.35</td><td class="num">15.88</td><td class="num">13.13</td></tr>
   </tbody>
 </table>
-<p class="note">Best-point per row is bolded green. <strong>A wins 5 tasks, B 4, C 1, D 2.</strong> "Fewer techniques wins more often" is itself the story — stacking increases per-task variance without proportional per-task wins.</p>
+</div>
+<p class="note">Best-per-row highlighted in green. A wins 5 tasks, B 4, C 1, D 2 — "fewer techniques wins more often" is itself the story.</p>
 
 <h3>4.3 Pass rate is mostly orthogonal — except on one task</h3>
 
+<div class="table-wrap">
 <table>
   <thead>
     <tr><th>Task</th><th class="num">OFF</th><th class="num">A</th><th class="num">B</th><th class="num">C</th><th class="num">D</th></tr>
   </thead>
   <tbody>
-    <tr><td>incident-evidence-synthesis</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td></tr>
-    <tr><td>policy-aware-request-resolution</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td></tr>
-    <tr><td>release-note-to-plan-translation</td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td><td class="num">1/4</td><td class="num">1/4</td></tr>
-    <tr><td><strong>sqlalchemy-2-session-modernization</strong></td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td><td class="num win"><strong>4/4</strong></td></tr>
-    <tr><td>transcript-merge-regression</td><td class="num">2/4</td><td class="num">1/4</td><td class="num">1/4</td><td class="num">1/4</td><td class="num">1/4</td></tr>
+    <tr><td><code>incident-evidence-synthesis</code></td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td></tr>
+    <tr><td><code>policy-aware-request-resolution</code></td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td><td class="num">4/4</td></tr>
+    <tr><td><code>release-note-to-plan-translation</code></td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td><td class="num">1/4</td><td class="num">1/4</td></tr>
+    <tr><td><code>sqlalchemy-2-session-modernization</code></td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td><td class="num win"><strong>4/4</strong></td></tr>
+    <tr><td><code>transcript-merge-regression</code></td><td class="num">2/4</td><td class="num">1/4</td><td class="num">1/4</td><td class="num">1/4</td><td class="num">1/4</td></tr>
     <tr><td>(6 other tasks)</td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td><td class="num">0/4</td></tr>
-    <tr class="bold-row"><td><strong>Total pass</strong></td><td class="num">10 / 44</td><td class="num">9 / 44</td><td class="num">9 / 44</td><td class="num">10 / 44</td><td class="num">14 / 44</td></tr>
+    <tr class="bold-row"><td><strong>Total pass</strong></td><td class="num">10 / 44</td><td class="num">9 / 44</td><td class="num">9 / 44</td><td class="num">10 / 44</td><td class="num"><strong>14 / 44</strong></td></tr>
   </tbody>
 </table>
+</div>
 
 <p>Three distinct pass-rate regimes:</p>
 <ol class="tight">
-  <li><strong>Task-bound (8/11)</strong> — pass rate is identical across all five points. The model either solves them or doesn't; spec-decode is completely orthogonal.</li>
-  <li><strong>Technique-helped (2/11)</strong> — <code>sqlalchemy</code> flips <strong>0/16 → 4/4</strong> only at D. Hypothesis: iterative multi-file refactor needs throughput headroom to finish all milestones inside the 30-minute wall. <code>release-note</code> picks up one pass at C/D.</li>
-  <li><strong>Technique-hurt (1/11)</strong> — <code>transcript-merge</code> passes 2/4 at OFF but only 1/4 at every spec-decode point. Hypothesis: faster decode lets the model commit to incorrect early-turn edits before considering full state. Small sample, could be noise.</li>
+  <li><strong>Task-bound (8 / 11).</strong> Pass rate is identical across all five points. The model either solves them or doesn't; spec-decode is completely orthogonal.</li>
+  <li><strong>Technique-helped (2 / 11).</strong> <code>sqlalchemy</code> flips <strong>0/16 → 4/4</strong> only at D. Hypothesis: iterative multi-file refactor needs throughput headroom to finish all milestones inside the 30-minute wall. <code>release-note</code> picks up one pass at C/D.</li>
+  <li><strong>Technique-hurt (1 / 11).</strong> <code>transcript-merge</code> passes 2/4 at OFF but only 1/4 at every spec-decode point. Hypothesis: faster decode lets the model commit to incorrect early-turn edits before considering full state. Small sample, could be noise.</li>
 </ol>
 
 <p class="pull">D's +4-pass advantage over baseline is <em>entirely</em> the sqlalchemy 4/4 result. Remove that task and the aggregate pass count equalizes across all five points.</p>
 
-<h2 id="per-tech"><span class="num">5</span>Per-technique decomposition</h2>
+<h2 id="per-tech"><span class="num">05</span>Per-technique decomposition</h2>
 
-<p>Each pairwise comparison (A−OFF, B−A, C−B, D−C) isolates the marginal effect of one technique.</p>
+<p>Each pairwise comparison (A − OFF, B − A, C − B, D − C) isolates the marginal effect of one technique.</p>
 
 <div class="chart-wrap">
-  <canvas id="chartDeltas" height="360"></canvas>
-  <div class="cap">Figure 2. Marginal contribution of each technique, per task. Green is "this technique helps on this task"; red is "this technique hurts." T1 (left column) is uniformly large-positive; T2 (second), T3 (third), and T4 (fourth) are mixed.</div>
+  <div class="chart-head">
+    <span class="id">Figure <b>2</b> &middot; marginal Δ decode_tps per technique, per task</span>
+    <span class="axis">x: Δ tokens / second</span>
+  </div>
+  <div class="chart-box h-md"><canvas id="chartDeltas"></canvas></div>
+  <div class="chart-fallback">[chart didn't load — see §6 table for raw deltas]</div>
+  <div class="chart-cap"><b>Figure 2.</b> Green is "this technique helps on this task"; red is "this technique hurts." T1 (the long green bar on every row) is uniformly large-positive; T2, T3, T4 are mixed.</div>
 </div>
 
-<h3>5.1 T1: cross-turn SuffixDecoding (the load-bearing technique)</h3>
+<h3>5.1 T1 — cross-turn SuffixDecoding (the load-bearing technique)</h3>
 <p><strong>A vs OFF</strong> isolates T1. Across every task in the corpus, A is <strong>2.4–5.1× faster</strong> than OFF; the aggregate is 3.26×. Per-call acceptance rate climbs from 0.41 at turn 0 to 0.53 at turn 21+ <em>on the same cell</em> — direct evidence that the session-scoped suffix tree is doing what it was designed to do: get richer as the agent accumulates history.</p>
 <p>T1's biggest wins are on tasks with high cross-turn structural repetition: <code>sqlalchemy</code> (4.84×), <code>release-note</code> (4.83×), <code>responses-sdk</code> (4.36×). All three involve the agent revisiting the same files, function names, and error patterns repeatedly.</p>
 
-<h3>5.2 T2: read_file proactive priming — bimodal</h3>
-<p><strong>B vs A.</strong> T2 is the most interesting technique because it's <em>simultaneously</em> the biggest per-task win and a net-flat aggregate:</p>
+<h3>5.2 T2 — <code>read_file</code> proactive priming (bimodal)</h3>
+<p><strong>B vs A.</strong> T2 is the most interesting technique because it is simultaneously the biggest per-task win and a net-flat aggregate:</p>
 
+<div class="table-wrap">
 <table>
-  <thead><tr><th>Task</th><th class="num">A → B (Δ tps)</th><th>Direction</th></tr></thead>
+  <thead><tr><th>Task</th><th class="num">Δ tps (A → B)</th><th>Direction</th></tr></thead>
   <tbody>
-    <tr><td>dead-flag</td><td class="num win">+9.47</td><td class="win">T2 helps big</td></tr>
-    <tr><td>incident-evidence</td><td class="num win">+8.64</td><td class="win">T2 helps big</td></tr>
-    <tr><td>transcript-merge</td><td class="num win">+6.97</td><td class="win">T2 helps</td></tr>
-    <tr><td>sqlalchemy</td><td class="num">+2.13</td><td class="meh">small</td></tr>
-    <tr><td>fanout, security, multi-tool, release-note</td><td class="num">−0.6 to −1.1</td><td class="meh">flat</td></tr>
-    <tr><td>responsive-checkout</td><td class="num">−1.97</td><td>small hurt</td></tr>
-    <tr><td>responses-sdk</td><td class="num lose">−5.52</td><td class="lose">T2 hurts</td></tr>
-    <tr><td>policy-aware</td><td class="num lose">−6.46</td><td class="lose">T2 hurts</td></tr>
+    <tr><td><code>dead-flag</code></td><td class="num win">+9.47</td><td class="win">T2 helps big</td></tr>
+    <tr><td><code>incident-evidence</code></td><td class="num win">+8.64</td><td class="win">T2 helps big</td></tr>
+    <tr><td><code>transcript-merge</code></td><td class="num win">+6.97</td><td class="win">T2 helps</td></tr>
+    <tr><td><code>sqlalchemy</code></td><td class="num">+2.13</td><td class="meh">small</td></tr>
+    <tr><td><code>fanout, security, multi-tool, release-note</code></td><td class="num">−0.6 to −1.1</td><td class="meh">flat</td></tr>
+    <tr><td><code>responsive-checkout</code></td><td class="num">−1.97</td><td>small hurt</td></tr>
+    <tr><td><code>responses-sdk</code></td><td class="num lose">−5.52</td><td class="lose">T2 hurts</td></tr>
+    <tr><td><code>policy-aware</code></td><td class="num lose">−6.46</td><td class="lose">T2 hurts</td></tr>
   </tbody>
 </table>
+</div>
 
-<p>B's overall accept rate (0.555) is higher than A's (0.471) &mdash; T2 <em>does</em> generate more accepted drafts. But on tasks where T2 hurts decode_tps despite higher acceptance, the drafter is spending time proposing primed-text drafts that get accepted at high rate but compete for slots with shorter-but-higher-yield drafts from the suffix tree. <strong>Higher accept-rate is not the same as higher throughput</strong> when drafts vary in length and per-token yield.</p>
+<p>B's overall accept rate (0.555) is higher than A's (0.471) — T2 <em>does</em> generate more accepted drafts. But on tasks where T2 hurts decode_tps despite higher acceptance, the drafter is spending time proposing primed-text drafts that get accepted at high rate but compete for slots with shorter-but-higher-yield drafts from the suffix tree. <strong>Higher accept-rate is not the same as higher throughput</strong> when drafts vary in length and per-token yield.</p>
 
-<h3>5.3 T3: schema-aware tool-call drafter — the mirror of T2</h3>
+<h3>5.3 T3 — schema-aware tool-call drafter (the mirror of T2)</h3>
 <p><strong>C vs B.</strong> The three tasks where T2 won big (<code>dead-flag</code>, <code>incident-evidence</code>, <code>transcript-merge</code>) are the same three tasks where T3 <em>reverts those wins</em>. The two tasks where T2 hurt (<code>responses-sdk</code>, <code>policy-aware</code>) are two of the three tasks where T3 wins.</p>
-
 <p>This is the cleanest single-table evidence for the slot-contention hypothesis (see §<a href="#mirror">6</a>). C's accept rate (0.554) is essentially identical to B's (0.555) — T3 produces equally-acceptable drafts, but they displace T2's on the wrong frames.</p>
 
-<h3>5.4 T4: plan-structure pre-drafter — small-positive in aggregate</h3>
-<p><strong>D vs C.</strong> T4 wins on 7/11 tasks and meaningfully hurts on 3. It's the cleanest "composes positively" signature of the three additive techniques. Why doesn't it double-count with T1's suffix tree? Plans are emitted at irregular intervals; the suffix tree captures <em>token sequences</em> but not the <em>meta-structure</em> of "this is a plan, with this fingerprint, and the next plan emission should repeat this structure." T4 fingerprints structural tokens (separators, numbers, headers) and pre-drafts them with high confidence, which gives the verifier a fast path through the formulaic parts of plan emissions.</p>
+<h3>5.4 T4 — plan-structure pre-drafter (small-positive in aggregate)</h3>
+<p><strong>D vs C.</strong> T4 wins on 7 of 11 tasks and meaningfully hurts on 3. It is the cleanest "composes positively" signature of the three additive techniques. Why doesn't it double-count with T1's suffix tree? Plans are emitted at irregular intervals; the suffix tree captures <em>token sequences</em> but not the <em>meta-structure</em> of "this is a plan, with this fingerprint, and the next plan emission should repeat this structure." T4 fingerprints structural tokens (separators, numbers, headers) and pre-drafts them with high confidence, which gives the verifier a fast path through the formulaic parts of plan emissions.</p>
 
-<h2 id="mirror"><span class="num">6</span>The mirror-image finding</h2>
+<h2 id="mirror"><span class="num">06</span>The mirror-image finding</h2>
 
 <p>The single most interesting observation in this study is that <strong>T2 and T3 cancel each other on 5 of 11 tasks</strong>. Looking at the marginal-effect table side by side:</p>
 
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
       <th>Task</th>
-      <th class="num">A→B (T2)</th>
-      <th class="num">B→C (T3)</th>
-      <th class="num">C→D (T4)</th>
-      <th class="num">A→D (net)</th>
+      <th class="num">A→B · T2</th>
+      <th class="num">B→C · T3</th>
+      <th class="num">C→D · T4</th>
+      <th class="num">A→D · net</th>
     </tr>
   </thead>
   <tbody>
-    <tr><td>dead-flag</td><td class="num win">+9.47</td><td class="num lose">−10.65</td><td class="num win">+10.64</td><td class="num">+9.46</td></tr>
-    <tr><td>incident-evidence</td><td class="num win">+8.64</td><td class="num lose">−10.07</td><td class="num">+4.40</td><td class="num">+2.97</td></tr>
-    <tr><td>transcript-merge</td><td class="num win">+6.97</td><td class="num lose">−6.47</td><td class="num">−2.75</td><td class="num">−2.25</td></tr>
-    <tr><td>policy-aware</td><td class="num lose">−6.46</td><td class="num win">+7.62</td><td class="num">−5.19</td><td class="num">−4.03</td></tr>
-    <tr><td>responses-sdk</td><td class="num lose">−5.52</td><td class="num">+4.53</td><td class="num">−5.95</td><td class="num lose">−6.94</td></tr>
-    <tr><td>sqlalchemy</td><td class="num">+2.13</td><td class="num">−2.06</td><td class="num">+1.27</td><td class="num">+1.34</td></tr>
-    <tr><td>release-note</td><td class="num">−1.09</td><td class="num">+0.16</td><td class="num">−1.95</td><td class="num">−2.88</td></tr>
-    <tr><td>multi-tool</td><td class="num">−0.58</td><td class="num">+0.35</td><td class="num">+1.93</td><td class="num">+1.70</td></tr>
-    <tr><td>responsive-checkout</td><td class="num">−1.97</td><td class="num">−0.67</td><td class="num">+2.63</td><td class="num">−0.01</td></tr>
-    <tr><td>security-audit</td><td class="num">−0.72</td><td class="num">−0.18</td><td class="num">+0.74</td><td class="num">−0.16</td></tr>
-    <tr><td>fanout</td><td class="num">−0.66</td><td class="num">−1.25</td><td class="num">+0.65</td><td class="num">−1.26</td></tr>
+    <tr><td><code>dead-flag</code></td><td class="num win">+9.47</td><td class="num lose">−10.65</td><td class="num win">+10.64</td><td class="num">+9.46</td></tr>
+    <tr><td><code>incident-evidence</code></td><td class="num win">+8.64</td><td class="num lose">−10.07</td><td class="num">+4.40</td><td class="num">+2.97</td></tr>
+    <tr><td><code>transcript-merge</code></td><td class="num win">+6.97</td><td class="num lose">−6.47</td><td class="num">−2.75</td><td class="num">−2.25</td></tr>
+    <tr><td><code>policy-aware</code></td><td class="num lose">−6.46</td><td class="num win">+7.62</td><td class="num">−5.19</td><td class="num">−4.03</td></tr>
+    <tr><td><code>responses-sdk</code></td><td class="num lose">−5.52</td><td class="num">+4.53</td><td class="num">−5.95</td><td class="num lose">−6.94</td></tr>
+    <tr><td><code>sqlalchemy</code></td><td class="num">+2.13</td><td class="num">−2.06</td><td class="num">+1.27</td><td class="num">+1.34</td></tr>
+    <tr><td><code>release-note</code></td><td class="num">−1.09</td><td class="num">+0.16</td><td class="num">−1.95</td><td class="num">−2.88</td></tr>
+    <tr><td><code>multi-tool</code></td><td class="num">−0.58</td><td class="num">+0.35</td><td class="num">+1.93</td><td class="num">+1.70</td></tr>
+    <tr><td><code>responsive-checkout</code></td><td class="num">−1.97</td><td class="num">−0.67</td><td class="num">+2.63</td><td class="num">−0.01</td></tr>
+    <tr><td><code>security-audit</code></td><td class="num">−0.72</td><td class="num">−0.18</td><td class="num">+0.74</td><td class="num">−0.16</td></tr>
+    <tr><td><code>fanout</code></td><td class="num">−0.66</td><td class="num">−1.25</td><td class="num">+0.65</td><td class="num">−1.26</td></tr>
   </tbody>
 </table>
+</div>
 
-<p>Read column 2 and column 3 together: where T2 is ≥+5, T3 is ≤−5; where T2 is ≤−5, T3 is ≥+5. That's not a model artifact — it's a resource-contention signature.</p>
+<p>Read columns 2 and 3 together: where T2 is ≥+5, T3 is ≤−5; where T2 is ≤−5, T3 is ≥+5. That's not a model artifact — it's a resource-contention signature.</p>
 
-<p class="pull">The original spec assumed T2, T3, and T4 tap orthogonal sources of acceptable drafts (file content, schema, plan structure). In practice they compete with each other for the verifier's fixed <code>num_speculative_tokens = 12</code> per-step budget.</p>
+<p class="pull">The original spec assumed T2, T3, and T4 tap orthogonal sources of acceptable drafts (file content, schema, plan structure). In practice they compete for the verifier's fixed <code>num_speculative_tokens = 12</code> per-step budget.</p>
 
 <h3>Proposed mechanism: drafter slot contention</h3>
 <p>Each verifier pass has a 12-token budget. T1 produces <em>N₁</em> drafts from the suffix tree; T2 produces <em>N₂</em> drafts from primed file text; T3 produces <em>N₃</em> drafts from the schema FSM. The drafter coordinator must pick which to emit. With T2 and T3 both active (C), the priming-buffer drafts and the schema-aware drafts compete for the same slots:</p>
@@ -633,9 +780,9 @@
   <li>On <strong>file-edit-heavy</strong> frames (dead-flag, incident-evidence, transcript-merge), T2's drafts are highest-yield and T3 displaces them.</li>
   <li>On <strong>tool-call-envelope-heavy</strong> frames (policy-aware, responses-sdk), T3's drafts are highest-yield and T2 displaces them.</li>
 </ul>
-<p>Testable prediction: a workload-aware priority scheme (per-frame draft weights based on the predicted next-emission type) should let C match B-on-T2-tasks <em>and</em> B-on-T3-tasks simultaneously. That's the natural Round-5 follow-up.</p>
+<p>Testable prediction: a workload-aware priority scheme (per-frame draft weights based on the predicted next-emission type) should let C match B-on-T2-tasks <em>and</em> B-on-T3-tasks simultaneously. That is the natural Round-5 follow-up.</p>
 
-<h2 id="telemetry"><span class="num">7</span>Hardware telemetry &amp; contamination methodology</h2>
+<h2 id="telemetry"><span class="num">07</span>Hardware telemetry &amp; contamination methodology</h2>
 
 <p>Telemetry on consumer Blackwell (sm_120) is limited: DCGM profile fields (<code>sm_active_pct</code>, <code>dram_active_pct</code>, tensor-pipe utilization) are unavailable on this hardware tier. NVML gives us three fields: <code>power_w</code>, <code>gpu_util_pct</code>, <code>mem_copy_util_pct</code>.</p>
 
@@ -645,19 +792,21 @@
 <p>NVML's <code>gpu_util_pct</code> sits at 94–96% across all five points, <em>including OFF</em>. That field reports the fraction of time the GPU is processing any work, not actual compute intensity. With requests arriving constantly from the agent harness, the GPU is "busy" the same fraction of the time regardless of spec-decode setting. This metric is unusable for distinguishing techniques.</p>
 
 <h3>7.2 Power-as-contamination-detector caught 4 cells</h3>
-<p>Per-cell power_w analysis flagged 4 attempts with confirmed contamination: high power simultaneous with low decode_tps (a work–power inversion). All 4 originally clustered temporally on 2026-05-12 evening — a single ~3-hour window where external load on the host degraded those attempts.</p>
+<p>Per-cell <code>power_w</code> analysis flagged 4 attempts with confirmed contamination: high power simultaneous with low decode_tps (a work–power inversion). All 4 originally clustered temporally on 2026-05-12 evening — a single ~3-hour window where external load on the host degraded those attempts.</p>
 
+<div class="table-wrap">
 <table>
   <thead>
     <tr><th>Cell</th><th class="num">Original tps</th><th class="num">Original pwr</th><th class="num">Remeasured tps</th><th class="num">Remeasured pwr</th></tr>
   </thead>
   <tbody>
-    <tr><td>D / responses-sdk / run_02</td><td class="num">5.10</td><td class="num">45.2 W</td><td class="num win">16.63</td><td class="num">44.8 W</td></tr>
-    <tr><td>D / responses-sdk / run_03</td><td class="num">7.85</td><td class="num">46.6 W</td><td class="num win">16.23</td><td class="num">43.7 W</td></tr>
-    <tr><td>D / transcript-merge / run_02</td><td class="num">9.33</td><td class="num">43.2 W</td><td class="num win">14.45</td><td class="num">40.2 W</td></tr>
-    <tr><td>D / transcript-merge / run_03</td><td class="num">4.84</td><td class="num">43.5 W</td><td class="num win">11.37</td><td class="num">41.4 W</td></tr>
+    <tr><td><code>D / responses-sdk / run_02</code></td><td class="num">5.10</td><td class="num">45.2 W</td><td class="num win">16.63</td><td class="num">44.8 W</td></tr>
+    <tr><td><code>D / responses-sdk / run_03</code></td><td class="num">7.85</td><td class="num">46.6 W</td><td class="num win">16.23</td><td class="num">43.7 W</td></tr>
+    <tr><td><code>D / transcript-merge / run_02</code></td><td class="num">9.33</td><td class="num">43.2 W</td><td class="num win">14.45</td><td class="num">40.2 W</td></tr>
+    <tr><td><code>D / transcript-merge / run_03</code></td><td class="num">4.84</td><td class="num">43.5 W</td><td class="num win">11.37</td><td class="num">41.4 W</td></tr>
   </tbody>
 </table>
+</div>
 
 <p>Remeasured 2026-05-17 under a verified host-quiet relaunch (load 0.17, vLLM the only GPU compute process). Contamination did not recur; the cell-max-tps / cell-min-power reference detector caught all 4 contaminated attempts and zero false-positives on A/B/C/OFF.</p>
 
@@ -665,7 +814,7 @@
 
 <p>That single methodological move flipped the directional conclusion of the report from "+3% net gain from the full stack on top of T1" to "−7% net cost from the full stack on top of T1."</p>
 
-<h2 id="validity"><span class="num">8</span>Limitations &amp; threats to validity</h2>
+<h2 id="validity"><span class="num">08</span>Limitations &amp; threats to validity</h2>
 <ol class="tight">
   <li><strong>Corpus size.</strong> 11 tasks × 4 attempts gives cell-level CIs of roughly ±2–3 tps. Differences smaller than that should be read as flat.</li>
   <li><strong>Single hardware × single model.</strong> Results are specific to GB10 / Qwen 3.5-27B FP8. The slot-contention finding may relax on larger models with more per-token compute.</li>
@@ -674,22 +823,24 @@
   <li><strong>Telemetry gaps on consumer Blackwell.</strong> Cannot distinguish "GPU is busy because spec-decode is working" from "GPU is busy because verifier pass is rejecting drafts."</li>
 </ol>
 
-<h2 id="shipping"><span class="num">9</span>Shipping decision</h2>
+<h2 id="shipping"><span class="num">09</span>Shipping decision</h2>
 
 <p>The choice is between <strong>T1 alone</strong> (throughput-optimized, aggregate-best) and <strong>D = full stack</strong> (pass-rate-optimized, +5 absolute passes on sqlalchemy):</p>
 
+<div class="table-wrap">
 <table>
   <thead>
     <tr><th>Metric</th><th class="num">T1 alone (A)</th><th class="num">Full stack (D)</th><th>Winner</th></tr>
   </thead>
   <tbody>
     <tr><td>Aggregate decode_tps median</td><td class="num">18.24</td><td class="num">17.02</td><td class="win">T1 (+7%)</td></tr>
-    <tr><td>Aggregate pass count</td><td class="num">9 / 44 (20.5%)</td><td class="num">14 / 44 (31.8%)</td><td class="win">D (+11.3pp)</td></tr>
+    <tr><td>Aggregate pass count</td><td class="num">9 / 44 · 20.5%</td><td class="num">14 / 44 · 31.8%</td><td class="win">D (+11.3pp)</td></tr>
     <tr><td>Cells with regression &gt; 5 tps</td><td class="num">0</td><td class="num">4</td><td class="win">T1</td></tr>
     <tr><td>Tasks with technique-dependent pass</td><td class="num">0</td><td class="num">1 (sqlalchemy)</td><td class="win">D</td></tr>
     <tr><td>Implementation complexity</td><td>lowest</td><td>highest</td><td class="win">T1</td></tr>
   </tbody>
 </table>
+</div>
 
 <p><strong>Recommendation: ship D.</strong> Pass rate is the binding constraint at 31.8%; the +5-pass advantage on a single multi-file iterative refactor task is worth the 7% throughput cost. If a future model improves correctness enough that sqlalchemy 4/4 lands at A as well, the recommendation flips back to T1-alone for simplicity.</p>
 
@@ -697,173 +848,216 @@
 
 <h2 id="about"><span class="num">10</span>About this work</h2>
 
-<p>This page summarizes the Round 4b ablation from the <strong>Lumo FlyWheel</strong> project — a self-hosted serving + benchmark stack I built to study inference-time techniques for coding agents on consumer hardware. The repository contains the full vLLM serving layer, the proxy that normalizes Codex Responses-API tool calls, the eleven-family benchmark corpus and its deterministic graders, the run drivers and contamination detectors, and the formal report this page condenses from.</p>
+<p>This page summarizes the Round 4b ablation from the <strong>Lumo FlyWheel</strong> project — a self-hosted serving and benchmark stack I built to study inference-time techniques for coding agents on consumer hardware. The repository contains the full vLLM serving layer, the proxy that normalizes Codex Responses-API tool calls, the eleven-family benchmark corpus and its deterministic graders, the run drivers and contamination detectors, and the formal report this page condenses from.</p>
 
 <p>Over the seven-day measurement window (2026-05-11 through 2026-05-17) the repository accumulated roughly 90 commits, mostly attempt-level run logs that capture the round-by-round progression of the ablation. The full formal report (<code>track-b-round4b-ablation-formal-report-20260516.md</code>) is 1,029 lines; this page is the engineer-facing condensation.</p>
 
 <h3>What you're looking at, if you're a recruiter or hiring manager</h3>
-<p>This is end-to-end ML systems work: an inference-time research question (does harness-coupled speculative decoding actually compose?), built end-to-end on real hardware (a single consumer-Blackwell GPU), measured with an honest experimental design (cumulative ablation, sample-size-aware), and reported with discipline (contamination detected, retracted, re-measured rather than excluded; conclusions revised when the data demanded it). The most interesting result &mdash; the T2↔T3 mirror &mdash; surfaced because the ablation was prefix-cumulative; a one-shot A/B against baseline would have missed it.</p>
+<p>This is end-to-end ML systems work: an inference-time research question (does harness-coupled speculative decoding actually compose?), built end-to-end on real hardware (a single consumer-Blackwell GPU), measured with an honest experimental design (cumulative ablation, sample-size-aware), and reported with discipline (contamination detected, retracted, re-measured rather than excluded; conclusions revised when the data demanded it). The most interesting result — the T2↔T3 mirror — surfaced because the ablation was prefix-cumulative; a one-shot A/B against baseline would have missed it.</p>
 
 <h3>What you're looking at, if you work in this space</h3>
-<p>The contributions are (1) an empirical attribution table for a harness-coupled spec-decode stack on a real coding-agent workload, (2) the slot-contention hypothesis as a falsifiable mechanism for the T2↔T3 mirror, and (3) a contamination-detection protocol (cell-max-tps + cell-min-power as references, work-power inversion flag) that closed a P1 measurement gate by re-measuring 4/220 cells. The runtime config is fully reproducible: <code>method=suffix, num_speculative_tokens=12, suffix_decoding_max_cached_requests=1000, max_spec_factor=2.0, max_tree_depth=32, min_token_prob=0.05</code>, frozen at <code>sha256:5ae88ac4…</code>.</p>
+<p>The contributions are (1) an empirical attribution table for a harness-coupled spec-decode stack on a real coding-agent workload, (2) the slot-contention hypothesis as a falsifiable mechanism for the T2↔T3 mirror, and (3) a contamination-detection protocol (cell-max-tps + cell-min-power as references, work-power inversion flag) that closed a P1 measurement gate by re-measuring 4 of 220 cells. The runtime config is fully reproducible: <code>method=suffix, num_speculative_tokens=12, suffix_decoding_max_cached_requests=1000, max_spec_factor=2.0, max_tree_depth=32, min_token_prob=0.05</code>, frozen at <code>sha256:5ae88ac4…</code>.</p>
 
 <h3>Repository &amp; reproduction</h3>
-<p>Code, data, and the full report:
-<a href="https://github.com/MaCoredroid/Lumo_FlyWheel">github.com/MaCoredroid/Lumo_FlyWheel</a></p>
-<p>Headline aggregate can be reproduced via:</p>
-<pre><code>python3 scripts/full_data_sweep.py
-# writes output/track_b_e2e_v4a_v2_report_data.json</code></pre>
-<p>Contamination detector:</p>
-<pre><code>python3 scripts/contamination_sweep.py</code></pre>
+<p>Code, data, and the full report: <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">github.com/MaCoredroid/Lumo_FlyWheel</a></p>
+<pre><code><span class="com"># reproduce headline aggregate</span>
+python3 scripts/full_data_sweep.py
+
+<span class="com"># run contamination detector</span>
+python3 scripts/contamination_sweep.py</code></pre>
 
 <footer>
-  <p>Mark Ma · <a href="mailto:coredroid0401@gmail.com">coredroid0401@gmail.com</a> · <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Lumo FlyWheel</a><br>
-  Last updated 2026-05-17. Built as a single static page; data inline. Charts: Chart.js. Typography: Tinos, Lora, JetBrains Mono.</p>
+  <p><strong style="color:var(--ink);">Mark Ma</strong> · <a href="mailto:coredroid0401@gmail.com">coredroid0401@gmail.com</a> · <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Lumo FlyWheel</a></p>
+  <p>Last updated May 17, 2026 · Single static page · Charts: Chart.js · Type: Inter, Fraunces, JetBrains Mono</p>
 </footer>
 
 </div>
 
 <script>
-// -------------------- Chart 1: Per-point aggregate decode_tps --------------------
-(function () {
-  const ctx = document.getElementById('chartAgg').getContext('2d');
-  const ink  = '#1F1B16';
-  const muted = '#6F665A';
-  const rule  = '#DCD3BD';
-  const accent = '#B85C2C';
-
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['OFF', 'A · T1', 'B · T1+T2', 'C · T1+T2+T3', 'D · full stack'],
-      datasets: [{
-        label: 'decode tokens / second (median)',
-        data: [5.59, 18.24, 17.96, 17.06, 17.02],
-        backgroundColor: [ink, accent, accent, accent, accent],
-        borderWidth: 0,
-        borderRadius: 2,
-        barPercentage: 0.62
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function (ctx) {
-              const v = ctx.parsed.y;
-              const sp = (v / 5.59).toFixed(2);
-              return v.toFixed(2) + ' tps  (' + sp + '× vs OFF)';
-            }
-          }
-        },
-        title: { display: false }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          grid: { color: rule, drawBorder: false },
-          ticks: {
-            color: muted,
-            font: { family: 'Lora, Georgia, serif', size: 12 },
-            callback: function (v) { return v + ' tps'; }
-          }
-        },
-        x: {
-          grid: { display: false },
-          ticks: {
-            color: ink,
-            font: { family: 'Tinos, Georgia, serif', size: 13 }
-          }
-        }
-      }
-    }
-  });
-})();
-
-// -------------------- Chart 2: Per-task technique deltas (stacked horizontal) --------------------
-(function () {
-  const ctx = document.getElementById('chartDeltas').getContext('2d');
-  const muted = '#6F665A';
-  const rule  = '#DCD3BD';
-  const green = '#4F6B3A';
-  const red   = '#A33C2C';
-
-  const labels = [
-    'dead-flag',
-    'incident-evidence',
-    'sqlalchemy',
-    'multi-tool',
-    'security-audit',
-    'responsive-checkout',
-    'fanout',
-    'transcript-merge',
-    'release-note',
-    'policy-aware',
-    'responses-sdk'
-  ];
-
-  // Per-task marginal deltas: [T1 (A−OFF), T2 (B−A), T3 (C−B), T4 (D−C)]
-  const T1 = [12.65, 16.48, 22.26, 11.66, 11.34, 10.16, 11.75,  9.86, 19.81, 14.57, 18.10];
-  const T2 = [ 9.47,  8.64,  2.13, -0.58, -0.72, -1.97, -0.66,  6.97, -1.09, -6.46, -5.52];
-  const T3 = [-10.65, -10.07, -2.06,  0.35, -0.18, -0.67, -1.25, -6.47,  0.16,  7.62,  4.53];
-  const T4 = [ 10.64,  4.40,  1.27,  1.93,  0.74,  2.63,  0.65, -2.75, -1.95, -5.19, -5.95];
-
-  function color(arr, posClr, negClr) {
-    return arr.map(function (v) { return v >= 0 ? posClr : negClr; });
+(function bootCharts() {
+  function fallback() { document.body.classList.add('no-charts'); }
+  if (typeof Chart === 'undefined') {
+    setTimeout(function () { if (typeof Chart === 'undefined') fallback(); else build(); }, 800);
+  } else {
+    build();
   }
 
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [
-        { label: 'T1 (A − OFF)',  data: T1, backgroundColor: '#B85C2C', stack: 's1', borderWidth: 0 },
-        { label: 'T2 (B − A)',    data: T2, backgroundColor: color(T2, green, red), stack: 's2', borderWidth: 0 },
-        { label: 'T3 (C − B)',    data: T3, backgroundColor: color(T3, green, red), stack: 's3', borderWidth: 0 },
-        { label: 'T4 (D − C)',    data: T4, backgroundColor: color(T4, green, red), stack: 's4', borderWidth: 0 }
-      ]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'top',
-          labels: {
-            color: muted,
-            font: { family: 'Tinos, Georgia, serif', size: 12 },
-            boxWidth: 14, boxHeight: 10
-          }
+  function build() {
+    var ink     = '#161513';
+    var ink2    = '#2c2a26';
+    var muted   = '#76726b';
+    var rule    = '#e4e1d8';
+    var rule2   = '#d4d0c4';
+    var accent  = '#2f6f4f';
+    var accent2 = '#1f4e37';
+    var green   = '#3a8a5c';
+    var red     = '#b03a2e';
+    var bgGrey  = '#a09c93';
+
+    Chart.defaults.color = muted;
+    Chart.defaults.borderColor = rule;
+    Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+    Chart.defaults.font.size = 12;
+
+    // ───── Figure 1 ─────
+    var ctx1 = document.getElementById('chartAgg');
+    if (ctx1) {
+      new Chart(ctx1, {
+        type: 'bar',
+        data: {
+          labels: ['OFF', 'A · T1', 'B · T1+T2', 'C · T1+T2+T3', 'D · full'],
+          datasets: [{
+            label: 'decode tps (median)',
+            data: [5.59, 18.24, 17.96, 17.06, 17.02],
+            backgroundColor: [bgGrey, accent, accent, accent, accent2],
+            borderWidth: 0,
+            borderRadius: 3,
+            barPercentage: 0.62,
+            categoryPercentage: 0.78
+          }]
         },
-        tooltip: {
-          callbacks: {
-            label: function (c) {
-              return c.dataset.label + ': ' + (c.parsed.x >= 0 ? '+' : '') + c.parsed.x.toFixed(2) + ' tps';
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 500 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#161513',
+              titleColor: '#fff',
+              bodyColor: '#fff',
+              borderColor: 'transparent', borderWidth: 0,
+              titleFont: { family: 'Inter', size: 12, weight: '600' },
+              bodyFont: { family: 'JetBrains Mono', size: 11.5 },
+              padding: 10, displayColors: false,
+              callbacks: {
+                label: function (c) {
+                  var v = c.parsed.y;
+                  return v.toFixed(2) + ' tps  (' + (v / 5.59).toFixed(2) + '× vs OFF)';
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: rule, drawBorder: false, lineWidth: 1 },
+              border: { display: false },
+              ticks: {
+                color: muted,
+                font: { family: 'JetBrains Mono', size: 11 },
+                callback: function (v) { return v; },
+                padding: 8
+              },
+              title: {
+                display: true, text: 'tokens / second (median)',
+                color: muted, font: { family: 'Inter', size: 11.5, style: 'italic' }, padding: { bottom: 8 }
+              }
+            },
+            x: {
+              grid: { display: false },
+              border: { color: rule2 },
+              ticks: {
+                color: ink,
+                font: { family: 'Inter', size: 12.5, weight: '500' },
+                padding: 8
+              }
             }
           }
         }
-      },
-      scales: {
-        x: {
-          grid: { color: rule, drawBorder: false },
-          ticks: {
-            color: muted,
-            font: { family: 'Lora, Georgia, serif', size: 11 },
-            callback: function (v) { return (v > 0 ? '+' : '') + v + ' tps'; }
-          },
-          title: { display: true, text: 'Marginal Δ decode_tps per technique', color: muted, font: { family: 'Tinos, Georgia, serif', size: 12, style: 'italic' } }
-        },
-        y: {
-          grid: { display: false },
-          ticks: { color: '#1F1B16', font: { family: 'JetBrains Mono, monospace', size: 11 } }
-        }
-      }
+      });
     }
-  });
+
+    // ───── Figure 2 ─────
+    var ctx2 = document.getElementById('chartDeltas');
+    if (ctx2) {
+      var labels = [
+        'dead-flag', 'incident-evidence', 'sqlalchemy', 'multi-tool',
+        'security-audit', 'responsive-checkout', 'fanout', 'transcript-merge',
+        'release-note', 'policy-aware', 'responses-sdk'
+      ];
+      var T1 = [12.65, 16.48, 22.26, 11.66, 11.34, 10.16, 11.75,  9.86, 19.81, 14.57, 18.10];
+      var T2 = [ 9.47,  8.64,  2.13, -0.58, -0.72, -1.97, -0.66,  6.97, -1.09, -6.46, -5.52];
+      var T3 = [-10.65, -10.07, -2.06,  0.35, -0.18, -0.67, -1.25, -6.47,  0.16,  7.62,  4.53];
+      var T4 = [ 10.64,  4.40,  1.27,  1.93,  0.74,  2.63,  0.65, -2.75, -1.95, -5.19, -5.95];
+
+      function colorize(arr, posColor, negColor) {
+        return arr.map(function (v) { return v >= 0 ? posColor : negColor; });
+      }
+
+      new Chart(ctx2, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'T1', data: T1, backgroundColor: accent,                        stack: 's1', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
+            { label: 'T2', data: T2, backgroundColor: colorize(T2, green, red),      stack: 's2', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
+            { label: 'T3', data: T3, backgroundColor: colorize(T3, green, red),      stack: 's3', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
+            { label: 'T4', data: T4, backgroundColor: colorize(T4, green, red),      stack: 's4', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 500 },
+          plugins: {
+            legend: {
+              position: 'top', align: 'end',
+              labels: {
+                color: ink2,
+                font: { family: 'Inter', size: 12, weight: '500' },
+                boxWidth: 12, boxHeight: 10, padding: 14,
+                usePointStyle: false
+              }
+            },
+            tooltip: {
+              backgroundColor: '#161513',
+              titleColor: '#fff', bodyColor: '#fff',
+              borderColor: 'transparent', borderWidth: 0,
+              titleFont: { family: 'Inter', size: 12, weight: '600' },
+              bodyFont: { family: 'JetBrains Mono', size: 11.5 },
+              padding: 10, displayColors: false,
+              callbacks: {
+                label: function (c) {
+                  var v = c.parsed.x;
+                  return c.dataset.label + ': ' + (v >= 0 ? '+' : '') + v.toFixed(2) + ' tps';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: rule, drawBorder: false },
+              border: { display: false },
+              ticks: {
+                color: muted,
+                font: { family: 'JetBrains Mono', size: 11 },
+                callback: function (v) { return (v > 0 ? '+' : '') + v; },
+                padding: 6
+              },
+              title: {
+                display: true,
+                text: 'Δ decode_tps — each segment is one technique on this task',
+                color: muted,
+                font: { family: 'Inter', size: 11.5, style: 'italic' },
+                padding: { top: 8 }
+              }
+            },
+            y: {
+              grid: { display: false },
+              border: { color: rule2 },
+              ticks: {
+                color: ink2,
+                font: { family: 'JetBrains Mono', size: 11.5 },
+                padding: 8
+              }
+            }
+          }
+        }
+      });
+    }
+  }
 })();
 </script>
 </body>
