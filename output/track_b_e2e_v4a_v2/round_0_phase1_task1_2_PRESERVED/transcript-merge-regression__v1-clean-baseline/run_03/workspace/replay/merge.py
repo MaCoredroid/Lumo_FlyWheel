@@ -13,7 +13,7 @@ def load_jsonl(path: str | Path) -> list[dict]:
 
 
 def _event_key(event: dict) -> object:
-    # Use event_id for stable identity, not role/name grouping
+    # Use event_id for stable identity, never derive from fixture order alone
     return event.get("event_id") or f"{event.get('kind')}:{event.get('sequence', 0)}"
 
 
@@ -29,6 +29,9 @@ def merge_records(records: list[dict]) -> list[dict]:
             row.get("event_id", ""),
         ),
     ):
+        # Drop all post-completion debug-only fragments
+        if seen_completion and event.get("debug_only"):
+            continue
         if event.get("kind") == "response.completed":
             seen_completion = True
             continue
@@ -43,8 +46,6 @@ def merge_records(records: list[dict]) -> list[dict]:
             existing["content_parts"].append(event.get("content", ""))
             existing["sequence"] = max(existing.get("sequence", 0), event.get("sequence", 0))
             existing["debug_only"] = existing.get("debug_only", False) or event.get("debug_only", False)
-        if seen_completion and event.get("debug_only"):
-            by_key[key]["after_completion"] = True
     for event in merged:
         event["content"] = "".join(event.pop("content_parts", []))
     return merged

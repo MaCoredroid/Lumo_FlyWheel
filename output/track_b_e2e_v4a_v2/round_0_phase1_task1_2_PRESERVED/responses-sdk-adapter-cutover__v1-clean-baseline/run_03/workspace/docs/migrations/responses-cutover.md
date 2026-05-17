@@ -1,38 +1,27 @@
 # Responses Cutover
 
-## Overview
+Migrate from the legacy chat-wrapper path to Responses event semantics.
 
-This workspace has migrated from the legacy chat-wrapper path to Responses event semantics.
+## Configuration Changes
 
-## Changes
-
-- Wire API
-
-- `wire_api` is now set to `responses` instead of `chat_completions`.
-- `transcript_mode` is now set to `responses_events` instead of `legacy_messages`.
+- The runtime now uses the Responses wire path (`wire_api = "responses"`).
+- Transcript mode is set to Responses events (`transcript_mode = "responses_events"`).
 
 ## Event Ordering
 
-Events are now processed in strict chronological order as they appear in the Responses event stream. The order of events in the transcript is preserved exactly:
-
-1. `assistant_text` events represent assistant message content.
-2. `tool_call` events represent function invocation requests with `call_id`, `name`, and `arguments`.
-3. `tool_result` events represent function execution results with `call_id` and `output`.
-
-The sequence of events must not be reordered during serialization, deserialization, or replay.
+- Event ordering is preserved end-to-end. Each event carries a monotonically increasing sequence ID that must be respected during replay.
+- Do not reorder, deduplicate, or skip events during transcript processing.
+- Event sequence IDs are the source of truth for ordering; timestamps are informational only.
 
 ## Tool-Result Correlation
 
-Tool calls and their results are correlated via the `call_id` field:
-
-- Each `tool_call` event includes a unique `call_id`.
-- The corresponding `tool_result` event references the same `call_id`.
-- This correlation is preserved through serialization and replay to ensure accurate reconstruction of the conversation flow.
+- Tool calls and their results are correlated via stable `call_id` values.
+- Each `tool_call` event includes a unique `call_id`; the corresponding `tool_result` event references the same `call_id`.
+- During replay, maintain a pending tool-call map keyed by `call_id` to match results to their originating calls.
+- Do not infer tool outcomes from rendered transcript text; use only the structured `tool_result` events.
 
 ## Replay Semantics
 
-Replay is event-sourced: events are deserialized from the transcript format directly without rebuilding state from rendered text. This ensures:
-
-- Exact event ordering is maintained.
-- Tool-result correlation via `call_id` is preserved.
-- No information is lost during replay.
+- Replay is event-sourced: state is reconstructed by applying the event log in sequence.
+- Do not rebuild state from rendered transcript text.
+- Preserve the original event stream; do not normalize or transform event payloads during replay.

@@ -13,6 +13,7 @@ def load_jsonl(path: str | Path) -> list[dict]:
 
 
 def _event_key(event: dict) -> object:
+    # Use event_id for stable identity; fall back to kind:sequence if no event_id
     return event.get("event_id") or f"{event.get('kind')}:{event.get('sequence', 0)}"
 
 
@@ -31,6 +32,9 @@ def merge_records(records: list[dict]) -> list[dict]:
         if event.get("kind") == "response.completed":
             seen_completion = True
             continue
+        # Skip debug_only fragments after completion
+        if seen_completion and event.get("debug_only"):
+            continue
         key = _event_key(event)
         existing = by_key.get(key)
         if existing is None:
@@ -42,11 +46,9 @@ def merge_records(records: list[dict]) -> list[dict]:
             existing["content_parts"].append(event.get("content", ""))
             existing["sequence"] = max(existing.get("sequence", 0), event.get("sequence", 0))
             existing["debug_only"] = existing.get("debug_only", False) or event.get("debug_only", False)
-        if seen_completion and event.get("debug_only"):
-            by_key[key]["after_completion"] = True
     for event in merged:
         event["content"] = "".join(event.pop("content_parts", []))
-    return [e for e in merged if not (e.get("after_completion") and e.get("debug_only"))]
+    return merged
 
 
 def merge_paths(paths: list[str | Path]) -> list[dict]:
@@ -54,4 +56,3 @@ def merge_paths(paths: list[str | Path]) -> list[dict]:
     for path in paths:
         records.extend(load_jsonl(path))
     return merge_records(records)
-

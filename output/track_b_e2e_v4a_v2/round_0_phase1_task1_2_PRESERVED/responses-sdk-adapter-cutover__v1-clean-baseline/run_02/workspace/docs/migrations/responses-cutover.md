@@ -2,24 +2,30 @@
 
 ## Overview
 
-This workspace has migrated from the legacy chat-wrapper path to Responses event semantics.
+This document covers the migration from the legacy chat-wrapper path to Responses event semantics.
 
 ## Event Ordering
 
 - Events are processed in strict sequential order as they appear in the transcript.
-- Each event carries a monotonically increasing sequence number.
-- Replay must preserve the original event order; do not reorder or deduplicate events.
-- Event-sourced replay reads must be performed in order to maintain causal consistency.
+- Each event carries a monotonically increasing sequence identifier.
+- Replay must preserve the original event order to maintain causal consistency.
+- Do not reorder or batch events during replay; process them in the order recorded.
 
 ## Tool-Result Correlation
 
-- Tool calls and their results are correlated via a stable `call_id` field.
-- Each tool call event emits a unique `call_id`.
-- The corresponding tool result event references the same `call_id`.
-- Correlation must be preserved during replay; do not rely on `call_id` matching, not positional heuristics.
+- Tool calls and their results are correlated via a unique `call_id` field.
+- Each tool_call event includes a `call_id` that matches its corresponding tool_result event.
+- During replay, maintain a mapping of pending tool calls by `call_id` to correlate results.
+- Tool results must be applied only after their corresponding tool_call event has been processed.
 
-## Replay Behavior
+## Replay Semantics
 
-- Replay is event-sourced: process raw events directly without rebuilding state from rendered transcript text.
-- Do not parse or reconstruct state from message text; use the structured event payload.
-- Maintain event fidelity to ensure deterministic replay.
+- Replay is event-sourced: state is rebuilt by processing the event stream, not from rendered transcript text.
+- Do not attempt to reconstruct state by parsing rendered message text.
+- The event stream is the single source of truth for replay operations.
+
+## Configuration
+
+- The required config file is `config/runtime.toml`.
+- Set `wire_api = "responses"` to use the Responses wire path.
+- Set `transcript_mode = "responses_events"` to enable event-sourced replay.

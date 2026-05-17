@@ -10,4 +10,4 @@ def request_wire_config():
 
 
 def extract_response_items(response):
-    return response["choices"][0]["message"]["content"]
+    return response["items"]
