@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUT_ROOT = REPO_ROOT / "output/track_b_e2e_qwen36_ablation"
+OUT_ROOT = REPO_ROOT / "output/track_b_e2e_qwen36_temp06_ablation"
 WARMUP_SP_JSON = REPO_ROOT / "output/track_b_e2e_v4a/round_0/codex_system_prompt.json"
 RESET_PREFIX_CACHE_URL = "http://127.0.0.1:9950/reset_prefix_cache"
 ENDPOINT = "http://127.0.0.1:8022/v1"
