@@ -476,15 +476,16 @@
   <div class="toc-label">Contents</div>
   <ol>
     <li><span class="n">01</span><a href="#why">Why this matters</a></li>
-    <li><span class="n">02</span><a href="#stack">The four-technique stack</a></li>
-    <li><span class="n">03</span><a href="#design">Experimental design</a></li>
-    <li><span class="n">04</span><a href="#results">Headline results</a></li>
-    <li><span class="n">05</span><a href="#per-tech">Per-technique decomposition</a></li>
-    <li><span class="n">06</span><a href="#mirror">The mirror-image finding</a></li>
-    <li><span class="n">07</span><a href="#telemetry">Hardware telemetry &amp; contamination</a></li>
-    <li><span class="n">08</span><a href="#validity">Limitations &amp; threats to validity</a></li>
-    <li><span class="n">09</span><a href="#shipping">Shipping decision</a></li>
-    <li><span class="n">10</span><a href="#about">About this work</a></li>
+    <li><span class="n">02</span><a href="#built">What I built before measuring anything</a></li>
+    <li><span class="n">03</span><a href="#stack">The four-technique stack</a></li>
+    <li><span class="n">04</span><a href="#design">Experimental design</a></li>
+    <li><span class="n">05</span><a href="#results">Headline results</a></li>
+    <li><span class="n">06</span><a href="#per-tech">Per-technique decomposition</a></li>
+    <li><span class="n">07</span><a href="#mirror">The mirror-image finding</a></li>
+    <li><span class="n">08</span><a href="#telemetry">Hardware telemetry &amp; contamination</a></li>
+    <li><span class="n">09</span><a href="#validity">Limitations &amp; threats to validity</a></li>
+    <li><span class="n">10</span><a href="#shipping">Shipping decision</a></li>
+    <li><span class="n">11</span><a href="#about">About this work</a></li>
   </ol>
 </nav>
 
@@ -496,7 +497,88 @@
 
 <p>The contribution of this work is not just <em>"we got 3×."</em> It is the per-technique decomposition that lets future iterations know which knobs to leave alone and which to gate on workload.</p>
 
-<h2 id="stack"><span class="num">02</span>The four-technique stack</h2>
+<h2 id="built"><span class="num">02</span>What I built before measuring anything</h2>
+
+<p>The "I got 3×" line in §1 buries the prerequisite work. Before any of the speculative-decoding measurements could exist there had to be (a) a benchmark to measure on, and (b) a serving stack that Codex CLI and vLLM could actually talk over. I authored both. They are the load-bearing artifacts of this project.</p>
+
+<h3>2.1 CNB-55: a benchmark I authored end-to-end</h3>
+
+<p>The eleven tasks measured in this report are <strong>my own benchmark</strong>, not a borrowed one. I designed it as <strong>CNB-55</strong> — a Linux-only, offline, reproducible agentic eval built around <code>codex exec</code> as the reference runner — and authored every part of the stack:</p>
+
+<ul class="tight">
+  <li><strong>Task content.</strong> Each family is a workspace bundle (real source tree, fixtures, AGENTS.md prompt, hidden state) plus a five-level variant progression (V1–V5) that hardens the task through a probe → harden → re-probe loop. The repository currently holds <strong>39 verifier directories</strong> under <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/verifiers"><code>verifiers/</code></a>, with matching workspace bundles under <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/scenario_families"><code>scenario_families/</code></a> and per-family <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/verifier_data"><code>verifier_data/</code></a>. Round 4b uses the eleven that have cleared the v4a_v2 freeze gate.</li>
+  <li><strong>Deterministic judges.</strong> Every family gets a five-milestone Python scorer that runs against the agent's modified workspace — for example <code>verifiers/dead-flag-reachability-audit/<wbr>score_reachability.py</code>, <code>verifiers/multi-tool-transaction-repair/<wbr>score_transaction_repair.py</code>, <code>verifiers/security-audit-hotfix-remediation/<wbr>score_hotfix.py</code>, <code>verifiers/responses-sdk-adapter-cutover/<wbr>score_responses_cutover.py</code>. Scoring is local-Python, fully deterministic, and the test gates ride inside the same docker container that the agent ran in — no LLM-as-judge in the loop. P_benchmark ≥ 65 ⇒ pass.</li>
+  <li><strong>Calibration.</strong> The whole pattern is calibrated so a frontier model — <code>codex exec --model gpt-5.4 --reasoning-effort high</code> — scores in the 15–25 band, with deliberate headroom. Not saturated (≥70) and not noise (≤5). The authoring spec, <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/CNB-55-authoring-spec.md"><code>CNB-55-authoring-spec.md</code></a>, locks the contract every family must meet before admission (workload type, hidden-state shape, milestone definitions, variant progression, freeze gate).</li>
+  <li><strong>Why a new benchmark at all.</strong> SWE-Bench Verified is saturated (≈80% at frontier). The next-gen benchmarks (SWE-Bench Pro, ALE-Bench, BrowseComp-Plus, AppWorld, ToolSandbox) target the properties Verified under-tests: long-horizon reasoning, partial credit, contamination resistance, managerial judgment. CNB-55 lives in that next-gen space, Linux-native and Codex-first.</li>
+</ul>
+
+<p>That is the substrate this whole report sits on. The numbers in §4 are not "what spec-decode does to a benchmark someone else built"; they are "what spec-decode does to the benchmark I built to stress-test Codex-style agents."</p>
+
+<h3>2.2 Engineering required to make Qwen 3.5 + vLLM + Codex actually run</h3>
+
+<p>Codex CLI talks the OpenAI <strong>Responses API</strong> with stateful event semantics; vLLM 0.19 does not natively speak it; Qwen 3.5-27B has its own quirks; the GB10 (sm_120 consumer Blackwell) is on a hardware tier that wants different fallbacks than the spec defaults. Getting from "vLLM serves Qwen on this GPU" to "Codex CLI can drive a real agentic loop against it for 30 minutes without a stall" was its own multi-week project. The headline fixes I shipped:</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Layer</th><th>Problem</th><th>Fix</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>vLLM ↔ Codex</td>
+      <td>Codex emits Responses-API requests; vLLM expects Chat Completions plus tool calls. Direct wiring fails on tool-call payload shape.</td>
+      <td>Built an inference-only proxy at <code>127.0.0.1:8022</code> that normalizes Codex Responses payloads, rewrites tool-call envelopes, and forwards to vLLM. (<a href="https://github.com/MaCoredroid/Lumo_FlyWheel/commits/main?after=cff55fe">commit chain</a>)</td>
+    </tr>
+    <tr>
+      <td>vLLM upstream</td>
+      <td>vLLM rejects FP8 <code>fp8_e5m2</code> KV cache against the FP8 weights checkpoint.</td>
+      <td>vLLM <a href="https://github.com/vllm-project/vllm/pull/39055">PR #39055</a> + serving guard ("Benchmark-validity §13"); auto-fallback to <code>--kv-cache-dtype auto</code> in the launcher.</td>
+    </tr>
+    <tr>
+      <td>Streaming protocol</td>
+      <td>vLLM's streaming response stream doesn't emit some events Codex's parser requires; the agent stalls mid-task.</td>
+      <td>Proxy-side streaming-protocol <strong>event synthesis</strong> — proxy injects the missing SSE frames so Codex sees a valid Responses event stream. ("§14 streaming-protocol synthesis fix")</td>
+    </tr>
+    <tr>
+      <td>Input validation</td>
+      <td>vLLM's input-validation rules differ between streaming and non-streaming endpoints, so a payload that passes one path fails the other.</td>
+      <td>Proxy-side input <strong>normalization</strong> — proxy massages the payload so both vLLM endpoints accept the same Codex request. ("§16 proxy input normalization")</td>
+    </tr>
+    <tr>
+      <td>Qwen 3.5 stops emitting</td>
+      <td>Qwen 3.5-27B periodically <em>stops emitting work mid-task</em> — Codex's outer loop iterates, the model returns an empty completion, the agent dies on the clock. Was the headline blocker preventing any end-to-end Codex run from completing.</td>
+      <td><strong>Auto-continue</strong> workaround: when the model emits an empty or under-budget completion, the harness silently re-issues a continuation prompt with the prior <code>previous_response_id</code>. The repo's commit message records it bluntly: <em>"auto-continue is load-bearing — qwen3.5-27b END-TO-END SUCCESS."</em> ("§17") The investigation walked through three other dead-ends first (chat-template tweaks, non-streaming bypass) and ruled them out empirically.</td>
+    </tr>
+    <tr>
+      <td>GB10 host memory</td>
+      <td>The DGX Spark host accumulates page cache between vLLM startups; subsequent loads OOM or get evicted.</td>
+      <td>Automatic host-memory recovery hook inside <code>ModelServer.start()</code>/<code>.stop()</code>: <code>sync; echo 3 &gt; /proc/sys/vm/drop_caches; swapoff -a; swapon -a</code>. Documented in <a href="https://github.com/MaCoredroid/Lumo_FlyWheel#gb10-host-cleanup">README §GB10 host cleanup</a>.</td>
+    </tr>
+    <tr>
+      <td>FP8 CUTLASS startup</td>
+      <td>vLLM dies inside the FP8 CUTLASS path on this GPU tier during certain init paths.</td>
+      <td>Launcher auto-retries with <code>--enforce-eager</code>; also auto-steps <code>--gpu-memory-utilization</code> down from spec default → 0.85 → 0.65 when VRAM is short.</td>
+    </tr>
+    <tr>
+      <td>Container build</td>
+      <td>The stock <code>vllm/vllm-openai</code> image doesn't compose with sm_120; needed an NVIDIA-base image with CUTLASS FP8 paths enabled.</td>
+      <td>Self-built image <code>lumo-flywheel-vllm:26.01-py3-v0.19.0</code> from <code>nvcr.io/nvidia/pytorch:26.01-py3</code> (<a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docker/Dockerfile.nvidia-vllm">docker/Dockerfile.nvidia-vllm</a>).</td>
+    </tr>
+    <tr>
+      <td>Run isolation</td>
+      <td>Codex's own docker containers, if reused across attempts, leaked workspace state and contaminated wall-clock numbers.</td>
+      <td>Per-attempt docker isolation: each Codex run gets a fresh container, fresh workspace, fresh proxy capture file — verified via the contamination audit in §7.</td>
+    </tr>
+    <tr>
+      <td>Measurement substrate</td>
+      <td>vLLM's built-in metrics don't break down per-call decode time or per-call accept rate; the data needed for this study didn't exist upstream.</td>
+      <td>Proxy-side per-request capture (<code>vllm_request_metrics.jsonl</code>): one row per request with <code>prefill_sum_s</code>, <code>decode_sum_s</code>, <code>completion_tokens</code>, <code>spec_decode_num_accepted_tokens</code>, <code>spec_decode_num_draft_tokens</code>, plus session-prefixed <code>X-Request-Id</code> and synthesized <code>X-Lumo-Oracle</code> headers. That capture is what the canonical <code>decode_tps</code> numbers in §4 are computed from.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">The commit history calls this the "Benchmark-validity §11–§19" series. Without it the speculative-decoding measurements simply don't exist — Codex stalls mid-task, the agent emits empty turns, and no attempt finishes inside the 30-minute budget. <strong>"auto-continue is load-bearing"</strong> is the most representative one-line summary of the work.</p>
+
+<h2 id="stack"><span class="num">03</span>The four-technique stack</h2>
 
 <p>The Round-4b configuration extends vLLM 0.19 with Snowflake Arctic Inference 0.1.2's <code>SuffixDecoding</code> backbone, then layers three harness-coupled drafters on top. (A fifth technique, T5, handles drafter lifecycle and is operational rather than throughput-bearing — out of scope here.)</p>
 
@@ -540,7 +622,7 @@
 
 <p class="note">T1 is structural — the per-session router around <code>SuffixDecodingCache</code> — and cannot be toggled without relaunching the inference container. T2, T3, T4 toggle at request time via a JSON flag file the prelaunch helpers consult: <code>/tmp/lumo_track_b_runtime_flags.json</code>.</p>
 
-<h2 id="design"><span class="num">03</span>Experimental design</h2>
+<h2 id="design"><span class="num">04</span>Experimental design</h2>
 
 <h3>3.1 Five-point cumulative ablation</h3>
 
@@ -610,7 +692,7 @@
   <li><strong>P_benchmark</strong> = 0–100 score from a deterministic per-family grader. <strong>Pass = P ≥ 65</strong>.</li>
 </ul>
 
-<h2 id="results"><span class="num">04</span>Headline results</h2>
+<h2 id="results"><span class="num">05</span>Headline results</h2>
 
 <h3>4.1 Per-point aggregate</h3>
 <div class="table-wrap">
@@ -693,7 +775,7 @@
 
 <p class="pull">D's +4-pass advantage over baseline is <em>entirely</em> the sqlalchemy 4/4 result. Remove that task and the aggregate pass count equalizes across all five points.</p>
 
-<h2 id="per-tech"><span class="num">05</span>Per-technique decomposition</h2>
+<h2 id="per-tech"><span class="num">06</span>Per-technique decomposition</h2>
 
 <p>Each pairwise comparison (A − OFF, B − A, C − B, D − C) isolates the marginal effect of one technique.</p>
 
@@ -704,7 +786,7 @@
   </div>
   <div class="chart-box h-md"><canvas id="chartDeltas"></canvas></div>
   <div class="chart-fallback">[chart didn't load — see §6 table for raw deltas]</div>
-  <div class="chart-cap"><b>Figure 2.</b> Green is "this technique helps on this task"; red is "this technique hurts." T1 (the long green bar on every row) is uniformly large-positive; T2, T3, T4 are mixed.</div>
+  <div class="chart-cap"><b>Figure 2.</b> Each technique keeps its own hue: T1 teal, T2 amber, T3 indigo, T4 rose. A solid bar means the technique helped on that task; a paler bar going left of zero means it hurt. T1 (teal) is large-positive on every row; T2/T3/T4 are mixed and sometimes mirror each other.</div>
 </div>
 
 <h3>5.1 T1 — cross-turn SuffixDecoding (the load-bearing technique)</h3>
@@ -739,7 +821,7 @@
 <h3>5.4 T4 — plan-structure pre-drafter (small-positive in aggregate)</h3>
 <p><strong>D vs C.</strong> T4 wins on 7 of 11 tasks and meaningfully hurts on 3. It is the cleanest "composes positively" signature of the three additive techniques. Why doesn't it double-count with T1's suffix tree? Plans are emitted at irregular intervals; the suffix tree captures <em>token sequences</em> but not the <em>meta-structure</em> of "this is a plan, with this fingerprint, and the next plan emission should repeat this structure." T4 fingerprints structural tokens (separators, numbers, headers) and pre-drafts them with high confidence, which gives the verifier a fast path through the formulaic parts of plan emissions.</p>
 
-<h2 id="mirror"><span class="num">06</span>The mirror-image finding</h2>
+<h2 id="mirror"><span class="num">07</span>The mirror-image finding</h2>
 
 <p>The single most interesting observation in this study is that <strong>T2 and T3 cancel each other on 5 of 11 tasks</strong>. Looking at the marginal-effect table side by side:</p>
 
@@ -782,7 +864,7 @@
 </ul>
 <p>Testable prediction: a workload-aware priority scheme (per-frame draft weights based on the predicted next-emission type) should let C match B-on-T2-tasks <em>and</em> B-on-T3-tasks simultaneously. That is the natural Round-5 follow-up.</p>
 
-<h2 id="telemetry"><span class="num">07</span>Hardware telemetry &amp; contamination methodology</h2>
+<h2 id="telemetry"><span class="num">08</span>Hardware telemetry &amp; contamination methodology</h2>
 
 <p>Telemetry on consumer Blackwell (sm_120) is limited: DCGM profile fields (<code>sm_active_pct</code>, <code>dram_active_pct</code>, tensor-pipe utilization) are unavailable on this hardware tier. NVML gives us three fields: <code>power_w</code>, <code>gpu_util_pct</code>, <code>mem_copy_util_pct</code>.</p>
 
@@ -814,7 +896,7 @@
 
 <p>That single methodological move flipped the directional conclusion of the report from "+3% net gain from the full stack on top of T1" to "−7% net cost from the full stack on top of T1."</p>
 
-<h2 id="validity"><span class="num">08</span>Limitations &amp; threats to validity</h2>
+<h2 id="validity"><span class="num">09</span>Limitations &amp; threats to validity</h2>
 <ol class="tight">
   <li><strong>Corpus size.</strong> 11 tasks × 4 attempts gives cell-level CIs of roughly ±2–3 tps. Differences smaller than that should be read as flat.</li>
   <li><strong>Single hardware × single model.</strong> Results are specific to GB10 / Qwen 3.5-27B FP8. The slot-contention finding may relax on larger models with more per-token compute.</li>
@@ -823,7 +905,7 @@
   <li><strong>Telemetry gaps on consumer Blackwell.</strong> Cannot distinguish "GPU is busy because spec-decode is working" from "GPU is busy because verifier pass is rejecting drafts."</li>
 </ol>
 
-<h2 id="shipping"><span class="num">09</span>Shipping decision</h2>
+<h2 id="shipping"><span class="num">10</span>Shipping decision</h2>
 
 <p>The choice is between <strong>T1 alone</strong> (throughput-optimized, aggregate-best) and <strong>D = full stack</strong> (pass-rate-optimized, +5 absolute passes on sqlalchemy):</p>
 
@@ -846,7 +928,7 @@
 
 <p><strong>Stretch (Round 5):</strong> implement per-frame draft priority and confirm the slot-contention hypothesis. If the mechanism holds, a workload-aware D could plausibly recover ~15% throughput on top of T1 while preserving the sqlalchemy pass-rate win.</p>
 
-<h2 id="about"><span class="num">10</span>About this work</h2>
+<h2 id="about"><span class="num">11</span>About this work</h2>
 
 <p>This page summarizes the Round 4b ablation from the <strong>Lumo FlyWheel</strong> project — a self-hosted serving and benchmark stack I built to study inference-time techniques for coding agents on consumer hardware. The repository contains the full vLLM serving layer, the proxy that normalizes Codex Responses-API tool calls, the eleven-family benchmark corpus and its deterministic graders, the run drivers and contamination detectors, and the formal report this page condenses from.</p>
 
@@ -888,11 +970,20 @@ python3 scripts/contamination_sweep.py</code></pre>
     var muted   = '#76726b';
     var rule    = '#e4e1d8';
     var rule2   = '#d4d0c4';
-    var accent  = '#2f6f4f';
-    var accent2 = '#1f4e37';
-    var green   = '#3a8a5c';
-    var red     = '#b03a2e';
     var bgGrey  = '#a09c93';
+
+    // Four distinct technique hues — kept at similar lightness so the chart reads
+    // as four siblings rather than three shades of green plus an outlier.
+    var hueT1   = '#0d9488';   // teal — load-bearing
+    var hueT2   = '#d97706';   // amber
+    var hueT3   = '#4f46e5';   // indigo
+    var hueT4   = '#be185d';   // rose
+    // Lighter "tint" variants used for negative bars of T2-T4, so a viewer
+    // sees "T2 hurt this task" as a paler-amber bar going LEFT of zero
+    // (rather than a green↔red recolor that loses technique identity).
+    var hueT2n  = '#fbbf77';
+    var hueT3n  = '#a5b4fc';
+    var hueT4n  = '#f9a8d4';
 
     Chart.defaults.color = muted;
     Chart.defaults.borderColor = rule;
@@ -908,8 +999,9 @@ python3 scripts/contamination_sweep.py</code></pre>
           labels: ['OFF', 'A · T1', 'B · T1+T2', 'C · T1+T2+T3', 'D · full'],
           datasets: [{
             label: 'decode tps (median)',
+            // OFF muted, then a cumulative palette so each point is visually distinct.
             data: [5.59, 18.24, 17.96, 17.06, 17.02],
-            backgroundColor: [bgGrey, accent, accent, accent, accent2],
+            backgroundColor: [bgGrey, hueT1, hueT2, hueT3, hueT4],
             borderWidth: 0,
             borderRadius: 3,
             barPercentage: 0.62,
@@ -981,8 +1073,12 @@ python3 scripts/contamination_sweep.py</code></pre>
       var T3 = [-10.65, -10.07, -2.06,  0.35, -0.18, -0.67, -1.25, -6.47,  0.16,  7.62,  4.53];
       var T4 = [ 10.64,  4.40,  1.27,  1.93,  0.74,  2.63,  0.65, -2.75, -1.95, -5.19, -5.95];
 
-      function colorize(arr, posColor, negColor) {
-        return arr.map(function (v) { return v >= 0 ? posColor : negColor; });
+      // For each technique: solid hue when the technique HELPS that task,
+      // lighter tint when it HURTS. Technique identity stays visually constant
+      // (T2 is always amber, T3 is always indigo, T4 is always rose), while
+      // sign reads off the bar's direction PLUS the lighter shade.
+      function shade(values, solid, tint) {
+        return values.map(function (v) { return v >= 0 ? solid : tint; });
       }
 
       new Chart(ctx2, {
@@ -990,10 +1086,10 @@ python3 scripts/contamination_sweep.py</code></pre>
         data: {
           labels: labels,
           datasets: [
-            { label: 'T1', data: T1, backgroundColor: accent,                        stack: 's1', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
-            { label: 'T2', data: T2, backgroundColor: colorize(T2, green, red),      stack: 's2', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
-            { label: 'T3', data: T3, backgroundColor: colorize(T3, green, red),      stack: 's3', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
-            { label: 'T4', data: T4, backgroundColor: colorize(T4, green, red),      stack: 's4', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 }
+            { label: 'T1', data: T1, backgroundColor: hueT1,                        stack: 's1', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
+            { label: 'T2', data: T2, backgroundColor: shade(T2, hueT2, hueT2n),     stack: 's2', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
+            { label: 'T3', data: T3, backgroundColor: shade(T3, hueT3, hueT3n),     stack: 's3', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 },
+            { label: 'T4', data: T4, backgroundColor: shade(T4, hueT4, hueT4n),     stack: 's4', borderWidth: 0, borderRadius: 2, barPercentage: 0.82 }
           ]
         },
         options: {
