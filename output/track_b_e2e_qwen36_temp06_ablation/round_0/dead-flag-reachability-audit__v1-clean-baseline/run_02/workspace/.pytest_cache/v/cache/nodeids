@@ -1,0 +1,5 @@
+[
+  "tests/test_force_legacy_reporting_only.py::test_force_legacy_flag_is_tracked_for_reporting_only",
+  "tests/test_preview_v2_alias.py::test_preview_v2_alias_maps_to_shadow_path",
+  "tests/test_shadow_preview_live.py::test_shadow_preview_changes_runtime_branch"
+]

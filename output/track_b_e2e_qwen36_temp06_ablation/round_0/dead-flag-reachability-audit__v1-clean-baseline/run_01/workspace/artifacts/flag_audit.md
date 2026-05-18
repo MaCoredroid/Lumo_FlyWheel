@@ -1,0 +1,44 @@
+# Flag Audit
+
+- variant: `v1-clean-baseline`
+- highest_operational_risk: `ENABLE_SHADOW_PREVIEW`
+
+## Flag Status
+
+| flag | status | alias_of | parser_symbol | runtime_branch_symbol | false_positive_path |
+|---|---|---|---|---|---|
+| `ENABLE_SHADOW_PREVIEW` | live | — | `load_preview_env` | `preview_runtime_branch:shadow_preview_path` | `docs/false_positive_notes.md` |
+
+Evidence: `src/preview/config.py`, `src/preview/runtime.py`, `tests/test_shadow_preview_live.py`, `docs/preview_rollout_runbook.md`, `config/defaults.toml`
+
+ENABLE_SHADOW_PREVIEW is the primary live flag. It is parsed by load_preview_env in config.py which sets shadow_enabled and effective_mode to shadow. The runtime branch in runtime.py checks config.shadow_enabled and returns the shadow_preview_path. The service layer and CLI both exercise this path. The runbook confirms it as the active live flag. Parser presence is confirmed by the parser_hit entry, and runtime reachability is confirmed by the conditional branch in preview_runtime_branch.
+
+| `ENABLE_PREVIEW_V2` | partial | ENABLE_SHADOW_PREVIEW | `load_preview_env` | `—` | `docs/false_positive_notes.md` |
+
+Evidence: `src/preview/config.py`, `tests/test_preview_v2_alias.py`, `docs/preview_rollout_runbook.md`, `config/defaults.toml`
+
+ENABLE_PREVIEW_V2 is a live alias of ENABLE_SHADOW_PREVIEW, not a standalone flag. The parser in load_preview_env accepts it in an elif branch and normalizes it to the same shadow_enabled and effective_mode values as ENABLE_SHADOW_PREVIEW. It has no independent runtime branch symbol — it routes through the same shadow_preview_path. The runbook explicitly states it is accepted for legacy deploy manifests but normalizes to the same shadow path. The test confirms the alias mapping. Parser presence is real but runtime reachability is only via the alias to ENABLE_SHADOW_PREVIEW.
+
+| `PREVIEW_FORCE_LEGACY` | partial | — | `load_preview_env` | `—` | `docs/false_positive_notes.md` |
+
+Evidence: `src/preview/config.py`, `src/preview/legacy.py`, `src/preview/service.py`, `tests/test_force_legacy_reporting_only.py`, `docs/preview_rollout_runbook.md`, `config/defaults.toml`
+
+PREVIEW_FORCE_LEGACY is parsed by load_preview_env which sets force_legacy_seen to True, but the live service runtime branch in preview_runtime_branch does not check this flag at all. The only consumer is legacy_force_label in legacy.py which produces a reporting label string, and build_preview_plan which includes force_legacy_seen in its output dict. The runbook confirms it is left in reporting and operator notes only and the live service does not branch on it. Parser presence is confirmed but there is no runtime branch — it is a reporting-only flag with no behavioral effect on the preview router.
+
+## Cleanup Plan
+
+| flag | action | blockers | rationale |
+|---|---|---|---|
+| `ENABLE_SHADOW_PREVIEW` | `keep` | none | This is the primary live flag controlling the preview router. It must remain active and functional. |
+| `ENABLE_PREVIEW_V2` | `deprecate` | legacy deploy manifests may still reference it | Alias with no independent runtime branch. Can be deprecated once legacy deploy manifests are migrated to use ENABLE_SHADOW_PREVIEW directly. |
+| `PREVIEW_FORCE_LEGACY` | `telemetry_first` | operator notes and reporting pipelines may depend on the force_legacy_seen signal | Parser hit exists but no runtime branch. Before removal, verify that reporting pipelines and operator tooling no longer depend on the force_legacy_seen flag in the plan output. |
+
+## Assumption Ledger
+
+| status | topic | note |
+|---|---|---|
+| observed | ENABLE_SHADOW_PREVIEW runtime branch | Confirmed in runtime.py conditional check on shadow_enabled |
+| observed | ENABLE_PREVIEW_V2 alias normalization | Confirmed in config.py elif branch mapping to shadow path |
+| missing | PREVIEW_FORCE_LEGACY downstream consumers | No evidence of runtime branching; legacy.py only produces labels |
+
+ENABLE_SHADOW_PREVIEW is the sole live runtime branch flag controlling the preview router. ENABLE_PREVIEW_V2 is a harmless alias that normalizes to the same path. PREVIEW_FORCE_LEGACY is parsed but only affects reporting labels, not runtime behavior.
