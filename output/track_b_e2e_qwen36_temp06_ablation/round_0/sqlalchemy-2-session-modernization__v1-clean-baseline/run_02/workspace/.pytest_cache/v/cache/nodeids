@@ -1,0 +1,5 @@
+[
+  "tests/test_admin_cli.py::test_dry_run_does_not_persist_status_change",
+  "tests/test_api.py::test_create_and_read_entry",
+  "tests/test_worker.py::test_worker_failure_does_not_persist_processing_status"
+]
