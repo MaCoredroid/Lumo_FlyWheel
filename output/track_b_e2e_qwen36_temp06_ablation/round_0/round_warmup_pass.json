@@ -1,0 +1,62 @@
+{
+  "endpoint": "http://127.0.0.1:8022/v1",
+  "hit_rate_threshold": 0.95,
+  "instructions_tokens": 4538,
+  "mode": "both",
+  "model": "qwen3.6-27b",
+  "passed": true,
+  "prime": {
+    "body_excerpt": null,
+    "hit_rate": 0.0,
+    "ok": true,
+    "prefix_cache_hits_delta": 0.0,
+    "prefix_cache_queries_delta": 65997.0,
+    "status_code": 200,
+    "usage": {
+      "input_tokens": 65997,
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "cached_tokens_per_turn": [],
+        "input_tokens_per_turn": []
+      },
+      "output_tokens": 8,
+      "output_tokens_details": {
+        "output_tokens_per_turn": [],
+        "reasoning_tokens": 0,
+        "tool_output_tokens": 0,
+        "tool_output_tokens_per_turn": []
+      },
+      "total_tokens": 66005
+    },
+    "wall_s": 83.787513
+  },
+  "schema": "lumo.track_b.codex_warmup_pass.v1",
+  "system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "tools_tokens": 59800,
+  "ts": "2026-05-18T15:50:07.241Z",
+  "verify": {
+    "body_excerpt": null,
+    "hit_rate": 0.9978635392517842,
+    "ok": true,
+    "prefix_cache_hits_delta": 65856.0,
+    "prefix_cache_queries_delta": 65997.0,
+    "status_code": 200,
+    "usage": {
+      "input_tokens": 65997,
+      "input_tokens_details": {
+        "cached_tokens": 65856,
+        "cached_tokens_per_turn": [],
+        "input_tokens_per_turn": []
+      },
+      "output_tokens": 8,
+      "output_tokens_details": {
+        "output_tokens_per_turn": [],
+        "reasoning_tokens": 0,
+        "tool_output_tokens": 0,
+        "tool_output_tokens_per_turn": []
+      },
+      "total_tokens": 66005
+    },
+    "wall_s": 1.418929
+  }
+}
