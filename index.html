@@ -422,7 +422,7 @@
   /* ── Architecture diagram (masthead) ── */
   .arch-figure {
     margin: 28px 0 0;
-    padding: 18px 14px 10px;
+    padding: 20px 18px 14px;
     background: var(--paper);
     border: 1px solid var(--rule);
     border-radius: 6px;
@@ -431,42 +431,58 @@
     display: block;
     width: 100%;
     height: auto;
-    max-height: 220px;
+    /* SVG aspect ratio is 1120 × 540 ⇒ scales to ~470px tall on an 870px container */
   }
   .arch-cap {
-    font-size: 13px;
+    font-size: 13.5px;
     color: var(--muted);
-    line-height: 1.5;
-    padding: 10px 4px 0;
-    margin: 0;
+    line-height: 1.55;
+    padding: 14px 4px 2px;
+    margin: 10px 0 0;
     border-top: 1px dashed var(--rule);
-    margin-top: 8px;
   }
-  /* SVG element styles */
+  .arch-cap strong { color: var(--ink); font-weight: 600; }
+
+  /* ── SVG element styles ── */
   .arch .a-box {
     fill: var(--bg);
     stroke: var(--rule-2);
     stroke-width: 1.25;
   }
   .arch .a-box-strong {
-    stroke: #c9c2af;        /* a little darker for the focal vLLM panel */
+    /* The vLLM panel — focal, brighter background, slightly heavier rule */
+    stroke: #c9c2af;
     stroke-width: 1.5;
     fill: #fdfcf6;
   }
+  .arch .a-box-driver {
+    /* Driver band — accent-tinted to read as the orchestrator above the runtime */
+    fill: #f1f7f3;
+    stroke: #b8d6c3;
+  }
+  .arch .a-box-patch {
+    /* Patch callouts — distinct fill to read as annotations, not first-class boxes */
+    fill: #fbf4ea;
+    stroke: #e1d3b8;
+  }
+  .arch .a-box-meas {
+    fill: #f4f1ea;
+    stroke: #cfc6b3;
+  }
   .arch .a-title {
-    font: 600 14.5px "Inter", system-ui, sans-serif;
+    font: 600 15px "Inter", system-ui, sans-serif;
     fill: var(--ink);
   }
   .arch .a-sub {
-    font: 500 12px "Inter", system-ui, sans-serif;
+    font: 500 12.5px "Inter", system-ui, sans-serif;
     fill: var(--ink-3);
   }
   .arch .a-meta {
-    font: 500 10.5px "JetBrains Mono", ui-monospace, monospace;
+    font: 500 11px "JetBrains Mono", ui-monospace, monospace;
     fill: var(--muted);
     letter-spacing: 0.01em;
   }
-  .arch .a-meta-top { fill: var(--accent-2); }
+  .arch .a-meta-top { fill: var(--accent-2); font-weight: 600; }
   .arch .a-edge-label {
     font: 500 10.5px "JetBrains Mono", ui-monospace, monospace;
     fill: var(--muted);
@@ -482,9 +498,24 @@
     stroke-width: 1.25;
     stroke-dasharray: 4 3;
   }
-  /* Chiclet base — each technique gets a distinct hue, matching Figure 2 */
-  .arch .a-chiclet rect { stroke-width: 1.2; }
-  .arch .a-chiclet text { font: 600 13px "JetBrains Mono", ui-monospace, monospace; }
+  .arch .a-line-dn {
+    stroke: #8e887d;
+    stroke-width: 1.25;
+  }
+  /* Patch callout text styling — italic mono header + small bullets */
+  .arch .a-patch-title {
+    font: italic 600 11.5px "JetBrains Mono", ui-monospace, monospace;
+    fill: var(--accent-2);
+    letter-spacing: 0.02em;
+  }
+  .arch .a-patch-line {
+    font: 500 11.5px "JetBrains Mono", ui-monospace, monospace;
+    fill: var(--ink-3);
+    letter-spacing: 0.005em;
+  }
+  /* Chiclets — each technique in its own hue, matching Figure 2 */
+  .arch .a-chiclet rect { stroke-width: 1.25; }
+  .arch .a-chiclet text { font: 600 14px "JetBrains Mono", ui-monospace, monospace; }
   .arch .ch-t1 rect { fill: #d9f0ee; stroke: #0d9488; }
   .arch .ch-t1 text { fill: #0d6b62; }
   .arch .ch-t2 rect { fill: #fcebcd; stroke: #d97706; }
@@ -494,8 +525,7 @@
   .arch .ch-t4 rect { fill: #fde0ec; stroke: #be185d; }
   .arch .ch-t4 text { fill: #8e1247; }
 
-  /* Reveal animation — runs once when the figure first becomes visible.
-     The IIFE adds `.is-animated` to .arch-figure; everything below keys off that. */
+  /* ── Reveal animation — runs once on first view ── */
   .arch-figure .a-node,
   .arch-figure .a-chiclet,
   .arch-figure .a-edge-label,
@@ -503,44 +533,56 @@
     opacity: 0;
   }
   .arch-figure .a-line {
-    stroke-dasharray: 110;
-    stroke-dashoffset: 110;
+    stroke-dasharray: 120;
+    stroke-dashoffset: 120;
   }
   .arch-figure .a-node { transform: translateY(6px); transform-origin: center; }
   .arch-figure .a-chiclet { transform: translateY(3px) scale(0.94); transform-origin: center; transform-box: fill-box; }
 
-  @keyframes archFade {
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  @keyframes archDraw {
-    to { stroke-dashoffset: 0; }
-  }
+  @keyframes archFade { to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes archDraw { to { stroke-dashoffset: 0; } }
+  /* Pulse path: Codex (125,166) → Proxy (380,166) → vLLM (815,166) */
   @keyframes archPulse {
-    0%   { opacity: 0; transform: translate(110px, 83px); }
+    0%   { opacity: 0; transform: translate(125px, 166px); }
     8%   { opacity: 1; }
-    33%  { opacity: 1; transform: translate(390px, 83px); }
-    66%  { opacity: 1; transform: translate(715px, 83px); }
-    100% { opacity: 0; transform: translate(715px, 83px); }
+    50%  { opacity: 1; transform: translate(380px, 166px); }
+    100% { opacity: 0; transform: translate(815px, 166px); }
   }
 
-  .arch-figure.is-animated .a-codex   { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.05s forwards; }
-  .arch-figure.is-animated .a-proxy   { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.18s forwards; }
-  .arch-figure.is-animated .a-vllm    { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.32s forwards; }
-  .arch-figure.is-animated .l-fwd1    { animation: archDraw .45s ease-out 0.55s forwards; }
-  .arch-figure.is-animated .l-fwd2    { animation: archDraw .45s ease-out 0.70s forwards; }
-  .arch-figure.is-animated .l-ret1    { animation: archDraw .45s ease-out 0.95s forwards; }
-  .arch-figure.is-animated .l-ret2    { animation: archDraw .45s ease-out 1.05s forwards; }
-  .arch-figure.is-animated .a-edge-label { animation: archFade .4s ease-out 0.70s forwards; }
-  .arch-figure.is-animated .ch-t1     { animation: archFade .4s cubic-bezier(.2,.7,.2,1) 1.15s forwards; }
-  .arch-figure.is-animated .ch-t2     { animation: archFade .4s cubic-bezier(.2,.7,.2,1) 1.28s forwards; }
-  .arch-figure.is-animated .ch-t3     { animation: archFade .4s cubic-bezier(.2,.7,.2,1) 1.41s forwards; }
-  .arch-figure.is-animated .ch-t4     { animation: archFade .4s cubic-bezier(.2,.7,.2,1) 1.54s forwards; }
-  /* One-shot data-pulse traversing the forward path after everything has settled */
-  .arch-figure.is-animated .a-pulse   { animation: archPulse 1.8s cubic-bezier(.4,0,.6,1) 1.85s forwards; }
+  /* Cascade timeline (total ~2.6s reveal + 1.6s pulse = ~4.2s end-to-end one-shot) */
+  .arch-figure.is-animated .a-driver  { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.05s forwards; }
+  .arch-figure.is-animated .l-driver  { animation: archDraw .35s ease-out 0.30s forwards; }
+  .arch-figure.is-animated .a-codex   { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.30s forwards; }
+  .arch-figure.is-animated .a-proxy   { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.42s forwards; }
+  .arch-figure.is-animated .a-vllm    { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.54s forwards; }
+  .arch-figure.is-animated .l-fwd1    { animation: archDraw .40s ease-out 0.80s forwards; }
+  .arch-figure.is-animated .l-fwd2    { animation: archDraw .40s ease-out 0.92s forwards; }
+  .arch-figure.is-animated .l-ret1    { animation: archDraw .40s ease-out 1.10s forwards; }
+  .arch-figure.is-animated .l-ret2    { animation: archDraw .40s ease-out 1.18s forwards; }
+  .arch-figure.is-animated .a-edge-label { animation: archFade .40s ease-out 0.95s forwards; }
+  .arch-figure.is-animated .ch-t1     { animation: archFade .40s cubic-bezier(.2,.7,.2,1) 1.25s forwards; }
+  .arch-figure.is-animated .ch-t2     { animation: archFade .40s cubic-bezier(.2,.7,.2,1) 1.38s forwards; }
+  .arch-figure.is-animated .ch-t3     { animation: archFade .40s cubic-bezier(.2,.7,.2,1) 1.51s forwards; }
+  .arch-figure.is-animated .ch-t4     { animation: archFade .40s cubic-bezier(.2,.7,.2,1) 1.64s forwards; }
+  /* Down-arrows from runtime → patch callouts */
+  .arch-figure.is-animated .l-dn1     { animation: archDraw .35s ease-out 1.55s forwards; }
+  .arch-figure.is-animated .l-dn2     { animation: archDraw .35s ease-out 1.60s forwards; }
+  .arch-figure.is-animated .l-dn3     { animation: archDraw .35s ease-out 1.65s forwards; }
+  /* Patch callouts */
+  .arch-figure.is-animated .p-isol    { animation: archFade .50s cubic-bezier(.2,.6,.2,1) 1.80s forwards; }
+  .arch-figure.is-animated .p-proxy   { animation: archFade .50s cubic-bezier(.2,.6,.2,1) 1.92s forwards; }
+  .arch-figure.is-animated .p-vllm    { animation: archFade .50s cubic-bezier(.2,.6,.2,1) 2.04s forwards; }
+  /* Down-arrows from callouts → measurement bus */
+  .arch-figure.is-animated .l-dn4,
+  .arch-figure.is-animated .l-dn5,
+  .arch-figure.is-animated .l-dn6     { animation: archDraw .35s ease-out 2.30s forwards; }
+  /* Measurement bus */
+  .arch-figure.is-animated .a-meas    { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 2.45s forwards; }
+  /* One-shot pulse traversing the forward request path */
+  .arch-figure.is-animated .a-pulse   { animation: archPulse 1.7s cubic-bezier(.4,0,.6,1) 2.75s forwards; }
 
   @media (max-width: 720px) {
-    /* Tighten labels for small screens; SVG itself scales via viewBox */
-    .arch-cap { font-size: 12px; padding: 8px 2px 0; }
+    .arch-cap { font-size: 12.5px; padding: 10px 2px 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     .arch-figure .a-node,
@@ -599,8 +641,8 @@
   </div>
 
   <figure class="arch-figure" id="archFigure" aria-labelledby="arch-cap">
-    <svg class="arch" viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" role="img"
-         aria-label="System architecture: Codex CLI talks Responses API to a Lumo proxy that normalizes payloads and captures per-request metrics; the proxy forwards to vLLM 0.19 serving Qwen 3.5-27B FP8 with a four-technique speculative-decoding stack (T1 suffix-decoding, T2 file-read priming, T3 schema-aware drafter, T4 plan-structure pre-drafter) on a GB10 GPU.">
+    <svg class="arch" viewBox="0 0 1120 540" xmlns="http://www.w3.org/2000/svg" role="img"
+         aria-label="End-to-end experiment architecture: an experiment driver orchestrates 220 cells; the runtime layer is Codex CLI talking Responses API to a Lumo proxy that normalizes payloads and captures per-request metrics, forwarded to vLLM 0.19 serving Qwen 3.5-27B FP8 with a four-technique speculative-decoding stack (T1 suffix-decoding, T2 file-read priming, T3 schema-aware drafter, T4 plan-structure pre-drafter) on a GB10 GPU; each runtime node has a callout listing the specific patches shipped on top of upstream; a measurement bus underneath aggregates DCGM/NVML samples, vLLM /metrics snapshots, per-request JSONL, and grader results.">
       <defs>
         <marker id="ah-fwd" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a4742"/>
@@ -608,56 +650,119 @@
         <marker id="ah-ret" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#a09c93"/>
         </marker>
+        <marker id="ah-dn" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#76726b"/>
+        </marker>
       </defs>
 
-      <!-- ─── Codex box ─── -->
+      <!-- ════════ BAND 1 · Experiment driver ════════ -->
+      <g class="a-node a-driver">
+        <rect class="a-box a-box-driver" x="280" y="14" width="560" height="60" rx="6"/>
+        <text class="a-title" x="560" y="40" text-anchor="middle">Experiment driver</text>
+        <text class="a-meta"  x="560" y="60" text-anchor="middle">scripts/full_data_sweep.py · 5 points × 11 tasks × 4 attempts = 220 cells · 30-min wall each</text>
+      </g>
+      <line class="a-line a-line-dn l-driver" x1="560" y1="74" x2="560" y2="98" marker-end="url(#ah-dn)"/>
+
+      <!-- ════════ BAND 2 · Runtime trio ════════ -->
       <g class="a-node a-codex">
-        <rect class="a-box" x="10" y="50" width="200" height="100" rx="6"/>
-        <text class="a-title" x="110" y="82" text-anchor="middle">Codex CLI</text>
-        <text class="a-sub"   x="110" y="103" text-anchor="middle">agent · tools · skills</text>
-        <text class="a-meta"  x="110" y="130" text-anchor="middle">v0.128.0 · docker-isolated</text>
+        <rect class="a-box" x="30" y="105" width="190" height="145" rx="6"/>
+        <text class="a-title" x="125" y="138" text-anchor="middle">Codex CLI</text>
+        <text class="a-sub"   x="125" y="160" text-anchor="middle">agent · tools · skills</text>
+        <text class="a-meta"  x="125" y="186" text-anchor="middle">v0.128.0</text>
+        <text class="a-meta"  x="125" y="206" text-anchor="middle">per-attempt docker</text>
+        <text class="a-meta"  x="125" y="226" text-anchor="middle">--network=host</text>
       </g>
 
-      <!-- ─── Proxy box ─── -->
       <g class="a-node a-proxy">
-        <rect class="a-box" x="300" y="50" width="180" height="100" rx="6"/>
-        <text class="a-title" x="390" y="82" text-anchor="middle">Lumo Proxy</text>
-        <text class="a-sub"   x="390" y="103" text-anchor="middle">normalize · capture</text>
-        <text class="a-meta"  x="390" y="130" text-anchor="middle">127.0.0.1:8022</text>
+        <rect class="a-box" x="260" y="105" width="240" height="145" rx="6"/>
+        <text class="a-title" x="380" y="138" text-anchor="middle">Lumo Proxy</text>
+        <text class="a-sub"   x="380" y="160" text-anchor="middle">normalize · capture · synthesize</text>
+        <text class="a-meta"  x="380" y="186" text-anchor="middle">127.0.0.1:8022</text>
+        <text class="a-meta"  x="380" y="206" text-anchor="middle">Responses → Chat Completions</text>
+        <text class="a-meta"  x="380" y="226" text-anchor="middle">per-request JSONL capture</text>
       </g>
 
-      <!-- ─── vLLM serving box ─── -->
       <g class="a-node a-vllm">
-        <rect class="a-box a-box-strong" x="560" y="10" width="310" height="180" rx="6"/>
-        <text class="a-title" x="715" y="36" text-anchor="middle">vLLM 0.19 &middot; Qwen 3.5-27B FP8</text>
-        <text class="a-meta a-meta-top" x="715" y="54" text-anchor="middle">speculative-decoding stack</text>
+        <rect class="a-box a-box-strong" x="540" y="92" width="550" height="170" rx="6"/>
+        <text class="a-title" x="815" y="118" text-anchor="middle">vLLM 0.19 &middot; Qwen 3.5-27B FP8 &middot; Arctic Inference 0.1.2</text>
+        <text class="a-meta a-meta-top" x="815" y="138" text-anchor="middle">speculative-decoding stack</text>
 
-        <!-- Four technique chiclets -->
-        <g class="a-chiclet ch-t1"><rect x="578" y="74" width="60" height="32" rx="4"/><text x="608" y="94" text-anchor="middle">T1</text></g>
-        <g class="a-chiclet ch-t2"><rect x="650" y="74" width="60" height="32" rx="4"/><text x="680" y="94" text-anchor="middle">T2</text></g>
-        <g class="a-chiclet ch-t3"><rect x="722" y="74" width="60" height="32" rx="4"/><text x="752" y="94" text-anchor="middle">T3</text></g>
-        <g class="a-chiclet ch-t4"><rect x="794" y="74" width="60" height="32" rx="4"/><text x="824" y="94" text-anchor="middle">T4</text></g>
+        <!-- Four technique chiclets, centered around x=815 -->
+        <g class="a-chiclet ch-t1"><rect x="615"  y="154" width="80" height="34" rx="4"/><text x="655"  y="176" text-anchor="middle">T1</text></g>
+        <g class="a-chiclet ch-t2"><rect x="710"  y="154" width="80" height="34" rx="4"/><text x="750"  y="176" text-anchor="middle">T2</text></g>
+        <g class="a-chiclet ch-t3"><rect x="805"  y="154" width="80" height="34" rx="4"/><text x="845"  y="176" text-anchor="middle">T3</text></g>
+        <g class="a-chiclet ch-t4"><rect x="900"  y="154" width="80" height="34" rx="4"/><text x="940"  y="176" text-anchor="middle">T4</text></g>
 
-        <text class="a-sub"  x="715" y="138" text-anchor="middle">drafter → verifier → 17.0 tps</text>
-        <text class="a-meta" x="715" y="172" text-anchor="middle">GB10 GPU · sm_120 · consumer Blackwell</text>
+        <text class="a-sub"  x="815" y="212" text-anchor="middle">drafter → verifier → 17.0 tps median</text>
+        <text class="a-meta" x="815" y="240" text-anchor="middle">GB10 GPU · sm_120 · consumer Blackwell · self-built CUTLASS image</text>
       </g>
 
-      <!-- ─── Forward arrows ─── -->
-      <text class="a-edge-label" x="255" y="72" text-anchor="middle">Responses API</text>
-      <line class="a-line l-fwd1" x1="210" y1="83" x2="298" y2="83" marker-end="url(#ah-fwd)"/>
-      <text class="a-edge-label" x="520" y="72" text-anchor="middle">normalized</text>
-      <line class="a-line l-fwd2" x1="480" y1="83" x2="558" y2="83" marker-end="url(#ah-fwd)"/>
+      <!-- Runtime connections: forward request -->
+      <text class="a-edge-label" x="240" y="158" text-anchor="middle">Responses API</text>
+      <line class="a-line l-fwd1" x1="220" y1="166" x2="258" y2="166" marker-end="url(#ah-fwd)"/>
+      <text class="a-edge-label" x="520" y="158" text-anchor="middle">normalized</text>
+      <line class="a-line l-fwd2" x1="500" y1="166" x2="538" y2="166" marker-end="url(#ah-fwd)"/>
 
-      <!-- ─── Return arrows ─── -->
-      <line class="a-line a-line-dim l-ret1" x1="560" y1="135" x2="482" y2="135" marker-end="url(#ah-ret)"/>
-      <line class="a-line a-line-dim l-ret2" x1="300" y1="135" x2="212" y2="135" marker-end="url(#ah-ret)"/>
-      <text class="a-edge-label a-edge-dim" x="390" y="152" text-anchor="middle">tokens + per-request metrics</text>
+      <!-- Runtime connections: return tokens + metrics -->
+      <line class="a-line a-line-dim l-ret1" x1="538" y1="200" x2="502" y2="200" marker-end="url(#ah-ret)"/>
+      <line class="a-line a-line-dim l-ret2" x1="258" y1="200" x2="222" y2="200" marker-end="url(#ah-ret)"/>
+      <text class="a-edge-label a-edge-dim" x="380" y="220" text-anchor="middle">tokens + per-request metrics</text>
 
-      <!-- ─── Single one-shot pulse along the request path ─── -->
-      <circle class="a-pulse" r="4.5" cx="0" cy="0" fill="#2f6f4f"/>
+      <!-- Down arrows from runtime nodes to patch callouts -->
+      <line class="a-line a-line-dn l-dn1" x1="125" y1="252" x2="125" y2="295" marker-end="url(#ah-dn)"/>
+      <line class="a-line a-line-dn l-dn2" x1="380" y1="252" x2="380" y2="295" marker-end="url(#ah-dn)"/>
+      <line class="a-line a-line-dn l-dn3" x1="815" y1="262" x2="815" y2="295" marker-end="url(#ah-dn)"/>
+
+      <!-- ════════ BAND 3 · Patches I shipped on top of upstream ════════ -->
+      <g class="a-node a-patch p-isol">
+        <rect class="a-box a-box-patch" x="30" y="300" width="190" height="125" rx="6"/>
+        <text class="a-patch-title" x="42" y="320">// run isolation</text>
+        <text class="a-patch-line"  x="42" y="343">• fresh docker / attempt</text>
+        <text class="a-patch-line"  x="42" y="362">• no container reuse</text>
+        <text class="a-patch-line"  x="42" y="381">• orphan-container audit</text>
+        <text class="a-patch-line"  x="42" y="400">• 30-min wall + soft kill</text>
+        <text class="a-patch-line"  x="42" y="419">• workspace bind-mount</text>
+      </g>
+
+      <g class="a-node a-patch p-proxy">
+        <rect class="a-box a-box-patch" x="260" y="300" width="240" height="125" rx="6"/>
+        <text class="a-patch-title" x="272" y="320">// proxy fixes (§13–§17)</text>
+        <text class="a-patch-line"  x="272" y="343">• PR #39055 + serving guard</text>
+        <text class="a-patch-line"  x="272" y="362">• streaming-protocol synth</text>
+        <text class="a-patch-line"  x="272" y="381">• input normalization</text>
+        <text class="a-patch-line"  x="272" y="400">• auto-continue workaround</text>
+        <text class="a-patch-line"  x="272" y="419">• X-Lumo-Oracle synth headers</text>
+      </g>
+
+      <g class="a-node a-patch p-vllm">
+        <rect class="a-box a-box-patch" x="540" y="300" width="550" height="125" rx="6"/>
+        <text class="a-patch-title" x="552" y="320">// vLLM &amp; Qwen patches</text>
+        <text class="a-patch-line"  x="552" y="343">• FP8 KV-cache fallback (--kv-cache-dtype auto)</text>
+        <text class="a-patch-line"  x="552" y="362">• gpu-memory-utilization auto-step 0.85 → 0.65</text>
+        <text class="a-patch-line"  x="552" y="381">• --enforce-eager fallback on CUTLASS startup death</text>
+        <text class="a-patch-line"  x="822" y="343">• GB10 host-memory recovery hook</text>
+        <text class="a-patch-line"  x="822" y="362">  (drop_caches + swapoff/swapon)</text>
+        <text class="a-patch-line"  x="822" y="381">• self-built NVIDIA-base image</text>
+        <text class="a-patch-line"  x="822" y="400">  lumo-flywheel-vllm:26.01-py3-v0.19.0</text>
+      </g>
+
+      <!-- Down arrows from patch callouts to measurement bus -->
+      <line class="a-line a-line-dn l-dn4" x1="125" y1="427" x2="125" y2="464" marker-end="url(#ah-dn)"/>
+      <line class="a-line a-line-dn l-dn5" x1="380" y1="427" x2="380" y2="464" marker-end="url(#ah-dn)"/>
+      <line class="a-line a-line-dn l-dn6" x1="815" y1="427" x2="815" y2="464" marker-end="url(#ah-dn)"/>
+
+      <!-- ════════ BAND 4 · Measurement bus ════════ -->
+      <g class="a-node a-meas">
+        <rect class="a-box a-box-meas" x="30" y="468" width="1060" height="60" rx="6"/>
+        <text class="a-title" x="560" y="494" text-anchor="middle">Measurement bus</text>
+        <text class="a-meta"  x="560" y="514" text-anchor="middle">DCGM/NVML @1Hz · vLLM /metrics pre+post · vllm_request_metrics.jsonl (20,623 rows) · codex_trace.jsonl · 5-milestone deterministic grader → P_benchmark</text>
+      </g>
+
+      <!-- Single one-shot pulse traversing the request path -->
+      <circle class="a-pulse" r="5" fill="#2f6f4f"/>
     </svg>
     <figcaption id="arch-cap" class="arch-cap">
-      How a single attempt runs end-to-end. Codex speaks the Responses API; the Lumo proxy normalizes the payload, captures one row per request, and forwards to vLLM. The four-technique speculative-decoding stack (T1–T4) sits inside vLLM, drafting and verifying tokens that flow back as the agent's next turn.
+      How the experiment is wired end-to-end. <strong>Driver</strong> orchestrates 220 cells. <strong>Runtime</strong>: Codex speaks the Responses API; the Lumo proxy normalizes the payload and captures one row per request; vLLM serves Qwen 3.5-27B FP8 with the four-technique stack on a single GB10. <strong>Infra patches</strong> (the callouts) are the specific work I shipped on top of upstream to make the runtime actually hold for a 30-minute agent task. <strong>Measurement bus</strong>: every cell writes DCGM/NVML samples, vLLM /metrics snapshots, the proxy-side per-request JSONL, and the grader's milestone scores — that's what the headline 3.04× number is computed from.
     </figcaption>
   </figure>
 </header>
