@@ -418,6 +418,159 @@
   footer p { color: var(--muted); margin-bottom: 4px; }
 
   h2[id], h3[id] { scroll-margin-top: 16px; }
+
+  /* ── Architecture diagram (masthead) ── */
+  .arch-figure {
+    margin: 28px 0 0;
+    padding: 18px 14px 10px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+  .arch {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+  }
+  .arch-cap {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+    padding: 10px 4px 0;
+    margin: 0;
+    border-top: 1px dashed var(--rule);
+    margin-top: 8px;
+  }
+  /* SVG element styles */
+  .arch .a-box {
+    fill: var(--bg);
+    stroke: var(--rule-2);
+    stroke-width: 1.25;
+  }
+  .arch .a-box-strong {
+    stroke: #c9c2af;        /* a little darker for the focal vLLM panel */
+    stroke-width: 1.5;
+    fill: #fdfcf6;
+  }
+  .arch .a-title {
+    font: 600 14.5px "Inter", system-ui, sans-serif;
+    fill: var(--ink);
+  }
+  .arch .a-sub {
+    font: 500 12px "Inter", system-ui, sans-serif;
+    fill: var(--ink-3);
+  }
+  .arch .a-meta {
+    font: 500 10.5px "JetBrains Mono", ui-monospace, monospace;
+    fill: var(--muted);
+    letter-spacing: 0.01em;
+  }
+  .arch .a-meta-top { fill: var(--accent-2); }
+  .arch .a-edge-label {
+    font: 500 10.5px "JetBrains Mono", ui-monospace, monospace;
+    fill: var(--muted);
+  }
+  .arch .a-edge-dim { fill: var(--muted-2); }
+  .arch .a-line {
+    stroke: #4a4742;
+    stroke-width: 1.5;
+    fill: none;
+  }
+  .arch .a-line-dim {
+    stroke: #b8b1a3;
+    stroke-width: 1.25;
+    stroke-dasharray: 4 3;
+  }
+  /* Chiclet base — each technique gets a distinct hue, matching Figure 2 */
+  .arch .a-chiclet rect { stroke-width: 1.2; }
+  .arch .a-chiclet text { font: 600 13px "JetBrains Mono", ui-monospace, monospace; }
+  .arch .ch-t1 rect { fill: #d9f0ee; stroke: #0d9488; }
+  .arch .ch-t1 text { fill: #0d6b62; }
+  .arch .ch-t2 rect { fill: #fcebcd; stroke: #d97706; }
+  .arch .ch-t2 text { fill: #92590a; }
+  .arch .ch-t3 rect { fill: #e3e2ff; stroke: #4f46e5; }
+  .arch .ch-t3 text { fill: #3730a3; }
+  .arch .ch-t4 rect { fill: #fde0ec; stroke: #be185d; }
+  .arch .ch-t4 text { fill: #8e1247; }
+
+  /* Reveal animation — runs once when the figure first becomes visible.
+     The IIFE adds `.is-animated` to .arch-figure; everything below keys off that. */
+  .arch-figure .a-node,
+  .arch-figure .a-chiclet,
+  .arch-figure .a-edge-label,
+  .arch-figure .a-pulse {
+    opacity: 0;
+  }
+  .arch-figure .a-line {
+    stroke-dasharray: 110;
+    stroke-dashoffset: 110;
+  }
+  .arch-figure .a-node { transform: translateY(6px); transform-origin: center; }
+  .arch-figure .a-chiclet { transform: translateY(3px) scale(0.94); transform-origin: center; transform-box: fill-box; }
+
+  @keyframes archFade {
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes archDraw {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes archPulse {
+    0%   { opacity: 0; transform: translate(110px, 83px); }
+    8%   { opacity: 1; }
+    33%  { opacity: 1; transform: translate(390px, 83px); }
+    66%  { opacity: 1; transform: translate(715px, 83px); }
+    100% { opacity: 0; transform: translate(715px, 83px); }
+  }
+
+  .arch-figure.is-animated .a-codex   { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.05s forwards; }
+  .arch-figure.is-animated .a-proxy   { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.18s forwards; }
+  .arch-figure.is-animated .a-vllm    { animation: archFade .55s cubic-bezier(.2,.6,.2,1) 0.32s forwards; }
+  .arch-figure.is-animated .l-fwd1    { animation: archDraw .45s ease-out 0.55s forwards; }
+  .arch-figure.is-animated .l-fwd2    { animation: archDraw .45s ease-out 0.70s forwards; }
+  .arch-figure.is-animated .l-ret1    { animation: archDraw .45s ease-out 0.95s forwards; }
+  .arch-figure.is-animated .l-ret2    { animation: archDraw .45s ease-out 1.05s forwards; }
+  .arch-figure.is-animated .a-edge-label { animation: archFade .4s ease-out 0.70s forwards; }
+  .arch-figure.is-animated .ch-t1     { animation: archFade .4s cubic-bezier(.2,.7,.2,1) 1.15s forwards; }
+  .arch-figure.is-animated .ch-t2     { animation: archFade .4s cubic-bezier(.2,.7,.2,1) 1.28s forwards; }
+  .arch-figure.is-animated .ch-t3     { animation: archFade .4s cubic-bezier(.2,.7,.2,1) 1.41s forwards; }
+  .arch-figure.is-animated .ch-t4     { animation: archFade .4s cubic-bezier(.2,.7,.2,1) 1.54s forwards; }
+  /* One-shot data-pulse traversing the forward path after everything has settled */
+  .arch-figure.is-animated .a-pulse   { animation: archPulse 1.8s cubic-bezier(.4,0,.6,1) 1.85s forwards; }
+
+  @media (max-width: 720px) {
+    /* Tighten labels for small screens; SVG itself scales via viewBox */
+    .arch-cap { font-size: 12px; padding: 8px 2px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .arch-figure .a-node,
+    .arch-figure .a-chiclet,
+    .arch-figure .a-edge-label { opacity: 1; transform: none; }
+    .arch-figure .a-line { stroke-dashoffset: 0; }
+    .arch-figure .a-pulse { display: none; }
+  }
+
+  /* ── Reveal-on-scroll (subtle) ── */
+  /* Elements that opt in start hidden + slightly offset; the .is-revealed
+     class (added by IntersectionObserver) fades + lifts them into place. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 600ms cubic-bezier(.2,.6,.2,1),
+                transform 600ms cubic-bezier(.2,.6,.2,1);
+    will-change: opacity, transform;
+  }
+  .reveal.is-revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* KPI numbers — tabular-num so the counter doesn't jitter as digits change */
+  .kpi .v { font-variant-numeric: tabular-nums; }
+
+  /* Honor user preference — no animation at all if they've asked the OS for less motion */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
 </style>
 </head>
 <body>
@@ -444,6 +597,69 @@
     <span class="sep">·</span>
     <span>ML systems / inference</span>
   </div>
+
+  <figure class="arch-figure" id="archFigure" aria-labelledby="arch-cap">
+    <svg class="arch" viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" role="img"
+         aria-label="System architecture: Codex CLI talks Responses API to a Lumo proxy that normalizes payloads and captures per-request metrics; the proxy forwards to vLLM 0.19 serving Qwen 3.5-27B FP8 with a four-technique speculative-decoding stack (T1 suffix-decoding, T2 file-read priming, T3 schema-aware drafter, T4 plan-structure pre-drafter) on a GB10 GPU.">
+      <defs>
+        <marker id="ah-fwd" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a4742"/>
+        </marker>
+        <marker id="ah-ret" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#a09c93"/>
+        </marker>
+      </defs>
+
+      <!-- ─── Codex box ─── -->
+      <g class="a-node a-codex">
+        <rect class="a-box" x="10" y="50" width="200" height="100" rx="6"/>
+        <text class="a-title" x="110" y="82" text-anchor="middle">Codex CLI</text>
+        <text class="a-sub"   x="110" y="103" text-anchor="middle">agent · tools · skills</text>
+        <text class="a-meta"  x="110" y="130" text-anchor="middle">v0.128.0 · docker-isolated</text>
+      </g>
+
+      <!-- ─── Proxy box ─── -->
+      <g class="a-node a-proxy">
+        <rect class="a-box" x="300" y="50" width="180" height="100" rx="6"/>
+        <text class="a-title" x="390" y="82" text-anchor="middle">Lumo Proxy</text>
+        <text class="a-sub"   x="390" y="103" text-anchor="middle">normalize · capture</text>
+        <text class="a-meta"  x="390" y="130" text-anchor="middle">127.0.0.1:8022</text>
+      </g>
+
+      <!-- ─── vLLM serving box ─── -->
+      <g class="a-node a-vllm">
+        <rect class="a-box a-box-strong" x="560" y="10" width="310" height="180" rx="6"/>
+        <text class="a-title" x="715" y="36" text-anchor="middle">vLLM 0.19 &middot; Qwen 3.5-27B FP8</text>
+        <text class="a-meta a-meta-top" x="715" y="54" text-anchor="middle">speculative-decoding stack</text>
+
+        <!-- Four technique chiclets -->
+        <g class="a-chiclet ch-t1"><rect x="578" y="74" width="60" height="32" rx="4"/><text x="608" y="94" text-anchor="middle">T1</text></g>
+        <g class="a-chiclet ch-t2"><rect x="650" y="74" width="60" height="32" rx="4"/><text x="680" y="94" text-anchor="middle">T2</text></g>
+        <g class="a-chiclet ch-t3"><rect x="722" y="74" width="60" height="32" rx="4"/><text x="752" y="94" text-anchor="middle">T3</text></g>
+        <g class="a-chiclet ch-t4"><rect x="794" y="74" width="60" height="32" rx="4"/><text x="824" y="94" text-anchor="middle">T4</text></g>
+
+        <text class="a-sub"  x="715" y="138" text-anchor="middle">drafter → verifier → 17.0 tps</text>
+        <text class="a-meta" x="715" y="172" text-anchor="middle">GB10 GPU · sm_120 · consumer Blackwell</text>
+      </g>
+
+      <!-- ─── Forward arrows ─── -->
+      <text class="a-edge-label" x="255" y="72" text-anchor="middle">Responses API</text>
+      <line class="a-line l-fwd1" x1="210" y1="83" x2="298" y2="83" marker-end="url(#ah-fwd)"/>
+      <text class="a-edge-label" x="520" y="72" text-anchor="middle">normalized</text>
+      <line class="a-line l-fwd2" x1="480" y1="83" x2="558" y2="83" marker-end="url(#ah-fwd)"/>
+
+      <!-- ─── Return arrows ─── -->
+      <line class="a-line a-line-dim l-ret1" x1="560" y1="135" x2="482" y2="135" marker-end="url(#ah-ret)"/>
+      <line class="a-line a-line-dim l-ret2" x1="300" y1="135" x2="212" y2="135" marker-end="url(#ah-ret)"/>
+      <text class="a-edge-label a-edge-dim" x="390" y="152" text-anchor="middle">tokens + per-request metrics</text>
+
+      <!-- ─── Single one-shot pulse along the request path ─── -->
+      <circle class="a-pulse" r="4.5" cx="0" cy="0" fill="#2f6f4f"/>
+    </svg>
+    <figcaption id="arch-cap" class="arch-cap">
+      How a single attempt runs end-to-end. Codex speaks the Responses API; the Lumo proxy normalizes the payload, captures one row per request, and forwards to vLLM. The four-technique speculative-decoding stack (T1–T4) sits inside vLLM, drafting and verifying tokens that flow back as the agent's next turn.
+    </figcaption>
+  </figure>
 </header>
 
 <div class="tag-row">
@@ -459,10 +675,10 @@
   <div class="tldr-label">Summary</div>
   <p class="lede">A four-technique speculative-decoding stack, co-designed with the agent harness, lifts decode throughput on a 27B coding agent from <strong>5.6 → 17.0 tokens per second</strong> on a single consumer-Blackwell GPU. That is a <strong>3.04× speedup</strong> at unchanged FP8 weights — and, more interestingly, it converts one of eleven benchmark tasks from <strong>0 / 4 → 4 / 4 pass</strong> by giving an iterative multi-file refactor enough headroom to finish.</p>
   <div class="kpi-row">
-    <div class="kpi"><div class="v">3.04×</div><div class="l">decode tps vs.<br>base decode</div></div>
-    <div class="kpi"><div class="v">17.0</div><div class="l">tokens / sec median<br>(was 5.6)</div></div>
-    <div class="kpi"><div class="v">+9.1pp</div><div class="l">pass-rate lift<br>22.7 → 31.8%</div></div>
-    <div class="kpi"><div class="v">220</div><div class="l">cells · ~7.7M<br>telemetry samples</div></div>
+    <div class="kpi"><div class="v" data-num="3.04" data-decimals="2" data-suffix="×">3.04×</div><div class="l">decode tps vs.<br>base decode</div></div>
+    <div class="kpi"><div class="v" data-num="17.0" data-decimals="1">17.0</div><div class="l">tokens / sec median<br>(was 5.6)</div></div>
+    <div class="kpi"><div class="v" data-num="9.1" data-decimals="1" data-prefix="+" data-suffix="pp">+9.1pp</div><div class="l">pass-rate lift<br>22.7 → 31.8%</div></div>
+    <div class="kpi"><div class="v" data-num="220" data-decimals="0">220</div><div class="l">cells · ~7.7M<br>telemetry samples</div></div>
   </div>
   <p style="margin-top:18px;">The headline number is one half of the story. The other half — <em>which</em> techniques carry the win, and why most of them don't compose — is what makes this an engineering result rather than a benchmark number.</p>
   <ul>
@@ -712,7 +928,7 @@
 </table>
 </div>
 
-<div class="chart-wrap">
+<div class="chart-wrap reveal">
   <div class="chart-head">
     <span class="id">Figure <b>1</b> &middot; per-point decode throughput</span>
     <span class="axis">y: tokens / second (median)</span>
@@ -779,7 +995,7 @@
 
 <p>Each pairwise comparison (A − OFF, B − A, C − B, D − C) isolates the marginal effect of one technique.</p>
 
-<div class="chart-wrap">
+<div class="chart-wrap reveal">
   <div class="chart-head">
     <span class="id">Figure <b>2</b> &middot; marginal Δ decode_tps per technique, per task</span>
     <span class="axis">x: Δ tokens / second</span>
@@ -957,6 +1173,67 @@ python3 scripts/contamination_sweep.py</code></pre>
 
 <script>
 (function bootCharts() {
+  var reduced = (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // ─────────────────────────────────────────────────────────────────────
+  // 1. KPI count-up — runs when each tile first scrolls into view.
+  //    Reads the target value from data-num; honors reduced-motion.
+  // ─────────────────────────────────────────────────────────────────────
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function animateNumber(el) {
+    if (el.__animated) return; el.__animated = true;
+    var target   = parseFloat(el.getAttribute('data-num'));
+    var decimals = parseInt(el.getAttribute('data-decimals') || '0', 10);
+    var prefix   = el.getAttribute('data-prefix') || '';
+    var suffix   = el.getAttribute('data-suffix') || '';
+    if (reduced || isNaN(target)) { return; }  // leave authored text untouched
+    var duration = 1100;
+    var start = performance.now();
+    function frame(now) {
+      var t = Math.min((now - start) / duration, 1);
+      var v = target * easeOutCubic(t);
+      el.textContent = prefix + v.toFixed(decimals) + suffix;
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // 2. Generic reveal-on-scroll for .reveal elements (chart wrappers).
+  //    One-shot: once revealed, the observer stops watching.
+  // ─────────────────────────────────────────────────────────────────────
+  // Helper: observe element once, fire fn on first intersection, with a
+  // viewport-check shortcut for already-visible elements and a safety timer.
+  function watch(el, fn, opts) {
+    if (!('IntersectionObserver' in window)) { fn(el); return; }
+    var r = el.getBoundingClientRect();
+    if (r.top < window.innerHeight && r.bottom > 0) { fn(el); return; }
+    var seen = false;
+    var go = function () { if (seen) return; seen = true; io.disconnect(); fn(el); };
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) go(); });
+    }, opts || { threshold: 0.12 });
+    io.observe(el);
+    setTimeout(go, 8000);
+  }
+
+  document.querySelectorAll('.reveal').forEach(function (el) {
+    watch(el, function (t) { t.classList.add('is-revealed'); }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  });
+  document.querySelectorAll('.kpi .v[data-num]').forEach(function (el) {
+    watch(el, animateNumber, { threshold: 0.4 });
+  });
+  // Architecture diagram — kicks the reveal animation on first view.
+  // (Lives in the masthead, so this typically fires immediately on load.)
+  var archFig = document.getElementById('archFigure');
+  if (archFig) watch(archFig, function (t) { t.classList.add('is-animated'); }, { threshold: 0.18 });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // 3. Chart construction — wait for Chart.js, then DEFER each chart's
+  //    build to when its canvas enters the viewport. That way the natural
+  //    Chart.js draw-in animation triggers exactly when the reader sees it,
+  //    instead of being silently consumed at page-load time.
+  // ─────────────────────────────────────────────────────────────────────
   function fallback() { document.body.classList.add('no-charts'); }
   if (typeof Chart === 'undefined') {
     setTimeout(function () { if (typeof Chart === 'undefined') fallback(); else build(); }, 800);
@@ -990,9 +1267,33 @@ python3 scripts/contamination_sweep.py</code></pre>
     Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
     Chart.defaults.font.size = 12;
 
+    // Build a Chart only when its canvas is first scrolled into view.
+    // Three paths:
+    //  1. No IntersectionObserver support → build right away.
+    //  2. Element already in viewport at this moment → build right away
+    //     (skips the IO race that can leave already-visible elements unbuilt).
+    //  3. Otherwise → set up IO; also schedule a safety fallback in 8s in case
+    //     IO never fires for whatever reason (programmatic scroll, etc.).
+    function whenVisible(el, fn) {
+      if (!('IntersectionObserver' in window)) { fn(); return; }
+      var r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight && r.bottom > 0) { fn(); return; }
+      var seen = false;
+      var go = function () { if (seen) return; seen = true; io.disconnect(); fn(); };
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { if (e.isIntersecting) go(); });
+      }, { threshold: 0.18 });
+      io.observe(el);
+      setTimeout(go, 8000);
+    }
+
+    // Common animation timing — slightly longer than Chart.js default so the
+    // bars rise into place with a clear deliberate motion rather than a flash.
+    var animBars = reduced ? false : { duration: 900, easing: 'easeOutCubic' };
+
     // ───── Figure 1 ─────
     var ctx1 = document.getElementById('chartAgg');
-    if (ctx1) {
+    if (ctx1) whenVisible(ctx1, function () {
       new Chart(ctx1, {
         type: 'bar',
         data: {
@@ -1011,7 +1312,7 @@ python3 scripts/contamination_sweep.py</code></pre>
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          animation: { duration: 500 },
+          animation: animBars,
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -1058,11 +1359,11 @@ python3 scripts/contamination_sweep.py</code></pre>
           }
         }
       });
-    }
+    });
 
     // ───── Figure 2 ─────
     var ctx2 = document.getElementById('chartDeltas');
-    if (ctx2) {
+    if (ctx2) whenVisible(ctx2, function () {
       var labels = [
         'dead-flag', 'incident-evidence', 'sqlalchemy', 'multi-tool',
         'security-audit', 'responsive-checkout', 'fanout', 'transcript-merge',
@@ -1096,7 +1397,7 @@ python3 scripts/contamination_sweep.py</code></pre>
           indexAxis: 'y',
           responsive: true,
           maintainAspectRatio: false,
-          animation: { duration: 500 },
+          animation: animBars,
           plugins: {
             legend: {
               position: 'top', align: 'end',
@@ -1152,7 +1453,7 @@ python3 scripts/contamination_sweep.py</code></pre>
           }
         }
       });
-    }
+    });
   }
 })();
 </script>
