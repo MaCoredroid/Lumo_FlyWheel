@@ -11,6 +11,18 @@ models:
     max_num_batched_tokens: 8192
     max_num_seqs: 4
 
+  qwen3.6-27b:
+    hf_repo: Qwen/Qwen3.6-27B-FP8
+    hf_revision: e89b16ebf1988b3d6befa7de50abc2d76f26eb09
+    local_path: /models/qwen3.6-27b-fp8
+    quantization: fp8
+    dtype: auto
+    kv_cache_dtype: fp8_e5m2
+    max_model_len: 131072
+    gpu_memory_utilization: 0.90
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+
   qwen3.5-35b-a3b:
     hf_repo: Qwen/Qwen3.5-35B-A3B-FP8
     hf_revision: 0b2752837483aa34b3db6e83e151b150c0e00e49

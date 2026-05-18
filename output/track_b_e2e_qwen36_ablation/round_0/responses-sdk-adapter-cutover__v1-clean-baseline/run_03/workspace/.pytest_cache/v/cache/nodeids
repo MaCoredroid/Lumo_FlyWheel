@@ -1,0 +1,5 @@
+[
+  "tests/test_adapter.py::test_adapter_extracts_message_blocks",
+  "tests/test_render.py::test_render_includes_tool_result_call_id",
+  "tests/test_replay.py::test_replay_preserves_tool_call_ids"
+]
