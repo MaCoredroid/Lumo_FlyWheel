@@ -1,0 +1,48 @@
+{
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "tests/test_shadow_preview_live.py",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env",
+      "rationale": "ENABLE_SHADOW_PREVIEW is a live standalone flag. The parser in config.py reads the env var and sets shadow_enabled to true, and runtime.py branches on config.shadow_enabled to return the shadow preview path. The test confirms the branch actually changes at runtime, disproving the false-positive hypothesis that parser hits alone prove reachability.",
+      "runtime_branch_symbol": "preview_runtime_branch",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "tests/test_preview_v2_alias.py",
+      "evidence": [
+        "src/preview/config.py",
+        "docs/preview_rollout_runbook.md",
+        "tests/test_preview_v2_alias.py"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env",
+      "rationale": "ENABLE_PREVIEW_V2 is a live alias of ENABLE_SHADOW_PREVIEW, not a standalone flag. The parser in config.py accepts the env var but normalizes it to the same shadow_enabled path with no unique runtime branch. The runbook confirms this mapping. The test disproves the false positive that a separate V2 branch exists \u2014 the plan shows shadow_preview_path, identical to shadow preview.",
+      "runtime_branch_symbol": null,
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "tests/test_force_legacy_reporting_only.py",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "tests/test_force_legacy_reporting_only.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env",
+      "rationale": "PREVIEW_FORCE_LEGACY is dead at runtime. The parser in config.py sets force_legacy_seen and records a parser hit, but runtime.py never branches on that field \u2014 it only checks shadow_enabled. The legacy.py module only uses it for a reporting label. The test disproves the false positive by showing that setting the flag still returns legacy_preview_path with no branch change, confirming it is reporting-only.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ]
+}

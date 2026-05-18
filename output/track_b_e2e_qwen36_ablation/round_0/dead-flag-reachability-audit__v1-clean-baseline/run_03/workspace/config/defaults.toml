@@ -1,0 +1,5 @@
+[preview]
+default_mode = "legacy"
+enable_shadow_preview = false
+enable_preview_v2 = false
+preview_force_legacy = false

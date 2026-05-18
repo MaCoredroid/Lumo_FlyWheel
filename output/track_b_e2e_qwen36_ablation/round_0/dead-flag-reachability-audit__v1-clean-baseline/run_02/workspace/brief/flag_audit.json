@@ -1,0 +1,104 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "Dockerfile confirms python:3.11-slim base image for execution",
+      "status": "observed",
+      "topic": "Python runtime"
+    },
+    {
+      "note": "Exactly three flags defined in defaults.toml and config.py parser",
+      "status": "observed",
+      "topic": "Flag count"
+    },
+    {
+      "note": "Legacy deploy manifests referencing ENABLE_PREVIEW_V2 are outside this workspace",
+      "status": "to_verify",
+      "topic": "Deploy manifests"
+    },
+    {
+      "note": "No release_context or incident_context directories present in this workspace copy",
+      "status": "missing",
+      "topic": "Deployment state"
+    }
+  ],
+  "cleanup_plan": [
+    {
+      "action": "keep",
+      "blockers": [],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "rationale": "This is the active live flag controlling the preview router branch. Removing it would break the shadow preview path entirely."
+    },
+    {
+      "action": "deprecate",
+      "blockers": [
+        "Legacy deploy manifests still reference ENABLE_PREVIEW_V2"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "rationale": "Live alias retained for legacy deploy manifests only. Should be deprecated with a migration path to ENABLE_SHADOW_PREVIEW before removal."
+    },
+    {
+      "action": "docs_cleanup",
+      "blockers": [
+        "Operator notes still reference PREVIEW_FORCE_LEGACY for historical context"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "rationale": "Parser presence with no runtime branching. Only used for reporting labels. Keep telemetry while cleaning up docs to mark as dead."
+    }
+  ],
+  "flags": [
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "src/preview/service.py",
+        "tests/test_shadow_preview_live.py",
+        "config/defaults.toml",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env",
+      "rationale": "This is the primary live preview control. The env parser in load_preview_env reads ENABLE_SHADOW_PREVIEW and sets shadow_enabled. The runtime function preview_runtime_branch explicitly branches on config.shadow_enabled, returning shadow_preview_path when true. The service layer build_preview_plan calls preview_runtime_branch and surfaces the result. The CLI entry point exercises the full pipeline. The runbook confirms it as the live router branch. Parser hit does prove a runtime branch here, disproving the generic false-positive note.",
+      "runtime_branch_symbol": "preview_runtime_branch",
+      "status": "live"
+    },
+    {
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py",
+        "config/defaults.toml",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "flag": "ENABLE_PREVIEW_V2",
+      "parser_symbol": "load_preview_env",
+      "rationale": "This flag is a live alias of ENABLE_SHADOW_PREVIEW, not a standalone runtime branch. The parser in load_preview_env accepts it but normalizes it to the same shadow_enabled path. There is no independent runtime branch for ENABLE_PREVIEW_V2 in preview_runtime_branch. The test confirms the alias mapping to the shadow path. The runbook states it is only accepted for legacy deploy manifests. Docs mentioning rollback language do not make it independently live.",
+      "runtime_branch_symbol": null,
+      "status": "partial"
+    },
+    {
+      "alias_of": null,
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "tests/test_force_legacy_reporting_only.py",
+        "docs/preview_rollout_runbook.md",
+        "config/defaults.toml"
+      ],
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "parser_symbol": "load_preview_env",
+      "rationale": "This flag is dead from a runtime branching perspective. The parser in load_preview_env sets force_legacy_seen but preview_runtime_branch does not check it. The only consumer is legacy_force_label in legacy.py, which is a reporting/labeling helper, not a control flow branch. The test name itself states reporting_only. The runbook confirms the live service no longer branches on it. The presence of a test helper does not prove a live service branch, disproving the false-positive note.",
+      "runtime_branch_symbol": null,
+      "status": "dead"
+    }
+  ],
+  "schema_version": "cnb55.flag_audit.v1",
+  "summary": {
+    "highest_operational_risk": "ENABLE_SHADOW_PREVIEW",
+    "note": "ENABLE_SHADOW_PREVIEW is the sole live runtime control for the preview router. ENABLE_PREVIEW_V2 is a deprecated alias normalizing to the same shadow path. PREVIEW_FORCE_LEGACY is dead code retained only for reporting and operator notes."
+  },
+  "variant_id": "v1-clean-baseline"
+}
