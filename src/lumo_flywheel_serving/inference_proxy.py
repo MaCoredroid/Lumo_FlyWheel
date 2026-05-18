@@ -122,6 +122,24 @@ def is_inference_get_path(path: str) -> bool:
 
 def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
+    # Lumo experiment knobs (env-gated): pin sampling params for controlled
+    # A/B runs without a Codex source change. Unset -> request unchanged.
+    _force_temp = os.environ.get("LUMO_PROXY_FORCE_TEMPERATURE")
+    if _force_temp:
+        try:
+            normalized["temperature"] = float(_force_temp)
+        except ValueError:
+            pass
+    _max_out = os.environ.get("LUMO_PROXY_MAX_OUTPUT_TOKENS")
+    if _max_out:
+        try:
+            cap = int(_max_out)
+        except ValueError:
+            cap = None
+        if cap is not None:
+            cur = normalized.get("max_output_tokens")
+            if not isinstance(cur, int) or cur > cap:
+                normalized["max_output_tokens"] = cap
     _normalize_responses_output_items(normalized)
     tools = normalized.get("tools")
     if not isinstance(tools, list):
