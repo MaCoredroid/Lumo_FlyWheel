@@ -1,0 +1,3 @@
+{"chunk_index": 0, "content": "live tail output", "event_id": "tool-log-01", "kind": "tool_output", "role": "tool", "sequence": 1, "tool_name": "fetch_logs"}
+{"chunk_index": 0, "content": "", "event_id": "done-02", "kind": "response.completed", "role": "system", "sequence": 2}
+{"chunk_index": 0, "content": "debug replay duplicate", "debug_only": true, "event_id": "debug-log-01", "kind": "tool_output", "role": "tool", "sequence": 3, "tool_name": "fetch_logs"}

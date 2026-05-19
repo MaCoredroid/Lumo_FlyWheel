@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from replay.merge import merge_paths
+
+
+def summarize_events(events: list[dict]) -> dict:
+    return {
+        "count_source": "merged_events",
+        "tool_output_blocks": sum(1 for e in events if e.get("kind") == "tool_output" and not (e.get("after_completion") and e.get("debug_only"))),
+        "assistant_blocks": sum(1 for e in events if e.get("kind") == "assistant"),
+    }
+
+
+def summarize_paths(paths: list[str | Path]) -> dict:
+    return summarize_events(merge_paths(paths))
