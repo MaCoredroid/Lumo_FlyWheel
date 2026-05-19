@@ -1,0 +1,97 @@
+{
+  "attempt": 2,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 0,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 537.4345208000159,
+  "family": "dead-flag-reachability-audit",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-19T20:49:50.572Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 96,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 96"
+      }
+    ],
+    "recorded_at": "2026-05-19T20:40:53.098Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-19T20:49:50.573Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 1,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5cce3e3d0bdca960e12d1c10d0b9ce1e7c1a7fb5672408bf4ba5bfa55a511565",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/dead-flag-reachability-audit/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_qwen36_temp06_ablation/round_1/dead-flag-reachability-audit__v1-clean-baseline/run_02/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 29,
+    "end_offset": 20864717,
+    "normalized_request_count": 29,
+    "request_ids": [
+      "resp_8042ebe6f032efa7",
+      "resp_8774f8ffa59384e3",
+      "resp_878e415e7bf75fb1",
+      "resp_8a45938c6615f8ec",
+      "resp_9072b8f35fb83b55",
+      "resp_921dd453389376b7",
+      "resp_93213f72756af884",
+      "resp_954c7d30be286e49",
+      "resp_95dc564260b8ce57",
+      "resp_966074974a85c365",
+      "resp_9682278d0541c044",
+      "resp_979efed2d95a4316",
+      "resp_9ac628fd99ff97da",
+      "resp_9f84c15b072286be",
+      "resp_a2a821d42cb7a1ad",
+      "resp_a3375c80e6683734",
+      "resp_a4417ee548909c1b",
+      "resp_a48a6356bc27b0c1",
+      "resp_a4aca0ed30cce705",
+      "resp_acff20ab03a915f5",
+      "resp_ad6817942e662691",
+      "resp_af4a8afafa865779",
+      "resp_b06d90cb3cda1ce9",
+      "resp_b1903de629d0c76d",
+      "resp_b22747b7d6f58554",
+      "resp_b5347d0a8f04cc0c",
+      "resp_b548ef5a287a2de6",
+      "resp_bc76cfc0f307c993",
+      "resp_bee4db8cf530ae11"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 20835616
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_qwen36_temp06_ablation/round_1/dead-flag-reachability-audit__v1-clean-baseline/run_02/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}

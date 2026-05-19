@@ -1,0 +1,95 @@
+{
+  "schema_version": "cnb55.flag_audit.v1",
+  "variant_id": "v1-clean-baseline",
+  "flags": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "status": "live",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the sole live flag. Parser reads the env var and sets shadow_enabled which is consumed by preview_runtime_branch to return the shadow path. Test and docs confirm end-to-end reachability."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "status": "partial",
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "ENABLE_PREVIEW_V2 is parsed by the env parser as an elif branch but normalizes to the same shadow_enabled flag. There is no independent runtime branch for V2. The runbook explicitly states it is not a standalone runtime branch. Parser hit does not prove runtime reachability."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "status": "dead",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "tests/test_force_legacy_reporting_only.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "PREVIEW_FORCE_LEGACY is parsed and sets force_legacy_seen but the live service does not branch on it. The only consumer is legacy_force_label which is a reporting-only label. The test asserts the runtime branch remains legacy. The runbook confirms the live service does not branch on it anymore."
+    }
+  ],
+  "summary": {
+    "highest_operational_risk": "ENABLE_SHADOW_PREVIEW",
+    "note": "ENABLE_SHADOW_PREVIEW is the only live flag controlling the preview router. ENABLE_PREVIEW_V2 is a dead alias and PREVIEW_FORCE_LEGACY is dead. Removing the dead/partial flags reduces config surface without runtime impact."
+  },
+  "cleanup_plan": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "action": "keep",
+      "blockers": [],
+      "rationale": "Sole live flag. Removing it would break the preview router. Must be kept as the canonical shadow preview toggle."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "action": "deprecate",
+      "blockers": [
+        "docs/preview_rollout_runbook.md"
+      ],
+      "rationale": "Alias with no independent runtime branch. Deprecate and redirect operators to ENABLE_SHADOW_PREVIEW."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "remove_after_migration",
+      "blockers": [
+        "tests/test_force_legacy_reporting_only.py"
+      ],
+      "rationale": "Dead flag with no runtime effect. Can be removed after confirming no external deploy manifests still reference it."
+    }
+  ],
+  "assumption_ledger": [
+    {
+      "status": "observed",
+      "topic": "ENABLE_SHADOW_PREVIEW runtime branch",
+      "note": "Confirmed via config.py parser and runtime.py branch logic."
+    },
+    {
+      "status": "observed",
+      "topic": "ENABLE_PREVIEW_V2 alias normalization",
+      "note": "Parser normalizes V2 to shadow_enabled; no standalone branch exists."
+    },
+    {
+      "status": "missing",
+      "topic": "External deploy manifest references to PREVIEW_FORCE_LEGACY",
+      "note": "Cannot verify from workspace alone whether external manifests still set this flag."
+    }
+  ]
+}

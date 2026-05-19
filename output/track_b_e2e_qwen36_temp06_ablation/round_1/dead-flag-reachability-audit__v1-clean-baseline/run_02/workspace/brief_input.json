@@ -1,0 +1,91 @@
+{
+  "schema_version": "cnb55.flag_audit.v1",
+  "variant_id": "v1-clean-baseline",
+  "flags": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "status": "live",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "docs/preview_rollout_runbook.md",
+        "tests/test_shadow_preview_live.py"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "ENABLE_SHADOW_PREVIEW is the canonical live flag. The parser in config.py sets shadow_enabled and effective_mode, and runtime.py branches on shadow_enabled to return the shadow preview path. The runbook confirms this is the active runtime branch."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "status": "partial",
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "docs/preview_rollout_runbook.md",
+        "tests/test_preview_v2_alias.py"
+      ],
+      "disproved_false_positive_path": "docs/preview_rollout_runbook.md",
+      "rationale": "ENABLE_PREVIEW_V2 is a live alias, not a standalone flag. The parser accepts it for legacy deploy manifests but normalizes it to the same shadow path as ENABLE_SHADOW_PREVIEW. It has no independent runtime branch in runtime.py, confirmed by the runbook."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "status": "dead",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/legacy.py",
+        "docs/preview_rollout_runbook.md",
+        "tests/test_force_legacy_reporting_only.py"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "PREVIEW_FORCE_LEGACY is dead. The parser records it but the live service does not branch on it. It only sets force_legacy_seen which is consumed by legacy_force_label for reporting. The runbook explicitly states it is left in reporting and operator notes only."
+    }
+  ],
+  "summary": {
+    "highest_operational_risk": "PREVIEW_FORCE_LEGACY",
+    "note": "PREVIEW_FORCE_LEGACY is dead code that should be removed after migration. ENABLE_PREVIEW_V2 is a safe alias that can be deprecated after deploy manifests migrate to ENABLE_SHADOW_PREVIEW."
+  },
+  "cleanup_plan": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "action": "keep",
+      "blockers": [],
+      "rationale": "This is the canonical live flag with active runtime branching. No cleanup needed."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "action": "deprecate",
+      "blockers": ["legacy deploy manifests may still reference ENABLE_PREVIEW_V2"],
+      "rationale": "Alias that normalizes to ENABLE_SHADOW_PREVIEW. Deprecate after confirming all deploy manifests use ENABLE_SHADOW_PREVIEW."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "remove_after_migration",
+      "blockers": ["operator notes and reporting pipelines may still reference force_legacy_seen"],
+      "rationale": "Dead flag with no runtime branch. Remove parser branch, dataclass field, legacy.py helper, and test after confirming reporting pipelines no longer depend on force_legacy_seen."
+    }
+  ],
+  "assumption_ledger": [
+    {
+      "status": "observed",
+      "topic": "ENABLE_SHADOW_PREVIEW is the only flag with a live runtime branch",
+      "note": "Confirmed by inspecting preview_runtime_branch in runtime.py which only checks config.shadow_enabled"
+    },
+    {
+      "status": "observed",
+      "topic": "ENABLE_PREVIEW_V2 normalizes to ENABLE_SHADOW_PREVIEW",
+      "note": "Parser sets the same shadow_enabled flag and effective_mode shadow, confirmed by runbook"
+    },
+    {
+      "status": "missing",
+      "topic": "Downstream consumers of force_legacy_seen outside this workspace",
+      "note": "Cannot verify whether external reporting pipelines still read force_legacy_seen labels from this service"
+    }
+  ]
+}
