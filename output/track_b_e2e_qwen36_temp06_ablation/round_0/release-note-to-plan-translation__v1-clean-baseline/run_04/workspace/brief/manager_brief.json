@@ -1,0 +1,94 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "No evidence of an existing kill switch mechanism for the dashboard summary; RN-103 assumes one exists or can be added.",
+      "status": "missing",
+      "topic": "Kill switch implementation"
+    },
+    {
+      "note": "Canary coverage exists but its readiness for validating the full dashboard summary path is unconfirmed.",
+      "status": "missing",
+      "topic": "Canary environment readiness"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "Fixtures must reflect the new schema discovered during the schema drift audit."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-101",
+      "reason": "Dashboard summary consumes the step-id schema produced by the translator; schema must be stable first."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "Dashboard summary must not ship until dependency-graph fixtures reflect the new schema."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Runbook only stabilizes after the rollout and rollback shape are known from canary validation."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Schema drift report with identified mismatches between translator output and legacy shim expectations.",
+      "evidence": [
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Audit the translator schema drift before removing the legacy parser shim. The shim currently masks drift in local smoke runs, so this audit de-risks all downstream work.",
+      "title": "Audit translator schema drift"
+    },
+    {
+      "bounded_deliverable": "Updated fixture files that pass plan_contract.py with the new step-id schema.",
+      "evidence": [
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Backfill dependency-graph fixtures so the plan contract catches ordering regressions. Fixtures must reflect the new schema discovered in RN-101.",
+      "title": "Backfill dependency-graph fixtures"
+    },
+    {
+      "bounded_deliverable": "Dashboard summary feature flag behind kill switch, validated in canary.",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Enable the translated release-plan dashboard summary behind a kill switch. Only after schema is stable (RN-101) and fixtures are backfilled (RN-102).",
+      "title": "Enable dashboard summary behind kill switch"
+    },
+    {
+      "bounded_deliverable": "Updated runbook and launch checklist documenting rollout and rollback procedures.",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Update the operator runbook and launch checklist after the summary path is proven in canary. Runbook only stabilizes after rollout and rollback shape are known.",
+      "title": "Update operator runbook and launch checklist"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/dependency_map.md"
+    ],
+    "mitigations": [
+      "Keep the dashboard summary behind a kill switch (RN-103) so it can be disabled immediately if bad data appears.",
+      "Complete schema audit (RN-101) and fixture backfill (RN-102) before enabling the dashboard, ensuring the translator output is correct.",
+      "Validate in canary before broad rollout; canary coverage exists for dashboard summary (test_inventory.md)."
+    ],
+    "statement": "The release dashboard renders incorrect step ordering to operators if the dashboard summary (RN-103) ships before the schema audit (RN-101) and fixture backfill (RN-102) are complete."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}

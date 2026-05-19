@@ -1,0 +1,102 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "RN-101 audits drift before shim removal, but the actual shim removal date and rollback plan are not specified in any release note or repo inventory.",
+      "status": "missing",
+      "topic": "Legacy parser shim removal timeline"
+    },
+    {
+      "note": "No explicit acceptance criteria defined for when the dashboard summary is considered proven in canary.",
+      "status": "missing",
+      "topic": "Canary rollout criteria for dashboard"
+    },
+    {
+      "note": "Extent of masked schema drift is unknown until RN-101 audit completes; if drift is breaking, RN-101 scope expands.",
+      "status": "missing",
+      "topic": "Schema drift severity"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "Fixtures must reflect the audited schema; backfilling before the audit would use stale schema definitions."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-101",
+      "reason": "Dashboard summary consumes the step-id schema produced by the translator; schema must be stable first."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "Dashboard must not ship until dependency-graph fixtures reflect the new schema, otherwise plan_contract.py will fail on ordering regressions."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Runbook and launch checklist require the dashboard summary path to be proven in canary so rollout and rollback shapes are known."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Schema drift audit report with list of drifted fields and shim removal plan.",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Audit the translator schema drift before removing the legacy parser shim. The shim currently masks drift in local smoke runs, so this step surfaces the real schema state.",
+      "title": "Audit translator schema drift"
+    },
+    {
+      "bounded_deliverable": "Updated fixtures that pass plan_contract.py with the new schema step ids.",
+      "evidence": [
+        "repo_inventory/test_inventory.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Backfill dependency-graph fixtures so the plan contract catches ordering regressions. Tests currently fail when new step ids are introduced without fixture updates.",
+      "title": "Backfill dependency-graph fixtures"
+    },
+    {
+      "bounded_deliverable": "Dashboard summary enabled behind kill switch with canary coverage.",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Enable the translated release-plan dashboard summary behind a kill switch after the schema is stable and fixtures are backfilled. The dashboard is user-visible.",
+      "title": "Enable dashboard summary behind kill switch"
+    },
+    {
+      "bounded_deliverable": "Updated runbook and launch checklist reflecting proven canary rollout and rollback procedures.",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Update the operator runbook and launch checklist after the summary path is proven in canary. The runbook only stabilizes after rollout and rollback shape are known.",
+      "title": "Update operator runbook and launch checklist"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/dependency_map.md",
+      "repo_inventory/test_inventory.md"
+    ],
+    "mitigations": [
+      "Keep dashboard behind a kill switch (RN-103) until schema and fixtures are verified.",
+      "Run plan_contract.py after fixture backfill to confirm ordering regressions are caught.",
+      "Gate runbook update (RN-104) behind successful canary proof of the summary path."
+    ],
+    "statement": "Dashboard renders incorrect step ordering to users if shipped before schema audit and fixture backfill are complete."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}

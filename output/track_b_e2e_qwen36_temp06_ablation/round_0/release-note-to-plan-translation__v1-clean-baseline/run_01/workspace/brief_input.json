@@ -1,0 +1,102 @@
+{
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline",
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "step_id": "RN-101",
+      "rank": 1,
+      "title": "Audit translator schema drift",
+      "summary": "Audit the translator schema drift before removing the legacy parser shim. The shim currently masks drift in local smoke runs, so this step surfaces the real schema state.",
+      "bounded_deliverable": "Schema drift audit report with list of drifted fields and shim removal plan.",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ]
+    },
+    {
+      "step_id": "RN-102",
+      "rank": 2,
+      "title": "Backfill dependency-graph fixtures",
+      "summary": "Backfill dependency-graph fixtures so the plan contract catches ordering regressions. Tests currently fail when new step ids are introduced without fixture updates.",
+      "bounded_deliverable": "Updated fixtures that pass plan_contract.py with the new schema step ids.",
+      "evidence": [
+        "repo_inventory/test_inventory.md",
+        "repo_inventory/dependency_map.md"
+      ]
+    },
+    {
+      "step_id": "RN-103",
+      "rank": 3,
+      "title": "Enable dashboard summary behind kill switch",
+      "summary": "Enable the translated release-plan dashboard summary behind a kill switch after the schema is stable and fixtures are backfilled. The dashboard is user-visible.",
+      "bounded_deliverable": "Dashboard summary enabled behind kill switch with canary coverage.",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ]
+    },
+    {
+      "step_id": "RN-104",
+      "rank": 4,
+      "title": "Update operator runbook and launch checklist",
+      "summary": "Update the operator runbook and launch checklist after the summary path is proven in canary. The runbook only stabilizes after rollout and rollback shape are known.",
+      "bounded_deliverable": "Updated runbook and launch checklist reflecting proven canary rollout and rollback procedures.",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ]
+    }
+  ],
+  "dependency_notes": [
+    {
+      "before": "RN-101",
+      "after": "RN-102",
+      "reason": "Fixtures must reflect the audited schema; backfilling before the audit would use stale schema definitions."
+    },
+    {
+      "before": "RN-101",
+      "after": "RN-103",
+      "reason": "Dashboard summary consumes the step-id schema produced by the translator; schema must be stable first."
+    },
+    {
+      "before": "RN-102",
+      "after": "RN-103",
+      "reason": "Dashboard must not ship until dependency-graph fixtures reflect the new schema, otherwise plan_contract.py will fail on ordering regressions."
+    },
+    {
+      "before": "RN-103",
+      "after": "RN-104",
+      "reason": "Runbook and launch checklist require the dashboard summary path to be proven in canary so rollout and rollback shapes are known."
+    }
+  ],
+  "primary_risk": {
+    "statement": "Dashboard renders incorrect step ordering to users if shipped before schema audit and fixture backfill are complete.",
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/dependency_map.md",
+      "repo_inventory/test_inventory.md"
+    ],
+    "mitigations": [
+      "Keep dashboard behind a kill switch (RN-103) until schema and fixtures are verified.",
+      "Run plan_contract.py after fixture backfill to confirm ordering regressions are caught.",
+      "Gate runbook update (RN-104) behind successful canary proof of the summary path."
+    ]
+  },
+  "assumption_ledger": [
+    {
+      "topic": "Legacy parser shim removal timeline",
+      "status": "missing",
+      "note": "RN-101 audits drift before shim removal, but the actual shim removal date and rollback plan are not specified in any release note or repo inventory."
+    },
+    {
+      "topic": "Canary rollout criteria for dashboard",
+      "status": "missing",
+      "note": "No explicit acceptance criteria defined for when the dashboard summary is considered proven in canary."
+    },
+    {
+      "topic": "Schema drift severity",
+      "status": "missing",
+      "note": "Extent of masked schema drift is unknown until RN-101 audit completes; if drift is breaking, RN-101 scope expands."
+    }
+  ]
+}
