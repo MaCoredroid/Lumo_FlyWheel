@@ -1,0 +1,38 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "If nested export paths (e.g. reports/partner-billing/2026-04/export.csv) fail to resolve under the tenant root, roll back immediately.",
+  "impact_scope": "repo/export_api/storage.py only; no changes to auth, archive, or config modules.",
+  "operator_verification_steps": [
+    "Deploy hotfix to staging and run 'make test' to confirm all existing tests pass.",
+    "Send REQ-legit-nested sample through staging export endpoint and verify 200 OK with correct file content.",
+    "Send REQ-encoded-dotdot, REQ-double-encoded, REQ-mixed-slash, REQ-absolute, REQ-drive-qualified samples and verify each returns an error.",
+    "Promote to production only after all verification steps pass."
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested export under tenant root resolves correctly and is allowed."
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded parent traversal is rejected."
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded parent traversal is rejected after iterative decoding."
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Backslash-based traversal is normalized to forward slashes and rejected."
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path requests are rejected before normalization."
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Windows drive-qualified paths are rejected before normalization."
+    }
+  ]
+}

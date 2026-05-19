@@ -1,0 +1,22 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "Any regression in nested export paths or unexpected ExportPathViolation on legitimate tenant-relative requests.",
+  "impact_scope": "repo/export_api/storage.py only; no changes to auth, archive, or config.",
+  "operator_verification_steps": [
+    "Confirm resolve_export_path rejects double-encoded traversal (%252e%252e%252f).",
+    "Confirm resolve_export_path rejects mixed-slash traversal (reports\\\\..\\\\..\\\\secrets.csv).",
+    "Confirm resolve_export_path still allows nested tenant-relative paths (reports/partner-billing/2026-04/export.csv).",
+    "Run make test and verify all tests pass."
+  ],
+  "behavior_preservation_claims": [
+    {"sample_id": "REQ-legit-nested", "claim": "allowed"},
+    {"sample_id": "REQ-encoded-dotdot", "claim": "blocked"},
+    {"sample_id": "REQ-double-encoded", "claim": "blocked"},
+    {"sample_id": "REQ-mixed-slash", "claim": "blocked"},
+    {"sample_id": "REQ-absolute", "claim": "blocked"},
+    {"sample_id": "REQ-drive-qualified", "claim": "blocked"}
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}
