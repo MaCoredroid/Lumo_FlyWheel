@@ -1,0 +1,8 @@
+[
+  "tests/test_policy_resolution.py::test_accepted_is_valid_proposal",
+  "tests/test_policy_resolution.py::test_assumption_ledger_has_missing_row",
+  "tests/test_policy_resolution.py::test_brief_exists_and_nonempty",
+  "tests/test_policy_resolution.py::test_each_ranking_entry_has_required_fields",
+  "tests/test_policy_resolution.py::test_ranking_length_matches_proposals",
+  "tests/test_policy_resolution.py::test_schema_version"
+]
