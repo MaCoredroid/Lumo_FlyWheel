@@ -1,0 +1,2 @@
+wire_api = "chat_completions"
+transcript_mode = "legacy_messages"
