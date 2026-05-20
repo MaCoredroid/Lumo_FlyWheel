@@ -1,0 +1,4 @@
+2026-05-01T10:04:12Z deploy=checkout-guardrail-v18 region=iad status=healthy
+2026-05-01T10:17:44Z request_class=bulk-refund retry_after_ms=0 idempotency_key=missing status=accepted
+2026-05-01T10:17:46Z request_class=bulk-refund retry_after_ms=0 idempotency_key=missing status=accepted duplicate_candidate=true
+2026-05-01T10:18:02Z guardrail=idempotency-required decision=skipped reason=legacy_batch_header

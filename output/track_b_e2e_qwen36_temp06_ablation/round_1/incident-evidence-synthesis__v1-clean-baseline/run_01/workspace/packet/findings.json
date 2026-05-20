@@ -1,0 +1,30 @@
+{
+  "ranked_findings": [
+    {
+      "summary": "Bulk-refund requests accepted without idempotency keys, causing duplicate refunds for three enterprise accounts.",
+      "confidence": "high",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: idempotency_key=missing, status=accepted, duplicate_candidate=true",
+        "corpus/timeline/incident_timeline.md: bulk refund requests accepted without idempotency keys at 10:17 UTC",
+        "corpus/tickets/TICKET-8729.md: every duplicate has request_class=bulk-refund and no idempotency key"
+      ]
+    },
+    {
+      "summary": "idempotency-required guardrail skipped due to legacy_batch_header bypass.",
+      "confidence": "high",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: guardrail=idempotency-required decision=skipped reason=legacy_batch_header",
+        "corpus/timeline/incident_timeline.md: idempotency-required guardrail skipped due to legacy_batch_header at 10:18 UTC"
+      ]
+    },
+    {
+      "summary": "Worker replay theory (TICKET-8721) not supported by final evidence; duplicates isolated to bulk-refund class.",
+      "confidence": "low",
+      "evidence": [
+        "corpus/tickets/TICKET-8721.md: initial theory of queue worker replay opened before gateway logs available",
+        "corpus/tickets/TICKET-8729.md: single-refund traffic in same window had idempotency keys and did not duplicate"
+      ]
+    }
+  ],
+  "unresolved_ambiguity": "The worker-replay theory from TICKET-8721 was formed before API gateway logs were available. Final evidence points to the missing idempotency key as the root cause, but the worker-replay hypothesis has not been formally closed and could be revisited if future incidents show similar patterns outside the bulk-refund request class."
+}

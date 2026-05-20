@@ -1,0 +1,37 @@
+{
+  "ranked_findings": [
+    {
+      "finding": "Bulk-refund requests were accepted without idempotency keys, causing duplicate refunds for three enterprise accounts.",
+      "confidence": "high",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: request_class=bulk-refund idempotency_key=missing status=accepted",
+        "corpus/tickets/TICKET-8729.md: every duplicate has request_class=bulk-refund and no idempotency key",
+        "corpus/timeline/incident_timeline.md: duplicate refunds reported at 10:25 UTC"
+      ]
+    },
+    {
+      "finding": "The idempotency-required guardrail was skipped due to the legacy_batch_header bypass, allowing non-idempotent requests through.",
+      "confidence": "high",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: guardrail=idempotency-required decision=skipped reason=legacy_batch_header",
+        "corpus/timeline/incident_timeline.md: idempotency-required guardrail skipped due to legacy_batch_header at 10:18 UTC"
+      ]
+    },
+    {
+      "finding": "Single-refund API traffic in the same window included idempotency keys and did not duplicate, isolating the issue to the bulk-refund path.",
+      "confidence": "high",
+      "evidence": [
+        "corpus/tickets/TICKET-8729.md: Single-refund API traffic in the same window includes idempotency keys and did not duplicate"
+      ]
+    },
+    {
+      "finding": "Worker replay was an early theory (TICKET-8721) opened before gateway logs were available; final evidence does not support it as the primary trigger.",
+      "confidence": "low",
+      "evidence": [
+        "corpus/tickets/TICKET-8721.md: Initial theory: queue worker replayed an old payment event after a timeout. This theory was opened before API gateway logs were available.",
+        "corpus/remediation/notes.md: Early note: investigate worker replay and retry backoff."
+      ]
+    }
+  ],
+  "unresolved_ambiguity": "Whether the queue worker replay contributed to the incident is not confirmed. TICKET-8721 raised this theory before API gateway logs were available, and the final evidence points to the guardrail skip as the root cause. Worker replay and retry backoff remain an open but unconfirmed secondary concern."
+}
