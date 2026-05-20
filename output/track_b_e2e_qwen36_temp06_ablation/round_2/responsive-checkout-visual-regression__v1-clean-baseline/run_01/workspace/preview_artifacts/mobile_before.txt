@@ -1,0 +1,2 @@
+Viewport: 390x844
+Observed: compact summary overlaps payment content; primary CTA is hidden behind sticky UI.

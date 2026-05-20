@@ -1,0 +1,7 @@
+[
+  "tests/e2e/test_checkout_desktop.py::test_desktop_checkout_still_uses_two_columns",
+  "tests/e2e/test_checkout_mobile.py::test_mobile_bar_is_fixed",
+  "tests/e2e/test_checkout_mobile.py::test_mobile_bottom_bar_clears_cta",
+  "tests/e2e/test_checkout_mobile.py::test_mobile_compact_summary_no_overlap",
+  "tests/unit/test_checkout_copy.py::test_checkout_primary_cta_copy_is_present"
+]
