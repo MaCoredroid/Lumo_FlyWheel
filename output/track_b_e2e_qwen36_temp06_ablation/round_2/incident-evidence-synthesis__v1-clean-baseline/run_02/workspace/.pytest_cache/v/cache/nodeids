@@ -1,0 +1,4 @@
+[
+  "tests/test_incident_packet.py::test_findings_shape_is_ranked_and_evidence_backed",
+  "tests/test_incident_packet.py::test_packet_outputs_exist_and_name_required_sections"
+]
