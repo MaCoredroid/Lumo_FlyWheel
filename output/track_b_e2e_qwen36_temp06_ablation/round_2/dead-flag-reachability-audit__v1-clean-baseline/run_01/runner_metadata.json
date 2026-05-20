@@ -1,0 +1,84 @@
+{
+  "attempt": 1,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 1,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 117.11080101295374,
+  "family": "dead-flag-reachability-audit",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-20T13:18:29.405Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-20T13:16:32.257Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-20T13:18:29.406Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 2,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5cce3e3d0bdca960e12d1c10d0b9ce1e7c1a7fb5672408bf4ba5bfa55a511565",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/dead-flag-reachability-audit/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_qwen36_temp06_ablation/round_2/dead-flag-reachability-audit__v1-clean-baseline/run_01/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 16,
+    "end_offset": 25080095,
+    "normalized_request_count": 16,
+    "request_ids": [
+      "resp_87c02dfcbe0eb04e",
+      "resp_8c0312e19209b477",
+      "resp_8d82b6762d39eeb9",
+      "resp_8fa79460ce7415c3",
+      "resp_967d21b5b1e6cf5c",
+      "resp_a162f7ad0994e423",
+      "resp_a5237d45bc7fba80",
+      "resp_a662dcc13597b74c",
+      "resp_ac13a7f6e47cdcdf",
+      "resp_ad334fd34d1e1208",
+      "resp_b085cee9fe220498",
+      "resp_b31d3320173e2ae7",
+      "resp_b3209e22e731dc7d",
+      "resp_b505fc0806f90580",
+      "resp_b6ac6b90c03c65c2",
+      "resp_bf9130c114cb5395"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 25064063
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_qwen36_temp06_ablation/round_2/dead-flag-reachability-audit__v1-clean-baseline/run_01/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}
