@@ -1,0 +1,99 @@
+{
+  "assumption_ledger": [
+    {
+      "note": "The release notes mention a kill switch for the dashboard summary, but no implementation evidence exists in repo inventory.",
+      "status": "to_verify",
+      "topic": "Kill switch availability"
+    },
+    {
+      "note": "No canary deployment pipeline or rollout/rollback configuration details found in repo inventory; canary process is referenced but not documented.",
+      "status": "missing",
+      "topic": "Canary deployment pipeline"
+    },
+    {
+      "note": "RN-101 mentions removing the legacy parser shim, but the scope of removal is not detailed in repo state.",
+      "status": "to_verify",
+      "topic": "Legacy parser shim removal scope"
+    }
+  ],
+  "dependency_notes": [
+    {
+      "after": "RN-102",
+      "before": "RN-101",
+      "reason": "Schema drift must be audited before backfilling fixtures, since fixtures must reflect the corrected schema."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-101",
+      "reason": "Dashboard summary consumes the step-id schema produced by the translator; schema must be stable first."
+    },
+    {
+      "after": "RN-103",
+      "before": "RN-102",
+      "reason": "Dashboard must not ship until dependency-graph fixtures reflect the new schema, otherwise plan_contract tests fail."
+    },
+    {
+      "after": "RN-104",
+      "before": "RN-103",
+      "reason": "Runbook only stabilizes after the dashboard summary path is proven in canary and rollout/rollback shape is known."
+    }
+  ],
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "bounded_deliverable": "Schema drift audit report with list of drifted fields",
+      "evidence": [
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 1,
+      "step_id": "RN-101",
+      "summary": "Audit the translator schema drift before removing the legacy parser shim. The shim currently masks drift in local smoke runs, so this step surfaces the real state of the schema.",
+      "title": "Audit translator schema drift"
+    },
+    {
+      "bounded_deliverable": "Updated fixtures that pass plan_contract tests",
+      "evidence": [
+        "repo_inventory/test_inventory.md"
+      ],
+      "rank": 2,
+      "step_id": "RN-102",
+      "summary": "Backfill dependency-graph fixtures so the plan contract catches ordering regressions. The plan_contract test currently fails when new step ids are introduced without fixture updates.",
+      "title": "Backfill dependency-graph fixtures"
+    },
+    {
+      "bounded_deliverable": "Dashboard summary enabled behind kill switch in canary",
+      "evidence": [
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md"
+      ],
+      "rank": 3,
+      "step_id": "RN-103",
+      "summary": "Enable the translated release-plan dashboard summary behind a kill switch after the schema is stable and fixtures are backfilled. Dashboard is user-visible and renders whatever the translator emits.",
+      "title": "Enable dashboard summary behind kill switch"
+    },
+    {
+      "bounded_deliverable": "Updated runbook and launch checklist reflecting proven rollout shape",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ],
+      "rank": 4,
+      "step_id": "RN-104",
+      "summary": "Update the operator runbook and launch checklist after the summary path is proven in canary. The runbook only stabilizes after rollout and rollback shape are known.",
+      "title": "Update operator runbook and launch checklist"
+    }
+  ],
+  "primary_risk": {
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md"
+    ],
+    "mitigations": [
+      "Keep dashboard behind kill switch until schema audit and fixture backfill are complete",
+      "Run plan_contract tests after each step to catch ordering regressions early",
+      "Canary-only rollout for dashboard summary before full exposure to all users"
+    ],
+    "statement": "Dashboard renders incorrect step ordering to users if schema drift is not audited and fixtures are not backfilled before enabling the dashboard summary."
+  },
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline"
+}

@@ -1,0 +1,99 @@
+{
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline",
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "step_id": "RN-101",
+      "rank": 1,
+      "title": "Audit translator schema drift",
+      "summary": "Audit the translator schema drift before removing the legacy parser shim. The shim currently masks drift in local smoke runs, so this step surfaces the real state of the schema.",
+      "bounded_deliverable": "Schema drift audit report with list of drifted fields",
+      "evidence": [
+        "repo_inventory/repo_state.md"
+      ]
+    },
+    {
+      "step_id": "RN-102",
+      "rank": 2,
+      "title": "Backfill dependency-graph fixtures",
+      "summary": "Backfill dependency-graph fixtures so the plan contract catches ordering regressions. The plan_contract test currently fails when new step ids are introduced without fixture updates.",
+      "bounded_deliverable": "Updated fixtures that pass plan_contract tests",
+      "evidence": [
+        "repo_inventory/test_inventory.md"
+      ]
+    },
+    {
+      "step_id": "RN-103",
+      "rank": 3,
+      "title": "Enable dashboard summary behind kill switch",
+      "summary": "Enable the translated release-plan dashboard summary behind a kill switch after the schema is stable and fixtures are backfilled. Dashboard is user-visible and renders whatever the translator emits.",
+      "bounded_deliverable": "Dashboard summary enabled behind kill switch in canary",
+      "evidence": [
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md"
+      ]
+    },
+    {
+      "step_id": "RN-104",
+      "rank": 4,
+      "title": "Update operator runbook and launch checklist",
+      "summary": "Update the operator runbook and launch checklist after the summary path is proven in canary. The runbook only stabilizes after rollout and rollback shape are known.",
+      "bounded_deliverable": "Updated runbook and launch checklist reflecting proven rollout shape",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ]
+    }
+  ],
+  "dependency_notes": [
+    {
+      "before": "RN-101",
+      "after": "RN-102",
+      "reason": "Schema drift must be audited before backfilling fixtures, since fixtures must reflect the corrected schema."
+    },
+    {
+      "before": "RN-101",
+      "after": "RN-103",
+      "reason": "Dashboard summary consumes the step-id schema produced by the translator; schema must be stable first."
+    },
+    {
+      "before": "RN-102",
+      "after": "RN-103",
+      "reason": "Dashboard must not ship until dependency-graph fixtures reflect the new schema, otherwise plan_contract tests fail."
+    },
+    {
+      "before": "RN-103",
+      "after": "RN-104",
+      "reason": "Runbook only stabilizes after the dashboard summary path is proven in canary and rollout/rollback shape is known."
+    }
+  ],
+  "primary_risk": {
+    "statement": "Dashboard renders incorrect step ordering to users if schema drift is not audited and fixtures are not backfilled before enabling the dashboard summary.",
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md"
+    ],
+    "mitigations": [
+      "Keep dashboard behind kill switch until schema audit and fixture backfill are complete",
+      "Run plan_contract tests after each step to catch ordering regressions early",
+      "Canary-only rollout for dashboard summary before full exposure to all users"
+    ]
+  },
+  "assumption_ledger": [
+    {
+      "topic": "Kill switch availability",
+      "status": "to_verify",
+      "note": "The release notes mention a kill switch for the dashboard summary, but no implementation evidence exists in repo inventory."
+    },
+    {
+      "topic": "Canary deployment pipeline",
+      "status": "missing",
+      "note": "No canary deployment pipeline or rollout/rollback configuration details found in repo inventory; canary process is referenced but not documented."
+    },
+    {
+      "topic": "Legacy parser shim removal scope",
+      "status": "to_verify",
+      "note": "RN-101 mentions removing the legacy parser shim, but the scope of removal is not detailed in repo state."
+    }
+  ]
+}

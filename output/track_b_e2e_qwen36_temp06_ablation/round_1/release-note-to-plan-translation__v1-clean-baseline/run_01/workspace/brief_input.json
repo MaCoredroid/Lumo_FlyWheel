@@ -1,0 +1,92 @@
+{
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline",
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "step_id": "RN-101",
+      "rank": 1,
+      "title": "Audit translator schema drift before removing legacy parser shim",
+      "summary": "Audit the translator schema to surface drift that the legacy parser shim currently masks. This is a bounded investigation that de-risks all downstream work without touching user-visible paths.",
+      "bounded_deliverable": "Schema drift report with a concrete list of fields that differ between legacy and translated schemas.",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "release_notes/release_notes_2026_04.md"
+      ]
+    },
+    {
+      "step_id": "RN-102",
+      "rank": 2,
+      "title": "Backfill dependency-graph fixtures for the new schema",
+      "summary": "Backfill the dependency-graph fixtures so the plan contract test catches ordering regressions under the new step-id schema. This must happen after the schema audit so the fixtures reflect the corrected field names.",
+      "bounded_deliverable": "Updated fixtures that make tests/plan_contract.py pass with new step ids.",
+      "evidence": [
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/test_inventory.md"
+      ]
+    },
+    {
+      "step_id": "RN-103",
+      "rank": 3,
+      "title": "Enable translated release-plan dashboard summary behind a kill switch",
+      "summary": "Enable the dashboard summary behind a kill switch now that the schema is stable and fixtures are in place. The dashboard is user-visible, so it must only render after the translator output is correct.",
+      "bounded_deliverable": "Dashboard summary feature-flagged behind a kill switch, validated in canary.",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ]
+    },
+    {
+      "step_id": "RN-104",
+      "rank": 4,
+      "title": "Update operator runbook and launch checklist",
+      "summary": "Finalize the operator runbook and launch checklist after the summary path is proven in canary. The runbook depends on knowing the rollout and rollback shape, which is only known after RN-103.",
+      "bounded_deliverable": "Updated runbook and launch checklist reflecting proven rollout/rollback procedures.",
+      "evidence": [
+        "repo_inventory/dependency_map.md",
+        "release_notes/release_notes_2026_04.md"
+      ]
+    }
+  ],
+  "dependency_notes": [
+    {
+      "before": "RN-101",
+      "after": "RN-102",
+      "reason": "Fixtures must reflect the corrected schema; backfilling before the audit would encode the wrong field names."
+    },
+    {
+      "before": "RN-102",
+      "after": "RN-103",
+      "reason": "Dashboard summary must not ship until dependency-graph fixtures reflect the new schema, otherwise plan_contract.py fails."
+    },
+    {
+      "before": "RN-103",
+      "after": "RN-104",
+      "reason": "Runbook depends on knowing the rollout and rollback shape, which is only determined after the dashboard is proven in canary."
+    }
+  ],
+  "primary_risk": {
+    "statement": "Dashboard renders steps in the wrong order, causing operators to execute release steps out of sequence.",
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/dependency_map.md"
+    ],
+    "mitigations": [
+      "Keep the dashboard behind a kill switch until canary validation passes (RN-103).",
+      "Ensure plan_contract.py passes with the new fixtures before enabling the dashboard (RN-102).",
+      "Audit schema drift first so the translator emits correct step ids (RN-101)."
+    ]
+  },
+  "assumption_ledger": [
+    {
+      "topic": "Canary environment availability",
+      "status": "missing",
+      "note": "No evidence in repo_inventory confirms a canary environment is ready for dashboard validation."
+    },
+    {
+      "topic": "Legacy parser shim removal timeline",
+      "status": "to_verify",
+      "note": "RN-101 audits drift before shim removal, but the shim removal itself is not in scope for this plan."
+    }
+  ]
+}
