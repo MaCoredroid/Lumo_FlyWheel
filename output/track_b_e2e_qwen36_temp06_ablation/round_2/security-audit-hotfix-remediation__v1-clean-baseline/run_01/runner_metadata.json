@@ -1,0 +1,90 @@
+{
+  "attempt": 1,
+  "codex_command_template": "docker run --rm --network=host -u 1000:1000 -v {workspace}:/workspace:rw -e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp -w /workspace codex-runner:v1 codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox -C /workspace -c 'model_provider=\"local-proxy\"' -c 'model_providers.local-proxy={{name=\"local-proxy\",base_url=\"{endpoint}\",env_key=\"OPENAI_API_KEY\",wire_api=\"responses\",stream_idle_timeout_ms=600000}}' -c 'model_reasoning_effort=\"high\"' -c 'model_supports_reasoning_summaries=true' -c 'model_reasoning_summary=\"auto\"' --model {model} \"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace.\"",
+  "codex_exit_code": 1,
+  "codex_trace_synthesis": null,
+  "deferred_instrumentation_checks": [
+    "codex_trace_out_supported",
+    "dcgm_profile_fields_available",
+    "vllm_request_metrics_join_available"
+  ],
+  "elapsed_s": 747.0638610920869,
+  "family": "security-audit-hotfix-remediation",
+  "gpu_mem_post": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 60,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 60"
+      }
+    ],
+    "recorded_at": "2026-05-20T16:35:29.955Z"
+  },
+  "gpu_mem_pre": {
+    "command": "nvidia-smi",
+    "gpus": [
+      {
+        "gpu_utilization_pct": 0,
+        "index": 0,
+        "memory_free_mb": null,
+        "memory_total_mb": null,
+        "memory_used_mb": null,
+        "raw": "0, [N/A], [N/A], [N/A], 0"
+      }
+    ],
+    "recorded_at": "2026-05-20T16:23:02.853Z"
+  },
+  "ncu_mode": false,
+  "recorded_at": "2026-05-20T16:35:29.957Z",
+  "reset_prefix_cache_per_task": false,
+  "round": 2,
+  "round_start_system_prompt_content_hash": "sha256:9448637322d565b874a9b1d228001cbe6a66c1c93e954544a52439c619eee3cf",
+  "round_start_system_prompt_json": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_v4a/round_0/codex_system_prompt.json",
+  "runtime_config_hash": "sha256:5cce3e3d0bdca960e12d1c10d0b9ce1e7c1a7fb5672408bf4ba5bfa55a511565",
+  "schema": "lumo.track_b.e2e_runner_metadata.v1",
+  "source_workspace": "benchmark_blueprints/families/security-audit-hotfix-remediation/workspace_bundle/v1-clean-baseline",
+  "trace_out": "/home/mark/shared/lumoFlyWheel/output/track_b_e2e_qwen36_temp06_ablation/round_2/security-audit-hotfix-remediation__v1-clean-baseline/run_01/codex_trace.jsonl",
+  "variant": "v1-clean-baseline",
+  "vllm_request_metrics_capture": {
+    "captured_row_count": 22,
+    "end_offset": 25982395,
+    "normalized_request_count": 22,
+    "request_ids": [
+      "resp_824108cb4e7695d4",
+      "resp_85729b706dc9f7c0",
+      "resp_87d35d22a2453447",
+      "resp_8d0b3ec77a7d4e6c",
+      "resp_8dc185d440124325",
+      "resp_92fc582a10569853",
+      "resp_9fac3c0d2dc190b5",
+      "resp_a2513b4e1646ae22",
+      "resp_a30ef621cedef4bb",
+      "resp_a36a39d043db786e",
+      "resp_a53b7b97b511dc07",
+      "resp_a5f6d46bd3d4ae1c",
+      "resp_a626b233ddadc75a",
+      "resp_ad5fcf16c6de995e",
+      "resp_aea22802e087308d",
+      "resp_b03e9282a0af9e51",
+      "resp_b283ccccf479cc2c",
+      "resp_b6ebdc3980aeb50d",
+      "resp_b913defe3327ab56",
+      "resp_bb73ecd4d580ec6f",
+      "resp_bc19271a72548c05",
+      "resp_bfb209f5c524f3da"
+    ],
+    "source": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+    "start_offset": 25960318
+  },
+  "vllm_request_metrics_jsonl": "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl",
+  "warmup_pass": null,
+  "warmup_system_prompt_json": null,
+  "workspace": "output/track_b_e2e_qwen36_temp06_ablation/round_2/security-audit-hotfix-remediation__v1-clean-baseline/run_01/workspace",
+  "workspace_isolated": true,
+  "zero_token_retry_cohort": false,
+  "zero_token_retry_count": 0
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "v1-clean-baseline",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "_normalize_requested_path called unquote() once, allowing double-encoded traversal sequences like %252e%252e%252f to survive the '..' detection. Fix: loop unquote until the string stabilizes so all layers of encoding are collapsed before the '..' check.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/storage.py",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "Same root cause as SARIF-PY-TRAVERSAL-001: encoded separators and double-encoded parent references bypass the single-pass unquote. The iterative decode loop resolves this; nested exports under tenant root remain valid.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "defer",
+      "rationale": "JWT key rotation is out of scope for this path-traversal hotfix per appsec review; will be addressed in a separate change.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-KEY-03",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/auth.py",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "defer",
+      "rationale": "JWT material rotation deferred; not folded into this hotfix per explicit appsec guidance.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ]
+    }
+  ]
+}

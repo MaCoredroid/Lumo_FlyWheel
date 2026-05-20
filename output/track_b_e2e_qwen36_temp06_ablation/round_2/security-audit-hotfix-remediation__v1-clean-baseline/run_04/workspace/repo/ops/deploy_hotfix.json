@@ -1,0 +1,40 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "If any existing export under tenant root returns 403 or ExportPathViolation after deploy, roll back immediately.",
+  "impact_scope": "repo/export_api/storage.py only; no changes to auth, archive, or config modules.",
+  "operator_verification_steps": [
+    "Confirm resolve_export_path still accepts nested paths like reports/partner-billing/2026-04/export.csv",
+    "Confirm double-encoded traversal %252e%252e%252fsecrets.csv is rejected with ExportPathViolation",
+    "Confirm percent-encoded traversal ..%2fsecrets.csv is rejected with ExportPathViolation",
+    "Run the full test suite (make test) and verify zero failures"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Allowed nested export path must still resolve successfully under tenant root"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded parent traversal must be rejected"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal must be rejected after full decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Mixed backslash traversal must be rejected"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path escape must be rejected"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Drive-qualified path must be rejected"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17 / SARIF-PY-TRAVERSAL-001"
+}

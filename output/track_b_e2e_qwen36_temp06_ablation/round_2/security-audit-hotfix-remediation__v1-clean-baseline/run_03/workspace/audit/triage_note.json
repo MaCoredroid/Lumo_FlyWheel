@@ -1,0 +1,31 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "Path traversal via single unquote pass allowed double-encoded .. sequences; absolute-path check ran after lstrip making it dead code; drive-qualified paths not blocked. Fixed by iterative decoding, pre-strip absolute/drive checks, and exact-component .. detection.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/storage.py",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "Same root cause as SARIF-PY-TRAVERSAL-001; exploit reproduces through encoded separators and symlink escapes. Fix applied in storage.py resolves both findings.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    }
+  ]
+}

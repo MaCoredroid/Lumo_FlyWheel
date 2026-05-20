@@ -1,0 +1,46 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "If nested export paths (e.g. reports/partner-billing/2026-04/export.csv) begin raising ExportPathViolation, roll back immediately.",
+  "impact_scope": "repo/export_api/storage.py only; no changes to auth, archive, or config modules.",
+  "operator_verification_steps": [
+    "Confirm resolve_export_path rejects '..%2fsecrets.csv' with ExportPathViolation",
+    "Confirm resolve_export_path rejects '%252e%252e%252fsecrets.csv' with ExportPathViolation",
+    "Confirm reports/partner-billing/2026-04/export.csv resolves successfully under tenant root",
+    "Confirm reports/..\\..\\secrets.csv (mixed-slash) is rejected",
+    "Confirm /etc/passwd and C:\\temp\\secrets.csv are rejected",
+    "Run make test and verify all existing tests still pass"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "allowed": true,
+      "description": "Nested export under tenant root must continue to resolve without error."
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "allowed": false,
+      "description": "Percent-encoded parent traversal must be rejected after iterative decode."
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "allowed": false,
+      "description": "Double-encoded traversal must be rejected after iterative decode."
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "allowed": false,
+      "description": "Mixed backslash/slash traversal must be rejected after normalization."
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "allowed": false,
+      "description": "Absolute Unix paths must be rejected."
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "allowed": false,
+      "description": "Windows drive-letter paths must be rejected."
+    }
+  ]
+}

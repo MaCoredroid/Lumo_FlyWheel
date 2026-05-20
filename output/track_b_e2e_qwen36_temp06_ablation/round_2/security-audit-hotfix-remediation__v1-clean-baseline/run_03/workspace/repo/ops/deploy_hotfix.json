@@ -1,0 +1,19 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "cnb55-variant",
+  "rollback_trigger": "If nested export paths (e.g. reports/partner-billing/2026-04/export.csv) fail to resolve under the tenant root, roll back immediately.",
+  "impact_scope": "repo/export_api/storage.py only; no changes to auth, dependency, archive, or config modules",
+  "operator_verification_steps": [
+    "Confirm make test passes with zero failures",
+    "Verify REQ-legit-nested still resolves under tenant root",
+    "Verify REQ-encoded-dotdot, REQ-double-encoded, REQ-mixed-slash, REQ-absolute, REQ-drive-qualified all raise ExportPathViolation"
+  ],
+  "behavior_preservation_claims": [
+    {"sample_id": "REQ-legit-nested", "claim": "Nested tenant export path resolves successfully under tenant root"},
+    {"sample_id": "REQ-encoded-dotdot", "claim": "Percent-encoded .. traversal is blocked"},
+    {"sample_id": "REQ-double-encoded", "claim": "Double-percent-encoded .. traversal is blocked after iterative decoding"},
+    {"sample_id": "REQ-mixed-slash", "claim": "Backslash traversal with .. components is blocked"},
+    {"sample_id": "REQ-absolute", "claim": "Absolute paths like /etc/passwd are blocked before lstrip"},
+    {"sample_id": "REQ-drive-qualified", "claim": "Drive-qualified paths like C:\\\\temp are blocked"}
+  ]
+}
