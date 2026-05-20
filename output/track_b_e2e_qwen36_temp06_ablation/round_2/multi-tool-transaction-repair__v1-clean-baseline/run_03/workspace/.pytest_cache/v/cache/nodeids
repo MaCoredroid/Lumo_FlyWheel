@@ -1,0 +1,5 @@
+[
+  "tests/test_atomicity.py::test_failed_billing_does_not_mark_order_paid",
+  "tests/test_atomicity.py::test_retry_failure_does_not_emit_duplicate_side_effects",
+  "tests/test_transaction_flow.py::test_checkout_happy_path_marks_paid_and_emits_once"
+]

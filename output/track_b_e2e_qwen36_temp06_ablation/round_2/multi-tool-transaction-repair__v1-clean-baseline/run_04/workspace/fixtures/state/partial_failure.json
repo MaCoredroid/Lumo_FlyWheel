@@ -1,0 +1,5 @@
+{
+  "order_id": "ord-100",
+  "amount": 42,
+  "failure": "billing rejected after order reservation"
+}
