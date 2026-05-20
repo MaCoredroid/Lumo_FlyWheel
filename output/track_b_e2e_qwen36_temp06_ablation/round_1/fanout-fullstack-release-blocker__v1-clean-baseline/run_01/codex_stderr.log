@@ -1,0 +1,4 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-20T08:16:34.213921Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
+2026-05-20T08:17:33.957663Z ERROR codex_core::tools::router: error=failed to parse function arguments: EOF while parsing a string at line 1 column 18
