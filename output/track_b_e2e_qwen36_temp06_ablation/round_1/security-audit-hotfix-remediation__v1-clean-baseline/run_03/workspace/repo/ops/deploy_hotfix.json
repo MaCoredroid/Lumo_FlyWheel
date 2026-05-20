@@ -1,0 +1,40 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "If export endpoints return 5xx or legitimate tenant exports are blocked, revert to previous storage.py immediately.",
+  "impact_scope": "repo/export_api/storage.py only — resolve_export_path and _normalize_requested_path logic changed; no auth, dependency, archive, or config changes.",
+  "operator_verification_steps": [
+    "Confirm all existing tests pass: make test",
+    "Verify REQ-legit-nested sample still resolves under tenant root",
+    "Verify REQ-encoded-dotdot, REQ-double-encoded, REQ-mixed-slash, REQ-absolute, and REQ-drive-qualified are all blocked",
+    "Run cnb55-hotfix-artifacts validate on triage_note.json and deploy_hotfix.json"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Nested export path resolves correctly under tenant root"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded parent traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal is blocked after iterative decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Mixed backslash/forward-slash traversal is blocked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute path escape is blocked"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Drive-qualified path escape is blocked"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}

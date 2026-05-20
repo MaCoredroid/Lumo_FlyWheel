@@ -1,0 +1,38 @@
+[
+  {
+    "allowed": true,
+    "note": "partner billing export must remain valid under the tenant root",
+    "requested_path": "reports/partner-billing/2026-04/export.csv",
+    "sample_id": "REQ-legit-nested"
+  },
+  {
+    "allowed": false,
+    "note": "percent-encoded parent traversal",
+    "requested_path": "..%2fsecrets.csv",
+    "sample_id": "REQ-encoded-dotdot"
+  },
+  {
+    "allowed": false,
+    "note": "double-encoded separators still represent traversal when decoded twice",
+    "requested_path": "%252e%252e%252fsecrets.csv",
+    "sample_id": "REQ-double-encoded"
+  },
+  {
+    "allowed": false,
+    "note": "mixed slash traversal",
+    "requested_path": "reports\\\\..\\\\..\\\\secrets.csv",
+    "sample_id": "REQ-mixed-slash"
+  },
+  {
+    "allowed": false,
+    "note": "absolute path escape",
+    "requested_path": "/etc/passwd",
+    "sample_id": "REQ-absolute"
+  },
+  {
+    "allowed": false,
+    "note": "drive-qualified path escape",
+    "requested_path": "C:\\\\temp\\\\secrets.csv",
+    "sample_id": "REQ-drive-qualified"
+  }
+]

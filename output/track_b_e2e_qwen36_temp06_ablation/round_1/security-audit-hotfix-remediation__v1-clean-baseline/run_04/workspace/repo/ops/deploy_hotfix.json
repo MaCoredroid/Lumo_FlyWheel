@@ -1,0 +1,22 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "resolve_export_path raises ExportPathViolation for previously-allowed tenant-relative paths under tenant_root",
+  "impact_scope": "repo/export_api/storage.py — _normalize_requested_path and resolve_export_path only",
+  "operator_verification_steps": [
+    "Confirm make test passes with zero failures",
+    "Confirm python3 bin/cnb55-hotfix-artifacts validate passes",
+    "Verify REQ-legit-nested path resolves under tenant_root without raising",
+    "Verify REQ-encoded-dotdot, REQ-double-encoded, REQ-mixed-slash, REQ-absolute, REQ-drive-qualified all raise ExportPathViolation"
+  ],
+  "behavior_preservation_claims": [
+    {"sample_id": "REQ-legit-nested", "expected": "allowed", "note": "nested tenant-relative export resolves under root"},
+    {"sample_id": "REQ-encoded-dotdot", "expected": "blocked", "note": "percent-encoded .. rejected after double-unquote"},
+    {"sample_id": "REQ-double-encoded", "expected": "blocked", "note": "double-encoded .. rejected after double-unquote"},
+    {"sample_id": "REQ-mixed-slash", "expected": "blocked", "note": "backslash .. rejected after slash normalization"},
+    {"sample_id": "REQ-absolute", "expected": "blocked", "note": "leading / rejected before lstrip"},
+    {"sample_id": "REQ-drive-qualified", "expected": "blocked", "note": "drive-letter prefix rejected by regex"}
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17 / SARIF-PY-TRAVERSAL-001"
+}

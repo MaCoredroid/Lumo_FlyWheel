@@ -1,0 +1,5 @@
+artifact_id,source,affected_path,seeded_guess
+SARIF-PY-TRAVERSAL-001,sarif,repo/export_api/storage.py,fix_now
+SARIF-PY-AUTH-014,sarif,repo/export_api/auth.py,review
+APPSEC-EXP-17,appsec,repo/export_api/storage.py,review
+APPSEC-KEY-03,appsec,repo/export_api/auth.py,review

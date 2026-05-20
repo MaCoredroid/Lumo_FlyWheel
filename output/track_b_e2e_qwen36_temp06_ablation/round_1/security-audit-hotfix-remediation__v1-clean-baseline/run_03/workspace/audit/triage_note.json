@@ -1,0 +1,56 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "v1-clean-baseline",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "Single unquote pass allowed double-encoded traversal (%252e%252e) parent traversal to bypass the '..' check; absolute-path check was defeated by lstrip('/') in normalization; string-prefix ancestry check replaced with Path.relative_to for symlink safety.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/storage.py",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "Exploit reproduces through encoded separators and symlink escapes; fix applies iterative decoding, absolute-path guard before stripping, split-based '..' detection, and Path.relative_to ancestry check.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "review",
+      "rationale": "JWT key rotation is out of scope for this hotfix per appsec review; deferring to separate change.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-KEY-03",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/auth.py",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "review",
+      "rationale": "JWT material rotation deferred; do not fold into this hotfix.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ]
+    }
+  ]
+}

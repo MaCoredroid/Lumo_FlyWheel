@@ -1,0 +1,56 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "v1-clean-baseline",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "Single unquote pass allows double-encoded traversal (%252e%252e) to bypass the '..' segment check. Fixed by double-unquoting before validation, rejecting absolute paths before lstrip, and rejecting drive-qualified paths.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-EXP-17",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/storage.py",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "Same root cause as SARIF-PY-TRAVERSAL-001: encoded separators and symlink escapes resolved by double-unquoting and canonical-resolve containment check. Nested exports preserved.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "review",
+      "rationale": "JWT key rotation is out of scope for this hotfix per appsec_review.md; defer to separate change.",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md"
+      ]
+    },
+    {
+      "artifact_id": "APPSEC-KEY-03",
+      "source": "appsec",
+      "rule_or_file": "repo/export_api/auth.py",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "review",
+      "rationale": "JWT material rotation deferred; do not fold into this hotfix.",
+      "evidence_paths": [
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": "cnb55.audit_triage.v1",
+  "variant_id": "v1-clean-baseline",
+  "items": [
+    {
+      "artifact_id": "SARIF-PY-TRAVERSAL-001",
+      "source": "sarif",
+      "rule_or_file": "py/export-path-traversal",
+      "affected_path": "repo/export_api/storage.py",
+      "disposition": "fix_now",
+      "rationale": "Repeated URL decoding and path-component split to catch double-encoded traversal; tightened prefix check with separator boundary",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md",
+        "audit/triage_matrix.csv",
+        "artifacts/request_samples.json"
+      ]
+    },
+    {
+      "artifact_id": "SARIF-PY-AUTH-014",
+      "source": "sarif",
+      "rule_or_file": "py/jwt-key-rotation",
+      "affected_path": "repo/export_api/auth.py",
+      "disposition": "review",
+      "rationale": "JWT key rotation is out of scope for this hotfix; defer to separate change",
+      "evidence_paths": [
+        "audit/audit.sarif",
+        "audit/appsec_review.md"
+      ]
+    }
+  ]
+}

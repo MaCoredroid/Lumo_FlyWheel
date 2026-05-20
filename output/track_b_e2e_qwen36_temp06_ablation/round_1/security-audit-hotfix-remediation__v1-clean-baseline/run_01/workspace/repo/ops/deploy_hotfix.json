@@ -1,0 +1,39 @@
+{
+  "schema_version": "cnb55.deploy_hotfix.v1",
+  "variant_id": "v1-clean-baseline",
+  "rollback_trigger": "If nested export paths under tenant root fail to resolve or legitimate partner-billing exports are blocked",
+  "impact_scope": "repo/export_api/storage.py only; no changes to auth, archive, or config",
+  "operator_verification_steps": [
+    "Confirm make test passes with zero failures",
+    "Verify cnb55-hotfix-artifacts validate reports ok",
+    "Smoke-test export endpoint with reports/partner-billing/2026-04/export.csv path"
+  ],
+  "behavior_preservation_claims": [
+    {
+      "sample_id": "REQ-legit-nested",
+      "claim": "Allowed nested export path still resolves under tenant root"
+    },
+    {
+      "sample_id": "REQ-encoded-dotdot",
+      "claim": "Percent-encoded .. traversal is blocked after single decode"
+    },
+    {
+      "sample_id": "REQ-double-encoded",
+      "claim": "Double-encoded traversal is blocked after repeated decoding"
+    },
+    {
+      "sample_id": "REQ-mixed-slash",
+      "claim": "Backslash separators are normalized to forward slashes and checked"
+    },
+    {
+      "sample_id": "REQ-absolute",
+      "claim": "Absolute paths starting with / are rejected"
+    },
+    {
+      "sample_id": "REQ-drive-qualified",
+      "claim": "Drive-qualified paths like C:\\temp\\secrets.csv are rejected by prefix check"
+    }
+  ],
+  "release_freeze_ack": true,
+  "incident_reference": "APPSEC-EXP-17"
+}
