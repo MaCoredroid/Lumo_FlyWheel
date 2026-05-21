@@ -1,20 +1,20 @@
 {
   "instance_id": "astropy__astropy-13033",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
-  "started_at": "2026-05-21T15:04:35Z",
+  "started_at": "2026-05-21T21:04:43Z",
   "repo": "astropy/astropy",
   "base_commit": "298ccb478e6bf092953bca67a3d29dc6c35f6752",
   "codex": {
-    "elapsed_s": 1800.128,
+    "elapsed_s": 1800.162,
     "exit_code": -1,
     "timed_out": true,
-    "container_name": "swe-codex-astropy__astropy-13033-1779375876"
+    "container_name": "swe-codex-astropy__astropy-13033-1779397483"
   },
-  "vllm_request_metrics_bytes": 104464,
-  "patch_bytes": 1091,
+  "vllm_request_metrics_bytes": 109544,
+  "patch_bytes": 1233,
   "eval": {
     "exit_code": 1,
-    "elapsed_s": 116.958
+    "elapsed_s": 113.592
   },
   "eval_report": {
     "track": "swe_bench",
@@ -27,13 +27,13 @@
     "passed": false,
     "failure_mode": "tests_failed",
     "harness_exit_code": 0,
-    "eval_wall_clock_seconds": 114.406,
+    "eval_wall_clock_seconds": 111.316,
     "error": null,
     "arch": "arm64",
-    "run_id": "cbe-eval-1779377676",
+    "run_id": "cbe-eval-1779399284",
     "namespace": "none",
     "requested_namespace": "auto",
     "cache_level": "env"
   },
-  "ended_at": "2026-05-21T15:36:33Z"
+  "ended_at": "2026-05-21T21:36:37Z"
 }

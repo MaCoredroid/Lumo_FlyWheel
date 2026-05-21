@@ -9,10 +9,10 @@
   "passed": false,
   "failure_mode": "tests_failed",
   "harness_exit_code": 0,
-  "eval_wall_clock_seconds": 114.406,
+  "eval_wall_clock_seconds": 111.316,
   "error": null,
   "arch": "arm64",
-  "run_id": "cbe-eval-1779377676",
+  "run_id": "cbe-eval-1779399284",
   "namespace": "none",
   "requested_namespace": "auto",
   "cache_level": "env"
