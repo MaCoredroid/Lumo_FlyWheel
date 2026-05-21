@@ -59,6 +59,7 @@ Per-instance medians: codex_s 1800 (most hit the 30-min wall), eval_s 74s, total
 | `astropy__astropy-13033` | astropy/astropy | failed | tests_failed | 1800.1 | 114.4 | 1091 | none (local build) | hit 30-min wall; 1091B patch applies but tests fail |
 | `astropy__astropy-13236` | astropy/astropy | failed | tests_failed | 1800.2 | 74.3 | 1617 | swebench (prebuilt) | hit 30-min wall; 1617B patch applies but tests fail |
 | `astropy__astropy-13398` | astropy/astropy | failed | tests_failed | 1800.2 | 74.0 | 580 | swebench (prebuilt) | hit 30-min wall; 580B patch applies but tests fail |
+| `astropy__astropy-13453` | astropy/astropy | resolved | tests_passed | 1800.2 | 111.9 | 427 | none (local build) | hit 30-min wall; 427B patch passes |
 
 ## Per-instance verdicts — Pro
 
