@@ -1,0 +1,37 @@
+diff --git a/astropy/units/quantity.py b/astropy/units/quantity.py
+index b98abfafb..396af998c 100644
+--- a/astropy/units/quantity.py
++++ b/astropy/units/quantity.py
+@@ -665,9 +665,12 @@ class Quantity(np.ndarray):
+ 
+         # Same for inputs, but here also convert if necessary.
+         arrays = []
+-        for input_, converter in zip(inputs, converters):
+-            input_ = getattr(input_, "value", input_)
+-            arrays.append(converter(input_) if converter else input_)
++        try:
++            for input_, converter in zip(inputs, converters):
++                input_ = getattr(input_, "value", input_)
++                arrays.append(converter(input_) if converter else input_)
++        except (ValueError, TypeError):
++            return NotImplemented
+ 
+         # Call our superclass's __array_ufunc__
+         result = super().__array_ufunc__(function, method, *arrays, **kwargs)
+diff --git a/astropy/wcs/setup_package.py b/astropy/wcs/setup_package.py
+index eb37ffd43..ae069b59c 100644
+--- a/astropy/wcs/setup_package.py
++++ b/astropy/wcs/setup_package.py
+@@ -10,7 +10,11 @@ from os.path import join
+ 
+ import numpy
+ from setuptools import Extension
+-from setuptools.dep_util import newer_group
++try:
++    from setuptools.dep_util import newer_group
++except ImportError:
++    def newer_group(sources, target, force=False):
++        return False
+ 
+ from extension_helpers import get_compiler, import_file, pkg_config, write_if_different
+ 
