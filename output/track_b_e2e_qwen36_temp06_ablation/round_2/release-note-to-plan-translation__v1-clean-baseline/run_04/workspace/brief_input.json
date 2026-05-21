@@ -1,0 +1,102 @@
+{
+  "schema_version": "cnb55.release_plan_brief.v1",
+  "variant_id": "v1-clean-baseline",
+  "first_milestone_id": "RN-101",
+  "ordered_steps": [
+    {
+      "step_id": "RN-101",
+      "rank": 1,
+      "title": "Audit translator schema drift and remove legacy parser shim",
+      "summary": "Audit and fix the translator schema drift that the legacy parser shim currently masks in local smoke runs. Removing the shim exposes the real schema state so downstream work builds on correct data.",
+      "bounded_deliverable": "Schema drift audit report with shim removal, passing local smoke runs against the new schema.",
+      "evidence": [
+        "repo_inventory/repo_state.md",
+        "repo_inventory/dependency_map.md"
+      ]
+    },
+    {
+      "step_id": "RN-102",
+      "rank": 2,
+      "title": "Backfill dependency-graph fixtures",
+      "summary": "Backfill the dependency-graph fixtures so the plan contract test catches ordering regressions with the new step ids from the corrected schema.",
+      "bounded_deliverable": "Updated fixtures that make tests/plan_contract.py pass with new step ids.",
+      "evidence": [
+        "repo_inventory/test_inventory.md",
+        "repo_inventory/dependency_map.md"
+      ]
+    },
+    {
+      "step_id": "RN-103",
+      "rank": 3,
+      "title": "Enable dashboard summary behind kill switch",
+      "summary": "Enable the translated release-plan dashboard summary behind a kill switch now that the schema is stable and fixtures are in place. Canary coverage already exists for the dashboard.",
+      "bounded_deliverable": "Dashboard summary feature flag behind kill switch, canary-validated.",
+      "evidence": [
+        "repo_inventory/dependency_map.md",
+        "repo_inventory/repo_state.md"
+      ]
+    },
+    {
+      "step_id": "RN-104",
+      "rank": 4,
+      "title": "Update operator runbook and launch checklist",
+      "summary": "Update the operator runbook and launch checklist now that the summary path is proven in canary and the rollout/rollback shape is known.",
+      "bounded_deliverable": "Updated runbook and launch checklist reflecting proven rollout and rollback procedures.",
+      "evidence": [
+        "repo_inventory/dependency_map.md"
+      ]
+    }
+  ],
+  "dependency_notes": [
+    {
+      "before": "RN-101",
+      "after": "RN-102",
+      "reason": "Fixtures must reflect the corrected schema; backfilling before the schema audit would use stale step ids."
+    },
+    {
+      "before": "RN-101",
+      "after": "RN-103",
+      "reason": "Dashboard consumes the translator step-id schema; enabling it before schema stabilization risks rendering incorrect plan order to users."
+    },
+    {
+      "before": "RN-102",
+      "after": "RN-103",
+      "reason": "Dependency map explicitly requires fixtures to reflect the new schema before the dashboard ships; otherwise plan_contract.py will fail on new step ids."
+    },
+    {
+      "before": "RN-103",
+      "after": "RN-104",
+      "reason": "Runbook needs the proven rollout and rollback shape from the dashboard canary before it can be finalized."
+    }
+  ],
+  "primary_risk": {
+    "statement": "Dashboard renders incorrect release-plan ordering to users if enabled before schema audit and fixture backfill are complete.",
+    "evidence": [
+      "repo_inventory/repo_state.md",
+      "repo_inventory/test_inventory.md",
+      "repo_inventory/dependency_map.md"
+    ],
+    "mitigations": [
+      "Keep dashboard behind a kill switch (RN-103) so it can be disabled instantly if regressions appear.",
+      "Complete schema audit (RN-101) and fixture backfill (RN-102) before enabling the dashboard.",
+      "Rely on existing canary coverage for dashboard summary to catch regressions early."
+    ]
+  },
+  "assumption_ledger": [
+    {
+      "topic": "Legacy parser shim removal",
+      "status": "missing",
+      "note": "No evidence of other consumers depending on the shim; assuming shim removal is safe once schema drift is audited and fixed."
+    },
+    {
+      "topic": "Kill switch implementation",
+      "status": "missing",
+      "note": "No repo evidence about whether a kill-switch mechanism already exists for the dashboard; assuming one can be added or the existing feature flag is sufficient."
+    },
+    {
+      "topic": "Canary environment readiness",
+      "status": "missing",
+      "note": "test_inventory.md mentions canary-only coverage but provides no deployment details; assuming canary environment is available and configured."
+    }
+  ]
+}
