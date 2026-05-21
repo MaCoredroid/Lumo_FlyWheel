@@ -29,6 +29,7 @@ and are gitignored.
 | `django__django-16256` | django/django | failed | patch_apply_failed | 31.8 | 0 | 0 | n/a | **FLAKE — re-run candidate.** Proxy/vLLM emitted `BadRequestError: Unterminated string at column 89` on turn 3 (2nd recurrence; first was astropy-14508 final turn). Codex CLI crashed rc=1, no patch produced. Same root cause as the prior incident; not representative of agent capability. |
 | `django__django-17084` | django/django | failed | tests_failed | 1800.1 | 75.9 | 1017 | swebench (prebuilt) | agent hit 30-min wall; 1017B patch applies but tests fail |
 | `matplotlib__matplotlib-24637` | matplotlib/matplotlib | resolved | tests_passed | 1800.2 | 465.3 | 808 | none (local build) | agent hit 30-min wall; eval_s=465 includes first-time matplotlib env image build (~7-8 min); 808B patch passes |
+| `pydata__xarray-6721` | pydata/xarray | crash | infra_error | 1800.2 | 63.5 | 484 | none (local build attempt) | **ARM64 UNSUPPORTED.** Env image build fails: `cdms2` conda package has no `linux-aarch64` build. Codex agent produced a 484B patch but it can never be evaluated on this host. Pre-reg §7 decision: log as infra_error, no fallback budget; carve out of pass-rate denominator. |
 
 ## Per-instance verdicts — Pro
 
@@ -62,6 +63,9 @@ _(none yet)_
 | 2026-05-21T10:00Z | 7.4 | 6.4/15 GiB | matplotlib-24637 at ~5 min; memory ticked down 0.4 GiB (transient — repo clone + image build using page cache) |
 | 2026-05-21T10:20Z | 7.8 | 6.4/15 GiB | matplotlib-24637 at ~25 min; memory **recovered** to 7.8 — no leak |
 | 2026-05-21T10:32Z | — | — | matplotlib-24637 resolved (instance 11/20); first new repo since django, env image cached for future |
+| 2026-05-21T10:40Z | 8.0 | 6.5/15 GiB | xarray-6721 codex agent at ~7 min |
+| 2026-05-21T11:00Z | 7.9 | 6.5/15 GiB | xarray-6721 codex agent at ~27 min |
+| 2026-05-21T11:03Z | — | — | xarray-6721 crash/infra_error (instance 12/20); cdms2 unavailable on linux-aarch64 — first ARM64-unsupported instance |
 
 ## Re-run queue (flake recovery)
 
@@ -70,3 +74,13 @@ Instances tagged for re-run after Tier 0 completes (per pre-reg §5 "interrupted
 | Instance | Reason | First-attempt artifacts kept at |
 |---|---|---|
 | `django__django-16256` | Proxy/vLLM `BadRequestError: Unterminated string at column 89` on turn 3 — empty patch | `output/swe_bench_q36_a_temp06/verified/per_task/django__django-16256/` |
+
+## ARM64-unsupported queue (denominator carve-out)
+
+Instances whose SWE-Bench env image cannot be built on linux-aarch64. Per pre-reg §7
+these are logged as infra_error and carved out of the pass-rate denominator in the
+closeout. Re-running cannot fix them — needs x86 emulation or an x86 host.
+
+| Instance | Reason |
+|---|---|
+| `pydata__xarray-6721` | conda-forge has no `linux-aarch64` build of `cdms2` |
