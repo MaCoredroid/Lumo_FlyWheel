@@ -123,6 +123,12 @@ counted in the campaign closeout's pass-rate denominator-adjustment section.
 Net post-fix change on astropy re-runs so far: **+1 resolved** (13236 flip).
 Astropy post-fix sweep standing: 3/5 resolved (vs pre-fix 2/5).
 
+### Fresh instances (never run pre-fix)
+
+| Instance | Repo | Verdict | Failure mode | Codex s | Eval s | Patch B | Namespace | Notes |
+|---|---|---|---|---:|---:|---:|---|---|
+| `astropy__astropy-14365` | astropy/astropy | failed | tests_failed | 1758.9 | 93.5 | 617 | none (local build) | self-stopped (rc=1) ~29 min; 617B patch applies but tests fail |
+
 ## Per-instance verdicts — Pro
 
 _(none yet)_
