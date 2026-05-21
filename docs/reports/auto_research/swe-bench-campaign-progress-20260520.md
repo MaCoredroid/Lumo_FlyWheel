@@ -51,6 +51,45 @@ and are gitignored.
 
 Per-instance medians: codex_s 1800 (most hit the 30-min wall), eval_s 74s, total 22 min/instance. No memory leak observed across 8 hours of continuous execution (host MemAvailable stable at 7.8-8.0 GiB).
 
+## Campaign reset: pre-fix vs post-fix (2026-05-21T20:20Z)
+
+On 2026-05-21T17:25Z the proxy was patched (commit `d458d794`) so that upstream
+4xx responses now propagate as JSON instead of being wrapped in synthetic SSE
+`response.created` events. The 25 instances completed before that timestamp
+(20 Tier 0 + 5 Tier 2 astropy) carry the pre-fix bias: each was exposed to the
+mid-run proxy JSON crash that destroyed django-16256 with zero patch, plus
+they ran with the 100Hz DCGM sampling and the 5-retry auto-continue.
+
+To produce a clean homogeneous dataset, all 24 of those pre-fix instance
+directories (django-16256 omitted — running in a parallel side slot at the
+time) were deleted at 2026-05-21T20:18Z and the orchestrator was restarted.
+The 5 post-fix Tier 2 instances (`astropy-13579`, `-13977`, `-14096`, `-14182`,
+`-14309`) were kept; they already ran under the post-fix stack.
+
+The verdict tables above are preserved as historical record. The
+post-restart sweep below is the campaign of record for the closeout.
+
+### New failure-mode classification (added 2026-05-21)
+
+In addition to the harness's four `failure_mode` values
+(`tests_passed`, `tests_failed`, `patch_apply_failed`, `infra_error`),
+we tag two campaign-level sub-modes when the orchestrator's
+`patch_apply_failed` row carries `patch_bytes == 0`:
+
+- **`empty_diff__agent_gave_up`**: Codex exit clean (`rc == 0`),
+  `turn.completed` in trace, NO error events. Agent finished without
+  emitting a patch. Examples in pre-fix data: sympy-13757, sympy-13974.
+- **`empty_diff__setup_loop`**: Codex used the full 30-min wall in
+  what turned out to be a setup-fight loop (e.g. astropy-14096 spent
+  30 min on `pip install setuptools` permutations, hitting the same
+  `setuptools.dep_util` import error each retry). Wall-budget extension
+  would NOT help — agent makes the same wrong attempt repeatedly.
+- **`empty_diff__proxy_flake`** (legacy, eliminated): the proxy-fix
+  class. Will not recur post-2026-05-21T17:25Z.
+
+These sub-modes are reported in addition to the harness verdict and are
+counted in the campaign closeout's pass-rate denominator-adjustment section.
+
 ## Tier 2 verdicts (incremental — Tier 0 reused via --skip-existing)
 
 | Instance | Repo | Verdict | Failure mode | Codex s | Eval s | Patch bytes | Namespace | Notes |
