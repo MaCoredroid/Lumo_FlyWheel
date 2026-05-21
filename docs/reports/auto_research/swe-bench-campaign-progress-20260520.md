@@ -27,6 +27,7 @@ and are gitignored.
 | `django__django-14373` | django/django | resolved | tests_passed | 346.8 | 135.9 | 418 | none (local build) | agent self-stopped clean (rc=0) at 6 min; 418B patch passes |
 | `django__django-16100` | django/django | failed | tests_failed | 893.5 | 73.9 | 3761 | swebench (prebuilt) | agent self-stopped clean (rc=0) at 15 min; large 3761B patch applies but tests fail |
 | `django__django-16256` | django/django | failed | patch_apply_failed | 31.8 | 0 | 0 | n/a | **FLAKE — re-run candidate.** Proxy/vLLM emitted `BadRequestError: Unterminated string at column 89` on turn 3 (2nd recurrence; first was astropy-14508 final turn). Codex CLI crashed rc=1, no patch produced. Same root cause as the prior incident; not representative of agent capability. |
+| `django__django-17084` | django/django | failed | tests_failed | 1800.1 | 75.9 | 1017 | swebench (prebuilt) | agent hit 30-min wall; 1017B patch applies but tests fail |
 
 ## Per-instance verdicts — Pro
 
@@ -55,6 +56,8 @@ _(none yet)_
 | 2026-05-21T09:20Z | 7.8 | 6.4/15 GiB | django-16100 codex agent at ~14 min |
 | 2026-05-21T09:22Z | — | — | django-16100 failed/tests_failed (instance 8/20); large 3.7K patch applied but tests fail |
 | 2026-05-21T09:23Z | — | — | django-16256 FLAKE (instance 9/20); proxy JSON BadRequestError on turn 3 → empty patch (2nd recurrence) |
+| 2026-05-21T09:40Z | 7.8 | 6.4/15 GiB | django-17084 codex agent at ~17 min |
+| 2026-05-21T09:54Z | — | — | django-17084 failed/tests_failed (instance 10/20); end of the 9-django block |
 
 ## Re-run queue (flake recovery)
 
