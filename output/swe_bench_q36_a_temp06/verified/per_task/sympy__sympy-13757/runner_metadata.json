@@ -1,0 +1,34 @@
+{
+  "instance_id": "sympy__sympy-13757",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-05-21T13:10:02Z",
+  "repo": "sympy/sympy",
+  "base_commit": "a5e6a101869e027e7930e694f8b1cfb082603453",
+  "codex": {
+    "elapsed_s": 1651.442,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-codex-sympy__sympy-13757-1779369015"
+  },
+  "vllm_request_metrics_bytes": 30146,
+  "patch_bytes": 0,
+  "eval": {
+    "exit_code": 1,
+    "elapsed_s": 0.111
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "sympy__sympy-13757",
+    "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "patch_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/sympy__sympy-13757/patch.diff",
+    "prediction_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/sympy__sympy-13757/eval/predictions.jsonl",
+    "verdict": "failed",
+    "passed": false,
+    "failure_mode": "patch_apply_failed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 0.0,
+    "error": "empty_patch"
+  },
+  "ended_at": "2026-05-21T13:37:46Z"
+}

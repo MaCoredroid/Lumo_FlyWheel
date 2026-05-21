@@ -1,0 +1,59 @@
+2026-05-21 15:34:41,750 - INFO - Environment image sweb.env.py.arm64.428468730904ff6b4232aa:latest found for astropy__astropy-13033
+Building instance image sweb.eval.arm64.astropy__astropy-13033:latest for astropy__astropy-13033
+2026-05-21 15:35:43,382 - INFO - Creating container for astropy__astropy-13033...
+2026-05-21 15:35:43,390 - INFO - Container for astropy__astropy-13033 created: b709f9e7705455958ff49121a7d21840d5a192a8091dcc589dde7321062832f1
+2026-05-21 15:35:43,475 - INFO - Container for astropy__astropy-13033 started: b709f9e7705455958ff49121a7d21840d5a192a8091dcc589dde7321062832f1
+2026-05-21 15:35:43,475 - INFO - Intermediate patch for astropy__astropy-13033 written to logs/run_evaluation/cbe-eval-1779377676/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13033/patch.diff, now applying to container...
+2026-05-21 15:35:43,569 - INFO - >>>>> Applied Patch:
+Checking patch astropy/timeseries/core.py...
+Applied patch astropy/timeseries/core.py cleanly.
+
+2026-05-21 15:35:43,816 - INFO - Git diff before:
+diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f8..94347d19b 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -75,6 +75,13 @@ class BaseTimeSeries(QTable):
+                                  .format(self.__class__.__name__, required_columns[0], plural))
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
++                missing = [col for col in required_columns if col not in self.colnames]
++                if missing and self.colnames and self.colnames[0] == required_columns[0]:
++                    raise ValueError("{} object is invalid - missing required "
++                                     "column{}: {}"
++                                     .format(self.__class__.__name__,
++                                             's' if len(missing) > 1 else '',
++                                             ', '.join(repr(c) for c in missing)))
+ 
+                 raise ValueError("{} object is invalid - expected '{}' "
+                                  "as the first column{} but found '{}'"
+2026-05-21 15:35:43,816 - INFO - Eval script for astropy__astropy-13033 written to logs/run_evaluation/cbe-eval-1779377676/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13033/eval.sh; copying to container...
+2026-05-21 15:36:18,160 - INFO - Test runtime: 34.31 seconds
+2026-05-21 15:36:18,160 - INFO - Test output for astropy__astropy-13033 written to logs/run_evaluation/cbe-eval-1779377676/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13033/test_output.txt
+2026-05-21 15:36:18,200 - INFO - Git diff after:
+diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f8..94347d19b 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -75,6 +75,13 @@ class BaseTimeSeries(QTable):
+                                  .format(self.__class__.__name__, required_columns[0], plural))
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
++                missing = [col for col in required_columns if col not in self.colnames]
++                if missing and self.colnames and self.colnames[0] == required_columns[0]:
++                    raise ValueError("{} object is invalid - missing required "
++                                     "column{}: {}"
++                                     .format(self.__class__.__name__,
++                                             's' if len(missing) > 1 else '',
++                                             ', '.join(repr(c) for c in missing)))
+ 
+                 raise ValueError("{} object is invalid - expected '{}' "
+                                  "as the first column{} but found '{}'"
+2026-05-21 15:36:18,200 - INFO - Grading answer for astropy__astropy-13033...
+2026-05-21 15:36:18,204 - INFO - report: {'astropy__astropy-13033': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': False, 'tests_status': {'FAIL_TO_PASS': {'success': [], 'failure': ['astropy/timeseries/tests/test_sampled.py::test_required_columns']}, 'PASS_TO_PASS': {'success': ['astropy/timeseries/tests/test_sampled.py::test_empty_initialization', 'astropy/timeseries/tests/test_sampled.py::test_empty_initialization_invalid', 'astropy/timeseries/tests/test_sampled.py::test_initialize_only_time', 'astropy/timeseries/tests/test_sampled.py::test_initialization_with_data', 'astropy/timeseries/tests/test_sampled.py::test_initialize_only_data', 'astropy/timeseries/tests/test_sampled.py::test_initialization_with_table', 'astropy/timeseries/tests/test_sampled.py::test_initialization_missing_time_delta', 'astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_and_time_start', 'astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_delta', 'astropy/timeseries/tests/test_sampled.py::test_initialization_with_time_in_data', 'astropy/timeseries/tests/test_sampled.py::test_initialization_n_samples', 'astropy/timeseries/tests/test_sampled.py::test_initialization_length_mismatch', 'astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_both_time_and_time_delta', 'astropy/timeseries/tests/test_sampled.py::test_fold', 'astropy/timeseries/tests/test_sampled.py::test_fold_invalid_options', 'astropy/timeseries/tests/test_sampled.py::test_read_time_missing', 'astropy/timeseries/tests/test_sampled.py::test_read_time_wrong', 'astropy/timeseries/tests/test_sampled.py::test_read', 'astropy/timeseries/tests/test_sampled.py::test_periodogram[BoxLeastSquares]', 'astropy/timeseries/tests/test_sampled.py::test_periodogram[LombScargle]'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for astropy__astropy-13033: resolved: False
+2026-05-21 15:36:18,204 - INFO - Attempting to stop container sweb.eval.astropy__astropy-13033.cbe-eval-1779377676...
+2026-05-21 15:36:33,348 - INFO - Attempting to remove container sweb.eval.astropy__astropy-13033.cbe-eval-1779377676...
+2026-05-21 15:36:33,358 - INFO - Container sweb.eval.astropy__astropy-13033.cbe-eval-1779377676 removed.
+2026-05-21 15:36:33,358 - INFO - Attempting to remove image sweb.eval.arm64.astropy__astropy-13033:latest...
+2026-05-21 15:36:33,403 - INFO - Image sweb.eval.arm64.astropy__astropy-13033:latest removed.

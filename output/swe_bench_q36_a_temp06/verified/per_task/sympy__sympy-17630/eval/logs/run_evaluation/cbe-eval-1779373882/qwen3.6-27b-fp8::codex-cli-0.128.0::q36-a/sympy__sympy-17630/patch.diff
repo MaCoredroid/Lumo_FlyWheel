@@ -1,0 +1,27 @@
+diff --git a/sympy/matrices/expressions/blockmatrix.py b/sympy/matrices/expressions/blockmatrix.py
+index 95302a05ca..fccfc48515 100644
+--- a/sympy/matrices/expressions/blockmatrix.py
++++ b/sympy/matrices/expressions/blockmatrix.py
+@@ -164,7 +164,21 @@ def structurally_equal(self, other):
+     def _blockmul(self, other):
+         if (isinstance(other, BlockMatrix) and
+                 self.colblocksizes == other.rowblocksizes):
+-            return BlockMatrix(self.blocks*other.blocks)
++            from sympy.matrices.expressions.matmul import MatMul
++            from sympy.matrices.expressions.matadd import MatAdd
++            nrows, ncols = self.blockshape
++            mrows, mcols = other.blockshape
++            result = []
++            for i in range(nrows):
++                row = []
++                for j in range(mcols):
++                    entry = MatMul(self.blocks[i, 0], other.blocks[0, j]).doit()
++                    for k in range(1, ncols):
++                        entry = MatAdd(entry,
++                            MatMul(self.blocks[i, k], other.blocks[k, j]).doit())
++                    row.append(entry)
++                result.append(row)
++            return BlockMatrix(result)
+ 
+         return self * other
+ 

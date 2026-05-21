@@ -1,0 +1,19 @@
+{
+  "track": "swe_bench",
+  "instance_id": "pylint-dev__pylint-6528",
+  "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "patch_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/pylint-dev__pylint-6528/patch.diff",
+  "prediction_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/pylint-dev__pylint-6528/eval/predictions.jsonl",
+  "verdict": "resolved",
+  "passed": true,
+  "failure_mode": "tests_passed",
+  "harness_exit_code": 0,
+  "eval_wall_clock_seconds": 62.653,
+  "error": null,
+  "arch": "arm64",
+  "run_id": "cbe-eval-1779363224",
+  "namespace": "swebench",
+  "requested_namespace": "auto",
+  "cache_level": "env"
+}

@@ -1,0 +1,10 @@
+{
+  "track": "swe_bench",
+  "instance_id": "django__django-16256",
+  "outcome": "failed",
+  "failure_mode": "patch_apply_failed",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+  "eval_wall_clock_seconds": 0.0,
+  "arch": "aarch64"
+}

@@ -1,0 +1,14 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-21T11:44:35.013037Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
+2026-05-21T11:47:15.472640Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "50", expected usize at line 1 column 106
+2026-05-21T11:47:18.478906Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "50", expected usize at line 1 column 106
+2026-05-21T11:47:23.359523Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "50", expected usize at line 1 column 26
+2026-05-21T11:47:41.828418Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 107
+2026-05-21T11:55:05.923755Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 152
+2026-05-21T11:55:09.815070Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 26
+2026-05-21T11:55:46.233391Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "300000", expected u64 at line 1 column 723
+2026-05-21T11:55:53.758191Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "300000", expected u64 at line 1 column 723
+2026-05-21T11:55:59.857280Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "300000", expected u64 at line 1 column 723
+2026-05-21T11:56:33.811571Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "300000", expected u64 at line 1 column 723
+2026-05-21T11:57:23.380830Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "300000", expected u64 at line 1 column 1133

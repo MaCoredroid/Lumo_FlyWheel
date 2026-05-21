@@ -1,0 +1,39 @@
+{
+  "instance_id": "sphinx-doc__sphinx-9230",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-05-21T12:46:29Z",
+  "repo": "sphinx-doc/sphinx",
+  "base_commit": "567ff22716ac258b9edd2c1711d766b440ac0b11",
+  "codex": {
+    "elapsed_s": 1351.988,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-codex-sphinx-doc__sphinx-9230-1779367590"
+  },
+  "vllm_request_metrics_bytes": 81375,
+  "patch_bytes": 541,
+  "eval": {
+    "exit_code": 0,
+    "elapsed_s": 59.95
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "sphinx-doc__sphinx-9230",
+    "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "patch_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/sphinx-doc__sphinx-9230/patch.diff",
+    "prediction_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/sphinx-doc__sphinx-9230/eval/predictions.jsonl",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 57.002,
+    "error": null,
+    "arch": "arm64",
+    "run_id": "cbe-eval-1779368942",
+    "namespace": "swebench",
+    "requested_namespace": "auto",
+    "cache_level": "env"
+  },
+  "ended_at": "2026-05-21T13:10:02Z"
+}

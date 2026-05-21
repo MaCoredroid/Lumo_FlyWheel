@@ -1,0 +1,10 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-21T15:10:41.961606Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
+2026-05-21T15:11:51.929614Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "500", expected usize at line 1 column 87
+2026-05-21T15:14:37.439802Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 64
+2026-05-21T15:14:43.949797Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 107
+2026-05-21T15:14:50.047565Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 107
+2026-05-21T15:15:10.645745Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "54353", expected i32 at line 1 column 35
+2026-05-21T15:15:50.724608Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 119
+2026-05-21T15:15:55.207705Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 107

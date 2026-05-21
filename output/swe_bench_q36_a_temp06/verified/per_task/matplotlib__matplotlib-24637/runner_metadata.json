@@ -1,0 +1,39 @@
+{
+  "instance_id": "matplotlib__matplotlib-24637",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-05-21T09:54:27Z",
+  "repo": "matplotlib/matplotlib",
+  "base_commit": "a9ba9d5d3fe9d5ac15fbdb06127f97d381148dd0",
+  "codex": {
+    "elapsed_s": 1800.157,
+    "exit_code": -1,
+    "timed_out": true,
+    "container_name": "swe-codex-matplotlib__matplotlib-24637-1779357280"
+  },
+  "vllm_request_metrics_bytes": 112592,
+  "patch_bytes": 808,
+  "eval": {
+    "exit_code": 0,
+    "elapsed_s": 467.557
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "matplotlib__matplotlib-24637",
+    "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "patch_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/matplotlib__matplotlib-24637/patch.diff",
+    "prediction_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/matplotlib__matplotlib-24637/eval/predictions.jsonl",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 465.263,
+    "error": null,
+    "arch": "arm64",
+    "run_id": "cbe-eval-1779359080",
+    "namespace": "none",
+    "requested_namespace": "auto",
+    "cache_level": "env"
+  },
+  "ended_at": "2026-05-21T10:32:28Z"
+}

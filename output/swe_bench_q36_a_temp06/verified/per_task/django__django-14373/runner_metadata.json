@@ -1,0 +1,39 @@
+{
+  "instance_id": "django__django-14373",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-05-21T08:58:13Z",
+  "repo": "django/django",
+  "base_commit": "b1a4b1f0bdf05adbd3dc4dde14228e68da54c1a3",
+  "codex": {
+    "elapsed_s": 346.77,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-codex-django__django-14373-1779353895"
+  },
+  "vllm_request_metrics_bytes": 27064,
+  "patch_bytes": 418,
+  "eval": {
+    "exit_code": 0,
+    "elapsed_s": 138.914
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "django__django-14373",
+    "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "patch_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/django__django-14373/patch.diff",
+    "prediction_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/django__django-14373/eval/predictions.jsonl",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 135.942,
+    "error": null,
+    "arch": "arm64",
+    "run_id": "cbe-eval-1779354242",
+    "namespace": "none",
+    "requested_namespace": "auto",
+    "cache_level": "env"
+  },
+  "ended_at": "2026-05-21T09:06:21Z"
+}
