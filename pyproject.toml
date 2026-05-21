@@ -21,6 +21,7 @@ dev = [
 
 [project.scripts]
 lumoserve = "lumo_flywheel_serving.cli:main"
+codex-bench-eval-swe = "lumo_flywheel_serving.codex_bench_eval_swe:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

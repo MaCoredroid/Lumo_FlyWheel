@@ -20,6 +20,9 @@ __pycache__/
 *.log
 output/
 
+# SWE-Bench scratch caches
+.cache/
+
 # Local secrets
 .lumo.local.env
 .codex/config.toml
