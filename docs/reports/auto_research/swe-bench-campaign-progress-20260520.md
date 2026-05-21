@@ -64,6 +64,7 @@ Per-instance medians: codex_s 1800 (most hit the 30-min wall), eval_s 74s, total
 | `astropy__astropy-13977` | astropy/astropy | failed | tests_failed | 1713.8 | 113.5 | 1462 | none (local build) | codex_s=28.6 min (close to wall), rc=1 (likely late turn.failed but patch already shipped — astropy-14508 pattern); 1462B patch applies but tests fail |
 | `astropy__astropy-14096` | astropy/astropy | failed | patch_apply_failed | 1800.2 | 0 | 0 | n/a | first instance with 10 Hz dcgm (5.9 MB samples, 10× under 100Hz). Codex hit 30-min wall, watchdog kill → no patch shipped. Astropy continues to be hard for Q36-A. |
 | `astropy__astropy-14182` | astropy/astropy | failed | tests_failed | 1800.2 | 112.9 | 882 | none (local build) | hit 30-min wall; 882B patch applies but tests fail |
+| `astropy__astropy-14309` | astropy/astropy | resolved | tests_passed | 1800.1 | 60.9 | 1689 | swebench (prebuilt) | hit 30-min wall; 1689B patch passes — first astropy resolve in Tier 2 |
 
 ## Per-instance verdicts — Pro
 
