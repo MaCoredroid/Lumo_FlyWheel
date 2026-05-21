@@ -32,6 +32,7 @@ and are gitignored.
 | `pydata__xarray-6721` | pydata/xarray | crash | infra_error | 1800.2 | 63.5 | 484 | none (local build attempt) | **ARM64 UNSUPPORTED.** Env image build fails: `cdms2` conda package has no `linux-aarch64` build. Codex agent produced a 484B patch but it can never be evaluated on this host. Pre-reg §7 decision: log as infra_error, no fallback budget; carve out of pass-rate denominator. |
 | `pylint-dev__pylint-6528` | pylint-dev/pylint | resolved | tests_passed | 1800.2 | 62.7 | 3174 | swebench (prebuilt) | agent hit 30-min wall; 3174B patch passes |
 | `pytest-dev__pytest-8399` | pytest-dev/pytest | resolved | tests_passed | 399.6 | 72.0 | 2460 | none (local build) | codex_rc=1 (turn.failed late on proxy JSON; agent had already shipped a 2460B patch that passes); fast self-stop at 7 min |
+| `scikit-learn__scikit-learn-13496` | scikit-learn/scikit-learn | crash | infra_error | 1800.2 | 141.9 | 1383 | none (local build attempt) | **ARM64 UNSUPPORTED.** Env image build fails: scipy can't be built from source on aarch64 (no Fortran compiler in base image, no prebuilt arm64 wheel for the pinned old scipy version). Agent shipped a 1383B patch but it can't be evaluated on this host. |
 
 ## Per-instance verdicts — Pro
 
@@ -72,6 +73,8 @@ _(none yet)_
 | 2026-05-21T11:34Z | — | — | pylint-6528 resolved (instance 13/20) |
 | 2026-05-21T11:40Z | 7.9 | 6.5/15 GiB | pytest-8399 codex agent at ~5 min |
 | 2026-05-21T11:42Z | — | — | pytest-8399 resolved (instance 14/20); fast self-stop ~7 min |
+| 2026-05-21T12:00Z | 7.9 | 6.5/15 GiB | sklearn-13496 codex agent at ~17 min |
+| 2026-05-21T12:15Z | — | — | sklearn-13496 crash/arm64-unsupported (instance 15/20); scipy fortran build failure — second ARM64 carve-out |
 
 ## Re-run queue (flake recovery)
 
@@ -90,3 +93,4 @@ closeout. Re-running cannot fix them — needs x86 emulation or an x86 host.
 | Instance | Reason |
 |---|---|
 | `pydata__xarray-6721` | conda-forge has no `linux-aarch64` build of `cdms2` |
+| `scikit-learn__scikit-learn-13496` | scipy source build needs Fortran compiler (absent in SWE-Bench base); no arm64 wheel for pinned old scipy |
