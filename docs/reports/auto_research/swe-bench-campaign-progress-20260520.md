@@ -37,6 +37,19 @@ and are gitignored.
 | `sphinx-doc__sphinx-9230` | sphinx-doc/sphinx | resolved | tests_passed | 1352.0 | 57.0 | 541 | swebench (prebuilt) | agent self-stopped clean (rc=0) at 22.5 min; 541B patch passes |
 | `sympy__sympy-13757` | sympy/sympy | failed | patch_apply_failed | 1651.4 | 0 | 0 | n/a | agent ran 60 tool calls clean (rc=0, turn.completed) but produced an empty diff. Real "agent gave up" failure — NOT a proxy flake (no error events in trace). Not in re-run queue. |
 | `sympy__sympy-13974` | sympy/sympy | failed | patch_apply_failed | 1410.6 | 0 | 0 | n/a | agent ran 23.5 min clean (rc=0) but produced an empty diff. Same shape as sympy-13757 — agent gave up. Not in re-run queue. |
+| `sympy__sympy-17630` | sympy/sympy | failed | tests_failed | 1800.1 | 61.1 | 1244 | swebench (prebuilt) | agent hit 30-min wall; 1244B patch applies but tests fail |
+
+## Tier 0 closeout
+
+- **20/20 instances complete** in 7h 49min wall-clock (06:43:36Z → 14:32:25Z).
+- **Resolved: 10 (raw 50%)** — astropy-14508, django-11119/-12754/-13809/-14373, matplotlib-24637, pylint-6528, pytest-8399, sphinx-7440/-9230.
+- **Failed: 8** — django-13741, django-14170, django-16100, django-17084, sympy-13757, sympy-13974, sympy-17630 (tests_failed/agent-gave-up), django-16256 (proxy flake — re-run queued).
+- **ARM64-unsupported: 2** — xarray-6721 (cdms2), sklearn-13496 (scipy fortran).
+- **Pre-reg G0 gate (≥4/20 = 20%): MET** (10/20 = 50%, 10x the gate threshold).
+- **Adjusted pass-rate after carve-out**: 10/18 = 55.6% (if the flake re-runs successfully, 11/18 = 61.1%).
+- **Per-repo**: 9-django at 4/9 (44%), 3-sympy at 0/3, 2-sphinx at 2/2, single repos (astropy/matplotlib/pylint/pytest) all 1/1.
+
+Per-instance medians: codex_s 1800 (most hit the 30-min wall), eval_s 74s, total 22 min/instance. No memory leak observed across 8 hours of continuous execution (host MemAvailable stable at 7.8-8.0 GiB).
 
 ## Per-instance verdicts — Pro
 
@@ -87,6 +100,9 @@ _(none yet)_
 | 2026-05-21T13:37Z | — | — | sympy-13757 failed/empty-diff (instance 18/20); agent ran 27 min clean but produced no patch — NOT a flake |
 | 2026-05-21T14:00Z | 7.9 | 6.5/15 GiB | sympy-13974 codex agent at ~22 min |
 | 2026-05-21T14:01Z | — | — | sympy-13974 failed/empty-diff (instance 19/20); same shape as sympy-13757 |
+| 2026-05-21T14:20Z | 7.9 | 6.5/15 GiB | sympy-17630 codex agent at ~19 min |
+| 2026-05-21T14:32Z | — | — | sympy-17630 failed/tests_failed (instance 20/20); **TIER 0 COMPLETE** |
+| 2026-05-21T14:33Z | — | — | Verified Tier 2 (full 500) launched with --skip-existing (480 remaining) |
 
 ## Re-run queue (flake recovery)
 
