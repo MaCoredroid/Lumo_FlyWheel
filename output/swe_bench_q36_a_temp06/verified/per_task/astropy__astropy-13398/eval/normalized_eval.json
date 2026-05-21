@@ -5,6 +5,6 @@
   "failure_mode": "tests_failed",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
   "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
-  "eval_wall_clock_seconds": 73.956,
+  "eval_wall_clock_seconds": 77.522,
   "arch": "aarch64"
 }

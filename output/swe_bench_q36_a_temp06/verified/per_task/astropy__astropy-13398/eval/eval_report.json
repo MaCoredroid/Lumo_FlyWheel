@@ -9,10 +9,10 @@
   "passed": false,
   "failure_mode": "tests_failed",
   "harness_exit_code": 0,
-  "eval_wall_clock_seconds": 73.956,
+  "eval_wall_clock_seconds": 77.522,
   "error": null,
   "arch": "arm64",
-  "run_id": "cbe-eval-1779381474",
+  "run_id": "cbe-eval-1779403077",
   "namespace": "swebench",
   "requested_namespace": "auto",
   "cache_level": "env"

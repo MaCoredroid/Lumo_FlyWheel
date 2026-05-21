@@ -1,6 +1,6 @@
-arch=arm64 dataset=princeton-nlp/SWE-bench_Verified split=test run_id=cbe-eval-1779381474
+arch=arm64 dataset=princeton-nlp/SWE-bench_Verified split=test run_id=cbe-eval-1779403077
 requested_namespace=auto effective_namespace=swebench timeout_s=1800 cache_level=env
-harness elapsed_s=73.956 exit_code=0
+harness elapsed_s=77.522 exit_code=0
 -- harness stdout --
 Running 1 instances...
 All instances run.
@@ -16,6 +16,6 @@ Instances with empty patches: 0
 Instances with errors: 0
 Unstopped containers: 0
 Unremoved images: 0
-Report written to qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a.cbe-eval-1779381474.json
+Report written to qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a.cbe-eval-1779403077.json
 -- harness stderr --
-Evaluation:   0%|          | 0/1 [00:00<?, ?it/s, error=0, ✓=0, ✖=0]Evaluation:   0%|          | 0/1 [01:11<?, ?it/s, ✓=0, ✖=1, error=0]Evaluation: 100%|##########| 1/1 [01:11<00:00, 71.34s/it, ✓=0, ✖=1, error=0]Evaluation: 100%|##########| 1/1 [01:11<00:00, 71.34s/it, ✓=0, ✖=1, error=0]
+Evaluation:   0%|          | 0/1 [00:00<?, ?it/s, error=0, ✓=0, ✖=0]Evaluation:   0%|          | 0/1 [01:14<?, ?it/s, ✓=0, ✖=1, error=0]Evaluation: 100%|##########| 1/1 [01:14<00:00, 74.43s/it, ✓=0, ✖=1, error=0]Evaluation: 100%|##########| 1/1 [01:14<00:00, 74.43s/it, ✓=0, ✖=1, error=0]
