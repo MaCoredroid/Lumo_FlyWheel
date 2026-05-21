@@ -60,6 +60,7 @@ Per-instance medians: codex_s 1800 (most hit the 30-min wall), eval_s 74s, total
 | `astropy__astropy-13236` | astropy/astropy | failed | tests_failed | 1800.2 | 74.3 | 1617 | swebench (prebuilt) | hit 30-min wall; 1617B patch applies but tests fail |
 | `astropy__astropy-13398` | astropy/astropy | failed | tests_failed | 1800.2 | 74.0 | 580 | swebench (prebuilt) | hit 30-min wall; 580B patch applies but tests fail |
 | `astropy__astropy-13453` | astropy/astropy | resolved | tests_passed | 1800.2 | 111.9 | 427 | none (local build) | hit 30-min wall; 427B patch passes |
+| `astropy__astropy-13579` | astropy/astropy | failed | patch_apply_failed | 1128.8 | 0 | 0 | n/a | first instance after proxy fix + full artifact bundle. Agent ran 40 tool calls clean (rc=0) but spent 19 min on setup (`pip install setuptools>=68.0`) and never wrote a fix — agent strategy failure, NOT a proxy/JSON flake. NOT in re-run queue. |
 
 ## Per-instance verdicts — Pro
 
