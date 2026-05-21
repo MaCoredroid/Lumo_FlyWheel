@@ -1770,6 +1770,7 @@ def build_proxy_handler(
             response_headers = _filtered_headers(upstream.headers)
             response_content: bytes | None = None
             non_streaming_parsed: dict[str, Any] | None = None
+            upstream_error_passthrough = False
             if nonstream_bypass_active:
                 # Codex thinks it asked for streaming. Buffer the upstream
                 # (non-streaming) JSON, normalize, then re-emit as SSE.
@@ -1778,7 +1779,27 @@ def build_proxy_handler(
                     parsed = json.loads(response_content_buf.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     parsed = None
-                if isinstance(parsed, dict):
+                # When upstream rejected the request (4xx) OR the parsed
+                # body is a top-level error envelope, do NOT wrap it in
+                # a synthetic SSE response.created event — that buries
+                # the OpenAI-format error inside a "successful" response
+                # shape and confuses Codex into a turn.failed crash with
+                # 0-byte patch. Propagate the JSON error directly so
+                # Codex sees a real HTTP error and can retry. (Was the
+                # observed failure mode on django-16256 / astropy-14508
+                # final-turn BadRequestError flakes — 2026-05-21.)
+                if (
+                    isinstance(parsed, dict)
+                    and (upstream.status_code >= 400 or "error" in parsed)
+                ):
+                    upstream_error_passthrough = True
+                    response_content = response_content_buf
+                    response_headers["Content-Type"] = upstream.headers.get(
+                        "Content-Type", "application/json"
+                    )
+                    response_headers.pop("Transfer-Encoding", None)
+                    response_headers["Content-Length"] = str(len(response_content))
+                elif isinstance(parsed, dict):
                     non_streaming_parsed = parsed
                 # Auto-continue retry loop (Qwen3 #1817 / Qwen3.5-9B #10 workaround):
                 # qwen3.5-27b in thinking mode sometimes plans tool calls in
@@ -1854,9 +1875,10 @@ def build_proxy_handler(
                                 break
                         except requests.RequestException:
                             break
-                response_headers["Transfer-Encoding"] = "chunked"
-                response_headers["Content-Type"] = "text/event-stream"
-                response_headers.pop("Content-Length", None)
+                if not upstream_error_passthrough:
+                    response_headers["Transfer-Encoding"] = "chunked"
+                    response_headers["Content-Type"] = "text/event-stream"
+                    response_headers.pop("Content-Length", None)
             elif upstream.headers.get("Content-Type", "").startswith("text/event-stream"):
                 response_headers["Transfer-Encoding"] = "chunked"
                 response_headers.pop("Content-Length", None)
