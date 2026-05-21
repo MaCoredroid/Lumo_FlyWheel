@@ -1,0 +1,69 @@
+2026-05-21 19:32:17,667 - INFO - Environment image sweb.env.py.arm64.428468730904ff6b4232aa:latest found for astropy__astropy-14182
+Building instance image sweb.eval.arm64.astropy__astropy-14182:latest for astropy__astropy-14182
+2026-05-21 19:33:17,998 - INFO - Creating container for astropy__astropy-14182...
+2026-05-21 19:33:18,009 - INFO - Container for astropy__astropy-14182 created: fc6c909e91ed2d2f0f6e812a38646c072f6b7a595116e511743f482b7d1224ef
+2026-05-21 19:33:18,077 - INFO - Container for astropy__astropy-14182 started: fc6c909e91ed2d2f0f6e812a38646c072f6b7a595116e511743f482b7d1224ef
+2026-05-21 19:33:18,077 - INFO - Intermediate patch for astropy__astropy-14182 written to logs/run_evaluation/cbe-eval-1779391932/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14182/patch.diff, now applying to container...
+2026-05-21 19:33:18,160 - INFO - >>>>> Applied Patch:
+Checking patch astropy/io/ascii/rst.py...
+Applied patch astropy/io/ascii/rst.py cleanly.
+
+2026-05-21 19:33:18,399 - INFO - Git diff before:
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+index abdeba8ef..882182f0b 100644
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -57,10 +57,15 @@ class RST(FixedWidth):
+     data_class = SimpleRSTData
+     header_class = SimpleRSTHeader
+ 
+-    def __init__(self):
+-        super().__init__(delimiter_pad=None, bookend=False)
++    def __init__(self, header_rows=None):
++        super().__init__(
++            delimiter_pad=None, bookend=False, header_rows=header_rows
++        )
+ 
+     def write(self, lines):
+         lines = super().write(lines)
+-        lines = [lines[1]] + lines + [lines[1]]
++        # Find the separator line (line of "=" characters)
++        # It appears after the header rows in the parent output
++        separator = lines[len(self.header.header_rows)]
++        lines = [separator] + lines + [separator]
+         return lines
+2026-05-21 19:33:18,399 - INFO - Eval script for astropy__astropy-14182 written to logs/run_evaluation/cbe-eval-1779391932/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14182/eval.sh; copying to container...
+2026-05-21 19:33:52,386 - INFO - Test runtime: 33.95 seconds
+2026-05-21 19:33:52,387 - INFO - Test output for astropy__astropy-14182 written to logs/run_evaluation/cbe-eval-1779391932/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14182/test_output.txt
+2026-05-21 19:33:52,419 - INFO - Git diff after:
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+index abdeba8ef..882182f0b 100644
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -57,10 +57,15 @@ class RST(FixedWidth):
+     data_class = SimpleRSTData
+     header_class = SimpleRSTHeader
+ 
+-    def __init__(self):
+-        super().__init__(delimiter_pad=None, bookend=False)
++    def __init__(self, header_rows=None):
++        super().__init__(
++            delimiter_pad=None, bookend=False, header_rows=header_rows
++        )
+ 
+     def write(self, lines):
+         lines = super().write(lines)
+-        lines = [lines[1]] + lines + [lines[1]]
++        # Find the separator line (line of "=" characters)
++        # It appears after the header rows in the parent output
++        separator = lines[len(self.header.header_rows)]
++        lines = [separator] + lines + [separator]
+         return lines
+2026-05-21 19:33:52,419 - INFO - Grading answer for astropy__astropy-14182...
+2026-05-21 19:33:52,422 - INFO - report: {'astropy__astropy-14182': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': False, 'tests_status': {'FAIL_TO_PASS': {'success': [], 'failure': ['astropy/io/ascii/tests/test_rst.py::test_rst_with_header_rows']}, 'PASS_TO_PASS': {'success': ['astropy/io/ascii/tests/test_rst.py::test_read_normal', 'astropy/io/ascii/tests/test_rst.py::test_read_normal_names', 'astropy/io/ascii/tests/test_rst.py::test_read_normal_names_include', 'astropy/io/ascii/tests/test_rst.py::test_read_normal_exclude', 'astropy/io/ascii/tests/test_rst.py::test_read_unbounded_right_column', 'astropy/io/ascii/tests/test_rst.py::test_read_unbounded_right_column_header', 'astropy/io/ascii/tests/test_rst.py::test_read_right_indented_table', 'astropy/io/ascii/tests/test_rst.py::test_trailing_spaces_in_row_definition', 'astropy/io/ascii/tests/test_rst.py::test_write_normal'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for astropy__astropy-14182: resolved: False
+2026-05-21 19:33:52,422 - INFO - Attempting to stop container sweb.eval.astropy__astropy-14182.cbe-eval-1779391932...
+2026-05-21 19:34:07,582 - INFO - Attempting to remove container sweb.eval.astropy__astropy-14182.cbe-eval-1779391932...
+2026-05-21 19:34:07,592 - INFO - Container sweb.eval.astropy__astropy-14182.cbe-eval-1779391932 removed.
+2026-05-21 19:34:07,592 - INFO - Attempting to remove image sweb.eval.arm64.astropy__astropy-14182:latest...
+2026-05-21 19:34:07,651 - INFO - Image sweb.eval.arm64.astropy__astropy-14182:latest removed.
