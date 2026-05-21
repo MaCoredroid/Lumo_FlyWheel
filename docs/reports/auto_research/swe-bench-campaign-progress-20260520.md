@@ -108,6 +108,20 @@ counted in the campaign closeout's pass-rate denominator-adjustment section.
 | `astropy__astropy-13033` | astropy/astropy | failed | tests_failed | 1800.2 | 111.3 | 1233 | none (local build) | (post-fix re-run; pre-fix also failed). hit 30-min wall; 1233B patch applies but tests fail |
 | `astropy__astropy-13236` | astropy/astropy | resolved | tests_passed | 1800.2 | 76.4 | 819 | swebench (prebuilt) | **FLIPPED**: pre-fix=failed (1617B patch tests_failed) → post-fix=resolved (819B patch). First verdict flip; smaller patch passes — proxy fix + tightened auto-continue likely steering agent toward cleaner fixes. |
 | `astropy__astropy-13398` | astropy/astropy | failed | tests_failed | 1800.2 | 77.5 | 580 | swebench (prebuilt) | (post-fix re-run; pre-fix also failed with identical 580B patch — same fix attempted, same fail). |
+| `astropy__astropy-13453` | astropy/astropy | resolved | tests_passed | 1801.1 | 112.9 | 551 | none (local build) | (post-fix re-run; pre-fix also resolved). hit wall; 551B patch passes. **MEM SPIKE during this eval**: MemAvailable dipped 7.8→0.6 GiB during env-build+pytest, absorbed by swap (no OOM), recovered to 10 GiB after eval container exited. |
+
+### Re-run summary (pre-fix astropy cells, 5 of 24 done)
+
+| Instance | Pre-fix | Post-fix | Change |
+|---|---|---|---|
+| astropy-12907 | resolved | resolved | same |
+| astropy-13033 | failed | failed | same |
+| astropy-13236 | failed | **resolved** | **FLIP +1** |
+| astropy-13398 | failed | failed | same |
+| astropy-13453 | resolved | resolved | same |
+
+Net post-fix change on astropy re-runs so far: **+1 resolved** (13236 flip).
+Astropy post-fix sweep standing: 3/5 resolved (vs pre-fix 2/5).
 
 ## Per-instance verdicts — Pro
 

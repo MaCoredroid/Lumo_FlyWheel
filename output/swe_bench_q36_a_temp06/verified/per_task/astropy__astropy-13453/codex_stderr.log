@@ -1,0 +1,11 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-21T22:46:15.656143Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
+2026-05-21T22:50:10.742706Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "50", expected usize at line 1 column 157
+2026-05-21T22:50:17.400614Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "100", expected usize at line 1 column 158
+2026-05-21T22:50:40.198512Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 156
+2026-05-21T22:53:35.083287Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "53806", expected i32 at line 1 column 22
+2026-05-21T22:53:40.072305Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "53806", expected i32 at line 1 column 35
+2026-05-21T23:07:16.557005Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "25477", expected i32 at line 1 column 35
+2026-05-21T23:07:41.355288Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "1037", expected i32 at line 1 column 34
+2026-05-21T23:08:08.254179Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "9877", expected i32 at line 1 column 34
