@@ -22,6 +22,7 @@ and are gitignored.
 | `django__django-11119` | django/django | resolved | tests_passed | 1800.2 | 119.8 | 485 | none (local build) | codex hit 30-min wall (timed_out=True, rc=-1); patch produced before kill resolves the task |
 | `django__django-12754` | django/django | resolved | tests_passed | 1800.2 | 124.6 | 1364 | none (local build) | codex hit 30-min wall; agent produced a 1364-byte patch that resolves the task |
 | `django__django-13741` | django/django | failed | tests_failed | 296.8 | 111.4 | 446 | swebench (prebuilt) | agent self-stopped clean (rc=0) at 5 min thinking the task was done; 446B patch applies but tests don't pass |
+| `django__django-13809` | django/django | resolved | tests_passed | 724.2 | 96.2 | 1841 | swebench (prebuilt) | agent self-stopped clean (rc=0) at 12 min; 1841B patch passes |
 
 ## Per-instance verdicts — Pro
 
@@ -41,3 +42,5 @@ _(none yet)_
 | 2026-05-21T08:00Z | 7.9 | 6.4/15 GiB | django-12754 codex agent at ~26 min into 30-min budget |
 | 2026-05-21T08:06Z | — | — | django-12754 resolved (instance 3/20) |
 | 2026-05-21T08:13Z | — | — | django-13741 failed/tests_failed (instance 4/20); agent self-stopped at 5 min |
+| 2026-05-21T08:20Z | 7.9 | 6.4/15 GiB | django-13809 codex agent at ~7 min (~4 instances completed, memory stable — no leak) |
+| 2026-05-21T08:27Z | — | — | django-13809 resolved (instance 5/20); fast self-stop at 12 min |
