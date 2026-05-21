@@ -51,6 +51,12 @@ and are gitignored.
 
 Per-instance medians: codex_s 1800 (most hit the 30-min wall), eval_s 74s, total 22 min/instance. No memory leak observed across 8 hours of continuous execution (host MemAvailable stable at 7.8-8.0 GiB).
 
+## Tier 2 verdicts (incremental — Tier 0 reused via --skip-existing)
+
+| Instance | Repo | Verdict | Failure mode | Codex s | Eval s | Patch bytes | Namespace | Notes |
+|---|---|---|---|---:|---:|---:|---|---|
+| `astropy__astropy-12907` | astropy/astropy | resolved | tests_passed | 1800.2 | 57.6 | 2208 | swebench (prebuilt) | first Tier 2 instance; hit 30-min wall; 2208B patch passes |
+
 ## Per-instance verdicts — Pro
 
 _(none yet)_
@@ -103,6 +109,8 @@ _(none yet)_
 | 2026-05-21T14:20Z | 7.9 | 6.5/15 GiB | sympy-17630 codex agent at ~19 min |
 | 2026-05-21T14:32Z | — | — | sympy-17630 failed/tests_failed (instance 20/20); **TIER 0 COMPLETE** |
 | 2026-05-21T14:33Z | — | — | Verified Tier 2 (full 500) launched with --skip-existing (480 remaining) |
+| 2026-05-21T15:00Z | 7.9 | 6.5/15 GiB | astropy-12907 codex agent at ~26 min |
+| 2026-05-21T15:04Z | — | — | astropy-12907 resolved (Tier 2 instance 1/480 = overall 21/500) |
 
 ## Re-run queue (flake recovery)
 
