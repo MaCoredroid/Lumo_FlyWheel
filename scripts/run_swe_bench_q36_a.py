@@ -45,12 +45,18 @@ DEFAULT_OUT_ROOT = REPO_ROOT / "output" / "swe_bench_q36_a_temp06"
 DEFAULT_REPO_CACHE = REPO_ROOT / ".cache" / "swe_bench_repos"
 DEFAULT_HF_HOME = REPO_ROOT / ".cache" / "huggingface"
 DEFAULT_ENDPOINT = "http://127.0.0.1:8022/v1"
+DEFAULT_METRICS_URL = "http://127.0.0.1:9950/metrics"
 DEFAULT_MODEL = "qwen3.6-27b"
 DEFAULT_AGENT_WALL_S = 25 * 60
 DEFAULT_EVAL_TIMEOUT_S = 30 * 60
 DEFAULT_MODEL_NAME_TAG = "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a"
 # Same capture path used by launch_qwen36_ablation_point.py / Track B benches.
 DEFAULT_PROXY_CAPTURE = Path("/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl")
+DEFAULT_DCGM_SAMPLER = REPO_ROOT / "scripts" / "sample_dcgm_during_task.py"
+DEFAULT_DCGM_INTERVAL_S = 0.1  # 10 Hz — 1/10th of Track B's 100 Hz default to keep
+# per-task dcgm_samples.jsonl under GitHub's 100 MB per-file hard limit. At 10 Hz a
+# 30-min Codex task lands ~6 MB; 100 Hz lands ~60 MB and risks rejection at the
+# campaign scale (500 + 731 instances).
 
 CODEX_TEMPLATE = (
     "docker run --rm --name {container_name} --network=host -u 1000:1000 "
@@ -75,6 +81,58 @@ CODEX_TEMPLATE = (
 
 def _iso_now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _metrics_text(metrics_url: str) -> str:
+    """Fetch a Prometheus metrics snapshot from the vLLM container."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(metrics_url)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except Exception as exc:  # noqa: BLE001
+        return f"# metrics fetch failed: {type(exc).__name__}: {exc}\n"
+
+
+def _spawn_dcgm_sampler(out_path: Path, interval_s: float = DEFAULT_DCGM_INTERVAL_S
+                       ) -> subprocess.Popen[bytes] | None:
+    """Spawn the same DCGM/NVML sampler Track B uses, writing JSONL to out_path."""
+    if not DEFAULT_DCGM_SAMPLER.is_file():
+        return None
+    venv_python = REPO_ROOT / ".venv" / "bin" / "python"
+    interp = str(venv_python) if venv_python.is_file() else sys.executable
+    cmd = [
+        interp, str(DEFAULT_DCGM_SAMPLER),
+        "--out", str(out_path),
+        "--interval-s", str(interval_s),
+        "--allow-unstamped-smoke",
+    ]
+    try:
+        return subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _stop_dcgm_sampler(proc: subprocess.Popen[bytes] | None) -> None:
+    if proc is None:
+        return
+    try:
+        proc.send_signal(2)  # SIGINT — sampler writes a clean tail on signal
+        proc.wait(timeout=10)
+    except Exception:  # noqa: BLE001
+        try:
+            proc.terminate()
+            proc.wait(timeout=5)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
 
 
 def _load_subset(subset_json: Path) -> tuple[str, list[str]]:
@@ -196,8 +254,17 @@ def _run_codex(
     timeout_s: int,
     instance_id: str,
     stdout_path: Path,
+    stderr_path: Path,
     trace_path: Path,
 ) -> dict[str, Any]:
+    """Run codex-runner:v1 and capture trace/stdout/stderr to separate files.
+
+    Track B layout (matching launch_qwen36_ablation_point.py):
+      - trace_path : the --json event stream from `codex exec`
+      - stdout_path: codex_stdout.log (kept for parity; usually empty when
+        --json is the agent output mode)
+      - stderr_path: codex_stderr.log (codex CLI stderr noise)
+    """
     container_name = f"swe-codex-{instance_id.replace('/', '_')[:48]}-{int(time.time())}"
     cmd = CODEX_TEMPLATE.format(
         container_name=container_name,
@@ -208,29 +275,25 @@ def _run_codex(
     started = time.monotonic()
     rc: int | None = None
     timed_out = False
-    # Send stdout/stderr straight to files so subprocess.run can enforce
-    # the wallclock with timeout=... and not block on a pipe. The trace
-    # is the agent's JSON event stream; stdout file gets stderr noise.
-    with stdout_path.open("w", encoding="utf-8") as stdout_f, \
-         trace_path.open("w", encoding="utf-8") as trace_f:
+    # Codex emits its --json event stream to stdout and any human-readable
+    # messages / errors to stderr. Track B keeps them in separate files.
+    with trace_path.open("w", encoding="utf-8") as trace_f, \
+         stderr_path.open("w", encoding="utf-8") as stderr_f:
         try:
             completed = subprocess.run(
                 shlex.split(cmd),
                 stdout=trace_f,
-                stderr=stdout_f,
+                stderr=stderr_f,
                 timeout=max(timeout_s, 30),
                 check=False,
             )
             rc = completed.returncode
         except subprocess.TimeoutExpired:
             timed_out = True
-            # Best-effort container stop (kills the cgroup; codex CLI inside
-            # the container goes with it).
             subprocess.run(
                 ["docker", "kill", container_name], check=False,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
-            # Reap the docker client; --rm cleans up the container.
             try:
                 subprocess.run(
                     ["docker", "wait", container_name], check=False,
@@ -241,6 +304,10 @@ def _run_codex(
                 pass
             rc = -1
     elapsed = time.monotonic() - started
+    # stdout_path kept for layout parity with Track B; the agent doesn't
+    # write to it under `codex exec --json`.
+    if not stdout_path.is_file():
+        stdout_path.write_text("", encoding="utf-8")
     return {
         "elapsed_s": round(elapsed, 3),
         "exit_code": rc if rc is not None else -1,
@@ -307,7 +374,13 @@ def _process_one(
     workspace_path = task_dir / "workspace"
     patch_path = task_dir / "patch.diff"
     codex_stdout = task_dir / "codex_stdout.log"
+    codex_stderr = task_dir / "codex_stderr.log"
     codex_trace = task_dir / "codex_trace.jsonl"
+    prompt_md = task_dir / "prompt.md"
+    metrics_pre = task_dir / "vllm_metrics_pre.txt"
+    metrics_post = task_dir / "vllm_metrics_post.txt"
+    per_turn_json = task_dir / "vllm_per_turn.json"
+    dcgm_samples = task_dir / "dcgm_samples.jsonl"
     eval_log = task_dir / "eval_invocation.log"
     eval_output = task_dir / "eval"
     eval_output.mkdir(parents=True, exist_ok=True)
@@ -340,12 +413,29 @@ def _process_one(
             _remove_workspace(cache_path, workspace_path)
         return summary
 
-    # Snapshot proxy capture byte offset before invoking Codex so we can
-    # slice this task's vllm_request_metrics.jsonl after the run.
+    # Write prompt.md mirroring the Track B layout. The codex agent receives
+    # both the docker-CLI prompt (the "Read the task prompt..." string) and
+    # the AGENTS.md content inside /workspace.
+    prompt_md.write_text(
+        "## Codex CLI invocation prompt\n\n"
+        '"Read the task prompt at /workspace/AGENTS.md and complete it in this '
+        "workspace. Edit the source files directly to implement the fix. Do not "
+        "write a diff file -- modify the files in place so that running pytest "
+        'passes the tests described in the prompt."\n\n'
+        f"## AGENTS.md (workspace/{instance_id})\n\n"
+        + (workspace_path / "AGENTS.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    # Snapshot proxy capture byte offset and Prometheus metrics before Codex.
     proxy_capture = DEFAULT_PROXY_CAPTURE
     proxy_offset_before = (
         proxy_capture.stat().st_size if proxy_capture.is_file() else 0
     )
+    metrics_pre.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+
+    # Start the DCGM/NVML sampler in parallel with the Codex agent.
+    dcgm_proc = _spawn_dcgm_sampler(dcgm_samples)
 
     codex_meta = _run_codex(
         workspace=workspace_path,
@@ -354,12 +444,17 @@ def _process_one(
         timeout_s=agent_wall_s,
         instance_id=instance_id,
         stdout_path=codex_stdout,
+        stderr_path=codex_stderr,
         trace_path=codex_trace,
     )
     summary["codex"] = codex_meta
 
+    _stop_dcgm_sampler(dcgm_proc)
+    metrics_post.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+
     # Slice the new proxy rows into a per-task file (matches Track B layout).
     per_task_metrics = task_dir / "vllm_request_metrics.jsonl"
+    proxy_row_count = 0
     try:
         if proxy_capture.is_file():
             with proxy_capture.open("rb") as src:
@@ -367,6 +462,7 @@ def _process_one(
                 payload = src.read()
             per_task_metrics.write_bytes(payload)
             summary["vllm_request_metrics_bytes"] = len(payload)
+            proxy_row_count = payload.count(b"\n")
         else:
             per_task_metrics.write_bytes(b"")
             summary["vllm_request_metrics_bytes"] = 0
@@ -375,6 +471,36 @@ def _process_one(
             )
     except Exception as exc:  # noqa: BLE001
         summary["vllm_request_metrics_error"] = f"{type(exc).__name__}: {exc}"
+
+    # Write a simple vllm_per_turn.json (delta of pre/post snapshot sizes
+    # plus the per-task proxy row count). This is a smaller artifact than
+    # Track B's full Prometheus per-request normalization but preserves the
+    # filename + role in the artifact set.
+    try:
+        per_turn_json.write_text(
+            json.dumps(
+                {
+                    "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                    "instance_id": instance_id,
+                    "metrics_pre_bytes": metrics_pre.stat().st_size,
+                    "metrics_post_bytes": metrics_post.stat().st_size,
+                    "proxy_request_rows": proxy_row_count,
+                    "model_id": model,
+                    "endpoint": endpoint,
+                    "metrics_url": DEFAULT_METRICS_URL,
+                    "deferred_full_normalization": True,
+                    "deferred_reason": (
+                        "SWE-Bench campaign captures raw pre/post snapshots and the "
+                        "proxy capture slice; full per-request Prometheus normalization "
+                        "deferred to LLD-12 / closeout aggregation."
+                    ),
+                },
+                indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
+    except Exception as exc:  # noqa: BLE001
+        summary["vllm_per_turn_error"] = f"{type(exc).__name__}: {exc}"
 
     patch_text = ""
     try:
