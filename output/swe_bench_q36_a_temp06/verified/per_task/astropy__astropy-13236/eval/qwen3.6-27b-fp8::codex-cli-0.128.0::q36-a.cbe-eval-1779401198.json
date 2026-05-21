@@ -2,8 +2,8 @@
     "total_instances": 1,
     "submitted_instances": 1,
     "completed_instances": 1,
-    "resolved_instances": 0,
-    "unresolved_instances": 1,
+    "resolved_instances": 1,
+    "unresolved_instances": 0,
     "empty_patch_instances": 0,
     "error_instances": 0,
     "completed_ids": [
@@ -14,10 +14,10 @@
     "submitted_ids": [
         "astropy__astropy-13236"
     ],
-    "resolved_ids": [],
-    "unresolved_ids": [
+    "resolved_ids": [
         "astropy__astropy-13236"
     ],
+    "unresolved_ids": [],
     "error_ids": [],
     "schema_version": 2
 }

@@ -106,6 +106,7 @@ counted in the campaign closeout's pass-rate denominator-adjustment section.
 | `astropy__astropy-14309` | astropy/astropy | resolved | tests_passed | 1800.1 | 60.9 | 1689 | swebench (prebuilt) | hit 30-min wall; 1689B patch passes — first astropy resolve in Tier 2 |
 | `astropy__astropy-12907` | astropy/astropy | resolved | tests_passed | 1530.1 | 52.3 | 504 | swebench (prebuilt) | (clean post-fix re-run after pre-fix sweep deleted). codex_rc=1 (late turn.failed, patch already shipped). 504B patch passes. |
 | `astropy__astropy-13033` | astropy/astropy | failed | tests_failed | 1800.2 | 111.3 | 1233 | none (local build) | (post-fix re-run; pre-fix also failed). hit 30-min wall; 1233B patch applies but tests fail |
+| `astropy__astropy-13236` | astropy/astropy | resolved | tests_passed | 1800.2 | 76.4 | 819 | swebench (prebuilt) | **FLIPPED**: pre-fix=failed (1617B patch tests_failed) → post-fix=resolved (819B patch). First verdict flip; smaller patch passes — proxy fix + tightened auto-continue likely steering agent toward cleaner fixes. |
 
 ## Per-instance verdicts — Pro
 

@@ -1,20 +1,20 @@
 {
   "instance_id": "astropy__astropy-13236",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
-  "started_at": "2026-05-21T15:36:33Z",
+  "started_at": "2026-05-21T21:36:37Z",
   "repo": "astropy/astropy",
   "base_commit": "6ed769d58d89380ebaa1ef52b300691eefda8928",
   "codex": {
-    "elapsed_s": 1800.181,
+    "elapsed_s": 1800.198,
     "exit_code": -1,
     "timed_out": true,
-    "container_name": "swe-codex-astropy__astropy-13236-1779377796"
+    "container_name": "swe-codex-astropy__astropy-13236-1779399398"
   },
-  "vllm_request_metrics_bytes": 104444,
-  "patch_bytes": 1617,
+  "vllm_request_metrics_bytes": 108616,
+  "patch_bytes": 819,
   "eval": {
-    "exit_code": 1,
-    "elapsed_s": 76.876
+    "exit_code": 0,
+    "elapsed_s": 78.768
   },
   "eval_report": {
     "track": "swe_bench",
@@ -23,17 +23,17 @@
     "dataset_name": "princeton-nlp/SWE-bench_Verified",
     "patch_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/astropy__astropy-13236/patch.diff",
     "prediction_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/astropy__astropy-13236/eval/predictions.jsonl",
-    "verdict": "failed",
-    "passed": false,
-    "failure_mode": "tests_failed",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
     "harness_exit_code": 0,
-    "eval_wall_clock_seconds": 74.32,
+    "eval_wall_clock_seconds": 76.412,
     "error": null,
     "arch": "arm64",
-    "run_id": "cbe-eval-1779379596",
+    "run_id": "cbe-eval-1779401198",
     "namespace": "swebench",
     "requested_namespace": "auto",
     "cache_level": "env"
   },
-  "ended_at": "2026-05-21T16:07:53Z"
+  "ended_at": "2026-05-21T22:07:57Z"
 }
