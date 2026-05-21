@@ -643,6 +643,48 @@ def main(argv: list[str] | None = None) -> int:
 
     args.repo_cache.mkdir(parents=True, exist_ok=True)
 
+    # Startup-time worktree GC: prune any stale worktrees registered in
+    # cached repos whose checkout directory either no longer exists OR
+    # whose parent per_task/<id>/ directory lacks a runner_metadata.json
+    # (signature of an aborted run). Without this, orchestrator restarts
+    # accumulate stale worktrees that hold 50-300 MB of checkout files
+    # each and never get cleaned, eating into the tight ~7-8 GiB host
+    # MemAvailable budget on this unified-memory DGX Spark host.
+    if args.repo_cache.is_dir():
+        for repo_cache in sorted(args.repo_cache.iterdir()):
+            if not repo_cache.is_dir():
+                continue
+            try:
+                out = subprocess.run(
+                    ["git", "-C", str(repo_cache), "worktree", "list", "--porcelain"],
+                    capture_output=True, text=True, check=False, timeout=10,
+                )
+                if out.returncode != 0:
+                    continue
+            except Exception:  # noqa: BLE001
+                continue
+            for line in out.stdout.splitlines():
+                if not line.startswith("worktree "):
+                    continue
+                wt_path = Path(line[len("worktree "):])
+                if wt_path == repo_cache:
+                    continue  # main checkout
+                parent = wt_path.parent
+                runner_meta = parent / "runner_metadata.json"
+                if not wt_path.exists() or not runner_meta.is_file():
+                    print(f"[startup-gc] removing stale worktree: {wt_path}", flush=True)
+                    subprocess.run(
+                        ["git", "-C", str(repo_cache), "worktree", "remove",
+                         "--force", str(wt_path)],
+                        capture_output=True, check=False, timeout=15,
+                    )
+                    if wt_path.exists():
+                        shutil.rmtree(wt_path, ignore_errors=True)
+            subprocess.run(
+                ["git", "-C", str(repo_cache), "worktree", "prune"],
+                capture_output=True, check=False, timeout=10,
+            )
+
     started_at = _iso_now()
     summaries: list[dict[str, Any]] = []
 
