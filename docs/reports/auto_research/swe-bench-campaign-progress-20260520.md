@@ -31,6 +31,7 @@ and are gitignored.
 | `matplotlib__matplotlib-24637` | matplotlib/matplotlib | resolved | tests_passed | 1800.2 | 465.3 | 808 | none (local build) | agent hit 30-min wall; eval_s=465 includes first-time matplotlib env image build (~7-8 min); 808B patch passes |
 | `pydata__xarray-6721` | pydata/xarray | crash | infra_error | 1800.2 | 63.5 | 484 | none (local build attempt) | **ARM64 UNSUPPORTED.** Env image build fails: `cdms2` conda package has no `linux-aarch64` build. Codex agent produced a 484B patch but it can never be evaluated on this host. Pre-reg §7 decision: log as infra_error, no fallback budget; carve out of pass-rate denominator. |
 | `pylint-dev__pylint-6528` | pylint-dev/pylint | resolved | tests_passed | 1800.2 | 62.7 | 3174 | swebench (prebuilt) | agent hit 30-min wall; 3174B patch passes |
+| `pytest-dev__pytest-8399` | pytest-dev/pytest | resolved | tests_passed | 399.6 | 72.0 | 2460 | none (local build) | codex_rc=1 (turn.failed late on proxy JSON; agent had already shipped a 2460B patch that passes); fast self-stop at 7 min |
 
 ## Per-instance verdicts — Pro
 
@@ -69,6 +70,8 @@ _(none yet)_
 | 2026-05-21T11:03Z | — | — | xarray-6721 crash/infra_error (instance 12/20); cdms2 unavailable on linux-aarch64 — first ARM64-unsupported instance |
 | 2026-05-21T11:20Z | 8.0 | 6.5/15 GiB | pylint-6528 codex agent at ~16 min |
 | 2026-05-21T11:34Z | — | — | pylint-6528 resolved (instance 13/20) |
+| 2026-05-21T11:40Z | 7.9 | 6.5/15 GiB | pytest-8399 codex agent at ~5 min |
+| 2026-05-21T11:42Z | — | — | pytest-8399 resolved (instance 14/20); fast self-stop ~7 min |
 
 ## Re-run queue (flake recovery)
 
