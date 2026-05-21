@@ -20,6 +20,7 @@ and are gitignored.
 |---|---|---|---|---:|---:|---:|---|---|
 | `astropy__astropy-14508` | astropy/astropy | resolved | tests_passed | 1007.4 | 89.1 | 1907 | none (local build) | codex_rc=1 (turn.failed on final turn after 130 OK turns — BadRequestError JSON parse; agent recovered enough to ship a passing patch) |
 | `django__django-11119` | django/django | resolved | tests_passed | 1800.2 | 119.8 | 485 | none (local build) | codex hit 30-min wall (timed_out=True, rc=-1); patch produced before kill resolves the task |
+| `django__django-12754` | django/django | resolved | tests_passed | 1800.2 | 124.6 | 1364 | none (local build) | codex hit 30-min wall; agent produced a 1364-byte patch that resolves the task |
 
 ## Per-instance verdicts — Pro
 
@@ -36,3 +37,5 @@ _(none yet)_
 | 2026-05-21T07:02Z | — | — | astropy-14508 resolved (instance 1/20) |
 | 2026-05-21T07:20Z | 7.9 | 6.4/15 GiB | django-11119 codex agent at ~18 min into 30-min budget |
 | 2026-05-21T07:34Z | — | — | django-11119 resolved (instance 2/20); Codex hit 30-min wall, watchdog killed cleanly |
+| 2026-05-21T08:00Z | 7.9 | 6.4/15 GiB | django-12754 codex agent at ~26 min into 30-min budget |
+| 2026-05-21T08:06Z | — | — | django-12754 resolved (instance 3/20) |
