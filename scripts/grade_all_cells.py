@@ -25,6 +25,9 @@ ROOT_ABLATION = REPO / "output" / "track_b_e2e_v4a_v2_ablation"
 VERIFIERS = REPO / "verifiers"
 SUMMARY = REPO / "output" / "grade_all_cells_summary.json"
 
+ROOT_QWEN36 = REPO / "output" / "track_b_e2e_qwen36_ablation"
+ROOT_QWEN36_TEMP06 = REPO / "output" / "track_b_e2e_qwen36_temp06_ablation"
+
 POINTS = {
     "D": [
         ROOT_V4A_V2 / "round_0",
@@ -36,6 +39,10 @@ POINTS = {
     "B": [ROOT_ABLATION / "round_2"],
     "C": [ROOT_ABLATION / "round_3"],
     "OFF": [ROOT_ABLATION / "round_4"],
+    "QWEN36_OFF": [ROOT_QWEN36 / "round_0"],
+    "QWEN36_OFF_TEMP06": [ROOT_QWEN36_TEMP06 / "round_0"],
+    "QWEN36_A_TEMP06": [ROOT_QWEN36_TEMP06 / "round_1"],
+    "QWEN36_D_TEMP06": [ROOT_QWEN36_TEMP06 / "round_2"],
 }
 
 

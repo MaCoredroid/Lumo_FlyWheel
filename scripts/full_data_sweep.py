@@ -28,6 +28,10 @@ POINTS = {
     "B": [ROOT / "track_b_e2e_v4a_v2_ablation" / "round_2"],
     "C": [ROOT / "track_b_e2e_v4a_v2_ablation" / "round_3"],
     "OFF": [ROOT / "track_b_e2e_v4a_v2_ablation" / "round_4"],
+    "Q36_OFF_T1": [ROOT / "track_b_e2e_qwen36_ablation" / "round_0"],  # qwen3.6 OFF, temp=1.0 (original 3-task slice)
+    "Q36_OFF": [ROOT / "track_b_e2e_qwen36_temp06_ablation" / "round_0"],  # qwen3.6 OFF, temp=0.6 (full 11-task corpus)
+    "Q36_A": [ROOT / "track_b_e2e_qwen36_temp06_ablation" / "round_1"],   # qwen3.6 A (T1 only), temp=0.6
+    "Q36_D": [ROOT / "track_b_e2e_qwen36_temp06_ablation" / "round_2"],   # qwen3.6 D (full stack), temp=0.6
 }
 
 CONTAMINATED = set()  # Originally 4 D-point attempts; remeasured 2026-05-17, contaminated originals archived.
