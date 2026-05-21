@@ -35,6 +35,7 @@ and are gitignored.
 | `scikit-learn__scikit-learn-13496` | scikit-learn/scikit-learn | crash | infra_error | 1800.2 | 141.9 | 1383 | none (local build attempt) | **ARM64 UNSUPPORTED.** Env image build fails: scipy can't be built from source on aarch64 (no Fortran compiler in base image, no prebuilt arm64 wheel for the pinned old scipy version). Agent shipped a 1383B patch but it can't be evaluated on this host. |
 | `sphinx-doc__sphinx-7440` | sphinx-doc/sphinx | resolved | tests_passed | 1800.2 | 58.4 | 2608 | swebench (prebuilt) | agent hit 30-min wall; 2608B patch passes |
 | `sphinx-doc__sphinx-9230` | sphinx-doc/sphinx | resolved | tests_passed | 1352.0 | 57.0 | 541 | swebench (prebuilt) | agent self-stopped clean (rc=0) at 22.5 min; 541B patch passes |
+| `sympy__sympy-13757` | sympy/sympy | failed | patch_apply_failed | 1651.4 | 0 | 0 | n/a | agent ran 60 tool calls clean (rc=0, turn.completed) but produced an empty diff. Real "agent gave up" failure — NOT a proxy flake (no error events in trace). Not in re-run queue. |
 
 ## Per-instance verdicts — Pro
 
@@ -81,6 +82,8 @@ _(none yet)_
 | 2026-05-21T12:46Z | — | — | sphinx-7440 resolved (instance 16/20) |
 | 2026-05-21T13:00Z | 7.9 | 6.5/15 GiB | sphinx-9230 codex agent at ~14 min; 20 ticks of memory stability → no leak proven |
 | 2026-05-21T13:10Z | — | — | sphinx-9230 resolved (instance 17/20) |
+| 2026-05-21T13:20Z | 7.9 | 6.5/15 GiB | sympy-13757 codex agent at ~10 min |
+| 2026-05-21T13:37Z | — | — | sympy-13757 failed/empty-diff (instance 18/20); agent ran 27 min clean but produced no patch — NOT a flake |
 
 ## Re-run queue (flake recovery)
 
