@@ -104,6 +104,7 @@ counted in the campaign closeout's pass-rate denominator-adjustment section.
 | `astropy__astropy-14096` | astropy/astropy | failed | patch_apply_failed | 1800.2 | 0 | 0 | n/a | first instance with 10 Hz dcgm (5.9 MB samples, 10× under 100Hz). Codex hit 30-min wall, watchdog kill → no patch shipped. Astropy continues to be hard for Q36-A. |
 | `astropy__astropy-14182` | astropy/astropy | failed | tests_failed | 1800.2 | 112.9 | 882 | none (local build) | hit 30-min wall; 882B patch applies but tests fail |
 | `astropy__astropy-14309` | astropy/astropy | resolved | tests_passed | 1800.1 | 60.9 | 1689 | swebench (prebuilt) | hit 30-min wall; 1689B patch passes — first astropy resolve in Tier 2 |
+| `astropy__astropy-12907` | astropy/astropy | resolved | tests_passed | 1530.1 | 52.3 | 504 | swebench (prebuilt) | (clean post-fix re-run after pre-fix sweep deleted). codex_rc=1 (late turn.failed, patch already shipped). 504B patch passes. |
 
 ## Per-instance verdicts — Pro
 
