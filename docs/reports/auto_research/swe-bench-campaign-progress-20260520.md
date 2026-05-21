@@ -33,6 +33,7 @@ and are gitignored.
 | `pylint-dev__pylint-6528` | pylint-dev/pylint | resolved | tests_passed | 1800.2 | 62.7 | 3174 | swebench (prebuilt) | agent hit 30-min wall; 3174B patch passes |
 | `pytest-dev__pytest-8399` | pytest-dev/pytest | resolved | tests_passed | 399.6 | 72.0 | 2460 | none (local build) | codex_rc=1 (turn.failed late on proxy JSON; agent had already shipped a 2460B patch that passes); fast self-stop at 7 min |
 | `scikit-learn__scikit-learn-13496` | scikit-learn/scikit-learn | crash | infra_error | 1800.2 | 141.9 | 1383 | none (local build attempt) | **ARM64 UNSUPPORTED.** Env image build fails: scipy can't be built from source on aarch64 (no Fortran compiler in base image, no prebuilt arm64 wheel for the pinned old scipy version). Agent shipped a 1383B patch but it can't be evaluated on this host. |
+| `sphinx-doc__sphinx-7440` | sphinx-doc/sphinx | resolved | tests_passed | 1800.2 | 58.4 | 2608 | swebench (prebuilt) | agent hit 30-min wall; 2608B patch passes |
 
 ## Per-instance verdicts — Pro
 
@@ -75,6 +76,8 @@ _(none yet)_
 | 2026-05-21T11:42Z | — | — | pytest-8399 resolved (instance 14/20); fast self-stop ~7 min |
 | 2026-05-21T12:00Z | 7.9 | 6.5/15 GiB | sklearn-13496 codex agent at ~17 min |
 | 2026-05-21T12:15Z | — | — | sklearn-13496 crash/arm64-unsupported (instance 15/20); scipy fortran build failure — second ARM64 carve-out |
+| 2026-05-21T12:20Z | 7.9 | 6.5/15 GiB | sphinx-7440 codex agent at ~5 min |
+| 2026-05-21T12:46Z | — | — | sphinx-7440 resolved (instance 16/20) |
 
 ## Re-run queue (flake recovery)
 
