@@ -1,0 +1,39 @@
+{
+  "instance_id": "django__django-10914",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-05-22T08:21:02Z",
+  "repo": "django/django",
+  "base_commit": "e7fd69d051eaa67cb17f172a39b57253e9cb831a",
+  "codex": {
+    "elapsed_s": 1800.183,
+    "exit_code": -1,
+    "timed_out": true,
+    "container_name": "swe-codex-django__django-10914-1779438063"
+  },
+  "vllm_request_metrics_bytes": 54272,
+  "patch_bytes": 625,
+  "eval": {
+    "exit_code": 0,
+    "elapsed_s": 67.109,
+    "offloaded": true,
+    "eval_host": "alienware"
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "django__django-10914",
+    "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 64.981,
+    "error": null,
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "run_id": "x86eval-out-1779439864",
+    "namespace": "swebench",
+    "cache_level": "env"
+  },
+  "ended_at": "2026-05-22T08:52:11Z"
+}
