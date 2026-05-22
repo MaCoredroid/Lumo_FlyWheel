@@ -355,6 +355,7 @@ class HTML(core.BaseReader):
 
         self.data._set_fill_values(cols)
 
+        self._set_col_formats()
         lines = []
 
         # Set HTML escaping to False for any column in the raw_html_cols input
