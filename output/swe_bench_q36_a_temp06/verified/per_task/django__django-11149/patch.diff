@@ -1,0 +1,56 @@
+diff --git a/django/contrib/admin/options.py b/django/contrib/admin/options.py
+index 880a2cc17b..2a3a17be82 100644
+--- a/django/contrib/admin/options.py
++++ b/django/contrib/admin/options.py
+@@ -2114,30 +2114,39 @@ class InlineModelAdmin(BaseModelAdmin):
+     def has_add_permission(self, request, obj):
+         if self.opts.auto_created:
+             # We're checking the rights to an auto-created intermediate model,
+-            # which doesn't have its own individual permissions. The user needs
+-            # to have the view permission for the related model in order to
+-            # be able to do anything with the intermediate model.
+-            return self.has_view_permission(request, obj)
++            # which doesn't have its own individual permissions. Check the
++            # change permission on the related model.
++            return self.has_related_change_permission(request, obj)
+         return super().has_add_permission(request)
+ 
+     def has_change_permission(self, request, obj=None):
+         if self.opts.auto_created:
+             # We're checking the rights to an auto-created intermediate model,
+-            # which doesn't have its own individual permissions. The user needs
+-            # to have the view permission for the related model in order to
+-            # be able to do anything with the intermediate model.
+-            return self.has_view_permission(request, obj)
++            # which doesn't have its own individual permissions. Check the
++            # change permission on the related model.
++            return self.has_related_change_permission(request, obj)
+         return super().has_change_permission(request)
+ 
+     def has_delete_permission(self, request, obj=None):
+         if self.opts.auto_created:
+             # We're checking the rights to an auto-created intermediate model,
+-            # which doesn't have its own individual permissions. The user needs
+-            # to have the view permission for the related model in order to
+-            # be able to do anything with the intermediate model.
+-            return self.has_view_permission(request, obj)
++            # which doesn't have its own individual permissions. Check the
++            # change permission on the related model.
++            return self.has_related_change_permission(request, obj)
+         return super().has_delete_permission(request, obj)
+ 
++    def has_related_change_permission(self, request, obj=None):
++        """
++        Check change permission on the related model for auto-created through models.
++        """
++        opts = self.opts
++        for field in opts.fields:
++            if field.remote_field and field.remote_field.model != self.parent_model:
++                opts = field.remote_field.model._meta
++                break
++        codename = get_permission_codename('change', opts)
++        return request.user.has_perm('%s.%s' % (opts.app_label, codename))
++
+     def has_view_permission(self, request, obj=None):
+         if self.opts.auto_created:
+             opts = self.opts
