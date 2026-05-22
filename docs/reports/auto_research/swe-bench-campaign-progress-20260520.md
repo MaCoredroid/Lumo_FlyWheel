@@ -137,6 +137,25 @@ Astropy post-fix sweep standing: 3/5 resolved (vs pre-fix 2/5).
 | `astropy__astropy-7336` | astropy/astropy | crash | infra_error | 1800.2 | 40.5 | 6375 | none (local build attempt) | **ARM64 UNSUPPORTED** (4th). Same `setuptools==38.2.4` arm64 gap as -7166. 6375B patch uneval-able. Carve out. |
 | `astropy__astropy-7606` | astropy/astropy | crash | infra_error | 972.1 | 28.5 | 7428 | none (local build attempt) | **ARM64 UNSUPPORTED** (5th). Same `setuptools==38.2.4` gap. 7428B patch uneval-able. Carve out. |
 | `astropy__astropy-7671` | astropy/astropy | crash | infra_error | 1800.2 | 37.0 | 3239 | none (local build attempt) | **ARM64 UNSUPPORTED** (6th). Same old-astropy conda gap. 3239B patch uneval-able. Carve out. |
+| `astropy__astropy-8707` | astropy/astropy | failed | patch_apply_failed | 625.3 | 0 | 0 | n/a | **`flake__token_truncation`** (NEW sub-mode, re-run candidate). Codex `turn.failed` rc=1: model emitted an ~80 KB single tool-call argument that hit the `LUMO_PROXY_MAX_OUTPUT_TOKENS=32768` cap and truncated mid-string → `EOF parsing function arguments at column 81828` → unparseable → BadRequestError. Distinct from the django-16256 SSE-wrap flake (fixed). Proxy fix made the error honest (`type:error` not fake `response.created`) but the truncation root cause is separate. |
+
+### NEW flake sub-mode: token truncation of large tool calls
+
+`flake__token_truncation` — when the model emits a single tool-call argument
+larger than ~80 KB (≈ the 32768-token output cap × ~2.5 chars/token), the
+JSON serialization truncates mid-string and becomes unparseable. Codex sees
+`failed to parse function arguments: EOF ... column ~81828` and crashes the
+turn with an empty patch. Typically a huge `apply_patch`/file-write the model
+tried to emit in one shot.
+
+- Root cause: `LUMO_PROXY_MAX_OUTPUT_TOKENS=32768` truncates large tool calls.
+- NOT fixed by the d458d794 4xx-passthrough patch (that addressed SSE-wrapping
+  of upstream errors; this is a model-output-boundary truncation).
+- Candidate fixes (deferred, not applied mid-campaign): (a) raise the output
+  cap; (b) detect truncated tool-call JSON in the proxy and auto-retry with a
+  "split your edit into smaller chunks" continue message; (c) accept as a real
+  capability limit of the harness on instances needing huge single edits.
+- Re-run queue: these instances are tagged for re-run after a proxy fix lands.
 
 ## Per-instance verdicts — Pro
 
@@ -199,7 +218,8 @@ Instances tagged for re-run after Tier 0 completes (per pre-reg §5 "interrupted
 
 | Instance | Reason | First-attempt artifacts kept at |
 |---|---|---|
-| `django__django-16256` | Proxy/vLLM `BadRequestError: Unterminated string at column 89` on turn 3 — empty patch | `output/swe_bench_q36_a_temp06/verified/per_task/django__django-16256/` |
+| `django__django-16256` | Proxy/vLLM `BadRequestError: Unterminated string at column 89` on turn 3 — empty patch (SSE-wrap flake, fixed by d458d794; re-collected naturally in the post-fix sweep) | `output/.../django__django-16256/` |
+| `astropy__astropy-8707` | `flake__token_truncation`: 80 KB tool-call arg hit the 32768-token cap, truncated mid-string. Needs a token-cap or split-edit fix before re-run. | `output/.../astropy__astropy-8707/` |
 
 ## ARM64-unsupported queue (denominator carve-out)
 
