@@ -1,0 +1,149 @@
+diff --git a/ah_bootstrap.py b/ah_bootstrap.py
+index 65c38eabd..c9c081f51 100644
+--- a/ah_bootstrap.py
++++ b/ah_bootstrap.py
+@@ -38,7 +38,7 @@ latest version of this module.
+ 
+ import contextlib
+ import errno
+-import imp
++import importlib
+ import io
+ import locale
+ import os
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 8deaacb41..ebe3e3f9c 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -181,29 +181,8 @@ def _initialize_astropy():
+         from .utils import _compiler
+     except ImportError:
+         if _is_astropy_source():
+-            log.warning('You appear to be trying to import astropy from '
+-                        'within a source checkout without building the '
+-                        'extension modules first.  Attempting to (re)build '
+-                        'extension modules:')
+-
+-            try:
+-                _rebuild_extensions()
+-            except BaseException as exc:
+-                _rollback_import(
+-                    'An error occurred while attempting to rebuild the '
+-                    'extension modules.  Please try manually running '
+-                    '`./setup.py develop` or `./setup.py build_ext '
+-                    '--inplace` to see what the issue was.  Extension '
+-                    'modules must be successfully compiled and importable '
+-                    'in order to import astropy.')
+-                # Reraise the Exception only in case it wasn't an Exception,
+-                # for example if a "SystemExit" or "KeyboardInterrupt" was
+-                # invoked.
+-                if not isinstance(exc, Exception):
+-                    raise
+-
++            log.warning('C extension modules not built, skipping')
+         else:
+-            # Outright broken installation; don't be nice.
+             raise
+ 
+     # add these here so we only need to cleanup the namespace at the end
+diff --git a/astropy/extern/configobj/configobj.py b/astropy/extern/configobj/configobj.py
+index 0c02b9b7a..2a783f989 100755
+--- a/astropy/extern/configobj/configobj.py
++++ b/astropy/extern/configobj/configobj.py
+@@ -17,6 +17,7 @@ import os
+ import re
+ import sys
+ import collections
++from collections.abc import Mapping as AbcMapping
+ 
+ from codecs import BOM_UTF8, BOM_UTF16, BOM_UTF16_BE, BOM_UTF16_LE
+ 
+@@ -594,7 +595,7 @@ class Section(dict):
+             if key not in self:
+                 self.sections.append(key)
+             dict.__setitem__(self, key, value)
+-        elif isinstance(value, collections.Mapping) and not unrepr:
++        elif isinstance(value, AbcMapping) and not unrepr:
+             # First create the new depth level,
+             # then create the section
+             if key not in self:
+@@ -801,8 +802,8 @@ class Section(dict):
+         ConfigObj({'section1': {'option1': 'False', 'subsection': {'more_options': 'False'}}})
+         """
+         for key, val in list(indict.items()):
+-            if (key in self and isinstance(self[key], collections.Mapping) and
+-                                isinstance(val, collections.Mapping)):
++            if (key in self and isinstance(self[key], AbcMapping) and
++                                isinstance(val, AbcMapping)):
+                 self[key].merge(val)
+             else:
+                 self[key] = val
+@@ -2434,7 +2435,7 @@ def flatten_errors(cfg, res, levels=None, results=None):
+     for (key, val) in list(res.items()):
+         if val == True:
+             continue
+-        if isinstance(cfg.get(key), collections.Mapping):
++        if isinstance(cfg.get(key), AbcMapping):
+             # Go down one level
+             levels.append(key)
+             flatten_errors(cfg[key], val, levels, results)
+diff --git a/astropy/units/decorators.py b/astropy/units/decorators.py
+index 8bece5a85..fe22466c4 100644
+--- a/astropy/units/decorators.py
++++ b/astropy/units/decorators.py
+@@ -220,7 +220,8 @@ class QuantityInput:
+             # Call the original function with any equivalencies in force.
+             with add_enabled_equivalencies(self.equivalencies):
+                 return_ = wrapped_function(*func_args, **func_kwargs)
+-            if wrapped_signature.return_annotation is not inspect.Signature.empty:
++            if (wrapped_signature.return_annotation is not inspect.Signature.empty
++                    and wrapped_signature.return_annotation is not None):
+                 return return_.to(wrapped_signature.return_annotation)
+             else:
+                 return return_
+diff --git a/astropy/units/quantity.py b/astropy/units/quantity.py
+index 3bdda4a63..d4a8d2b75 100644
+--- a/astropy/units/quantity.py
++++ b/astropy/units/quantity.py
+@@ -758,7 +758,7 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
+         if obj is None:
+             obj = self.view(np.ndarray)
+         else:
+-            obj = np.array(obj, copy=False)
++            obj = np.asarray(obj)
+ 
+         # Take the view, set the unit, and update possible other properties
+         # such as ``info``, ``wrap_angle`` in `Longitude`, etc.
+diff --git a/astropy/utils/introspection.py b/astropy/utils/introspection.py
+index 2d1c0b572..d02099cd9 100644
+--- a/astropy/utils/introspection.py
++++ b/astropy/utils/introspection.py
+@@ -144,9 +144,12 @@ def minversion(module, version, inclusive=True, version_path='__version__'):
+         have_version = resolve_name(module.__name__, version_path)
+ 
+     try:
+-        from pkg_resources import parse_version
++        from packaging.version import parse as parse_version
+     except ImportError:
+-        from distutils.version import LooseVersion as parse_version
++        try:
++            from pkg_resources import parse_version
++        except ImportError:
++            from distutils.version import LooseVersion as parse_version
+         # LooseVersion raises a TypeError when strings like dev, rc1 are part
+         # of the version number. Match the dotted numbers only. Regex taken
+         # from PEP440, https://www.python.org/dev/peps/pep-0440/, Appendix B
+diff --git a/conftest.py b/conftest.py
+index 00c613c99..e0eec805a 100644
+--- a/conftest.py
++++ b/conftest.py
+@@ -1,6 +1,3 @@
+-# Licensed under a 3-clause BSD style license - see LICENSE.rst
+-
+-pytest_plugins = [
+-    'astropy.tests.plugins.config',
+-    'astropy.tests.plugins.display',
+-]
++import collections
++from collections.abc import Mapping
++collections.Mapping = Mapping
