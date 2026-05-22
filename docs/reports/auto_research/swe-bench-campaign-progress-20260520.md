@@ -139,6 +139,8 @@ Astropy post-fix sweep standing: 3/5 resolved (vs pre-fix 2/5).
 | `astropy__astropy-7671` | astropy/astropy | crash | infra_error | 1800.2 | 37.0 | 3239 | none (local build attempt) | **ARM64 UNSUPPORTED** (6th). Same old-astropy conda gap. 3239B patch uneval-able. Carve out. |
 | `astropy__astropy-8707` | astropy/astropy | failed | patch_apply_failed | 625.3 | 0 | 0 | n/a | **`flake__token_truncation`** (NEW sub-mode, re-run candidate). Codex `turn.failed` rc=1: model emitted an ~80 KB single tool-call argument that hit the `LUMO_PROXY_MAX_OUTPUT_TOKENS=32768` cap and truncated mid-string → `EOF parsing function arguments at column 81828` → unparseable → BadRequestError. Distinct from the django-16256 SSE-wrap flake (fixed). Proxy fix made the error honest (`type:error` not fake `response.created`) but the truncation root cause is separate. |
 
+| `astropy__astropy-8872` | astropy/astropy | crash | infra_error | 1800.2 | 22.5 | 1295 | none (local build attempt) | **ARM64 UNSUPPORTED** (7th). Build fails: `ModuleNotFoundError: No module named 'pkg_resources'` (setuptools-era arm64 build incompat). 1295B patch uneval-able. Carve out. |
+
 ### NEW flake sub-mode: token truncation of large tool calls
 
 `flake__token_truncation` — when the model emits a single tool-call argument
@@ -235,3 +237,4 @@ closeout. Re-running cannot fix them — needs x86 emulation or an x86 host.
 | `astropy__astropy-7336` | same `setuptools==38.2.4` arm64 gap as -7166 |
 | `astropy__astropy-7606` | same `setuptools==38.2.4` arm64 gap |
 | `astropy__astropy-7671` | same old-astropy conda arm64 gap |
+| `astropy__astropy-8872` | `pkg_resources` missing during arm64 build (setuptools-era incompat) |

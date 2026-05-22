@@ -1,0 +1,35 @@
+diff --git a/astropy/units/quantity.py b/astropy/units/quantity.py
+index ded609cbe..f9e6e793e 100644
+--- a/astropy/units/quantity.py
++++ b/astropy/units/quantity.py
+@@ -296,7 +296,7 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
+                 if not copy:
+                     return value
+ 
+-                if not (np.can_cast(np.float32, value.dtype) or
++                if not (value.dtype.kind in "fc" or
+                         value.dtype.fields):
+                     dtype = float
+ 
+@@ -377,7 +377,7 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
+                             "Numpy numeric type.")
+ 
+         # by default, cast any integer, boolean, etc., to float
+-        if dtype is None and (not (np.can_cast(np.float32, value.dtype)
++        if dtype is None and (not (value.dtype.kind in "fc"
+                                    or value.dtype.fields)
+                               or value.dtype.kind == 'O'):
+             value = value.astype(float)
+diff --git a/setup.cfg b/setup.cfg
+index 96e1c829b..c210499ad 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -104,7 +104,7 @@ qt_no_exception_capture = 1
+ bitmap = static/wininst_background.bmp
+ 
+ [ah_bootstrap]
+-auto_use = True
++auto_use = False
+ 
+ [flake8]
+ exclude = extern,*parsetab.py,*lextab.py

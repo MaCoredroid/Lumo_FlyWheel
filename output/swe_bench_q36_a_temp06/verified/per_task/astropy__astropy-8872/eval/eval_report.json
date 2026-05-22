@@ -1,0 +1,19 @@
+{
+  "track": "swe_bench",
+  "instance_id": "astropy__astropy-8872",
+  "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "patch_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/astropy__astropy-8872/patch.diff",
+  "prediction_path": "/home/mark/shared/lumoFlyWheel/output/swe_bench_q36_a_temp06/verified/per_task/astropy__astropy-8872/eval/predictions.jsonl",
+  "verdict": "crash",
+  "passed": false,
+  "failure_mode": "infra_error",
+  "harness_exit_code": 0,
+  "eval_wall_clock_seconds": 22.485,
+  "error": null,
+  "arch": "arm64",
+  "run_id": "cbe-eval-1779423556",
+  "namespace": "none",
+  "requested_namespace": "auto",
+  "cache_level": "env"
+}

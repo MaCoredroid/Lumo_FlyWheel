@@ -1,0 +1,431 @@
+2026-05-22 04:19:21,825 - INFO - Building image sweb.eval.arm64.astropy__astropy-8872:latest
+Using dockerfile:
+FROM --platform=linux/arm64/v8 sweb.env.py.arm64.428468730904ff6b4232aa:latest
+
+COPY ./setup_repo.sh /root/
+RUN sed -i -e 's/\r$//' /root/setup_repo.sh
+RUN /bin/bash /root/setup_repo.sh
+
+WORKDIR /testbed/
+
+Adding (1) setup scripts to image build repo
+2026-05-22 04:19:21,825 - INFO - [SETUP SCRIPT] setup_repo.sh:
+#!/bin/bash
+set -euxo pipefail
+git clone -o origin  --single-branch https://github.com/astropy/astropy /testbed
+chmod -R 777 /testbed
+cd /testbed
+git reset --hard b750a0e6ee76fb6b8a099a4d16ec51977be46bf6
+git remote remove origin
+TARGET_TIMESTAMP=$(git show -s --format=%ci b750a0e6ee76fb6b8a099a4d16ec51977be46bf6)
+git tag -l | while read tag; do TAG_COMMIT=$(git rev-list -n 1 "$tag"); TAG_TIME=$(git show -s --format=%ci "$TAG_COMMIT"); if [[ "$TAG_TIME" > "$TARGET_TIMESTAMP" ]]; then git tag -d "$tag"; fi; done
+git reflog expire --expire=now --all
+git gc --prune=now --aggressive
+AFTER_TIMESTAMP=$(date -d "$TARGET_TIMESTAMP + 1 second" '+%Y-%m-%d %H:%M:%S')
+COMMIT_COUNT=$(git log --oneline --all --since="$AFTER_TIMESTAMP" | wc -l)
+[ "$COMMIT_COUNT" -eq 0 ] || exit 1
+source /opt/miniconda3/bin/activate
+conda activate testbed
+echo "Current environment: $CONDA_DEFAULT_ENV"
+python -m pip install -e .[test] --verbose
+git config --global user.email setup@swebench.config
+git config --global user.name SWE-bench
+git commit --allow-empty -am SWE-bench
+
+2026-05-22 04:19:21,825 - INFO - Building docker image sweb.eval.arm64.astropy__astropy-8872:latest in logs/build_images/instances/sweb.eval.arm64.astropy__astropy-8872__latest with platform linux/arm64/v8
+2026-05-22 04:19:21,829 - INFO - Step 1/5 : FROM --platform=linux/arm64/v8 sweb.env.py.arm64.428468730904ff6b4232aa:latest
+2026-05-22 04:19:21,829 - INFO - 
+2026-05-22 04:19:21,830 - INFO - ---> 45308739d748
+2026-05-22 04:19:21,830 - INFO - Step 2/5 : COPY ./setup_repo.sh /root/
+2026-05-22 04:19:21,830 - INFO - 
+2026-05-22 04:19:21,847 - INFO - ---> 16f29762e331
+2026-05-22 04:19:21,847 - INFO - Step 3/5 : RUN sed -i -e 's/\r$//' /root/setup_repo.sh
+2026-05-22 04:19:21,847 - INFO - 
+2026-05-22 04:19:21,856 - INFO - ---> Running in 4506e6fab0bf
+2026-05-22 04:19:22,038 - INFO - ---> Removed intermediate container 4506e6fab0bf
+2026-05-22 04:19:22,038 - INFO - ---> d11bb88320a3
+2026-05-22 04:19:22,039 - INFO - Step 4/5 : RUN /bin/bash /root/setup_repo.sh
+2026-05-22 04:19:22,039 - INFO - 
+2026-05-22 04:19:22,050 - INFO - ---> Running in 60faafcc6286
+2026-05-22 04:19:22,129 - INFO - + git clone -o origin --single-branch https://github.com/astropy/astropy /testbed
+2026-05-22 04:19:22,130 - INFO - Cloning into '/testbed'...
+2026-05-22 04:19:34,234 - INFO - + chmod -R 777 /testbed
+2026-05-22 04:19:34,244 - INFO - + cd /testbed
++ git reset --hard b750a0e6ee76fb6b8a099a4d16ec51977be46bf6
+2026-05-22 04:19:34,405 - INFO - HEAD is now at b750a0e6ee Merge pull request #8831 from lglattly/copy-edit-cosmology
+2026-05-22 04:19:34,409 - INFO - + git remote remove origin
+2026-05-22 04:19:34,411 - INFO - ++ git show -s --format=%ci b750a0e6ee76fb6b8a099a4d16ec51977be46bf6
+2026-05-22 04:19:34,414 - INFO - + TARGET_TIMESTAMP='2019-06-19 14:28:44 -0400'
+2026-05-22 04:19:34,415 - INFO - + git tag -l
+2026-05-22 04:19:34,415 - INFO - + read tag
+2026-05-22 04:19:34,416 - INFO - ++ git rev-list -n 1 v0.1
+2026-05-22 04:19:34,418 - INFO - + TAG_COMMIT=9847aa1412ef9ac337e7a2e8d998161d81fc4157
+2026-05-22 04:19:34,418 - INFO - ++ git show -s --format=%ci 9847aa1412ef9ac337e7a2e8d998161d81fc4157
+2026-05-22 04:19:34,419 - INFO - + TAG_TIME='2012-06-19 02:09:53 -0400'
++ [[ 2012-06-19 02:09:53 -0400 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,419 - INFO - ++ git rev-list -n 1 v0.2
+2026-05-22 04:19:34,421 - INFO - + TAG_COMMIT=c416453c5984d04b03d5f8e4dfd13de966968850
+2026-05-22 04:19:34,421 - INFO - ++ git show -s --format=%ci c416453c5984d04b03d5f8e4dfd13de966968850
+2026-05-22 04:19:34,422 - INFO - + TAG_TIME='2013-02-19 17:26:48 -0500'
++ [[ 2013-02-19 17:26:48 -0500 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,422 - INFO - ++ git rev-list -n 1 v0.2b1
+2026-05-22 04:19:34,424 - INFO - + TAG_COMMIT=3633ac14240d17151b5ff373eb6c1a5c4330329e
+2026-05-22 04:19:34,424 - INFO - ++ git show -s --format=%ci 3633ac14240d17151b5ff373eb6c1a5c4330329e
+2026-05-22 04:19:34,425 - INFO - + TAG_TIME='2012-12-24 15:42:12 -0500'
++ [[ 2012-12-24 15:42:12 -0500 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,426 - INFO - ++ git rev-list -n 1 v0.2b2
+2026-05-22 04:19:34,427 - INFO - + TAG_COMMIT=f5167da0db750942aaf07983ac45300d7d2044b1
+2026-05-22 04:19:34,428 - INFO - ++ git show -s --format=%ci f5167da0db750942aaf07983ac45300d7d2044b1
+2026-05-22 04:19:34,429 - INFO - + TAG_TIME='2013-01-29 20:08:31 -0500'
++ [[ 2013-01-29 20:08:31 -0500 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,429 - INFO - ++ git rev-list -n 1 v0.2rc1
+2026-05-22 04:19:34,431 - INFO - + TAG_COMMIT=464deeac8b4ccda25403d10107116aee9b72175f
+2026-05-22 04:19:34,431 - INFO - ++ git show -s --format=%ci 464deeac8b4ccda25403d10107116aee9b72175f
+2026-05-22 04:19:34,433 - INFO - + TAG_TIME='2013-02-13 12:22:31 -0500'
++ [[ 2013-02-13 12:22:31 -0500 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,433 - INFO - ++ git rev-list -n 1 v0.3b1
+2026-05-22 04:19:34,435 - INFO - + TAG_COMMIT=b48aa13593647e75e09dd80fac9a921be07e1a30
+2026-05-22 04:19:34,435 - INFO - ++ git show -s --format=%ci b48aa13593647e75e09dd80fac9a921be07e1a30
+2026-05-22 04:19:34,437 - INFO - + TAG_TIME='2013-11-04 00:19:45 -0500'
++ [[ 2013-11-04 00:19:45 -0500 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,437 - INFO - ++ git rev-list -n 1 v0.3rc1
+2026-05-22 04:19:34,437 - INFO - + TAG_COMMIT=40a010c79bbf355f50c62d5b719c1d1dcc2eaaf9
+2026-05-22 04:19:34,438 - INFO - ++ git show -s --format=%ci 40a010c79bbf355f50c62d5b719c1d1dcc2eaaf9
+2026-05-22 04:19:34,439 - INFO - + TAG_TIME='2013-11-13 19:17:54 -0500'
++ [[ 2013-11-13 19:17:54 -0500 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,439 - INFO - ++ git rev-list -n 1 v0.4
+2026-05-22 04:19:34,440 - INFO - + TAG_COMMIT=15750909a2393c7c289fdc244b2e042bfd52b493
+2026-05-22 04:19:34,440 - INFO - ++ git show -s --format=%ci 15750909a2393c7c289fdc244b2e042bfd52b493
+2026-05-22 04:19:34,441 - INFO - + TAG_TIME='2014-07-16 12:12:09 -0400'
++ [[ 2014-07-16 12:12:09 -0400 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,442 - INFO - ++ git rev-list -n 1 v0.4rc1
+2026-05-22 04:19:34,444 - INFO - + TAG_COMMIT=83b72b64933dc9b0d46ab63834142afa78722cf7
+2026-05-22 04:19:34,444 - INFO - ++ git show -s --format=%ci 83b72b64933dc9b0d46ab63834142afa78722cf7
+2026-05-22 04:19:34,445 - INFO - + TAG_TIME='2014-07-01 12:58:32 -0400'
++ [[ 2014-07-01 12:58:32 -0400 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,446 - INFO - ++ git rev-list -n 1 v0.4rc2
+2026-05-22 04:19:34,447 - INFO - + TAG_COMMIT=9431d6e860761329169cc6dc1f30b51aca2342bd
+2026-05-22 04:19:34,447 - INFO - ++ git show -s --format=%ci 9431d6e860761329169cc6dc1f30b51aca2342bd
+2026-05-22 04:19:34,448 - INFO - + TAG_TIME='2014-07-12 10:46:33 -0400'
++ [[ 2014-07-12 10:46:33 -0400 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,449 - INFO - ++ git rev-list -n 1 v1.0rc1
+2026-05-22 04:19:34,450 - INFO - + TAG_COMMIT=d0548e3964464853083fd1ba8ae2b99056924368
+2026-05-22 04:19:34,450 - INFO - ++ git show -s --format=%ci d0548e3964464853083fd1ba8ae2b99056924368
+2026-05-22 04:19:34,451 - INFO - + TAG_TIME='2015-01-27 16:22:59 -0500'
++ [[ 2015-01-27 16:22:59 -0500 > 2019-06-19 14:28:44 -0400 ]]
++ read tag
+2026-05-22 04:19:34,451 - INFO - ++ git rev-list -n 1 v4.1.dev
+2026-05-22 04:19:34,452 - INFO - + TAG_COMMIT=01b5fab9a49a378a0372a9102646ef512a043d1b
+2026-05-22 04:19:34,452 - INFO - ++ git show -s --format=%ci 01b5fab9a49a378a0372a9102646ef512a043d1b
+2026-05-22 04:19:34,453 - INFO - + TAG_TIME='2019-11-10 16:26:14 -0500'
++ [[ 2019-11-10 16:26:14 -0500 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v4.1.dev
+2026-05-22 04:19:34,454 - INFO - Deleted tag 'v4.1.dev' (was 1aded7f6b1)
+2026-05-22 04:19:34,454 - INFO - + read tag
+2026-05-22 04:19:34,454 - INFO - ++ git rev-list -n 1 v4.2.dev
+2026-05-22 04:19:34,456 - INFO - + TAG_COMMIT=e85064210d094d722e4ecb415884b967322d8cd6
+2026-05-22 04:19:34,456 - INFO - ++ git show -s --format=%ci e85064210d094d722e4ecb415884b967322d8cd6
+2026-05-22 04:19:34,458 - INFO - + TAG_TIME='2020-05-04 21:49:12 -0700'
++ [[ 2020-05-04 21:49:12 -0700 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v4.2.dev
+2026-05-22 04:19:34,460 - INFO - Deleted tag 'v4.2.dev' (was d4ef6ce69a)
+2026-05-22 04:19:34,460 - INFO - + read tag
+2026-05-22 04:19:34,460 - INFO - ++ git rev-list -n 1 v4.3.dev
+2026-05-22 04:19:34,461 - INFO - + TAG_COMMIT=13b473482b015417b06525056e4b3e9b715b76af
+2026-05-22 04:19:34,461 - INFO - ++ git show -s --format=%ci 13b473482b015417b06525056e4b3e9b715b76af
+2026-05-22 04:19:34,463 - INFO - + TAG_TIME='2020-10-26 19:58:43 -0700'
++ [[ 2020-10-26 19:58:43 -0700 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v4.3.dev
+2026-05-22 04:19:34,464 - INFO - + read tag
+2026-05-22 04:19:34,464 - INFO - Deleted tag 'v4.3.dev' (was c2d2398877)
+2026-05-22 04:19:34,464 - INFO - ++ git rev-list -n 1 v5.0.dev
+2026-05-22 04:19:34,465 - INFO - + TAG_COMMIT=4cc5a0a04109759c798df7ec3234e52a04afe684
+2026-05-22 04:19:34,465 - INFO - ++ git show -s --format=%ci 4cc5a0a04109759c798df7ec3234e52a04afe684
+2026-05-22 04:19:34,467 - INFO - + TAG_TIME='2021-05-03 10:43:37 -0400'
++ [[ 2021-05-03 10:43:37 -0400 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v5.0.dev
+2026-05-22 04:19:34,468 - INFO - Deleted tag 'v5.0.dev' (was c992101d0c)
+2026-05-22 04:19:34,468 - INFO - + read tag
+2026-05-22 04:19:34,468 - INFO - ++ git rev-list -n 1 v5.1.dev
+2026-05-22 04:19:34,469 - INFO - + TAG_COMMIT=2885b2d65a080f422ee8e6e99e2e2026e3c8bbeb
+2026-05-22 04:19:34,469 - INFO - ++ git show -s --format=%ci 2885b2d65a080f422ee8e6e99e2e2026e3c8bbeb
+2026-05-22 04:19:34,472 - INFO - + TAG_TIME='2021-10-30 22:24:31 +0100'
++ [[ 2021-10-30 22:24:31 +0100 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v5.1.dev
+2026-05-22 04:19:34,474 - INFO - Deleted tag 'v5.1.dev' (was af2ae495ff)
+2026-05-22 04:19:34,474 - INFO - + read tag
+2026-05-22 04:19:34,474 - INFO - ++ git rev-list -n 1 v5.2.dev
+2026-05-22 04:19:34,475 - INFO - + TAG_COMMIT=f81ba85db66a37617cd88d3e6fd91b13c0945fe8
+2026-05-22 04:19:34,475 - INFO - ++ git show -s --format=%ci f81ba85db66a37617cd88d3e6fd91b13c0945fe8
+2026-05-22 04:19:34,476 - INFO - + TAG_TIME='2022-04-23 23:30:37 +0200'
++ [[ 2022-04-23 23:30:37 +0200 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v5.2.dev
+2026-05-22 04:19:34,478 - INFO - Deleted tag 'v5.2.dev' (was b9fff89c89)
+2026-05-22 04:19:34,478 - INFO - + read tag
+2026-05-22 04:19:34,479 - INFO - ++ git rev-list -n 1 v5.3.dev
+2026-05-22 04:19:34,480 - INFO - + TAG_COMMIT=628960658895340c304fc3b768835998b520c996
+2026-05-22 04:19:34,480 - INFO - ++ git show -s --format=%ci 628960658895340c304fc3b768835998b520c996
+2026-05-22 04:19:34,482 - INFO - + TAG_TIME='2022-11-16 20:57:22 +0000'
++ [[ 2022-11-16 20:57:22 +0000 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v5.3.dev
+2026-05-22 04:19:34,484 - INFO - Deleted tag 'v5.3.dev' (was a36d51a2e7)
+2026-05-22 04:19:34,484 - INFO - + read tag
+2026-05-22 04:19:34,484 - INFO - ++ git rev-list -n 1 v6.0.dev
+2026-05-22 04:19:34,486 - INFO - + TAG_COMMIT=11a2b9133c6bf387853ae15ba8fb5f4e5f6867fb
+2026-05-22 04:19:34,486 - INFO - ++ git show -s --format=%ci 11a2b9133c6bf387853ae15ba8fb5f4e5f6867fb
+2026-05-22 04:19:34,487 - INFO - + TAG_TIME='2023-04-22 22:42:05 +0200'
++ [[ 2023-04-22 22:42:05 +0200 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v6.0.dev
+2026-05-22 04:19:34,489 - INFO - Deleted tag 'v6.0.dev' (was 30e46ae1f2)
+2026-05-22 04:19:34,489 - INFO - + read tag
+2026-05-22 04:19:34,490 - INFO - ++ git rev-list -n 1 v6.1.dev
+2026-05-22 04:19:34,491 - INFO - + TAG_COMMIT=e5d8157fb52ccd36e6f631ec9ef6f2e806f7cd20
+2026-05-22 04:19:34,491 - INFO - ++ git show -s --format=%ci e5d8157fb52ccd36e6f631ec9ef6f2e806f7cd20
+2026-05-22 04:19:34,493 - INFO - + TAG_TIME='2023-10-28 23:44:09 +0200'
++ [[ 2023-10-28 23:44:09 +0200 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v6.1.dev
+2026-05-22 04:19:34,495 - INFO - Deleted tag 'v6.1.dev' (was 957ea6577c)
+2026-05-22 04:19:34,495 - INFO - + read tag
+2026-05-22 04:19:34,495 - INFO - ++ git rev-list -n 1 v7.0.0.dev
+2026-05-22 04:19:34,496 - INFO - + TAG_COMMIT=10eeb885d49b9f1c897923853aa3b65b3028d1cc
+2026-05-22 04:19:34,497 - INFO - ++ git show -s --format=%ci 10eeb885d49b9f1c897923853aa3b65b3028d1cc
+2026-05-22 04:19:34,498 - INFO - + TAG_TIME='2024-04-04 11:44:03 +0100'
++ [[ 2024-04-04 11:44:03 +0100 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v7.0.0.dev
+2026-05-22 04:19:34,500 - INFO - Deleted tag 'v7.0.0.dev' (was 0f16d45936)
+2026-05-22 04:19:34,500 - INFO - + read tag
+2026-05-22 04:19:34,501 - INFO - ++ git rev-list -n 1 v7.1.dev
+2026-05-22 04:19:34,502 - INFO - + TAG_COMMIT=9f55ef83be0f5059c22094df517f24722e9f3989
+2026-05-22 04:19:34,503 - INFO - ++ git show -s --format=%ci 9f55ef83be0f5059c22094df517f24722e9f3989
+2026-05-22 04:19:34,504 - INFO - + TAG_TIME='2024-10-26 22:32:11 +0200'
++ [[ 2024-10-26 22:32:11 +0200 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v7.1.dev
+2026-05-22 04:19:34,506 - INFO - Deleted tag 'v7.1.dev' (was 8265560e73)
+2026-05-22 04:19:34,506 - INFO - + read tag
+2026-05-22 04:19:34,507 - INFO - ++ git rev-list -n 1 v7.2.dev
+2026-05-22 04:19:34,508 - INFO - + TAG_COMMIT=be83a620a678836b40f1220d395e818f60d92741
+2026-05-22 04:19:34,509 - INFO - ++ git show -s --format=%ci be83a620a678836b40f1220d395e818f60d92741
+2026-05-22 04:19:34,511 - INFO - + TAG_TIME='2025-04-28 09:51:04 +0100'
++ [[ 2025-04-28 09:51:04 +0100 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v7.2.dev
+2026-05-22 04:19:34,512 - INFO - Deleted tag 'v7.2.dev' (was 3fdb57f35f)
+2026-05-22 04:19:34,512 - INFO - + read tag
+2026-05-22 04:19:34,512 - INFO - ++ git rev-list -n 1 v8.0.0.dev
+2026-05-22 04:19:34,514 - INFO - + TAG_COMMIT=cbd282e47c399b60632063979d6a2ac059014bb8
+2026-05-22 04:19:34,514 - INFO - ++ git show -s --format=%ci cbd282e47c399b60632063979d6a2ac059014bb8
+2026-05-22 04:19:34,516 - INFO - + TAG_TIME='2025-11-03 11:09:29 +0000'
++ [[ 2025-11-03 11:09:29 +0000 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v8.0.0.dev
+2026-05-22 04:19:34,518 - INFO - Deleted tag 'v8.0.0.dev' (was 09cf84e0d6)
+2026-05-22 04:19:34,518 - INFO - + read tag
+2026-05-22 04:19:34,518 - INFO - ++ git rev-list -n 1 v8.1.0.dev
+2026-05-22 04:19:34,520 - INFO - + TAG_COMMIT=8697e1025b1e5c8b8e58b076aa4686114a9f4856
+2026-05-22 04:19:34,520 - INFO - ++ git show -s --format=%ci 8697e1025b1e5c8b8e58b076aa4686114a9f4856
+2026-05-22 04:19:34,522 - INFO - + TAG_TIME='2026-05-05 23:47:34 +0100'
++ [[ 2026-05-05 23:47:34 +0100 > 2019-06-19 14:28:44 -0400 ]]
++ git tag -d v8.1.0.dev
+2026-05-22 04:19:34,523 - INFO - Deleted tag 'v8.1.0.dev' (was 57b76f6ea6)
+2026-05-22 04:19:34,523 - INFO - + read tag
+2026-05-22 04:19:34,523 - INFO - + git reflog expire --expire=now --all
+2026-05-22 04:19:34,524 - INFO - + git gc --prune=now --aggressive
+2026-05-22 04:19:40,584 - INFO - ++ date -d '2019-06-19 14:28:44 -0400 + 1 second' '+%Y-%m-%d %H:%M:%S'
+2026-05-22 04:19:40,584 - INFO - + AFTER_TIMESTAMP='2019-06-19 18:28:45'
+2026-05-22 04:19:40,585 - INFO - ++ git log --oneline --all '--since=2019-06-19 18:28:45'
+2026-05-22 04:19:40,585 - INFO - ++ wc -l
+2026-05-22 04:19:40,588 - INFO - + COMMIT_COUNT=0
++ '[' 0 -eq 0 ']'
++ source /opt/miniconda3/bin/activate
+++ _CONDA_ROOT=/opt/miniconda3
+++ . /opt/miniconda3/etc/profile.d/conda.sh
++++ export CONDA_EXE=/opt/miniconda3/bin/conda
++++ CONDA_EXE=/opt/miniconda3/bin/conda
++++ export _CE_M=
++++ _CE_M=
++++ export _CE_CONDA=
++++ _CE_CONDA=
++++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+2026-05-22 04:19:40,588 - INFO - +++ '[' -z '' ']'
++++ export CONDA_SHLVL=0
++++ CONDA_SHLVL=0
++++ '[' -n '' ']'
+2026-05-22 04:19:40,588 - INFO - +++++ dirname /opt/miniconda3/bin/conda
+2026-05-22 04:19:40,590 - INFO - ++++ dirname /opt/miniconda3/bin
+2026-05-22 04:19:40,590 - INFO - +++ PATH=/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ export PATH
++++ '[' -z '' ']'
++++ PS1=
+++ conda activate
+++ local cmd=activate
+++ case "$cmd" in
+++ __conda_activate activate
+++ '[' -n '' ']'
+++ local ask_conda
+2026-05-22 04:19:40,591 - INFO - +++ PS1=
++++ __conda_exe shell.posix activate
+2026-05-22 04:19:40,591 - INFO - +++ /opt/miniconda3/bin/conda shell.posix activate
+2026-05-22 04:19:40,646 - INFO - ++ ask_conda='PS1='\''(base) '\''
+export PATH='\''/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3'\''
+export CONDA_SHLVL='\''1'\''
+export CONDA_DEFAULT_ENV='\''base'\''
+export CONDA_PROMPT_MODIFIER='\''(base) '\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
+++ eval 'PS1='\''(base) '\''
+export PATH='\''/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3'\''
+export CONDA_SHLVL='\''1'\''
+export CONDA_DEFAULT_ENV='\''base'\''
+export CONDA_PROMPT_MODIFIER='\''(base) '\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
++++ PS1='(base) '
++++ export PATH=/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ PATH=/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ export CONDA_PREFIX=/opt/miniconda3
++++ CONDA_PREFIX=/opt/miniconda3
++++ export CONDA_SHLVL=1
++++ CONDA_SHLVL=1
++++ export CONDA_DEFAULT_ENV=base
++++ CONDA_DEFAULT_ENV=base
++++ export 'CONDA_PROMPT_MODIFIER=(base) '
++++ CONDA_PROMPT_MODIFIER='(base) '
++++ export CONDA_EXE=/opt/miniconda3/bin/conda
++++ CONDA_EXE=/opt/miniconda3/bin/conda
++++ export _CE_M=
++++ _CE_M=
++++ export _CE_CONDA=
++++ _CE_CONDA=
++++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+++ __conda_hashr
+++ '[' -n '' ']'
+++ '[' -n '' ']'
+++ hash -r
++ conda activate testbed
++ local cmd=activate
++ case "$cmd" in
++ __conda_activate activate testbed
++ '[' -n '' ']'
++ local ask_conda
+2026-05-22 04:19:40,646 - INFO - ++ PS1='(base) '
+++ __conda_exe shell.posix activate testbed
+2026-05-22 04:19:40,647 - INFO - ++ /opt/miniconda3/bin/conda shell.posix activate testbed
+2026-05-22 04:19:40,716 - INFO - Current environment: testbed
+2026-05-22 04:19:40,716 - INFO - + ask_conda='PS1='\''(testbed) '\''
+export PATH='\''/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3/envs/testbed'\''
+export CONDA_SHLVL='\''2'\''
+export CONDA_DEFAULT_ENV='\''testbed'\''
+export CONDA_PROMPT_MODIFIER='\''(testbed) '\''
+export CONDA_PREFIX_1='\''/opt/miniconda3'\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
++ eval 'PS1='\''(testbed) '\''
+export PATH='\''/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3/envs/testbed'\''
+export CONDA_SHLVL='\''2'\''
+export CONDA_DEFAULT_ENV='\''testbed'\''
+export CONDA_PROMPT_MODIFIER='\''(testbed) '\''
+export CONDA_PREFIX_1='\''/opt/miniconda3'\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
+++ PS1='(testbed) '
+++ export PATH=/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ PATH=/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ export CONDA_PREFIX=/opt/miniconda3/envs/testbed
+++ CONDA_PREFIX=/opt/miniconda3/envs/testbed
+++ export CONDA_SHLVL=2
+++ CONDA_SHLVL=2
+++ export CONDA_DEFAULT_ENV=testbed
+++ CONDA_DEFAULT_ENV=testbed
+++ export 'CONDA_PROMPT_MODIFIER=(testbed) '
+++ CONDA_PROMPT_MODIFIER='(testbed) '
+++ export CONDA_PREFIX_1=/opt/miniconda3
+++ CONDA_PREFIX_1=/opt/miniconda3
+++ export CONDA_EXE=/opt/miniconda3/bin/conda
+++ CONDA_EXE=/opt/miniconda3/bin/conda
+++ export _CE_M=
+++ _CE_M=
+++ export _CE_CONDA=
+++ _CE_CONDA=
+++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++ __conda_hashr
++ '[' -n '' ']'
++ '[' -n '' ']'
++ hash -r
++ echo 'Current environment: testbed'
++ python -m pip install -e '.[test]' --verbose
+2026-05-22 04:19:40,830 - INFO - Using pip 26.0.1 from /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/pip (python 3.9)
+2026-05-22 04:19:40,851 - INFO - Obtaining file:///testbed
+2026-05-22 04:19:40,852 - INFO - Installing build dependencies: started
+2026-05-22 04:19:40,853 - INFO - Running command installing build dependencies
+2026-05-22 04:19:40,967 - INFO - Using pip 26.0.1 from /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/pip (python 3.9)
+2026-05-22 04:19:41,157 - INFO - Collecting setuptools>=40.8.0
+    Obtaining dependency information for setuptools>=40.8.0 from https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl.metadata
+2026-05-22 04:19:41,158 - INFO - Using cached setuptools-82.0.1-py3-none-any.whl.metadata (6.5 kB)
+2026-05-22 04:19:41,164 - INFO - Using cached setuptools-82.0.1-py3-none-any.whl (1.0 MB)
+2026-05-22 04:19:41,183 - INFO - Installing collected packages: setuptools
+2026-05-22 04:19:41,214 - INFO - Successfully installed setuptools-82.0.1
+  WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+2026-05-22 04:19:41,241 - INFO - Installing build dependencies: finished with status 'done'
+2026-05-22 04:19:41,242 - INFO - Checking if build backend supports build_editable: started
+2026-05-22 04:19:41,242 - INFO - Running command Checking if build backend supports build_editable
+2026-05-22 04:19:41,353 - INFO - Checking if build backend supports build_editable: finished with status 'done'
+2026-05-22 04:19:41,355 - INFO - Running command Getting requirements to build editable
+2026-05-22 04:19:41,355 - INFO - Getting requirements to build editable: started
+2026-05-22 04:19:41,407 - INFO - Traceback (most recent call last):
+    File "/opt/miniconda3/envs/testbed/lib/python3.9/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+2026-05-22 04:19:41,407 - INFO - main()
+2026-05-22 04:19:41,407 - INFO - File "/opt/miniconda3/envs/testbed/lib/python3.9/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+2026-05-22 04:19:41,407 - INFO - json_out["return_val"] = hook(**hook_input["kwargs"])
+2026-05-22 04:19:41,408 - INFO - File "/opt/miniconda3/envs/testbed/lib/python3.9/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 157, in get_requires_for_build_editable
+2026-05-22 04:19:41,408 - INFO - return hook(config_settings)
+2026-05-22 04:19:41,408 - INFO - File "/tmp/pip-build-env-stvgua5d/overlay/lib/python3.9/site-packages/setuptools/build_meta.py", line 481, in get_requires_for_build_editable
+2026-05-22 04:19:41,408 - INFO - return self.get_requires_for_build_wheel(config_settings)
+2026-05-22 04:19:41,408 - INFO - File "/tmp/pip-build-env-stvgua5d/overlay/lib/python3.9/site-packages/setuptools/build_meta.py", line 333, in get_requires_for_build_wheel
+2026-05-22 04:19:41,408 - INFO - return self._get_build_requires(config_settings, requirements=[])
+2026-05-22 04:19:41,408 - INFO - File "/tmp/pip-build-env-stvgua5d/overlay/lib/python3.9/site-packages/setuptools/build_meta.py", line 301, in _get_build_requires
+2026-05-22 04:19:41,408 - INFO - self.run_setup()
+2026-05-22 04:19:41,408 - INFO - File "/tmp/pip-build-env-stvgua5d/overlay/lib/python3.9/site-packages/setuptools/build_meta.py", line 520, in run_setup
+2026-05-22 04:19:41,408 - INFO - super().run_setup(setup_script=setup_script)
+2026-05-22 04:19:41,408 - INFO - File "/tmp/pip-build-env-stvgua5d/overlay/lib/python3.9/site-packages/setuptools/build_meta.py", line 317, in run_setup
+2026-05-22 04:19:41,408 - INFO - exec(code, locals())
+2026-05-22 04:19:41,408 - INFO - File "<string>", line 12, in <module>
+2026-05-22 04:19:41,408 - INFO - File "/testbed/ah_bootstrap.py", line 53, in <module>
+2026-05-22 04:19:41,408 - INFO - import pkg_resources
+2026-05-22 04:19:41,409 - INFO - ModuleNotFoundError: No module named 'pkg_resources'
+2026-05-22 04:19:41,419 - INFO - error: subprocess-exited-with-error
+  
+  × Getting requirements to build editable did not run successfully.
+  │ exit code: 1
+  ╰─> No available output.
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+2026-05-22 04:19:41,419 - INFO - full command: /opt/miniconda3/envs/testbed/bin/python /opt/miniconda3/envs/testbed/lib/python3.9/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py get_requires_for_build_editable /tmp/tmpw7qxhwy_
+2026-05-22 04:19:41,419 - INFO - cwd: /testbed
+2026-05-22 04:19:41,419 - INFO - Getting requirements to build editable: finished with status 'error'
+2026-05-22 04:19:41,421 - INFO - ERROR: Failed to build 'file:///testbed' when getting requirements to build editable
+2026-05-22 04:19:41,611 - INFO - ---> Removed intermediate container 60faafcc6286
+2026-05-22 04:19:41,611 - ERROR - Error: The command '/bin/sh -c /bin/bash /root/setup_repo.sh' returned a non-zero code: 1
+2026-05-22 04:19:41,611 - ERROR - docker.errors.BuildError during sweb.eval.arm64.astropy__astropy-8872:latest: The command '/bin/sh -c /bin/bash /root/setup_repo.sh' returned a non-zero code: 1
