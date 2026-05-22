@@ -1,0 +1,18 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-22T10:12:17.491920Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "5000", expected usize at line 1 column 85
+2026-05-22T10:17:01.943741Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "81358", expected i32 at line 1 column 35
+2026-05-22T10:17:08.871832Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "81358", expected i32 at line 1 column 22
+2026-05-22T10:17:14.626622Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "81358", expected i32 at line 1 column 22
+2026-05-22T10:17:19.810873Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "81358", expected i32 at line 1 column 22
+2026-05-22T10:17:24.960520Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "81358", expected i32 at line 1 column 22
+2026-05-22T10:17:32.201593Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 137
+2026-05-22T10:17:50.943748Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "78204", expected i32 at line 1 column 22
+2026-05-22T10:17:53.990586Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "78204", expected i32 at line 1 column 22
+2026-05-22T10:17:57.764667Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "78204", expected i32 at line 1 column 22
+2026-05-22T10:18:05.567448Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 125
+2026-05-22T10:18:10.656167Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "120000", expected u64 at line 1 column 125
+2026-05-22T10:21:17.307489Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "60000", expected u64 at line 1 column 124
+2026-05-22T10:24:26.269865Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "33500", expected i32 at line 1 column 22
+2026-05-22T10:24:32.893227Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "33500", expected i32 at line 1 column 22
+2026-05-22T10:27:07.442498Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "81678", expected i32 at line 1 column 22
