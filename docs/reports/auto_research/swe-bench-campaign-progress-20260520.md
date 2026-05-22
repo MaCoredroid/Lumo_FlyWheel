@@ -141,7 +141,33 @@ emulation path is the only way to recover these cells.
 | Instance | Repo | Verdict | Failure mode | Codex s | Eval s | Patch B | Namespace | Notes |
 |---|---|---|---|---:|---:|---:|---|---|
 | `astropy__astropy-14365` | astropy/astropy | failed | tests_failed | 1758.9 | 93.5 | 617 | none (local build) | self-stopped (rc=1) ~29 min; 617B patch applies but tests fail |
-| `django__django-10097` | django/django | crash | infra_error | 1800.2 | 42.8 | 596 | none (local build attempt) | **ARM64 UNSUPPORTED** (8th). Needs `python=3.5*` — no conda linux-aarch64 build. First non-scientific-repo carve-out; confirms the issue is Python-version-driven. |
+| `django__django-10097` | django/django | crash | infra_error | 1800.2 | 42.8 | 596 | none (local build attempt) | **ARM64 UNSUPPORTED** (8th). Needs `python=3.5*` — no conda linux-aarch64 build. First non-scientific-repo carve-out; confirms the issue is Python-version-driven. **RECOVERED via x86 offload -> failed.** |
+
+## ARM64 carve-out RESOLVED — x86 eval-offload (2026-05-22)
+
+The carve-out is fixed by offloading the **eval step** to a native x86_64
+box (alienware) over SSH. Agent runs on the DGX Spark (Q36-A vLLM); eval
+runs on x86 where every instance's conda env builds. Infra: scripts/
+swe_eval_x86_worker.py (remote) + scripts/swe_eval_offload.py (driver) +
+orchestrator `--eval-host`. Network-tolerant (backoff retries, keepalives,
+network-issue log), docker relocated to alienware /home (85 GB).
+
+**Validity (answers the contamination question): 17/17 buildable instances
+agree between arm64-native and x86 eval — 0 flips.** The arm64 verdicts we
+already had were correct. The 6 arm64-crashes were *blocked*, not
+contaminating; all recovered on x86 (2 -> resolved, 4 -> failed). The 23
+on-disk instances are now x86-authoritative single-arch; runner_metadata
+keeps eval_report_arm64 for the comparison.
+
+From 2026-05-22T07:19Z the resumed Verified sweep runs eval on x86 for
+every fresh instance (single-arch, no carve-outs, and the DGX eval-phase
+memory spikes are gone since eval is remote).
+
+### Fresh instances — x86 eval-offload (resumed sweep)
+
+| Instance | Repo | Verdict | Failure mode | Codex s | Eval s | Patch B | Eval host | Notes |
+|---|---|---|---|---:|---:|---:|---|---|
+| `django__django-10554` | django/django | failed | patch_apply_failed | 1800.1 | 1.1 | 0 | alienware (x86) | first resumed instance; agent hit 30-min wall, empty patch; eval offloaded + fast-pathed (arch=x86_64 confirmed) |
 | `astropy__astropy-14369` | astropy/astropy | failed | patch_apply_failed | 1481.7 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 24.7 min, no patch emitted |
 | `astropy__astropy-14508` | astropy/astropy | resolved | tests_passed | 1800.2 | 91.9 | 2830 | none (local build) | (was Tier 0's resolved instance; consistent re-run). hit wall; 2830B patch passes |
 | `astropy__astropy-14539` | astropy/astropy | failed | patch_apply_failed | 847.5 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 14 min, no patch emitted |
