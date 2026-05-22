@@ -123,11 +123,25 @@ counted in the campaign closeout's pass-rate denominator-adjustment section.
 Net post-fix change on astropy re-runs so far: **+1 resolved** (13236 flip).
 Astropy post-fix sweep standing: 3/5 resolved (vs pre-fix 2/5).
 
+### KEY FINDING: ARM64 carve-out is Python-version-driven, not repo-driven
+
+`django-10097` (an old django needing `python=3.5*`) crashed with the same
+conda PackagesNotFoundError. **The arm64 build failures are not specific to
+scientific repos — they affect ANY SWE-Bench instance whose environment pins
+Python ≤3.5/3.6 or old deps that conda-forge never built for linux-aarch64.**
+SWE-Bench Verified spans ~2018-2023; the older cohort (django 2.x, astropy
+3.x, etc.) will carve out broadly on this aarch64 host. Modern instances
+(python ≥3.8) build clean. Expect the full-benchmark arm64 carve-out to be
+material (rough early estimate 20-35%); the closeout MUST report an
+arm64-evaluable denominator separately from the headline. An x86-offload or
+emulation path is the only way to recover these cells.
+
 ### Fresh instances (never run pre-fix)
 
 | Instance | Repo | Verdict | Failure mode | Codex s | Eval s | Patch B | Namespace | Notes |
 |---|---|---|---|---:|---:|---:|---|---|
 | `astropy__astropy-14365` | astropy/astropy | failed | tests_failed | 1758.9 | 93.5 | 617 | none (local build) | self-stopped (rc=1) ~29 min; 617B patch applies but tests fail |
+| `django__django-10097` | django/django | crash | infra_error | 1800.2 | 42.8 | 596 | none (local build attempt) | **ARM64 UNSUPPORTED** (8th). Needs `python=3.5*` — no conda linux-aarch64 build. First non-scientific-repo carve-out; confirms the issue is Python-version-driven. |
 | `astropy__astropy-14369` | astropy/astropy | failed | patch_apply_failed | 1481.7 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 24.7 min, no patch emitted |
 | `astropy__astropy-14508` | astropy/astropy | resolved | tests_passed | 1800.2 | 91.9 | 2830 | none (local build) | (was Tier 0's resolved instance; consistent re-run). hit wall; 2830B patch passes |
 | `astropy__astropy-14539` | astropy/astropy | failed | patch_apply_failed | 847.5 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 14 min, no patch emitted |

@@ -1,0 +1,167 @@
+2026-05-22 04:49:49,777 - INFO - Building image sweb.env.py.arm64.56a3bf2c8561bd901139b0:latest
+Using dockerfile:
+FROM --platform=linux/arm64/v8 sweb.base.py.arm64:latest
+
+COPY ./setup_env.sh /root/
+RUN sed -i -e 's/\r$//' /root/setup_env.sh
+RUN chmod +x /root/setup_env.sh
+RUN /bin/bash -c "source ~/.bashrc && /root/setup_env.sh"
+
+WORKDIR /testbed/
+
+# Automatically activate the testbed environment
+RUN echo "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed" > /root/.bashrc
+
+Adding (1) setup scripts to image build repo
+2026-05-22 04:49:49,777 - INFO - [SETUP SCRIPT] setup_env.sh:
+#!/bin/bash
+set -euxo pipefail
+source /opt/miniconda3/bin/activate
+conda create -n testbed python=3.5 -y
+cat <<'EOF_59812759871' > $HOME/requirements.txt
+argon2-cffi >= 16.1.0
+bcrypt
+docutils
+geoip2
+jinja2 >= 2.9.2
+numpy
+Pillow != 5.4.0
+pylibmc; sys.platform != 'win32'
+python-memcached >= 1.59
+pytz
+pywatchman; sys.platform != 'win32'
+PyYAML
+selenium
+sqlparse
+tblib
+
+EOF_59812759871
+conda activate testbed && python -m pip install -r $HOME/requirements.txt
+rm $HOME/requirements.txt
+conda activate testbed
+python -m pip install setuptools
+
+2026-05-22 04:49:49,777 - INFO - Building docker image sweb.env.py.arm64.56a3bf2c8561bd901139b0:latest in logs/build_images/env/sweb.env.py.arm64.56a3bf2c8561bd901139b0__latest with platform linux/arm64/v8
+2026-05-22 04:49:49,786 - INFO - Step 1/7 : FROM --platform=linux/arm64/v8 sweb.base.py.arm64:latest
+2026-05-22 04:49:49,786 - INFO - 
+2026-05-22 04:49:49,786 - INFO - ---> 6feaebb3cd61
+2026-05-22 04:49:49,786 - INFO - Step 2/7 : COPY ./setup_env.sh /root/
+2026-05-22 04:49:49,786 - INFO - 
+2026-05-22 04:49:49,807 - INFO - ---> 4daf1cc25e4d
+2026-05-22 04:49:49,807 - INFO - Step 3/7 : RUN sed -i -e 's/\r$//' /root/setup_env.sh
+2026-05-22 04:49:49,807 - INFO - 
+2026-05-22 04:49:49,820 - INFO - ---> Running in a41ade50ccd4
+2026-05-22 04:49:50,042 - INFO - ---> Removed intermediate container a41ade50ccd4
+2026-05-22 04:49:50,042 - INFO - ---> d4573a6ac74f
+2026-05-22 04:49:50,042 - INFO - Step 4/7 : RUN chmod +x /root/setup_env.sh
+2026-05-22 04:49:50,042 - INFO - 
+2026-05-22 04:49:50,051 - INFO - ---> Running in 2bb474c34c20
+2026-05-22 04:49:50,271 - INFO - ---> Removed intermediate container 2bb474c34c20
+2026-05-22 04:49:50,271 - INFO - ---> 00cb53b83dc7
+2026-05-22 04:49:50,271 - INFO - Step 5/7 : RUN /bin/bash -c "source ~/.bashrc && /root/setup_env.sh"
+2026-05-22 04:49:50,271 - INFO - 
+2026-05-22 04:49:50,282 - INFO - ---> Running in a9777602751e
+2026-05-22 04:49:50,399 - INFO - + source /opt/miniconda3/bin/activate
+++ _CONDA_ROOT=/opt/miniconda3
+++ . /opt/miniconda3/etc/profile.d/conda.sh
++++ export CONDA_EXE=/opt/miniconda3/bin/conda
++++ CONDA_EXE=/opt/miniconda3/bin/conda
++++ export _CE_M=
++++ _CE_M=
+2026-05-22 04:49:50,399 - INFO - +++ export _CE_CONDA=
++++ _CE_CONDA=
++++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+2026-05-22 04:49:50,399 - INFO - +++ '[' -z '' ']'
++++ export CONDA_SHLVL=0
++++ CONDA_SHLVL=0
+2026-05-22 04:49:50,399 - INFO - +++ '[' -n '' ']'
+2026-05-22 04:49:50,400 - INFO - +++++ dirname /opt/miniconda3/bin/conda
+2026-05-22 04:49:50,401 - INFO - ++++ dirname /opt/miniconda3/bin
+2026-05-22 04:49:50,402 - INFO - +++ PATH=/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ export PATH
++++ '[' -z '' ']'
++++ PS1=
+2026-05-22 04:49:50,402 - INFO - ++ conda activate
+++ local cmd=activate
+2026-05-22 04:49:50,402 - INFO - ++ case "$cmd" in
+++ __conda_activate activate
+2026-05-22 04:49:50,402 - INFO - ++ '[' -n '' ']'
+++ local ask_conda
+2026-05-22 04:49:50,403 - INFO - +++ PS1=
++++ __conda_exe shell.posix activate
+2026-05-22 04:49:50,403 - INFO - +++ /opt/miniconda3/bin/conda shell.posix activate
+2026-05-22 04:49:50,492 - INFO - ++ ask_conda='PS1='\''(base) '\''
+export PATH='\''/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3'\''
+export CONDA_SHLVL='\''1'\''
+export CONDA_DEFAULT_ENV='\''base'\''
+export CONDA_PROMPT_MODIFIER='\''(base) '\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
+++ eval 'PS1='\''(base) '\''
+export PATH='\''/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3'\''
+export CONDA_SHLVL='\''1'\''
+export CONDA_DEFAULT_ENV='\''base'\''
+export CONDA_PROMPT_MODIFIER='\''(base) '\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
++++ PS1='(base) '
++++ export PATH=/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ PATH=/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ export CONDA_PREFIX=/opt/miniconda3
++++ CONDA_PREFIX=/opt/miniconda3
++++ export CONDA_SHLVL=1
++++ CONDA_SHLVL=1
++++ export CONDA_DEFAULT_ENV=base
++++ CONDA_DEFAULT_ENV=base
++++ export 'CONDA_PROMPT_MODIFIER=(base) '
++++ CONDA_PROMPT_MODIFIER='(base) '
++++ export CONDA_EXE=/opt/miniconda3/bin/conda
++++ CONDA_EXE=/opt/miniconda3/bin/conda
++++ export _CE_M=
++++ _CE_M=
++++ export _CE_CONDA=
++++ _CE_CONDA=
++++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+++ __conda_hashr
+++ '[' -n '' ']'
+++ '[' -n '' ']'
+++ hash -r
+2026-05-22 04:49:50,493 - INFO - + conda create -n testbed python=3.5 -y
++ local cmd=create
++ case "$cmd" in
++ __conda_exe create -n testbed python=3.5 -y
+2026-05-22 04:49:50,493 - INFO - + /opt/miniconda3/bin/conda create -n testbed python=3.5 -y
+2026-05-22 04:49:50,897 - INFO - Channels:
+ - defaults
+ - conda-forge
+Platform: linux-aarch64
+Collecting package metadata (repodata.json): ...working...
+2026-05-22 04:50:28,485 - INFO - done
+Solving environment: ...working...
+2026-05-22 04:50:28,673 - INFO - failed
+2026-05-22 04:50:28,673 - INFO - PackagesNotFoundError: The following packages are not available from current channels:
+
+  - python=3.5*
+
+Current channels:
+
+  - defaults
+  - https://conda.anaconda.org/conda-forge
+
+To search for alternate channels that may provide the conda package you're
+looking for, navigate to
+
+    https://anaconda.org
+
+and use the search bar at the top of the page.
+2026-05-22 04:50:29,339 - INFO - ---> Removed intermediate container a9777602751e
+2026-05-22 04:50:29,339 - ERROR - Error: The command '/bin/sh -c /bin/bash -c "source ~/.bashrc && /root/setup_env.sh"' returned a non-zero code: 1
+2026-05-22 04:50:29,339 - ERROR - docker.errors.BuildError during sweb.env.py.arm64.56a3bf2c8561bd901139b0:latest: The command '/bin/sh -c /bin/bash -c "source ~/.bashrc && /root/setup_env.sh"' returned a non-zero code: 1
