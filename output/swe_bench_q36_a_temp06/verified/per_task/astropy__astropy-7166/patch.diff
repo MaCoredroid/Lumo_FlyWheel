@@ -1,0 +1,101 @@
+diff --git a/astropy/conftest.py b/astropy/conftest.py
+deleted file mode 100644
+index 5975f3590..000000000
+--- a/astropy/conftest.py
++++ /dev/null
+@@ -1,30 +0,0 @@
+-# Licensed under a 3-clause BSD style license - see LICENSE.rst
+-"""
+-This file contains pytest configuration settings that are astropy-specific
+-(i.e.  those that would not necessarily be shared by affiliated packages
+-making use of astropy's test runner).
+-"""
+-from importlib.util import find_spec
+-
+-from astropy.tests.plugins.display import PYTEST_HEADER_MODULES
+-from astropy.tests.helper import enable_deprecations_as_exceptions
+-
+-if find_spec('asdf') is not None:
+-    pytest_plugins = ['asdf.tests.schema_tester']
+-
+-
+-enable_deprecations_as_exceptions(
+-    include_astropy_deprecations=False,
+-    # This is a workaround for the OpenSSL deprecation warning that comes from
+-    # the `requests` module. It only appears when both asdf and sphinx are
+-    # installed. This can be removed once pyopenssl 1.7.20+ is released.
+-    modules_to_ignore_on_import=['requests'])
+-
+-try:
+-    import matplotlib
+-except ImportError:
+-    pass
+-else:
+-    matplotlib.use('Agg')
+-
+-PYTEST_HEADER_MODULES['Cython'] = 'cython'
+diff --git a/astropy/extern/configobj/configobj.py b/astropy/extern/configobj/configobj.py
+index 0c02b9b7a..7bcccaf2a 100755
+--- a/astropy/extern/configobj/configobj.py
++++ b/astropy/extern/configobj/configobj.py
+@@ -594,7 +594,7 @@ class Section(dict):
+             if key not in self:
+                 self.sections.append(key)
+             dict.__setitem__(self, key, value)
+-        elif isinstance(value, collections.Mapping) and not unrepr:
++        elif isinstance(value, collections.abc.Mapping) and not unrepr:
+             # First create the new depth level,
+             # then create the section
+             if key not in self:
+@@ -801,8 +801,8 @@ class Section(dict):
+         ConfigObj({'section1': {'option1': 'False', 'subsection': {'more_options': 'False'}}})
+         """
+         for key, val in list(indict.items()):
+-            if (key in self and isinstance(self[key], collections.Mapping) and
+-                                isinstance(val, collections.Mapping)):
++            if (key in self and isinstance(self[key], collections.abc.Mapping) and
++                                isinstance(val, collections.abc.Mapping)):
+                 self[key].merge(val)
+             else:
+                 self[key] = val
+@@ -2434,7 +2434,7 @@ def flatten_errors(cfg, res, levels=None, results=None):
+     for (key, val) in list(res.items()):
+         if val == True:
+             continue
+-        if isinstance(cfg.get(key), collections.Mapping):
++        if isinstance(cfg.get(key), collections.abc.Mapping):
+             # Go down one level
+             levels.append(key)
+             flatten_errors(cfg[key], val, levels, results)
+diff --git a/astropy/utils/misc.py b/astropy/utils/misc.py
+index de3fb01d1..da163fed5 100644
+--- a/astropy/utils/misc.py
++++ b/astropy/utils/misc.py
+@@ -536,6 +536,15 @@ class InheritDocstrings(type):
+                     if super_method is not None:
+                         val.__doc__ = super_method.__doc__
+                         break
++            if (isinstance(val, property) and
++                is_public_member(key) and
++                val.fget is not None and
++                val.fget.__doc__ is None):
++                for base in cls.__mro__[1:]:
++                    super_prop = getattr(base, key, None)
++                    if super_prop is not None and super_prop.fget is not None:
++                        val.fget.__doc__ = super_prop.fget.__doc__
++                        break
+ 
+         super().__init__(name, bases, dct)
+ 
+diff --git a/conftest.py b/conftest.py
+deleted file mode 100644
+index 00c613c99..000000000
+--- a/conftest.py
++++ /dev/null
+@@ -1,6 +0,0 @@
+-# Licensed under a 3-clause BSD style license - see LICENSE.rst
+-
+-pytest_plugins = [
+-    'astropy.tests.plugins.config',
+-    'astropy.tests.plugins.display',
+-]

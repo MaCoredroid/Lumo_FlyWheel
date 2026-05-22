@@ -133,6 +133,7 @@ Astropy post-fix sweep standing: 3/5 resolved (vs pre-fix 2/5).
 | `astropy__astropy-14539` | astropy/astropy | failed | patch_apply_failed | 847.5 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 14 min, no patch emitted |
 | `astropy__astropy-14598` | astropy/astropy | failed | tests_failed | 1488.5 | 88.6 | 95 | none (local build) | self-stop clean (rc=0) ~25 min; tiny 95B patch applies but tests fail |
 | `astropy__astropy-14995` | astropy/astropy | resolved | tests_passed | 1794.5 | 65.5 | 669 | swebench (prebuilt) | rc=1 late, patch already shipped; 669B patch passes |
+| `astropy__astropy-7166` | astropy/astropy | crash | infra_error | 1800.2 | 29.7 | 3998 | none (local build attempt) | **ARM64 UNSUPPORTED** (3rd). Env build fails: conda has no `setuptools==38.2.4` for linux-aarch64 (ancient pin in old astropy). Agent shipped 3998B patch, uneval-able. Carve out. |
 
 ## Per-instance verdicts — Pro
 
@@ -207,3 +208,4 @@ closeout. Re-running cannot fix them — needs x86 emulation or an x86 host.
 |---|---|
 | `pydata__xarray-6721` | conda-forge has no `linux-aarch64` build of `cdms2` |
 | `scikit-learn__scikit-learn-13496` | scipy source build needs Fortran compiler (absent in SWE-Bench base); no arm64 wheel for pinned old scipy |
+| `astropy__astropy-7166` | conda has no `setuptools==38.2.4` for linux-aarch64 (ancient pin in old astropy version) |
