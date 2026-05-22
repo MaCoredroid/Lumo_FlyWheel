@@ -1,0 +1,23 @@
+[offload host=alienware worker_rc=1]
+VERDICT astropy__astropy-13398 failed tests_failed elapsed_s=136.8 arch=x86_64
+
+-- stderr --
+2026-05-22 12:32:47,411 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-22 12:32:47,411 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-22 12:32:47,437 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/princeton-nlp/SWE-bench_Verified/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/README.md "HTTP/1.1 200 OK"
+2026-05-22 12:32:47,527 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified/resolve/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/SWE-bench_Verified.py "HTTP/1.1 404 Not Found"
+2026-05-22 12:32:47,861 - httpx - INFO - HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/princeton-nlp/SWE-bench_Verified/princeton-nlp/SWE-bench_Verified.py "HTTP/1.1 404 Not Found"
+2026-05-22 12:32:47,959 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/datasets/princeton-nlp/SWE-bench_Verified/revision/c104f840cc67f8b6eec6f759ebc8b2693d585d4a "HTTP/1.1 200 OK"
+2026-05-22 12:32:48,052 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified/resolve/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-05-22 12:32:48,251 - httpx - INFO - HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=princeton-nlp/SWE-bench_Verified "HTTP/1.1 200 OK"
+2026-05-22 12:32:48,351 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/datasets/princeton-nlp/SWE-bench_Verified/tree/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/data?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-05-22 12:32:48,447 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/datasets/princeton-nlp/SWE-bench_Verified/tree/c104f840cc67f8b6eec6f759ebc8b2693d585d4a?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-05-22 12:32:48,538 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified/resolve/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/dataset_infos.json "HTTP/1.1 404 Not Found"
+2026-05-22 12:32:48,690 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-05-22 12:32:48,715 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/princeton-nlp/SWE-bench_Verified/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/README.md "HTTP/1.1 200 OK"
+2026-05-22 12:32:48,821 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified/resolve/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/SWE-bench_Verified.py "HTTP/1.1 404 Not Found"
+2026-05-22 12:32:48,962 - httpx - INFO - HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/princeton-nlp/SWE-bench_Verified/princeton-nlp/SWE-bench_Verified.py "HTTP/1.1 404 Not Found"
+2026-05-22 12:32:49,059 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified/resolve/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-05-22 12:32:49,165 - httpx - INFO - HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=princeton-nlp/SWE-bench_Verified "HTTP/1.1 200 OK"
+2026-05-22 12:32:49,259 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified/resolve/c104f840cc67f8b6eec6f759ebc8b2693d585d4a/dataset_infos.json "HTTP/1.1 404 Not Found"
