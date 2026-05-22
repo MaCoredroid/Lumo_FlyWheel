@@ -5,6 +5,7 @@
   "failure_mode": "tests_passed",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
   "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
-  "eval_wall_clock_seconds": 119.754,
-  "arch": "aarch64"
+  "eval_wall_clock_seconds": 64.447,
+  "arch": "x86_64",
+  "eval_host": "mark-Alienware-Aurora-ACT1250"
 }
