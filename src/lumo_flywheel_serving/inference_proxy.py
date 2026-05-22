@@ -130,6 +130,12 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
             normalized["temperature"] = float(_force_temp)
         except ValueError:
             pass
+    _force_top_p = os.environ.get("LUMO_PROXY_FORCE_TOP_P")
+    if _force_top_p:
+        try:
+            normalized["top_p"] = float(_force_top_p)
+        except ValueError:
+            pass
     _max_out = os.environ.get("LUMO_PROXY_MAX_OUTPUT_TOKENS")
     if _max_out:
         try:
