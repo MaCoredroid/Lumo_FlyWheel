@@ -1,1 +1,3 @@
 [driver] 2026-05-22T21:18:44Z START arm c4 conc=4
+[driver] 2026-05-22T21:59:19Z rest-driver: waiting for c4 to finish, then c8 c2 c1
+[driver] 2026-05-22T22:04:26Z rest2: waiting for c4 to finish
