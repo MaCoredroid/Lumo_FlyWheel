@@ -181,6 +181,45 @@ No fallback budget shift required; the per-task wall budget already
 accommodates a ~15 min eval-build phase before the per-task 25 min
 agent + 5 min eval buffer kicks in.
 
+## 10c. Bundle B pre-registration (2026-05-22) — fixes + temp decision
+
+After the first ~43 Verified instances + the x86-eval migration, six harness
+fixes ("Bundle B") were applied to close known non-capability gaps. Pre-registered
+BEFORE re-running so the headline isn't built on post-hoc goalpost shifts.
+
+**Fixes (shipped, commit 5bb8cbd4 + proxy restart):**
+1. proxy `MAX_OUTPUT_TOKENS` 32768→80000 — eliminates `flake__token_truncation`.
+2/3/8. orchestrator empty-patch retry: classify (`setup_loop` vs `agent_gave_up`)
+   and re-launch codex once with a state-conditional directive prompt.
+4. proxy retries a transient upstream 400 parse-flake once before propagating.
+6. verified `FORCE_TEMPERATURE=0.6` is genuinely applied.
+7. explicit reasoning + "don't burn budget on env setup" + "always leave a real
+   edit" directive in the AGENTS.md operator prompt (model_reasoning_effort is
+   inert on Q36).
+
+All eval runs on native x86 (alienware) — single-arch, no carve-outs.
+
+**Temp decision experiment (#5):** 16-instance stratified subset
+(`swe-bench-tier1-verified-instances-tempexp.json`, seed=1, 9 repos) run at
+temp=0.6 (arm A) then temp=1.0 (arm B), BOTH under the full Bundle B stack,
+same instances, x86 eval.
+- **Decision rule (pre-registered):** adopt temp=1.0 for the full campaign IFF
+  arm B resolves ≥ arm A + 2 (i.e. ≥2 more of 16 resolved, ~+12.5 pts on the
+  subset — above single-instance noise). Otherwise keep temp=0.6 (Qwen card's
+  precise-coding rec). Ties and +1 → keep 0.6 (favor the documented default).
+
+**Projected post-Bundle-B gates (replacing the §4 G2 expectation for the
+shipping config, NOT the published-comparison gates):**
+| Gate | Criterion |
+|---|---|
+| **GB-1** | Bundle B full Verified resolved-rate ≥ 50% (arm64-evaluable denominator, flakes excluded) |
+| **GB-2** | Bundle B improves on the pre-Bundle-B clean rate by ≥ 6 absolute points |
+| **GB-headline** | projected 58–70% Verified (vs published 77.2; residual gap = Codex-vs-Qwen-scaffold harness gap → Round 5 Path 4) |
+
+Denominator policy unchanged: arm64-unsupported instances are now recoverable
+via x86 offload (0 expected carve-outs); proxy/token flakes are re-run, not
+counted as capability failures.
+
 ## 11. Sign-off
 
 Pre-registration owner: Track B team. This document is committed as part
