@@ -168,6 +168,7 @@ memory spikes are gone since eval is remote).
 | Instance | Repo | Verdict | Failure mode | Codex s | Eval s | Patch B | Eval host | Notes |
 |---|---|---|---|---:|---:|---:|---|---|
 | `django__django-10554` | django/django | failed | patch_apply_failed | 1800.1 | 1.1 | 0 | alienware (x86) | first resumed instance; agent hit 30-min wall, empty patch; eval offloaded + fast-pathed (arch=x86_64 confirmed) |
+| `django__django-10880` | django/django | resolved | tests_passed | 1800.1 | 64.7 | 639 | alienware (x86) | first RESOLVED via offload; native x86 django eval 65s (vs >18 min emulated); 639B patch passes |
 | `astropy__astropy-14369` | astropy/astropy | failed | patch_apply_failed | 1481.7 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 24.7 min, no patch emitted |
 | `astropy__astropy-14508` | astropy/astropy | resolved | tests_passed | 1800.2 | 91.9 | 2830 | none (local build) | (was Tier 0's resolved instance; consistent re-run). hit wall; 2830B patch passes |
 | `astropy__astropy-14539` | astropy/astropy | failed | patch_apply_failed | 847.5 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 14 min, no patch emitted |
