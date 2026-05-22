@@ -1,0 +1,7 @@
+{
+  "track": "swe_bench",
+  "instance_id": "django__django-11087",
+  "outcome": "failed",
+  "failure_mode": "patch_apply_failed",
+  "arch": "x86_64"
+}
