@@ -1,0 +1,17 @@
+{
+  "track": "swe_bench",
+  "instance_id": "astropy__astropy-13033",
+  "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "verdict": "failed",
+  "passed": false,
+  "failure_mode": "tests_failed",
+  "harness_exit_code": 0,
+  "eval_wall_clock_seconds": 135.788,
+  "error": null,
+  "arch": "x86_64",
+  "eval_host": "mark-Alienware-Aurora-ACT1250",
+  "run_id": "x86eval-eval-1779486528",
+  "namespace": "swebench",
+  "cache_level": "env"
+}
