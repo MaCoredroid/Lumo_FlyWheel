@@ -1753,18 +1753,46 @@ def build_proxy_handler(
             ts_request_received = time.time()
             if capture_active:
                 metrics_before = capture.fetch_metrics_snapshot()
-            try:
+            # Bundle B #4: retry once on a transient upstream 400. vLLM
+            # occasionally rejects a well-formed request with a JSON-parse
+            # BadRequestError ("Unterminated string ...") — a flaky decode of
+            # the request, not a real client error. Re-POSTing the identical
+            # payload almost always succeeds. Bounded to 1 retry to avoid
+            # masking genuine 400s. Gated by LUMO_PROXY_RETRY_UPSTREAM_400.
+            _retry_400 = os.environ.get("LUMO_PROXY_RETRY_UPSTREAM_400", "1").lower() in {"1", "true", "yes"}
+            upstream = None
+            for _attempt in range(2):
+                try:
+                    upstream = requests.post(
+                        f"{upstream_base_url}{self.path}",
+                        data=payload,
+                        headers=headers,
+                        timeout=600,
+                        stream=True,
+                    )
+                except requests.RequestException as exc:
+                    _write_json_error(self, 502, f"Upstream inference request failed: {exc}")
+                    admission.release(ticket)
+                    return
+                if not (_retry_400 and upstream.status_code == 400 and _attempt == 0):
+                    break
+                # peek a bounded prefix to confirm it's the parse-flake, then retry
+                try:
+                    head = upstream.raw.read(512, decode_content=True) or b""
+                except Exception:  # noqa: BLE001
+                    head = b""
+                upstream.close()
+                if b"Unterminated string" in head or b"BadRequestError" in head or b"JSONDecode" in head:
+                    sys.stderr.write(f"[proxy] upstream 400 parse-flake on {self.path}; retrying once\n")
+                    sys.stderr.flush()
+                    continue
+                # genuine 400 (not the flake): re-issue once to get a fresh
+                # streamable response object, then propagate as-is.
                 upstream = requests.post(
                     f"{upstream_base_url}{self.path}",
-                    data=payload,
-                    headers=headers,
-                    timeout=600,
-                    stream=True,
+                    data=payload, headers=headers, timeout=600, stream=True,
                 )
-            except requests.RequestException as exc:
-                _write_json_error(self, 502, f"Upstream inference request failed: {exc}")
-                admission.release(ticket)
-                return
+                break
 
             self.send_response(upstream.status_code)
             response_headers = _filtered_headers(upstream.headers)

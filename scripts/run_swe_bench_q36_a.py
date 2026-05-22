@@ -73,9 +73,31 @@ CODEX_TEMPLATE = (
     "-c 'model_supports_reasoning_summaries=true' "
     "-c 'model_reasoning_summary=\"auto\"' "
     "--model {model} "
-    "\"Read the task prompt at /workspace/AGENTS.md and complete it in this workspace. "
+    "\"{prompt}\""
+)
+
+# Default operator prompt (first attempt).
+DEFAULT_CODEX_PROMPT = (
+    "Read the task prompt at /workspace/AGENTS.md and complete it in this workspace. "
     "Edit the source files directly to implement the fix. Do not write a diff file -- "
-    "modify the files in place so that running pytest passes the tests described in the prompt.\""
+    "modify the files in place so that running pytest passes the tests described in the prompt."
+)
+# Bundle B #2/#8: retry prompt when the first attempt left no patch (agent
+# returned without editing source).
+RETRY_PROMPT_EMPTY = (
+    "Your previous attempt finished WITHOUT leaving any code change in the working tree. "
+    "Re-read /workspace/AGENTS.md, inspect the relevant source files, and EDIT them now to "
+    "implement the fix. Do not stop until you have made a concrete source edit. Do not waste "
+    "time on environment setup or pip/conda installs -- the grader uses its own environment."
+)
+# Bundle B #3/#8: retry prompt when the first attempt looped on the same failing
+# command (e.g. repeated pip/build errors) and left no patch.
+RETRY_PROMPT_SETUP_LOOP = (
+    "Your previous attempt repeatedly hit the same failing command (likely an environment/"
+    "install/build step) and never edited the source. STOP trying that approach entirely. "
+    "The grader builds its own environment, so you do NOT need the project to install or import. "
+    "Read /workspace/AGENTS.md and the relevant source files, and directly EDIT the source to "
+    "implement the fix."
 )
 
 
@@ -234,7 +256,55 @@ def _write_agents_md(workspace: Path, instance: dict) -> None:
         "your code must make those tests pass without breaking existing ones."
     )
     body.append("")
+    # Bundle B #7: model_reasoning_effort="high" is inert on Qwen 3.6 in this
+    # stack (Harmony-path only), so steer reasoning depth via the operator
+    # prompt instead. Also pre-empts the common failure modes: don't burn the
+    # budget on env setup (the grader builds its own env), and always emit a
+    # real source edit before finishing.
+    body.append("## How to work (important)")
+    body.append("")
+    body.append(
+        "- Reason carefully and thoroughly before each tool call. First inspect "
+        "the relevant source files to confirm your understanding of the bug, "
+        "then make the minimal correct edit.\n"
+        "- Do NOT spend your time trying to `pip install` or build/conda the "
+        "project — the grader runs in its own prepared environment. If an "
+        "install/build command fails, do not retry it; just edit the source.\n"
+        "- You MUST finish by leaving an actual code change in the working tree. "
+        "Do not stop until you have edited the source files to implement the fix."
+    )
+    body.append("")
     (workspace / "AGENTS.md").write_text("\n".join(body) + "\n", encoding="utf-8")
+
+
+def _classify_empty_patch_cause(trace_path: Path) -> str:
+    """Inspect a codex trace to decide why an empty-patch run produced no edit.
+
+    Returns 'setup_loop' if the agent repeatedly ran the same failing command
+    (>=3 identical failing command_execution items — the pip/conda/build loop),
+    else 'agent_gave_up'. Drives the Bundle B #2/#3/#8 state-conditional retry.
+    """
+    try:
+        from collections import Counter
+        failing: Counter = Counter()
+        for line in trace_path.read_text(errors="replace").splitlines():
+            if '"type":"command_execution"' not in line:
+                continue
+            try:
+                item = json.loads(line).get("item", {})
+            except Exception:  # noqa: BLE001
+                continue
+            if item.get("type") != "command_execution":
+                continue
+            ec = item.get("exit_code")
+            cmd = item.get("command")
+            if isinstance(cmd, str) and ec not in (0, None):
+                failing[cmd.strip()] += 1
+        if failing and max(failing.values()) >= 3:
+            return "setup_loop"
+    except Exception:  # noqa: BLE001
+        pass
+    return "agent_gave_up"
 
 
 def _extract_patch(cache_path: Path, workspace: Path, base_commit: str) -> str:
@@ -256,6 +326,7 @@ def _run_codex(
     stdout_path: Path,
     stderr_path: Path,
     trace_path: Path,
+    prompt: str = DEFAULT_CODEX_PROMPT,
 ) -> dict[str, Any]:
     """Run codex-runner:v1 and capture trace/stdout/stderr to separate files.
 
@@ -271,6 +342,7 @@ def _run_codex(
         workspace=str(workspace),
         endpoint=endpoint,
         model=model,
+        prompt=prompt,
     )
     started = time.monotonic()
     rc: int | None = None
@@ -609,6 +681,41 @@ def _process_one(
         patch_text = _extract_patch(cache_path, workspace_path, instance["base_commit"])
     except Exception as exc:  # noqa: BLE001
         summary["patch_extract_error"] = f"{type(exc).__name__}: {exc}"
+
+    # Bundle B #2/#3/#8: if the first attempt left no patch, classify why and
+    # re-launch codex ONCE with a state-conditional directive prompt. Bounded
+    # to a single retry to cap the wall-time premium.
+    if not patch_text.strip():
+        cause = _classify_empty_patch_cause(codex_trace)
+        retry_prompt = RETRY_PROMPT_SETUP_LOOP if cause == "setup_loop" else RETRY_PROMPT_EMPTY
+        summary["empty_patch_retry"] = {"cause": cause, "attempted": True}
+        print(f"[{_iso_now()}]    {instance_id}: empty patch ({cause}); retrying codex once",
+              flush=True)
+        retry_trace = task_dir / "codex_trace_retry.jsonl"
+        retry_stderr = task_dir / "codex_stderr_retry.log"
+        retry_stdout = task_dir / "codex_stdout_retry.log"
+        retry_dcgm = _spawn_dcgm_sampler(task_dir / "dcgm_samples_retry.jsonl")
+        codex_meta_retry = _run_codex(
+            workspace=workspace_path, endpoint=endpoint, model=model,
+            timeout_s=agent_wall_s, instance_id=instance_id,
+            stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
+            prompt=retry_prompt,
+        )
+        _stop_dcgm_sampler(retry_dcgm)
+        summary["codex_retry"] = codex_meta_retry
+        try:
+            retry_patch = _extract_patch(cache_path, workspace_path, instance["base_commit"])
+        except Exception as exc:  # noqa: BLE001
+            retry_patch = ""
+            summary["patch_extract_error_retry"] = f"{type(exc).__name__}: {exc}"
+        if retry_patch.strip():
+            patch_text = retry_patch
+            summary["empty_patch_retry"]["recovered_patch_bytes"] = len(retry_patch)
+            print(f"[{_iso_now()}]    {instance_id}: retry produced {len(retry_patch)}B patch",
+                  flush=True)
+        else:
+            summary["empty_patch_retry"]["recovered_patch_bytes"] = 0
+
     patch_path.write_text(patch_text, encoding="utf-8")
     summary["patch_bytes"] = len(patch_text)
 
