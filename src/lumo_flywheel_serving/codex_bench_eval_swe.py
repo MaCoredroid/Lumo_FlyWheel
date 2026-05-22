@@ -63,14 +63,19 @@ def _resolve_auto_namespace(instance_id: str, arch: str) -> str | None:
     return "swebench" if rc == 0 else None
 
 
-def _apply_arm64_shim() -> str:
-    """Patch swebench.make_test_spec so the harness picks arm64 images.
-
-    Returns the arch string actually wired ("arm64" on aarch64, "x86_64"
-    elsewhere). Idempotent.
-    """
+def _native_arch() -> str:
     machine = platform.machine().lower()
-    arch = "arm64" if machine in {"aarch64", "arm64"} else "x86_64"
+    return "arm64" if machine in {"aarch64", "arm64"} else "x86_64"
+
+
+def _apply_arch_shim(arch: str) -> str:
+    """Patch swebench.make_test_spec so the harness uses the given arch.
+
+    The upstream CLI exposes no arch knob and hard-defaults to x86_64. We
+    force the chosen arch ("arm64" for native aarch64 runs, or "x86_64" for
+    the QEMU-emulation fallback on instances whose env can't build natively
+    on aarch64). Idempotent; re-applying with a new arch re-patches.
+    """
     from swebench.harness.test_spec import test_spec as _ts
     from swebench.harness import run_evaluation as _re
     from swebench.harness import docker_build as _db
@@ -94,6 +99,41 @@ def _apply_arm64_shim() -> str:
     _re.make_test_spec = patched
     _db.make_test_spec = patched
     return arch
+
+
+def _x86_emulation_available() -> bool:
+    """True if qemu-x86_64 is registered in binfmt_misc (Docker can run amd64)."""
+    try:
+        data = Path("/proc/sys/fs/binfmt_misc/qemu-x86_64").read_text()
+        return "enabled" in data
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _arm64_env_build_failed(output_dir: Path, run_id: str) -> bool:
+    """Detect the conda/arm64 env-build failure signature in harness logs.
+
+    These are the instances whose Python/dep pins have no linux-aarch64
+    conda build (python<=3.6, setuptools==38.2.4, etc.). Signature is a
+    BuildImageError / PackagesNotFoundError in the build_images log tree.
+    """
+    log_root = output_dir / "logs"
+    if not log_root.is_dir():
+        return False
+    signatures = (
+        "PackagesNotFoundError",
+        "BuildImageError",
+        "ResolvePackageNotFound",
+        "No module named 'pkg_resources'",
+    )
+    try:
+        for build_log in log_root.rglob("build_image.log"):
+            text = build_log.read_text(errors="replace")
+            if any(sig in text for sig in signatures):
+                return True
+    except Exception:  # noqa: BLE001
+        pass
+    return False
 
 
 def _write_eval_log(output_dir: Path, lines: list[str]) -> None:
@@ -298,28 +338,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return EXIT_FAILED
 
-    # Step 3: invoke the harness in-process with arch shim
-    arch = _apply_arm64_shim()
-
-    # Resolve --namespace policy. The upstream CLI converts "none" -> Python None
-    # via its optional_str type, but our in-process main(namespace=...) takes the
-    # raw value, so we must do the conversion here.
-    namespace_arg = args.namespace.strip().lower()
-    if namespace_arg == "auto":
-        effective_namespace = _resolve_auto_namespace(instance_id, arch)
-    elif namespace_arg in {"none", "local"}:
-        effective_namespace = None
-    else:
-        effective_namespace = args.namespace
-
-    _write_eval_log(output_dir, [
-        f"arch={arch} dataset={dataset_name} split={args.split} run_id={run_id}",
-        f"requested_namespace={args.namespace} effective_namespace={effective_namespace} "
-        f"timeout_s={args.timeout_s} cache_level={args.cache_level}",
-    ])
-
+    # Step 3: invoke the harness, with an arm64 -> x86_64-emulation fallback.
     try:
-        from swebench.harness import run_evaluation as _re
+        from swebench.harness import run_evaluation as _re  # noqa: F401
     except Exception as exc:  # noqa: BLE001
         _write_eval_log(output_dir, [
             f"failed to import swebench.harness.run_evaluation: {exc}",
@@ -341,97 +362,129 @@ def main(argv: list[str] | None = None) -> int:
         )
         return EXIT_CRASH
 
-    # Harness writes per-instance logs to ./logs/run_evaluation/<run_id>/<model>/<id>/
-    # and a summary JSON to <report_dir>/<model>.<run_id>.json. We chdir into
-    # output_dir so all artifacts cluster under the attempt-scoped dir.
-    cwd_save = Path.cwd()
-    os.chdir(output_dir)
-    harness_stdout = io.StringIO()
-    harness_stderr = io.StringIO()
-    start = time.monotonic()
-    harness_exit_code = 0
-    harness_error: str | None = None
-    try:
-        with contextlib.redirect_stdout(harness_stdout), contextlib.redirect_stderr(harness_stderr):
-            _re.main(
-                dataset_name=dataset_name,
-                split=args.split,
-                instance_ids=[instance_id],
-                predictions_path=str(predictions_path),
-                max_workers=1,
-                force_rebuild=False,
-                cache_level=args.cache_level,
-                clean=False,
-                open_file_limit=4096,
-                run_id=run_id,
-                timeout=args.timeout_s,
-                namespace=effective_namespace,
-                rewrite_reports=False,
-                modal=False,
-                instance_image_tag="latest",
-                env_image_tag="latest",
-                report_dir=str(output_dir),
-            )
-    except SystemExit as exc:
-        harness_exit_code = int(exc.code) if isinstance(exc.code, int) else 1
-    except Exception as exc:  # noqa: BLE001
-        harness_exit_code = -1
-        harness_error = f"{type(exc).__name__}: {exc}"
-        _write_eval_log(output_dir, [traceback.format_exc()])
-    finally:
-        os.chdir(cwd_save)
-        elapsed = time.monotonic() - start
+    def _run_attempt(arch: str, run_id: str) -> dict[str, Any]:
+        """One harness invocation for a given arch. Returns a result dict."""
+        from swebench.harness import run_evaluation as _re
 
-    _write_eval_log(output_dir, [
-        f"harness elapsed_s={elapsed:.3f} exit_code={harness_exit_code}",
-        "-- harness stdout --",
-        harness_stdout.getvalue(),
-        "-- harness stderr --",
-        harness_stderr.getvalue(),
-    ])
-
-    # Step 4: read harness per-instance report and classify
-    instance_report = None
-    try:
-        instance_report_dir = (
-            output_dir / "logs" / "run_evaluation" / run_id /
-            args.model_name.replace("/", "__") / instance_id
-        )
-        candidate = instance_report_dir / "report.json"
-        if candidate.is_file():
-            instance_report = json.loads(candidate.read_text())
+        _apply_arch_shim(arch)
+        namespace_arg = args.namespace.strip().lower()
+        if namespace_arg in {"none", "local"}:
+            eff_ns: str | None = None
+        elif namespace_arg == "auto":
+            eff_ns = _resolve_auto_namespace(instance_id, arch)
         else:
-            # Fallback: glob the summary file written by the harness
-            summary = next(
-                output_dir.glob(f"*.{run_id}.json"),
-                None,
-            )
-            if summary is not None:
-                summary_payload = json.loads(summary.read_text())
-                if instance_id in summary_payload.get("resolved_ids", []):
-                    instance_report = {"resolved": True}
-                elif instance_id in summary_payload.get("unresolved_ids", []):
-                    instance_report = {"resolved": False, "patch_successfully_applied": True}
-                elif instance_id in summary_payload.get("empty_patch_ids", []):
-                    instance_report = {"resolved": False, "patch_successfully_applied": False}
-                else:
-                    instance_report = None
-    except Exception as exc:  # noqa: BLE001
+            eff_ns = args.namespace
+        # x86_64 emulation path always uses the prebuilt swebench namespace
+        # (building old x86 envs locally under emulation is far slower and
+        # unnecessary — the team publishes x86_64 images for every instance).
+        if arch == "x86_64":
+            eff_ns = "swebench"
+
         _write_eval_log(output_dir, [
-            f"failed to read harness report: {exc}",
-            traceback.format_exc(),
+            f"[attempt arch={arch}] dataset={dataset_name} split={args.split} run_id={run_id}",
+            f"[attempt arch={arch}] effective_namespace={eff_ns} "
+            f"timeout_s={args.timeout_s} cache_level={args.cache_level}",
         ])
 
-    if instance_report is None:
-        verdict, passed, failure_mode = "crash", False, "infra_error"
-    else:
-        # Per-instance reports from swebench wrap the verdict inside the
-        # instance_id key (eg {"astropy__...": {"resolved": true, ...}})
-        if isinstance(instance_report, dict) and instance_id in instance_report:
-            payload = instance_report[instance_id]
+        cwd_save = Path.cwd()
+        os.chdir(output_dir)
+        h_stdout, h_stderr = io.StringIO(), io.StringIO()
+        start = time.monotonic()
+        exit_code = 0
+        err: str | None = None
+        try:
+            with contextlib.redirect_stdout(h_stdout), contextlib.redirect_stderr(h_stderr):
+                _re.main(
+                    dataset_name=dataset_name,
+                    split=args.split,
+                    instance_ids=[instance_id],
+                    predictions_path=str(predictions_path),
+                    max_workers=1,
+                    force_rebuild=False,
+                    cache_level=args.cache_level,
+                    clean=False,
+                    open_file_limit=4096,
+                    run_id=run_id,
+                    timeout=args.timeout_s,
+                    namespace=eff_ns,
+                    rewrite_reports=False,
+                    modal=False,
+                    instance_image_tag="latest",
+                    env_image_tag="latest",
+                    report_dir=str(output_dir),
+                )
+        except SystemExit as exc:
+            exit_code = int(exc.code) if isinstance(exc.code, int) else 1
+        except Exception as exc:  # noqa: BLE001
+            exit_code = -1
+            err = f"{type(exc).__name__}: {exc}"
+            _write_eval_log(output_dir, [traceback.format_exc()])
+        finally:
+            os.chdir(cwd_save)
+            elapsed = time.monotonic() - start
+
+        _write_eval_log(output_dir, [
+            f"[attempt arch={arch}] harness elapsed_s={elapsed:.3f} exit_code={exit_code}",
+            "-- harness stdout --", h_stdout.getvalue(),
+            "-- harness stderr --", h_stderr.getvalue(),
+        ])
+
+        # Read + classify the per-instance report.
+        report = None
+        try:
+            cand = (output_dir / "logs" / "run_evaluation" / run_id /
+                    args.model_name.replace("/", "__") / instance_id / "report.json")
+            if cand.is_file():
+                report = json.loads(cand.read_text())
+            else:
+                summary = next(output_dir.glob(f"*.{run_id}.json"), None)
+                if summary is not None:
+                    sp = json.loads(summary.read_text())
+                    if instance_id in sp.get("resolved_ids", []):
+                        report = {"resolved": True}
+                    elif instance_id in sp.get("unresolved_ids", []):
+                        report = {"resolved": False, "patch_successfully_applied": True}
+                    elif instance_id in sp.get("empty_patch_ids", []):
+                        report = {"resolved": False, "patch_successfully_applied": False}
+        except Exception as exc:  # noqa: BLE001
+            _write_eval_log(output_dir, [f"failed to read harness report: {exc}",
+                                         traceback.format_exc()])
+
+        if report is None:
+            verdict, passed, failure_mode = "crash", False, "infra_error"
         else:
-            payload = instance_report
-        verdict, passed, failure_mode = _classify_failure(payload if isinstance(payload, dict) else {})
+            payload = report[instance_id] if (isinstance(report, dict) and instance_id in report) else report
+            verdict, passed, failure_mode = _classify_failure(payload if isinstance(payload, dict) else {})
+
+        return {
+            "arch": arch, "run_id": run_id, "namespace": eff_ns,
+            "verdict": verdict, "passed": passed, "failure_mode": failure_mode,
+            "exit_code": exit_code, "elapsed": elapsed, "error": err,
+        }
+
+    native = _native_arch()
+    result = _run_attempt(native, run_id)
+
+    # Fallback: if the native (arm64) attempt crashed because the conda env
+    # can't build on aarch64 (old python / dep pins), retry the SAME instance
+    # under x86_64 QEMU emulation using the prebuilt swebench images. This
+    # recovers the ~20-35% of SWE-Bench Verified whose env predates aarch64
+    # conda support. See docs swe-bench-campaign-progress §"ARM64 carve-out".
+    used_x86_fallback = False
+    if (
+        native == "arm64"
+        and result["verdict"] == "crash"
+        and _arm64_env_build_failed(output_dir, result["run_id"])
+        and _x86_emulation_available()
+    ):
+        _write_eval_log(output_dir, [
+            "[fallback] arm64 env build failed; retrying under x86_64 QEMU emulation",
+        ])
+        x86_run_id = f"{run_id}-x86emu"
+        x86_result = _run_attempt("x86_64", x86_run_id)
+        used_x86_fallback = True
+        # Prefer the x86 result unless it also crashed (then keep showing it).
+        result = x86_result
 
     _emit_report(
         output_dir,
@@ -440,24 +493,25 @@ def main(argv: list[str] | None = None) -> int:
         model_name_or_path=args.model_name,
         patch_path=patch_path,
         predictions_path=predictions_path,
-        verdict=verdict,
-        passed=passed,
-        failure_mode=failure_mode,
-        harness_exit_code=harness_exit_code,
-        eval_wall_clock_seconds=elapsed,
-        error=harness_error,
+        verdict=result["verdict"],
+        passed=result["passed"],
+        failure_mode=result["failure_mode"],
+        harness_exit_code=result["exit_code"],
+        eval_wall_clock_seconds=result["elapsed"],
+        error=result["error"],
         extra={
-            "arch": arch,
-            "run_id": run_id,
-            "namespace": effective_namespace if effective_namespace is not None else "none",
+            "arch": result["arch"],
+            "run_id": result["run_id"],
+            "namespace": result["namespace"] if result["namespace"] is not None else "none",
             "requested_namespace": args.namespace,
             "cache_level": args.cache_level,
+            "x86_emulation_fallback": used_x86_fallback,
         },
     )
 
-    if verdict == "resolved":
+    if result["verdict"] == "resolved":
         return EXIT_RESOLVED
-    if verdict == "failed":
+    if result["verdict"] == "failed":
         return EXIT_FAILED
     return EXIT_CRASH
 
