@@ -132,6 +132,7 @@ Astropy post-fix sweep standing: 3/5 resolved (vs pre-fix 2/5).
 | `astropy__astropy-14508` | astropy/astropy | resolved | tests_passed | 1800.2 | 91.9 | 2830 | none (local build) | (was Tier 0's resolved instance; consistent re-run). hit wall; 2830B patch passes |
 | `astropy__astropy-14539` | astropy/astropy | failed | patch_apply_failed | 847.5 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 14 min, no patch emitted |
 | `astropy__astropy-14598` | astropy/astropy | failed | tests_failed | 1488.5 | 88.6 | 95 | none (local build) | self-stop clean (rc=0) ~25 min; tiny 95B patch applies but tests fail |
+| `astropy__astropy-14995` | astropy/astropy | resolved | tests_passed | 1794.5 | 65.5 | 669 | swebench (prebuilt) | rc=1 late, patch already shipped; 669B patch passes |
 
 ## Per-instance verdicts — Pro
 
