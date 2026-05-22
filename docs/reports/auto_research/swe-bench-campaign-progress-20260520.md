@@ -169,6 +169,10 @@ memory spikes are gone since eval is remote).
 |---|---|---|---|---:|---:|---:|---|---|
 | `django__django-10554` | django/django | failed | patch_apply_failed | 1800.1 | 1.1 | 0 | alienware (x86) | first resumed instance; agent hit 30-min wall, empty patch; eval offloaded + fast-pathed (arch=x86_64 confirmed) |
 | `django__django-10880` | django/django | resolved | tests_passed | 1800.1 | 64.7 | 639 | alienware (x86) | first RESOLVED via offload; native x86 django eval 65s (vs >18 min emulated); 639B patch passes |
+| `django__django-10914` | django/django | resolved | tests_passed | 1800.1 | 67.1 | 625 | alienware (x86) | hit wall; 625B patch passes |
+| `django__django-10973` | django/django | resolved | tests_passed | 1800.1 | 64.9 | 2451 | alienware (x86) | hit wall; 2451B patch passes |
+| `django__django-10999` | django/django | failed | tests_failed | 975.8 | 65.1 | 497 | alienware (x86) | self-stop ~16 min; 497B patch applies but tests fail |
+| `django__django-11066` | django/django | failed | patch_apply_failed | 38.3 | 1.0 | 0 | alienware (x86) | **`flake__proxy_json` (re-run candidate).** Early-turn `BadRequestError: Unterminated string at column 149` + `unsupported call: apply_patch` (rc=1, empty patch, 38s). Same proxy/vLLM malformed-tool-call class as django-16256; the 4xx-passthrough fix made the error honest but didn't eliminate it. NOT a real capability failure. |
 | `astropy__astropy-14369` | astropy/astropy | failed | patch_apply_failed | 1481.7 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 24.7 min, no patch emitted |
 | `astropy__astropy-14508` | astropy/astropy | resolved | tests_passed | 1800.2 | 91.9 | 2830 | none (local build) | (was Tier 0's resolved instance; consistent re-run). hit wall; 2830B patch passes |
 | `astropy__astropy-14539` | astropy/astropy | failed | patch_apply_failed | 847.5 | 0 | 0 | n/a | `empty_diff__agent_gave_up`: clean rc=0 at 14 min, no patch emitted |
