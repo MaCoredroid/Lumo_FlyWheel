@@ -1,6 +1,6 @@
-arch=arm64 dataset=princeton-nlp/SWE-bench_Verified split=test run_id=cbe-eval-1779346823
+arch=arm64 dataset=princeton-nlp/SWE-bench_Verified split=test run_id=cbe-eval-1779410214
 requested_namespace=auto effective_namespace=None timeout_s=1800 cache_level=env
-harness elapsed_s=89.074 exit_code=0
+harness elapsed_s=91.874 exit_code=0
 -- harness stdout --
 Base image sweb.base.py.arm64:latest already exists, skipping build.
 Base images built successfully.
@@ -19,6 +19,6 @@ Instances with empty patches: 0
 Instances with errors: 0
 Unstopped containers: 0
 Unremoved images: 0
-Report written to qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a.cbe-eval-1779346823.json
+Report written to qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a.cbe-eval-1779410214.json
 -- harness stderr --
-Evaluation:   0%|          | 0/1 [00:00<?, ?it/s, error=0, ✓=0, ✖=0]Evaluation:   0%|          | 0/1 [01:26<?, ?it/s, ✓=1, ✖=0, error=0]Evaluation: 100%|##########| 1/1 [01:26<00:00, 86.47s/it, ✓=1, ✖=0, error=0]Evaluation: 100%|##########| 1/1 [01:26<00:00, 86.47s/it, ✓=1, ✖=0, error=0]
+Evaluation:   0%|          | 0/1 [00:00<?, ?it/s, error=0, ✓=0, ✖=0]Evaluation:   0%|          | 0/1 [01:28<?, ?it/s, ✓=1, ✖=0, error=0]Evaluation: 100%|##########| 1/1 [01:28<00:00, 88.87s/it, ✓=1, ✖=0, error=0]Evaluation: 100%|##########| 1/1 [01:28<00:00, 88.87s/it, ✓=1, ✖=0, error=0]
