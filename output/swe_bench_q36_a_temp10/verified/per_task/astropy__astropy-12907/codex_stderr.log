@@ -1,0 +1,4 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-22T17:25:50.672652Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
+2026-05-22T17:29:20.084362Z ERROR codex_core::tools::router: error=failed to parse function arguments: duplicate field `cmd` at line 1 column 54
