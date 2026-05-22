@@ -1,0 +1,18 @@
+=== [2026-05-22T22:56:36Z] dataset=princeton-nlp/SWE-bench_Verified tag=c2 n=8 concurrency=2 ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/conc_probe16_v2/c2/per_task/astropy__astropy-12907/workspace
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/conc_probe16_v2/c2/per_task/astropy__astropy-13033/workspace
+[2026-05-22T22:56:38Z] -> astropy__astropy-12907
+[2026-05-22T22:56:38Z] -> astropy__astropy-13033
+Preparing worktree (detached HEAD 298ccb478)
+Preparing worktree (detached HEAD d16bfe05a)
+HEAD is now at d16bfe05a Merge pull request #12900 from Cadair/custom_compound_model
+HEAD is now at 298ccb478 Merge pull request #13031 from meeseeksmachine/auto-backport-of-pr-13027-on-main
+[2026-05-22T23:21:54Z] <- astropy__astropy-13033 verdict=failed elapsed_total=1516.7s
+[2026-05-22T23:21:54Z] -> astropy__astropy-13236
+Preparing worktree (detached HEAD 6ed769d58)
+HEAD is now at 6ed769d58 Merge pull request #13228 from astrofrog/fix-spectralcoord-no-target
+[2026-05-22T23:25:15Z] <- astropy__astropy-12907 verdict=resolved elapsed_total=1717.3s
+[2026-05-22T23:25:15Z] -> astropy__astropy-13398
+Preparing worktree (detached HEAD 6500928dc)
+HEAD is now at 6500928dc Merge pull request #13502 from taldcroft/better-iers-docs
