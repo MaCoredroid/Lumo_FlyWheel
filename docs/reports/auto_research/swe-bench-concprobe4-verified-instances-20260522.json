@@ -1,0 +1,29 @@
+{
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "split": "test",
+  "tier": "conc_probe4",
+  "seed": 0,
+  "target_n": 4,
+  "generated_at": "2026-05-21T14:33:20Z",
+  "instance_ids": [
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398"
+  ],
+  "by_repo": {
+    "astropy/astropy": 22,
+    "django/django": 231,
+    "matplotlib/matplotlib": 34,
+    "mwaskom/seaborn": 2,
+    "pallets/flask": 1,
+    "psf/requests": 8,
+    "pydata/xarray": 22,
+    "pylint-dev/pylint": 10,
+    "pytest-dev/pytest": 19,
+    "scikit-learn/scikit-learn": 32,
+    "sphinx-doc/sphinx": 44,
+    "sympy/sympy": 75
+  },
+  "note": "First 4 of tier2 verified (astropy) \u2014 concurrency probe c=1/2/4 (4 divides evenly by all arms), codex on x86 (alienware), DGX=vLLM only."
+}
