@@ -316,6 +316,102 @@ def _run_codex(
     }
 
 
+# Eval-offload config. When EVAL_HOST is set (via --eval-host), the eval
+# step runs on a native x86_64 box over SSH instead of locally on aarch64
+# (recovers old-python instances that can't build the conda env on arm64,
+# and keeps the whole dataset single-arch). See scripts/swe_eval_offload.py.
+EVAL_HOST: str | None = None
+_EVAL_SSH_OPTS = [
+    "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+    "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4",
+    "-o", "StrictHostKeyChecking=accept-new",
+]
+_REMOTE_BASE = "~/swe_eval_offload"
+_REMOTE_WORKER = "~/swe_eval_offload/swe_eval_x86_worker.py"
+_REMOTE_VENV_PY = "~/swe_eval_offload/venv/bin/python"
+_REMOTE_HF_HOME = "~/.cache/huggingface"
+_EVAL_NET_LOG = DEFAULT_OUT_ROOT / "swe_eval_offload_network.log"
+
+
+def _eval_net_log(msg: str) -> None:
+    try:
+        _EVAL_NET_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with _EVAL_NET_LOG.open("a", encoding="utf-8") as f:
+            f.write(f"[{_iso_now()}] {msg}\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _net_retry(argv: list[str], *, what: str, timeout: int,
+               max_attempts: int = 5, ok_rcs: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
+    backoff = 5
+    last: subprocess.CompletedProcess | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            cp = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+            if cp.returncode in ok_rcs:
+                if attempt > 1:
+                    _eval_net_log(f"RECOVERED {what} on attempt {attempt}")
+                return cp
+            last = cp
+            if cp.returncode == 255:
+                _eval_net_log(f"FAIL {what} attempt={attempt}/{max_attempts} rc=255(transport)")
+            else:
+                _eval_net_log(f"NONRETRY {what} rc={cp.returncode} (remote ran)")
+                return cp
+        except subprocess.TimeoutExpired:
+            _eval_net_log(f"TIMEOUT {what} attempt={attempt}/{max_attempts} after {timeout}s")
+            last = subprocess.CompletedProcess(argv, 124, "", "timeout")
+        if attempt < max_attempts:
+            time.sleep(backoff)
+            backoff = min(backoff * 3, 300)
+    _eval_net_log(f"GIVEUP {what} after {max_attempts} attempts")
+    return last if last is not None else subprocess.CompletedProcess(argv, 1, "", "unknown")
+
+
+def _run_eval_remote(
+    *, host: str, instance_id: str, patch_path: Path, output_dir: Path,
+    dataset_name: str, model_name: str, timeout_s: int, eval_log_path: Path,
+) -> dict[str, Any]:
+    """Offload one eval to a native x86_64 host over SSH (network-tolerant)."""
+    started = time.monotonic()
+    remote_dir = f"{_REMOTE_BASE}/work/{instance_id}"
+    mk = _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"mkdir -p {remote_dir} && echo ok"],
+                    what=f"mkdir:{instance_id}", timeout=30)
+    if mk.returncode != 0:
+        eval_log_path.write_text(f"remote mkdir failed rc={mk.returncode}\n{mk.stderr}", encoding="utf-8")
+        return {"exit_code": -1, "elapsed_s": round(time.monotonic() - started, 3), "offloaded": True}
+    up = _net_retry(["scp", *_EVAL_SSH_OPTS, str(patch_path), f"{host}:{remote_dir}/patch.diff"],
+                    what=f"scp_up:{instance_id}", timeout=120)
+    if up.returncode != 0:
+        eval_log_path.write_text(f"scp patch up failed rc={up.returncode}\n{up.stderr}", encoding="utf-8")
+        return {"exit_code": -1, "elapsed_s": round(time.monotonic() - started, 3), "offloaded": True}
+    remote_cmd = (
+        f"cd {_REMOTE_BASE} && HF_HOME={_REMOTE_HF_HOME} {_REMOTE_VENV_PY} {_REMOTE_WORKER} "
+        f"--instance-id {instance_id} --patch-path {remote_dir}/patch.diff "
+        f"--output-dir {remote_dir}/out --dataset-name '{dataset_name}' "
+        f"--model-name '{model_name}' --timeout-s {timeout_s} --cache-level env"
+    )
+    ev = _net_retry(["ssh", *_EVAL_SSH_OPTS, host, remote_cmd],
+                    what=f"eval:{instance_id}", timeout=timeout_s + 900,
+                    max_attempts=3, ok_rcs=(0, 1, 2))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with eval_log_path.open("w", encoding="utf-8") as f:
+        f.write(f"[offload host={host} worker_rc={ev.returncode}]\n")
+        f.write(ev.stdout or "")
+        f.write("\n-- stderr --\n")
+        f.write(ev.stderr or "")
+    # fetch artifacts
+    for fname, attempts in (("eval_report.json", 4), ("normalized_eval.json", 3),
+                            ("eval.log", 3), ("predictions.jsonl", 2)):
+        _net_retry(["scp", *_EVAL_SSH_OPTS, f"{host}:{remote_dir}/out/{fname}", str(output_dir / fname)],
+                   what=f"scp_{fname}:{instance_id}", timeout=120, max_attempts=attempts)
+    _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"rm -rf {remote_dir}"],
+               what=f"cleanup:{instance_id}", timeout=30, max_attempts=2)
+    return {"exit_code": ev.returncode, "elapsed_s": round(time.monotonic() - started, 3),
+            "offloaded": True, "eval_host": host}
+
+
 def _run_eval(
     *,
     instance_id: str,
@@ -326,6 +422,12 @@ def _run_eval(
     timeout_s: int,
     eval_log_path: Path,
 ) -> dict[str, Any]:
+    if EVAL_HOST:
+        return _run_eval_remote(
+            host=EVAL_HOST, instance_id=instance_id, patch_path=patch_path,
+            output_dir=output_dir, dataset_name=dataset_name, model_name=model_name,
+            timeout_s=timeout_s, eval_log_path=eval_log_path,
+        )
     cbe_exe = shutil.which("codex-bench-eval-swe")
     if cbe_exe is None:
         cbe_exe = str(REPO_ROOT / ".venv" / "bin" / "codex-bench-eval-swe")
@@ -622,7 +724,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="Process only the first N instances (for smoke runs).")
     parser.add_argument("--skip-existing", action="store_true",
                         help="Skip instances whose runner_metadata.json is already on disk.")
+    parser.add_argument("--eval-host", default=None,
+                        help="SSH host to offload the eval step to (native x86_64). When set, "
+                             "the agent runs locally on arm64 but eval runs on the x86 box — "
+                             "recovers old-python instances + keeps the dataset single-arch.")
     args = parser.parse_args(argv)
+
+    global EVAL_HOST
+    EVAL_HOST = args.eval_host
+    if EVAL_HOST:
+        print(f"[eval-offload] eval step -> {EVAL_HOST} (native x86_64)", flush=True)
 
     dataset_name, instance_ids = _load_subset(args.subset)
     if args.limit is not None:
