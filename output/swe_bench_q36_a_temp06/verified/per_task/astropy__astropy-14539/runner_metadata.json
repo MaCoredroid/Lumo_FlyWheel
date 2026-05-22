@@ -17,6 +17,17 @@
     "elapsed_s": 0.104
   },
   "eval_report": {
+    "instance_id": "astropy__astropy-14539",
+    "verdict": "failed",
+    "passed": false,
+    "failure_mode": "patch_apply_failed",
+    "error": "empty_patch",
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "eval_wall_clock_seconds": 0.0
+  },
+  "ended_at": "2026-05-22T00:52:37Z",
+  "eval_report_arm64": {
     "track": "swe_bench",
     "instance_id": "astropy__astropy-14539",
     "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
@@ -30,5 +41,16 @@
     "eval_wall_clock_seconds": 0.0,
     "error": "empty_patch"
   },
-  "ended_at": "2026-05-22T00:52:37Z"
+  "eval_report_x86": {
+    "instance_id": "astropy__astropy-14539",
+    "verdict": "failed",
+    "passed": false,
+    "failure_mode": "patch_apply_failed",
+    "error": "empty_patch",
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "eval_wall_clock_seconds": 0.0
+  },
+  "eval_arch_authoritative": "x86_64",
+  "arch_verdict_changed": false
 }
