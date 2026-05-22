@@ -64,26 +64,37 @@ def _net_log(msg: str) -> None:
 
 
 def _run_with_retries(argv: list[str], *, what: str, host: str,
-                      timeout: int, max_attempts: int = 5) -> subprocess.CompletedProcess:
+                      timeout: int, max_attempts: int = 5,
+                      ok_rcs: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
     """Run a network command (ssh/scp) with bounded exponential-backoff retries.
 
-    Network failures (non-zero rc, timeout, transport errors) are logged to
-    the network-issue log with the attempt number; the final failure is
-    re-raised so the caller can decide whether to skip or abort.
+    `ok_rcs` lists return codes that count as a *successful run* (no retry).
+    For plain ssh/scp that's just {0}. For the eval ssh it's {0,1,2} because
+    the remote worker exits 1 (failed verdict) / 2 (crash verdict) as
+    legitimate measurement outcomes — those must NOT be retried. Only true
+    transport failures (ssh rc 255) and timeouts are network errors worth a
+    retry; they're timestamped to the network-issue log.
     """
     backoff = 5
     last: subprocess.CompletedProcess | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             cp = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-            if cp.returncode == 0:
+            if cp.returncode in ok_rcs:
                 if attempt > 1:
                     _net_log(f"RECOVERED {what} host={host} on attempt {attempt}")
                 return cp
             last = cp
             tail = (cp.stderr or cp.stdout or "").strip().splitlines()[-1:] or [""]
-            _net_log(f"FAIL {what} host={host} attempt={attempt}/{max_attempts} "
-                     f"rc={cp.returncode} :: {tail[0][:300]}")
+            # rc 255 = ssh transport failure (retry-worthy network error).
+            # Other non-ok rcs from a remote command that already ran are not
+            # network errors; log them plainly and do not retry.
+            if cp.returncode == 255:
+                _net_log(f"FAIL {what} host={host} attempt={attempt}/{max_attempts} "
+                         f"rc=255(transport) :: {tail[0][:300]}")
+            else:
+                _net_log(f"NONRETRY {what} host={host} rc={cp.returncode} (remote ran) :: {tail[0][:200]}")
+                return cp
         except subprocess.TimeoutExpired:
             _net_log(f"TIMEOUT {what} host={host} attempt={attempt}/{max_attempts} "
                      f"after {timeout}s")
@@ -96,9 +107,10 @@ def _run_with_retries(argv: list[str], *, what: str, host: str,
 
 
 def _ssh(host: str, remote_cmd: str, *, timeout: int, what: str,
-         max_attempts: int = 5) -> subprocess.CompletedProcess:
+         max_attempts: int = 5, ok_rcs: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
     return _run_with_retries(["ssh", *SSH_OPTS, host, remote_cmd],
-                             what=what, host=host, timeout=timeout, max_attempts=max_attempts)
+                             what=what, host=host, timeout=timeout,
+                             max_attempts=max_attempts, ok_rcs=ok_rcs)
 
 
 def _scp(host: str, src: str, dst: str, *, timeout: int, what: str,
@@ -169,7 +181,10 @@ def _process(host: str, instance_id: str, dataset_name: str, per_task_root: Path
         f"--timeout-s {timeout_s} --cache-level env"
     )
     # ssh timeout = eval timeout + generous slack for image pull
-    ev = _ssh(host, remote_cmd, timeout=timeout_s + 900, what=f"eval:{instance_id}", max_attempts=2)
+    # ok_rcs={0,1,2}: worker exits 0/1/2 for resolved/failed/crash verdicts —
+    # legitimate outcomes, NOT retry-worthy. Only ssh rc 255 / timeout retries.
+    ev = _ssh(host, remote_cmd, timeout=timeout_s + 900, what=f"eval:{instance_id}",
+              max_attempts=3, ok_rcs=(0, 1, 2))
     result["worker_rc"] = ev.returncode
     if ev.stdout:
         for line in ev.stdout.splitlines():
