@@ -24,3 +24,5 @@ HEAD is now at 5250b2442 Merge pull request #14164 from ayshih/grid_performance
 Preparing worktree (detached HEAD 1a4462d72)
 HEAD is now at 1a4462d72 Merge pull request #14102 from zoghbi-a/fix-votable-validator-issue-#14099
 [2026-05-23T16:54:56Z] <- astropy__astropy-13977 verdict=failed elapsed_total=1861.0s
+[2026-05-23T17:10:48Z] <- astropy__astropy-14096 verdict=resolved elapsed_total=1862.2s
+=== [2026-05-23T17:10:48Z] DONE n=8 resolved_rate=0.375 verdicts={'resolved': 3, 'failed': 5} ===

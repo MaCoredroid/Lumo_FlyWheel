@@ -4,3 +4,5 @@
 [driver] 2026-05-22T23:55:06Z END arm c1 conc=1
 [driver] ALL ARMS DONE 2026-05-22T23:55:06Z
 [driver] 2026-05-23T16:01:34Z RERUN START arm c2 conc=2 (skip-existing)
+[driver] 2026-05-23T17:10:49Z RERUN END arm c2 conc=2
+[driver] 2026-05-23T17:10:49Z RERUN START arm c1 conc=1 (skip-existing)
