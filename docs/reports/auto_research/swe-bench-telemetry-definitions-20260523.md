@@ -21,6 +21,26 @@ One row is emitted by the **proxy** when a `/v1/responses` request completes.
 | `decode_sum_s` | **DELTA of the global counter `vllm:request_decode_time_seconds_sum`** over the same before/after window | **NO — global, see below** |
 | `spec_decode_num_accepted_tokens` / `_draft_tokens` / `_drafts` | DELTAS of the corresponding global `vllm:spec_decode_*_total` counters over the same window | **NO — global** |
 
+### NEW (2026-05-23): network-deducted per-request vLLM compute time
+To get clean per-agent decode timing **without** turning off NONSTREAM_BYPASS
+(which would disable the proxy AUTO_CONTINUE solve-rate feature), the proxy now
+records the upstream (proxy→vLLM) call boundaries:
+| field | meaning |
+|---|---|
+| `ts_upstream_sent` | proxy wall-clock just before it POSTed the request to vLLM |
+| `ts_upstream_recv` | proxy wall-clock when the full upstream (non-streamed) response was received |
+| `upstream_compute_s` | `ts_upstream_recv - ts_upstream_sent` |
+
+Because proxy and vLLM are **co-located on the DGX (127.0.0.1)**, `upstream_compute_s`
+≈ vLLM's actual generation wall (prefill+decode) for that request, with the
+**codex↔proxy tunnel network latency deducted**. Validated: a 64-token request
+showed `upstream_compute_s`=6.44s vs `wallclock_s`=6.73s (Δ≈0.29s = tunnel RTT).
+**Use `completion_tokens / upstream_compute_s` as the clean per-request /
+per-agent throughput** (attributable via `oracle_session_id`). Caveat: still
+prefill+decode combined (bypass = non-streamed upstream, so no first-token split),
+and the AUTO_CONTINUE retry issues extra upstream calls whose time is not in this
+single delta (it captures the initial generation).
+
 ### The critical caveat (why decode_sum_s/wall can exceed 1)
 `prefill_sum_s`, `decode_sum_s`, and the `spec_decode_*` fields are **deltas of
 vLLM-global Prometheus histogram/counter sums**, captured by snapshotting

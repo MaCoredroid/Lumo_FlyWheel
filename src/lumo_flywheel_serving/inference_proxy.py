@@ -789,6 +789,9 @@ def _build_request_metrics_row(
         "ts_completed": _iso_ts(ts_completed),
         "wallclock_s": max(0.0, ts_completed - ts_request_received),
         "first_byte_s": (ts_first_byte - ts_request_received) if ts_first_byte is not None else None,
+        "ts_upstream_sent": _iso_ts(response_observed["ts_upstream_sent"]) if response_observed.get("ts_upstream_sent") else None,
+        "ts_upstream_recv": _iso_ts(response_observed["ts_upstream_recv"]) if response_observed.get("ts_upstream_recv") else None,
+        "upstream_compute_s": (response_observed["ts_upstream_recv"] - response_observed["ts_upstream_sent"]) if (response_observed.get("ts_upstream_sent") and response_observed.get("ts_upstream_recv")) else None,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "prefill_sum_s": deltas.get("prefill_sum_s"),
@@ -1767,7 +1770,16 @@ def build_proxy_handler(
             # masking genuine 400s. Gated by LUMO_PROXY_RETRY_UPSTREAM_400.
             _retry_400 = os.environ.get("LUMO_PROXY_RETRY_UPSTREAM_400", "1").lower() in {"1", "true", "yes"}
             upstream = None
+            # Upstream (proxy->vLLM) send/receive timestamps. proxy and vLLM are
+            # co-located on the DGX (127.0.0.1), so recv-sent ~= vLLM compute wall
+            # (prefill+decode) for the request, with the codex<->proxy tunnel
+            # network latency deducted. Lets per-agent decode speed be measured
+            # cleanly even with NONSTREAM_BYPASS on (where ts_first_byte collapses
+            # into ts_completed).
+            ts_upstream_sent = None
+            ts_upstream_recv = None
             for _attempt in range(2):
+                ts_upstream_sent = time.time()
                 try:
                     upstream = requests.post(
                         f"{upstream_base_url}{self.path}",
@@ -1809,6 +1821,7 @@ def build_proxy_handler(
                 # Codex thinks it asked for streaming. Buffer the upstream
                 # (non-streaming) JSON, normalize, then re-emit as SSE.
                 response_content_buf = upstream.content
+                ts_upstream_recv = time.time()
                 try:
                     parsed = json.loads(response_content_buf.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
@@ -1932,7 +1945,8 @@ def build_proxy_handler(
             self.end_headers()
 
             capture_state: dict[str, Any] | None = (
-                {"ts_first_byte": None, "has_tool_call": False, "text_chars": 0}
+                {"ts_first_byte": None, "has_tool_call": False, "text_chars": 0,
+                 "ts_upstream_sent": ts_upstream_sent, "ts_upstream_recv": ts_upstream_recv}
                 if capture_active
                 else None
             )
