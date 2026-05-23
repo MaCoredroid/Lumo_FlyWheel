@@ -791,7 +791,12 @@ def _build_request_metrics_row(
         "first_byte_s": (ts_first_byte - ts_request_received) if ts_first_byte is not None else None,
         "ts_upstream_sent": _iso_ts(response_observed["ts_upstream_sent"]) if response_observed.get("ts_upstream_sent") else None,
         "ts_upstream_recv": _iso_ts(response_observed["ts_upstream_recv"]) if response_observed.get("ts_upstream_recv") else None,
-        "upstream_compute_s": (response_observed["ts_upstream_recv"] - response_observed["ts_upstream_sent"]) if (response_observed.get("ts_upstream_sent") and response_observed.get("ts_upstream_recv")) else None,
+        "upstream_compute_s": (
+            response_observed["upstream_compute_accum_s"]
+            if response_observed.get("upstream_compute_accum_s") is not None
+            else ((response_observed["ts_upstream_recv"] - response_observed["ts_upstream_sent"])
+                  if (response_observed.get("ts_upstream_sent") and response_observed.get("ts_upstream_recv")) else None)
+        ),
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "prefill_sum_s": deltas.get("prefill_sum_s"),
@@ -1778,6 +1783,11 @@ def build_proxy_handler(
             # into ts_completed).
             ts_upstream_sent = None
             ts_upstream_recv = None
+            # Sum of ALL upstream vLLM call durations for this codex request:
+            # the initial call plus every AUTO_CONTINUE retry (each retry is a
+            # separate upstream generation merged into one response). This is the
+            # true network-deducted vLLM compute for the request.
+            upstream_compute_accum_s = None
             for _attempt in range(2):
                 ts_upstream_sent = time.time()
                 try:
@@ -1822,6 +1832,8 @@ def build_proxy_handler(
                 # (non-streaming) JSON, normalize, then re-emit as SSE.
                 response_content_buf = upstream.content
                 ts_upstream_recv = time.time()
+                if ts_upstream_sent is not None:
+                    upstream_compute_accum_s = ts_upstream_recv - ts_upstream_sent
                 try:
                     parsed = json.loads(response_content_buf.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
@@ -1899,6 +1911,7 @@ def build_proxy_handler(
                         retry_req = _normalize_input_for_nonstreaming(retry_req)
                         retry_payload = json.dumps(retry_req).encode("utf-8")
                         try:
+                            _retry_sent = time.time()
                             retry_resp = requests.post(
                                 f"{upstream_base_url}{self.path}",
                                 data=retry_payload,
@@ -1906,6 +1919,8 @@ def build_proxy_handler(
                                 timeout=600,
                                 stream=False,
                             )
+                            if upstream_compute_accum_s is not None:
+                                upstream_compute_accum_s += time.time() - _retry_sent
                             if retry_resp.status_code == 200:
                                 try:
                                     retry_parsed = retry_resp.json()
@@ -1946,7 +1961,8 @@ def build_proxy_handler(
 
             capture_state: dict[str, Any] | None = (
                 {"ts_first_byte": None, "has_tool_call": False, "text_chars": 0,
-                 "ts_upstream_sent": ts_upstream_sent, "ts_upstream_recv": ts_upstream_recv}
+                 "ts_upstream_sent": ts_upstream_sent, "ts_upstream_recv": ts_upstream_recv,
+                 "upstream_compute_accum_s": upstream_compute_accum_s}
                 if capture_active
                 else None
             )
