@@ -11,3 +11,9 @@ HEAD is now at 298ccb478 Merge pull request #13031 from meeseeksmachine/auto-bac
 [2026-05-23T18:04:50Z] -> astropy__astropy-13236
 Preparing worktree (detached HEAD 6ed769d58)
 HEAD is now at 6ed769d58 Merge pull request #13228 from astrofrog/fix-spectralcoord-no-target
+[2026-05-23T18:15:09Z]    astropy__astropy-13236: empty patch (agent_gave_up); retrying codex once
+[2026-05-23T18:45:09Z]    astropy__astropy-13236: retry produced 1305B patch
+[2026-05-23T18:46:03Z] <- astropy__astropy-13236 verdict=failed elapsed_total=2473.2s
+[2026-05-23T18:46:03Z] -> astropy__astropy-13398
+Preparing worktree (detached HEAD 6500928dc)
+HEAD is now at 6500928dc Merge pull request #13502 from taldcroft/better-iers-docs
