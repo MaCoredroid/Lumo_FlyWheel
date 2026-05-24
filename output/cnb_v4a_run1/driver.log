@@ -1,0 +1,2 @@
+[cnb] 2026-05-24T20:43:53.654820+00:00 START cnb-v4a config=D B=1 tasks=11 model=qwen3.6-27b endpoint=http://127.0.0.1:8022/v1
+[cnb] 2026-05-24T20:43:53.654855+00:00 [1/11] dead-flag-reachability-audit START
