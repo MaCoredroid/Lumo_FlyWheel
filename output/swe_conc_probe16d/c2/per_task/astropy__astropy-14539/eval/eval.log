@@ -1,0 +1,19 @@
+harness elapsed_s=48.794 exit_code=0 arch=x86_64
+-- stdout --
+Running 1 instances...
+All instances run.
+Cleaning cached images...
+Removed 0 images.
+Total instances: 1
+Instances submitted: 1
+Instances completed: 1
+Instances incomplete: 0
+Instances resolved: 1
+Instances unresolved: 0
+Instances with empty patches: 0
+Instances with errors: 0
+Unstopped containers: 0
+Unremoved images: 0
+Report written to qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a.x86eval-eval-1779601432.json
+-- stderr --
+Evaluation:   0%|          | 0/1 [00:00<?, ?it/s, error=0, ✓=0, ✖=0]Evaluation:   0%|          | 0/1 [00:46<?, ?it/s, ✓=1, ✖=0, error=0]Evaluation: 100%|##########| 1/1 [00:46<00:00, 46.41s/it, ✓=1, ✖=0, error=0]Evaluation: 100%|##########| 1/1 [00:46<00:00, 46.42s/it, ✓=1, ✖=0, error=0]

@@ -1,0 +1,4 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-24T05:14:34.758514Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "3000", expected usize at line 1 column 77
+2026-05-24T05:18:50.549518Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
