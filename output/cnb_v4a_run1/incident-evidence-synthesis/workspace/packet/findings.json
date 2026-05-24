@@ -1,0 +1,29 @@
+{
+  "ranked_findings": [
+    {
+      "summary": "Bulk-refund requests accepted without idempotency keys, bypassed by legacy_batch_header",
+      "confidence": "high",
+      "evidence": [
+        "corpus/logs/api_gateway_2026-05-01.log: idempotency_key=missing on accepted bulk-refund requests",
+        "corpus/logs/api_gateway_2026-05-01.log: idempotency-required guardrail skipped due to legacy_batch_header",
+        "corpus/timeline/incident_timeline.md: guardrail skipped at 10:18 UTC",
+        "corpus/tickets/TICKET-8729.md: every duplicate has request_class=bulk-refund and no idempotency key"
+      ]
+    },
+    {
+      "summary": "Duplicate refunds limited to bulk-refund class; single-refund traffic unaffected",
+      "confidence": "high",
+      "evidence": [
+        "corpus/tickets/TICKET-8729.md: single-refund API traffic included idempotency keys and did not duplicate"
+      ]
+    },
+    {
+      "summary": "Worker replay theory opened but not supported by final evidence",
+      "confidence": "low",
+      "evidence": [
+        "corpus/tickets/TICKET-8721.md: initial theory was queue worker replay before API gateway logs were available"
+      ]
+    }
+  ],
+  "unresolved_ambiguity": "Worker replay and retry backoff remain as early symptom theories that are not supported by final evidence as the primary trigger"
+}
