@@ -1,0 +1,10 @@
+{
+  "task": "incident-evidence-synthesis",
+  "started_at": "2026-05-24T21:16:59.326603+00:00",
+  "ended_at": "2026-05-24T21:35:38.600530+00:00",
+  "elapsed_s": 1119.3,
+  "rc": 1,
+  "model": "qwen3.6-27b",
+  "endpoint": "http://127.0.0.1:8022/v1",
+  "variant": "v1-clean-baseline"
+}

@@ -4,3 +4,5 @@
 [cnb] 2026-05-24T20:52:37.349427+00:00 [2/11] fanout-fullstack-release-blocker START
 [cnb] 2026-05-24T21:16:59.325542+00:00 [2/11] fanout-fullstack-release-blocker END rc=1 files=14 elapsed=1462.0 status=WROTE_FILES
 [cnb] 2026-05-24T21:16:59.325571+00:00 [3/11] incident-evidence-synthesis START
+[cnb] 2026-05-24T21:35:38.601736+00:00 [3/11] incident-evidence-synthesis END rc=1 files=7 elapsed=1119.3 status=WROTE_FILES
+[cnb] 2026-05-24T21:35:38.601764+00:00 [4/11] multi-tool-transaction-repair START
