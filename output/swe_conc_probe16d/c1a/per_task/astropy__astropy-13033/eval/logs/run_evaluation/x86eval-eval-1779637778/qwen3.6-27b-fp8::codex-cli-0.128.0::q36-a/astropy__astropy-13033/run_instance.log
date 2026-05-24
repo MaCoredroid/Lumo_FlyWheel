@@ -1,0 +1,75 @@
+2026-05-24 08:51:03,822 - INFO - Creating container for astropy__astropy-13033...
+2026-05-24 08:51:04,385 - INFO - Container for astropy__astropy-13033 created: 2ea0fc47fe6bf1fe0c35853afd1249fc765986da5d3b2fb5e59368d8a02cc2ce
+2026-05-24 08:51:04,506 - INFO - Container for astropy__astropy-13033 started: 2ea0fc47fe6bf1fe0c35853afd1249fc765986da5d3b2fb5e59368d8a02cc2ce
+2026-05-24 08:51:04,506 - INFO - Intermediate patch for astropy__astropy-13033 written to logs/run_evaluation/x86eval-eval-1779637778/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13033/patch.diff, now applying to container...
+2026-05-24 08:51:04,587 - INFO - >>>>> Applied Patch:
+Checking patch astropy/timeseries/core.py...
+Applied patch astropy/timeseries/core.py cleanly.
+
+2026-05-24 08:51:04,804 - INFO - Git diff before:
+diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f8..b15835c16 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -76,6 +76,22 @@ class BaseTimeSeries(QTable):
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
+ 
++                # Check if required columns are simply missing (the first
++                # required column is in the right place but others are not
++                # present), to avoid a confusing message like
++                # "expected 'time' as the first column but found 'time'"
++                missing = [col for col in required_columns if col not in self.colnames]
++                if (missing and len(self.colnames) > 0
++                        and self.colnames[0] == required_columns[0]):
++                    if len(missing) == 1:
++                        raise ValueError("{} object is invalid - missing required "
++                                         "column '{}'".format(self.__class__.__name__, missing[0]))
++                    else:
++                        raise ValueError("{} object is invalid - missing required "
++                                         "columns '{}'"
++                                         .format(self.__class__.__name__,
++                                                "', '".join(missing)))
++
+                 raise ValueError("{} object is invalid - expected '{}' "
+                                  "as the first column{} but found '{}'"
+                                  .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
+2026-05-24 08:51:04,804 - INFO - Eval script for astropy__astropy-13033 written to logs/run_evaluation/x86eval-eval-1779637778/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13033/eval.sh; copying to container...
+2026-05-24 08:51:36,572 - INFO - Test runtime: 31.73 seconds
+2026-05-24 08:51:36,572 - INFO - Test output for astropy__astropy-13033 written to logs/run_evaluation/x86eval-eval-1779637778/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13033/test_output.txt
+2026-05-24 08:51:36,623 - INFO - Git diff after:
+diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f8..b15835c16 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -76,6 +76,22 @@ class BaseTimeSeries(QTable):
+ 
+             elif self.colnames[:len(required_columns)] != required_columns:
+ 
++                # Check if required columns are simply missing (the first
++                # required column is in the right place but others are not
++                # present), to avoid a confusing message like
++                # "expected 'time' as the first column but found 'time'"
++                missing = [col for col in required_columns if col not in self.colnames]
++                if (missing and len(self.colnames) > 0
++                        and self.colnames[0] == required_columns[0]):
++                    if len(missing) == 1:
++                        raise ValueError("{} object is invalid - missing required "
++                                         "column '{}'".format(self.__class__.__name__, missing[0]))
++                    else:
++                        raise ValueError("{} object is invalid - missing required "
++                                         "columns '{}'"
++                                         .format(self.__class__.__name__,
++                                                "', '".join(missing)))
++
+                 raise ValueError("{} object is invalid - expected '{}' "
+                                  "as the first column{} but found '{}'"
+                                  .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
+2026-05-24 08:51:36,623 - INFO - Grading answer for astropy__astropy-13033...
+2026-05-24 08:51:36,625 - INFO - report: {'astropy__astropy-13033': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': False, 'tests_status': {'FAIL_TO_PASS': {'success': [], 'failure': ['astropy/timeseries/tests/test_sampled.py::test_required_columns']}, 'PASS_TO_PASS': {'success': ['astropy/timeseries/tests/test_sampled.py::test_empty_initialization', 'astropy/timeseries/tests/test_sampled.py::test_empty_initialization_invalid', 'astropy/timeseries/tests/test_sampled.py::test_initialize_only_time', 'astropy/timeseries/tests/test_sampled.py::test_initialization_with_data', 'astropy/timeseries/tests/test_sampled.py::test_initialize_only_data', 'astropy/timeseries/tests/test_sampled.py::test_initialization_with_table', 'astropy/timeseries/tests/test_sampled.py::test_initialization_missing_time_delta', 'astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_and_time_start', 'astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_time_delta', 'astropy/timeseries/tests/test_sampled.py::test_initialization_with_time_in_data', 'astropy/timeseries/tests/test_sampled.py::test_initialization_n_samples', 'astropy/timeseries/tests/test_sampled.py::test_initialization_length_mismatch', 'astropy/timeseries/tests/test_sampled.py::test_initialization_invalid_both_time_and_time_delta', 'astropy/timeseries/tests/test_sampled.py::test_fold', 'astropy/timeseries/tests/test_sampled.py::test_fold_invalid_options', 'astropy/timeseries/tests/test_sampled.py::test_read_time_missing', 'astropy/timeseries/tests/test_sampled.py::test_read_time_wrong', 'astropy/timeseries/tests/test_sampled.py::test_read', 'astropy/timeseries/tests/test_sampled.py::test_periodogram[BoxLeastSquares]', 'astropy/timeseries/tests/test_sampled.py::test_periodogram[LombScargle]'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for astropy__astropy-13033: resolved: False
+2026-05-24 08:51:36,625 - INFO - Attempting to stop container sweb.eval.astropy__astropy-13033.x86eval-eval-1779637778...
+2026-05-24 08:51:51,733 - INFO - Attempting to remove container sweb.eval.astropy__astropy-13033.x86eval-eval-1779637778...
+2026-05-24 08:51:51,744 - INFO - Container sweb.eval.astropy__astropy-13033.x86eval-eval-1779637778 removed.
+2026-05-24 08:51:51,744 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.astropy_1776_astropy-13033:latest...
+2026-05-24 08:51:52,283 - INFO - Image swebench/sweb.eval.x86_64.astropy_1776_astropy-13033:latest removed.
