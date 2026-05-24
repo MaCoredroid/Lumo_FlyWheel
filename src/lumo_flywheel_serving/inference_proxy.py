@@ -243,6 +243,39 @@ def _first_user_text(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, default=str)[:4096]
 
 
+def _run_anchor(payload: dict[str, Any]) -> str:
+    """Per-invocation identifier distinguishing separate runs that share the
+    same first-user-text.
+
+    The first-user-text alone is *not* unique per run: CNB-55 ``--repeat N``
+    ablations and any A/B that re-runs an identical prompt produce the same
+    ``_first_user_text`` across independent Codex invocations, which collapsed
+    them onto one suffix-tree partition and let earlier attempts warm the cache
+    for later ones (Round 5 spec §0.1). This anchor must stay stable across
+    *turns of one conversation* but differ across *separate invocations*.
+
+    Precedence: explicit harness override (``metadata.run_id``), then Codex's
+    ``prompt_cache_key`` (a per-conversation UUIDv7 — verified stable across
+    turns and unique per ``codex exec``), then a process-level env override.
+    Empty string when none present, so the caller falls back to first-user-text
+    alone (legacy behaviour, no regression for traffic that lacks the key).
+    """
+
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ("run_id", "lumo_run_id"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value:
+                return value
+    pck = payload.get("prompt_cache_key")
+    if isinstance(pck, str) and pck:
+        return pck
+    env_run_id = os.environ.get("LUMO_RUN_ID", "").strip()
+    if env_run_id:
+        return env_run_id
+    return ""
+
+
 def _detect_dialect(payload: dict[str, Any]) -> str:
     """Identify the harness dialect.
 
@@ -461,7 +494,12 @@ def synthesize_oracle_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
     emission to be useful and the drafter tolerates absence.
     """
 
+    run_anchor = _run_anchor(payload)
     anchor = _first_user_text(payload)
+    if run_anchor:
+        # \x1e (record separator) can't appear in user text or a UUID, so the
+        # concatenation is unambiguous.
+        anchor = anchor + "\x1e" + run_anchor
     session_id = "sess_" + hashlib.sha256(anchor.encode("utf-8", errors="replace")).hexdigest()[:16]
     turn_index = _count_turn_index(payload)
     tool_schemas = _extract_tool_schemas(payload)
@@ -475,6 +513,8 @@ def synthesize_oracle_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         "is_session_open": turn_index == 0,
         "suffix_tree_cap_mb": 100,
     }
+    if run_anchor:
+        snap["run_anchor"] = run_anchor
     if tool_schemas:
         snap["tool_schemas"] = tool_schemas
     if expected is not None:
@@ -809,9 +849,24 @@ def _build_request_metrics_row(
         "text_chars_observed": int(response_observed.get("text_chars", 0) or 0),
         "saw_response_completed": bool(saw_completed),
         "metrics_snapshot_collected": bool(metrics_before) and bool(metrics_after),
+        # Batch-occupancy gauges (instantaneous, not deltas) bracketing this
+        # request. The spec_decode_* and decode_sum_s deltas above are computed
+        # from global counters, so they are only attributable to this single
+        # request when nothing else was in flight. Emitting the running/waiting
+        # gauges lets a consumer keep only clean rows (both ~<=1 ⇒ effectively
+        # B=1) instead of silently averaging concurrency-contaminated deltas
+        # (Round 5 spec §0 measurement hygiene).
+        "num_requests_running_before": metrics_before.get("vllm:num_requests_running"),
+        "num_requests_running_after": metrics_after.get("vllm:num_requests_running"),
+        "num_requests_waiting_before": metrics_before.get("vllm:num_requests_waiting"),
+        "num_requests_waiting_after": metrics_after.get("vllm:num_requests_waiting"),
     }
     if oracle_snapshot is not None:
         row["oracle_session_id"] = oracle_snapshot.get("session_id")
+        # Per-invocation anchor (prompt_cache_key / run_id). Lets cold (first
+        # attempt) vs warm (later attempts of the same task) be separated even
+        # when first-user-text is shared (Round 5 spec §0.1).
+        row["oracle_run_anchor"] = oracle_snapshot.get("run_anchor")
         row["oracle_turn_index"] = oracle_snapshot.get("turn_index")
         row["oracle_dialect"] = oracle_snapshot.get("dialect")
         row["oracle_is_session_open"] = bool(oracle_snapshot.get("is_session_open"))

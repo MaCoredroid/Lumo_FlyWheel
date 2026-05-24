@@ -31,6 +31,7 @@ from lumo_flywheel_serving.inference_proxy import (
     build_proxy_handler,
     parse_session_request_id,
     synthesize_oracle_snapshot,
+    _build_request_metrics_row,
 )
 from lumo_flywheel_serving.tuned_config import RuntimeStateStore, make_tuned_config_bundle, persist_tuned_config_bundle
 
@@ -1071,6 +1072,87 @@ def test_synthesize_oracle_snapshot_session_id_stable_across_turns() -> None:
     assert turn0["session_id"] == turn1["session_id"]
     assert turn0["turn_index"] == 0
     assert turn1["turn_index"] == 1
+
+
+def test_synthesize_oracle_snapshot_run_anchor_separates_repeat_invocations() -> None:
+    # Same first-user-text, different prompt_cache_key = two independent Codex
+    # invocations of one task (the --repeat / A-B bleed case, spec §0.1).
+    base_input = [{"role": "user", "content": "fix the failing test"}]
+    run_a = synthesize_oracle_snapshot({"input": base_input, "prompt_cache_key": "uuid-aaa"})
+    run_b = synthesize_oracle_snapshot({"input": base_input, "prompt_cache_key": "uuid-bbb"})
+    assert run_a["session_id"] != run_b["session_id"]
+    assert run_a["run_anchor"] == "uuid-aaa"
+    assert run_b["run_anchor"] == "uuid-bbb"
+
+
+def test_synthesize_oracle_snapshot_run_anchor_stable_across_turns() -> None:
+    # One conversation: prompt_cache_key is constant across turns, so the
+    # session partition (and its warming suffix cache) must persist.
+    pck = "uuid-conversation-1"
+    turn0 = synthesize_oracle_snapshot(
+        {"input": [{"role": "user", "content": "go"}], "prompt_cache_key": pck}
+    )
+    turn1 = synthesize_oracle_snapshot(
+        {
+            "input": [
+                {"role": "user", "content": "go"},
+                {"type": "function_call", "name": "shell", "arguments": "{}"},
+                {"type": "function_call_output", "output": "ok"},
+            ],
+            "prompt_cache_key": pck,
+        }
+    )
+    assert turn0["session_id"] == turn1["session_id"]
+
+
+def test_synthesize_oracle_snapshot_metadata_run_id_overrides_prompt_cache_key() -> None:
+    snap = synthesize_oracle_snapshot(
+        {
+            "input": [{"role": "user", "content": "x"}],
+            "prompt_cache_key": "ignored",
+            "metadata": {"run_id": "explicit-run-7"},
+        }
+    )
+    assert snap["run_anchor"] == "explicit-run-7"
+
+
+def test_synthesize_oracle_snapshot_no_run_anchor_falls_back_to_legacy() -> None:
+    # No prompt_cache_key / run_id / env -> legacy first-user-text-only id and
+    # no run_anchor field (no regression for traffic that lacks the key).
+    snap = synthesize_oracle_snapshot({"input": [{"role": "user", "content": "x"}]})
+    legacy = synthesize_oracle_snapshot({"input": [{"role": "user", "content": "x"}]})
+    assert snap["session_id"] == legacy["session_id"]
+    assert "run_anchor" not in snap
+
+
+def test_synthesize_oracle_snapshot_env_run_id_used_when_no_prompt_cache_key(monkeypatch) -> None:
+    monkeypatch.setenv("LUMO_RUN_ID", "env-run-9")
+    snap = synthesize_oracle_snapshot({"input": [{"role": "user", "content": "x"}]})
+    assert snap["run_anchor"] == "env-run-9"
+
+
+def test_build_request_metrics_row_emits_concurrency_gauges_and_run_anchor() -> None:
+    before = {"vllm:num_requests_running": 1.0, "vllm:num_requests_waiting": 0.0}
+    after = {"vllm:num_requests_running": 1.0, "vllm:num_requests_waiting": 0.0}
+    row = _build_request_metrics_row(
+        request_id="resp_1",
+        request_path="/v1/responses",
+        request_class="agent",
+        upstream_status=200,
+        metrics_before=before,
+        metrics_after=after,
+        deltas={},
+        response_observed={"model": "qwen3.6-27b", "usage": {}},
+        ts_request_received=0.0,
+        ts_first_byte=0.1,
+        ts_completed=1.0,
+        saw_completed=True,
+        oracle_snapshot={"session_id": "sess_x", "run_anchor": "uuid-aaa", "turn_index": 0},
+    )
+    assert row["num_requests_running_before"] == 1.0
+    assert row["num_requests_running_after"] == 1.0
+    assert row["num_requests_waiting_before"] == 0.0
+    assert row["oracle_run_anchor"] == "uuid-aaa"
 
 
 def test_synthesize_oracle_snapshot_counts_assistant_messages() -> None:
