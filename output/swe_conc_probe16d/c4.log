@@ -1,0 +1,79 @@
+=== [2026-05-23T21:02:39Z] dataset=princeton-nlp/SWE-bench_Verified tag=c4 n=16 concurrency=4 ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/conc_probe8c/c2/per_task/astropy__astropy-13236/workspace
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/conc_probe8c/c2/per_task/astropy__astropy-13398/workspace
+[2026-05-23T21:02:41Z] -> astropy__astropy-12907
+[2026-05-23T21:02:41Z] -> astropy__astropy-13033
+[2026-05-23T21:02:41Z] -> astropy__astropy-13236
+[2026-05-23T21:02:41Z] -> astropy__astropy-13398
+Preparing worktree (detached HEAD 6ed769d58)
+Preparing worktree (detached HEAD 298ccb478)
+Preparing worktree (detached HEAD 6500928dc)
+Preparing worktree (detached HEAD d16bfe05a)
+HEAD is now at d16bfe05a Merge pull request #12900 from Cadair/custom_compound_model
+HEAD is now at 6500928dc Merge pull request #13502 from taldcroft/better-iers-docs
+HEAD is now at 6ed769d58 Merge pull request #13228 from astrofrog/fix-spectralcoord-no-target
+HEAD is now at 298ccb478 Merge pull request #13031 from meeseeksmachine/auto-backport-of-pr-13027-on-main
+[2026-05-23T21:14:00Z]    astropy__astropy-12907: empty patch (agent_gave_up); retrying codex once
+[2026-05-23T21:28:52Z] <- astropy__astropy-13398 verdict=failed elapsed_total=1570.6s
+[2026-05-23T21:28:52Z] -> astropy__astropy-13453
+Preparing worktree (detached HEAD 19cc80471)
+HEAD is now at 19cc80471 Merge pull request #13444 from eerovaher/unit-format-docs
+[2026-05-23T21:35:05Z] <- astropy__astropy-13033 verdict=failed elapsed_total=1944.0s
+[2026-05-23T21:35:05Z] -> astropy__astropy-13579
+Preparing worktree (detached HEAD 0df94ff70)
+HEAD is now at 0df94ff70 Merge pull request #13574 from pllim/rm-corpus-404
+[2026-05-23T21:35:06Z] <- astropy__astropy-13236 verdict=failed elapsed_total=1945.3s
+[2026-05-23T21:35:06Z] -> astropy__astropy-13977
+Preparing worktree (detached HEAD 5250b2442)
+HEAD is now at 5250b2442 Merge pull request #14164 from ayshih/grid_performance
+[2026-05-23T21:44:00Z]    astropy__astropy-12907: retry produced 504B patch
+[2026-05-23T21:45:01Z] <- astropy__astropy-12907 verdict=resolved elapsed_total=2539.5s
+[2026-05-23T21:45:01Z] -> astropy__astropy-14096
+Preparing worktree (detached HEAD 1a4462d72)
+HEAD is now at 1a4462d72 Merge pull request #14102 from zoghbi-a/fix-votable-validator-issue-#14099
+[2026-05-23T22:00:20Z] <- astropy__astropy-13453 verdict=resolved elapsed_total=1888.5s
+[2026-05-23T22:00:20Z] -> astropy__astropy-14182
+Preparing worktree (detached HEAD a5917978b)
+HEAD is now at a5917978b Merge pull request #14172 from astropy/pre-commit-ci-update-config
+[2026-05-23T22:05:06Z]    astropy__astropy-13579: empty patch (agent_gave_up); retrying codex once
+[2026-05-23T22:06:09Z] <- astropy__astropy-13977 verdict=failed elapsed_total=1862.8s
+[2026-05-23T22:06:09Z] -> astropy__astropy-14309
+Preparing worktree (detached HEAD cdb66059a)
+HEAD is now at cdb66059a Merge pull request #14303 from pllim/bleach-v6
+[2026-05-23T22:13:42Z]    astropy__astropy-14096: empty patch (agent_gave_up); retrying codex once
+[2026-05-23T22:31:21Z] <- astropy__astropy-14182 verdict=failed elapsed_total=1861.4s
+[2026-05-23T22:31:21Z] -> astropy__astropy-14365
+Preparing worktree (detached HEAD 7269fa3e3)
+HEAD is now at 7269fa3e3 Merge pull request #14013 from WilliamJamieson/deprecate/Voigt1D_humlicek2_option
+[2026-05-23T22:35:06Z] <- astropy__astropy-13579 verdict=failed elapsed_total=3600.8s
+[2026-05-23T22:35:06Z] -> astropy__astropy-14369
+Preparing worktree (detached HEAD fa4e8d1cd)
+HEAD is now at fa4e8d1cd Merge pull request #14358 from WilliamJamieson/bugfix/asdf_warning
+[2026-05-23T22:37:00Z] <- astropy__astropy-14309 verdict=resolved elapsed_total=1851.0s
+[2026-05-23T22:37:00Z] -> astropy__astropy-14508
+Preparing worktree (detached HEAD a3f4ae6cd)
+HEAD is now at a3f4ae6cd Merge pull request #14430 from Cadair/performance_issues_decompress_tile
+[2026-05-23T22:40:56Z]    astropy__astropy-14508: empty patch (agent_gave_up); retrying codex once
+[2026-05-23T22:43:42Z]    astropy__astropy-14096: retry produced 813B patch
+[2026-05-23T22:44:44Z] <- astropy__astropy-14096 verdict=failed elapsed_total=3583.2s
+[2026-05-23T22:44:44Z] -> astropy__astropy-14539
+Preparing worktree (detached HEAD c0a24c1dc)
+HEAD is now at c0a24c1dc Merge pull request #14517 from pllim/drop-i686-wheel
+[2026-05-23T22:58:02Z]    astropy__astropy-14369: empty patch (agent_gave_up); retrying codex once
+[2026-05-23T23:02:12Z] <- astropy__astropy-14365 verdict=failed elapsed_total=1850.2s
+[2026-05-23T23:02:12Z] -> astropy__astropy-14598
+Preparing worktree (detached HEAD 80c3854a5)
+HEAD is now at 80c3854a5 Merge pull request #14576 from Cadair/no_gc_in_tiled_data
+[2026-05-23T23:10:56Z]    astropy__astropy-14508: retry produced 1083B patch
+[2026-05-23T23:11:45Z] <- astropy__astropy-14508 verdict=resolved elapsed_total=2085.1s
+[2026-05-23T23:11:45Z] -> astropy__astropy-14995
+Preparing worktree (detached HEAD b16c7d12c)
+Updating files:   0% (2/1777)Updating files:   1% (18/1777)Updating files:   2% (36/1777)Updating files:   3% (54/1777)Updating files:   4% (72/1777)Updating files:   5% (89/1777)Updating files:   6% (107/1777)Updating files:   7% (125/1777)Updating files:   8% (143/1777)Updating files:   9% (160/1777)Updating files:  10% (178/1777)Updating files:  11% (196/1777)Updating files:  12% (214/1777)Updating files:  13% (232/1777)Updating files:  14% (249/1777)Updating files:  15% (267/1777)Updating files:  16% (285/1777)Updating files:  17% (303/1777)Updating files:  18% (320/1777)Updating files:  19% (338/1777)Updating files:  20% (356/1777)Updating files:  21% (374/1777)Updating files:  22% (391/1777)Updating files:  23% (409/1777)Updating files:  24% (427/1777)Updating files:  25% (445/1777)Updating files:  26% (463/1777)Updating files:  27% (480/1777)Updating files:  28% (498/1777)Updating files:  29% (516/1777)Updating files:  30% (534/1777)Updating files:  31% (551/1777)Updating files:  32% (569/1777)Updating files:  33% (587/1777)Updating files:  34% (605/1777)Updating files:  35% (622/1777)Updating files:  36% (640/1777)Updating files:  37% (658/1777)Updating files:  38% (676/1777)Updating files:  39% (694/1777)Updating files:  40% (711/1777)Updating files:  41% (729/1777)Updating files:  42% (747/1777)Updating files:  43% (765/1777)Updating files:  44% (782/1777)Updating files:  45% (800/1777)Updating files:  46% (818/1777)Updating files:  47% (836/1777)Updating files:  48% (853/1777)Updating files:  49% (871/1777)Updating files:  50% (889/1777)Updating files:  51% (907/1777)Updating files:  52% (925/1777)Updating files:  53% (942/1777)Updating files:  54% (960/1777)Updating files:  55% (978/1777)Updating files:  56% (996/1777)Updating files:  57% (1013/1777)Updating files:  58% (1031/1777)Updating files:  59% (1049/1777)Updating files:  60% (1067/1777)Updating files:  61% (1084/1777)Updating files:  62% (1102/1777)Updating files:  63% (1120/1777)Updating files:  64% (1138/1777)Updating files:  65% (1156/1777)Updating files:  66% (1173/1777)Updating files:  67% (1191/1777)Updating files:  68% (1209/1777)Updating files:  69% (1227/1777)Updating files:  70% (1244/1777)Updating files:  71% (1262/1777)Updating files:  72% (1280/1777)Updating files:  73% (1298/1777)Updating files:  74% (1315/1777)Updating files:  75% (1333/1777)Updating files:  76% (1351/1777)Updating files:  77% (1369/1777)Updating files:  78% (1387/1777)Updating files:  79% (1404/1777)Updating files:  80% (1422/1777)Updating files:  81% (1440/1777)Updating files:  82% (1458/1777)Updating files:  83% (1475/1777)Updating files:  84% (1493/1777)Updating files:  85% (1511/1777)Updating files:  86% (1529/1777)Updating files:  87% (1546/1777)Updating files:  88% (1564/1777)Updating files:  89% (1582/1777)Updating files:  90% (1600/1777)Updating files:  91% (1618/1777)Updating files:  92% (1635/1777)Updating files:  93% (1653/1777)Updating files:  94% (1671/1777)Updating files:  95% (1689/1777)Updating files:  96% (1706/1777)Updating files:  97% (1724/1777)Updating files:  98% (1742/1777)Updating files:  99% (1760/1777)Updating files: 100% (1777/1777)Updating files: 100% (1777/1777), done.
+HEAD is now at b16c7d12c Merge pull request #14988 from nstarman/cosmo-dont-register-abstract
+[2026-05-23T23:15:35Z] <- astropy__astropy-14539 verdict=resolved elapsed_total=1851.5s
+[2026-05-23T23:19:13Z]    astropy__astropy-14598: empty patch (agent_gave_up); retrying codex once
+[2026-05-23T23:28:02Z] <- astropy__astropy-14369 verdict=failed elapsed_total=3175.9s
+[2026-05-23T23:39:29Z] <- astropy__astropy-14995 verdict=resolved elapsed_total=1663.9s
+[2026-05-23T23:45:23Z] <- astropy__astropy-14598 verdict=failed elapsed_total=2591.4s
+=== [2026-05-23T23:45:23Z] DONE n=16 resolved_rate=0.375 verdicts={'resolved': 6, 'failed': 10} ===

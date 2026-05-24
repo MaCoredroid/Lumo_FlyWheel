@@ -1,0 +1,7 @@
+[driver] 2026-05-23T21:02:39Z START arm c4 conc=4 epoch=1779570159
+[driver] 2026-05-23T23:45:23Z END arm c4 conc=4 epoch=1779579923
+[driver] 2026-05-23T23:45:23Z START arm c2 conc=2 epoch=1779579923
+[driver] 2026-05-24T00:37:27Z END arm c2 conc=2 epoch=1779583047
+[driver] 2026-05-24T00:37:27Z START arm c1 conc=1 epoch=1779583047
+[driver] 2026-05-24T00:50:49Z END arm c1 conc=1 epoch=1779583849
+[driver] ALL ARMS DONE (16d) 2026-05-24T00:50:49Z

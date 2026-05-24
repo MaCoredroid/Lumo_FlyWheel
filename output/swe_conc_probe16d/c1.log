@@ -1,0 +1,82 @@
+=== [2026-05-24T00:37:27Z] dataset=princeton-nlp/SWE-bench_Verified tag=c1 n=16 concurrency=1 ===
+[2026-05-24T00:37:29Z] -> astropy__astropy-12907
+Preparing worktree (detached HEAD d16bfe05a)
+HEAD is now at d16bfe05a Merge pull request #12900 from Cadair/custom_compound_model
+[2026-05-24T00:37:55Z]    astropy__astropy-12907: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:38:20Z] <- astropy__astropy-12907 verdict=failed elapsed_total=50.7s
+[2026-05-24T00:38:20Z] -> astropy__astropy-13033
+Preparing worktree (detached HEAD 298ccb478)
+HEAD is now at 298ccb478 Merge pull request #13031 from meeseeksmachine/auto-backport-of-pr-13027-on-main
+[2026-05-24T00:38:45Z]    astropy__astropy-13033: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:39:10Z] <- astropy__astropy-13033 verdict=failed elapsed_total=50.3s
+[2026-05-24T00:39:10Z] -> astropy__astropy-13236
+Preparing worktree (detached HEAD 6ed769d58)
+HEAD is now at 6ed769d58 Merge pull request #13228 from astrofrog/fix-spectralcoord-no-target
+[2026-05-24T00:39:36Z]    astropy__astropy-13236: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:40:01Z] <- astropy__astropy-13236 verdict=failed elapsed_total=50.5s
+[2026-05-24T00:40:01Z] -> astropy__astropy-13398
+Preparing worktree (detached HEAD 6500928dc)
+HEAD is now at 6500928dc Merge pull request #13502 from taldcroft/better-iers-docs
+[2026-05-24T00:40:25Z]    astropy__astropy-13398: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:40:51Z] <- astropy__astropy-13398 verdict=failed elapsed_total=49.9s
+[2026-05-24T00:40:51Z] -> astropy__astropy-13453
+Preparing worktree (detached HEAD 19cc80471)
+HEAD is now at 19cc80471 Merge pull request #13444 from eerovaher/unit-format-docs
+[2026-05-24T00:41:15Z]    astropy__astropy-13453: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:41:40Z] <- astropy__astropy-13453 verdict=failed elapsed_total=49.6s
+[2026-05-24T00:41:40Z] -> astropy__astropy-13579
+Preparing worktree (detached HEAD 0df94ff70)
+HEAD is now at 0df94ff70 Merge pull request #13574 from pllim/rm-corpus-404
+[2026-05-24T00:42:05Z]    astropy__astropy-13579: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:42:30Z] <- astropy__astropy-13579 verdict=failed elapsed_total=49.8s
+[2026-05-24T00:42:30Z] -> astropy__astropy-13977
+Preparing worktree (detached HEAD 5250b2442)
+HEAD is now at 5250b2442 Merge pull request #14164 from ayshih/grid_performance
+[2026-05-24T00:42:55Z]    astropy__astropy-13977: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:43:20Z] <- astropy__astropy-13977 verdict=failed elapsed_total=49.7s
+[2026-05-24T00:43:20Z] -> astropy__astropy-14096
+Preparing worktree (detached HEAD 1a4462d72)
+HEAD is now at 1a4462d72 Merge pull request #14102 from zoghbi-a/fix-votable-validator-issue-#14099
+[2026-05-24T00:43:45Z]    astropy__astropy-14096: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:44:10Z] <- astropy__astropy-14096 verdict=failed elapsed_total=50.3s
+[2026-05-24T00:44:10Z] -> astropy__astropy-14182
+Preparing worktree (detached HEAD a5917978b)
+HEAD is now at a5917978b Merge pull request #14172 from astropy/pre-commit-ci-update-config
+[2026-05-24T00:44:35Z]    astropy__astropy-14182: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:44:59Z] <- astropy__astropy-14182 verdict=failed elapsed_total=49.5s
+[2026-05-24T00:44:59Z] -> astropy__astropy-14309
+Preparing worktree (detached HEAD cdb66059a)
+HEAD is now at cdb66059a Merge pull request #14303 from pllim/bleach-v6
+[2026-05-24T00:45:24Z]    astropy__astropy-14309: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:45:49Z] <- astropy__astropy-14309 verdict=failed elapsed_total=50.1s
+[2026-05-24T00:45:49Z] -> astropy__astropy-14365
+Preparing worktree (detached HEAD 7269fa3e3)
+HEAD is now at 7269fa3e3 Merge pull request #14013 from WilliamJamieson/deprecate/Voigt1D_humlicek2_option
+[2026-05-24T00:46:15Z]    astropy__astropy-14365: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:46:40Z] <- astropy__astropy-14365 verdict=failed elapsed_total=50.1s
+[2026-05-24T00:46:40Z] -> astropy__astropy-14369
+Preparing worktree (detached HEAD fa4e8d1cd)
+HEAD is now at fa4e8d1cd Merge pull request #14358 from WilliamJamieson/bugfix/asdf_warning
+[2026-05-24T00:47:05Z]    astropy__astropy-14369: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:47:30Z] <- astropy__astropy-14369 verdict=failed elapsed_total=50.5s
+[2026-05-24T00:47:30Z] -> astropy__astropy-14508
+Preparing worktree (detached HEAD a3f4ae6cd)
+HEAD is now at a3f4ae6cd Merge pull request #14430 from Cadair/performance_issues_decompress_tile
+[2026-05-24T00:47:55Z]    astropy__astropy-14508: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:48:20Z] <- astropy__astropy-14508 verdict=failed elapsed_total=50.1s
+[2026-05-24T00:48:20Z] -> astropy__astropy-14539
+Preparing worktree (detached HEAD c0a24c1dc)
+HEAD is now at c0a24c1dc Merge pull request #14517 from pllim/drop-i686-wheel
+[2026-05-24T00:48:45Z]    astropy__astropy-14539: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:49:10Z] <- astropy__astropy-14539 verdict=failed elapsed_total=50.1s
+[2026-05-24T00:49:10Z] -> astropy__astropy-14598
+Preparing worktree (detached HEAD 80c3854a5)
+HEAD is now at 80c3854a5 Merge pull request #14576 from Cadair/no_gc_in_tiled_data
+[2026-05-24T00:49:35Z]    astropy__astropy-14598: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:50:00Z] <- astropy__astropy-14598 verdict=failed elapsed_total=49.5s
+[2026-05-24T00:50:00Z] -> astropy__astropy-14995
+Preparing worktree (detached HEAD b16c7d12c)
+HEAD is now at b16c7d12c Merge pull request #14988 from nstarman/cosmo-dont-register-abstract
+[2026-05-24T00:50:25Z]    astropy__astropy-14995: empty patch (agent_gave_up); retrying codex once
+[2026-05-24T00:50:49Z] <- astropy__astropy-14995 verdict=failed elapsed_total=49.2s
+=== [2026-05-24T00:50:49Z] DONE n=16 resolved_rate=0.0 verdicts={'failed': 16} ===
