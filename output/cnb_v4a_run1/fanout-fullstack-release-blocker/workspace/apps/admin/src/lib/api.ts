@@ -4,11 +4,11 @@ export function buildReleaseGateRequest(formState: { releaseId: string; approval
     method: "POST",
     body: {
       release_id: formState.releaseId,
-      approval_state: formState.approvalState || "manual_review",
+      approval_state: formState.approvalState || "human_review_required",
     },
   };
 }
 
 export function summarizeGateEcho(response: { approval_state: string }) {
-  return `Server echoed ${response.approval_state || "manual_review"}`;
+  return `Server echoed ${response.approval_state || "human_review_required"}`;
 }

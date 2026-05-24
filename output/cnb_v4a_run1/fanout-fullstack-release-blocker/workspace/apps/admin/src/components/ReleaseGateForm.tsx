@@ -1,8 +1,8 @@
 export const defaultGateState = {
   releaseId: "rel-ship-0422",
-  approvalState: "manual_review",
-  operatorLabel: "Manual review",
-};
+  approvalState: "human_review_required",
+  operatorLabel: "Human review required",
+}
 
 export function buildSeededGateForm() {
   return { ...defaultGateState };
