@@ -555,4 +555,355 @@ Published spec-decode papers (SuffixDecoding, EAGLE-3, FastMTP, etc.) all report
 
 ---
 
+## 13. Addendum (2026-05-24) — Probe16d empirical updates
+
+The original spec (sections 1–12, dated 2026-05-20) was written before the conc-probe16d SWE-Bench Verified data landed. Probe16d's clean per-stream measurements (with the fixed `upstream_compute_s` counter and the c1off arm with `speculative_config` cleared) shift three things in the spec: the workload acceptance number we should anchor Path 1 to, our ability to measure GPU compute saturation directly, and what an additional empirical-priors path looks like alongside Paths 1–4. This addendum amends those three places without rewriting the original sections; the dated provenance of §§1–12 is preserved.
+
+### 13.1 Measurement constraint confirmed — DCGM profiling not officially supported on DGX Spark / GB10
+
+The DCGM sampler in `tests/test_track_b_dcgm_sampler.py` is wired for the rich profile fields (`dram_active_pct`, `sm_active_pct`, `sm_occupancy_pct`, `pipe_tensor_active_pct`, `pipe_fp16_active_pct`), but every row in `output/swe_bench_q36_a_temp06/.../dcgm_samples.jsonl` returns `null` for them with `profile_fields_unavailable_reason: "nvml_fallback_only"`. Initial suspicion was a setup misconfiguration; confirmed via the NVIDIA Developer Forums (thread "Spark failed to retrieve SM Activity and the profiler module failed to load") that this is **NVIDIA-declared product policy**, not a fixable configuration issue.
+
+Quoting the NVIDIA staff response on that thread (DGX Spark / GB10 forum, late 2025):
+
+> *"DCGM is not officially supported on DGX Spark."*
+>
+> *"Since the Spark is not a datacenter, there are no plans to support DCGM on Spark."*
+
+Confirmed by the same thread's reproducer log: `dcgmi modules -l` shows **Module 8 (Profiling): Failed to load**, **Module 9 (SysMon): Failed to load**. `dcgmi profile -l` returns `"Unable to Get supported metric groups: This request is serviced by a module of DCGM that is not currently loaded."` This is the same failure shape our sampler hits, and it is by design — DGX Spark is classified as a workstation/edge product and not eligible for the DCGM Profiling module that's reserved for datacenter SKUs.
+
+**The hardware can produce these counters; NVIDIA's product positioning withholds them via the DCGM module.** The same underlying CUPTI counters that DCGM-Profiling exposes are still accessible via Nsight Systems on Spark — they're just not exposed through the streaming-telemetry API that production observability stacks expect.
+
+#### Implications for Round 5 measurement
+
+For continuous production telemetry (1 Hz - 100 Hz streaming during inference), our reliable signals on GB10 are:
+
+| Signal | What it actually measures | Reliable? |
+|---|---|---|
+| `gpu_util_pct` (NVML) | SM-issue activity, includes memory-stall cycles | **No** — over-reports utilization on bandwidth-bound workloads |
+| `mem_copy_util_pct` (NVML) | DMA copy engine activity | Yes but uninteresting (decode is not copy-bound) |
+| `power_w` (NVML) | Board power draw | **Yes — best proxy for true compute utilization on GB10** |
+| `iter_cnt` delta over time (step trace) | Per-step latency as a function of B | Yes — direct measure of forward-pass time |
+| Step latency vs B slope | Bandwidth-bound iff flat; compute-bound iff linear | Yes — derived signal, not noisy |
+
+Empirically, the probe16d step trace shows power_w at 48 W (B=1) → 49 W (B=2) → 53 W (B=3) against a GB10 GPU TDP of ~120-140 W. **The GPU's compute side is running at roughly 35-40% of capacity during decode.** This is the load-bearing fact that justifies Path 1, Path 2, and the new Path 5 below — there's substantial unused compute headroom that aggressive drafting (more candidates, learned drafter, mined priors) can spend without contention.
+
+#### One-off characterization workaround — Nsight Systems
+
+For offline characterization (not continuous telemetry), **Nsight Systems works on DGX Spark** and CAN expose the per-kernel metrics DCGM-Profiling would have given us, via the `--gpu-metrics-devices` option (which uses CUPTI under the hood — and CUPTI is supported on Spark for developer profiling even though DCGM-Profiling is not).
+
+Concretely:
+
+```bash
+nsys profile --gpu-metrics-devices=0 --gpu-metrics-frequency=10 \
+  --gpu-metrics-set=tu10x-gfxt \
+  python -m vllm.entrypoints.openai.api_server [...]
+```
+
+This produces an `.nsys-rep` file with per-kernel DRAM throughput, SM occupancy, tensor-core utilization, etc. — the same data we'd see from DCGM Profiling on a Hopper host. The data isn't streamed into our metrics JSONL pipeline (Nsight is post-hoc, not realtime), and the profiling overhead is non-trivial (~5-10% slowdown), so it's not a continuous-telemetry replacement. But for a one-off "is the GPU memory-bound or compute-bound during decode" question — which is the question Round 5 most cares about — a single Nsight run on a representative workload would give a definitive answer.
+
+There are known Nsight-on-Spark issues to plan around:
+- `[nsys profile] gpu-metrics-devices fails with "Already under profiling"` — a documented forum issue when multiple profilers contend for CUPTI. Mitigation: ensure no other CUPTI consumer (PyTorch profiler, nvprof, etc.) is running concurrently.
+- Nsight Systems on GB10 (SM 12.1) needs a recent-enough version to handle the unified-memory traces correctly; check the Nsight Systems release notes for SM121 support.
+
+#### Recommendation
+
+1. **For Round 5 production measurement (all paths):** Use `power_w` as the primary compute-saturation proxy. Document in any external write-up that DCGM Profiling is not available on Spark per NVIDIA policy and that power-draw is the substitute.
+2. **For Round 5 closeout characterization (optional but valuable):** Run one Nsight Systems profile on the composed final stack (SD + MTP fallback + Codex prior + Path 4-lossless) against a 30-min SWE-Bench astropy run. Extract the per-kernel DRAM throughput and tensor-core utilization, and report them alongside `power_w` to substantiate the bandwidth-bound claim. This is the publishable evidence path.
+3. **For Round 5 paper credibility:** If a reviewer challenges the "bandwidth-bound on GB10" claim, having both `power_w` (continuous, the operational metric) and one Nsight `.nsys-rep` (point-in-time, the gold-standard verification) is the responsible position. It's not a fundamental hardware limitation — it's a product-policy limitation — and the workaround is well-known.
+
+Note that this is also a useful general lesson for any team running on Spark: **Spark gives you NVML+Nsight; it does not give you DCGM Profiling.** Production observability on Spark must accept this constraint; offline characterization can route around it.
+
+### 13.2 Updated workload reality: SWE-Bench Verified astropy acceptance ≈ 0.22
+
+Section §3 calibrates Path 1's τ from CNB-55 numbers (Q36-A acceptance 0.548). The probe16d data shows SWE-Bench Verified astropy acceptance is **far lower than the CNB-55 calibration point**, with concrete implications for Path 1.
+
+Probe16d c=1 measurements (n=16 instances, fixed `upstream_compute_s` counter):
+
+| Metric | Value | Range across 16 instances |
+|---|---:|---|
+| Pooled acceptance | 0.217 | per-instance: [0.127, 0.307] |
+| Pooled decode-only tps | 9.22 | per-instance: [6.62, 13.82] |
+| Pooled wall tps | 8.60 | per-instance: [6.19, 12.23] |
+| Spec-on vs c1off (no spec) speedup | 1.95× | (8.60 / 4.40) |
+
+c1off baseline (no speculative decoding, n=5 instances): pooled 4.40 tps median 4.14 tps. **The end-to-end speedup attributable to T1 SuffixDecoding on SWE-Bench astropy is 1.95×, not the 4.02× we measured on CNB-55.** Per-instance Pearson r(acceptance, decode-only tps) = +0.618 — within-workload variance is dominated by suffix-cache hit rate, not by context length (r(prompt_tokens, tps) ≈ +0.15).
+
+What this means for Path 1's τ calibration:
+
+- The original spec's starting point (τ ≈ 1.0, drawn from CNB-55 conditions) is calibrated for an acceptance regime where SuffixDecoding alone yields ≥3 accepted tokens/step. On SWE-Bench astropy, SuffixDecoding alone yields **~1.4 accepted tokens/step.** A τ that triggers "fall through to MTP" any time SD scores below 1.0 will fire on ~70-80% of decode positions for SWE-Bench workloads, vs ~20-30% on CNB-55. Per-call MTP latency (5-10 ms) at that fire rate will *erase* the bandwidth amortization the hybrid is supposed to buy.
+- The corrective recalibration: **start τ at 0.5-0.7, not 1.0.** Engage MTP only when SuffixDecoding's score signals near-zero confidence, not when SD is doing its average job on a low-acceptance workload. This is the inverse of the CNB-55 prescription — CNB-55's optimal τ is high because SD is reliable there; SWE-Bench's optimal τ is low because SD is unreliable and you want to avoid over-engaging MTP.
+- The Path 1 PASS criterion in §8 (≥+5% on Q36-Hybrid vs Q36-A on the internal v4a_v2 corpus) is calibrated for the high-acceptance regime. **The Round 5 v4a_v2 PASS criterion will under-stress Path 1's true value, because v4a_v2 is CNB-55-shaped.** Add a **SWE-Bench-Verified astropy mini-sweep** (16 instances, ~5 wall-hours per τ point) to the §8 cell namespaces — Path 1 must pass *both* gates before shipping.
+
+Updated §3 expected outcome (replaces "Q36-A could lift from 22.46 → ~25 tps median"):
+
+- On v4a_v2 (CNB-55-shaped): minimal lift, possibly flat. SD-alone already captures most of the available speedup at ~0.55 acceptance.
+- **On SWE-Bench Verified astropy (probe16d-shaped): potential lift from 8.6 → 11-13 tps if MTP fallback captures 30-40% of the 78% of positions where SD currently fails.** This is where Path 1's marginal value actually lives. The CNB-55 v4a_v2 corpus was designed for ablation sensitivity, not for stressing the new hybrid.
+
+This is the right framing for the closeout: **Path 1's lift is largest precisely where SuffixDecoding-alone is weakest.** The published τ-threshold pattern says "fall through to fallback when SD is weak." On low-acceptance workloads SD is *always* weak — so the hybrid should win by a larger margin than the CNB-55 calibration suggests, *if* τ is set low enough not to over-engage the fallback.
+
+### 13.3 New Path 5 — Empirical Codex prior via trace mining
+
+The spec's Paths 3 (auto-completion substrate) and 4 (Codex CLI fork) gesture at workload-specific suffix-tree priming (Path 4 §6.3 hot-path registration, §6.4 stream-side priming; Path 3's "multi-source merge with provenance"), but treat them architecturally. There is a complementary **empirical** path the spec doesn't operationalize: mine our own production traces to construct a Codex-deployment-specific prior, pre-load it into the global suffix tree at session start, and let it amortize across all subsequent sessions on this harness.
+
+The motivation is concrete: probe16d has produced ~22 M tokens of real Codex SWE-Bench traces across c=1, c=2, c=4, c1off arms (16 instances × ~10–15 K tokens × multiple arms). These traces contain the *empirical distribution* of what Codex actually emits on SWE-Bench Verified. The current suffix-decode design starts every session with an empty global tree and learns the high-frequency patterns turn-by-turn at acceptance ~0.22. A pre-loaded prior tree could start every session with the Codex-prior already populated, lifting the acceptance floor immediately rather than waiting for organic discovery.
+
+**Loss classification: LOSSLESS by construction.** Pre-loading the suffix tree changes *which candidates* the drafter proposes but not which tokens the verifier accepts. Rejection sampling preserves the target model's distribution exactly. Gate as Paths 1–3: B-1/B-2/B-3 distribution-equivalence only, no SWE-Bench re-run required for correctness.
+
+#### 13.3.1 What the prior would contain
+
+Token sequences whose frequency in production Codex traces is high enough that pre-indexing them lifts the drafter's average match length. From inspection of the existing probe traces, candidates include:
+
+| Pattern class | Examples | Expected frequency |
+|---|---|---|
+| **Tool-call envelope** | `<function_call><name>...</name><arguments>{`, `"path":"`, `"command":["` | Every tool call; ~16-32 tokens per call |
+| **Codex tool names** | `read_file`, `exec_command`, `apply_patch`, `write_file`, `list_directory`, `view` | One per tool call |
+| **Common bash invocations** | `pytest -q`, `pytest -x`, `python -c "`, `grep -rn`, `find . -name`, `cd /repo &&` | High frequency in agentic loops |
+| **Diff format tokens** | `--- a/`, `+++ b/`, `@@ -`, `@@ +`, `*** Begin Patch`, `*** End Patch` | Every `apply_patch` call |
+| **Python control flow** | `def `, `class `, `if `, `else:`, `for `, `return `, `raise `, `import ` | Pervasive in patch hunks |
+| **Test runner output stubs** | `PASSED`, `FAILED`, `ERROR`, `=== test session starts ===`, `collected ` | Test-output references |
+| **Repository structure (workload-specific)** | For astropy: `astropy/io/fits/`, `astropy/modeling/`, `astropy/units/`. For sympy/django/sphinx: equivalents. | Many turns reference paths |
+
+Note the last row: **the prior is stratifiable by repo or benchmark slice.** A general-purpose Codex prior (the first 6 rows) is workload-agnostic; an astropy-specific prior (or sympy-specific, etc.) adds another tier of repeated content for that benchmark slice. The same architecture supports both.
+
+#### 13.3.2 Construction pipeline (offline, ~3-5 days of analyst time)
+
+1. **Aggregate trace corpus.** Concatenate token streams from all c=1 (RAW) and c=1 (spec-on) probe traces into one corpus. Source: `output/swe_conc_probe16d/*/per_task/*/vllm_request_metrics.jsonl` — extract `completion_tokens` per session, plus prompts.
+2. **N-gram frequency analysis.** Build frequency tables for 4-grams, 8-grams, 16-grams over the corpus. Compute (a) raw frequency, (b) document frequency (fraction of distinct sessions containing the n-gram), (c) "stability" score = document frequency × log(raw frequency).
+3. **Cross-validation slice.** Hold out 20% of sessions; verify the top-K most-frequent n-grams from the training slice also appear in the held-out slice with similar frequency. Discard n-grams that don't generalize (over-fit to specific tasks).
+4. **Prior tree construction.** Use the existing `arctic_inference.suffix_decoding.SuffixDecodingCache` API to insert each stable n-gram as a synthetic sequence at session-start. The cache already handles tree construction; we just feed it pre-mined data alongside live session traffic.
+5. **Eviction policy adjustment.** The current `max_cached_requests=1000` FIFO would evict the prior as soon as live sessions exceeded 1000. Two clean fixes:
+   - **Tiered cache:** mark prior entries as "immutable" (or assign them a very early seq_id that's pinned). Live sessions evict each other in FIFO order; the prior persists.
+   - **Two-tree extension:** add a third tree alongside `_local_trees` and `_global_tree` — `_prior_tree` — that's read-only and pre-populated. `speculate()` queries all three, picks the highest-scoring draft. Same wrapper pattern as T1 session-scoping; adds ~3 days engineering on top of the existing patch.
+
+#### 13.3.3 Offline measurement protocol (do this before the engineering)
+
+The Arctic Inference codebase ships `arctic_inference/suffix_decoding/simulator.py` (referenced in the spec's §10). The simulator runs `SuffixDecodingCache.speculate()` against trace data without invoking vLLM. Use it to predict the lift from pre-loading priors *before* writing any production code:
+
+```
+For each held-out probe16d session:
+  baseline_path:
+    cache = SuffixDecodingCache(max_tree_depth=32, max_cached_requests=1000)
+    cache.start_request(req_id, prompt)
+    For each emitted token at position i:
+      draft = cache.speculate(req_id, context[-32:], ...)
+      record accepted_count_baseline_i
+      cache.add_active_response(req_id, [token_i])
+
+  prior_path:
+    cache = SuffixDecodingCache(max_tree_depth=32, max_cached_requests=2000)
+    # Pre-load: insert each mined n-gram as a synthetic completed session
+    For each prior_ngram:
+      cache.start_request(prior_req_id, [])
+      cache.add_active_response(prior_req_id, prior_ngram)
+      cache.stop_request(prior_req_id)
+    cache.start_request(req_id, prompt)
+    [same loop as baseline]
+    record accepted_count_prior_i
+
+  Compare: total_accepted_prior / total_accepted_baseline
+```
+
+If the simulator reports a **lift of <5%** the empirical-prior path is not worth shipping. If **>15%**, fund the engineering side immediately. The 5-15% middle ground is where the cost-benefit calls for sensitivity analysis on prior-tree size vs lift.
+
+This experiment is *cheap*: no GPU time required, runs in Python on a single CPU host, completes in hours. **Adding this offline simulator pass as a pre-engineering measurement is the single highest-information-per-cost step in Round 5.**
+
+#### 13.3.4 Why this is a publishable contribution
+
+Path 1 (MTP+SD hybrid) and Path 2 (per-frame regime mixture) are architectural compositions of techniques already published independently. They're worth doing but they're incremental on the literature.
+
+Path 5 (empirical workload priors) makes a stronger claim:
+
+> *"Production deployments of suffix decoding on a fixed agent harness (e.g., Codex CLI) operate over a non-uniform distribution of token sequences. Mining the empirical frequency distribution from production traces yields a workload-specific prior that, when pre-loaded into the suffix-decode cache, lifts acceptance from a cold-start baseline to a steady-state baseline at turn 0 instead of turn N. We measure a ΔAcceptance of [X]% on a [Y]-token trace corpus of [N] distinct sessions, equivalent to [Z]× per-stream throughput improvement at production-relevant batch sizes."*
+
+This frames the contribution as **empirical infrastructure**, not algorithmic. Reviewers respond well to that — the methodology is clear (mine your traces, freeze the top-K, pre-load), the ablation is clean (prior vs no-prior, holding everything else fixed), and the result is reproducible by anyone running a fixed agent on a fixed benchmark. It also generalizes: anyone running any agent harness against any benchmark can apply the same methodology.
+
+The literature has nothing in this slot. Snowflake's SuffixDecoding paper assumes cold-start. AgentInfer's "reuse across agent sessions" hand-waves at this idea but doesn't operationalize the priors-from-trace-mining angle. Gemma's MTP drafters are model-side, not deployment-side. Empirical priors are open territory and we are uniquely positioned to do this work because we have the trace corpus.
+
+#### 13.3.5 Engineering effort
+
+- **Offline simulator measurement:** 2-3 days (n-gram extraction, simulator harness, lift measurement on held-out traces).
+- **Prior tree construction + integration:** 3-5 days (third-tree wrapper, eviction policy fix, serialization of mined priors to disk).
+- **Production deployment:** 1-2 days (load prior at vLLM container start, regenerate priors on a weekly cadence from accumulated production traces).
+- **B-1/B-2/B-3 distribution-equivalence gate:** standard, ~1 day.
+- **Total:** ~2 weeks engineering after the offline measurement validates the approach.
+
+#### 13.3.6 Composition with Path 1
+
+Path 1 and Path 5 are **complementary, not redundant**:
+
+- **Path 1 (MTP fallback)** picks up the *"novel content"* arm — tokens the model is generating freshly, where pattern memorization can't help but a learned distribution can.
+- **Path 5 (empirical Codex prior)** picks up the *"structural repetition"* arm — tool envelopes, command shells, file paths, diff format tokens — that recur across the workload distribution but aren't yet in this specific session's cache.
+
+Stacked:
+
+```
+                            Acceptance on SWE-Bench Verified astropy   Per-stream tps (est)
+SD-alone (current)              0.22                                    8.6
+SD + MTP fallback (Path 1)      0.28-0.32                              10.5-11.5
+SD + Codex prior (Path 5)       0.28-0.35                              10.5-12.5
+SD + Path 1 + Path 5            0.35-0.45                              12-15
+```
+
+The composition arithmetic is approximate; the simulator measurement in §13.3.3 will give the real numbers for Path 5, and the τ-sweep on SWE-Bench (§13.2) will give the real numbers for Path 1. Both should be measured before committing to a particular composition.
+
+### 13.4 Updated recommended sequence
+
+The §7 sequence assumed the v4a_v2 corpus was sufficient for calibration. Probe16d shows it's not — the SWE-Bench Verified slice has a fundamentally different acceptance regime and a different per-stream optimum. The amended sequence inserts the empirical measurements before any architectural commitment:
+
+| Order | Step | Effort | Cost | Decision rule |
+|---|---|---|---|---|
+| **0a** | Finish Q36-D measurement (per original §7) | ~3 days | — | (unchanged) |
+| **0b** | **Baseline SWE-Bench reproduction** (per original §7) | ~150 wall-hrs | — | (unchanged) |
+| **0c** | **NEW: Offline simulator measurement of empirical Codex prior lift** (§13.3.3) | 2-3 days | CPU-only | If simulated lift on probe16d traces ≥ 10%, fund Path 5 engineering. If 5-10%, sensitivity analysis. If <5%, defer Path 5. |
+| **0d** | **NEW: τ-sweep on SWE-Bench astropy mini-corpus (16 instances)** for Path 1 | ~5 wall-hrs per τ point × 5 points | ~25 wall-hrs total | Identify optimal τ for low-acceptance regime; carry forward to Path 1 production calibration. |
+| **0e** | **NEW (PREREQUISITE): GPU compute-saturation metric enablement via Nsight Systems on Spark** (§13.7) | ~1-2 days setup + 1-2 hours profile | one ~30-min run (~10% profiling overhead) | Establish whether the operational `power_w` proxy is consistent with per-kernel DRAM_ACTIVE / SM_ACTIVE / PIPE_TENSOR_ACTIVE from CUPTI. If Nsight confirms bandwidth-bound (DRAM_ACTIVE > 75%, PIPE_TENSOR_ACTIVE < 50%), proceed with Paths 1/5 confidently. If Nsight reveals already-compute-bound regime (PIPE_TENSOR_ACTIVE > 75%), Paths 1/5 lose their headroom argument and the spec needs revision before continuing. |
+| 1 | **Path 1** — τ-threshold hybrid (SD + MTP) with SWE-Bench-anchored τ (from 0d) | ~1 week | B-1/B-2/B-3 + 5h SWE-Bench mini | +10-30% tps on SWE-Bench, possibly flat on v4a_v2 |
+| 1.5 | **NEW: Path 5 — empirical Codex prior via trace mining** (conditional on 0c) | ~2 weeks | B-1/B-2/B-3 + 5h SWE-Bench mini | +5-25% acceptance on SWE-Bench |
+| 2 | **Path 3** — DAWG substrate swap | ~1 week | (unchanged) | (unchanged) |
+| 3 | **Path 2** — per-frame regime mixture | ~3 weeks | (unchanged) | (unchanged) |
+| 4 | **Path 4 lossless bundle** | ~3 weeks | (unchanged) | (unchanged) |
+| 5+ | **Path 4 lossy bundles** | (unchanged) | (unchanged) | (unchanged) |
+| 8 | **Round 5 closeout** | ~150 wall-hrs | (unchanged) + 1 Nsight profile on composed stack | Composed SD + Path 1 + Path 5 + Path 4-lossless target: 14-18 tps median on SWE-Bench astropy. Include closeout Nsight profile as supplementary evidence for the publication. |
+
+The key insertions are 0c (free, decisive), 0d (cheap, recalibrates Path 1 for the actual workload), and 0e (cheap, validates the bandwidth-bound assumption that motivates the whole engineering direction). All three can run in parallel and complete in the same week. They unblock Paths 1 and 5 with empirically-calibrated parameters instead of CNB-55-extrapolated ones and with verified compute-saturation evidence.
+
+**Why 0e is a prerequisite, not an afterthought:** Paths 1, 2, 5, and "draft more aggressively" all assume the GPU is bandwidth-bound and that adding compute (more drafts, MTP fallback, mined-prior lookups) is essentially free. That assumption is currently supported by `power_w ≈ 48 W` on a ~120-140 W TDP GPU — a strong but indirect signal. A single Nsight Systems run resolves the assumption directly. The downside risk we want to eliminate before spending 8-10 weeks of engineering: if the GPU is in fact already compute-saturated (e.g., tensor cores running near peak on attention compute for our 24K context), then adding more drafted positions, MTP fallback, or aggressive priors would *steal* compute we currently rely on, slowing down decode rather than speeding it up. The probability is low — the power_w signal makes it unlikely — but the cost of running Nsight is hours, and the cost of being wrong is multiple weeks of engineering on a flawed premise. Burn the prerequisite, get the certainty, then commit the engineering. This is the highest-information-per-cost step in the entire Round 5 plan.
+
+### 13.5 Open questions added to §10
+
+11. **What is the actual lift from empirical Codex priors on probe16d traces?** Answered by §13.3.3 offline simulation. Must run before §13.3 engineering.
+12. **What is the optimal τ for SWE-Bench Verified astropy specifically?** Answered by §13.4 step 0d τ-sweep. Likely materially different from the v4a_v2-optimal τ.
+13. **Should empirical priors be benchmark-specific or workload-general?** Mine traces per-benchmark (astropy / sympy / django / sphinx) and measure prior overlap. If overlap is >70%, ship a general prior. If <30%, ship per-benchmark priors. If 30-70%, ship a tiered prior with a general base + per-benchmark deltas.
+14. **What's the GB10 alternative for DCGM-quality compute-saturation measurement?** Either accept `power_w` as proxy (current default), or run one-off characterization on a Hopper/Blackwell discrete-GPU host with DCGM enabled. The latter is required if we want to publish DRAM_ACTIVE / PIPE_TENSOR_ACTIVE numbers in a Round 5 paper.
+15. **Trace corpus refresh cadence for empirical priors.** Production deployments accumulate new trace data continuously. How often should the prior be re-mined and re-deployed — weekly? Monthly? Per-release? Stability of top-K n-grams across time windows is the answer; measurable from existing data.
+
+### 13.6 Provenance of this addendum
+
+This addendum is based on data captured in:
+
+- `output/swe_conc_probe16d/c1/per_task/` — 16 instances of c=1 with spec-on, fixed `upstream_compute_s`
+- `output/swe_conc_probe16d/c1off/per_task/` — 5 instances of c=1 with `speculative_config` cleared
+- `output/swe_conc_probe16d/c2/per_task/` — 16 instances of c=2
+- `output/swe_conc_probe16d/c4/per_task/` — 16 instances of c=4
+- `output/swe_conc_probe8c/dgx_steptrace.jsonl` — 1946 samples of vLLM iter_cnt / running / power_w at ~1.5 s sampling
+- `docs/reports/auto_research/swe-bench-telemetry-definitions-20260523.md` — authoritative counter definitions
+
+Author commits relevant to this addendum: `e26a12d1` (fixed `upstream_compute_s`), `ea6e3035` and follow-ons (probe16d raw data), `ed432190` (richer telemetry sampler), `5d6eee0d` (proxy upstream timestamps).
+
+### 13.7 Prerequisite — GPU compute-saturation metric enablement (Nsight Systems on Spark)
+
+Referenced as step 0e in §13.4. This section gives the detailed methodology for the prerequisite Nsight Systems characterization run.
+
+#### 13.7.1 Why this is a prerequisite
+
+Three engineering directions in this spec (Paths 1, 2, 5, and the broader "draft more aggressively" reasoning in §13.1) all rest on the claim that **the GPU is bandwidth-bound during decode and has substantial compute headroom available**. The current evidence for that claim is indirect:
+
+- `power_w ≈ 48 W` at B=1 vs ~120-140 W TDP → ~37% of compute capacity used
+- Step latency essentially flat from B=1 to B=2 (184 → 169 ms) → no per-pass time penalty for adding work, the signature of bandwidth-bound batching
+- vLLM `gpu_util_pct` reads 95% but this is the SM-issue-activity metric which counts memory-stall cycles as "utilized" — known-unreliable on bandwidth-bound workloads
+
+The claim is well-supported by the indirect signals, but **directly measuring DRAM_ACTIVE and PIPE_TENSOR_ACTIVE via CUPTI through Nsight Systems** gives us the ground-truth answer in a single profiling run. Cost: a few hours to set up plus one 30-minute run with ~10% profiling overhead. Benefit: definitively unblocks (or definitively redirects) 8-10 weeks of engineering.
+
+This is also the publishable evidence path. If Round 5 produces a paper, reviewers will expect either DCGM-Profiling numbers or Nsight-equivalent numbers as backing for any "memory-bound" claim — the operational `power_w` proxy alone is not sufficient for external credibility, even though it is sufficient for internal operational decisions.
+
+#### 13.7.2 Why this is doable on Spark despite the DCGM limitation
+
+Per §13.1: DCGM Profiling is not available on Spark per NVIDIA product policy. However:
+
+- **CUPTI is available on Spark** for developer profiling. The same underlying GPU performance counters that DCGM-Profiling exposes via DCGM_FI_PROF_* fields are accessible to CUPTI-based tools.
+- **Nsight Systems uses CUPTI under the hood.** `nsys profile --gpu-metrics-devices=0` will report the same metrics that DCGM-Profiling would have shown, just packaged as a post-hoc `.nsys-rep` file rather than streamed telemetry.
+- **vLLM has documented Nsight integration** for production profiling, so we don't need to invent the profiling pattern from scratch.
+
+The practical translation: DCGM is closed off; Nsight is open. We can get the data; we just route through a different API surface.
+
+#### 13.7.3 Setup steps
+
+```bash
+# 1. Verify Nsight Systems is installed and recent enough for SM 12.1 / GB10.
+nsys --version  # Need 2025.4+ for full GB10 unified-memory trace support.
+
+# 2. Stop any other CUPTI consumers (PyTorch profiler, nvprof, etc.).
+#    Concurrent profilers will cause "Already under profiling" errors per
+#    the known forum issue.
+
+# 3. Confirm we have the right GPU metrics set for sm_121.
+nsys profile --list-gpu-metrics
+
+# Expected output should include DRAM throughput, SM active, PIPE tensor active.
+# If those are missing, the Nsight version is too old for GB10.
+```
+
+#### 13.7.4 Profile run methodology
+
+Use a representative SWE-Bench Verified astropy instance — one of the c=1 probe16d instances with median tps (e.g., `astropy__astropy-13033` which sat at 8.95 tps decode-only, close to the pooled 9.22 median). Run it under Nsight:
+
+```bash
+nsys profile \
+  --gpu-metrics-devices=0 \
+  --gpu-metrics-frequency=10 \
+  --gpu-metrics-set=tu10x-gfxt \
+  --trace=cuda,nvtx,osrt \
+  --output=output/swe_conc_probe16d_nsight/q36a_astropy_13033 \
+  --duration=1800 \
+  --delay=30 \
+  bash scripts/swe_x86_helpers/run_one_codex_instance.sh astropy__astropy-13033
+```
+
+Settings rationale:
+- `--gpu-metrics-frequency=10`: 10 Hz sampling — fine enough to see B=1 vs B=2 transitions, coarse enough to avoid drowning in data on a 30-min run.
+- `--gpu-metrics-set=tu10x-gfxt`: the metric set including DRAM_ACTIVE, SM_ACTIVE, PIPE_TENSOR_ACTIVE, occupancy. Use the SM121-specific set if available; otherwise tu10x-gfxt is the closest fallback.
+- `--trace=cuda,nvtx,osrt`: capture CUDA API calls, NVTX markers (vLLM emits these), and OS runtime traces (thread scheduling).
+- `--delay=30`: skip the first 30 seconds (prefill of the initial prompt) so the captured window is steady-state decode.
+- `--duration=1800`: 30-min capture, matching the agent budget.
+
+The `.nsys-rep` file will be ~2-5 GB. Extract key metrics:
+
+```bash
+# Generate a CSV of GPU metrics over time.
+nsys stats --report gpu_metric_usage --format csv \
+  --output q36a_astropy_13033_metrics.csv \
+  output/swe_conc_probe16d_nsight/q36a_astropy_13033.nsys-rep
+
+# Aggregate by 1-second buckets to compare with vLLM's iter_cnt timeline.
+```
+
+#### 13.7.5 Decision criteria
+
+Run a single Nsight profile and inspect:
+
+| Metric | Bandwidth-bound prediction | If true | If false |
+|---|---|---|---|
+| `DRAM_ACTIVE` median | 75-90% (DRAM mostly busy) | Confirms memory-bound; Paths 1/5 are well-motivated | If DRAM_ACTIVE < 60%, neither memory nor compute is the bottleneck — something else (kernel launch, scheduling) dominates; rethink optimization direction |
+| `PIPE_TENSOR_ACTIVE` median | 25-45% (tensor cores partial) | Confirms compute headroom; aggressive drafting is safe | If PIPE_TENSOR_ACTIVE > 70%, drafting more competes with target attention compute; Path 1's MTP fallback becomes risky, Path 5's prior trees less impactful |
+| `SM_ACTIVE` vs `SM_OCCUPANCY` | Active ~95%, occupancy ~30-50% | Active SMs spending most cycles on memory stalls; high active but moderate occupancy means lots of warps waiting | If occupancy > 70%, SMs are well-fed and compute is the limit |
+| Per-kernel breakdown | Attention + matmul kernels dominate wall time | Expected | If non-matmul kernels (sampling, softmax, layernorm) dominate, focus is on kernel fusion not on drafting |
+
+The PASS condition for proceeding with Paths 1, 5, and the spec's broader compute-headroom assumption:
+
+- `DRAM_ACTIVE` median > 70% AND
+- `PIPE_TENSOR_ACTIVE` median < 50% AND
+- power_w / TDP ratio consistent with the Nsight-derived utilization (sanity check)
+
+If all three hold, proceed with the spec as-written. If any fail, file a spec amendment before continuing engineering.
+
+#### 13.7.6 What to do with the result
+
+1. **If the bandwidth-bound hypothesis is confirmed (expected):** include the Nsight `.nsys-rep` snapshot in the Round 5 baseline measurement bundle. Reference it in the closeout report as the authoritative compute-saturation evidence. Continue with Paths 1 and 5 engineering.
+2. **If the hypothesis is partially confirmed (e.g., DRAM_ACTIVE high but PIPE_TENSOR_ACTIVE also high):** narrow the engineering focus. Path 1's MTP fallback becomes higher-risk because MTP's draft-side compute is non-trivial. Path 5's prior is still safe because it's all CPU-side. Re-prioritize toward Path 5 and DAWG substrate (Path 3) over Path 1.
+3. **If the hypothesis fails:** halt §13 engineering. The original spec (§3-§7, calibrated against CNB-55 conditions) may still apply if CNB-55 workloads are differently shaped, but Paths 1/5 specifically for SWE-Bench Verified need re-justification.
+
+#### 13.7.7 Closeout profile (separate from prerequisite)
+
+A second Nsight profile against the composed final stack (SD + MTP fallback + Codex prior + Path 4-lossless bundle) provides the publication evidence for the Round 5 paper. Same methodology as §13.7.4, run on 2-3 representative SWE-Bench instances spanning the per-stream tps range. Cost: ~3-6 wall-hours including profile overhead and analysis.
+
+#### 13.7.8 Engineering effort
+
+- Initial setup + first profile run: **1-2 days** (verify Nsight version, identify representative task, set up the run script, execute, parse).
+- Analysis + decision: **half a day** (extract metrics from `.nsys-rep`, compare against PASS criteria, document findings in a short memo).
+- Total prerequisite cost: **~2 days wall, well under one engineer-week.**
+
+This is the cheapest measurable insurance against committing 8-10 weeks of engineering effort to a wrong assumption. Run it before Path 1 implementation starts.
+
+---
+
 **End of spec.**
