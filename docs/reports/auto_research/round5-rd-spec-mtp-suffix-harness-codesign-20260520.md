@@ -14,6 +14,352 @@ We need both gates. Our internal v4a_v2 corpus (11 tasks) is too small to give e
 
 ---
 
+## 0. Measurement bugs to fix BEFORE shipping any Round 5 numbers
+
+Two protocol-level measurement asymmetries surfaced during the probe16d analysis (2026-05-23/24) that affect every comparison in §1-§12 plus the §13 addendum. Both must be resolved before Round 5 measurements should be trusted for either internal decisions or external publication. Listed here at the head of the spec because they are easy to miss and load-bearing for everything downstream.
+
+### 0.1 Suffix-tree cache bleeds across `--repeat N` attempts of the same task
+
+**The bug:** the proxy at `src/lumo_flywheel_serving/inference_proxy.py:464-465` derives the `session_id` (used by the T1 wrapper to partition the suffix tree per session) from `_first_user_text(payload)`. The intent is correct — keep the session_id stable across turns of one conversation, so the suffix cache for that conversation accumulates correctly. But CNB-55 ablation protocols use `--repeat 4` to run the *same* task 4 times in independent Codex containers. Because all 4 attempts share the same first user text (the AGENTS.md-anchored boilerplate from the Codex template), all 4 produce the *same* session_id, and **the T1 wrapper points all 4 attempts at the same suffix-tree partition**.
+
+Empirically verified in `output/track_b_e2e_v4a_v2_ablation/round_1/`:
+
+```
+Every CNB-55 task: run_01 / run_02 / run_03 / run_04 → SAME oracle_session_id
+                   (11/11 tasks, all 4 attempts share one suffix partition)
+```
+
+The effect is monotonic acceptance and tps lift across attempts. Aggregated across all 11 tasks:
+
+```
+attempt     n_calls   accept   decode-tps
+run_01      1,100     0.459    13.21        ← cold for this anchor
+run_02        977     0.473    13.74        ← warmed by run_01
+run_03      1,014     0.486    16.78
+run_04      1,485     0.506    16.56
+
+Warm (02-04 pooled) vs cold (01): accept ratio 1.07×, tps ratio 1.19×
+```
+
+**Why it matters:**
+- The Round 4b closeout's headline `Q36-A 22.46 tps, accept 0.548` is the median across 44 cells (11 × 4 attempts), of which only 11 are truly cold for the suffix anchor. The remaining 33 cells benefit from cache built by earlier attempts. **The published "Q36-A acceptance 0.548" is the warm-attempts-averaged figure — the cold-only equivalent is closer to 0.46.**
+- This makes the published CNB-55 numbers **not apples-to-apples with SWE-Bench**, which uses unique per-instance first-user text and therefore unique session_ids by construction (verified: 16 distinct session_ids across 16 probe16d c=1 instances). SWE-Bench numbers are cold by nature; CNB-55 numbers are partially warmed by protocol.
+- The "CNB-55 is 2.5× faster than SWE-Bench" framing throughout §13 was overstated. After correcting for this and for the temperature confounder (see §0.2 below), the apples-to-apples gap is closer to 1.5-1.8×.
+
+**Two fixes — either is acceptable; (a) is already happening, (b) is the durable solution:**
+
+(a) **Run all Round 5 calibration with `--repeat 1` on a larger task set.** This sidesteps the cache-bleed without touching the proxy. Already in progress as of 2026-05-24 with the CNB-55 v4a B=1 rerun under the current config.
+
+(b) **Patch the proxy to incorporate attempt index (or some per-run identifier) into the session_id anchor.** Replace:
+
+```python
+# Current — bleeds across attempts when first_user_text is identical:
+session_id = "sess_" + sha256(_first_user_text(payload)).hexdigest()[:16]
+```
+
+with something like:
+
+```python
+# Proposed — each attempt gets its own session partition:
+run_id = payload.get("metadata", {}).get("run_id") \
+         or os.environ.get("LUMO_RUN_ID") \
+         or _generate_per_request_run_id(payload)  # fallback to time-bucketed id
+anchor = _first_user_text(payload) + "::" + run_id
+session_id = "sess_" + sha256(anchor.encode("utf-8")).hexdigest()[:16]
+```
+
+The exact source of `run_id` is design-room — could come from a new Codex header, from the ablation harness via env var, or from a proxy-side per-request UUID. The constraint is that it must stay stable across **turns of one Codex conversation** (so within-session caching still works) but differ across **separate Codex invocations on the same prompt** (so ablation repeats don't pollute each other). The Codex CLI passes a `previous_response_id` for continuation turns; that's a usable anchor for "same conversation."
+
+**Why (b) is the durable solution even though (a) sidesteps the issue:** future ablation protocols, A/B tests, and contamination checks will keep wanting to run the same prompt twice and not have the second run see the first run's cache. Fix the proxy once; protect every subsequent measurement.
+
+**Filed as a separate bug to commit independently of the Round 5 plan.** This does not invalidate Round 4b's *qualitative* findings (T1 dominates; A and D are within noise on Q36) — both A and D were subject to the same bias, so their *relative* ranking holds. It does invalidate the absolute numbers for use in any apples-to-apples CNB-vs-SWE comparison.
+
+### 0.2 Temperature was inconsistent between CNB-55 closeout and SWE-Bench probe16d
+
+The Round 4b closeout sampled at `temp=0.6` (the Qwen 3.6 precise-coding recommendation). The current shipping proxy forces `temp=1.0` (`LUMO_PROXY_FORCE_TEMPERATURE=1.0` in `relaunch_proxy.sh`), which is what probe16d SWE-Bench measurements use. **Lower temperature concentrates the next-token distribution, which lifts suffix-decode acceptance and tps.** Empirical effect: CNB-55 acceptance at temp=0.6 is 0.547; the in-progress CNB-55 rerun at temp=1.0 is showing ~0.32. About 40% of the acceptance gap between CNB-55 and SWE-Bench was driven by temperature, not by workload structure.
+
+**Fix:** all Round 5 ablations must run at the **same sampling temperature as the production SWE-Bench measurements** (currently temp=1.0). If we want to also report numbers at temp=0.6 for completeness, run a parallel arm — don't mix temperatures within a comparison.
+
+### 0.3 Net consequence for §1-§12 and §13
+
+Every "+X% over closeout baseline" claim in this spec needs to be re-anchored against the **temp=1.0, single-shot CNB-55 numbers** (in progress) and against the **probe16d SWE-Bench numbers** (committed). Don't quote the closeout's 22.46 / 22.27 / 0.547 figures as the target — those are biased upward. The corrected anchors when the rerun finishes will be roughly:
+
+```
+                              temp     accept    decode-tps    inflation factor
+CNB-55 closeout (Q36-D)       0.6      0.547     22.27         baseline (biased)
+  → cold-only at temp=0.6    0.6      ~0.46     ~20.8         removes attempt-warming
+  → cold-only at temp=1.0    1.0      ~0.32     ~16-17        removes temp confounder too (rerun pending)
+SWE-Bench probe16d c=1       1.0      0.217     9.22          clean — anchor everything against this
+```
+
+The Path 1 / Path 5 / Path 4 lift estimates in §3-§6 and §13 should target reaching ~14-15 tps on SWE-Bench (a 1.5-1.6× lift over the current 9.2), not the 25+ tps the closeout headline number would suggest.
+
+---
+
+Both good questions. Let me do the research on the MTP side first since the configurability question is empirical, then walk through the design space for both.This is discussion mode, not tool work — I'll skip the task list and walk through both questions directly.
+
+## (1) MTP + Suffix Decoding combination strategies
+
+### What we can actually configure on Qwen 3.6 27B MTP
+
+The MTP head on Qwen 3.6 is **a native part of the released checkpoint**. You don't bolt on a separate draft model — the same forward pass that emits the target token also emits the MTP head's prediction for the next position(s). vLLM exposes it as:
+
+```json
+"speculative_config": {
+  "method": "qwen3_next_mtp",
+  "num_speculative_tokens": 2     // 1-5 supported, 2 is recommended default
+}
+```
+
+The configurable surface is surprisingly thin:
+- **`num_speculative_tokens` (1-5)** — how many positions ahead the MTP head drafts. More = more potential lift, but each step costs a small amount of GPU compute and acceptance falls off geometrically with depth.
+- **Tree topology** — vLLM's default is a linear chain. The FastMTP paper argues tree-of-MTP outperforms chain-of-MTP at the same draft budget; not all vLLM versions expose the toggle.
+- **`disable_by_batch_size`** — turn MTP off when running batch exceeds N (single-tenant: no effect; multi-tenant: prevents MTP compute from competing with prefill).
+
+That's basically it. The MTP head's weights are frozen in the released checkpoint — no temperature, no top-k on the drafter, no per-position branching policy. If you want different behavior, you retrain.
+
+**Three released MTP variants for Qwen 3.6 27B**:
+
+| Variant | Source | Notes |
+|---|---|---|
+| Official `Qwen/Qwen3.6-27B` | Qwen team | Native MTP head shipped in the checkpoint; what vLLM's `qwen3_next_mtp` consumes |
+| `unsloth/Qwen3.6-27B-MTP-GGUF` | Unsloth | GGUF quantization of the same MTP-head model for llama.cpp / Ollama users; not directly relevant for vLLM serving |
+| `sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP` | community | NVFP4 quantized variant; an FP4 (rather than FP8) deployment path — useful if we ever want to push to FP4 on Blackwell-class hardware but doesn't change the algorithm |
+
+There's also a known issue worth flagging: Qwen3-Next's **DeltaNet hybrid attention** (linear-attention layers interleaved with softmax) doesn't roll back cleanly when a draft token is rejected. The MTP head was designed around this and vLLM handles it, but if we ever extend to fancier rollback (e.g., tree spec with deep backtracking), the linear-attention layers can constrain how aggressive we can be. This is the same bug class that breaks naive tree-spec on Mamba/RWKV variants — Qwen3.6's solution is the bundled MTP head, which expects the engine to call it through vLLM's structured path. Don't try to hand-roll a tree-MTP on top.
+
+### Context-length intuition you raised — the key insight
+
+Your framing — context grows 0 → 40K through a SWE-Bench session — maps onto the two drafters' regimes really cleanly:
+
+```
+Context length / turn        Suffix tree state          MTP state
+─────────────────────────────────────────────────────────────────
+Turn 0 (cold, ~5-10K prompt) Empty for this session.    Always trained.
+                              SD can only match the      MTP draws from 27B
+                              prompt itself.             of training prior.
+                              → SD acceptance LOW
+                              → MTP acceptance ~normal
+
+Turn 5 (~15K context)        SD warming up — has 5      Same MTP capability.
+                              turns of agent output.
+                              → SD acceptance MID
+                              → MTP acceptance ~normal
+
+Turn 20+ (~30-40K context)   SD fully warmed.           Same MTP capability.
+                              Lots to match. Also: more  
+                              novel content per turn.
+                              → SD acceptance plateaus
+                              → MTP acceptance ~normal
+```
+
+So **MTP's value is highest exactly where SD's value is lowest: turn 0, cold cache.** This is the strongest argument for combining them — they're complementary in the time dimension, not just in the content-type dimension.
+
+For our probe16d data this matters concretely: most agent turns in a SWE-Bench codex loop are NOT in the "fully warmed" regime. The cache is warming throughout the 30-min session, but only the late turns benefit from a fully populated tree. MTP fills the early-turn gap.
+
+### Combination strategies, ranked by what the literature has tested
+
+**A. τ-threshold hybrid (paper-validated, simplest)**
+
+```python
+candidates = sd.propose(request)
+if sd.score(candidates) >= tau:
+    return candidates                   # SD primary
+return mtp.propose(request)              # MTP fallback
+```
+
+**Upside**: well-validated pattern. Cheap to ship (one fallback call site). Lossless by construction (rejection sampling). Works at any context length without explicit context-awareness.
+
+**Downside**: binary switch wastes information. When SD scores 0.3 (below τ=1.0), we fall through to MTP and discard SD's signal entirely — even though SD might still know a high-frequency 2-token continuation. Also: per-call MTP latency is ~5-10 ms on GPU. At low SD acceptance (our 0.22), we fall through to MTP on 70%+ of calls, so the MTP cost dominates. **Need τ low enough that MTP doesn't fire constantly.**
+
+**Paper baseline on Spec-Bench (SD+EAGLE-3)**: +0.1× over SD alone. For SD+MTP on SWE-Bench at low acceptance, our best-case is probably +0.2-0.3× because MTP is filling more dead time than EAGLE was.
+
+**B. Per-position mixture (more sophisticated, no published baseline for SD+MTP)**
+
+```python
+sd_candidates = sd.propose(request)
+mtp_candidates = mtp.propose(request)
+merged_tree = merge_by_per_position_confidence(sd_candidates, mtp_candidates)
+return verify_tree(merged_tree)
+```
+
+At each position, draw candidate tokens from BOTH SD and MTP, score by source confidence, send the highest-scoring N to the verifier. Effectively turns the drafter into a 2-source ensemble.
+
+**Upside**: never throws away signal. SD wins on positions where surface repetition exists; MTP wins on positions where it doesn't. The merge happens at the candidate level, so each individual draft token is the best estimate from either source.
+
+**Downside**: more engineering (~3 weeks per the spec). Requires deciding how to merge probability estimates from two very different sources (SD's frequency-derived prob vs MTP's logit-derived prob). The "right" merge function is open research.
+
+**My prediction**: this would beat strategy A by another ~0.1-0.2× on our workload, but the engineering surface is non-trivial.
+
+**C. Cascaded (try SD first, then MTP if SD short, then both verified together)**
+
+```python
+sd_short = sd.propose_first_k(request, k=4)   # cheap, CPU-only
+if good_enough(sd_short):
+    return sd_short                           # exit early, no MTP cost
+mtp_extension = mtp.propose_after(sd_short, request)
+return concat(sd_short, mtp_extension)         # SD provides first 4, MTP extends
+```
+
+The idea: SD is good at the very first few tokens (often quoting from context). MTP is better at extending further into novel territory. Use SD as a "fast prefix" and MTP as a "slow but smart extension."
+
+**Upside**: amortizes MTP cost — only invoke when SD didn't fully fill the budget. Particularly good for tool-call boilerplate where SD covers the envelope and MTP covers the argument.
+
+**Downside**: stateful and per-position; harder to make work with tree topology. Verification gets more complex.
+
+**No published baseline for this exact pattern.**
+
+**D. Context-length-adaptive routing (your insight, not in the literature)**
+
+```python
+context_len = len(running_context_tokens)
+if context_len < 5000:
+    return mtp.propose(request)              # SD has no material to match
+elif context_len > 20000:
+    return sd.propose(request) or mtp_fallback()  # SD warm, MTP rare fallback
+else:
+    return per_position_mixture(sd, mtp)     # middle ground, ensemble
+```
+
+**Upside**: explicitly uses the time-dimension complementarity. Cheapest at the extremes (only one drafter runs). Could fold in tree-depth adaptation too (less aggressive drafting when context is small, more aggressive when warm).
+
+**Downside**: adds a regime classifier that has to be calibrated. Sensitive to per-task variance.
+
+**Why this is interesting for publication**: this is *not* in any spec-decode paper I know of, and our SWE-bench data is exactly the workload that would benefit. Worth measuring.
+
+### What the literature says is best (and what we'd actually test)
+
+**Paper's best-case pattern**: τ-threshold hybrid with τ ≈ MAT of the fallback (per Snowflake's SuffixDecoding paper). For SD+EAGLE-3 on Spec-Bench, this hits ~2.5× over base. For SD+MTP it's unstudied.
+
+**Engineering-cost-adjusted best choice for Round 5**: 
+1. Ship τ-threshold (strategy A) first, ~1 week. Recalibrate τ for the low-acceptance SWE-Bench regime (τ ≈ 0.5, not the CNB-55 calibrated 1.0).
+2. Measure. If it lands ≥ 1.3× on SWE-Bench, commit. Continue to strategy D (context-length-adaptive).
+3. Only escalate to strategy B (per-position mixture) if A doesn't deliver — it's much more engineering.
+
+The right thing to publish, in my estimation: strategy D measured on SWE-Bench with our trace data. It's the smallest novel claim ("MTP + SD with context-length routing") with the cleanest experimental story (one degree of freedom — the routing threshold — and a workload where the time dimension actually varies meaningfully).
+
+## (2) Harness-aware suffix decoding for Codex (fixed harness version)
+
+Since Codex is fixed, you have unusual leverage: every emission pattern is *deterministic up to model output*. The bash command syntax, the XML envelope, the tool schemas, the patch format — these are all parts of Codex's prompt and output protocol that won't change between sessions. So priors built from existing traces transfer to future traces of the same harness perfectly.
+
+You correctly identified that **MTP is fixed-by-retraining**, so the harness-aware path lives entirely on the suffix-decoding side. Here's the menu:
+
+### Tier 1 — what's almost free (~1 week each)
+
+**(a) Static envelope prior**: pre-load the suffix tree at session start with the literal token IDs of Codex's tool-call XML envelopes, JSON shells, and apply_patch markers. These appear in EVERY agentic session, are completely deterministic, and currently the suffix tree learns them organically turn by turn. By pre-loading you get them from token 0.
+
+```python
+ENVELOPE_TOKENS = [
+    tokenize('<function_call>'),
+    tokenize('<name>read_file</name>'),
+    tokenize('<arguments>{"path":"'),
+    tokenize('"command":["'),
+    tokenize('--- a/'),
+    tokenize('+++ b/'),
+    tokenize('*** Begin Patch'),
+    # ... ~50 patterns, ~16K total tokens
+]
+```
+
+Cost: list maintenance + injection on session_start. Lossless. Expected lift: 5-10% acceptance from turn 0 (degrades as the suffix tree learns these organically anyway).
+
+**(b) Codex source mining**: Codex CLI is open source. Read the source for tool name strings, schema field names, fixed error messages — these literal tokens are guaranteed to appear. Pre-load.
+
+```python
+# From Codex CLI source: 
+TOOL_NAMES = ['read_file', 'exec_command', 'apply_patch', 'write_file', 'list_directory', 'view']
+TOOL_SCHEMA_PARTS = ['{"type":"object","properties":{"path":{"type":"string"}', ...]
+COMMON_BASH_FRAGMENTS = ['pytest -x', 'pytest -q', 'python -c "', ...]
+```
+
+Cost: one-time extraction + maintenance when Codex updates. Expected lift: same range as (a) — they're orthogonal sources for similar pattern classes.
+
+**(c) Per-benchmark-family prior**: SWE-Bench astropy traces have astropy-specific file paths (`astropy/io/fits/`, `astropy/modeling/core.py`). SWE-Bench sympy has sympy ones. Mine traces per repo, ship a family-level prior alongside the universal Codex prior.
+
+```python
+PRIORS = {
+    'universal':       [envelope_patterns, codex_tool_names, common_bash],
+    'astropy':         [astropy_paths, astropy_imports, common_test_invocations],
+    'sympy':           [...],
+    # detect from base_commit or first turn
+}
+```
+
+Cost: per-family mining + a routing decision at session start. Expected lift: 10-20% on top of the universal prior, because the family-specific tokens are higher-volume than the universal ones.
+
+### Tier 2 — structurally smarter (~2-4 weeks each)
+
+**(d) Type-aware suffix tree indexing**: tool-call arguments have known JSON schema types. The suffix tree could index candidates **by argument type** — when emitting a `"path":` value, only consider candidates that look like paths; when emitting `"command":` value, only consider candidates that look like commands. T3 (schema-aware drafter) was this idea at the proposer level; doing it inside the suffix tree at the cache level is the more powerful version.
+
+Concretely: at the trie root, branch by "type context" (current schema position). Each branch is a smaller subtree of high-probability candidates for that type. Lookup at draft time uses the model's recent tokens + the known schema position to navigate to the right subtree.
+
+**Lift estimate**: substantial — could be 20-30% on tool-call frames, which are a meaningful fraction of total tokens. Easier to publish than other ideas because it's a clean ablation against current SD.
+
+**(e) Time-decay / recency-weighted scoring**: currently every pattern in the trie is weighted equally regardless of age. For an agentic loop, recent turns are more predictive than turns 30 ago — Codex tends to iterate around the same files / functions. Add a per-node `last_used` timestamp; downweight by exp(-decay × age). Standard editor-completion technique.
+
+**Lift estimate**: 5-15% in the agentic case. Easier to ship than (d), but the lift is smaller.
+
+**(f) Fuzzy suffix matching (Levenshtein-1)**: when the model emits a token that's a 1-token variant of something in the trie (`def calculate_distance` vs `def calculate_velocity`), the current strict-prefix match fails. A bounded edit-distance lookup catches these. Token-vocabulary BPE makes this trickier than character-level fuzzy match, but feasible.
+
+**Lift estimate**: workload-dependent, probably 5-10% on novel content. Reach goal, not a near-term win.
+
+### Tier 3 — research bets (~4-8 weeks, publishable)
+
+**(g) Learned ranker over trie candidates**: instead of trie's built-in head-of-list (most frequent child), train a small learned model that takes (current model hidden state, candidate token, trie node features) and predicts acceptance probability. The trie provides the candidate set; the learned ranker picks the best subset for the verifier batch.
+
+This is essentially "use Codex traces to train a small neural ranker that's deployed alongside SD." Lossless because rejection sampling still gates correctness. The ranker only changes draft selection.
+
+**Lift estimate**: ambitious — could be 25-50% on top of (a)+(c). High variance. This is the auto-completion-substrate idea taken seriously.
+
+**(h) Active-learning loop**: deploy a prior, log per-pattern hit/miss in production traces, regenerate the prior weekly with weights informed by which patterns actually contribute. Auto-refresh; never goes stale.
+
+**Lift estimate**: not a single-shot lift — turns the prior into a continuously-improving artifact. Probably +1-3% per refresh cycle. Better thought of as preventing decay than as a one-time win.
+
+### What you can do *because* Codex is fixed (and we couldn't if it weren't)
+
+The unique opportunity from a fixed harness:
+
+1. **Profile the exact emission distribution.** Run an offline pass over all probe traces and compute the precise empirical distribution of n-grams given a Codex version + model version. Hard-code into the prior.
+
+2. **Source-derived hot paths.** From Codex CLI's source: enumerate every tool name, every schema property name, every fixed string emitted in any code path. These are 100%-guaranteed-to-appear in some session and pre-loading them costs nothing.
+
+3. **Tool-schema-aware structure.** Codex's request envelopes include the full tool schema in every call. The schema fields, types, and nesting are stable. Build a "schema fingerprint → expected token positions" map and inject it as a prior conditional on the current schema.
+
+4. **Multi-tier cache with eviction policy that respects priors.** Currently `max_cached_requests=1000` FIFO evicts anything. Add a "pinned" tier for the static prior + family prior, and only churn the dynamic session-local tier. This is the §13.3.2 "tiered cache" sketch — small engineering, big stability win.
+
+### How I'd sequence the harness-aware work
+
+Roughly in priority order, given your goals:
+
+1. **(a) Static envelope prior + (b) Codex source mining** — ~1 week combined. Lossless, ships immediately. Anchor for everything downstream.
+2. **(c) Per-benchmark-family prior** — ~1 week after (a)/(b). Mine astropy/sympy/django/sphinx traces separately. Largest expected lift among Tier 1.
+3. **(d) Type-aware indexing** — ~3 weeks. Best publishable contribution among Tier 2. Sharp claim, easy ablation.
+4. **(g) Learned ranker** — only if Tier 1+2 don't deliver enough. Big swing, big risk.
+
+Stop adding paths once aggregate lift reaches 1.5-1.6× on SWE-Bench (~14 tps); diminishing returns kick in past that on a bandwidth-bound system.
+
+### One thing worth noting about MTP
+
+You said *"I guess MTP header we cannot do too much other than retraining"* — mostly right, but two things you CAN do without retraining:
+
+- **Calibrate `num_speculative_tokens`** on the actual workload. Default is 2; sweep 1-5 on a SWE-Bench mini-corpus. The MTP head's drop-off depth varies by output type; you may find 3 or 4 is the sweet spot on our specific output distribution.
+- **Adjust tree topology if vLLM exposes it.** Some vLLM versions expose `mtp_tree_size` or similar. Linear chain vs branching tree is a calibrate-not-train decision.
+
+Neither is a big lever, but free to test.
+
+---
+
+Both directions are real and complementary. The MTP+SD combination gets you 1.3-1.5× on top of pure SD. The harness-aware suffix decoding stack gets you 1.3-1.5× independently. Stacked, you could plausibly reach 2× over pure-SD on SWE-Bench, putting absolute decode tps at ~13-15 from the current 9.2. That's the realistic Round 5 ceiling under the current measurement protocol — with the §0 bug fixes applied to make sure we're measuring it cleanly.
+
+Sources:
+- [MTP (Multi-Token Prediction) — vLLM](https://docs.vllm.ai/en/latest/features/speculative_decoding/mtp/)
+- [Qwen3-Next Usage Guide — vLLM Recipes](https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3-Next.html)
+- [Qwen/Qwen3.6-27B (Hugging Face) — model card and MTP head details](https://huggingface.co/Qwen/Qwen3.6-27B)
+- [unsloth/Qwen3.6-27B-MTP-GGUF (Hugging Face) — GGUF MTP variant](https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF)
+- [sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP (Hugging Face) — NVFP4 MTP variant](https://huggingface.co/sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP)
+- [SuffixDecoding paper (NeurIPS 2025) — τ-threshold pattern](https://arxiv.org/abs/2411.04975)
+- [FastMTP paper — tree-of-MTP topology](https://arxiv.org/abs/2509.18362)
+
 ## 1. Why this spec
 
 Round 4b on Qwen 3.5 27B FP8 demonstrated:
