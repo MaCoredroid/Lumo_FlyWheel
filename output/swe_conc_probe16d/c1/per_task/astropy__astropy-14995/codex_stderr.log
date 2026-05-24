@@ -1,0 +1,4 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-24T14:38:16.284372Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
+2026-05-24T14:38:45.772265Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
