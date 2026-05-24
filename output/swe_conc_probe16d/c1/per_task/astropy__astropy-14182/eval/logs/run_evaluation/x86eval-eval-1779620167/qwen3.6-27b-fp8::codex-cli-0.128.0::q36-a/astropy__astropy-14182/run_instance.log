@@ -1,0 +1,51 @@
+2026-05-24 03:57:31,464 - INFO - Creating container for astropy__astropy-14182...
+2026-05-24 03:57:31,539 - INFO - Container for astropy__astropy-14182 created: 24189b0b671753fda384185af968e9b06745ad51ca063ef9849bd0a8fa06bf01
+2026-05-24 03:57:31,643 - INFO - Container for astropy__astropy-14182 started: 24189b0b671753fda384185af968e9b06745ad51ca063ef9849bd0a8fa06bf01
+2026-05-24 03:57:31,643 - INFO - Intermediate patch for astropy__astropy-14182 written to logs/run_evaluation/x86eval-eval-1779620167/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14182/patch.diff, now applying to container...
+2026-05-24 03:57:31,720 - INFO - >>>>> Applied Patch:
+Checking patch astropy/io/ascii/rst.py...
+Applied patch astropy/io/ascii/rst.py cleanly.
+
+2026-05-24 03:57:31,950 - INFO - Git diff before:
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+index abdeba8ef..78e42b7d6 100644
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -57,8 +57,8 @@ class RST(FixedWidth):
+     data_class = SimpleRSTData
+     header_class = SimpleRSTHeader
+ 
+-    def __init__(self):
+-        super().__init__(delimiter_pad=None, bookend=False)
++    def __init__(self, header_rows=None):
++        super().__init__(delimiter_pad=None, bookend=False, header_rows=header_rows)
+ 
+     def write(self, lines):
+         lines = super().write(lines)
+2026-05-24 03:57:31,951 - INFO - Eval script for astropy__astropy-14182 written to logs/run_evaluation/x86eval-eval-1779620167/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14182/eval.sh; copying to container...
+2026-05-24 03:58:04,262 - INFO - Test runtime: 32.27 seconds
+2026-05-24 03:58:04,262 - INFO - Test output for astropy__astropy-14182 written to logs/run_evaluation/x86eval-eval-1779620167/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14182/test_output.txt
+2026-05-24 03:58:04,299 - INFO - Git diff after:
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+index abdeba8ef..78e42b7d6 100644
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -57,8 +57,8 @@ class RST(FixedWidth):
+     data_class = SimpleRSTData
+     header_class = SimpleRSTHeader
+ 
+-    def __init__(self):
+-        super().__init__(delimiter_pad=None, bookend=False)
++    def __init__(self, header_rows=None):
++        super().__init__(delimiter_pad=None, bookend=False, header_rows=header_rows)
+ 
+     def write(self, lines):
+         lines = super().write(lines)
+2026-05-24 03:58:04,299 - INFO - Grading answer for astropy__astropy-14182...
+2026-05-24 03:58:04,302 - INFO - report: {'astropy__astropy-14182': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': False, 'tests_status': {'FAIL_TO_PASS': {'success': [], 'failure': ['astropy/io/ascii/tests/test_rst.py::test_rst_with_header_rows']}, 'PASS_TO_PASS': {'success': ['astropy/io/ascii/tests/test_rst.py::test_read_normal', 'astropy/io/ascii/tests/test_rst.py::test_read_normal_names', 'astropy/io/ascii/tests/test_rst.py::test_read_normal_names_include', 'astropy/io/ascii/tests/test_rst.py::test_read_normal_exclude', 'astropy/io/ascii/tests/test_rst.py::test_read_unbounded_right_column', 'astropy/io/ascii/tests/test_rst.py::test_read_unbounded_right_column_header', 'astropy/io/ascii/tests/test_rst.py::test_read_right_indented_table', 'astropy/io/ascii/tests/test_rst.py::test_trailing_spaces_in_row_definition', 'astropy/io/ascii/tests/test_rst.py::test_write_normal'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for astropy__astropy-14182: resolved: False
+2026-05-24 03:58:04,302 - INFO - Attempting to stop container sweb.eval.astropy__astropy-14182.x86eval-eval-1779620167...
+2026-05-24 03:58:19,395 - INFO - Attempting to remove container sweb.eval.astropy__astropy-14182.x86eval-eval-1779620167...
+2026-05-24 03:58:19,407 - INFO - Container sweb.eval.astropy__astropy-14182.x86eval-eval-1779620167 removed.
+2026-05-24 03:58:19,407 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.astropy_1776_astropy-14182:latest...
+2026-05-24 03:58:19,970 - INFO - Image swebench/sweb.eval.x86_64.astropy_1776_astropy-14182:latest removed.
