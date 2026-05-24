@@ -8,3 +8,7 @@ HEAD is now at d16bfe05a Merge pull request #12900 from Cadair/custom_compound_m
 [2026-05-24T18:01:05Z] -> astropy__astropy-13033
 Preparing worktree (detached HEAD 298ccb478)
 HEAD is now at 298ccb478 Merge pull request #13031 from meeseeksmachine/auto-backport-of-pr-13027-on-main
+[2026-05-24T18:33:18Z] <- astropy__astropy-13033 verdict=failed elapsed_total=1932.6s
+[2026-05-24T18:33:18Z] -> astropy__astropy-13236
+Preparing worktree (detached HEAD 6ed769d58)
+HEAD is now at 6ed769d58 Merge pull request #13228 from astrofrog/fix-spectralcoord-no-target
