@@ -8,3 +8,7 @@
 [driver] 2026-05-24T02:54:38Z RERUN START arm c2 conc=2 epoch=1779591278
 [driver] 2026-05-24T06:31:36Z RERUN END arm c2 conc=2 epoch=1779604296
 [driver] 2026-05-24T06:31:36Z RERUN START arm c1 conc=1 epoch=1779604296
+[driver] 2026-05-24T14:51:22Z RERUN END arm c1 conc=1 epoch=1779634282
+[driver] ALL ARMS DONE (16d-rerun) 2026-05-24T14:51:22Z
+[driver] 2026-05-24T15:02:04Z START arm c1a conc=1 config=A epoch=1779634924
+[driver] 2026-05-24T17:28:48Z START arm c1off conc=1 config=off epoch=1779643728
