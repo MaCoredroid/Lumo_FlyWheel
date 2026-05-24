@@ -1,0 +1,5 @@
+=== [2026-05-24T06:31:36Z] dataset=princeton-nlp/SWE-bench_Verified tag=c1 n=16 concurrency=1 ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[2026-05-24T06:31:38Z] -> astropy__astropy-12907
+Preparing worktree (detached HEAD d16bfe05a)
+HEAD is now at d16bfe05a Merge pull request #12900 from Cadair/custom_compound_model

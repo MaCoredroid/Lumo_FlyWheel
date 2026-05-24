@@ -6,3 +6,5 @@
 [driver] 2026-05-24T00:50:49Z END arm c1 conc=1 epoch=1779583849
 [driver] ALL ARMS DONE (16d) 2026-05-24T00:50:49Z
 [driver] 2026-05-24T02:54:38Z RERUN START arm c2 conc=2 epoch=1779591278
+[driver] 2026-05-24T06:31:36Z RERUN END arm c2 conc=2 epoch=1779604296
+[driver] 2026-05-24T06:31:36Z RERUN START arm c1 conc=1 epoch=1779604296
