@@ -1,2 +1,4 @@
 WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
 Reading additional input from stdin...
+2026-05-24T21:26:16.874441Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "9", expected i32 at line 1 column 1394
+2026-05-24T21:28:43.099019Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
