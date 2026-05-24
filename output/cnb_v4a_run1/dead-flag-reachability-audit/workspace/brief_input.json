@@ -1,0 +1,89 @@
+{
+  "schema_version": "cnb55.flag_audit.v1",
+  "variant_id": "v1-clean-baseline",
+  "flags": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "status": "live",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "src/preview/runtime.py",
+        "tests/test_shadow_preview_live.py"
+      ],
+      "disproved_false_positive_path": "docs/false_positive_notes.md",
+      "rationale": "This flag is fully live: the parser sets shadow_enabled and effective_mode, and preview_runtime_branch directly returns the shadow_preview_path when shadow_enabled is true. The false positive that parser presence alone does not prove runtime reachability is disproved here by the explicit branch in runtime.py."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "status": "partial",
+      "alias_of": "ENABLE_SHADOW_PREVIEW",
+      "parser_symbol": "load_preview_env:ENABLE_PREVIEW_V2->ENABLE_SHADOW_PREVIEW",
+      "runtime_branch_symbol": "preview_runtime_branch:shadow_preview_path",
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_preview_v2_alias.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "tests/test_preview_v2_alias.py",
+      "rationale": "This flag is partial: the parser accepts it via the env parser and normalizes it to the same shadow path as ENABLE_SHADOW_PREVIEW, but it is not a standalone runtime branch. It is a live alias, not a live standalone flag. The test file alone would suggest a dedicated branch, but the runtime only has one shared path."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "status": "dead",
+      "alias_of": null,
+      "parser_symbol": "load_preview_env:PREVIEW_FORCE_LEGACY",
+      "runtime_branch_symbol": null,
+      "evidence": [
+        "src/preview/config.py",
+        "tests/test_force_legacy_reporting_only.py",
+        "docs/preview_rollout_runbook.md"
+      ],
+      "disproved_false_positive_path": "tests/test_force_legacy_reporting_only.py",
+      "rationale": "This flag is dead: the parser records force_legacy_seen and the test verifies reporting, but the live service runtime branch in preview_runtime_branch never inspects force_legacy_seen. The presence of a parser hit and a test does not prove the live service reads that flag at runtime. The runbook confirms it is left in reporting and operator notes only."
+    }
+  ],
+  "summary": {
+    "highest_operational_risk": "ENABLE_SHADOW_PREVIEW",
+    "note": "ENABLE_SHADOW_PREVIEW is the sole live standalone flag controlling the preview router. The other two flags either alias it or are dead at runtime."
+  },
+  "cleanup_plan": [
+    {
+      "flag": "ENABLE_SHADOW_PREVIEW",
+      "action": "keep",
+      "blockers": [],
+      "rationale": "This is the primary live flag controlling preview routing. No cleanup is needed."
+    },
+    {
+      "flag": "ENABLE_PREVIEW_V2",
+      "action": "remove_after_migration",
+      "blockers": ["legacy deploy manifests may still reference the name"],
+      "rationale": "Remove the alias once all deploy manifests are migrated to use ENABLE_SHADOW_PREVIEW directly."
+    },
+    {
+      "flag": "PREVIEW_FORCE_LEGACY",
+      "action": "docs_cleanup",
+      "blockers": [],
+      "rationale": "The flag has no runtime branch. Remove the parser handling and retain only operator notes for historical context."
+    }
+  ],
+  "assumption_ledger": [
+    {
+      "status": "observed",
+      "topic": "parser_symbol mapping",
+      "note": "Config parser symbols match the runtime branch output for ENABLE_SHADOW_PREVIEW"
+    },
+    {
+      "status": "missing",
+      "topic": "deployment rollback procedure",
+      "note": "No rollback procedure found in this workspace copy for PREVIEW_FORCE_LEGACY"
+    },
+    {
+      "status": "to_verify",
+      "topic": "alias deprecation timeline",
+      "note": "Unclear when ENABLE_PREVIEW_V2 should be removed from production manifests"
+    }
+  ]
+}
