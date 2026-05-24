@@ -1,0 +1,8 @@
+=== [2026-05-24T23:29:15Z] dataset=princeton-nlp/SWE-bench_Verified tag=q36a_configA_smoke n=1 concurrency=1 ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/q36a_configA_smoke/q36a_configA_smoke/per_task/astropy__astropy-12907/workspace
+[2026-05-24T23:29:17Z] -> astropy__astropy-12907
+Preparing worktree (detached HEAD d16bfe05a)
+HEAD is now at d16bfe05a Merge pull request #12900 from Cadair/custom_compound_model
+[2026-05-24T23:41:36Z] <- astropy__astropy-12907 verdict=resolved elapsed_total=739.2s
+=== [2026-05-24T23:41:36Z] DONE n=1 resolved_rate=1.0 verdicts={'resolved': 1} ===

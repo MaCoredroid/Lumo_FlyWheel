@@ -1,0 +1,7 @@
+ts_completed,oracle_session_id,oracle_run_anchor,completion_tokens,decode_tps,accept_ratio,running_before,running_after,gpu_samples,tensor_active_med,sm_issue_med,sms_active_med,power_w
+2026-05-24T23:29:24.788Z,sess_67bf26580af2cd00,019e5c52-4cfa-7ca2-8f2d-aa183ec0cb01,170,29.87,0.546,1.0,1.0,46,12.0,4.0,88.0,56.42
+2026-05-24T23:29:27.374Z,sess_67bf26580af2cd00,019e5c52-4cfa-7ca2-8f2d-aa183ec0cb01,54,28.31,0.471,1.0,1.0,23,12.0,4.0,87.0,55.17
+2026-05-24T23:30:24.252Z,sess_67bf26580af2cd00,019e5c52-4cfa-7ca2-8f2d-aa183ec0cb01,767,14.14,0.275,1.0,1.0,566,12.0,4.0,88.0,63.05
+2026-05-24T23:31:17.231Z,sess_67bf26580af2cd00,019e5c52-4cfa-7ca2-8f2d-aa183ec0cb01,471,2.71,0.218,1.0,1.0,528,13.0,4.0,89.0,57.37
+2026-05-24T23:31:26.836Z,sess_67bf26580af2cd00,019e5c52-4cfa-7ca2-8f2d-aa183ec0cb01,320,37.7,0.642,1.0,1.0,94,13.0,4.0,89.0,58.26
+2026-05-24T23:33:13.539Z,sess_67bf26580af2cd00,019e5c52-4cfa-7ca2-8f2d-aa183ec0cb01,1264,8.96,0.313,1.0,0.0,201,13.0,4.0,88.0,43.47

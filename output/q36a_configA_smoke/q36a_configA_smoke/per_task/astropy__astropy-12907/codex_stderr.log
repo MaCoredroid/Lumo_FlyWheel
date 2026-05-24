@@ -1,0 +1,7 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-24T23:31:17.260638Z ERROR codex_core::tools::router: error=failed to parse function arguments: duplicate field `cmd` at line 1 column 20
+2026-05-24T23:33:52.510229Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
+2026-05-24T23:37:46.576578Z ERROR codex_core::tools::router: error=failed to parse function arguments: duplicate field `cmd` at line 1 column 51
+2026-05-24T23:37:53.725853Z ERROR codex_core::tools::router: error=failed to parse function arguments: duplicate field `cmd` at line 1 column 43
+2026-05-24T23:38:53.132389Z ERROR codex_core::tools::router: error=failed to parse function arguments: EOF while parsing a string at line 1 column 68
