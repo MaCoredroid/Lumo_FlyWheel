@@ -1,0 +1,10 @@
+{
+  "task": "policy-aware-request-resolution",
+  "started_at": "2026-05-24T22:01:27.114962+00:00",
+  "ended_at": "2026-05-24T22:17:50.286118+00:00",
+  "elapsed_s": 983.2,
+  "rc": 1,
+  "model": "qwen3.6-27b",
+  "endpoint": "http://127.0.0.1:8022/v1",
+  "variant": "v1-clean-baseline"
+}
