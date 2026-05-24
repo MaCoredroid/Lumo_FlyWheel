@@ -1,0 +1,5 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-24T07:54:13.762888Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "[{\"status\": \"in_progress\", \"step\": \"Create itrs_observed_transforms.py with ITRS<->AltAz and ITRS<->HADec transforms\"}, {\"status\": \"pending\", \"step\": \"Register new transforms in builtin_frames/__init__.py\"}, {\"status\": \"pending\", \"step\": \"Verify imports and basic sanity\"}]", expected a sequence at line 1 column 308
+2026-05-24T07:55:37.085873Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "[{\"step\": \"Create itrs_observed_transforms.py\", \"status\": \"completed\"}, {\"step\": \"Register new transforms in __init__.py\", \"status\": \"in_progress\"}, {\"step\": \"Verify imports and basic sanity\", \"status\": \"pending\"}]", expected a sequence at line 1 column 249
+2026-05-24T07:55:50.813023Z ERROR codex_core::tools::router: error=unsupported call: apply_patch
