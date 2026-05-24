@@ -1,0 +1,136 @@
+ci:
+  autofix_prs: false
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-added-large-files
+        # Prevent giant files from being committed.
+      - id: check-ast
+        # Simply check whether files parse as valid python.
+      - id: check-case-conflict
+        # Check for files with names that would conflict on a case-insensitive
+        # filesystem like MacOS HFS+ or Windows FAT.
+      - id: check-json
+        # Attempts to load all json files to verify syntax.
+      - id: check-merge-conflict
+        # Check for files that contain merge conflict strings.
+      - id: check-symlinks
+        # Checks for symlinks which do not point to anything.
+      - id: check-toml
+        # Attempts to load all TOML files to verify syntax.
+      - id: check-xml
+        # Attempts to load all xml files to verify syntax.
+      - id: check-yaml
+        # Attempts to load all yaml files to verify syntax.
+      - id: debug-statements
+        # Check for debugger imports and py37+ breakpoint() calls in python
+        # source.
+      - id: detect-private-key
+        # Checks for the existence of private keys.
+      - id: end-of-file-fixer
+        # Makes sure files end in a newline and only a newline.
+        exclude: ".*(data.*|extern.*|licenses.*|_parsetab.py)$"
+      # - id: fix-encoding-pragma  # covered by pyupgrade
+      - id: trailing-whitespace
+        # Trims trailing whitespace.
+        exclude: ".*(data.*|extern.*|licenses.*|_parsetab.py|test_cds.py)$"
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.9.0
+    hooks:
+      - id: python-check-mock-methods
+        # Prevent common mistakes of assert mck.not_called(), assert
+        # mck.called_once_with(...) and mck.assert_called.
+      - id: rst-directive-colons
+        # Detect mistake of rst directive not ending with double colon.
+      - id: rst-inline-touching-normal
+        # Detect mistake of inline code touching normal text in rst.
+      - id: text-unicode-replacement-char
+        # Forbid files which have a UTF-8 Unicode replacement character.
+      - id: python-check-blanket-noqa
+        # Enforce that all noqa annotations always occur with specific codes.
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.3.0
+    hooks:
+      - id: pyupgrade
+        args: ["--py38-plus"]
+        exclude: ".*(extern.*|_parsetab.py|_lextab.py)$"
+
+  - repo: https://github.com/asottile/yesqa
+    rev: v1.4.0
+    hooks:
+      - id: yesqa
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.10.1
+    hooks:
+      - id: isort
+        name: isort (python)
+        additional_dependencies: [toml]
+      - id: isort
+        name: isort (pyi)
+        types: [pyi]
+        additional_dependencies: [toml]
+      - id: isort
+        name: isort (cython)
+        types: [cython]
+        additional_dependencies: [toml]
+
+  - repo: https://github.com/psf/black
+    rev: 22.10.0
+    hooks:
+      - id: black
+
+  # We list the warnings/errors to check for here rather than in setup.cfg because
+  # we don't want these options to apply whenever anyone calls flake8 from the
+  # command-line or their code editor - in this case all warnings/errors should be
+  # checked for. The warnings/errors we check for here are:
+  # E101 - mix of tabs and spaces
+  # E111 - 4 spaces per indentation level
+  # E112 - 4 spaces per indentation level
+  # E113 - 4 spaces per indentation level
+  # E201 - whitespace after '('
+  # E202 - whitespace before ')'
+  # E27 - spaces and tabs after
+  # E3 - Blank line
+  # E502 - the backslash is redundant between brackets
+  # E70 - multiple statements on a line
+  # E9 - Runtime
+  # F - Flake8 Errors
+  # W - Whitespace
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args:
+          [
+            "--count",
+            "--select",
+            "E10,E11,E201,E202,E27,E3,E5,E70,E722,E9,F,W",
+            "--ignore",
+            "E114,E116,E501,F403,F821,F841,W5"
+          ]
+        exclude: ".*(data.*|extern.*|cextern)$"
+
+  - repo: local
+    hooks:
+      - id: changelogs-rst
+        name: changelog filenames
+        language: fail
+        entry: >-
+          changelog files must be named <sub-package>/####.(bugfix|feature|api).rst
+          or ####.other.rst (in the root directory only)
+        exclude: >-
+          ^docs/changes/[\w\.]+/(\d+\.(bugfix|feature|api)(\.\d)?.rst|.gitkeep)
+        files: ^docs/changes/[\w\.]+/
+      - id: changelogs-rst-other
+        name: changelog filenames for other category
+        language: fail
+        entry: >-
+          only "other" changelog files must be placed in the root directory
+        exclude: >-
+          ^docs/changes/(\d+\.other.rst|README.rst|template.rst)
+        files: ^docs/changes/\d+.\w+.rst

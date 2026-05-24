@@ -1,0 +1,20 @@
+diff --git a/astropy/coordinates/sky_coordinate.py b/astropy/coordinates/sky_coordinate.py
+index ab475f7d0..34c5dc2b2 100644
+--- a/astropy/coordinates/sky_coordinate.py
++++ b/astropy/coordinates/sky_coordinate.py
+@@ -871,6 +871,15 @@ class SkyCoord(ShapedLikeNDArray):
+         Overrides getattr to return coordinates that this can be transformed
+         to, based on the alias attr in the primary transform graph.
+         """
++        # If the attribute name is defined as a descriptor (e.g., a @property)
++        # in the class hierarchy, re-invoke the descriptor so any error raised
++        # within it propagates correctly, rather than falling through to the
++        # generic "no attribute" message below with the wrong attribute name.
++        for cls in type(self).__mro__:
++            descriptor = cls.__dict__.get(attr)
++            if isinstance(descriptor, property):
++                return descriptor.__get__(self, type(self))
++
+         if "_sky_coord_frame" in self.__dict__:
+             if self._is_name(attr):
+                 return self  # Should this be a deepcopy of self?
