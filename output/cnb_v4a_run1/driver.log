@@ -1,2 +1,4 @@
 [cnb] 2026-05-24T20:43:53.654820+00:00 START cnb-v4a config=D B=1 tasks=11 model=qwen3.6-27b endpoint=http://127.0.0.1:8022/v1
 [cnb] 2026-05-24T20:43:53.654855+00:00 [1/11] dead-flag-reachability-audit START
+[cnb] 2026-05-24T20:52:37.349385+00:00 [1/11] dead-flag-reachability-audit END rc=1 files=1 elapsed=523.7 status=WROTE_FILES
+[cnb] 2026-05-24T20:52:37.349427+00:00 [2/11] fanout-fullstack-release-blocker START

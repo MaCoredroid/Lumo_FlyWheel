@@ -1,0 +1,10 @@
+{
+  "task": "dead-flag-reachability-audit",
+  "started_at": "2026-05-24T20:43:53.655954+00:00",
+  "ended_at": "2026-05-24T20:52:37.348038+00:00",
+  "elapsed_s": 523.7,
+  "rc": 1,
+  "model": "qwen3.6-27b",
+  "endpoint": "http://127.0.0.1:8022/v1",
+  "variant": "v1-clean-baseline"
+}
