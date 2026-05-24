@@ -1,0 +1,21 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index 5afe2127a..870fe41cb 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -1243,8 +1243,14 @@ class Table:
+         # mixin class
+         if (not isinstance(data, Column) and not data_is_mixin
+                 and isinstance(data, np.ndarray) and len(data.dtype) > 1):
+-            data = data.view(NdarrayMixin)
+-            data_is_mixin = True
++            warnings.warn(
++                'Adding a structured array column to a Table is '
++                'deprecated. To avoid this warning, wrap the data in '
++                'Column (e.g., Column(your_array)). In a future '
++                'version the structured array will be added as a '
++                'Column rather than NdarrayMixin.',
++                FutureWarning, stacklevel=4
++            )
+ 
+         # Get the final column name using precedence.  Some objects may not
+         # have an info attribute. Also avoid creating info as a side effect.
