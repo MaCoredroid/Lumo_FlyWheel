@@ -9,8 +9,10 @@ export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=10
 export LUMO_PROXY_MAX_OUTPUT_TOKENS=80000
 export LUMO_PROXY_NONSTREAM_BYPASS=1
 export LUMO_PROXY_REQUEST_DUMP_DIR=/tmp/lumo_proxy_request_dumps
-export LUMO_PROXY_FORCE_TOP_P=0.95
-export LUMO_PROXY_FORCE_TEMPERATURE=1.0
+# temp/top_p are overridable by the caller's env (e.g. the experiment runner
+# switching temp 1.0<->0.6); default to the campaign values when unset.
+export LUMO_PROXY_FORCE_TOP_P=${LUMO_PROXY_FORCE_TOP_P:-0.95}
+export LUMO_PROXY_FORCE_TEMPERATURE=${LUMO_PROXY_FORCE_TEMPERATURE:-1.0}
 export LUMO_TRACK_B_REQUEST_METRICS_OUT=/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl
 # kill old proxy on 8022 by pid-file (clean), fallback to port
 OLD=$(cat /tmp/track_b_e2e_proxy_8022.pid 2>/dev/null || true)
