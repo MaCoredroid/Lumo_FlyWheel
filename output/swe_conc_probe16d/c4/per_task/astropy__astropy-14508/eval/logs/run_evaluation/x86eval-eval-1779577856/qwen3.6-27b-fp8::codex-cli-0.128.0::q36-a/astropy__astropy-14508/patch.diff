@@ -1,0 +1,22 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..86de14d73 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,8 +1299,15 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
+-    value_str = f"{value:.16G}"
+-    if "." not in value_str and "E" not in value_str:
++    # First try the shortest representation (Python's str()), and only fall
++    # back to 16-digit format if it is longer than 20 characters
++    value_str = str(value)
++    if len(value_str) > 20:
++        value_str = f"{value:.16G}"
++    # Handle special values and scientific notation (str() uses lowercase)
++    elif "inf" in value_str.lower() or "nan" in value_str.lower() or "e" in value_str:
++        value_str = value_str.upper()
++    if "." not in value_str and "E" not in value_str and "INF" not in value_str and "NAN" not in value_str:
+         value_str += ".0"
+     elif "E" in value_str:
+         # On some Windows builds of Python (and possibly other platforms?) the

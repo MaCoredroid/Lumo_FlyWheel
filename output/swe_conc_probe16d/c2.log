@@ -80,3 +80,19 @@ HEAD is now at b16c7d12c Merge pull request #14988 from nstarman/cosmo-dont-regi
 [2026-05-24T00:37:03Z]    astropy__astropy-14995: empty patch (agent_gave_up); retrying codex once
 [2026-05-24T00:37:27Z] <- astropy__astropy-14995 verdict=failed elapsed_total=48.9s
 === [2026-05-24T00:37:27Z] DONE n=16 resolved_rate=0.0625 verdicts={'resolved': 1, 'failed': 15} ===
+=== [2026-05-24T02:54:38Z] dataset=princeton-nlp/SWE-bench_Verified tag=c2 n=16 concurrency=2 ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[2026-05-24T02:54:39Z] -> astropy__astropy-12907
+[2026-05-24T02:54:39Z] <- astropy__astropy-12907 verdict=skipped_existing elapsed_total=0.0s
+[2026-05-24T02:54:39Z] -> astropy__astropy-13033
+[2026-05-24T02:54:39Z] -> astropy__astropy-13236
+[2026-05-24T02:54:39Z] <- astropy__astropy-13236 verdict=skipped_existing elapsed_total=0.0s
+[2026-05-24T02:54:39Z] -> astropy__astropy-13398
+[2026-05-24T02:54:39Z] <- astropy__astropy-13398 verdict=skipped_existing elapsed_total=0.0s
+[2026-05-24T02:54:39Z] -> astropy__astropy-13453
+[2026-05-24T02:54:39Z] <- astropy__astropy-13033 verdict=skipped_existing elapsed_total=0.0s
+[2026-05-24T02:54:39Z] -> astropy__astropy-13579
+Preparing worktree (detached HEAD 19cc80471)
+Preparing worktree (detached HEAD 0df94ff70)
+HEAD is now at 19cc80471 Merge pull request #13444 from eerovaher/unit-format-docs
+HEAD is now at 0df94ff70 Merge pull request #13574 from pllim/rm-corpus-404
