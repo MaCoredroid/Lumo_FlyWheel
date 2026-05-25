@@ -1,0 +1,25 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index 5afe2127a..3338a8292 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -1239,12 +1239,16 @@ class Table:
+                                 f'{fully_qualified_name} '
+                                 'did not return a valid mixin column')
+ 
+-        # Structured ndarray gets viewed as a mixin unless already a valid
+-        # mixin class
++        # Structured ndarray used to get viewed as a mixin, but now
++        # it will be added as a regular Column.
+         if (not isinstance(data, Column) and not data_is_mixin
+                 and isinstance(data, np.ndarray) and len(data.dtype) > 1):
+-            data = data.view(NdarrayMixin)
+-            data_is_mixin = True
++            warnings.warn(
++                'Adding a structured ndarray to a Table as a column '
++                'now creates a Column instead of an NdarrayMixin. '
++                'To silence this warning, wrap the ndarray in a '
++                'Column explicitly, e.g., Column(data).',
++                FutureWarning)
+ 
+         # Get the final column name using precedence.  Some objects may not
+         # have an info attribute. Also avoid creating info as a side effect.
