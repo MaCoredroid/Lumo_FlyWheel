@@ -1,0 +1,37 @@
+{
+  "instance_id": "astropy__astropy-14508",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-05-25T19:32:11Z",
+  "repo": "astropy/astropy",
+  "base_commit": "a3f4ae6cd24d5ecdf49f213d77b3513dd509a06c",
+  "codex": {
+    "elapsed_s": 1800.079,
+    "exit_code": -1,
+    "timed_out": true,
+    "container_name": "swe-codex-astropy__astropy-14508-1779737531"
+  },
+  "vllm_request_metrics_bytes": 191026,
+  "patch_bytes": 1785,
+  "eval": {
+    "exit_code": 1,
+    "elapsed_s": 50.357
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "astropy__astropy-14508",
+    "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "verdict": "failed",
+    "passed": false,
+    "failure_mode": "tests_failed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 49.686,
+    "error": null,
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "run_id": "x86eval-eval-1779739332",
+    "namespace": "swebench",
+    "cache_level": "env"
+  },
+  "ended_at": "2026-05-25T20:03:02Z"
+}

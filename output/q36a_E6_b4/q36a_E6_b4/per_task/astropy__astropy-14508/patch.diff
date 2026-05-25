@@ -1,0 +1,39 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..cbea93093 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,13 +1299,28 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
+-    value_str = f"{value:.16G}"
+-    if "." not in value_str and "E" not in value_str:
++    # Handle non-finite values first.
++    if not np.isfinite(value):
++        return str(value).upper()
++
++    # Try the shortest representation first (str()), which for Python 3
++    # gives the shortest round-trippable decimal.  Only fall back to the
++    # more precise f"{value:.16G}" if the result is too long (>20 chars)
++    # or does not round-trip.
++    value_str = str(value)
++    if len(value_str) > 20 or float(value_str) != value:
++        # Fall back to 16-digit formatting for precision or length.
++        value_str = f"{value:.16G}"
++        if len(value_str) > 20:
++            value_str = value_str[:20]
++            return value_str
++    if "." not in value_str and "e" not in value_str.lower():
+         value_str += ".0"
+-    elif "E" in value_str:
+-        # On some Windows builds of Python (and possibly other platforms?) the
+-        # exponent is zero-padded out to, it seems, three digits.  Normalize
+-        # the format to pad only to two digits.
++    elif "e" in value_str.lower():
++        # Normalize exponent: uppercase E, zero-padded to 2 digits.
++        # On some Windows builds of Python the exponent may be zero-padded
++        # out to three digits; normalize to two.
++        value_str = value_str.replace("e", "E")
+         significand, exponent = value_str.split("E")
+         if exponent[0] in ("+", "-"):
+             sign = exponent[0]
