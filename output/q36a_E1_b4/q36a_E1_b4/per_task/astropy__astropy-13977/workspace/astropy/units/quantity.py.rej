@@ -1,0 +1,17 @@
+--- astropy/units/quantity.py
++++ astropy/units/quantity.py
+@@ -664,10 +664,14 @@ class Quantity(np.ndarray):
+             )
+ 
+         # Same for inputs, but here also convert if necessary.
++        try:
+         arrays = []
+         for input_, converter in zip(inputs, converters):
+             input_ = getattr(input_, "value", input_)
+             arrays.append(converter(input_) if converter else input_)
++        except (ValueError, TypeError):
++            return NotImplemented
++
+         # Call our superclass's __array_ufunc__
+         result = super().__array_ufunc__(function, method, *arrays, **kwargs)
+         # If unit is None, a plain array is expected (e.g., comparisons), which
