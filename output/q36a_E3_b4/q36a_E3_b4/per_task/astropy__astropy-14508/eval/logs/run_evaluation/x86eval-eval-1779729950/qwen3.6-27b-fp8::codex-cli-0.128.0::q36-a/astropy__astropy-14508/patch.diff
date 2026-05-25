@@ -1,0 +1,25 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..234fe9402 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,7 +1299,19 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
+-    value_str = f"{value:.16G}"
++    # First try the shortest representation (e.g. str(value)) that round-trips.
++    # This avoids unnecessarily long strings like 0.009124999999999999
++    # when 0.009125 would suffice.
++    short_str = str(value)
++    if float(short_str) == value:
++        value_str = short_str
++    else:
++        value_str = f"{value:.16G}"
++
++    # Normalize lowercase 'e' to uppercase 'E' (str() may produce lowercase).
++    if "e" in value_str:
++        value_str = value_str.replace("e", "E")
++
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"
+     elif "E" in value_str:
