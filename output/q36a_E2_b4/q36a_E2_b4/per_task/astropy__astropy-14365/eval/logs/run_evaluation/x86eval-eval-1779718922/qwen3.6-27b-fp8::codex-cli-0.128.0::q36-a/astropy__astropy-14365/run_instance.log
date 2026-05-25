@@ -1,0 +1,47 @@
+2026-05-25 07:22:14,047 - INFO - Creating container for astropy__astropy-14365...
+2026-05-25 07:22:14,123 - INFO - Container for astropy__astropy-14365 created: 958f7bf2b3d49d26bef2d2819b69910370946452dbf780fd6ceb058b1fbffe6b
+2026-05-25 07:22:14,233 - INFO - Container for astropy__astropy-14365 started: 958f7bf2b3d49d26bef2d2819b69910370946452dbf780fd6ceb058b1fbffe6b
+2026-05-25 07:22:14,233 - INFO - Intermediate patch for astropy__astropy-14365 written to logs/run_evaluation/x86eval-eval-1779718922/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14365/patch.diff, now applying to container...
+2026-05-25 07:22:14,316 - INFO - >>>>> Applied Patch:
+Checking patch astropy/io/ascii/qdp.py...
+Applied patch astropy/io/ascii/qdp.py cleanly.
+
+2026-05-25 07:22:14,552 - INFO - Git diff before:
+diff --git a/astropy/io/ascii/qdp.py b/astropy/io/ascii/qdp.py
+index 83a4f004a..66ba59126 100644
+--- a/astropy/io/ascii/qdp.py
++++ b/astropy/io/ascii/qdp.py
+@@ -60,7 +60,7 @@ def _line_type(line, delimiter=None):
+     ValueError: Unrecognized QDP line...
+     """
+     _decimal_re = r"[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?"
+-    _command_re = r"READ [TS]ERR(\s+[0-9]+)+"
++    _command_re = r"[Rr][Ee][Aa][Dd] [TtSs][Ee][Rr][Rr](\s+[0-9]+)+"
+ 
+     sep = delimiter
+     if delimiter is None:
+2026-05-25 07:22:14,552 - INFO - Eval script for astropy__astropy-14365 written to logs/run_evaluation/x86eval-eval-1779718922/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14365/eval.sh; copying to container...
+2026-05-25 07:22:36,618 - INFO - Test runtime: 22.01 seconds
+2026-05-25 07:22:36,618 - INFO - Test output for astropy__astropy-14365 written to logs/run_evaluation/x86eval-eval-1779718922/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14365/test_output.txt
+2026-05-25 07:22:36,651 - INFO - Git diff after:
+diff --git a/astropy/io/ascii/qdp.py b/astropy/io/ascii/qdp.py
+index 83a4f004a..66ba59126 100644
+--- a/astropy/io/ascii/qdp.py
++++ b/astropy/io/ascii/qdp.py
+@@ -60,7 +60,7 @@ def _line_type(line, delimiter=None):
+     ValueError: Unrecognized QDP line...
+     """
+     _decimal_re = r"[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?"
+-    _command_re = r"READ [TS]ERR(\s+[0-9]+)+"
++    _command_re = r"[Rr][Ee][Aa][Dd] [TtSs][Ee][Rr][Rr](\s+[0-9]+)+"
+ 
+     sep = delimiter
+     if delimiter is None:
+2026-05-25 07:22:36,652 - INFO - Grading answer for astropy__astropy-14365...
+2026-05-25 07:22:36,654 - INFO - report: {'astropy__astropy-14365': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': False, 'tests_status': {'FAIL_TO_PASS': {'success': [], 'failure': ['astropy/io/ascii/tests/test_qdp.py::test_roundtrip[True]']}, 'PASS_TO_PASS': {'success': ['astropy/io/ascii/tests/test_qdp.py::test_get_tables_from_qdp_file', 'astropy/io/ascii/tests/test_qdp.py::test_roundtrip[False]', 'astropy/io/ascii/tests/test_qdp.py::test_read_example', 'astropy/io/ascii/tests/test_qdp.py::test_roundtrip_example', 'astropy/io/ascii/tests/test_qdp.py::test_roundtrip_example_comma', 'astropy/io/ascii/tests/test_qdp.py::test_read_write_simple', 'astropy/io/ascii/tests/test_qdp.py::test_read_write_simple_specify_name', 'astropy/io/ascii/tests/test_qdp.py::test_get_lines_from_qdp'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for astropy__astropy-14365: resolved: False
+2026-05-25 07:22:36,654 - INFO - Attempting to stop container sweb.eval.astropy__astropy-14365.x86eval-eval-1779718922...
+2026-05-25 07:22:51,767 - INFO - Attempting to remove container sweb.eval.astropy__astropy-14365.x86eval-eval-1779718922...
+2026-05-25 07:22:51,778 - INFO - Container sweb.eval.astropy__astropy-14365.x86eval-eval-1779718922 removed.
+2026-05-25 07:22:51,778 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.astropy_1776_astropy-14365:latest...
+2026-05-25 07:22:51,810 - INFO - Image swebench/sweb.eval.x86_64.astropy_1776_astropy-14365:latest removed.
