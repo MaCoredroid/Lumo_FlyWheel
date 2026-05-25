@@ -35,6 +35,7 @@ VLLM_METRICS = "http://127.0.0.1:9950/metrics"
 NSYS = "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys"
 STEPTRACE = "/tmp/swe_dgx_steptrace.jsonl"
 REQUEST_METRICS = "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl"
+PER_REQ_SPEC_TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl"
 
 
 def sh(cmd: list[str], **kw) -> subprocess.CompletedProcess:
@@ -64,21 +65,26 @@ def set_temperature(temp: str) -> None:
     sys.exit("proxy did not come back after temperature change")
 
 
-def apply_config(config: str) -> None:
-    """Relaunch vLLM into the requested ablation config and wait for READY.
-    A/off use the validated /tmp relaunch scripts; D must be pre-set (no D
-    relaunch script). Needs LUMO_SUDO_PASSWORD in env (host-memory recovery)."""
+def apply_config(config: str, mtp: int = 1) -> None:
+    """Relaunch vLLM into the requested config and wait for READY. D/E use the
+    parameterized round relaunch (/tmp/relaunch_qwen36_round.py, which also
+    applies the per-agent spec-step trace patch); A/off fall back to the older
+    /tmp scripts. Needs LUMO_SUDO_PASSWORD (host-memory recovery)."""
     import os
-    script = {"A": "/tmp/relaunch_qwen36_A.py", "off": "/tmp/relaunch_qwen36_off.py",
-              "E": "/tmp/relaunch_qwen36_E.py"}.get(config)
-    if config == "D":
-        sys.exit("config D has no relaunch script; set it manually before --apply-config")
-    if not script or not Path(script).exists():
-        sys.exit(f"relaunch script for config {config} not found: {script}")
     if not os.environ.get("LUMO_SUDO_PASSWORD"):
         sys.exit("LUMO_SUDO_PASSWORD required to relaunch vLLM (source .lumo.local.env)")
-    log(f"relaunching vLLM into config {config} via {script} (model load ~ several min)")
-    r = sh([str(REPO / ".venv/bin/python"), script], timeout=1200)
+    round_script = "/tmp/relaunch_qwen36_round.py"
+    if config in ("D", "E") and Path(round_script).exists():
+        cmd = [str(REPO / ".venv/bin/python"), round_script, "--config", config]
+        if config == "E":
+            cmd += ["--mtp", str(mtp)]
+    else:
+        script = {"A": "/tmp/relaunch_qwen36_A.py", "off": "/tmp/relaunch_qwen36_off.py"}.get(config)
+        if not script or not Path(script).exists():
+            sys.exit(f"relaunch script for config {config} not found: {script}")
+        cmd = [str(REPO / ".venv/bin/python"), script]
+    log(f"relaunching vLLM config={config} mtp={mtp if config=='E' else '-'} (model load ~ several min)")
+    r = sh(cmd, timeout=1200)
     if "READY" not in (r.stdout + r.stderr):
         sys.exit(f"config {config} relaunch did not reach READY:\n{r.stdout[-500:]}\n{r.stderr[-500:]}")
     for _ in range(60):
@@ -193,6 +199,9 @@ def rsync_back(args) -> Path:
     src = remote_exp_dir(args).replace("~", f"/home/mark") + "/"
     sh(["rsync", "-az", f"{ALIEN}:{src}", str(local) + "/"])
     sh(["cp", STEPTRACE, str(local / "dgx_steptrace.jsonl")])
+    # per-agent spec-step trace (bind-mounted from the vLLM container) -- clean
+    # per-request decode steps/acceptance regardless of batch size
+    sh(["cp", PER_REQ_SPEC_TRACE, str(local / "per_req_spec_trace.jsonl")])
     return local
 
 
@@ -216,7 +225,8 @@ def task_verdict(meta: Path) -> tuple[str, float | None]:
 def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
     rel = f"output/{args.exp_tag}"
     paths = [f"{rel}/*/per_task/{task_id}", f"{rel}/per_task/{task_id}",
-             f"{rel}/driver.log", f"{rel}/dgx_steptrace.jsonl"]
+             f"{rel}/driver.log", f"{rel}/dgx_steptrace.jsonl",
+             f"{rel}/per_req_spec_trace.jsonl"]
     if joined:
         paths.append(str(joined.relative_to(REPO)))
     nrep = REPO / f"{rel}/nsight_{args.exp_tag}.nsys-rep"
@@ -246,6 +256,8 @@ def main() -> int:
                     help="relaunch vLLM into --config (A/off/E have relaunch scripts; needs LUMO_SUDO_PASSWORD)")
     ap.add_argument("--temp", choices=["1.0", "0.6"], default=None,
                     help="force sampling temperature by restarting the proxy")
+    ap.add_argument("--mtp", type=int, default=1,
+                    help="config E num_speculative_tokens (MTP depth) when --apply-config")
     ap.add_argument("--subset", help="subset json path ON ALIENWARE (swe)")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--concurrency", type=int, default=1)
@@ -262,7 +274,7 @@ def main() -> int:
         log(f"WARNING: concurrency={args.concurrency} (feedback-no-parallel-testing: default is 1)")
 
     if args.apply_config:
-        apply_config(args.config)
+        apply_config(args.config, args.mtp)
     if args.temp:
         set_temperature(args.temp)
     preflight()
