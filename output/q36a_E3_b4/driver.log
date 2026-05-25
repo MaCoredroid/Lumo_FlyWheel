@@ -38,3 +38,7 @@ HEAD is now at a5917978b Merge pull request #14172 from astropy/pre-commit-ci-up
 [2026-05-25T16:24:59Z] -> astropy__astropy-14309
 Preparing worktree (detached HEAD cdb66059a)
 HEAD is now at cdb66059a Merge pull request #14303 from pllim/bleach-v6
+[2026-05-25T16:36:08Z] <- astropy__astropy-13579 verdict=failed elapsed_total=1941.4s
+[2026-05-25T16:36:08Z] -> astropy__astropy-14365
+Preparing worktree (detached HEAD 7269fa3e3)
+HEAD is now at 7269fa3e3 Merge pull request #14013 from WilliamJamieson/deprecate/Voigt1D_humlicek2_option
