@@ -74,9 +74,9 @@ def apply_config(config: str, mtp: int = 1) -> None:
     if not os.environ.get("LUMO_SUDO_PASSWORD"):
         sys.exit("LUMO_SUDO_PASSWORD required to relaunch vLLM (source .lumo.local.env)")
     round_script = "/tmp/relaunch_qwen36_round.py"
-    if config in ("D", "E") and Path(round_script).exists():
+    if config in ("D", "E", "F") and Path(round_script).exists():
         cmd = [str(REPO / ".venv/bin/python"), round_script, "--config", config]
-        if config == "E":
+        if config in ("E", "F"):
             cmd += ["--mtp", str(mtp)]
     else:
         script = {"A": "/tmp/relaunch_qwen36_A.py", "off": "/tmp/relaunch_qwen36_off.py"}.get(config)
@@ -87,7 +87,7 @@ def apply_config(config: str, mtp: int = 1) -> None:
     # new file handle, so each round's trace starts clean (and we never delete it
     # out from under a live handle -- the cause of the round-1 unlinked-inode loss).
     sh(["rm", "-f", PER_REQ_SPEC_TRACE])
-    log(f"relaunching vLLM config={config} mtp={mtp if config=='E' else '-'} (model load ~ several min)")
+    log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F') else '-'} (model load ~ several min)")
     r = sh(cmd, timeout=1200)
     if "READY" not in (r.stdout + r.stderr):
         sys.exit(f"config {config} relaunch did not reach READY:\n{r.stdout[-500:]}\n{r.stderr[-500:]}")
