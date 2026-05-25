@@ -16,3 +16,8 @@ HEAD is now at 19cc80471 Merge pull request #13444 from eerovaher/unit-format-do
 [2026-05-25T04:22:11Z] -> astropy__astropy-13579
 Preparing worktree (detached HEAD 0df94ff70)
 HEAD is now at 0df94ff70 Merge pull request #13574 from pllim/rm-corpus-404
+[2026-05-25T04:52:12Z]    astropy__astropy-13579: empty patch (agent_gave_up); retrying codex once
+[2026-05-25T05:22:12Z] <- astropy__astropy-13579 verdict=failed elapsed_total=3600.6s
+[2026-05-25T05:22:12Z] -> astropy__astropy-13977
+Preparing worktree (detached HEAD 5250b2442)
+HEAD is now at 5250b2442 Merge pull request #14164 from ayshih/grid_performance
