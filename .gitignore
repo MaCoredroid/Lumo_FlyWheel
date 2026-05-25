@@ -26,3 +26,4 @@ output/
 # Local secrets
 .lumo.local.env
 .codex/config.toml
+.claude/

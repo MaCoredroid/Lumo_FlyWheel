@@ -16,7 +16,7 @@ cd /home/mark/shared/lumoFlyWheel
 source .lumo.local.env 2>/dev/null; export LUMO_SUDO_PASSWORD
 SUB=docs/reports/auto_research/swe-bench-concprobe16-verified-instances-20260522.json
 PY=.venv/bin/python
-COMMON="--suite swe --subset $SUB --concurrency 4 --agent-wall-s 1800 --eval-timeout-s 1800 --nsight off"
+COMMON="--suite swe --subset $SUB --concurrency 4 --temp 0.6 --agent-wall-s 1800 --eval-timeout-s 1800 --nsight off"
 R1APPLY=""; [ "${1:-}" = "--r1-apply" ] && R1APPLY="--apply-config"
 LOG=/tmp/round5_b4_sweep.log
 say(){ echo "[sweep $(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
