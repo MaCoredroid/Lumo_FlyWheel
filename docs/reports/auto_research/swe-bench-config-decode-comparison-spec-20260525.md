@@ -12,8 +12,8 @@ SWE-Bench eval verdict in each task's `eval_report.json`.
 
 ## Inputs
 
-For each run tag, such as `q36a_D_b4`, `q36a_E1_b4`, `q36a_E2_b4`, or
-`q36a_E3_b4`, use:
+For each run tag, such as `q36a_D_b4`, `q36a_E1_b4`, `q36a_E2_b4`,
+`q36a_E3_b4`, or `q36a_E6_b4`, use:
 
 - Task metadata:
   `output/<tag>/<tag>/per_task/<instance_id>/runner_metadata.json`
@@ -159,23 +159,31 @@ Interpretation:
 
 ## Current D/E B=4 Snapshot
 
-As of the completed `q36a_D_b4`, `q36a_E1_b4`, `q36a_E2_b4`, and `q36a_E3_b4`
-runs:
+As of the completed `q36a_D_b4`, `q36a_E1_b4`, `q36a_E2_b4`, `q36a_E3_b4`,
+and `q36a_E6_b4` runs:
 
 | run | depth / mode | resolved | steptrace decode TPS | accept ratio | draft/event | accepted/event |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `q36a_D_b4` | suffix/D | 6/16 | 13.246 | 0.256 | 5.761 | 1.473 |
-| `q36a_E1_b4` | MTP 1 | 7/16 | 10.795 | 0.877 | 1.000 | 0.877 |
-| `q36a_E2_b4` | MTP 2 | 7/16 | 12.051 | 0.818 | 2.000 | 1.635 |
+| `q36a_E1_b4` | MTP 1 | 7/16 | 10.806 | 0.877 | 1.000 | 0.877 |
+| `q36a_E2_b4` | MTP 2 | 7/16 | 12.052 | 0.818 | 2.000 | 1.635 |
 | `q36a_E3_b4` | MTP 3 | 7/16 | 15.058 | 0.751 | 3.000 | 2.254 |
+| `q36a_E6_b4` | MTP 6 | 6/16 | 14.363 | 0.541 | 6.000 | 3.245 |
 
 Conclusion from this slice:
 
 - E1 has high acceptance but too little accepted work per event.
 - E2 improves accepted work per event but remains slower than D on primary
   steptrace speed.
-- E3 is the current leader on this slice: same best resolved count and the
-  highest run-level decode TPS.
+- E3 is the current leader on this slice: best resolved count tied with E1/E2
+  and the highest run-level decode TPS.
+- E6 proves that larger accepted/event is not enough by itself. Its deeper
+  linear chain reaches 3.245 accepted/event, but lower acceptance and repeated
+  MTP-layer overhead leave it slower than E3 and at only 6/16 resolved.
+
+`q36a_E6_b4/per_req_spec_trace.jsonl` contains two malformed split JSON rows at
+the end of the trace. Ignore malformed rows for speculative-event aggregation;
+the steptrace speed and eval verdicts are unaffected.
 
 ## Reporting Rules
 

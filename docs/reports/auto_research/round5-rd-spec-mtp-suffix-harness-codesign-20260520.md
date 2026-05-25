@@ -348,7 +348,7 @@ Stop adding paths once aggregate lift reaches 1.5-1.6× on SWE-Bench (~14 tps); 
 
 You said *"I guess MTP header we cannot do too much other than retraining"* — mostly right, but two things you CAN do without retraining:
 
-- **Calibrate `num_speculative_tokens`** on the actual workload. vLLM examples commonly start at 1 or 2, but the right depth is workload/hardware dependent. Our 2026-05-25 B=4 SWE-Bench slice currently points to `num_speculative_tokens=3` as the best measured linear-chain point: E1 = 10.81 tok/s, E2 = 12.05 tok/s, E3 = 15.06 tok/s, and E6 partial = 13.91 tok/s. Treat `n=3` as the current empirical sweet spot for this stack, not as a literature-wide conclusion.
+- **Calibrate `num_speculative_tokens`** on the actual workload. vLLM examples commonly start at 1 or 2, but the right depth is workload/hardware dependent. Our completed 2026-05-25 B=4 SWE-Bench slice currently points to `num_speculative_tokens=3` as the best measured linear-chain point: E1 = 10.81 tok/s, E2 = 12.05 tok/s, E3 = 15.06 tok/s, and E6 = 14.36 tok/s. Treat `n=3` as the current empirical sweet spot for this stack, not as a literature-wide conclusion.
 - **Adjust tree topology if vLLM exposes it.** Current vLLM exposes `speculative_token_tree`; when unset, it uses a linear chain. Branching MTP trees are supported by the broader tree-speculation literature, but our local launcher does not enable them yet. Any tree run needs an explicit launcher/config diff plus B-1/B-2/B-3 equivalence and steptrace accounting.
 
 Neither changes the MTP weights. Both are drafter-side choices and remain lossless if the verifier path is unchanged.
@@ -407,7 +407,7 @@ This spec lays out four parallel paths: a tight τ-threshold hybrid (lowest effo
 
 1. **τ-threshold pattern is well-validated.** Plug in *any* model-based fallback; the only parameter to tune is τ. Swapping EAGLE-3 for MTP in that slot is open territory — no published paper has done this yet.
 2. **Suffix automaton (DAWG) over suffix tree is the right substrate.** Same recall, ~50% memory, and Codex agents create the kind of repetition where DAWG compresses well.
-3. **`num_speculative_tokens=3` is currently our measured MTP sweet spot, not a universal theorem.** The public MTP/tree literature motivates sweeping depth and topology; it does not identify a single best depth across workloads. On our 2026-05-25 B=4 SWE-Bench slice, linear-chain E3 beats E1/E2 and the partial E6 row on primary steptrace TPS.
+3. **`num_speculative_tokens=3` is currently our measured MTP sweet spot, not a universal theorem.** The public MTP/tree literature motivates sweeping depth and topology; it does not identify a single best depth across workloads. On our completed 2026-05-25 B=4 SWE-Bench slice, linear-chain E3 beats E1/E2/E6 on primary steptrace TPS and resolved count.
 
 ---
 
@@ -1114,22 +1114,22 @@ The composition arithmetic is approximate; the simulator measurement in §13.3.3
 
 The Round 5 E-depth sweep gives the first real local answer to "what MTP depth
 should we use?" All rows below use the run-level steptrace TPS definition from
-`swe-bench-config-decode-comparison-spec-20260525.md`; the E6 row is partial and
-should not be used for final promotion.
+`swe-bench-config-decode-comparison-spec-20260525.md`.
 
 | Run | MTP shape | Done | Resolved | Steptrace decode TPS | Accept ratio | Accepted/event | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
 | `q36a_E1_b4` | linear depth 1 | 16/16 | 7 | 10.81 | 0.877 | 0.877 | complete |
 | `q36a_E2_b4` | linear depth 2 | 16/16 | 7 | 12.05 | 0.818 | 1.635 | complete |
 | `q36a_E3_b4` | linear depth 3 | 16/16 | 7 | 15.06 | 0.751 | 2.254 | complete |
-| `q36a_E6_b4` | linear depth 6 | 7/16 | 3 | 13.91 | 0.553 | 3.320 | partial |
+| `q36a_E6_b4` | linear depth 6 | 16/16 | 6 | 14.36 | 0.541 | 3.245 | complete |
 
 Current interpretation:
 
 - `num_speculative_tokens=3` is the current empirical sweet spot for our
   Qwen3.6 FP8 + SWE-Bench Verified B=4 stack.
 - Depth 6 accepts more tokens per event, but the acceptance-rate drop and
-  repeated-MTP-layer overhead appear to erase the extra depth advantage.
+  repeated-MTP-layer overhead erase the extra depth advantage on this slice:
+  E6 is slower than E3 and drops from 7/16 to 6/16 resolved.
 - This does **not** prove that depth 3 is globally optimal. It proves that
   deeper linear-chain MTP is not automatically better, and that the next
   topology question should be "linear E3 vs explicit tree with the same draft
