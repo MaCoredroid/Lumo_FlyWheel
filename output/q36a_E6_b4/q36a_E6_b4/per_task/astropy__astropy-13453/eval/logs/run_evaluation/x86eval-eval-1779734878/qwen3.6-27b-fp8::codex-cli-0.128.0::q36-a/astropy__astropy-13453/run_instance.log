@@ -1,0 +1,53 @@
+2026-05-25 11:48:37,512 - INFO - Creating container for astropy__astropy-13453...
+2026-05-25 11:48:38,089 - INFO - Container for astropy__astropy-13453 created: ca2984ed8cde9ad5e2a01ccbc9338cd6bc48f26e4373929dad0be8dccb64a35b
+2026-05-25 11:48:38,191 - INFO - Container for astropy__astropy-13453 started: ca2984ed8cde9ad5e2a01ccbc9338cd6bc48f26e4373929dad0be8dccb64a35b
+2026-05-25 11:48:38,192 - INFO - Intermediate patch for astropy__astropy-13453 written to logs/run_evaluation/x86eval-eval-1779734878/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13453/patch.diff, now applying to container...
+2026-05-25 11:48:38,287 - INFO - >>>>> Applied Patch:
+Checking patch astropy/io/ascii/html.py...
+Applied patch astropy/io/ascii/html.py cleanly.
+
+2026-05-25 11:48:38,506 - INFO - Git diff before:
+diff --git a/astropy/io/ascii/html.py b/astropy/io/ascii/html.py
+index 266cf229c..4f8f7c7d2 100644
+--- a/astropy/io/ascii/html.py
++++ b/astropy/io/ascii/html.py
+@@ -355,6 +355,11 @@ class HTML(core.BaseReader):
+ 
+         self.data._set_fill_values(cols)
+ 
++        # Apply column formats from the formats argument
++        for col in cols:
++            if col.info.name in self.data.formats:
++                col.info.format = self.data.formats[col.info.name]
++
+         lines = []
+ 
+         # Set HTML escaping to False for any column in the raw_html_cols input
+2026-05-25 11:48:38,506 - INFO - Eval script for astropy__astropy-13453 written to logs/run_evaluation/x86eval-eval-1779734878/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13453/eval.sh; copying to container...
+2026-05-25 11:49:10,366 - INFO - Test runtime: 31.81 seconds
+2026-05-25 11:49:10,367 - INFO - Test output for astropy__astropy-13453 written to logs/run_evaluation/x86eval-eval-1779734878/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-13453/test_output.txt
+2026-05-25 11:49:10,408 - INFO - Git diff after:
+diff --git a/astropy/io/ascii/html.py b/astropy/io/ascii/html.py
+index 266cf229c..4f8f7c7d2 100644
+--- a/astropy/io/ascii/html.py
++++ b/astropy/io/ascii/html.py
+@@ -355,6 +355,11 @@ class HTML(core.BaseReader):
+ 
+         self.data._set_fill_values(cols)
+ 
++        # Apply column formats from the formats argument
++        for col in cols:
++            if col.info.name in self.data.formats:
++                col.info.format = self.data.formats[col.info.name]
++
+         lines = []
+ 
+         # Set HTML escaping to False for any column in the raw_html_cols input
+2026-05-25 11:49:10,408 - INFO - Grading answer for astropy__astropy-13453...
+2026-05-25 11:49:10,409 - INFO - report: {'astropy__astropy-13453': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': True, 'tests_status': {'FAIL_TO_PASS': {'success': ['astropy/io/ascii/tests/test_html.py::test_write_table_formatted_columns'], 'failure': []}, 'PASS_TO_PASS': {'success': ['astropy/io/ascii/tests/test_html.py::test_listwriter', 'astropy/io/ascii/tests/test_html.py::test_htmlinputter_no_bs4', 'astropy/io/ascii/tests/test_html.py::test_multicolumn_write', 'astropy/io/ascii/tests/test_html.py::test_write_no_multicols', 'astropy/io/ascii/tests/test_html.py::test_write_table_html_fill_values', 'astropy/io/ascii/tests/test_html.py::test_write_table_html_fill_values_optional_columns', 'astropy/io/ascii/tests/test_html.py::test_write_table_html_fill_values_masked', 'astropy/io/ascii/tests/test_html.py::test_multicolumn_table_html_fill_values', 'astropy/io/ascii/tests/test_html.py::test_multi_column_write_table_html_fill_values_masked'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for astropy__astropy-13453: resolved: True
+2026-05-25 11:49:10,409 - INFO - Attempting to stop container sweb.eval.astropy__astropy-13453.x86eval-eval-1779734878...
+2026-05-25 11:49:25,506 - INFO - Attempting to remove container sweb.eval.astropy__astropy-13453.x86eval-eval-1779734878...
+2026-05-25 11:49:25,517 - INFO - Container sweb.eval.astropy__astropy-13453.x86eval-eval-1779734878 removed.
+2026-05-25 11:49:25,517 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.astropy_1776_astropy-13453:latest...
+2026-05-25 11:49:25,715 - INFO - Image swebench/sweb.eval.x86_64.astropy_1776_astropy-13453:latest removed.
