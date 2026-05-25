@@ -22,35 +22,43 @@ from lumo_flywheel_serving.model_server import ModelServer
 
 _KEEP_MARKER = "applied forced tool_choice parser patch')\nPY\n"
 
-# Source-edit (NOT monkeypatch -- prelaunch patches the file before vLLM imports it)
-# of Scheduler.make_spec_decoding_stats to emit per-request per-step rows.
+# Source-edit (NOT monkeypatch -- prelaunch patches the file before vLLM imports
+# it) of Scheduler.make_spec_decoding_stats to emit per-request per-step rows.
+# The inner python builds the injected source with chr(10) for EVERY newline
+# (both line separators and the JSON-line terminator) so no backslash-escape has
+# to survive the raw-string -> heredoc -> inner-python -> written-source layers.
 _SPEC_TRACE_BLOCK = r'''
 python3 - <<'LUMOSPECTRACE'
 from pathlib import Path
+nl = chr(10)
 p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py')
 text = p.read_text()
 sentinel = '# LUMO_PER_AGENT_SPEC_TRACE'
 if sentinel in text:
     print('[TRACK-B-PRELAUNCH] per-agent spec trace already present')
 else:
-    anchor = '    ) -> SpecDecodingStats | None:\n        if not self.log_stats or not num_draft_tokens:'
+    anchor = '    ) -> SpecDecodingStats | None:' + nl + '        if not self.log_stats or not num_draft_tokens:'
     if anchor not in text:
         raise RuntimeError('make_spec_decoding_stats anchor not found for per-agent spec trace')
-    inject = ('    ) -> SpecDecodingStats | None:\n'
-              '        ' + sentinel + '\n'
-              '        try:\n'
-              '            import json as _lj, time as _lt, os as _lo\n'
-              '            global _LUMO_SPEC_FH\n'
-              '            try:\n'
-              '                _LUMO_SPEC_FH\n'
-              '            except NameError:\n'
-              '                _LUMO_SPEC_FH = open(_lo.environ.get("LUMO_PER_REQ_SPEC_TRACE", "/logs/per_req_spec_trace.jsonl"), "a", buffering=1)\n'
-              '            _LUMO_SPEC_FH.write(_lj.dumps({"ts": round(_lt.time(), 4), "rid": request_id, "draft": num_draft_tokens, "acc": num_accepted_tokens}) + "\n")\n'
-              '        except Exception:\n'
-              '            pass\n'
-              '        if not self.log_stats or not num_draft_tokens:')
+    inject = nl.join([
+        '    ) -> SpecDecodingStats | None:',
+        '        ' + sentinel,
+        '        try:',
+        '            import json as _lj, time as _lt, os as _lo',
+        '            global _LUMO_SPEC_FH',
+        '            try:',
+        '                _LUMO_SPEC_FH',
+        '            except NameError:',
+        '                _LUMO_SPEC_FH = open(_lo.environ.get("LUMO_PER_REQ_SPEC_TRACE", "/logs/per_req_spec_trace.jsonl"), "a", buffering=1)',
+        '            _LUMO_SPEC_FH.write(_lj.dumps({"ts": round(_lt.time(), 4), "rid": request_id, "draft": num_draft_tokens, "acc": num_accepted_tokens}) + chr(10))',
+        '        except Exception:',
+        '            pass',
+        '        if not self.log_stats or not num_draft_tokens:',
+    ])
     text = text.replace(anchor, inject, 1)
     p.write_text(text)
+    import py_compile, tempfile
+    py_compile.compile(str(p), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied per-agent spec-decode step trace patch')
 LUMOSPECTRACE
 '''
