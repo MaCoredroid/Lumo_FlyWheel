@@ -54,3 +54,7 @@ HEAD is now at fa4e8d1cd Merge pull request #14358 from WilliamJamieson/bugfix/a
 [2026-05-25T08:04:12Z] -> astropy__astropy-14508
 Preparing worktree (detached HEAD a3f4ae6cd)
 HEAD is now at a3f4ae6cd Merge pull request #14430 from Cadair/performance_issues_decompress_tile
+[2026-05-25T08:09:08Z] <- astropy__astropy-14365 verdict=failed elapsed_total=1829.8s
+[2026-05-25T08:09:08Z] -> astropy__astropy-14539
+Preparing worktree (detached HEAD c0a24c1dc)
+HEAD is now at c0a24c1dc Merge pull request #14517 from pllim/drop-i686-wheel
