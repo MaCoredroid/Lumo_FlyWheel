@@ -1,10 +1,14 @@
 # Round F — MTP top-k branching tree: F_a (tree-attn) vs F_b (batched-paths)
 
 **Generated:** 2026-05-25
-**Status:** Design + implementation record. F_a implemented and serving on `TREE_ATTN`;
-canary verification of tree activation + extended telemetry pending before the
-16-task round. F_b not yet built. **No measurement results yet** — this is a
-how/why + current-state record, not a results analysis.
+**Status:** Design + implementation record. F_a reached `propose_tree` (TREE_ATTN
+active) but **crashed on a vLLM 0.19.0 M-RoPE bug** (`propose_tree` references
+`self.positions`, which M-RoPE models don't allocate). A narrow text-only
+M-RoPE `propose_tree` patch is now in the prelaunch; **pending: canary (draft=6 +
+`inv`) → no target-verify crash → B-1/B-2/B-3 lossless gate → only then the
+16-task run.** F_b not yet built. **No measurement results yet.**
+**Last updated:** 2026-05-25 (post-crash; supersedes the earlier "serving/pending
+canary" status).
 **Builds on:** `round5-rd-spec-mtp-suffix-harness-codesign-20260520.md` (§10.1 open
 question: MTP tree topology) and `round5-b4-sweep-runbook-20260525.md` (the D vs
 E-mtp{1,2,3,6} linear sweep).
@@ -106,6 +110,20 @@ Run **F_a first**; it gates F_b's value:
    `parents`** → linear verification, FLASH_ATTN. (Latent capability: a future
    hybrid could feed Arctic's `parents` into the same `TREE_ATTN` verify path —
    separate config, not F.)
+7. **vLLM 0.19.0 tree spec is not M-RoPE-safe (the blocker).** `propose_tree`
+   references `self.positions` unconditionally (eagle.py:971/1056/1075), but
+   M-RoPE models allocate `self.mrope_positions` instead (only the non-mrope
+   branch creates `self.positions`). The linear `propose` path is mrope-aware
+   (`_get_positions`/`_set_positions`); `propose_tree` is not. **Qwen3.6-27B is
+   M-RoPE** (multimodal Qwen3_5) → `propose_tree` crashes with
+   `AttributeError: 'EagleProposer' object has no attribute 'positions'`. F_a's
+   `TREE_ATTN` force was correct but exposed an unimplemented combination. No
+   public vLLM issue/PR for tree-spec + M-RoPE; the documented Qwen3.6 spec
+   config is **linear** MTP. **Fix:** a narrow text-only `propose_tree` patch
+   (M-RoPE text-only has identical position IDs across the 3 dims, so 1D tree
+   slot math is sound) reusing `_get_positions`/`_set_positions` and feeding the
+   draft model 3D positions. Target-verify mrope-correctness is *not* guaranteed
+   by this patch — B-1/B-2/B-3 must gate the run.
 
 ---
 
@@ -158,11 +176,14 @@ Run **F_a first**; it gates F_b's value:
 | Config F (pluggable) | Implemented (`relaunch_qwen36_round.py`, `run_codex_experiment.py`) |
 | Tree-attn selector patch | Implemented; **vLLM accepted `TREE_ATTN`** (`cuda.py:274`), graph capture clean, served healthy |
 | Canary 1 (env-only approach) | FAILED as expected — `draft=3` (silent linear fallback); proved config-only insufficient |
-| Telemetry extension (`inv`) | Implemented + compiles; **verify on F_a canary before the round** |
-| F_a relaunch (extended telemetry) | In progress (model loading) |
-| F_a canary (`draft=6` + `inv`) | Pending — gates the run |
-| F_a 16-task run (`q36a_F_a_b4`) | Not started (gated on canary) |
-| F_b (batched-paths) | Not started; ~1–2 wk build; gated on F_a result |
+| Telemetry extension (`inv`) | Implemented + compiles |
+| Canary 2 (TREE_ATTN forced) | **Crashed**: `propose_tree` reached, but `AttributeError: EagleProposer has no attribute 'positions'` — vLLM 0.19.0 M-RoPE bug (see finding 7) |
+| propose_tree M-RoPE patch | Implemented (4-edit prelaunch source-edit, validated end-to-end; reuses `_get_positions`/`_set_positions`) |
+| F_a canary (`draft=6` + `inv`) | Pending — relaunch with patch, then verify |
+| Target-verify correctness | **Unverified** — B-1/B-2/B-3 required (if target tree positions are also mrope-wrong, byte-exact greedy match catches it) |
+| F_a 16-task run (`q36a_F_a_b4`) | Not started (gated on canary + B-1/B-2/B-3) |
+| F_b (batched-paths) | Not started; ~1–2 wk build; sidesteps the mrope bug (linear path); gated on F_a result |
+| Container state | DOWN (config-F crashed; deliberately not crash-looped) |
 | Monitoring loop | cron `dc2c36a0` (10 min) watching the F_a run |
 
 **Operational note:** config-F relaunches on GB10 commonly hit a transient

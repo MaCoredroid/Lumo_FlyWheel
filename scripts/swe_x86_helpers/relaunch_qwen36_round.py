@@ -123,6 +123,64 @@ LUMOTREEATTN
 '''
 
 
+# vLLM 0.19.0's propose_tree references self.positions unconditionally, but
+# M-RoPE models (Qwen3.6 is multimodal Qwen3_5) allocate self.mrope_positions
+# instead -> AttributeError at decode. The linear propose() path is mrope-aware
+# (via _get_positions/_set_positions) but propose_tree is not. This patch makes
+# propose_tree mrope-aware for TEXT-ONLY inputs (all 3 M-RoPE dims identical, per
+# vLLM's own note): reduce the incoming 3D positions to 1D for tree slot math,
+# take device/dtype off input_ids, write back via _set_positions (broadcast 1D
+# ->3D for mrope), and feed the draft model via _get_positions (3D for mrope).
+# Lossless gate (B-1/B-2/B-3) still required before any SWE run: if the TARGET
+# verify's tree positions are also mrope-wrong, byte-exact greedy match catches it.
+_MROPE_TREE_BLOCK = r'''
+python3 - <<'LUMOMROPETREE'
+from pathlib import Path
+nl = chr(10)
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py')
+text = p.read_text()
+sentinel = '# LUMO_MROPE_TREE'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] propose_tree M-RoPE patch already present')
+else:
+    edits = [
+        (
+            '        assert isinstance(tree_attn_metadata_builder, TreeAttentionMetadataBuilder)' + nl,
+            '        assert isinstance(tree_attn_metadata_builder, TreeAttentionMetadataBuilder)' + nl + nl.join([
+                '        ' + sentinel + ': text-only M-RoPE -> 1D positions for tree slot math',
+                '        if self.uses_mrope and positions.dim() > 1:',
+                '            positions = positions[0]',
+                '',
+            ]),
+        ),
+        (
+            '            0, device=self.positions.device, dtype=self.positions.dtype',
+            '            0, device=self.input_ids.device, dtype=torch.int64',
+        ),
+        (
+            '            self.positions[:num_tokens] = tree_positions.view(-1)',
+            nl.join([
+                '            _lt_tp = tree_positions.view(-1)',
+                '            self._set_positions(num_tokens, _lt_tp.unsqueeze(0).expand(3, -1) if self.uses_mrope else _lt_tp)',
+            ]),
+        ),
+        (
+            '                    positions=self.positions[:num_input_tokens],',
+            '                    positions=self._get_positions(num_input_tokens),',
+        ),
+    ]
+    for anchor, new in edits:
+        if text.count(anchor) != 1:
+            raise RuntimeError('propose_tree M-RoPE anchor not unique: ' + repr(anchor[:60]))
+        text = text.replace(anchor, new, 1)
+    p.write_text(text)
+    import py_compile
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied propose_tree M-RoPE patch (eagle.py)')
+LUMOMROPETREE
+'''
+
+
 def _prelaunch_for(config: str, tree: bool = False) -> str:
     full = _track_b_runtime_prelaunch_shell()
     if config == "D":
@@ -140,7 +198,7 @@ def _prelaunch_for(config: str, tree: bool = False) -> str:
     # backend (target verify + draft). vLLM's selector has no tree logic and does
     # not honor VLLM_ATTENTION_BACKEND in 0.19.0, so we source-edit the selector
     # (config F only). Realized KV is auto/bf16, which TreeAttention supports.
-    return base + _SPEC_TRACE_BLOCK + (_TREE_ATTN_BLOCK if tree else "")
+    return base + _SPEC_TRACE_BLOCK + (_TREE_ATTN_BLOCK + _MROPE_TREE_BLOCK if tree else "")
 
 
 def _mtp_bundle(n: int, tree: str | None = None) -> str:
