@@ -69,7 +69,8 @@ def apply_config(config: str) -> None:
     A/off use the validated /tmp relaunch scripts; D must be pre-set (no D
     relaunch script). Needs LUMO_SUDO_PASSWORD in env (host-memory recovery)."""
     import os
-    script = {"A": "/tmp/relaunch_qwen36_A.py", "off": "/tmp/relaunch_qwen36_off.py"}.get(config)
+    script = {"A": "/tmp/relaunch_qwen36_A.py", "off": "/tmp/relaunch_qwen36_off.py",
+              "E": "/tmp/relaunch_qwen36_E.py"}.get(config)
     if config == "D":
         sys.exit("config D has no relaunch script; set it manually before --apply-config")
     if not script or not Path(script).exists():
@@ -104,24 +105,29 @@ def preflight() -> None:
 
 def launch_suite(args) -> None:
     out_root = f"output/{args.exp_tag}"
+    # NOTE: keep nohup as its OWN statement (';'-separated) and background ONLY
+    # it with a trailing '&'. If joined with '&&', bash backgrounds the whole
+    # AND-list as one subshell that runs the long python in the FOREGROUND,
+    # holding the ssh channel open until the run ends (ssh then never returns).
     if args.suite == "swe":
         extra = f"--limit {args.limit}" if args.limit else ""
         cmd = (
-            f'cd ~/swe_conc_probe && export HF_HOME=$HOME/.cache/huggingface && '
-            f'mkdir -p {out_root} && nohup $HOME/swe_eval_offload/venv/bin/python '
+            f'cd ~/swe_conc_probe ; export HF_HOME=$HOME/.cache/huggingface ; '
+            f'mkdir -p {out_root} ; '
+            f'nohup $HOME/swe_eval_offload/venv/bin/python '
             f'scripts/run_swe_bench_q36_a.py --subset {args.subset} --out-root {out_root} '
             f'--dataset-tag {args.exp_tag} --agent-wall-s {args.agent_wall_s} '
             f'--eval-timeout-s {args.eval_timeout_s} --concurrency {args.concurrency} '
             f'{extra} --repo-cache $HOME/swe_conc_probe/repo_cache '
-            f'> {out_root}/driver.log 2>&1 & echo launched pid=$!'
+            f'> {out_root}/driver.log 2>&1 </dev/null & echo launched pid=$!'
         )
     else:  # cnb
         cmd = (
-            f'cd ~/cnb_v4a && nohup python3 /tmp/run_cnb_v4a_x86.py '
-            f'--out output/{args.exp_tag} > output/{args.exp_tag}/driver.log 2>&1 & '
-            f'echo launched pid=$!'
+            f'cd ~/cnb_v4a ; mkdir -p output/{args.exp_tag} ; '
+            f'nohup python3 /tmp/run_cnb_v4a_x86.py --out output/{args.exp_tag} '
+            f'> output/{args.exp_tag}/driver.log 2>&1 </dev/null & echo launched pid=$!'
         )
-    r = ssh(cmd)
+    r = sh(["ssh", "-n", "-o", "ConnectTimeout=8", ALIEN, cmd], timeout=60)
     log(f"suite launch: {r.stdout.strip() or r.stderr.strip()}")
 
 
@@ -233,10 +239,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--exp-tag", required=True)
     ap.add_argument("--suite", choices=["swe", "cnb"], default="swe")
-    ap.add_argument("--config", choices=["A", "D", "off"], required=True,
-                    help="ablation config; with --apply-config the runner relaunches vLLM into it")
+    ap.add_argument("--config", choices=["A", "D", "off", "E", "F", "G"], required=True,
+                    help="ablation/spec config; with --apply-config the runner relaunches vLLM into it. "
+                         "E=Qwen3.6 native MTP head; F=combA (MTP+SD tau-threshold); G=combB (per-position mix)")
     ap.add_argument("--apply-config", action="store_true",
-                    help="relaunch vLLM into --config (A/off only; needs LUMO_SUDO_PASSWORD)")
+                    help="relaunch vLLM into --config (A/off/E have relaunch scripts; needs LUMO_SUDO_PASSWORD)")
     ap.add_argument("--temp", choices=["1.0", "0.6"], default=None,
                     help="force sampling temperature by restarting the proxy")
     ap.add_argument("--subset", help="subset json path ON ALIENWARE (swe)")
