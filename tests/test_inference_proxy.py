@@ -1141,7 +1141,7 @@ def test_build_request_metrics_row_emits_concurrency_gauges_and_run_anchor() -> 
         upstream_status=200,
         metrics_before=before,
         metrics_after=after,
-        deltas={},
+        deltas={"engine_iterations": 50.0, "iteration_tokens": 96.0},
         response_observed={"model": "qwen3.6-27b", "usage": {}},
         ts_request_received=0.0,
         ts_first_byte=0.1,
@@ -1153,6 +1153,9 @@ def test_build_request_metrics_row_emits_concurrency_gauges_and_run_anchor() -> 
     assert row["num_requests_running_after"] == 1.0
     assert row["num_requests_waiting_before"] == 0.0
     assert row["oracle_run_anchor"] == "uuid-aaa"
+    # engine-iteration counters -> per-step latency + tokens/step are derivable
+    assert row["engine_iterations"] == 50.0
+    assert row["iteration_tokens"] == 96.0
 
 
 def test_synthesize_oracle_snapshot_counts_assistant_messages() -> None:

@@ -734,6 +734,18 @@ class TrackBRequestMetricsCapture:
         ("prefill_sum_s", "vllm:request_prefill_time_seconds_sum"),
         ("decode_sum_s", "vllm:request_decode_time_seconds_sum"),
     )
+    # Engine-iteration counters. count delta = forward passes (engine steps) in
+    # the request window; sum delta = tokens processed across those steps. These
+    # are the ONLY counters that give per-step latency (decode_sum_s/engine_iterations)
+    # and tokens/step (iteration_tokens/engine_iterations) WITHOUT the token-
+    # accounting ambiguity of completion_tokens vs spec_decode deltas. Clean at
+    # B=1 (use the num_requests_running gauges to gate). Previously only the
+    # global steptrace carried these; emitting per-request makes per-task per-step
+    # analysis self-contained in the committed per-task artifact.
+    _ITER_KEYS: tuple[tuple[str, str], ...] = (
+        ("engine_iterations", "vllm:iteration_tokens_total_count"),
+        ("iteration_tokens", "vllm:iteration_tokens_total_sum"),
+    )
 
     def __init__(self, output_path: Path, upstream_metrics_url: str, *, runtime_config_hash: str = "") -> None:
         self._path = output_path
@@ -768,7 +780,7 @@ class TrackBRequestMetricsCapture:
         after: dict[str, float],
     ) -> dict[str, float | None]:
         result: dict[str, float | None] = {}
-        for logical, metric_key in self._SPEC_KEYS + self._HISTOGRAM_KEYS:
+        for logical, metric_key in self._SPEC_KEYS + self._HISTOGRAM_KEYS + self._ITER_KEYS:
             if not before or not after or metric_key not in after:
                 result[logical] = None
                 continue
@@ -844,6 +856,9 @@ def _build_request_metrics_row(
         "spec_decode_num_accepted_tokens": deltas.get("spec_decode_num_accepted_tokens"),
         "spec_decode_num_draft_tokens": deltas.get("spec_decode_num_draft_tokens"),
         "spec_decode_num_drafts": deltas.get("spec_decode_num_drafts"),
+        # engine steps (forward passes) + tokens across them in this request window
+        "engine_iterations": deltas.get("engine_iterations"),
+        "iteration_tokens": deltas.get("iteration_tokens"),
         "regime": _classify_regime(response_observed),
         "tool_call_observed": bool(response_observed.get("has_tool_call")),
         "text_chars_observed": int(response_observed.get("text_chars", 0) or 0),
