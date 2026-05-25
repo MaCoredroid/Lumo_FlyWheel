@@ -118,7 +118,7 @@ def launch_suite(args) -> None:
             f'scripts/run_swe_bench_q36_a.py --subset {args.subset} --out-root {out_root} '
             f'--dataset-tag {args.exp_tag} --agent-wall-s {args.agent_wall_s} '
             f'--eval-timeout-s {args.eval_timeout_s} --concurrency {args.concurrency} '
-            f'{extra} --repo-cache $HOME/swe_conc_probe/repo_cache '
+            f'{extra} --skip-existing --repo-cache $HOME/swe_conc_probe/repo_cache '
             f'> {out_root}/driver.log 2>&1 </dev/null & echo launched pid=$!'
         )
     else:  # cnb
