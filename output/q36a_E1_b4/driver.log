@@ -70,3 +70,5 @@ HEAD is now at b16c7d12c Merge pull request #14988 from nstarman/cosmo-dont-regi
 [2026-05-25T11:52:29Z]    astropy__astropy-14539: retry produced 530B patch
 [2026-05-25T11:53:20Z] <- astropy__astropy-14539 verdict=resolved elapsed_total=3650.9s
 [2026-05-25T11:54:12Z] <- astropy__astropy-14995 verdict=resolved elapsed_total=1852.3s
+[2026-05-25T12:12:17Z] <- astropy__astropy-14598 verdict=failed elapsed_total=3211.5s
+=== [2026-05-25T12:12:17Z] DONE n=16 resolved_rate=0.4375 verdicts={'resolved': 7, 'failed': 9} ===
