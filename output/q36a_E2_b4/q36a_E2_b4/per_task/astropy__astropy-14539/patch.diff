@@ -1,0 +1,28 @@
+diff --git a/astropy/io/fits/diff.py b/astropy/io/fits/diff.py
+index 100cdf1b8..67e448a6a 100644
+--- a/astropy/io/fits/diff.py
++++ b/astropy/io/fits/diff.py
+@@ -1445,11 +1445,7 @@ class TableDataDiff(_BaseDiff):
+             arra = self.a[col.name]
+             arrb = self.b[col.name]
+ 
+-            if np.issubdtype(arra.dtype, np.floating) and np.issubdtype(
+-                arrb.dtype, np.floating
+-            ):
+-                diffs = where_not_allclose(arra, arrb, rtol=self.rtol, atol=self.atol)
+-            elif "P" in col.format:
++            if "P" in col.format or "Q" in col.format:
+                 diffs = (
+                     [
+                         idx
+@@ -1459,6 +1455,10 @@ class TableDataDiff(_BaseDiff):
+                         )
+                     ],
+                 )
++            elif np.issubdtype(arra.dtype, np.floating) and np.issubdtype(
++                arrb.dtype, np.floating
++            ):
++                diffs = where_not_allclose(arra, arrb, rtol=self.rtol, atol=self.atol)
+             else:
+                 diffs = np.where(arra != arrb)
+ 
