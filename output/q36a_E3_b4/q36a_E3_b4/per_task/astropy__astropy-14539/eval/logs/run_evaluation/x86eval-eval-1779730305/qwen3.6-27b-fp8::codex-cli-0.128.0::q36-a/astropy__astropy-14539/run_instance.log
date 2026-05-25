@@ -1,0 +1,75 @@
+2026-05-25 10:31:59,402 - INFO - Creating container for astropy__astropy-14539...
+2026-05-25 10:31:59,490 - INFO - Container for astropy__astropy-14539 created: c28ca99e2a48c49114e10591e05c55b7a2c2d1c26b73c177d6b9d9ef37506415
+2026-05-25 10:31:59,593 - INFO - Container for astropy__astropy-14539 started: c28ca99e2a48c49114e10591e05c55b7a2c2d1c26b73c177d6b9d9ef37506415
+2026-05-25 10:31:59,594 - INFO - Intermediate patch for astropy__astropy-14539 written to logs/run_evaluation/x86eval-eval-1779730305/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14539/patch.diff, now applying to container...
+2026-05-25 10:31:59,676 - INFO - >>>>> Applied Patch:
+Checking patch astropy/io/fits/diff.py...
+Applied patch astropy/io/fits/diff.py cleanly.
+
+2026-05-25 10:31:59,910 - INFO - Git diff before:
+diff --git a/astropy/io/fits/diff.py b/astropy/io/fits/diff.py
+index 100cdf1b8..67e448a6a 100644
+--- a/astropy/io/fits/diff.py
++++ b/astropy/io/fits/diff.py
+@@ -1445,11 +1445,7 @@ class TableDataDiff(_BaseDiff):
+             arra = self.a[col.name]
+             arrb = self.b[col.name]
+ 
+-            if np.issubdtype(arra.dtype, np.floating) and np.issubdtype(
+-                arrb.dtype, np.floating
+-            ):
+-                diffs = where_not_allclose(arra, arrb, rtol=self.rtol, atol=self.atol)
+-            elif "P" in col.format:
++            if "P" in col.format or "Q" in col.format:
+                 diffs = (
+                     [
+                         idx
+@@ -1459,6 +1455,10 @@ class TableDataDiff(_BaseDiff):
+                         )
+                     ],
+                 )
++            elif np.issubdtype(arra.dtype, np.floating) and np.issubdtype(
++                arrb.dtype, np.floating
++            ):
++                diffs = where_not_allclose(arra, arrb, rtol=self.rtol, atol=self.atol)
+             else:
+                 diffs = np.where(arra != arrb)
+2026-05-25 10:31:59,910 - INFO - Eval script for astropy__astropy-14539 written to logs/run_evaluation/x86eval-eval-1779730305/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14539/eval.sh; copying to container...
+2026-05-25 10:32:22,243 - INFO - Test runtime: 22.29 seconds
+2026-05-25 10:32:22,244 - INFO - Test output for astropy__astropy-14539 written to logs/run_evaluation/x86eval-eval-1779730305/qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a/astropy__astropy-14539/test_output.txt
+2026-05-25 10:32:22,289 - INFO - Git diff after:
+diff --git a/astropy/io/fits/diff.py b/astropy/io/fits/diff.py
+index 100cdf1b8..67e448a6a 100644
+--- a/astropy/io/fits/diff.py
++++ b/astropy/io/fits/diff.py
+@@ -1445,11 +1445,7 @@ class TableDataDiff(_BaseDiff):
+             arra = self.a[col.name]
+             arrb = self.b[col.name]
+ 
+-            if np.issubdtype(arra.dtype, np.floating) and np.issubdtype(
+-                arrb.dtype, np.floating
+-            ):
+-                diffs = where_not_allclose(arra, arrb, rtol=self.rtol, atol=self.atol)
+-            elif "P" in col.format:
++            if "P" in col.format or "Q" in col.format:
+                 diffs = (
+                     [
+                         idx
+@@ -1459,6 +1455,10 @@ class TableDataDiff(_BaseDiff):
+                         )
+                     ],
+                 )
++            elif np.issubdtype(arra.dtype, np.floating) and np.issubdtype(
++                arrb.dtype, np.floating
++            ):
++                diffs = where_not_allclose(arra, arrb, rtol=self.rtol, atol=self.atol)
+             else:
+                 diffs = np.where(arra != arrb)
+2026-05-25 10:32:22,289 - INFO - Grading answer for astropy__astropy-14539...
+2026-05-25 10:32:22,290 - INFO - report: {'astropy__astropy-14539': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': True, 'tests_status': {'FAIL_TO_PASS': {'success': ['astropy/io/fits/tests/test_diff.py::TestDiff::test_identical_tables', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_table_data'], 'failure': []}, 'PASS_TO_PASS': {'success': ['astropy/io/fits/tests/test_diff.py::TestDiff::test_identical_headers', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_slightly_different_headers', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_common_keywords', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_keyword_count', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_keywords', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_keyword_values', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_keyword_comments', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_keyword_values_with_duplicate', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_asymmetric_duplicate_keywords', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_floating_point_rtol', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_floating_point_atol', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_ignore_blanks', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_ignore_blank_cards[HeaderDiff]', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_ignore_blank_cards[HDUDiff]', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_ignore_blank_cards[FITSDiff]', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_ignore_hdus', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_ignore_keyword_values', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_ignore_keyword_comments', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_trivial_identical_images', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_identical_within_relative_tolerance', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_identical_within_absolute_tolerance', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_identical_within_rtol_and_atol', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_not_identical_within_rtol_and_atol', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_identical_comp_image_hdus', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_dimensions', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_pixels', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_diff_empty_tables', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_ignore_table_fields', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_table_field_names', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_table_field_counts', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_different_table_rows', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_identical_files_basic', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_partially_identical_files1', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_partially_identical_files2', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_partially_identical_files3', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_diff_nans', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_file_output_from_path_string', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_file_output_overwrite_safety', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_file_output_overwrite_success', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_rawdatadiff_nodiff', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_rawdatadiff_dimsdiff', 'astropy/io/fits/tests/test_diff.py::TestDiff::test_rawdatadiff_bytesdiff', 'astropy/io/fits/tests/test_diff.py::test_fitsdiff_hdu_name', 'astropy/io/fits/tests/test_diff.py::test_fitsdiff_no_hdu_name', 'astropy/io/fits/tests/test_diff.py::test_fitsdiff_with_names', 'astropy/io/fits/tests/test_diff.py::test_rawdatadiff_diff_with_rtol'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for astropy__astropy-14539: resolved: True
+2026-05-25 10:32:22,291 - INFO - Attempting to stop container sweb.eval.astropy__astropy-14539.x86eval-eval-1779730305...
+2026-05-25 10:32:37,409 - INFO - Attempting to remove container sweb.eval.astropy__astropy-14539.x86eval-eval-1779730305...
+2026-05-25 10:32:37,421 - INFO - Container sweb.eval.astropy__astropy-14539.x86eval-eval-1779730305 removed.
+2026-05-25 10:32:37,421 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.astropy_1776_astropy-14539:latest...
+2026-05-25 10:32:37,453 - INFO - Image swebench/sweb.eval.x86_64.astropy_1776_astropy-14539:latest removed.
