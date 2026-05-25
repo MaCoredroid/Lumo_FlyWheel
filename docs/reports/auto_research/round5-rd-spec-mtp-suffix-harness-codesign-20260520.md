@@ -1,9 +1,24 @@
 # Round 5 R&D Spec — MTP + SuffixDecoding Hybrid, Codex Harness Co-Design, and Auto-Completion Substrate
 
 **Generated:** 2026-05-20
+**Last updated:** 2026-05-25
 **Audience:** Track B team + broader inference R&D
-**Status:** Forward-looking spec. None of the implementations described here have shipped. Builds on Round 4b ablation findings (T1 alone is the load-bearing technique; Q36-A is now the leader at 22.46 tps; sqlalchemy 4/4 effect on Q35-D does not replicate on Q36-D).
+**Status:** Living spec. Round 5 now includes a completed config-only SWE-Bench
+Verified B=4 E-depth sweep; no new vLLM implementation path described here has
+shipped. Builds on Round 4b ablation findings (T1 alone is the load-bearing
+technique; Q36-A was the earlier leader at 22.46 tps before the measurement
+corrections below; sqlalchemy 4/4 effect on Q35-D does not replicate on Q36-D).
 **Constraint:** stay under FP8 weights, Qwen 3.6 27B as base model, FP8 KV cache.
+
+**How to read this doc now:**
+
+1. Start with **Current Round 5 status** for what has actually been run and what
+   the numbers say.
+2. Use **Experiment taxonomy** to separate config-only vLLM experiments from
+   vLLM implementation work, harness/proxy work, and measurement prerequisites.
+3. Treat the older path sections as design background. They explain why the
+   next experiments are worth doing, but the completed E-depth sweep supersedes
+   the earlier speculative depth estimates.
 
 **Lossless vs lossy taxonomy (load-bearing for what we measure):**
 
@@ -14,11 +29,101 @@ We need both gates. Our internal v4a_v2 corpus (11 tasks) is too small to give e
 
 ---
 
-## 0. Measurement bugs to fix BEFORE shipping any Round 5 numbers
+## Current Round 5 status (2026-05-25)
 
-Two protocol-level measurement asymmetries surfaced during the probe16d analysis (2026-05-23/24) that affect every comparison in §1-§12 plus the §13 addendum. Both must be resolved before Round 5 measurements should be trusted for either internal decisions or external publication. Listed here at the head of the spec because they are easy to miss and load-bearing for everything downstream.
+### What we did
 
-### 0.1 Suffix-tree cache bleeds across `--repeat N` attempts of the same task
+Round 5 has moved from pure design to one completed SWE-Bench Verified B=4
+measurement slice. The measured set compares Config D against Config E with MTP
+depths 1, 2, 3, and 6:
+
+| Run | Configuration | vLLM shape | Status |
+|---|---|---|---|
+| `q36a_D_b4` | Config D | SuffixDecoding stack, no native MTP | complete |
+| `q36a_E1_b4` | Config E | `qwen3_5_mtp`, linear depth 1 | complete |
+| `q36a_E2_b4` | Config E | `qwen3_5_mtp`, linear depth 2 | complete |
+| `q36a_E3_b4` | Config E | `qwen3_5_mtp`, linear depth 3 | complete |
+| `q36a_E6_b4` | Config E | `qwen3_5_mtp`, linear depth 6 | complete |
+
+The primary speed source is run-level `dgx_steptrace.jsonl`, not per-task proxy
+decode sums, because B=4 tasks overlap. Speculative acceptance uses
+`per_req_spec_trace.jsonl` with malformed rows skipped. The exact math is now
+spelled out in `swe-bench-config-decode-comparison-spec-20260525.md`.
+
+### Completed E-depth results
+
+| Run | Resolved | Steptrace decode TPS | Accept ratio | Draft/event | Accepted/event | Dormant time |
+|---|---:|---:|---:|---:|---:|---:|
+| `q36a_D_b4` | 6/16 | 13.247 | 0.256 | 5.761 | 1.473 | 145.6s |
+| `q36a_E1_b4` | 7/16 | 10.806 | 0.877 | 1.000 | 0.877 | 12.5s |
+| `q36a_E2_b4` | 7/16 | 12.052 | 0.818 | 2.000 | 1.635 | 55.7s |
+| `q36a_E3_b4` | 7/16 | 15.058 | 0.751 | 3.000 | 2.254 | 75.4s |
+| `q36a_E6_b4` | 6/16 | 14.363 | 0.541 | 6.000 | 3.245 | 60.4s |
+
+Interpretation:
+
+- E3 is the current measured leader on this slice: best resolved count tied with
+  E1/E2 and the highest run-level decode TPS.
+- E6 confirms that higher accepted/event is not sufficient. Depth 6 accepts
+  more tokens per speculative event, but lower acceptance and repeated MTP-layer
+  overhead make it slower than E3 and reduce resolved count to 6/16.
+- D has low accept ratio but broad draft length from the suffix stack. It is
+  competitive with E1/E2 on speed, but not with E3 on this slice.
+- Dormant windows are not the main explanation for E6. E6 active generation is
+  ~93.4% of wall time; the slowdown is inside the decode/speculation path, not
+  idle scheduler tail.
+
+Current decision: **keep `num_speculative_tokens=3` as the working Config E
+depth. Do not promote E6.** This is an empirical local conclusion for Qwen3.6
+FP8 + SWE-Bench Verified B=4, not a universal MTP theorem.
+
+### Experiment taxonomy
+
+Use this taxonomy when deciding the next Round 5 experiment. It keeps config
+changes separate from implementation work.
+
+| Bucket | Experiment | Where it changes | Effort | Gate |
+|---|---|---|---:|---|
+| vLLM config-only | Repeat E3 and D on the same task slice | launcher/config only | low | paired steptrace + verdicts |
+| vLLM config-only | Sweep MTP depth around the current winner (`n=2/3/4`) | `num_speculative_tokens` | low | same slice, same temp/concurrency |
+| vLLM config-only | Try explicit `speculative_token_tree` at E3/E6-equivalent draft budget | launcher `speculative_config` if supported | low/medium | verify tree actually appears in trace |
+| vLLM config-only | Tune `disable_by_batch_size` under multi-tenant B>4 pressure | `speculative_config` | low | throughput under load, no quality regression |
+| vLLM implementation | Convert MTP top-k distributions into a branching trie | vLLM proposer/scheduler | high | distribution-equivalence + SWE sanity |
+| vLLM implementation | Union SuffixDecoding candidates and MTP candidates in one verifier pass | vLLM/proxy proposer integration | high | verifier correctness + steptrace |
+| vLLM implementation | τ-threshold fallback: SuffixDecoding primary, MTP fallback | proxy/vLLM drafter path | medium/high | lossless verifier gate + SWE speed |
+| Harness/proxy implementation | Fix suffix-cache repeat contamination | `inference_proxy.py` session partitioning | low/medium | repeat isolation test |
+| Harness/proxy implementation | Static Codex envelope/source prior | proxy suffix prior builder | medium | offline trace replay, then SWE |
+| Measurement prerequisite | Nsight Systems GPU saturation profile | measurement harness | medium | SM/tensor/DRAM trace over representative run |
+
+Config-only vLLM experiments should happen before vLLM implementation work.
+Implementation work should only start after the E3 result has at least one
+repeat or a larger paired slice.
+
+### Recommended next sequence
+
+1. **Repeat D vs E3** on the same SWE-Bench slice with the same temp,
+   concurrency, timeout, and relaunch path.
+2. **Run E4** before any deeper-tree work. E6 was too deep; E4 is the missing
+   local point around the observed optimum.
+3. **Try explicit vLLM tree config** only if the launcher can prove
+   `speculative_token_tree` is actually active. Compare against linear E3 with
+   similar draft budget.
+4. **Then decide between two implementation tracks:** MTP tree/trie work inside
+   vLLM, or hybrid SuffixDecoding+MTP fallback/union work.
+5. **Keep harness-aware suffix priors separate** from MTP experiments so we can
+   attribute lift cleanly.
+
+---
+
+## Measurement protocol fixes before publication
+
+Two protocol-level measurement asymmetries surfaced during the probe16d
+analysis (2026-05-23/24) that affect the older design sections and appendix.
+Both must be resolved before Round 5 measurements should be trusted for either
+internal decisions or external publication. Listed here at the head of the spec
+because they are easy to miss and load-bearing for everything downstream.
+
+### Suffix-tree cache bleeds across `--repeat N` attempts of the same task
 
 **The bug:** the proxy at `src/lumo_flywheel_serving/inference_proxy.py:464-465` derives the `session_id` (used by the T1 wrapper to partition the suffix tree per session) from `_first_user_text(payload)`. The intent is correct — keep the session_id stable across turns of one conversation, so the suffix cache for that conversation accumulates correctly. But CNB-55 ablation protocols use `--repeat 4` to run the *same* task 4 times in independent Codex containers. Because all 4 attempts share the same first user text (the AGENTS.md-anchored boilerplate from the Codex template), all 4 produce the *same* session_id, and **the T1 wrapper points all 4 attempts at the same suffix-tree partition**.
 
@@ -44,7 +149,9 @@ Warm (02-04 pooled) vs cold (01): accept ratio 1.07×, tps ratio 1.19×
 **Why it matters:**
 - The Round 4b closeout's headline `Q36-A 22.46 tps, accept 0.548` is the median across 44 cells (11 × 4 attempts), of which only 11 are truly cold for the suffix anchor. The remaining 33 cells benefit from cache built by earlier attempts. **The published "Q36-A acceptance 0.548" is the warm-attempts-averaged figure — the cold-only equivalent is closer to 0.46.**
 - This makes the published CNB-55 numbers **not apples-to-apples with SWE-Bench**, which uses unique per-instance first-user text and therefore unique session_ids by construction (verified: 16 distinct session_ids across 16 probe16d c=1 instances). SWE-Bench numbers are cold by nature; CNB-55 numbers are partially warmed by protocol.
-- The "CNB-55 is 2.5× faster than SWE-Bench" framing throughout §13 was overstated. After correcting for this and for the temperature confounder (see §0.2 below), the apples-to-apples gap is closer to 1.5-1.8×.
+- The "CNB-55 is 2.5× faster than SWE-Bench" framing in the empirical appendix
+  was overstated. After correcting for this and for the temperature confounder
+  below, the apples-to-apples gap is closer to 1.5-1.8×.
 
 **Two fixes — either is acceptable; (a) is already happening, (b) is the durable solution:**
 
@@ -74,15 +181,19 @@ The exact source of `run_id` is design-room — could come from a new Codex head
 
 **Filed as a separate bug to commit independently of the Round 5 plan.** This does not invalidate Round 4b's *qualitative* findings (T1 dominates; A and D are within noise on Q36) — both A and D were subject to the same bias, so their *relative* ranking holds. It does invalidate the absolute numbers for use in any apples-to-apples CNB-vs-SWE comparison.
 
-### 0.2 Temperature was inconsistent between CNB-55 closeout and SWE-Bench probe16d
+### Temperature was inconsistent between CNB-55 closeout and SWE-Bench probe16d
 
 The Round 4b closeout sampled at `temp=0.6` (the Qwen 3.6 precise-coding recommendation). The current shipping proxy forces `temp=1.0` (`LUMO_PROXY_FORCE_TEMPERATURE=1.0` in `relaunch_proxy.sh`), which is what probe16d SWE-Bench measurements use. **Lower temperature concentrates the next-token distribution, which lifts suffix-decode acceptance and tps.** Empirical effect: CNB-55 acceptance at temp=0.6 is 0.547; the in-progress CNB-55 rerun at temp=1.0 is showing ~0.32. About 40% of the acceptance gap between CNB-55 and SWE-Bench was driven by temperature, not by workload structure.
 
 **Fix:** all Round 5 ablations must run at the **same sampling temperature as the production SWE-Bench measurements** (currently temp=1.0). If we want to also report numbers at temp=0.6 for completeness, run a parallel arm — don't mix temperatures within a comparison.
 
-### 0.3 Net consequence for §1-§12 and §13
+### Net consequence for the design background and appendix
 
-Every "+X% over closeout baseline" claim in this spec needs to be re-anchored against the **temp=1.0, single-shot CNB-55 numbers** (in progress) and against the **probe16d SWE-Bench numbers** (committed). Don't quote the closeout's 22.46 / 22.27 / 0.547 figures as the target — those are biased upward. The corrected anchors when the rerun finishes will be roughly:
+Every "+X% over closeout baseline" claim in the older design sections needs to
+be re-anchored against the **temp=1.0, single-shot CNB-55 numbers** (in
+progress) and against the **probe16d SWE-Bench numbers** (committed). Don't
+quote the closeout's 22.46 / 22.27 / 0.547 figures as the target — those are
+biased upward. The corrected anchors when the rerun finishes will be roughly:
 
 ```
                               temp     accept    decode-tps    inflation factor
@@ -92,13 +203,17 @@ CNB-55 closeout (Q36-D)       0.6      0.547     22.27         baseline (biased)
 SWE-Bench probe16d c=1       1.0      0.217     9.22          clean — anchor everything against this
 ```
 
-The Path 1 / Path 5 / Path 4 lift estimates in §3-§6 and §13 should target reaching ~14-15 tps on SWE-Bench (a 1.5-1.6× lift over the current 9.2), not the 25+ tps the closeout headline number would suggest.
+The Path 1 / Path 5 / Path 4 lift estimates in the design background and
+appendix should target reaching ~14-15 tps on SWE-Bench (a 1.5-1.6× lift over
+the current 9.2), not the 25+ tps the closeout headline number would suggest.
 
 ---
 
-Both good questions. Let me do the research on the MTP side first since the configurability question is empirical, then walk through the design space for both.This is discussion mode, not tool work — I'll skip the task list and walk through both questions directly.
+The following sections preserve the design analysis that led to the current
+experiment plan. Read them as background; the completed E-depth results above
+supersede the earlier depth estimates.
 
-## (1) MTP + Suffix Decoding combination strategies
+## Design background: MTP + SuffixDecoding combination strategies
 
 ### What we can actually configure on Qwen 3.6 27B MTP
 
@@ -244,7 +359,7 @@ else:
 
 The right thing to publish, in my estimation: strategy D measured on SWE-Bench with our trace data. It's the smallest novel claim ("MTP + SD with context-length routing") with the cleanest experimental story (one degree of freedom — the routing threshold — and a workload where the time dimension actually varies meaningfully).
 
-## (2) Harness-aware suffix decoding for Codex (fixed harness version)
+## Design background: harness-aware suffix decoding for Codex
 
 Since Codex is fixed, you have unusual leverage: every emission pattern is *deterministic up to model output*. The bash command syntax, the XML envelope, the tool schemas, the patch format — these are all parts of Codex's prompt and output protocol that won't change between sessions. So priors built from existing traces transfer to future traces of the same harness perfectly.
 
@@ -331,7 +446,7 @@ The unique opportunity from a fixed harness:
 
 3. **Tool-schema-aware structure.** Codex's request envelopes include the full tool schema in every call. The schema fields, types, and nesting are stable. Build a "schema fingerprint → expected token positions" map and inject it as a prior conditional on the current schema.
 
-4. **Multi-tier cache with eviction policy that respects priors.** Currently `max_cached_requests=1000` FIFO evicts anything. Add a "pinned" tier for the static prior + family prior, and only churn the dynamic session-local tier. This is the §13.3.2 "tiered cache" sketch — small engineering, big stability win.
+4. **Multi-tier cache with eviction policy that respects priors.** Currently `max_cached_requests=1000` FIFO evicts anything. Add a "pinned" tier for the static prior + family prior, and only churn the dynamic session-local tier. This is the A.3.2 "tiered cache" sketch — small engineering, big stability win.
 
 ### How I'd sequence the harness-aware work
 
@@ -355,7 +470,7 @@ Neither changes the MTP weights. Both are drafter-side choices and remain lossle
 
 ---
 
-Both directions are real and complementary. The MTP+SD combination gets you 1.3-1.5× on top of pure SD. The harness-aware suffix decoding stack gets you 1.3-1.5× independently. Stacked, you could plausibly reach 2× over pure-SD on SWE-Bench, putting absolute decode tps at ~13-15 from the current 9.2. That's the realistic Round 5 ceiling under the current measurement protocol — with the §0 bug fixes applied to make sure we're measuring it cleanly.
+Both directions are real and complementary. The MTP+SD combination gets you 1.3-1.5× on top of pure SD. The harness-aware suffix decoding stack gets you 1.3-1.5× independently. Stacked, you could plausibly reach 2× over pure-SD on SWE-Bench, putting absolute decode tps at ~13-15 from the current 9.2. That's the realistic Round 5 ceiling under the current measurement protocol — with the measurement protocol fixes applied to make sure we're measuring it cleanly.
 
 Sources:
 - [MTP (Multi-Token Prediction) — vLLM](https://docs.vllm.ai/en/latest/features/speculative_decoding/mtp/)
@@ -370,7 +485,7 @@ Sources:
 - [SEQUOIA — scalable tree-based speculative decoding](https://papers.neurips.cc/paper_files/paper/2024/file/ea1f5f0878d43ff4fb8bf64ef4a2326c-Paper-Conference.pdf)
 - [MCSD — multi-candidate speculative decoding](https://arxiv.org/abs/2409.10644)
 
-## 1. Why this spec
+## 1. Original motivation
 
 Round 4b on Qwen 3.5 27B FP8 demonstrated:
 
@@ -717,7 +832,10 @@ This is also the only path that turns into a real ecosystem contribution. A vend
 
 ---
 
-## 7. Recommended sequence
+## 7. Historical recommended sequence
+
+This sequence is preserved for provenance. The current recommended next steps
+are in **Current Round 5 status** at the top of this document.
 
 | Order | Path | Effort | Loss class | Quality gate | Expected gain |
 |---|---|---|---|---|---|
@@ -919,11 +1037,18 @@ Published spec-decode papers (SuffixDecoding, EAGLE-3, FastMTP, etc.) all report
 
 ---
 
-## 13. Addendum (2026-05-24) — Probe16d empirical updates
+## Appendix: empirical updates and measurement notes
 
-The original spec (sections 1–12, dated 2026-05-20) was written before the conc-probe16d SWE-Bench Verified data landed. Probe16d's clean per-stream measurements (with the fixed `upstream_compute_s` counter and the c1off arm with `speculative_config` cleared) shift three things in the spec: the workload acceptance number we should anchor Path 1 to, our ability to measure GPU compute saturation directly, and what an additional empirical-priors path looks like alongside Paths 1–4. This addendum amends those three places without rewriting the original sections; the dated provenance of §§1–12 is preserved.
+The original spec, dated 2026-05-20, was written before the conc-probe16d
+SWE-Bench Verified data landed. Probe16d's clean per-stream measurements (with
+the fixed `upstream_compute_s` counter and the c1off arm with
+`speculative_config` cleared) shift three things in the spec: the workload
+acceptance number we should anchor Path 1 to, our ability to measure GPU compute
+saturation directly, and what an additional empirical-priors path looks like
+alongside Paths 1-4. This appendix amends those three places without rewriting
+the original design sections.
 
-### 13.1 Measurement constraint confirmed — DCGM profiling not officially supported on DGX Spark / GB10
+### A.1 Measurement constraint confirmed — DCGM profiling not officially supported on DGX Spark / GB10
 
 The DCGM sampler in `tests/test_track_b_dcgm_sampler.py` is wired for the rich profile fields (`dram_active_pct`, `sm_active_pct`, `sm_occupancy_pct`, `pipe_tensor_active_pct`, `pipe_fp16_active_pct`), but every row in `output/swe_bench_q36_a_temp06/.../dcgm_samples.jsonl` returns `null` for them with `profile_fields_unavailable_reason: "nvml_fallback_only"`. Initial suspicion was a setup misconfiguration; confirmed via the NVIDIA Developer Forums (thread "Spark failed to retrieve SM Activity and the profiler module failed to load") that this is **NVIDIA-declared product policy**, not a fixable configuration issue.
 
@@ -977,7 +1102,7 @@ There are known Nsight-on-Spark issues to plan around:
 
 Note that this is also a useful general lesson for any team running on Spark: **Spark gives you NVML+Nsight; it does not give you DCGM Profiling.** Production observability on Spark must accept this constraint; offline characterization can route around it.
 
-### 13.2 Updated workload reality: SWE-Bench Verified astropy acceptance ≈ 0.22
+### A.2 Updated workload reality: SWE-Bench Verified astropy acceptance ≈ 0.22
 
 Section §3 calibrates Path 1's τ from CNB-55 numbers (Q36-A acceptance 0.548). The probe16d data shows SWE-Bench Verified astropy acceptance is **far lower than the CNB-55 calibration point**, with concrete implications for Path 1.
 
@@ -1005,7 +1130,7 @@ Updated §3 expected outcome (replaces "Q36-A could lift from 22.46 → ~25 tps 
 
 This is the right framing for the closeout: **Path 1's lift is largest precisely where SuffixDecoding-alone is weakest.** The published τ-threshold pattern says "fall through to fallback when SD is weak." On low-acceptance workloads SD is *always* weak — so the hybrid should win by a larger margin than the CNB-55 calibration suggests, *if* τ is set low enough not to over-engage the fallback.
 
-### 13.3 New Path 5 — Empirical Codex prior via trace mining
+### A.3 New Path 5 — Empirical Codex prior via trace mining
 
 The spec's Paths 3 (auto-completion substrate) and 4 (Codex CLI fork) gesture at workload-specific suffix-tree priming (Path 4 §6.3 hot-path registration, §6.4 stream-side priming; Path 3's "multi-source merge with provenance"), but treat them architecturally. There is a complementary **empirical** path the spec doesn't operationalize: mine our own production traces to construct a Codex-deployment-specific prior, pre-load it into the global suffix tree at session start, and let it amortize across all subsequent sessions on this harness.
 
@@ -1013,7 +1138,7 @@ The motivation is concrete: probe16d has produced ~22 M tokens of real Codex SWE
 
 **Loss classification: LOSSLESS by construction.** Pre-loading the suffix tree changes *which candidates* the drafter proposes but not which tokens the verifier accepts. Rejection sampling preserves the target model's distribution exactly. Gate as Paths 1–3: B-1/B-2/B-3 distribution-equivalence only, no SWE-Bench re-run required for correctness.
 
-#### 13.3.1 What the prior would contain
+#### A.3.1 What the prior would contain
 
 Token sequences whose frequency in production Codex traces is high enough that pre-indexing them lifts the drafter's average match length. From inspection of the existing probe traces, candidates include:
 
@@ -1029,7 +1154,7 @@ Token sequences whose frequency in production Codex traces is high enough that p
 
 Note the last row: **the prior is stratifiable by repo or benchmark slice.** A general-purpose Codex prior (the first 6 rows) is workload-agnostic; an astropy-specific prior (or sympy-specific, etc.) adds another tier of repeated content for that benchmark slice. The same architecture supports both.
 
-#### 13.3.2 Construction pipeline (offline, ~3-5 days of analyst time)
+#### A.3.2 Construction pipeline (offline, ~3-5 days of analyst time)
 
 1. **Aggregate trace corpus.** Concatenate token streams from all c=1 (RAW) and c=1 (spec-on) probe traces into one corpus. Source: `output/swe_conc_probe16d/*/per_task/*/vllm_request_metrics.jsonl` — extract `completion_tokens` per session, plus prompts.
 2. **N-gram frequency analysis.** Build frequency tables for 4-grams, 8-grams, 16-grams over the corpus. Compute (a) raw frequency, (b) document frequency (fraction of distinct sessions containing the n-gram), (c) "stability" score = document frequency × log(raw frequency).
@@ -1039,7 +1164,7 @@ Note the last row: **the prior is stratifiable by repo or benchmark slice.** A g
    - **Tiered cache:** mark prior entries as "immutable" (or assign them a very early seq_id that's pinned). Live sessions evict each other in FIFO order; the prior persists.
    - **Two-tree extension:** add a third tree alongside `_local_trees` and `_global_tree` — `_prior_tree` — that's read-only and pre-populated. `speculate()` queries all three, picks the highest-scoring draft. Same wrapper pattern as T1 session-scoping; adds ~3 days engineering on top of the existing patch.
 
-#### 13.3.3 Offline measurement protocol (do this before the engineering)
+#### A.3.3 Offline measurement protocol (do this before the engineering)
 
 The Arctic Inference codebase ships `arctic_inference/suffix_decoding/simulator.py` (referenced in the spec's §10). The simulator runs `SuffixDecodingCache.speculate()` against trace data without invoking vLLM. Use it to predict the lift from pre-loading priors *before* writing any production code:
 
@@ -1071,7 +1196,7 @@ If the simulator reports a **lift of <5%** the empirical-prior path is not worth
 
 This experiment is *cheap*: no GPU time required, runs in Python on a single CPU host, completes in hours. **Adding this offline simulator pass as a pre-engineering measurement is the single highest-information-per-cost step in Round 5.**
 
-#### 13.3.4 Why this is a publishable contribution
+#### A.3.4 Why this is a publishable contribution
 
 Path 1 (MTP+SD hybrid) and Path 2 (per-frame regime mixture) are architectural compositions of techniques already published independently. They're worth doing but they're incremental on the literature.
 
@@ -1083,7 +1208,7 @@ This frames the contribution as **empirical infrastructure**, not algorithmic. R
 
 The literature has nothing in this slot. Snowflake's SuffixDecoding paper assumes cold-start. AgentInfer's "reuse across agent sessions" hand-waves at this idea but doesn't operationalize the priors-from-trace-mining angle. Gemma's MTP drafters are model-side, not deployment-side. Empirical priors are open territory and we are uniquely positioned to do this work because we have the trace corpus.
 
-#### 13.3.5 Engineering effort
+#### A.3.5 Engineering effort
 
 - **Offline simulator measurement:** 2-3 days (n-gram extraction, simulator harness, lift measurement on held-out traces).
 - **Prior tree construction + integration:** 3-5 days (third-tree wrapper, eviction policy fix, serialization of mined priors to disk).
@@ -1091,7 +1216,7 @@ The literature has nothing in this slot. Snowflake's SuffixDecoding paper assume
 - **B-1/B-2/B-3 distribution-equivalence gate:** standard, ~1 day.
 - **Total:** ~2 weeks engineering after the offline measurement validates the approach.
 
-#### 13.3.6 Composition with Path 1
+#### A.3.6 Composition with Path 1
 
 Path 1 and Path 5 are **complementary, not redundant**:
 
@@ -1108,9 +1233,12 @@ SD + Codex prior (Path 5)       0.28-0.35                              10.5-12.5
 SD + Path 1 + Path 5            0.35-0.45                              12-15
 ```
 
-The composition arithmetic is approximate; the simulator measurement in §13.3.3 will give the real numbers for Path 5, and the τ-sweep on SWE-Bench (§13.2) will give the real numbers for Path 1. Both should be measured before committing to a particular composition.
+The composition arithmetic is approximate; the simulator measurement in A.3.3
+will give the real numbers for Path 5, and the tau-sweep on SWE-Bench (A.2)
+will give the real numbers for Path 1. Both should be measured before committing
+to a particular composition.
 
-### 13.3.5 MTP depth update from the 2026-05-25 B=4 SWE-Bench sweep
+### A.4 Detailed MTP depth update from the 2026-05-25 B=4 SWE-Bench sweep
 
 The Round 5 E-depth sweep gives the first real local answer to "what MTP depth
 should we use?" All rows below use the run-level steptrace TPS definition from
@@ -1135,7 +1263,7 @@ Current interpretation:
   topology question should be "linear E3 vs explicit tree with the same draft
   budget", not "keep increasing linear depth".
 
-### 13.4 Updated recommended sequence
+### A.5 Updated recommended sequence from the appendix
 
 The §7 sequence assumed the v4a_v2 corpus was sufficient for calibration. Probe16d shows it's not — the SWE-Bench Verified slice has a fundamentally different acceptance regime and a different per-stream optimum. The amended sequence inserts the empirical measurements before any architectural commitment:
 
@@ -1143,10 +1271,10 @@ The §7 sequence assumed the v4a_v2 corpus was sufficient for calibration. Probe
 |---|---|---|---|---|
 | **0a** | Finish Q36-D measurement (per original §7) | ~3 days | — | (unchanged) |
 | **0b** | **Baseline SWE-Bench reproduction** (per original §7) | ~150 wall-hrs | — | (unchanged) |
-| **0c** | **NEW: Offline simulator measurement of empirical Codex prior lift** (§13.3.3) | 2-3 days | CPU-only | If simulated lift on probe16d traces ≥ 10%, fund Path 5 engineering. If 5-10%, sensitivity analysis. If <5%, defer Path 5. |
+| **0c** | **NEW: Offline simulator measurement of empirical Codex prior lift** (A.3.3) | 2-3 days | CPU-only | If simulated lift on probe16d traces ≥ 10%, fund Path 5 engineering. If 5-10%, sensitivity analysis. If <5%, defer Path 5. |
 | **0d** | **NEW: τ-sweep on SWE-Bench astropy mini-corpus (16 instances)** for Path 1 | ~5 wall-hrs per τ point × 5 points | ~25 wall-hrs total | Identify optimal τ for low-acceptance regime; carry forward to Path 1 production calibration. |
 | **0d.1** | **NEW: MTP topology check** — linear E3 vs explicit `speculative_token_tree` at the same draft budget | ~5 wall-hrs per topology | ~10-15 wall-hrs | If tree topology beats linear E3 by ≥5% TPS at equal or better resolved count, make it the Path 1 fallback shape. Otherwise keep linear E3. |
-| **0e** | **NEW (PREREQUISITE): GPU compute-saturation metric enablement via Nsight Systems on Spark** (§13.7) | ~1-2 days setup + 1-2 hours profile | one ~30-min run (~10% profiling overhead) | Establish whether the operational `power_w` proxy is consistent with per-kernel DRAM_ACTIVE / SM_ACTIVE / PIPE_TENSOR_ACTIVE from CUPTI. If Nsight confirms bandwidth-bound (DRAM_ACTIVE > 75%, PIPE_TENSOR_ACTIVE < 50%), proceed with Paths 1/5 confidently. If Nsight reveals already-compute-bound regime (PIPE_TENSOR_ACTIVE > 75%), Paths 1/5 lose their headroom argument and the spec needs revision before continuing. |
+| **0e** | **NEW (PREREQUISITE): GPU compute-saturation metric enablement via Nsight Systems on Spark** (A.8) | ~1-2 days setup + 1-2 hours profile | one ~30-min run (~10% profiling overhead) | Establish whether the operational `power_w` proxy is consistent with per-kernel DRAM_ACTIVE / SM_ACTIVE / PIPE_TENSOR_ACTIVE from CUPTI. If Nsight confirms bandwidth-bound (DRAM_ACTIVE > 75%, PIPE_TENSOR_ACTIVE < 50%), proceed with Paths 1/5 confidently. If Nsight reveals already-compute-bound regime (PIPE_TENSOR_ACTIVE > 75%), Paths 1/5 lose their headroom argument and the spec needs revision before continuing. |
 | 1 | **Path 1** — τ-threshold hybrid (SD + MTP) with SWE-Bench-anchored τ (from 0d) | ~1 week | B-1/B-2/B-3 + 5h SWE-Bench mini | +10-30% tps on SWE-Bench, possibly flat on v4a_v2 |
 | 1.5 | **NEW: Path 5 — empirical Codex prior via trace mining** (conditional on 0c) | ~2 weeks | B-1/B-2/B-3 + 5h SWE-Bench mini | +5-25% acceptance on SWE-Bench |
 | 2 | **Path 3** — DAWG substrate swap | ~1 week | (unchanged) | (unchanged) |
@@ -1159,17 +1287,17 @@ The key insertions are 0c (free, decisive), 0d (cheap, recalibrates Path 1 for t
 
 **Why 0e is a prerequisite, not an afterthought:** Paths 1, 2, 5, and "draft more aggressively" all assume the GPU is bandwidth-bound and that adding compute (more drafts, MTP fallback, mined-prior lookups) is essentially free. That assumption is currently supported by `power_w ≈ 48 W` on a ~120-140 W TDP GPU — a strong but indirect signal. A single Nsight Systems run resolves the assumption directly. The downside risk we want to eliminate before spending 8-10 weeks of engineering: if the GPU is in fact already compute-saturated (e.g., tensor cores running near peak on attention compute for our 24K context), then adding more drafted positions, MTP fallback, or aggressive priors would *steal* compute we currently rely on, slowing down decode rather than speeding it up. The probability is low — the power_w signal makes it unlikely — but the cost of running Nsight is hours, and the cost of being wrong is multiple weeks of engineering on a flawed premise. Burn the prerequisite, get the certainty, then commit the engineering. This is the highest-information-per-cost step in the entire Round 5 plan.
 
-### 13.5 Open questions added to §10
+### A.6 Open questions added to design review
 
-11. **What is the actual lift from empirical Codex priors on probe16d traces?** Answered by §13.3.3 offline simulation. Must run before §13.3 engineering.
-12. **What is the optimal τ for SWE-Bench Verified astropy specifically?** Answered by §13.4 step 0d τ-sweep. Likely materially different from the v4a_v2-optimal τ.
+11. **What is the actual lift from empirical Codex priors on probe16d traces?** Answered by A.3.3 offline simulation. Must run before A.3 engineering.
+12. **What is the optimal tau for SWE-Bench Verified astropy specifically?** Answered by A.5 step 0d tau-sweep. Likely materially different from the v4a_v2-optimal tau.
 13. **Should empirical priors be benchmark-specific or workload-general?** Mine traces per-benchmark (astropy / sympy / django / sphinx) and measure prior overlap. If overlap is >70%, ship a general prior. If <30%, ship per-benchmark priors. If 30-70%, ship a tiered prior with a general base + per-benchmark deltas.
 14. **What's the GB10 alternative for DCGM-quality compute-saturation measurement?** Either accept `power_w` as proxy (current default), or run one-off characterization on a Hopper/Blackwell discrete-GPU host with DCGM enabled. The latter is required if we want to publish DRAM_ACTIVE / PIPE_TENSOR_ACTIVE numbers in a Round 5 paper.
 15. **Trace corpus refresh cadence for empirical priors.** Production deployments accumulate new trace data continuously. How often should the prior be re-mined and re-deployed — weekly? Monthly? Per-release? Stability of top-K n-grams across time windows is the answer; measurable from existing data.
 
-### 13.6 Provenance of this addendum
+### A.7 Provenance of this appendix
 
-This addendum is based on data captured in:
+This appendix is based on data captured in:
 
 - `output/swe_conc_probe16d/c1/per_task/` — 16 instances of c=1 with spec-on, fixed `upstream_compute_s`
 - `output/swe_conc_probe16d/c1off/per_task/` — 5 instances of c=1 with `speculative_config` cleared
@@ -1178,15 +1306,18 @@ This addendum is based on data captured in:
 - `output/swe_conc_probe8c/dgx_steptrace.jsonl` — 1946 samples of vLLM iter_cnt / running / power_w at ~1.5 s sampling
 - `docs/reports/auto_research/swe-bench-telemetry-definitions-20260523.md` — authoritative counter definitions
 
-Author commits relevant to this addendum: `e26a12d1` (fixed `upstream_compute_s`), `ea6e3035` and follow-ons (probe16d raw data), `ed432190` (richer telemetry sampler), `5d6eee0d` (proxy upstream timestamps).
+Author commits relevant to this appendix: `e26a12d1` (fixed `upstream_compute_s`), `ea6e3035` and follow-ons (probe16d raw data), `ed432190` (richer telemetry sampler), `5d6eee0d` (proxy upstream timestamps).
 
-### 13.7 Prerequisite — GPU compute-saturation metric enablement (Nsight Systems on Spark)
+### A.8 Prerequisite — GPU compute-saturation metric enablement (Nsight Systems on Spark)
 
-Referenced as step 0e in §13.4. This section gives the detailed methodology for the prerequisite Nsight Systems characterization run.
+Referenced as step 0e in A.5. This section gives the detailed methodology for the prerequisite Nsight Systems characterization run.
 
-#### 13.7.1 Why this is a prerequisite
+#### A.8.1 Why this is a prerequisite
 
-Three engineering directions in this spec (Paths 1, 2, 5, and the broader "draft more aggressively" reasoning in §13.1) all rest on the claim that **the GPU is bandwidth-bound during decode and has substantial compute headroom available**. The current evidence for that claim is indirect:
+Three engineering directions in this spec (Paths 1, 2, 5, and the broader
+"draft more aggressively" reasoning in A.1) all rest on the claim that **the GPU
+is bandwidth-bound during decode and has substantial compute headroom
+available**. The current evidence for that claim is indirect:
 
 - `power_w ≈ 48 W` at B=1 vs ~120-140 W TDP → ~37% of compute capacity used
 - Step latency essentially flat from B=1 to B=2 (184 → 169 ms) → no per-pass time penalty for adding work, the signature of bandwidth-bound batching
@@ -1196,9 +1327,9 @@ The claim is well-supported by the indirect signals, but **directly measuring DR
 
 This is also the publishable evidence path. If Round 5 produces a paper, reviewers will expect either DCGM-Profiling numbers or Nsight-equivalent numbers as backing for any "memory-bound" claim — the operational `power_w` proxy alone is not sufficient for external credibility, even though it is sufficient for internal operational decisions.
 
-#### 13.7.2 Why this is doable on Spark despite the DCGM limitation
+#### A.8.2 Why this is doable on Spark despite the DCGM limitation
 
-Per §13.1: DCGM Profiling is not available on Spark per NVIDIA product policy. However:
+Per A.1: DCGM Profiling is not available on Spark per NVIDIA product policy. However:
 
 - **CUPTI is available on Spark** for developer profiling. The same underlying GPU performance counters that DCGM-Profiling exposes via DCGM_FI_PROF_* fields are accessible to CUPTI-based tools.
 - **Nsight Systems uses CUPTI under the hood.** `nsys profile --gpu-metrics-devices=0` will report the same metrics that DCGM-Profiling would have shown, just packaged as a post-hoc `.nsys-rep` file rather than streamed telemetry.
@@ -1206,7 +1337,7 @@ Per §13.1: DCGM Profiling is not available on Spark per NVIDIA product policy. 
 
 The practical translation: DCGM is closed off; Nsight is open. We can get the data; we just route through a different API surface.
 
-#### 13.7.3 Setup steps
+#### A.8.3 Setup steps
 
 ```bash
 # 1. Verify Nsight Systems is installed and recent enough for SM 12.1 / GB10.
@@ -1223,7 +1354,7 @@ nsys profile --list-gpu-metrics
 # If those are missing, the Nsight version is too old for GB10.
 ```
 
-#### 13.7.4 Profile run methodology
+#### A.8.4 Profile run methodology
 
 Use a representative SWE-Bench Verified astropy instance — one of the c=1 probe16d instances with median tps (e.g., `astropy__astropy-13033` which sat at 8.95 tps decode-only, close to the pooled 9.22 median). Run it under Nsight:
 
@@ -1257,7 +1388,7 @@ nsys stats --report gpu_metric_usage --format csv \
 # Aggregate by 1-second buckets to compare with vLLM's iter_cnt timeline.
 ```
 
-#### 13.7.5 Decision criteria
+#### A.8.5 Decision criteria
 
 Run a single Nsight profile and inspect:
 
@@ -1276,17 +1407,24 @@ The PASS condition for proceeding with Paths 1, 5, and the spec's broader comput
 
 If all three hold, proceed with the spec as-written. If any fail, file a spec amendment before continuing engineering.
 
-#### 13.7.6 What to do with the result
+#### A.8.6 What to do with the result
 
 1. **If the bandwidth-bound hypothesis is confirmed (expected):** include the Nsight `.nsys-rep` snapshot in the Round 5 baseline measurement bundle. Reference it in the closeout report as the authoritative compute-saturation evidence. Continue with Paths 1 and 5 engineering.
 2. **If the hypothesis is partially confirmed (e.g., DRAM_ACTIVE high but PIPE_TENSOR_ACTIVE also high):** narrow the engineering focus. Path 1's MTP fallback becomes higher-risk because MTP's draft-side compute is non-trivial. Path 5's prior is still safe because it's all CPU-side. Re-prioritize toward Path 5 and DAWG substrate (Path 3) over Path 1.
-3. **If the hypothesis fails:** halt §13 engineering. The original spec (§3-§7, calibrated against CNB-55 conditions) may still apply if CNB-55 workloads are differently shaped, but Paths 1/5 specifically for SWE-Bench Verified need re-justification.
+3. **If the hypothesis fails:** halt appendix-driven engineering. The original
+   design paths, calibrated against CNB-55 conditions, may still apply if CNB-55
+   workloads are differently shaped, but Paths 1/5 specifically for SWE-Bench
+   Verified need re-justification.
 
-#### 13.7.7 Closeout profile (separate from prerequisite)
+#### A.8.7 Closeout profile (separate from prerequisite)
 
-A second Nsight profile against the composed final stack (SD + MTP fallback + Codex prior + Path 4-lossless bundle) provides the publication evidence for the Round 5 paper. Same methodology as §13.7.4, run on 2-3 representative SWE-Bench instances spanning the per-stream tps range. Cost: ~3-6 wall-hours including profile overhead and analysis.
+A second Nsight profile against the composed final stack (SD + MTP fallback +
+Codex prior + Path 4-lossless bundle) provides the publication evidence for the
+Round 5 paper. Same methodology as A.8.4, run on 2-3 representative SWE-Bench
+instances spanning the per-stream tps range. Cost: ~3-6 wall-hours including
+profile overhead and analysis.
 
-#### 13.7.8 Engineering effort
+#### A.8.8 Engineering effort
 
 - Initial setup + first profile run: **1-2 days** (verify Nsight version, identify representative task, set up the run script, execute, parse).
 - Analysis + decision: **half a day** (extract metrics from `.nsys-rep`, compare against PASS criteria, document findings in a short memo).
