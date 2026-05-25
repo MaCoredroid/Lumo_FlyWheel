@@ -1,0 +1,17 @@
+{
+  "track": "swe_bench",
+  "instance_id": "astropy__astropy-13398",
+  "model_id": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "verdict": "failed",
+  "passed": false,
+  "failure_mode": "tests_failed",
+  "harness_exit_code": -1,
+  "eval_wall_clock_seconds": 58.698,
+  "error": "ImageNotFound: 404 Client Error for http+docker://localhost/v1.47/images/sha256:bdbc30d363cfbd9902e0d338fc959782d1a92a9e85236c0dca92c95372088783/json: Not Found (\"No such image: sha256:bdbc30d363cfbd9902e0d338fc959782d1a92a9e85236c0dca92c95372088783\")",
+  "arch": "x86_64",
+  "eval_host": "mark-Alienware-Aurora-ACT1250",
+  "run_id": "x86eval-eval-1779702541",
+  "namespace": "swebench",
+  "cache_level": "env"
+}

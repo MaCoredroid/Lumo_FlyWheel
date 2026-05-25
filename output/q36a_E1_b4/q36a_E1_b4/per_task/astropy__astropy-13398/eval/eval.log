@@ -1,0 +1,46 @@
+Traceback (most recent call last):
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/docker/api/client.py", line 275, in _raise_for_status
+    response.raise_for_status()
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/requests/models.py", line 1167, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 404 Client Error: Not Found for url: http+docker://localhost/v1.47/images/sha256:bdbc30d363cfbd9902e0d338fc959782d1a92a9e85236c0dca92c95372088783/json
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/mark/swe_eval_offload/swe_eval_x86_worker.py", line 118, in main
+    _re.main(
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/swebench/harness/run_evaluation.py", line 568, in main
+    clean_images(client, existing_images, cache_level, clean)
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/swebench/harness/docker_utils.py", line 281, in clean_images
+    images = list_images(client)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/swebench/harness/docker_utils.py", line 263, in list_images
+    return {tag for i in client.images.list(all=True) for tag in i.tags}
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/docker/models/images.py", line 381, in list
+    return [self.get(r["Id"]) for r in resp]
+            ^^^^^^^^^^^^^^^^^
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/docker/models/images.py", line 333, in get
+    return self.prepare_model(self.client.api.inspect_image(name))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/docker/utils/decorators.py", line 19, in wrapped
+    return f(self, resource_id, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/docker/api/image.py", line 251, in inspect_image
+    return self._result(
+           ^^^^^^^^^^^^^
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/docker/api/client.py", line 281, in _result
+    self._raise_for_status(response)
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/docker/api/client.py", line 277, in _raise_for_status
+    raise create_api_error_from_http_exception(e) from e
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/swe_eval_offload/venv/lib/python3.12/site-packages/docker/errors.py", line 39, in create_api_error_from_http_exception
+    raise cls(e, response=response, explanation=explanation) from e
+docker.errors.ImageNotFound: 404 Client Error for http+docker://localhost/v1.47/images/sha256:bdbc30d363cfbd9902e0d338fc959782d1a92a9e85236c0dca92c95372088783/json: Not Found ("No such image: sha256:bdbc30d363cfbd9902e0d338fc959782d1a92a9e85236c0dca92c95372088783")
+harness elapsed_s=58.698 exit_code=-1 arch=x86_64
+-- stdout --
+Running 1 instances...
+All instances run.
+-- stderr --
+Evaluation:   0%|          | 0/1 [00:00<?, ?it/s, error=0, ✓=0, ✖=0]Evaluation:   0%|          | 0/1 [00:55<?, ?it/s, ✓=0, ✖=1, error=0]Evaluation: 100%|##########| 1/1 [00:55<00:00, 55.76s/it, ✓=0, ✖=1, error=0]Evaluation: 100%|##########| 1/1 [00:55<00:00, 55.76s/it, ✓=0, ✖=1, error=0]
