@@ -106,23 +106,29 @@ The MTP head on Qwen 3.6 is **a native part of the released checkpoint**. You do
 
 ```json
 "speculative_config": {
-  "method": "qwen3_next_mtp",
-  "num_speculative_tokens": 2     // 1-5 supported, 2 is recommended default
+  "method": "qwen3_5_mtp",
+  "num_speculative_tokens": 2
 }
 ```
 
+`qwen3_5_mtp` is the actual method used by our Qwen 3.6 relaunch scripts
+(`scripts/swe_x86_helpers/relaunch_qwen36_round.py`). Upstream vLLM's naming is
+moving toward the generic `method=mtp`, but the local deployed surface is still
+the Qwen3.5/Qwen3.6-specific path because it reads `mtp_num_hidden_layers` from
+the checkpoint.
+
 The configurable surface is surprisingly thin:
-- **`num_speculative_tokens` (1-5)** — how many positions ahead the MTP head drafts. More = more potential lift, but each step costs a small amount of GPU compute and acceptance falls off geometrically with depth.
-- **Tree topology** — vLLM's default is a linear chain. The FastMTP paper argues tree-of-MTP outperforms chain-of-MTP at the same draft budget; not all vLLM versions expose the toggle.
+- **`num_speculative_tokens`** — how many positions ahead the MTP path drafts. More = more potential lift, but each step costs GPU compute and acceptance falls with depth. For Qwen3.6 on our stack, `mtp_num_hidden_layers=1`, so `num_speculative_tokens > 1` means vLLM repeatedly forwards through the same MTP layer to extend one draft chain. vLLM explicitly warns that this may reduce acceptance.
+- **Tree topology** — vLLM's default is a linear chain. Current vLLM exposes `speculative_token_tree`; if absent, vLLM uses the chain `[[0], [1], ..., [num_speculative_tokens - 1]]`. Our local E1/E2/E3/E6 launchers do **not** pass `speculative_token_tree`, so all measured E runs are linear-chain MTP. Enabling a branching tree is a vLLM configuration/launcher change plus validation, not something currently active in the experiments.
 - **`disable_by_batch_size`** — turn MTP off when running batch exceeds N (single-tenant: no effect; multi-tenant: prevents MTP compute from competing with prefill).
 
-That's basically it. The MTP head's weights are frozen in the released checkpoint — no temperature, no top-k on the drafter, no per-position branching policy. If you want different behavior, you retrain.
+That's basically it. The MTP head's weights are frozen in the released checkpoint. Changing the draft temperature/top-k distribution or turning logits into a custom top-k trie is **not** exposed by our current config surface. It would require vLLM proposer/scheduler work so the engine can represent, verify, and account for a branching draft tree.
 
 **Three released MTP variants for Qwen 3.6 27B**:
 
 | Variant | Source | Notes |
 |---|---|---|
-| Official `Qwen/Qwen3.6-27B` | Qwen team | Native MTP head shipped in the checkpoint; what vLLM's `qwen3_next_mtp` consumes |
+| Official `Qwen/Qwen3.6-27B` | Qwen team | Native MTP head shipped in the checkpoint; what our vLLM `qwen3_5_mtp` path consumes |
 | `unsloth/Qwen3.6-27B-MTP-GGUF` | Unsloth | GGUF quantization of the same MTP-head model for llama.cpp / Ollama users; not directly relevant for vLLM serving |
 | `sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP` | community | NVFP4 quantized variant; an FP4 (rather than FP8) deployment path — useful if we ever want to push to FP4 on Blackwell-class hardware but doesn't change the algorithm |
 
@@ -342,10 +348,10 @@ Stop adding paths once aggregate lift reaches 1.5-1.6× on SWE-Bench (~14 tps); 
 
 You said *"I guess MTP header we cannot do too much other than retraining"* — mostly right, but two things you CAN do without retraining:
 
-- **Calibrate `num_speculative_tokens`** on the actual workload. Default is 2; sweep 1-5 on a SWE-Bench mini-corpus. The MTP head's drop-off depth varies by output type; you may find 3 or 4 is the sweet spot on our specific output distribution.
-- **Adjust tree topology if vLLM exposes it.** Some vLLM versions expose `mtp_tree_size` or similar. Linear chain vs branching tree is a calibrate-not-train decision.
+- **Calibrate `num_speculative_tokens`** on the actual workload. vLLM examples commonly start at 1 or 2, but the right depth is workload/hardware dependent. Our 2026-05-25 B=4 SWE-Bench slice currently points to `num_speculative_tokens=3` as the best measured linear-chain point: E1 = 10.81 tok/s, E2 = 12.05 tok/s, E3 = 15.06 tok/s, and E6 partial = 13.91 tok/s. Treat `n=3` as the current empirical sweet spot for this stack, not as a literature-wide conclusion.
+- **Adjust tree topology if vLLM exposes it.** Current vLLM exposes `speculative_token_tree`; when unset, it uses a linear chain. Branching MTP trees are supported by the broader tree-speculation literature, but our local launcher does not enable them yet. Any tree run needs an explicit launcher/config diff plus B-1/B-2/B-3 equivalence and steptrace accounting.
 
-Neither is a big lever, but free to test.
+Neither changes the MTP weights. Both are drafter-side choices and remain lossless if the verifier path is unchanged.
 
 ---
 
@@ -353,12 +359,16 @@ Both directions are real and complementary. The MTP+SD combination gets you 1.3-
 
 Sources:
 - [MTP (Multi-Token Prediction) — vLLM](https://docs.vllm.ai/en/latest/features/speculative_decoding/mtp/)
+- [SpeculativeConfig — vLLM API docs](https://docs.vllm.ai/en/v0.16.0/api/vllm/config/speculative/)
 - [Qwen3-Next Usage Guide — vLLM Recipes](https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3-Next.html)
+- [Qwen3.5 Usage Guide — vLLM Recipes](https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html)
 - [Qwen/Qwen3.6-27B (Hugging Face) — model card and MTP head details](https://huggingface.co/Qwen/Qwen3.6-27B)
 - [unsloth/Qwen3.6-27B-MTP-GGUF (Hugging Face) — GGUF MTP variant](https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF)
 - [sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP (Hugging Face) — NVFP4 MTP variant](https://huggingface.co/sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP)
 - [SuffixDecoding paper (NeurIPS 2025) — τ-threshold pattern](https://arxiv.org/abs/2411.04975)
 - [FastMTP paper — tree-of-MTP topology](https://arxiv.org/abs/2509.18362)
+- [SEQUOIA — scalable tree-based speculative decoding](https://papers.neurips.cc/paper_files/paper/2024/file/ea1f5f0878d43ff4fb8bf64ef4a2326c-Paper-Conference.pdf)
+- [MCSD — multi-candidate speculative decoding](https://arxiv.org/abs/2409.10644)
 
 ## 1. Why this spec
 
@@ -387,6 +397,8 @@ This spec lays out four parallel paths: a tight τ-threshold hybrid (lowest effo
 | **SAM Decoding** (arXiv 2411.10666) | DAWG substrate details | Documents suffix automaton substitution with comparable hit rate. |
 | **Gemma 4 MTP drafters** (Google AI, May 2026) | Production MTP at scale | 3× speedup at zero quality loss with small MTP heads. Trained for cross-step coherence. Implies MTP-as-drafter generalizes well. |
 | **FastMTP** (arXiv 2509.18362) | Better MTP training | Position-shared MTP head + draft-tree organization beats per-step independent MTP heads. Conceptual sibling to Qwen 3.6's MTP layer. |
+| **vLLM `SpeculativeConfig` MTP surface** | What we can configure without patching vLLM | Supports MTP methods, `num_speculative_tokens`, and `speculative_token_tree`. If `speculative_token_tree` is absent, vLLM uses a linear chain. For MTP models with a single prediction layer, `num_speculative_tokens > 1` reuses the same layer repeatedly and may reduce acceptance. |
+| **SEQUOIA / MCSD and related tree-speculation work** | Branching draft trees | Confirms that tree-shaped candidate verification can dominate a single greedy chain at the same draft budget. This supports testing `speculative_token_tree`, but it does **not** mean our current E runs already use a tree. |
 | **Speculative Search** (arXiv 2511.20048) | Search-agent co-design | Algorithm+system co-design for LLM search agents. Defines the cross-layer protocol pattern we already use (oracle API). |
 | **vLLM Issue #40831** | Compatibility flag | TurboQuant KV × any spec_decode produces degenerate token loops. We're FP8 KV (unaffected) — flag if quant changes. |
 | **vLLM Issue #41190** | Compatibility flag | TP=2 + `qwen3_next_mtp` crashes on hybrid-GDN Qwen 3.6. We're TP=1, unaffected. |
@@ -395,6 +407,7 @@ This spec lays out four parallel paths: a tight τ-threshold hybrid (lowest effo
 
 1. **τ-threshold pattern is well-validated.** Plug in *any* model-based fallback; the only parameter to tune is τ. Swapping EAGLE-3 for MTP in that slot is open territory — no published paper has done this yet.
 2. **Suffix automaton (DAWG) over suffix tree is the right substrate.** Same recall, ~50% memory, and Codex agents create the kind of repetition where DAWG compresses well.
+3. **`num_speculative_tokens=3` is currently our measured MTP sweet spot, not a universal theorem.** The public MTP/tree literature motivates sweeping depth and topology; it does not identify a single best depth across workloads. On our 2026-05-25 B=4 SWE-Bench slice, linear-chain E3 beats E1/E2 and the partial E6 row on primary steptrace TPS.
 
 ---
 
@@ -857,7 +870,7 @@ Published spec-decode papers (SuffixDecoding, EAGLE-3, FastMTP, etc.) all report
 
 ## 10. Open questions for design review
 
-1. **What's the right MTP draft tree topology?** vLLM's `Qwen3NextMTPProposer` defaults to linear. The FastMTP paper suggests tree topologies help. Worth testing both inside Path 1.
+1. **What's the right MTP draft tree topology?** Our current E runs use linear-chain `qwen3_5_mtp` only. Current vLLM exposes `speculative_token_tree`, while FastMTP/SEQUOIA/MCSD-style research suggests branching draft trees can help. The next experiment should test linear E3 against an explicit tree config with the same draft budget before implementing any custom top-k trie.
 2. **Is τ static or per-frame?** Path 1 starts static. Path 2 makes it dynamic by regime. Verify the gain from dynamic τ separately from the regime mixture.
 3. **How aggressive should DAWG eviction be?** Codex sessions can run 200+ turns. Memory cap on the suffix tree / DAWG matters. Currently we hold 50-200 MB per session. With DAWG that's 25-100 MB. With sessions running into the hundreds, total RAM could matter.
 4. **Should the harness-oracle protocol be vendor-neutral from day 1?** If yes, spec it up front and propose to OpenAI as an upstream Codex extension. If no, optimize for our setup first, generalize later.
@@ -884,8 +897,13 @@ Published spec-decode papers (SuffixDecoding, EAGLE-3, FastMTP, etc.) all report
 - SuffixDecoding paper — [arXiv 2411.04975](https://arxiv.org/pdf/2411.04975)
 - SuffixDecoding NeurIPS 2025 spotlight site — [suffix-decoding.github.io](https://suffix-decoding.github.io/)
 - Snowflake Arctic Inference + vLLM SuffixDecoding blog — [snowflake.com](https://www.snowflake.com/en/engineering-blog/suffixdecoding-arctic-inference-vllm/)
+- vLLM MTP docs — [docs.vllm.ai](https://docs.vllm.ai/en/latest/features/speculative_decoding/mtp/)
+- vLLM SpeculativeConfig docs — [docs.vllm.ai](https://docs.vllm.ai/en/v0.16.0/api/vllm/config/speculative/)
+- vLLM Qwen3.5 recipe — [docs.vllm.ai](https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html)
 - AgentInfer paper — [arXiv 2512.18337](https://arxiv.org/pdf/2512.18337)
 - SAM Decoding paper — [arXiv 2411.10666](https://arxiv.org/pdf/2411.10666)
+- SEQUOIA tree speculative decoding — [NeurIPS 2024 paper](https://papers.neurips.cc/paper_files/paper/2024/file/ea1f5f0878d43ff4fb8bf64ef4a2326c-Paper-Conference.pdf)
+- MCSD multi-candidate speculative decoding — [arXiv 2409.10644](https://arxiv.org/abs/2409.10644)
 - FastMTP paper — [arXiv 2509.18362](https://arxiv.org/pdf/2509.18362)
 - Speculative Search agent co-design — [arXiv 2511.20048](https://arxiv.org/pdf/2511.20048)
 - Gemma 4 MTP drafters — [MarkTechPost article, May 2026](https://www.marktechpost.com/2026/05/06/google-ai-releases-multi-token-prediction-mtp-drafters-for-gemma-4-delivering-up-to-3x-faster-inference-without-quality-loss/)
@@ -1092,6 +1110,31 @@ SD + Path 1 + Path 5            0.35-0.45                              12-15
 
 The composition arithmetic is approximate; the simulator measurement in §13.3.3 will give the real numbers for Path 5, and the τ-sweep on SWE-Bench (§13.2) will give the real numbers for Path 1. Both should be measured before committing to a particular composition.
 
+### 13.3.5 MTP depth update from the 2026-05-25 B=4 SWE-Bench sweep
+
+The Round 5 E-depth sweep gives the first real local answer to "what MTP depth
+should we use?" All rows below use the run-level steptrace TPS definition from
+`swe-bench-config-decode-comparison-spec-20260525.md`; the E6 row is partial and
+should not be used for final promotion.
+
+| Run | MTP shape | Done | Resolved | Steptrace decode TPS | Accept ratio | Accepted/event | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `q36a_E1_b4` | linear depth 1 | 16/16 | 7 | 10.81 | 0.877 | 0.877 | complete |
+| `q36a_E2_b4` | linear depth 2 | 16/16 | 7 | 12.05 | 0.818 | 1.635 | complete |
+| `q36a_E3_b4` | linear depth 3 | 16/16 | 7 | 15.06 | 0.751 | 2.254 | complete |
+| `q36a_E6_b4` | linear depth 6 | 7/16 | 3 | 13.91 | 0.553 | 3.320 | partial |
+
+Current interpretation:
+
+- `num_speculative_tokens=3` is the current empirical sweet spot for our
+  Qwen3.6 FP8 + SWE-Bench Verified B=4 stack.
+- Depth 6 accepts more tokens per event, but the acceptance-rate drop and
+  repeated-MTP-layer overhead appear to erase the extra depth advantage.
+- This does **not** prove that depth 3 is globally optimal. It proves that
+  deeper linear-chain MTP is not automatically better, and that the next
+  topology question should be "linear E3 vs explicit tree with the same draft
+  budget", not "keep increasing linear depth".
+
 ### 13.4 Updated recommended sequence
 
 The §7 sequence assumed the v4a_v2 corpus was sufficient for calibration. Probe16d shows it's not — the SWE-Bench Verified slice has a fundamentally different acceptance regime and a different per-stream optimum. The amended sequence inserts the empirical measurements before any architectural commitment:
@@ -1102,6 +1145,7 @@ The §7 sequence assumed the v4a_v2 corpus was sufficient for calibration. Probe
 | **0b** | **Baseline SWE-Bench reproduction** (per original §7) | ~150 wall-hrs | — | (unchanged) |
 | **0c** | **NEW: Offline simulator measurement of empirical Codex prior lift** (§13.3.3) | 2-3 days | CPU-only | If simulated lift on probe16d traces ≥ 10%, fund Path 5 engineering. If 5-10%, sensitivity analysis. If <5%, defer Path 5. |
 | **0d** | **NEW: τ-sweep on SWE-Bench astropy mini-corpus (16 instances)** for Path 1 | ~5 wall-hrs per τ point × 5 points | ~25 wall-hrs total | Identify optimal τ for low-acceptance regime; carry forward to Path 1 production calibration. |
+| **0d.1** | **NEW: MTP topology check** — linear E3 vs explicit `speculative_token_tree` at the same draft budget | ~5 wall-hrs per topology | ~10-15 wall-hrs | If tree topology beats linear E3 by ≥5% TPS at equal or better resolved count, make it the Path 1 fallback shape. Otherwise keep linear E3. |
 | **0e** | **NEW (PREREQUISITE): GPU compute-saturation metric enablement via Nsight Systems on Spark** (§13.7) | ~1-2 days setup + 1-2 hours profile | one ~30-min run (~10% profiling overhead) | Establish whether the operational `power_w` proxy is consistent with per-kernel DRAM_ACTIVE / SM_ACTIVE / PIPE_TENSOR_ACTIVE from CUPTI. If Nsight confirms bandwidth-bound (DRAM_ACTIVE > 75%, PIPE_TENSOR_ACTIVE < 50%), proceed with Paths 1/5 confidently. If Nsight reveals already-compute-bound regime (PIPE_TENSOR_ACTIVE > 75%), Paths 1/5 lose their headroom argument and the spec needs revision before continuing. |
 | 1 | **Path 1** — τ-threshold hybrid (SD + MTP) with SWE-Bench-anchored τ (from 0d) | ~1 week | B-1/B-2/B-3 + 5h SWE-Bench mini | +10-30% tps on SWE-Bench, possibly flat on v4a_v2 |
 | 1.5 | **NEW: Path 5 — empirical Codex prior via trace mining** (conditional on 0c) | ~2 weeks | B-1/B-2/B-3 + 5h SWE-Bench mini | +5-25% acceptance on SWE-Bench |
