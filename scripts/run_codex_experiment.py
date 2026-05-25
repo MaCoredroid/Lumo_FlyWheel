@@ -83,6 +83,10 @@ def apply_config(config: str, mtp: int = 1) -> None:
         if not script or not Path(script).exists():
             sys.exit(f"relaunch script for config {config} not found: {script}")
         cmd = [str(REPO / ".venv/bin/python"), script]
+    # Reset the per-agent spec trace BEFORE relaunch: the fresh container opens a
+    # new file handle, so each round's trace starts clean (and we never delete it
+    # out from under a live handle -- the cause of the round-1 unlinked-inode loss).
+    sh(["rm", "-f", PER_REQ_SPEC_TRACE])
     log(f"relaunching vLLM config={config} mtp={mtp if config=='E' else '-'} (model load ~ several min)")
     r = sh(cmd, timeout=1200)
     if "READY" not in (r.stdout + r.stderr):
