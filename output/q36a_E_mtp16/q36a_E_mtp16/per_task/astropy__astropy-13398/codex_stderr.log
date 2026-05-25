@@ -1,0 +1,4 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (codex_home: AbsolutePathBuf("/tmp/.codex"))
+Reading additional input from stdin...
+2026-05-25T03:09:32.347078Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "1", expected i32 at line 1 column 18
+2026-05-25T03:14:07.162288Z ERROR codex_core::tools::router: error=failed to parse function arguments: invalid type: string "1000", expected usize at line 1 column 109
