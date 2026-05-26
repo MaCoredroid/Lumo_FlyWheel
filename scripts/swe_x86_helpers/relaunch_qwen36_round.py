@@ -2234,11 +2234,55 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
         row_block_ids.append([blk.block_id for blk in row_blocks])
     self._lumo_fb_ir_owned_blocks = getattr(self, "_lumo_fb_ir_owned_blocks", {})
     self._lumo_fb_ir_owned_blocks[row_id] = owned
+    self._lumo_fb_ir_row_block_ids = getattr(self, "_lumo_fb_ir_row_block_ids", {})
+    self._lumo_fb_ir_row_block_ids[row_id] = tuple(row_block_ids)
     return tuple(row_block_ids), copies
+
+def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id):
+    owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
+    row_block_ids_by_row = getattr(self, "_lumo_fb_ir_row_block_ids", {})
+    owned = owned_by_row.pop(row_id, [])
+    row_block_ids = row_block_ids_by_row.pop(row_id, None)
+    if not owned or row_block_ids is None:
+        return
+    by_group = {}
+    for group_idx, block in owned:
+        by_group.setdefault(group_idx, {})[block.block_id] = block
+    for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
+        if group_idx >= len(row_block_ids):
+            continue
+        parent_blocks = list(manager.req_to_blocks.get(parent_id, ()))
+        parent_by_id = {blk.block_id: blk for blk in parent_blocks}
+        owned_by_id = by_group.get(group_idx, {})
+        new_ids = list(row_block_ids[group_idx])
+        new_id_set = set(new_ids)
+        new_blocks = []
+        for block_id in new_ids:
+            block = owned_by_id.get(block_id) or parent_by_id.get(block_id)
+            if block is not None:
+                new_blocks.append(block)
+        if len(new_blocks) != len(new_ids):
+            continue
+        to_free = [
+            blk for blk in parent_blocks
+            if blk.block_id not in new_id_set
+            and blk != getattr(manager, "_null_block", None)
+        ]
+        if to_free:
+            manager.block_pool.free_blocks(reversed(to_free))
+        manager.req_to_blocks[parent_id] = new_blocks
+        manager.num_cached_block[parent_id] = min(
+            manager.num_cached_block.get(parent_id, len(new_blocks)),
+            len(new_blocks),
+        )
+        if hasattr(manager, "_allocated_block_reqs"):
+            manager._allocated_block_reqs.add(parent_id)
 
 def _lumo_fb_ir_free_owned(self, row_ids):
     owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
+    row_block_ids_by_row = getattr(self, "_lumo_fb_ir_row_block_ids", {})
     for row_id in row_ids:
+        row_block_ids_by_row.pop(row_id, None)
         owned = owned_by_row.pop(row_id, [])
         by_group = {}
         for group_idx, block in owned:
@@ -2316,6 +2360,15 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
             internal_ids.append(row.get("rid"))
     internal_ids = [rid for rid in internal_ids if rid]
     if internal_ids:
+        winners = getattr(scheduler_output, "lumo_fb_internal_winners", {}) or {}
+        winner_ids = {
+            data.get("winner_rid")
+            for data in winners.values()
+            if isinstance(data, dict) and data.get("winner_rid")
+        }
+        for parent_id, data in winners.items():
+            if isinstance(data, dict) and data.get("winner_rid") in internal_ids:
+                _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, data.get("winner_rid"))
         for rid in internal_ids:
             if rid in scheduler_output.num_scheduled_tokens:
                 scheduler_output.total_num_scheduled_tokens -= scheduler_output.num_scheduled_tokens.pop(rid)
@@ -2327,7 +2380,7 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                 model_runner_output.req_ids = [model_runner_output.req_ids[i] for i in keep]
                 model_runner_output.sampled_token_ids = [model_runner_output.sampled_token_ids[i] for i in keep]
                 model_runner_output.req_id_to_index = {rid: i for i, rid in enumerate(model_runner_output.req_ids)}
-        _lumo_fb_ir_free_owned(self, internal_ids)
+        _lumo_fb_ir_free_owned(self, [rid for rid in internal_ids if rid not in winner_ids])
     return _lumo_fb_orig_update_output(self, scheduler_output, model_runner_output)
 
 Scheduler.update_draft_token_ids = _lumo_fb_ir_update_draft_token_ids
@@ -2495,6 +2548,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
     internal_ids = set(active.keys())
     req_ids = list(self.input_batch.req_ids)
     keep = [i for i, rid in enumerate(req_ids) if rid not in internal_ids]
+    winners = {}
     try:
         raw = sampler_output.sampled_token_ids.detach().cpu().tolist()
         rows = []
@@ -2508,10 +2562,56 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     "sampled": list(toks),
                     "accepted": max(0, len([t for t in toks if int(t) != -1]) - 1),
                 })
+        by_parent = {}
+        for i, rid in enumerate(req_ids):
+            if rid in internal_ids:
+                parent = active.get(rid)
+            elif rid in set(active.values()):
+                parent = rid
+            else:
+                continue
+            toks = raw[i] if i < len(raw) else []
+            valid = []
+            for tok in toks:
+                if int(tok) == -1:
+                    break
+                valid.append(int(tok))
+            by_parent.setdefault(parent, []).append((rid, valid, max(0, len(valid) - 1)))
+        for parent, row_data in by_parent.items():
+            row_data.sort(key=lambda item: (item[2], 0 if item[0] == parent else -1), reverse=True)
+            winner_rid, winner_tokens, winner_acc = row_data[0]
+            parent_idx = req_ids.index(parent) if parent in req_ids else None
+            winner_idx = req_ids.index(winner_rid) if winner_rid in req_ids else None
+            if parent_idx is not None and winner_idx is not None and winner_idx != parent_idx:
+                sampler_output.sampled_token_ids[parent_idx].copy_(sampler_output.sampled_token_ids[winner_idx])
+                try:
+                    parent_state = self.requests.get(parent)
+                    winner_state = self.requests.get(winner_rid)
+                    if parent_state is not None and winner_state is not None:
+                        parent_state.block_ids = tuple([list(group) for group in winner_state.block_ids])
+                        pidx = self.input_batch.req_id_to_index.get(parent)
+                        if pidx is not None:
+                            self.input_batch.block_table.clear_row(pidx)
+                            self.input_batch.block_table.add_row(parent_state.block_ids, pidx)
+                        if winner_rid in self.mamba_state_idx:
+                            self.mamba_state_idx[parent] = self.mamba_state_idx[winner_rid]
+                except Exception:
+                    pass
+            winners[parent] = {
+                "winner_rid": winner_rid,
+                "winner_idx": 0 if winner_rid == parent else 1,
+                "accepted": int(winner_acc),
+                "accept_lens": [
+                    int(acc) for rid, toks, acc in sorted(
+                        row_data, key=lambda item: 0 if item[0] == parent else 1)
+                ],
+            }
         if rows:
-            _lumo_fb_ir_debug({"event": "sampled", "rows": rows})
+            _lumo_fb_ir_debug({"event": "sampled", "rows": rows, "winners": winners})
     except Exception:
         pass
+    if winners:
+        scheduler_output.lumo_fb_internal_winners = winners
     if len(keep) != len(req_ids):
         try:
             idx = _lumo_fb_ir_torch.tensor(keep, dtype=_lumo_fb_ir_torch.long,
