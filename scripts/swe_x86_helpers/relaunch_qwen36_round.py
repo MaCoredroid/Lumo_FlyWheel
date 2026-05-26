@@ -932,6 +932,128 @@ def _lumo_fb_extend_one(self, root_token, base_positions, base_hidden_states,
         draft_token_ids_list.append(draft_token_ids)
     return _lumo_fb_torch.stack(draft_token_ids_list, dim=1)
 
+def _lumo_fb_repeat_cpu_shadow(value, k):
+    if value is None:
+        return None
+    return value[:1].repeat(k).clone()
+
+def _lumo_fb_extend_paths_batched(self, root_tokens, base_positions, base_hidden_states,
+                                  base_common_attn_metadata, per_layer_attn_metadata,
+                                  num_rejected_tokens_gpu, draft_len=None):
+    # LUMO_FB_BATCHED_PROPOSER: row-scaled K path growth.  The K path roots
+    # share the prompt prefix but advance as K draft rows inside one MTP forward
+    # per depth step instead of K serial single-row forwards.
+    if draft_len is None:
+        draft_len = self.num_speculative_tokens
+    k = int(root_tokens.numel())
+    root_tokens = root_tokens.reshape(k).to(device=base_hidden_states.device)
+    draft_token_ids_list = [root_tokens]
+    if self.uses_mrope:
+        positions = base_positions[:, :1].repeat(1, k).clone()
+    else:
+        positions = base_positions[:1].repeat(k).clone()
+    hidden_states = base_hidden_states[:1].repeat(k, 1).clone()
+    cad = _lumo_fb_replace(
+        base_common_attn_metadata,
+        query_start_loc=self.arange[: k + 1],
+        query_start_loc_cpu=_lumo_fb_torch.from_numpy(
+            self.token_arange_np[: k + 1]
+        ).clone(),
+        seq_lens=base_common_attn_metadata.seq_lens[:1].repeat(k).clone(),
+        _seq_lens_cpu=_lumo_fb_repeat_cpu_shadow(
+            base_common_attn_metadata._seq_lens_cpu, k),
+        _num_computed_tokens_cpu=_lumo_fb_repeat_cpu_shadow(
+            base_common_attn_metadata._num_computed_tokens_cpu, k),
+        num_reqs=k,
+        num_actual_tokens=k,
+        max_query_len=1,
+        block_table_tensor=base_common_attn_metadata.block_table_tensor[:1].repeat(
+            k, 1).clone(),
+        slot_mapping=base_common_attn_metadata.slot_mapping[:1].repeat(k).clone(),
+    )
+    cudagraph_runtime_mode, input_batch_size, batch_size_across_dp = (
+        self._determine_batch_execution_and_padding(k)
+    )
+    if self.num_speculative_tokens > 1 and num_rejected_tokens_gpu is not None:
+        cad.seq_lens -= num_rejected_tokens_gpu[:1].repeat(k)
+        cad._seq_lens_cpu = None
+        cad._num_computed_tokens_cpu = None
+    block_size = self.block_size
+    assert block_size > 0
+    for token_index in range(draft_len - 1):
+        input_ids = draft_token_ids_list[-1].int()
+        positions_1d = positions[0] if self.uses_mrope else positions
+        if self.uses_mrope:
+            out_pos = self.mrope_positions[0, :k]
+        elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
+            out_pos = self.xdrope_positions[0, :k]
+        else:
+            out_pos = self.positions[:k]
+        _lumo_fb_step_update(
+            positions_1d=positions_1d,
+            block_table_tensor=cad.block_table_tensor,
+            seq_lens=cad.seq_lens,
+            block_size=block_size,
+            max_model_len=self.max_model_len,
+            out_clamped_positions=out_pos,
+            out_slot_mapping=self._slot_mapping_buffer[:input_batch_size],
+            input_batch_size=input_batch_size,
+        )
+        cad.slot_mapping = self._slot_mapping_buffer[:k]
+        if self.uses_mrope:
+            self.mrope_positions[1:, :k] = self.mrope_positions[0, :k]
+            positions = self.mrope_positions[:, :k]
+        elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
+            self.xdrope_positions[1:, :k] = self.xdrope_positions[0, :k]
+            positions = self.xdrope_positions[0, :k]
+        else:
+            positions = self.positions[:k]
+        cad.max_seq_len = min(cad.max_seq_len + 1, self.max_model_len)
+        if cad._seq_lens_cpu is not None:
+            cad._seq_lens_cpu += 1
+        if cad._num_computed_tokens_cpu is not None:
+            cad._num_computed_tokens_cpu += 1
+        for attn_group in self.draft_attn_groups:
+            attn_metadata = attn_group.get_metadata_builder().build_for_drafting(
+                common_attn_metadata=cad, draft_index=token_index + 1,
+            )
+            for layer_name in attn_group.layer_names:
+                per_layer_attn_metadata[layer_name] = attn_metadata
+        self.input_ids[:k] = input_ids
+        self.hidden_states[:k] = hidden_states
+        if self.supports_mm_inputs:
+            self.inputs_embeds[:k] = self.model.embed_input_ids(input_ids)
+            input_ids_arg = None
+            inputs_embeds = self.inputs_embeds[:input_batch_size]
+        else:
+            input_ids_arg = self.input_ids[:input_batch_size]
+            inputs_embeds = None
+        model_kwargs = {
+            "input_ids": input_ids_arg,
+            "positions": self._get_positions(input_batch_size),
+            "inputs_embeds": inputs_embeds,
+        }
+        if self.pass_hidden_states_to_model:
+            model_kwargs["hidden_states"] = self.hidden_states[:input_batch_size]
+        with _lumo_fb_forward_context(
+            per_layer_attn_metadata,
+            self.vllm_config,
+            num_tokens=input_batch_size,
+            num_tokens_across_dp=batch_size_across_dp,
+            cudagraph_runtime_mode=cudagraph_runtime_mode,
+            slot_mapping=self._get_slot_mapping(input_batch_size),
+        ):
+            ret_hidden_states = self.model(**model_kwargs)
+            if not self.model_returns_tuple():
+                last_hidden_states = ret_hidden_states
+                hidden_states = ret_hidden_states
+            else:
+                last_hidden_states, hidden_states = ret_hidden_states
+        hidden_states = hidden_states[:k]
+        draft_token_ids = self._greedy_sample(last_hidden_states[:k])
+        draft_token_ids_list.append(draft_token_ids)
+    return _lumo_fb_torch.stack(draft_token_ids_list, dim=1)
+
 def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_states,
                      next_token_ids, token_indices_to_sample, common_attn_metadata,
                      sampling_metadata, mm_embed_inputs=None,
@@ -1047,11 +1169,11 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
     _lumo_fb_path0_root = raw_roots[0] if (
         policy_k == 1 or _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
     ) else roots[0]
-    path0 = _lumo_fb_extend_one(
-        self, _lumo_fb_path0_root, positions, base_hidden_states,
-        common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
-        num_rejected_tokens_gpu)
     if policy_k == 1:
+        path0 = _lumo_fb_extend_one(
+            self, _lumo_fb_path0_root, positions, base_hidden_states,
+            common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+            num_rejected_tokens_gpu)
         out = path0[:, :self.num_speculative_tokens]
         try:
             if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
@@ -1072,9 +1194,28 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
         except Exception:
             pass
         return out
-    if _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
+    if _lumo_fb_os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1":
+        root_vec = _lumo_fb_torch.cat([
+            _lumo_fb_path0_root.reshape(-1)[:1],
+            (_lumo_fb_path0_root if _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
+             else roots[1]).reshape(-1)[:1],
+        ], dim=0)
+        paths = _lumo_fb_extend_paths_batched(
+            self, root_vec, positions, base_hidden_states, common_attn_metadata,
+            dict(per_layer_attn_metadata), num_rejected_tokens_gpu)
+        path0 = paths[0:1, :self.num_speculative_tokens]
+        path1 = paths[1:2, :self.num_speculative_tokens]
+    elif _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
+        path0 = _lumo_fb_extend_one(
+            self, _lumo_fb_path0_root, positions, base_hidden_states,
+            common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+            num_rejected_tokens_gpu)
         path1 = path0.clone()
     else:
+        path0 = _lumo_fb_extend_one(
+            self, _lumo_fb_path0_root, positions, base_hidden_states,
+            common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+            num_rejected_tokens_gpu)
         path1 = _lumo_fb_extend_one(
             self, roots[1], positions, base_hidden_states,
             common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
@@ -2849,9 +2990,10 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
     fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
     fb_adaptive = "export LUMO_FB_ADAPTIVE=1\n" if os.environ.get("LUMO_FB_ADAPTIVE") == "1" else ""
+    fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
     fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\nexport LUMO_FB_DEPTH=3\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_adaptive}{fb_p1}{fb_ratio}" if fb else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\nexport LUMO_FB_DEPTH=3\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_adaptive}{fb_batched}{fb_p1}{fb_ratio}" if fb else ""
     return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
 
 
