@@ -237,6 +237,544 @@ LUMOMROPETREE
 '''
 
 
+_TREE_REJECTION_BLOCK = r'''
+python3 - <<'LUMOTREEREJECT'
+from pathlib import Path
+nl = chr(10)
+
+rs = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py')
+text = rs.read_text()
+sentinel = '# LUMO_TREE_REJECTION'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] tree rejection sampler patch already present')
+else:
+    helper_anchor = nl + nl + 'def rejection_sample('
+    helper = nl.join([
+        '',
+        '',
+        sentinel + ': sample target tokens for tree-walk acceptance',
+        'def _lumo_sample_token_ids_from_logits(',
+        '    logits: torch.Tensor,',
+        '    cu_num_draft_tokens: torch.Tensor,',
+        '    sampling_metadata: SamplingMetadata,',
+        ') -> torch.Tensor:',
+        '    greedy_token_ids = logits.argmax(dim=-1)',
+        '    if sampling_metadata.all_greedy:',
+        '        return greedy_token_ids.to(torch.int32)',
+        '    probs = logits.softmax(dim=-1, dtype=torch.float32)',
+        '    q = torch.empty_like(probs)',
+        '    q.exponential_()',
+        '    sampled_token_ids = probs.div(q).argmax(dim=-1)',
+        '    if not sampling_metadata.all_random:',
+        '        is_greedy = expand_batch_to_tokens(',
+        '            sampling_metadata.temperature,',
+        '            cu_num_draft_tokens,',
+        '            logits.shape[0],',
+        '        ) == GREEDY_TEMPERATURE',
+        '        sampled_token_ids = torch.where(',
+        '            is_greedy, greedy_token_ids, sampled_token_ids',
+        '        )',
+        '    return sampled_token_ids.to(torch.int32)',
+    ])
+    if helper_anchor not in text:
+        raise RuntimeError('rejection_sample helper anchor not found')
+    text = text.replace(helper_anchor, helper + nl + nl + 'def rejection_sample(', 1)
+
+    prep_anchor = nl.join([
+        '        target_logits = apply_sampling_constraints(',
+        '            target_logits,',
+        '            metadata.cu_num_draft_tokens,',
+        '            sampling_metadata,',
+        '        )',
+        '',
+        '        output_token_ids = rejection_sample(',
+    ])
+    prep_inject = nl.join([
+        '        target_logits = apply_sampling_constraints(',
+        '            target_logits,',
+        '            metadata.cu_num_draft_tokens,',
+        '            sampling_metadata,',
+        '        )',
+        '',
+        '        lumo_tree_parent_indices = getattr(metadata, "tree_parent_indices", None)',
+        '        lumo_tree_token_ids = None',
+        '        if lumo_tree_parent_indices is not None:',
+        '            tree_self_logits = logits[metadata.tree_self_logits_indices]',
+        '            tree_self_logits = tree_self_logits.to(torch.float32)',
+        '            if not self.is_processed_logprobs_mode:',
+        '                tree_self_logits = tree_self_logits.clone()',
+        '            tree_self_logits = self.apply_logits_processors(',
+        '                tree_self_logits, sampling_metadata, metadata',
+        '            )',
+        '            tree_self_logits = apply_sampling_constraints(',
+        '                tree_self_logits,',
+        '                metadata.cu_num_draft_tokens,',
+        '                sampling_metadata,',
+        '            )',
+        '            lumo_parent_token_ids = _lumo_sample_token_ids_from_logits(',
+        '                target_logits, metadata.cu_num_draft_tokens, sampling_metadata',
+        '            )',
+        '            lumo_self_token_ids = _lumo_sample_token_ids_from_logits(',
+        '                tree_self_logits, metadata.cu_num_draft_tokens, sampling_metadata',
+        '            )',
+        '            lumo_tree_token_ids = torch.stack(',
+        '                [lumo_parent_token_ids, lumo_self_token_ids], dim=0',
+        '            ).contiguous()',
+        '            try:',
+        '                import os as _tdo',
+        '                if _tdo.environ.get("LUMO_TREE_DRAFT_DEBUG") == "1":',
+        '                    import json as _tdj, time as _tdt',
+        '                    global _LUMO_TREE_ACCEPT_DBG_FH, _LUMO_TREE_ACCEPT_DBG_N',
+        '                    try:',
+        '                        _LUMO_TREE_ACCEPT_DBG_N',
+        '                    except NameError:',
+        '                        _LUMO_TREE_ACCEPT_DBG_N = 0',
+        '                    if _LUMO_TREE_ACCEPT_DBG_N < 64:',
+        '                        try:',
+        '                            _LUMO_TREE_ACCEPT_DBG_FH',
+        '                        except NameError:',
+        '                            _LUMO_TREE_ACCEPT_DBG_FH = open("/logs/tree_accept_debug.jsonl", "a", buffering=1)',
+        '                        _LUMO_TREE_ACCEPT_DBG_FH.write(_tdj.dumps({',
+        '                            "ts": round(_tdt.time(), 4),',
+        '                            "num_draft_tokens": metadata.num_draft_tokens,',
+        '                            "parents": lumo_tree_parent_indices.detach().cpu().tolist(),',
+        '                            "draft": metadata.draft_token_ids.detach().cpu().tolist(),',
+        '                            "parent_target": lumo_parent_token_ids.detach().cpu().tolist(),',
+        '                            "self_target": lumo_self_token_ids.detach().cpu().tolist(),',
+        '                            "target_logits_indices": metadata.target_logits_indices.detach().cpu().tolist(),',
+        '                            "self_logits_indices": metadata.tree_self_logits_indices.detach().cpu().tolist(),',
+        '                        }) + chr(10))',
+        '                        _LUMO_TREE_ACCEPT_DBG_N += 1',
+        '            except Exception:',
+        '                pass',
+        '',
+        '        output_token_ids = rejection_sample(',
+    ])
+    if prep_anchor not in text:
+        raise RuntimeError('tree token prep anchor not found')
+    text = text.replace(prep_anchor, prep_inject, 1)
+
+    call_anchor = nl.join([
+        '            bonus_token_ids,',
+        '            sampling_metadata,',
+        '        )',
+    ])
+    call_inject = nl.join([
+        '            bonus_token_ids,',
+        '            sampling_metadata,',
+        '            tree_parent_indices=lumo_tree_parent_indices,',
+        '            tree_token_ids=lumo_tree_token_ids,',
+        '        )',
+    ])
+    if call_anchor not in text:
+        raise RuntimeError('rejection_sample call anchor not found')
+    text = text.replace(call_anchor, call_inject, 1)
+
+    sig_anchor = nl.join([
+        '    bonus_token_ids: torch.Tensor,',
+        '    sampling_metadata: SamplingMetadata,',
+        ') -> torch.Tensor:',
+    ])
+    sig_inject = nl.join([
+        '    bonus_token_ids: torch.Tensor,',
+        '    sampling_metadata: SamplingMetadata,',
+        '    tree_parent_indices: torch.Tensor | None = None,',
+        '    tree_token_ids: torch.Tensor | None = None,',
+        ') -> torch.Tensor:',
+    ])
+    if sig_anchor not in text:
+        raise RuntimeError('rejection_sample signature anchor not found')
+    text = text.replace(sig_anchor, sig_inject, 1)
+
+    branch_anchor = nl.join([
+        '    if sampling_metadata.all_greedy:',
+        '        is_greedy = None',
+    ])
+    branch_inject = nl.join([
+        '    if tree_parent_indices is not None and tree_token_ids is not None:',
+        '        assert tree_parent_indices.is_contiguous()',
+        '        assert tree_token_ids.is_contiguous()',
+        '        if sampling_metadata.all_greedy:',
+        '            lumo_tree_sample_kernel[(batch_size,)](',
+        '                output_token_ids,',
+        '                cu_num_draft_tokens,',
+        '                draft_token_ids,',
+        '                tree_parent_indices,',
+        '                tree_token_ids[0],',
+        '                tree_token_ids[1],',
+        '                max_spec_len,',
+        '            )',
+        '        else:',
+        '            target_probs = target_logits.softmax(dim=-1, dtype=torch.float32)',
+        '            uniform_probs = generate_uniform_probs(',
+        '                num_tokens,',
+        '                num_draft_tokens,',
+        '                sampling_metadata.generators,',
+        '                device,',
+        '            )',
+        '            lumo_tree_prob_sample_kernel[(batch_size,)](',
+        '                output_token_ids,',
+        '                cu_num_draft_tokens,',
+        '                draft_token_ids,',
+        '                tree_parent_indices,',
+        '                tree_token_ids[0],',
+        '                tree_token_ids[1],',
+        '                target_probs,',
+        '                uniform_probs,',
+        '                max_spec_len,',
+        '                vocab_size,',
+        '            )',
+        '        return output_token_ids',
+        '',
+        '    if sampling_metadata.all_greedy:',
+        '        is_greedy = None',
+    ])
+    if branch_anchor not in text:
+        raise RuntimeError('tree rejection branch anchor not found')
+    text = text.replace(branch_anchor, branch_inject, 1)
+
+    kernel_anchor = nl + nl + '# NOTE(woosuk): Avoid specialization to prevent unnecessary recompilation.' + nl + '@triton.jit(do_not_specialize=["max_spec_len"])' + nl + 'def rejection_greedy_sample_kernel('
+    kernel = nl.join([
+        '',
+        '',
+        '# NOTE(woosuk): Avoid specialization to prevent unnecessary recompilation.',
+        '@triton.jit(do_not_specialize=["max_spec_len"])',
+        'def lumo_tree_sample_kernel(',
+        '    output_token_ids_ptr,  # [batch_size, max_spec_len + 1]',
+        '    cu_num_draft_tokens_ptr,  # [batch_size]',
+        '    draft_token_ids_ptr,  # [num_tokens]',
+        '    tree_parent_indices_ptr,  # [num_tokens], parent node or -1 for root',
+        '    parent_token_ids_ptr,  # [num_tokens], target sample at each node parent',
+        '    self_token_ids_ptr,  # [num_tokens], target sample at each node',
+        '    max_spec_len,',
+        '):',
+        '    req_idx = tl.program_id(0)',
+        '    start_idx = 0 if req_idx == 0 else tl.load(cu_num_draft_tokens_ptr + req_idx - 1)',
+        '    end_idx = tl.load(cu_num_draft_tokens_ptr + req_idx)',
+        '    num_draft_tokens = end_idx - start_idx',
+        '',
+        '    current_parent = -1',
+        '    out_pos = 0',
+        '    done = False',
+        '    for _step in range(max_spec_len + 1):',
+        '        if not done:',
+        '            first_child = -1',
+        '            matched_child = -1',
+        '            target_token_id = -1',
+        '            for pos in range(num_draft_tokens):',
+        '                parent = tl.load(tree_parent_indices_ptr + start_idx + pos)',
+        '                if parent == current_parent:',
+        '                    if first_child == -1:',
+        '                        first_child = pos',
+        '                        target_token_id = tl.load(parent_token_ids_ptr + start_idx + pos)',
+        '                    draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)',
+        '                    if (matched_child == -1) and (draft_token_id == target_token_id):',
+        '                        matched_child = pos',
+        '',
+        '            if first_child == -1:',
+        '                if current_parent >= 0:',
+        '                    token_id = tl.load(self_token_ids_ptr + start_idx + current_parent)',
+        '                    tl.store(',
+        '                        output_token_ids_ptr + req_idx * (max_spec_len + 1) + out_pos,',
+        '                        token_id,',
+        '                    )',
+        '                done = True',
+        '            else:',
+        '                tl.store(',
+        '                    output_token_ids_ptr + req_idx * (max_spec_len + 1) + out_pos,',
+        '                    target_token_id,',
+        '                )',
+        '                out_pos += 1',
+        '                if matched_child >= 0:',
+        '                    current_parent = matched_child',
+        '                else:',
+        '                    done = True',
+    ])
+    prob_kernel = nl.join([
+        '',
+        '',
+        '# NOTE(woosuk): Avoid specialization to prevent unnecessary recompilation.',
+        '@triton.jit(do_not_specialize=["max_spec_len"])',
+        'def lumo_tree_prob_sample_kernel(',
+        '    output_token_ids_ptr,  # [batch_size, max_spec_len + 1]',
+        '    cu_num_draft_tokens_ptr,  # [batch_size]',
+        '    draft_token_ids_ptr,  # [num_tokens]',
+        '    tree_parent_indices_ptr,  # [num_tokens], parent node or -1 for root',
+        '    parent_token_ids_ptr,  # [num_tokens], target sample at each node parent',
+        '    self_token_ids_ptr,  # [num_tokens], target sample at each node',
+        '    target_probs_ptr,  # [num_tokens, vocab_size]',
+        '    uniform_probs_ptr,  # [num_tokens]',
+        '    max_spec_len,',
+        '    vocab_size,',
+        '):',
+        '    req_idx = tl.program_id(0)',
+        '    start_idx = 0 if req_idx == 0 else tl.load(cu_num_draft_tokens_ptr + req_idx - 1)',
+        '    end_idx = tl.load(cu_num_draft_tokens_ptr + req_idx)',
+        '    num_draft_tokens = end_idx - start_idx',
+        '',
+        '    current_parent = -1',
+        '    out_pos = 0',
+        '    done = False',
+        '    for _step in range(max_spec_len + 1):',
+        '        if not done:',
+        '            first_child = -1',
+        '            accepted_child = -1',
+        '            accepted_token_id = -1',
+        '            fallback_token_id = -1',
+        '            for pos in range(num_draft_tokens):',
+        '                parent = tl.load(tree_parent_indices_ptr + start_idx + pos)',
+        '                if parent == current_parent:',
+        '                    if first_child == -1:',
+        '                        first_child = pos',
+        '                        fallback_token_id = tl.load(parent_token_ids_ptr + start_idx + pos)',
+        '                    draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)',
+        '                    target_prob = tl.load(',
+        '                        target_probs_ptr + (start_idx + pos) * vocab_size + draft_token_id',
+        '                    )',
+        '                    uniform_prob = tl.load(uniform_probs_ptr + start_idx + pos)',
+        '                    if (accepted_child == -1) and (target_prob >= uniform_prob):',
+        '                        accepted_child = pos',
+        '                        accepted_token_id = draft_token_id',
+        '',
+        '            if first_child == -1:',
+        '                if current_parent >= 0:',
+        '                    token_id = tl.load(self_token_ids_ptr + start_idx + current_parent)',
+        '                    tl.store(',
+        '                        output_token_ids_ptr + req_idx * (max_spec_len + 1) + out_pos,',
+        '                        token_id,',
+        '                    )',
+        '                done = True',
+        '            elif accepted_child >= 0:',
+        '                tl.store(',
+        '                    output_token_ids_ptr + req_idx * (max_spec_len + 1) + out_pos,',
+        '                    accepted_token_id,',
+        '                )',
+        '                out_pos += 1',
+        '                current_parent = accepted_child',
+        '            else:',
+        '                tl.store(',
+        '                    output_token_ids_ptr + req_idx * (max_spec_len + 1) + out_pos,',
+        '                    fallback_token_id,',
+        '                )',
+        '                done = True',
+    ])
+    if kernel_anchor not in text:
+        raise RuntimeError('tree sample kernel anchor not found')
+    text = text.replace(kernel_anchor, kernel + prob_kernel + kernel_anchor, 1)
+
+    rs.write_text(text)
+    import py_compile
+    py_compile.compile(str(rs), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied tree-aware rejection sampler patch')
+
+gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = gm.read_text()
+sentinel = '# LUMO_TREE_METADATA'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] tree metadata/position patch already present')
+else:
+    meta_anchor = nl.join([
+        '        # TODO: Optimize the CPU -> GPU copy.',
+        '        cu_num_draft_tokens = torch.from_numpy(cu_num_draft_tokens).to(',
+    ])
+    meta_inject = nl.join([
+        '        ' + sentinel + ': tree parent map + parent-logit remap.',
+        '        lumo_tree_parent_indices = None',
+        '        lumo_tree_self_logits_indices = None',
+        '        lumo_draft_token_indices = None',
+        '        try:',
+        '            _lspec = getattr(self.vllm_config, "speculative_config", None)',
+        '            _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None',
+        '            if _ltree_src:',
+        '                _choices = __import__("ast").literal_eval(_ltree_src)',
+        '                _max_depth = max(len(_t) for _t in _choices)',
+        '                if len(_choices) > _max_depth:',
+        '                    _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}',
+        '                    _parents_template = np.array([',
+        '                        _path_to_idx.get(tuple(_p[:-1]), -1) for _p in _choices',
+        '                    ], dtype=np.int32)',
+        '                    _tree_len = int(len(_choices))',
+        '                    _parents = []',
+        '                    _target = []',
+        '                    _self = []',
+        '                    _draft = []',
+        '                    _sampled_start = 0',
+        '                    _ok = True',
+        '                    for _n in num_draft_tokens.tolist():',
+        '                        _n = int(_n)',
+        '                        if _n == 0:',
+        '                            _sampled_start += 1',
+        '                            continue',
+        '                        if _n != _tree_len:',
+        '                            _ok = False',
+        '                            break',
+        '                        for _node_idx, _parent in enumerate(_parents_template.tolist()):',
+        '                            _parent_local = 0 if _parent < 0 else int(_parent) + 1',
+        '                            _parents.append(int(_parent))',
+        '                            _target.append(_sampled_start + _parent_local)',
+        '                            _self.append(_sampled_start + _node_idx + 1)',
+        '                            _draft.append(_sampled_start + _node_idx + 1)',
+        '                        _sampled_start += _n + 1',
+        '                    if _ok and len(_target) == int(cu_num_draft_tokens[-1]):',
+        '                        target_logits_indices = np.array(_target, dtype=np.int32)',
+        '                        lumo_tree_parent_indices = torch.from_numpy(',
+        '                            np.array(_parents, dtype=np.int32)',
+        '                        ).to(self.device, non_blocking=True)',
+        '                        lumo_tree_self_logits_indices = torch.from_numpy(',
+        '                            np.array(_self, dtype=np.int32)',
+        '                        ).to(self.device, non_blocking=True)',
+        '                        lumo_draft_token_indices = torch.from_numpy(',
+        '                            np.array(_draft, dtype=np.int32)',
+        '                        ).to(self.device, non_blocking=True)',
+        '        except Exception:',
+        '            lumo_tree_parent_indices = None',
+        '            lumo_tree_self_logits_indices = None',
+        '            lumo_draft_token_indices = None',
+        '',
+        '        # TODO: Optimize the CPU -> GPU copy.',
+        '        cu_num_draft_tokens = torch.from_numpy(cu_num_draft_tokens).to(',
+    ])
+    if meta_anchor not in text:
+        raise RuntimeError('metadata CPU-copy anchor not found')
+    text = text.replace(meta_anchor, meta_inject, 1)
+
+    draft_anchor = nl.join([
+        '        # Compute the draft token ids.',
+        '        # draft_token_indices:      [  1,   2,   3, 105, 106, 208]',
+        '        draft_token_ids = self.input_ids.gpu[logits_indices]',
+        '        draft_token_ids = draft_token_ids[target_logits_indices + 1]',
+        '',
+        '        return SpecDecodeMetadata(',
+    ])
+    draft_inject = nl.join([
+        '        # Compute the draft token ids.',
+        '        # draft_token_indices:      [  1,   2,   3, 105, 106, 208]',
+        '        draft_token_ids = self.input_ids.gpu[logits_indices]',
+        '        if lumo_draft_token_indices is not None:',
+        '            draft_token_ids = draft_token_ids[lumo_draft_token_indices]',
+        '        else:',
+        '            draft_token_ids = draft_token_ids[target_logits_indices + 1]',
+        '',
+        '        _lumo_meta = SpecDecodeMetadata(',
+    ])
+    if draft_anchor not in text:
+        raise RuntimeError('draft token gather anchor not found')
+    text = text.replace(draft_anchor, draft_inject, 1)
+
+    return_anchor = nl.join([
+        '            logits_indices=logits_indices,',
+        '        )',
+        '',
+        '    def _prepare_kv_sharing_fast_prefill(',
+    ])
+    return_inject = nl.join([
+        '            logits_indices=logits_indices,',
+        '        )',
+        '        if lumo_tree_parent_indices is not None:',
+        '            _lumo_meta.tree_parent_indices = lumo_tree_parent_indices',
+        '            _lumo_meta.tree_self_logits_indices = lumo_tree_self_logits_indices',
+        '        return _lumo_meta',
+        '',
+        '    def _prepare_kv_sharing_fast_prefill(',
+    ])
+    if return_anchor not in text:
+        raise RuntimeError('metadata return anchor not found')
+    text = text.replace(return_anchor, return_inject, 1)
+
+    pos_anchor = nl.join([
+        '        self.positions[:total_num_scheduled_tokens] = (',
+        '            self.num_computed_tokens[req_indices_gpu].to(torch.int64)',
+        '            + self.query_pos.gpu[:total_num_scheduled_tokens]',
+        '        )',
+        '        self.seq_lens[:num_reqs] = (',
+    ])
+    pos_inject = nl.join([
+        '        self.positions[:total_num_scheduled_tokens] = (',
+        '            self.num_computed_tokens[req_indices_gpu].to(torch.int64)',
+        '            + self.query_pos.gpu[:total_num_scheduled_tokens]',
+        '        )',
+        '        # LUMO_TREE_POS: tree verify tokens use depth, not flat order.',
+        '        try:',
+        '            _ltree_offsets = getattr(self, "_lumo_tree_depth_offsets", None)',
+        '            if _ltree_offsets is None:',
+        '                _lspec = getattr(self.vllm_config, "speculative_config", None)',
+        '                _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None',
+        '                _ltree_offsets = False',
+        '                if _ltree_src:',
+        '                    _choices = __import__("ast").literal_eval(_ltree_src)',
+        '                    _max_depth = max(len(_t) for _t in _choices)',
+        '                    if len(_choices) > _max_depth:',
+        '                        _ltree_offsets = [0] + [len(_t) for _t in _choices]',
+        '                self._lumo_tree_depth_offsets = _ltree_offsets',
+        '            if _ltree_offsets and not self.uses_mrope:',
+        '                _off_t = torch.tensor(_ltree_offsets, device=self.positions.device, dtype=torch.int64)',
+        '                _ptr = 0',
+        '                for _n_sched in num_scheduled_tokens[:num_reqs]:',
+        '                    _n_sched = int(_n_sched)',
+        '                    if _n_sched == len(_ltree_offsets):',
+        '                        _base = self.positions[_ptr].clone()',
+        '                        self.positions[_ptr:_ptr + _n_sched] = _base + _off_t',
+        '                    _ptr += _n_sched',
+        '        except Exception:',
+        '            pass',
+        '        self.seq_lens[:num_reqs] = (',
+    ])
+    if pos_anchor not in text:
+        raise RuntimeError('non-mrope tree position anchor not found')
+    text = text.replace(pos_anchor, pos_inject, 1)
+
+    mrope_anchor = nl.join([
+        '                MRotaryEmbedding.get_next_input_positions_tensor(',
+        '                    out=self.mrope_positions.np,',
+        '                    out_offset=dst_start,',
+        '                    mrope_position_delta=req.mrope_position_delta,',
+        '                    context_len=num_computed_tokens + prompt_part_len,',
+        '                    num_new_tokens=completion_part_len,',
+        '                )',
+        '',
+        '                mrope_pos_ptr += completion_part_len',
+    ])
+    mrope_inject = nl.join([
+        '                MRotaryEmbedding.get_next_input_positions_tensor(',
+        '                    out=self.mrope_positions.np,',
+        '                    out_offset=dst_start,',
+        '                    mrope_position_delta=req.mrope_position_delta,',
+        '                    context_len=num_computed_tokens + prompt_part_len,',
+        '                    num_new_tokens=completion_part_len,',
+        '                )',
+        '                # LUMO_TREE_POS_MROPE: siblings share depth-based RoPE positions.',
+        '                try:',
+        '                    _ltree_offsets = getattr(self, "_lumo_tree_depth_offsets_np", None)',
+        '                    if _ltree_offsets is None:',
+        '                        _lspec = getattr(self.vllm_config, "speculative_config", None)',
+        '                        _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None',
+        '                        _ltree_offsets = False',
+        '                        if _ltree_src:',
+        '                            _choices = __import__("ast").literal_eval(_ltree_src)',
+        '                            _max_depth = max(len(_t) for _t in _choices)',
+        '                            if len(_choices) > _max_depth:',
+        '                                _ltree_offsets = np.array([0] + [len(_t) for _t in _choices], dtype=self.mrope_positions.np.dtype)',
+        '                        self._lumo_tree_depth_offsets_np = _ltree_offsets',
+        '                    if _ltree_offsets is not False and completion_part_len == len(_ltree_offsets):',
+        '                        _base = self.mrope_positions.np[:, dst_start:dst_start + 1].copy()',
+        '                        self.mrope_positions.np[:, dst_start:dst_end] = _base + _ltree_offsets.reshape(1, -1)',
+        '                except Exception:',
+        '                    pass',
+        '',
+        '                mrope_pos_ptr += completion_part_len',
+    ])
+    if mrope_anchor not in text:
+        raise RuntimeError('mrope tree position anchor not found')
+    text = text.replace(mrope_anchor, mrope_inject, 1)
+
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied tree metadata and depth-position patches')
+LUMOTREEREJECT
+'''
+
+
 def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False) -> str:
     full = _track_b_runtime_prelaunch_shell()
     if config == "D":
@@ -255,7 +793,8 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False) ->
     # not honor VLLM_ATTENTION_BACKEND in 0.19.0, so we source-edit the selector
     # (config F only). Realized KV is auto/bf16, which TreeAttention supports.
     dbg = "export LUMO_TREE_DRAFT_DEBUG=1\n" if (tree and tree_debug) else ""
-    return dbg + base + _SPEC_TRACE_BLOCK + (_TREE_ATTN_BLOCK + _MROPE_TREE_BLOCK if tree else "")
+    tree_blocks = _TREE_ATTN_BLOCK + _MROPE_TREE_BLOCK + _TREE_REJECTION_BLOCK
+    return dbg + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "")
 
 
 def _mtp_bundle(n: int, tree: str | None = None) -> str:

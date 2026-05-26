@@ -12,6 +12,47 @@ realized `kv_cache_dtype=auto` (bf16).
 
 ---
 
+## Findings / conclusion (2026-05-26): F_a no-ship on Qwen3.6 GDN hybrid
+
+**Conclusion:** do **not** ship F_a packed branching-tree speculative decoding
+for Qwen3.6. The tree-aware rejection-sampler patch is useful as a reference
+implementation, but packed tree verification is architecturally capped on this
+hybrid model and failed both hard gates. F_a does not beat E3, and the breadth-
+first packed tree violates the top-1-path invariant.
+
+**Final root cause:** after adding tree-aware rejection sampling, parent-logit
+remapping, and depth-based target M-RoPE positions, the remaining failure is not
+the sampler. Qwen3.6 is a hybrid `qwen3_5` model with GDN/GatedDeltaNet sequence
+layers. `TreeAttention` masks only softmax self-attention; the GDN speculative
+path is linear-chain-oriented and processes the packed tree in flattened order.
+For breadth-first trees, sibling nodes are evaluated before deeper top-1
+continuations, so the non-attention recurrent/convolutional state corrupts
+depth-2/depth-3 top-1 verification logits. A packed tree cannot be made
+lossless by attention masks alone.
+
+**Probe evidence (B=1 `spec_speed_probe`, greedy temp 0, 10 fixed prompts):**
+
+| Config | Shape | decode_tps | acc/event | P(acc=3) | Result |
+|---|---|---:|---:|---:|---|
+| E3 | linear MTP depth 3 | 17.69 | 2.209 | 0.585 | Baseline |
+| F_a breadth-first | top-2 root, 6-node packed tree | 16.00 | 1.836 | 0.329 | Fails invariant and speed |
+| F diagnostic | contiguous top-1 path + side leaf | 17.17 | 2.140 | 0.613 | Restores near-E3 top-1 behavior but still slower/lower acc |
+
+The decisive comparison is breadth-first versus contiguous top-1. Keeping the
+top-1 path contiguous restores acceptance close to E3 (`acc/event=2.14`,
+`P(acc=3)=0.613`), while the intended breadth-first top-2-root tree remains far
+below E3 (`acc/event=1.836`, `P(acc=3)=0.329`). Since the top-1 path is supposed
+to be exactly the E3 chain, breadth-first F_a must be at least E3 if packed-tree
+verification is correct. It is not.
+
+**No-ship decision:** F_a packed tree-attention is **not losslessly viable** on
+the Qwen3.6 GDN hybrid and does **not** beat E3. Do not sweep more packed-tree
+shapes as a shipping path. The only lossless multi-candidate route for this
+model family is F_b: verify each candidate path as a separate contiguous
+sequence, so GDN/Mamba-style layers see a normal linear history per path.
+
+---
+
 ## 0. Goal & success criteria
 
 Ship **F_a** = native-MTP **branching-tree** speculative decoding that is **faster
