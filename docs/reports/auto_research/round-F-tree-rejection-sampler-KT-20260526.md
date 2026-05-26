@@ -47,9 +47,64 @@ verification is correct. It is not.
 
 **No-ship decision:** F_a packed tree-attention is **not losslessly viable** on
 the Qwen3.6 GDN hybrid and does **not** beat E3. Do not sweep more packed-tree
-shapes as a shipping path. The only lossless multi-candidate route for this
-model family is F_b: verify each candidate path as a separate contiguous
-sequence, so GDN/Mamba-style layers see a normal linear history per path.
+shapes as a shipping path. F_b was the next plausible lossless multi-candidate
+route because it verifies each candidate path as a separate contiguous sequence;
+the follow-up implementation result below shows that K>=2 F_b also no-ships on
+this GDN/Mamba hybrid.
+
+## F_b implementation result (2026-05-26): K>=2 no-ship on Qwen3.6 GDN hybrid
+
+**Conclusion:** do **not** ship F_b batched-path speculative decoding for
+Qwen3.6 at K>=2. The bounded engine build was implemented via the same
+prelaunch source-edit mechanism used for F_a, with K=2 root paths, depth=3,
+FlashAttention target verification, scheduler clone/collapse, isolated Mamba
+state blocks, shared-root sampling instrumentation, and per-path acceptance
+debug logs. The K=1 control works, but adding a second verifier row corrupts
+the top-1 path's acceptance far below E3, even when the second row is an exact
+duplicate of path0.
+
+**Baseline / gate reference:**
+
+| Config | Shape | decode_tps | acc/event | acc_dist | Result |
+|---|---|---:|---:|---|---|
+| E3 | linear MTP depth 3 | 17.67 | 2.235 | `{0:88,1:114,2:115,3:476}` | baseline |
+| F_b K=1 isolation | one linear path, depth 3 | 20.858 | 2.667 | `{0:1,1:1,2:1,3:15}` | path0 works |
+| F_b K=2 | two distinct root paths, depth 3 | 5.088 | 1.143 | `{0:8,1:6,2:3,3:4}` | fails invariant |
+| F_b K=2 duplicate | path1 exact duplicate of path0 | 4.729 | 0.864 | `{0:14,1:2,2:1,3:5}` | content-independent failure |
+| F_b K=2 duplicate, shared-root disabled | path1 exact duplicate; stock flat sampler | 3.248 | 0.286 | `{0:25,2:1,3:2}` | final no-ship confirmation |
+
+**Decisive evidence:** the duplicate-path canary used identical draft chains for
+path0 and path1 in all events (`dup_ok=22/22`). Path0 still collapsed from the
+K=1 control's `2.667` acc/event to `0.864`; with shared-root sampling disabled,
+path0 fell further to `0.286` (`dup_ok=28/28`). Because path1 was
+content-identical, the failure is not root diversity, target sample coupling,
+winner selection, draft extraction, or path1 token content. The mere presence
+of a second speculative verifier row in the batched GDN/Mamba hybrid forward is
+sufficient to destroy the top-1 path invariant.
+
+**What was ruled out before the no-ship decision:**
+
+- Draft extraction/scatter bugs: fixed; K=1 produces clean linear drafts and
+  high acceptance.
+- Root assembly bugs: fixed; distinct nonzero roots were observed for normal
+  K=2, and duplicate mode proved content does not explain the degradation.
+- Double-counted traces: ruled out; parent-only trace rows with no clone IDs.
+- Mamba physical state block aliasing: ruled out; path0/path1 clones received
+  distinct physical Mamba state blocks.
+- Accepted-prefix collapse length: ruled out; `fb_mamba_preprocess_debug.jsonl`
+  showed the collapsed parent/clone rows carried winner committed lengths such
+  as `2`, and `preprocess_mamba` did not reset them in the measured run.
+- Shared-root sampler: ruled out as the root cause by the duplicate run with
+  `LUMO_FB_DISABLE_SHARED_ROOT=1`, which stayed far below E3.
+
+**No-ship decision:** F_b K>=2 fails the hard quality gate (`acc/event >= 2.235`
+and `decode_tps > 17.67`) and violates the invariant that the top-1 path must
+be at least E3. Do not run SWE on F_b K>=2. K=1 remains a useful diagnostic
+control and can be faster than E3 on the 64-token canary, but K=1 is just a
+single linear chain and provides no multi-candidate win. For Qwen3.6's
+GDN/Mamba hybrid, both packed-tree F_a and batched-path F_b hit the same class
+of recurrent-state limitation when more than one speculative path is verified
+in the same step.
 
 ---
 
@@ -330,10 +385,14 @@ SWE-Bench re-run needed for correctness; run SWE only for the final speed number
 
 ---
 
-## Appendix A: F_b (batched-paths) — the alternative / fallback plan
+## Appendix A: F_b (batched-paths) — investigated fallback, now no-ship for Qwen3.6
 
-If the tree-rejection-sampler fix (F_a) proves too costly or risky, **F_b is the
-pragmatic path to "more candidates than linear" that needs NO vLLM core change.**
+Original hypothesis: if the tree-rejection-sampler fix (F_a) proves too costly
+or risky, **F_b is the pragmatic path to "more candidates than linear" that
+needs NO vLLM core change.** This was implemented and falsified for Qwen3.6:
+K=1 works as a linear-chain control, but K>=2 violates the top-1-path invariant
+and fails the E3 quality gate. Keep this appendix as design context only; do
+not treat F_b K>=2 as a shipping path for this model.
 
 **Idea:** instead of one packed tree verified with a tree mask, enumerate the
 MTP top-k as **K parallel linear paths** (root top-k first tokens, each extended
