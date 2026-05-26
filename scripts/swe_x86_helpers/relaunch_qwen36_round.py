@@ -805,6 +805,28 @@ def _lumo_fb_sample_logits(self, hidden_states):
         return None
     return self.model.compute_logits(hidden_states)
 
+def _lumo_fb_policy_from_logits(logits):
+    if _lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE") != "1":
+        return int(_lumo_fb_os.environ.get("LUMO_FB_K", "2")), {}
+    try:
+        vals = _lumo_fb_torch.topk(logits.float(), min(8, logits.shape[-1]), dim=-1).values.view(-1)
+        probs = _lumo_fb_torch.softmax(vals, dim=-1)
+        p1 = float(probs[0].item())
+        p2 = float(probs[1].item()) if probs.numel() > 1 else 0.0
+        ratio = p2 / max(p1, 1e-9)
+        p1_max = float(_lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX", "0.70"))
+        ratio_min = float(_lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN", "0.20"))
+        k = 2 if (p1 < p1_max and ratio > ratio_min) else 1
+        return k, {
+            "fb_policy_k": k,
+            "fb_root_p1": round(p1, 6),
+            "fb_root_p2": round(p2, 6),
+            "fb_root_ratio": round(ratio, 6),
+            "fb_policy_reason": "uncertain_root" if k == 2 else "confident_root",
+        }
+    except Exception:
+        return 1, {"fb_policy_k": 1, "fb_policy_reason": "policy_error"}
+
 def _lumo_fb_extend_one(self, root_token, base_positions, base_hidden_states,
                         base_common_attn_metadata, batch_size, per_layer_attn_metadata,
                         num_rejected_tokens_gpu, draft_len=None):
@@ -993,6 +1015,12 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
             self, target_token_ids, target_positions, target_hidden_states,
             next_token_ids, token_indices_to_sample, common_attn_metadata,
             sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
+    policy_k, policy_info = _lumo_fb_policy_from_logits(logits)
+    if _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
+        policy_k = 2
+        policy_info = dict(policy_info)
+        policy_info["fb_policy_k"] = 2
+        policy_info["fb_policy_reason"] = "duplicate_path_gate"
     root_candidates = _lumo_fb_torch.topk(
         logits, min(16, logits.shape[-1]), dim=-1
     ).indices.view(-1)
@@ -1014,11 +1042,16 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
     else:
         positions = self.positions[token_indices_to_sample]
     base_hidden_states = hidden_states[token_indices_to_sample]
+    # LUMO_FB_DUP_PATH1_TEST: duplicate-path discriminator keeps path0 as the
+    # raw MTP top-1 chain so it remains directly comparable to K=1.
+    _lumo_fb_path0_root = raw_roots[0] if (
+        policy_k == 1 or _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
+    ) else roots[0]
     path0 = _lumo_fb_extend_one(
-        self, (raw_roots[0] if int(_lumo_fb_os.environ.get("LUMO_FB_K", "2")) == 1 else roots[0]), positions, base_hidden_states,
+        self, _lumo_fb_path0_root, positions, base_hidden_states,
         common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
         num_rejected_tokens_gpu)
-    if int(_lumo_fb_os.environ.get("LUMO_FB_K", "2")) == 1:
+    if policy_k == 1:
         out = path0[:, :self.num_speculative_tokens]
         try:
             if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
@@ -1034,14 +1067,18 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                     "roots": [int(out[0, 0].item())],
                     "root_candidates": root_candidates[:8].tolist(),
                     "draft": out.tolist(),
+                    "policy": policy_info,
                 }) + chr(10))
         except Exception:
             pass
         return out
-    path1 = _lumo_fb_extend_one(
-        self, roots[1], positions, base_hidden_states,
-        common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
-        num_rejected_tokens_gpu)
+    if _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
+        path1 = path0.clone()
+    else:
+        path1 = _lumo_fb_extend_one(
+            self, roots[1], positions, base_hidden_states,
+            common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+            num_rejected_tokens_gpu)
     out = _lumo_fb_torch.cat([path0, path1], dim=1)
     try:
         if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
@@ -1056,6 +1093,7 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                 "roots": [int(out[0, 0].item()), int(out[0, self.num_speculative_tokens].item())],
                 "root_candidates": root_candidates[:8].tolist(),
                 "draft": out.tolist(),
+                "policy": policy_info,
             }) + chr(10))
     except Exception:
         pass
@@ -2810,7 +2848,10 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
     fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\nexport LUMO_FB_DEPTH=3\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}" if fb else ""
+    fb_adaptive = "export LUMO_FB_ADAPTIVE=1\n" if os.environ.get("LUMO_FB_ADAPTIVE") == "1" else ""
+    fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
+    fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\nexport LUMO_FB_DEPTH=3\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_adaptive}{fb_p1}{fb_ratio}" if fb else ""
     return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
 
 
