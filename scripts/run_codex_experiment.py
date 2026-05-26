@@ -74,9 +74,9 @@ def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -
     if not os.environ.get("LUMO_SUDO_PASSWORD"):
         sys.exit("LUMO_SUDO_PASSWORD required to relaunch vLLM (source .lumo.local.env)")
     round_script = "/tmp/relaunch_qwen36_round.py"
-    if config in ("D", "E", "F") and Path(round_script).exists():
+    if config in ("D", "E", "F", "Fb") and Path(round_script).exists():
         cmd = [str(REPO / ".venv/bin/python"), round_script, "--config", config]
-        if config in ("E", "F"):
+        if config in ("E", "F", "Fb"):
             cmd += ["--mtp", str(mtp)]
         if kv_cache_dtype:
             cmd += ["--kv-cache-dtype", kv_cache_dtype]
@@ -89,7 +89,7 @@ def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -
     # new file handle, so each round's trace starts clean (and we never delete it
     # out from under a live handle -- the cause of the round-1 unlinked-inode loss).
     sh(["rm", "-f", PER_REQ_SPEC_TRACE])
-    log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F') else '-'} "
+    log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F','Fb') else '-'} "
         f"kv={kv_cache_dtype or 'bundle-default'} (model load ~ several min)")
     r = sh(cmd, timeout=1200)
     if "READY" not in (r.stdout + r.stderr):
@@ -256,9 +256,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--exp-tag", required=True)
     ap.add_argument("--suite", choices=["swe", "cnb"], default="swe")
-    ap.add_argument("--config", choices=["A", "D", "off", "E", "F", "G"], required=True,
+    ap.add_argument("--config", choices=["A", "D", "off", "E", "F", "Fb", "G"], required=True,
                     help="ablation/spec config; with --apply-config the runner relaunches vLLM into it. "
-                         "E=Qwen3.6 native MTP head; F=combA (MTP+SD tau-threshold); G=combB (per-position mix)")
+                         "E=Qwen3.6 native MTP head; F=tree MTP; Fb=batched-path MTP; G=combB (per-position mix)")
     ap.add_argument("--apply-config", action="store_true",
                     help="relaunch vLLM into --config (A/off/E have relaunch scripts; needs LUMO_SUDO_PASSWORD)")
     ap.add_argument("--temp", choices=["1.0", "0.6"], default=None,
