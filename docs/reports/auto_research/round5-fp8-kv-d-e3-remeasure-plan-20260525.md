@@ -184,6 +184,110 @@ Possible outcomes:
 
 ---
 
+## Next steps — D-Pro suffix-trie recovery
+
+Separate from the KV-dtype remeasure, there is now enough evidence to justify a
+small D-Pro canary: current Config D uses SuffixDecoding, but the serving path
+appears to verify a flat linear suffix draft rather than the full suffix trie.
+
+Concrete evidence:
+
+1. `q36a_D_b4` is the suffix-stack control:
+   `method=suffix`, `num_speculative_tokens=12`.
+2. vLLM's native `SuffixDecodingProposer.propose()` returns
+   `list[list[int]]` and appends only `draft.token_ids`.
+3. ArcticInference's `SuffixDecodingDraft` contains richer tree metadata:
+   `token_ids`, `parents`, `probs`, `score`, and `match_len`.
+4. ArcticInference's simulator walks `result.parents` to verify accepted
+   branches, which proves the parent links are intended tree structure.
+5. ArcticInference's vLLM plugin path also emits `result.token_ids` into the
+   vLLM draft-token surface, so the serving integration still consumes a linear
+   sequence.
+6. `SuffixDecodingCache.speculate(..., use_tree_spec=False)` defaults to
+   non-tree speculation unless requested; the vLLM suffix wrapper does not pass
+   `use_tree_spec=True`.
+
+Useful public references:
+
+- vLLM suffix proposer API/source:
+  <https://docs.vllm.ai/en/v0.18.1/api/vllm/v1/spec_decode/suffix_decoding/>
+- ArcticInference suffix docs:
+  <https://arcticinference.readthedocs.io/en/latest/suffix-decoding.html>
+- SuffixDecoding paper:
+  <https://openreview.net/pdf?id=uwL0vbeEVn>
+
+The research question is not "can suffix draft long continuations?" D already
+does that cheaply. The question is:
+
+```text
+Is D losing because the suffix trie lacks a correct continuation,
+or because vLLM only submits one linear path while the right continuation
+exists elsewhere in the trie?
+```
+
+Recommended D-Pro sequence:
+
+### D-Pro-0 — observe, do not optimize yet
+
+Patch/instrument the suffix path to expose, per speculative event:
+
+- `len(token_ids)`
+- `len(parents)`
+- root width and depth histogram
+- `score`, `match_len`, and top node probabilities
+- current linear path chosen by vLLM
+- whether the eventual target-accepted token path existed elsewhere in the
+  raw suffix trie
+
+Run this on a tiny slice first. Do not launch a full 16-task round until this
+answers whether missed acceptance is a proposal-quality issue or a
+linearization issue.
+
+### D-Pro-1 — MTP-guided suffix-trie trim
+
+If D-Pro-0 shows the trie often contains better alternatives than the emitted
+linear path, test:
+
+```text
+build suffix trie up to depth 10-12
+use Qwen3.6 MTP n=3 as a neural prior over the first 1-3 trie levels
+boost / keep branches whose prefixes agree with MTP top-k probabilities
+trim low-score suffix branches
+verify the selected proposal losslessly
+```
+
+This uses MTP where it is strongest: short-horizon local probability. It keeps
+suffix where it is strongest: cheap long-tail continuation from repeated agent
+patterns.
+
+Two verifier flavors are possible:
+
+| Variant | Verification | Why test |
+|---|---|---|
+| `D-pro-tree-attn` | packed suffix tree + tree mask | lowest duplicate compute, but depends on TREE_ATTN and source patches |
+| `D-pro-batched-paths` | top suffix paths as separate linear drafts | FlashAttention-compatible, simpler correctness story, more duplicated compute |
+
+The D-Pro promotion gate should be stricter than normal tuning:
+
+```text
+D-Pro must beat q36a_E3_b4 on steptrace TPS,
+or prove a clear mechanism with accepted/event lift worth a larger build.
+```
+
+Suggested first target:
+
+```text
+accepted/event > 2.7
+steptrace TPS > 15.1
+no resolved-count regression on the paired slice
+```
+
+If D-Pro-0 shows the correct continuation is rarely present in the suffix trie,
+do not build D-Pro-1. In that case D's weakness is suffix proposal quality, not
+vLLM linearization.
+
+---
+
 ## Reminder
 
 The current D/E/F docs should always say **configured KV** and **realized KV**
