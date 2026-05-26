@@ -2410,6 +2410,9 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
                 block_ids=tuple([list(group) for group in row["block_ids"]]),
                 num_computed_tokens=parent_state.num_computed_tokens,
                 output_token_ids=list(parent_state.output_token_ids),
+                mrope_positions=parent_state.mrope_positions,
+                mrope_position_delta=parent_state.mrope_position_delta,
+                xdrope_positions=parent_state.xdrope_positions,
                 lora_request=parent_state.lora_request,
             )
             self.requests[row_id] = req_state
