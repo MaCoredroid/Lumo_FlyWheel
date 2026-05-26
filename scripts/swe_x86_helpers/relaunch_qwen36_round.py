@@ -999,6 +999,15 @@ def _lumo_fb_extend_paths_batched(self, root_tokens, base_positions, base_hidden
             out_slot_mapping=self._slot_mapping_buffer[:input_batch_size],
             input_batch_size=input_batch_size,
         )
+        if k > 1:
+            slot_stride = int(_lumo_fb_os.environ.get(
+                "LUMO_FB_BATCHED_SLOT_STRIDE", str(self.num_speculative_tokens)))
+            slot_offsets = (
+                _lumo_fb_torch.arange(k, device=self._slot_mapping_buffer.device,
+                                      dtype=self._slot_mapping_buffer.dtype)
+                * slot_stride
+            )
+            self._slot_mapping_buffer[:k] += slot_offsets
         cad.slot_mapping = self._slot_mapping_buffer[:k]
         if self.uses_mrope:
             self.mrope_positions[1:, :k] = self.mrope_positions[0, :k]
