@@ -2486,6 +2486,48 @@ def _lumo_fb_ir_filter_model_output(model_output, internal_ids):
             pass
     return model_output
 
+def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output):
+    active = getattr(self, "_lumo_fb_ir_active", None)
+    if not (_lumo_fb_ir_runner_enabled() and active):
+        return sampler_output
+    internal_ids = set(active.keys())
+    req_ids = list(self.input_batch.req_ids)
+    keep = [i for i, rid in enumerate(req_ids) if rid not in internal_ids]
+    try:
+        raw = sampler_output.sampled_token_ids.detach().cpu().tolist()
+        rows = []
+        for i, rid in enumerate(req_ids):
+            if rid in internal_ids or rid in set(active.values()):
+                toks = raw[i] if i < len(raw) else []
+                rows.append({
+                    "rid": rid,
+                    "parent": active.get(rid, rid),
+                    "is_internal": rid in internal_ids,
+                    "sampled": list(toks),
+                    "accepted": max(0, len([t for t in toks if int(t) != -1]) - 1),
+                })
+        if rows:
+            _lumo_fb_ir_debug({"event": "sampled", "rows": rows})
+    except Exception:
+        pass
+    if len(keep) != len(req_ids):
+        try:
+            idx = _lumo_fb_ir_torch.tensor(keep, dtype=_lumo_fb_ir_torch.long,
+                                           device=sampler_output.sampled_token_ids.device)
+            sampler_output.sampled_token_ids = sampler_output.sampled_token_ids.index_select(0, idx)
+            if sampler_output.logprobs_tensors is not None:
+                sampler_output.logprobs_tensors = None
+        except Exception:
+            pass
+    for rid in internal_ids:
+        if rid in scheduler_output.num_scheduled_tokens:
+            scheduler_output.total_num_scheduled_tokens -= scheduler_output.num_scheduled_tokens.pop(rid)
+        scheduler_output.scheduled_spec_decode_tokens.pop(rid, None)
+        scheduler_output.finished_req_ids.discard(rid)
+    _lumo_fb_ir_cleanup_rows(self, internal_ids)
+    self._lumo_fb_ir_active = {}
+    return sampler_output
+
 def _lumo_fb_ir_cleanup_rows(self, internal_ids):
     for rid in internal_ids:
         try:
@@ -2543,6 +2585,38 @@ GPUModelRunner.sample_tokens = _lumo_fb_ir_sample_tokens
     import py_compile
     py_compile.compile(str(gm), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b internal-row runner patch')
+
+text = gm.read_text()
+sentinel = '# LUMO_FB_INTERNAL_ROWS_PRE_DRAFT_CLEANUP'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b internal-row pre-draft cleanup already present')
+else:
+    old = nl.join([
+        '        self._update_states_after_model_execute(',
+        '            sampler_output.sampled_token_ids, scheduler_output',
+        '        )',
+        '        self.p2b_debug_exporter.export_state_snapshots(runner=self)',
+    ])
+    new = nl.join([
+        '        self._update_states_after_model_execute(',
+        '            sampler_output.sampled_token_ids, scheduler_output',
+        '        )',
+        '        # LUMO_FB_INTERNAL_ROWS_PRE_DRAFT_CLEANUP: internal F_b verifier',
+        '        # rows must be removed before proposing the next draft, otherwise',
+        '        # the ordinary EAGLE proposer sees batch_size=2 and falls back to',
+        '        # width-3 drafting on alternating steps.',
+        '        if "_lumo_fb_ir_prune_after_sample" in globals():',
+        '            sampler_output = _lumo_fb_ir_prune_after_sample(',
+        '                self, scheduler_output, sampler_output)',
+        '        self.p2b_debug_exporter.export_state_snapshots(runner=self)',
+    ])
+    if old not in text:
+        raise RuntimeError('F_b internal-row pre-draft cleanup anchor not found')
+    text = text.replace(old, new, 1)
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b internal-row pre-draft cleanup patch')
 LUMOFBPATHS
 '''
 
