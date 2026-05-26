@@ -200,6 +200,30 @@ else:
                 '                    last_hidden_states = hidden_states = _lt_ret',
             ]),
         ),
+        # Env-gated per-level draft-token logger (LUMO_TREE_DRAFT_DEBUG=1) to
+        # localize the depth-2 acceptance cliff: logs each level's proposed
+        # token ids + base position, so we can diff the tree's top-1 path
+        # against the linear chain / actual output.
+        (
+            '        return draft_token_ids_list',
+            nl.join([
+                '        try:',
+                '            import os as _do',
+                '            if _do.environ.get("LUMO_TREE_DRAFT_DEBUG") == "1":',
+                '                import json as _dj, time as _dt',
+                '                global _LUMO_TREE_DBG_FH',
+                '                try:',
+                '                    _LUMO_TREE_DBG_FH',
+                '                except NameError:',
+                '                    _LUMO_TREE_DBG_FH = open("/logs/tree_draft_debug.jsonl", "a", buffering=1)',
+                '                _dbp = int(positions.flatten()[0].item())',
+                '                _dlv = [t.tolist() for t in draft_token_ids_list]',
+                '                _LUMO_TREE_DBG_FH.write(_dj.dumps({"ts": round(_dt.time(), 4), "base_pos": _dbp, "levels": _dlv}) + chr(10))',
+                '        except Exception:',
+                '            pass',
+                '        return draft_token_ids_list',
+            ]),
+        ),
     ]
     for anchor, new in edits:
         if text.count(anchor) != 1:
@@ -213,7 +237,7 @@ LUMOMROPETREE
 '''
 
 
-def _prelaunch_for(config: str, tree: bool = False) -> str:
+def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False) -> str:
     full = _track_b_runtime_prelaunch_shell()
     if config == "D":
         base = full  # full T1+T2+T3+T4 stack
@@ -230,7 +254,8 @@ def _prelaunch_for(config: str, tree: bool = False) -> str:
     # backend (target verify + draft). vLLM's selector has no tree logic and does
     # not honor VLLM_ATTENTION_BACKEND in 0.19.0, so we source-edit the selector
     # (config F only). Realized KV is auto/bf16, which TreeAttention supports.
-    return base + _SPEC_TRACE_BLOCK + (_TREE_ATTN_BLOCK + _MROPE_TREE_BLOCK if tree else "")
+    dbg = "export LUMO_TREE_DRAFT_DEBUG=1\n" if (tree and tree_debug) else ""
+    return dbg + base + _SPEC_TRACE_BLOCK + (_TREE_ATTN_BLOCK + _MROPE_TREE_BLOCK if tree else "")
 
 
 def _mtp_bundle(n: int, tree: str | None = None) -> str:
@@ -283,6 +308,9 @@ def main() -> int:
                     help="config F only: override the speculative_token_tree literal "
                          "(default: _default_tree(--mtp)). Must be a REGULAR tree whose "
                          "max depth equals --mtp.")
+    ap.add_argument("--tree-debug", action="store_true",
+                    help="config F only: export LUMO_TREE_DRAFT_DEBUG=1 so propose_tree "
+                         "logs per-level proposed draft tokens to /logs/tree_draft_debug.jsonl")
     args = ap.parse_args()
     is_tree = args.config == "F"
     if args.tree is not None and not is_tree:
@@ -299,7 +327,7 @@ def main() -> int:
         triton_cache_root=Path("/tmp/lumo-l0c-fp8-cutlass-run30-triton"),
         state_root=Path("/tmp/lumo-l0c-fp8-cutlass-run30-state"),
         proxy_port=8088, ready_timeout_s=900,
-        prelaunch_shell=_prelaunch_for(args.config, tree=is_tree),
+        prelaunch_shell=_prelaunch_for(args.config, tree=is_tree, tree_debug=args.tree_debug),
     )
     server.load_tuned_config(bundle)
     server.start("qwen3.6-27b")

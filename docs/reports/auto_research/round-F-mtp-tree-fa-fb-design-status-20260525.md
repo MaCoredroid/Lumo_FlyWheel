@@ -192,6 +192,65 @@ GPU-mem OOM on first `docker run` and self-heal via ModelServer's
 
 ---
 
+## 6b. Investigation update (2026-05-26): F_a runs, but is slower than E3 — verify-side bug
+
+After 3 `propose_tree` MTP-compat patches (mrope positions, mm `inputs_embeds`,
+tuple-return) + 1 config fix (`num_speculative_tokens` = tree NODE count, not
+depth), F_a runs clean and **B-2 lossless passed** (byte-exact vs OFF). Then the
+B=1 `spec_speed_probe` (10 fixed prompts, temp 0.6) measured F_a vs E3 on
+**identical prompts**:
+
+| | E3 (linear, draft=3) | F_a (tree, draft=6) |
+|---|---:|---:|
+| decode_tps (B=1) | **17.67** | 10.97 |
+| acc/event | **2.235** | 0.974 |
+| accepted/node | **0.745** | 0.162 |
+| mean_event_ms | 185 | 181 |
+| tokens/event (completion/events) | 3.23 | 1.98 |
+| acc_dist | {0:88,1:114,2:115,**3:476**} | {0:141,**1:1049**,2:105,3:1} |
+
+Cross-check: `committed(trace) ≈ completion_tokens` to 0.1% for both (validates
+the probe + acc counting). Same 2560 tokens, but F_a needs 1296 events vs E3's
+793 — F_a burns ~63% more forward passes. mean_event_ms is ~equal, so the tree
+verify is **not** more expensive per event; the deficit is purely acceptance.
+
+**Decisive diagnosis — the tree's drafts are CORRECT; the verifier rejects them.**
+Detokenizing the tree's top-1-path proposals against the actual greedy output
+(`"Here's a thinking process:\n\n1.  **Understand the User Request:**"`): the
+depth-2 and depth-3 proposed tokens are *exactly* the correct next tokens
+(`'s`→` a`→` thinking`, ` thinking`→` process`→`:`, …). Yet `base_pos` advances
+~2/event (acc=1): the correct depth-2 token comes back as the *bonus* token, not
+credited as an accepted draft. So B-2 stays lossless while acceptance collapses.
+
+By depth: F_a's **depth-1 acceptance (89.1%) == E3's (88.9%)**, then **depth-2
+collapses (8.2% vs 74.5%)**. The first draft (from the input logits) is perfect;
+the loop-generated depth-≥2 drafts are correct but **rejected by the target
+verify**.
+
+**Position hypothesis disproven.** `_calc_mrope_positions` (gmr.py:2527) assigns
+*sequential* positions to tree nodes — but so does the non-mrope path
+(`self.positions = num_computed + query_pos`, gmr.py:1998). If sequential-vs-
+depth-based were the cause, EAGLE tree spec would break too (shared code). And it
+predicts depth-2 *should* accept (the depth-1 parent node `(0,)` is at the correct
+`base+1` under both conventions) — contradicting the observed depth-2 collapse.
+So the remaining cause is in the **tree attention mask / rejection-sampler tree
+handling** (how node `(0,)`'s verify logit is computed/compared), a deeper and
+likely general (not mrope-specific) branching-tree-verify issue. No confident
+one-line fix; this is uncertain deep vLLM-internals territory.
+
+**Decision pending:** (1) instrument the rejection sampler (per-node verify
+acceptance + target argmax) to localize; (2) pivot to **F_b** (batched-paths,
+avoids `propose_tree`/tree-verify entirely); or (3) ship **E3** (17.7 tps B=1,
+lossless, already strong). Lean: F_b or E3 — diminishing returns chasing an
+upstream branching-tree-verify bug.
+
+**Tools added:** `scripts/spec_speed_probe.py` (B=1 accept-vs-cost probe;
+committed≈completion_tokens validates it) and an env-gated per-level
+draft-token logger in `propose_tree` (`LUMO_TREE_DRAFT_DEBUG=1` →
+`/logs/tree_draft_debug.jsonl`, via `relaunch_qwen36_round.py --tree-debug`).
+
+---
+
 ## 7. Files
 
 - `scripts/swe_x86_helpers/relaunch_qwen36_round.py` — config F, `_default_tree`,
