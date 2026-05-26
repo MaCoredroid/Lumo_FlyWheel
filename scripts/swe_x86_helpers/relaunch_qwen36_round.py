@@ -2163,6 +2163,383 @@ def _lumo_fb_shared_root_rejection_sample(
     import py_compile
     py_compile.compile(str(rs), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b shared-root sampler patch')
+
+sch = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py')
+text = sch.read_text()
+sentinel = '# LUMO_FB_INTERNAL_ROWS'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b internal-row scheduler patch already present')
+else:
+    patch = r"""
+
+# LUMO_FB_INTERNAL_ROWS: Gate-2 path verifier rows without public scheduler
+# request clones.  The scheduler keeps the parent as the only logical request,
+# attaches internal verifier rows to SchedulerOutput, and owns only the fresh
+# COW blocks allocated for those rows.
+import os as _lumo_fb_ir_os
+
+_lumo_fb_ir_prev_update_draft = Scheduler.update_draft_token_ids
+_lumo_fb_ir_prev_schedule = Scheduler.schedule
+_lumo_fb_ir_prev_update_output = Scheduler.update_from_output
+
+def _lumo_fb_ir_enabled():
+    return (_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
+            and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+
+def _lumo_fb_ir_row_id(parent_id, path_idx):
+    return f"{parent_id}::lumo_fb_ir::{path_idx}"
+
+def _lumo_fb_ir_cdiv(a, b):
+    return (int(a) + int(b) - 1) // int(b)
+
+def _lumo_fb_ir_new_block(manager):
+    return manager.block_pool.get_new_blocks(1)[0]
+
+def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
+    copies = []
+    owned = []
+    row_block_ids = []
+    for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
+        parent_blocks = list(manager.req_to_blocks.get(parent.request_id, ()))
+        row_blocks = list(parent_blocks)
+        if not row_blocks:
+            row_block_ids.append([])
+            continue
+        block_size = int(manager.block_size)
+        if getattr(manager, "mamba_cache_mode", None) == "align":
+            num_spec_blocks = int(getattr(manager.kv_cache_spec, "num_speculative_blocks", 0))
+            curr_idx = max(0, _lumo_fb_ir_cdiv(parent.num_computed_tokens + num_scheduled_tokens, block_size) - 1)
+            last_idx = min(len(row_blocks), curr_idx + 1 + num_spec_blocks)
+            for logical_idx in range(curr_idx, last_idx):
+                src = row_blocks[logical_idx]
+                if src == getattr(manager, "_null_block", None):
+                    continue
+                dst = _lumo_fb_ir_new_block(manager)
+                row_blocks[logical_idx] = dst
+                owned.append((group_idx, dst))
+                if logical_idx == curr_idx:
+                    copies.append(("mamba", src.block_id, dst.block_id))
+        else:
+            start_idx = max(0, int(parent.num_computed_tokens) // block_size)
+            end_idx = min(len(row_blocks), _lumo_fb_ir_cdiv(parent.num_computed_tokens + num_scheduled_tokens, block_size))
+            for logical_idx in range(start_idx, end_idx):
+                src = row_blocks[logical_idx]
+                if src == getattr(manager, "_null_block", None):
+                    continue
+                dst = _lumo_fb_ir_new_block(manager)
+                row_blocks[logical_idx] = dst
+                owned.append((group_idx, dst))
+                if logical_idx == start_idx and (int(parent.num_computed_tokens) % block_size) != 0:
+                    copies.append((src.block_id, dst.block_id))
+        row_block_ids.append([blk.block_id for blk in row_blocks])
+    self._lumo_fb_ir_owned_blocks = getattr(self, "_lumo_fb_ir_owned_blocks", {})
+    self._lumo_fb_ir_owned_blocks[row_id] = owned
+    return tuple(row_block_ids), copies
+
+def _lumo_fb_ir_free_owned(self, row_ids):
+    owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
+    for row_id in row_ids:
+        owned = owned_by_row.pop(row_id, [])
+        by_group = {}
+        for group_idx, block in owned:
+            by_group.setdefault(group_idx, []).append(block)
+        for group_idx, blocks in by_group.items():
+            try:
+                manager = self.kv_cache_manager.coordinator.single_type_managers[group_idx]
+                manager.block_pool.free_blocks(reversed(blocks))
+            except Exception:
+                pass
+
+def _lumo_fb_ir_update_draft_token_ids(self, draft_token_ids):
+    if not _lumo_fb_ir_enabled():
+        return _lumo_fb_ir_prev_update_draft(self, draft_token_ids)
+    for req_id, spec_token_ids in zip(draft_token_ids.req_ids, draft_token_ids.draft_token_ids):
+        request = self.requests.get(req_id)
+        if request is None or request.is_finished():
+            continue
+        if request.is_prefill_chunk:
+            request.spec_token_ids = []
+            request._lumo_fb_internal_paths = None
+            continue
+        toks = list(spec_token_ids)
+        if len(toks) == 6 and int(_lumo_fb_ir_os.environ.get("LUMO_FB_K", "2")) >= 2:
+            paths = [list(toks[:3]), list(toks[3:6])]
+            if _lumo_fb_ir_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
+                paths[1] = list(paths[0])
+            request._lumo_fb_internal_paths = paths
+            request.spec_token_ids = list(paths[0])
+        else:
+            request._lumo_fb_internal_paths = None
+            request.spec_token_ids = toks[:3]
+
+def _lumo_fb_ir_schedule(self):
+    if not _lumo_fb_ir_enabled():
+        return _lumo_fb_ir_prev_schedule(self)
+    out = _lumo_fb_orig_schedule(self)
+    rows_by_parent = {}
+    copies = []
+    for parent_id in list(out.num_scheduled_tokens.keys()):
+        parent = self.requests.get(parent_id)
+        paths = getattr(parent, "_lumo_fb_internal_paths", None) if parent is not None else None
+        if not paths or len(paths) < 2:
+            continue
+        if parent_id not in out.scheduled_spec_decode_tokens:
+            parent._lumo_fb_internal_paths = None
+            continue
+        num_sched = int(out.num_scheduled_tokens[parent_id])
+        row_id = _lumo_fb_ir_row_id(parent_id, 1)
+        block_ids, row_copies = _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_sched)
+        copies.extend(row_copies)
+        rows_by_parent[parent_id] = {
+            "paths": [list(p) for p in paths[:2]],
+            "rows": [{
+                "rid": row_id,
+                "path_idx": 1,
+                "draft": list(paths[1]),
+                "block_ids": block_ids,
+            }],
+        }
+        parent._lumo_fb_internal_paths = None
+    if rows_by_parent:
+        out.lumo_fb_internal_rows = rows_by_parent
+        existing = list(getattr(out, "lumo_fb_block_copies", []) or [])
+        out.lumo_fb_block_copies = existing + copies
+    return out
+
+def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
+    if not _lumo_fb_ir_enabled():
+        return _lumo_fb_ir_prev_update_output(self, scheduler_output, model_runner_output)
+    rows_by_parent = getattr(scheduler_output, "lumo_fb_internal_rows", {}) or {}
+    internal_ids = []
+    for bundle in rows_by_parent.values():
+        for row in bundle.get("rows", []):
+            internal_ids.append(row.get("rid"))
+    internal_ids = [rid for rid in internal_ids if rid]
+    if internal_ids:
+        for rid in internal_ids:
+            if rid in scheduler_output.num_scheduled_tokens:
+                scheduler_output.total_num_scheduled_tokens -= scheduler_output.num_scheduled_tokens.pop(rid)
+            scheduler_output.scheduled_spec_decode_tokens.pop(rid, None)
+            scheduler_output.finished_req_ids.discard(rid)
+        if hasattr(model_runner_output, "req_ids"):
+            keep = [i for i, rid in enumerate(model_runner_output.req_ids) if rid not in internal_ids]
+            if len(keep) != len(model_runner_output.req_ids):
+                model_runner_output.req_ids = [model_runner_output.req_ids[i] for i in keep]
+                model_runner_output.sampled_token_ids = [model_runner_output.sampled_token_ids[i] for i in keep]
+                model_runner_output.req_id_to_index = {rid: i for i, rid in enumerate(model_runner_output.req_ids)}
+        _lumo_fb_ir_free_owned(self, internal_ids)
+    return _lumo_fb_orig_update_output(self, scheduler_output, model_runner_output)
+
+Scheduler.update_draft_token_ids = _lumo_fb_ir_update_draft_token_ids
+Scheduler.schedule = _lumo_fb_ir_schedule
+Scheduler.update_from_output = _lumo_fb_ir_update_from_output
+"""
+    sch.write_text(text + patch)
+    import py_compile
+    py_compile.compile(str(sch), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b internal-row scheduler patch')
+
+gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = gm.read_text()
+sentinel = '# LUMO_FB_INTERNAL_ROWS_RUNNER'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b internal-row runner patch already present')
+else:
+    patch = r"""
+
+# LUMO_FB_INTERNAL_ROWS_RUNNER: materialize scheduler-attached F_b path rows
+# inside the GPU runner for one target forward, then remove them before the
+# scheduler observes outputs.  This is a Gate-2 duplicate-path isolation path:
+# parent/path0 remains the committed row, while the second row tests whether
+# batched GDN verification corrupts path0 under internal COW state blocks.
+import os as _lumo_fb_ir_os
+import json as _lumo_fb_ir_json
+import time as _lumo_fb_ir_time
+import torch as _lumo_fb_ir_torch
+from vllm.v1.worker.gpu_input_batch import CachedRequestState as _LumoFBCachedRequestState
+
+_lumo_fb_ir_prev_update_states_runner = GPUModelRunner._update_states
+_lumo_fb_ir_prev_sample_tokens = GPUModelRunner.sample_tokens
+
+def _lumo_fb_ir_runner_enabled():
+    return (_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
+            and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+
+def _lumo_fb_ir_is_row_id(req_id):
+    return isinstance(req_id, str) and "::lumo_fb_ir::" in req_id
+
+def _lumo_fb_ir_debug(event):
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG") != "1":
+        return
+    try:
+        global _LUMO_FB_IR_DBG_FH
+        try:
+            _LUMO_FB_IR_DBG_FH
+        except NameError:
+            _LUMO_FB_IR_DBG_FH = open("/logs/fb_internal_debug.jsonl", "a", buffering=1)
+        event["ts"] = round(_lumo_fb_ir_time.time(), 4)
+        _LUMO_FB_IR_DBG_FH.write(_lumo_fb_ir_json.dumps(event) + chr(10))
+    except Exception:
+        pass
+
+def _lumo_fb_ir_update_states_runner(self, scheduler_output):
+    ret = _lumo_fb_ir_prev_update_states_runner(self, scheduler_output)
+    if not _lumo_fb_ir_runner_enabled():
+        return ret
+    rows_by_parent = getattr(scheduler_output, "lumo_fb_internal_rows", {}) or {}
+    if not rows_by_parent:
+        return ret
+    active = {}
+    for parent_id, bundle in rows_by_parent.items():
+        parent_state = self.requests.get(parent_id)
+        parent_sched = scheduler_output.num_scheduled_tokens.get(parent_id)
+        if parent_state is None or parent_sched is None:
+            continue
+        for row in bundle.get("rows", []):
+            row_id = row["rid"]
+            if row_id in self.requests:
+                continue
+            req_state = _LumoFBCachedRequestState(
+                req_id=row_id,
+                prompt_token_ids=(None if parent_state.prompt_token_ids is None else list(parent_state.prompt_token_ids)),
+                prompt_embeds=parent_state.prompt_embeds,
+                mm_features=list(parent_state.mm_features),
+                sampling_params=parent_state.sampling_params,
+                pooling_params=parent_state.pooling_params,
+                generator=parent_state.generator,
+                block_ids=tuple([list(group) for group in row["block_ids"]]),
+                num_computed_tokens=parent_state.num_computed_tokens,
+                output_token_ids=list(parent_state.output_token_ids),
+                lora_request=parent_state.lora_request,
+            )
+            self.requests[row_id] = req_state
+            scheduler_output.num_scheduled_tokens[row_id] = int(parent_sched)
+            scheduler_output.total_num_scheduled_tokens += int(parent_sched)
+            scheduler_output.scheduled_spec_decode_tokens[row_id] = list(row["draft"])
+            self.input_batch.add_request(req_state)
+            self.input_batch.update_req_spec_token_ids(req_state, scheduler_output.scheduled_spec_decode_tokens)
+            if parent_id in self.mamba_state_idx:
+                self.mamba_state_idx[row_id] = self.mamba_state_idx[parent_id]
+            active[row_id] = parent_id
+    if active:
+        self.input_batch.refresh_metadata()
+        self._lumo_fb_ir_active = active
+        _lumo_fb_ir_debug({
+            "event": "expanded",
+            "rows": [{
+                "rid": rid,
+                "parent": parent,
+                "idx": self.input_batch.req_id_to_index.get(rid),
+                "parent_idx": self.input_batch.req_id_to_index.get(parent),
+                "draft": scheduler_output.scheduled_spec_decode_tokens.get(rid),
+                "mamba_idx": self.mamba_state_idx.get(rid),
+                "parent_mamba_idx": self.mamba_state_idx.get(parent),
+            } for rid, parent in active.items()],
+        })
+    return ret
+
+def _lumo_fb_ir_filter_drafts(self, internal_ids):
+    try:
+        req_ids = list(self._draft_token_req_ids or [])
+        if not req_ids:
+            return
+        keep = [i for i, rid in enumerate(req_ids) if rid not in internal_ids]
+        if len(keep) == len(req_ids):
+            return
+        self._draft_token_req_ids = [req_ids[i] for i in keep]
+        toks = self._draft_token_ids
+        if _lumo_fb_ir_torch.is_tensor(toks):
+            idx = _lumo_fb_ir_torch.tensor(keep, dtype=_lumo_fb_ir_torch.long, device=toks.device)
+            self._draft_token_ids = toks.index_select(0, idx)
+            if hasattr(self, "draft_token_ids_cpu") and self.draft_token_ids_cpu is not None:
+                try:
+                    if self.draft_token_ids_event is not None:
+                        self.draft_token_ids_event.synchronize()
+                    cpu_idx = _lumo_fb_ir_torch.tensor(keep, dtype=_lumo_fb_ir_torch.long, device="cpu")
+                    width = int(getattr(self, "_lumo_fb_draft_cpu_width", self.draft_token_ids_cpu.shape[1]))
+                    self.draft_token_ids_cpu[:len(keep), :width].copy_(
+                        self.draft_token_ids_cpu.index_select(0, cpu_idx)[:, :width])
+                except Exception:
+                    pass
+        elif isinstance(toks, list):
+            self._draft_token_ids = [toks[i] for i in keep]
+    except Exception:
+        pass
+
+def _lumo_fb_ir_filter_model_output(model_output, internal_ids):
+    if model_output is None or not hasattr(model_output, "req_ids"):
+        return model_output
+    req_ids = list(model_output.req_ids)
+    keep = [i for i, rid in enumerate(req_ids) if rid not in internal_ids]
+    if len(keep) == len(req_ids):
+        return model_output
+    model_output.req_ids = [req_ids[i] for i in keep]
+    model_output.sampled_token_ids = [model_output.sampled_token_ids[i] for i in keep]
+    model_output.req_id_to_index = {rid: i for i, rid in enumerate(model_output.req_ids)}
+    if getattr(model_output, "logprobs", None) is not None:
+        try:
+            model_output.logprobs = [model_output.logprobs[i] for i in keep]
+        except Exception:
+            pass
+    return model_output
+
+def _lumo_fb_ir_cleanup_rows(self, internal_ids):
+    for rid in internal_ids:
+        try:
+            self.input_batch.remove_request(rid)
+        except Exception:
+            pass
+        self.requests.pop(rid, None)
+        self.mamba_state_idx.pop(rid, None)
+    try:
+        self.input_batch.condense()
+        self.input_batch.refresh_metadata()
+    except Exception:
+        pass
+
+def _lumo_fb_ir_sample_tokens(self, grammar_output):
+    output = _lumo_fb_ir_prev_sample_tokens(self, grammar_output)
+    if not _lumo_fb_ir_runner_enabled():
+        return output
+    active = getattr(self, "_lumo_fb_ir_active", None)
+    if not active:
+        return output
+    self._lumo_fb_ir_active = {}
+    internal_ids = set(active.keys())
+    model_output = getattr(output, "model_runner_output", output)
+    try:
+        raw_req_ids = list(getattr(model_output, "req_ids", []) or [])
+        raw_samples = list(getattr(model_output, "sampled_token_ids", []) or [])
+        rows = []
+        for rid, toks in zip(raw_req_ids, raw_samples):
+            if rid in internal_ids or rid in set(active.values()):
+                rows.append({
+                    "rid": rid,
+                    "parent": active.get(rid, rid),
+                    "is_internal": rid in internal_ids,
+                    "sampled": list(toks),
+                    "accepted": max(0, len(toks) - 1),
+                })
+        if rows:
+            _lumo_fb_ir_debug({"event": "sampled", "rows": rows})
+    except Exception:
+        pass
+    _lumo_fb_ir_filter_drafts(self, internal_ids)
+    filtered = _lumo_fb_ir_filter_model_output(model_output, internal_ids)
+    if hasattr(output, "model_runner_output"):
+        output.model_runner_output = filtered
+    else:
+        output = filtered
+    _lumo_fb_ir_cleanup_rows(self, internal_ids)
+    return output
+
+GPUModelRunner._update_states = _lumo_fb_ir_update_states_runner
+GPUModelRunner.sample_tokens = _lumo_fb_ir_sample_tokens
+"""
+    gm.write_text(text + patch)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b internal-row runner patch')
 LUMOFBPATHS
 '''
 
@@ -2189,7 +2566,8 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_k = os.environ.get("LUMO_FB_K", "2")
     fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\nexport LUMO_FB_DEPTH=3\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}" if fb else ""
+    fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\nexport LUMO_FB_DEPTH=3\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}" if fb else ""
     return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
 
 
