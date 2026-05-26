@@ -2486,10 +2486,12 @@ def _lumo_fb_ir_filter_model_output(model_output, internal_ids):
             pass
     return model_output
 
-def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output):
+def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
+                                   spec_decode_metadata=None):
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not (_lumo_fb_ir_runner_enabled() and active):
-        return sampler_output
+        return sampler_output if spec_decode_metadata is None else (sampler_output, spec_decode_metadata)
+    legacy_return = spec_decode_metadata is None
     internal_ids = set(active.keys())
     req_ids = list(self.input_batch.req_ids)
     keep = [i for i, rid in enumerate(req_ids) if rid not in internal_ids]
@@ -2524,9 +2526,22 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output):
             scheduler_output.total_num_scheduled_tokens -= scheduler_output.num_scheduled_tokens.pop(rid)
         scheduler_output.scheduled_spec_decode_tokens.pop(rid, None)
         scheduler_output.finished_req_ids.discard(rid)
+    if spec_decode_metadata is not None:
+        try:
+            parent_drafts = int(spec_decode_metadata.num_draft_tokens[0])
+            parent_sampled = parent_drafts + 1
+            spec_decode_metadata.draft_token_ids = spec_decode_metadata.draft_token_ids[:parent_drafts]
+            spec_decode_metadata.num_draft_tokens = spec_decode_metadata.num_draft_tokens[:1]
+            spec_decode_metadata.cu_num_draft_tokens = spec_decode_metadata.cu_num_draft_tokens[:1]
+            spec_decode_metadata.cu_num_sampled_tokens = spec_decode_metadata.cu_num_sampled_tokens[:1]
+            spec_decode_metadata.target_logits_indices = spec_decode_metadata.target_logits_indices[:parent_drafts]
+            spec_decode_metadata.bonus_logits_indices = spec_decode_metadata.bonus_logits_indices[:1]
+            spec_decode_metadata.logits_indices = spec_decode_metadata.logits_indices[:parent_sampled]
+        except Exception:
+            pass
     _lumo_fb_ir_cleanup_rows(self, internal_ids)
     self._lumo_fb_ir_active = {}
-    return sampler_output
+    return sampler_output if legacy_return else (sampler_output, spec_decode_metadata)
 
 def _lumo_fb_ir_cleanup_rows(self, internal_ids):
     for rid in internal_ids:
@@ -2617,6 +2632,33 @@ else:
     import py_compile
     py_compile.compile(str(gm), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b internal-row pre-draft cleanup patch')
+
+text = gm.read_text()
+sentinel = '# LUMO_FB_INTERNAL_ROWS_SPEC_META_PRUNE'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b internal-row spec metadata prune already present')
+else:
+    old = nl.join([
+        '        if "_lumo_fb_ir_prune_after_sample" in globals():',
+        '            sampler_output = _lumo_fb_ir_prune_after_sample(',
+        '                self, scheduler_output, sampler_output)',
+    ])
+    new = nl.join([
+        '        if "_lumo_fb_ir_prune_after_sample" in globals():',
+        '            # LUMO_FB_INTERNAL_ROWS_SPEC_META_PRUNE: once internal rows',
+        '            # are removed from the persistent batch, prune spec metadata',
+        '            # too so the next EAGLE proposal keeps the parent-only F_b',
+        '            # width-6 path instead of falling back on batch_size=2.',
+        '            sampler_output, spec_decode_metadata = _lumo_fb_ir_prune_after_sample(',
+        '                self, scheduler_output, sampler_output, spec_decode_metadata)',
+    ])
+    if old not in text:
+        raise RuntimeError('F_b internal-row spec metadata prune anchor not found')
+    text = text.replace(old, new, 1)
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b internal-row spec metadata prune patch')
 LUMOFBPATHS
 '''
 
