@@ -2490,8 +2490,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                                    spec_decode_metadata=None):
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not (_lumo_fb_ir_runner_enabled() and active):
-        return sampler_output if spec_decode_metadata is None else (sampler_output, spec_decode_metadata)
-    legacy_return = spec_decode_metadata is None
+        return sampler_output, spec_decode_metadata
     internal_ids = set(active.keys())
     req_ids = list(self.input_batch.req_ids)
     keep = [i for i, rid in enumerate(req_ids) if rid not in internal_ids]
@@ -2541,7 +2540,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             pass
     _lumo_fb_ir_cleanup_rows(self, internal_ids)
     self._lumo_fb_ir_active = {}
-    return sampler_output if legacy_return else (sampler_output, spec_decode_metadata)
+    return sampler_output, spec_decode_metadata
 
 def _lumo_fb_ir_cleanup_rows(self, internal_ids):
     for rid in internal_ids:
