@@ -34,3 +34,7 @@ HEAD is now at 1a4462d72 Merge pull request #14102 from zoghbi-a/fix-votable-val
 [2026-05-26T18:57:33Z] -> astropy__astropy-14182
 Preparing worktree (detached HEAD a5917978b)
 HEAD is now at a5917978b Merge pull request #14172 from astropy/pre-commit-ci-update-config
+[2026-05-26T19:02:27Z] <- astropy__astropy-14096 verdict=failed elapsed_total=1862.7s
+[2026-05-26T19:02:27Z] -> astropy__astropy-14309
+Preparing worktree (detached HEAD cdb66059a)
+HEAD is now at cdb66059a Merge pull request #14303 from pllim/bleach-v6
