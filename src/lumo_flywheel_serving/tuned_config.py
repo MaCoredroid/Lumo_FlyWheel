@@ -15,7 +15,7 @@ from .registry import ModelConfig
 from .yaml_utils import load_yaml_file
 
 _STATE_FILENAME = "serving_runtime_state.json"
-_ALLOWED_KV_CACHE_DTYPES = {"fp8_e5m2", "auto"}
+_ALLOWED_KV_CACHE_DTYPES = {"fp8_e5m2", "fp8_e4m3", "auto"}
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -135,7 +135,7 @@ def _validate_vllm_config(raw: Any, *, field_name: str, issues: list[ValidationI
         issues.append(
             ValidationIssue(
                 field=f"{field_name}.kv_cache_dtype",
-                message="must be one of fp8_e5m2 or auto",
+                message="must be one of fp8_e5m2, fp8_e4m3 or auto",
                 value=kv_cache_dtype,
             )
         )

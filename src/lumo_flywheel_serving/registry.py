@@ -107,9 +107,9 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
     if dtype != "auto":
         raise ValueError(f"Model {model_id} dtype must be 'auto'; got {dtype!r}")
     kv_cache_dtype = raw.get("kv_cache_dtype", "fp8_e5m2")
-    if kv_cache_dtype not in {"fp8_e5m2", "auto"}:
+    if kv_cache_dtype not in {"fp8_e5m2", "fp8_e4m3", "auto"}:
         raise ValueError(
-            f"Model {model_id} kv_cache_dtype must be 'fp8_e5m2' or 'auto'; got {kv_cache_dtype!r}"
+            f"Model {model_id} kv_cache_dtype must be 'fp8_e5m2', 'fp8_e4m3' or 'auto'; got {kv_cache_dtype!r}"
         )
     lora_modules_raw = raw.get("lora_modules", {})
     if not isinstance(lora_modules_raw, dict):

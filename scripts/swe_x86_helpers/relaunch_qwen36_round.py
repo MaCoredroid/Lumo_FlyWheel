@@ -2193,9 +2193,35 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
 
 
-def _mtp_bundle(n: int, tree: str | None = None) -> str:
+def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
+    """Rewrite the bundle's realized KV cache dtype. The base bundles request
+    fp8_e5m2, which ModelServer._initial_kv_cache_dtype rewrites to auto for the
+    fp8 checkpoint (vLLM rejects fp8_e5m2 KV on fp8 checkpoints). fp8_e4m3 is the
+    one FP8 KV dtype the fp8 checkpoint accepts (it carries e4m3 k/v scales), so it
+    passes through to a realized FP8 KV cache instead of falling back to auto."""
+    if kv_cache_dtype is None:
+        return src
+    old = "    kv_cache_dtype: fp8_e5m2"
+    if src.count(old) != 1:
+        raise RuntimeError("kv_cache_dtype anchor not unique in bundle")
+    return src.replace(old, f"    kv_cache_dtype: {kv_cache_dtype}", 1)
+
+
+def _d_bundle(kv_cache_dtype: str | None = None) -> str:
+    base = "/tmp/lumo-track-b-bundle-qwen36/bundle.yaml"
+    if kv_cache_dtype is None:
+        return base
+    src = _apply_kv_cache_dtype(Path(base).read_text(), kv_cache_dtype)
+    out = Path(f"/tmp/lumo-track-b-bundle-qwen36-kv{kv_cache_dtype}"); out.mkdir(exist_ok=True)
+    (out / "bundle.yaml").write_text(src)
+    return str(out / "bundle.yaml")
+
+
+def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = None) -> str:
     src = Path("/tmp/lumo-track-b-bundle-qwen36-off/bundle.yaml").read_text()
-    tag = f"mtp{n}" if tree is None else f"mtp{n}tree"
+    src = _apply_kv_cache_dtype(src, kv_cache_dtype)
+    kvtag = "" if kv_cache_dtype is None else f"-kv{kv_cache_dtype}"
+    tag = (f"mtp{n}" if tree is None else f"mtp{n}tree") + kvtag
     src = src.replace("bundle_id: 712fd011-4b16-4051-9e8c-875405b70f5b",
                       f"bundle_id: e0000000-{tag}-4000-9000-config-e-qwen36")
     # speculative_token_tree passes through load_tuned_config (the
@@ -2246,6 +2272,11 @@ def main() -> int:
     ap.add_argument("--tree-debug", action="store_true",
                     help="config F only: export LUMO_TREE_DRAFT_DEBUG=1 so propose_tree "
                          "logs per-level proposed draft tokens to /logs/tree_draft_debug.jsonl")
+    ap.add_argument("--kv-cache-dtype", default=None,
+                    choices=["auto", "fp8_e5m2", "fp8_e4m3"],
+                    help="override realized KV cache dtype. fp8_e4m3 is the FP8 KV that "
+                         "the fp8 checkpoint accepts (fp8_e5m2 is rejected -> auto). Default: "
+                         "use the bundle's value (fp8_e5m2 -> auto for this checkpoint).")
     args = ap.parse_args()
     is_tree = args.config == "F"
     is_fb = args.config == "Fb"
@@ -2253,9 +2284,9 @@ def main() -> int:
         ap.error("--tree is only valid with --config F")
     tree = (args.tree or _default_tree(args.mtp)) if is_tree else None
     if args.config == "D":
-        bundle = "/tmp/lumo-track-b-bundle-qwen36/bundle.yaml"
+        bundle = _d_bundle(kv_cache_dtype=args.kv_cache_dtype)
     else:  # E, F, or Fb -- MTP bundle (F adds speculative_token_tree)
-        bundle = _mtp_bundle(args.mtp, tree=tree)
+        bundle = _mtp_bundle(args.mtp, tree=tree, kv_cache_dtype=args.kv_cache_dtype)
     server = ModelServer(
         registry_path=REPO / "model_registry.yaml", port=9950,
         container_name="lumo-vllm-track-b-suffix",
@@ -2269,7 +2300,8 @@ def main() -> int:
     server.start("qwen3.6-27b")
     tree_desc = f" tree={tree}" if is_tree else ""
     mtp_desc = args.mtp if args.config in ("E", "F", "Fb") else "-"
-    print(f"READY config={args.config} mtp={mtp_desc}{tree_desc} bundle={bundle}")
+    kv_desc = args.kv_cache_dtype or "bundle-default"
+    print(f"READY config={args.config} mtp={mtp_desc}{tree_desc} kv={kv_desc} bundle={bundle}")
     return 0
 
 

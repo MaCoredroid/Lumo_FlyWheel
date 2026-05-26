@@ -65,7 +65,7 @@ def set_temperature(temp: str) -> None:
     sys.exit("proxy did not come back after temperature change")
 
 
-def apply_config(config: str, mtp: int = 1) -> None:
+def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -> None:
     """Relaunch vLLM into the requested config and wait for READY. D/E use the
     parameterized round relaunch (/tmp/relaunch_qwen36_round.py, which also
     applies the per-agent spec-step trace patch); A/off fall back to the older
@@ -78,6 +78,8 @@ def apply_config(config: str, mtp: int = 1) -> None:
         cmd = [str(REPO / ".venv/bin/python"), round_script, "--config", config]
         if config in ("E", "F"):
             cmd += ["--mtp", str(mtp)]
+        if kv_cache_dtype:
+            cmd += ["--kv-cache-dtype", kv_cache_dtype]
     else:
         script = {"A": "/tmp/relaunch_qwen36_A.py", "off": "/tmp/relaunch_qwen36_off.py"}.get(config)
         if not script or not Path(script).exists():
@@ -87,7 +89,8 @@ def apply_config(config: str, mtp: int = 1) -> None:
     # new file handle, so each round's trace starts clean (and we never delete it
     # out from under a live handle -- the cause of the round-1 unlinked-inode loss).
     sh(["rm", "-f", PER_REQ_SPEC_TRACE])
-    log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F') else '-'} (model load ~ several min)")
+    log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F') else '-'} "
+        f"kv={kv_cache_dtype or 'bundle-default'} (model load ~ several min)")
     r = sh(cmd, timeout=1200)
     if "READY" not in (r.stdout + r.stderr):
         sys.exit(f"config {config} relaunch did not reach READY:\n{r.stdout[-500:]}\n{r.stderr[-500:]}")
@@ -262,6 +265,10 @@ def main() -> int:
                     help="force sampling temperature by restarting the proxy")
     ap.add_argument("--mtp", type=int, default=1,
                     help="config E num_speculative_tokens (MTP depth) when --apply-config")
+    ap.add_argument("--kv-cache-dtype", default=None,
+                    choices=["auto", "fp8_e5m2", "fp8_e4m3"],
+                    help="override realized KV cache dtype on relaunch (fp8_e4m3 = realized FP8 "
+                         "KV for the fp8 checkpoint; default uses the bundle value)")
     ap.add_argument("--subset", help="subset json path ON ALIENWARE (swe)")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--concurrency", type=int, default=1)
@@ -278,7 +285,7 @@ def main() -> int:
         log(f"WARNING: concurrency={args.concurrency} (feedback-no-parallel-testing: default is 1)")
 
     if args.apply_config:
-        apply_config(args.config, args.mtp)
+        apply_config(args.config, args.mtp, kv_cache_dtype=args.kv_cache_dtype)
     if args.temp:
         set_temperature(args.temp)
     preflight()
