@@ -165,8 +165,40 @@ else:
             ]),
         ),
         (
-            '                    positions=self.positions[:num_input_tokens],',
-            '                    positions=self._get_positions(num_input_tokens),',
+            nl.join([
+                '                last_hidden_states, hidden_states = self.model(',
+                '                    input_ids=self.input_ids[:num_input_tokens],',
+                '                    positions=self.positions[:num_input_tokens],',
+                '                    hidden_states=self.hidden_states[:num_input_tokens],',
+                '                    inputs_embeds=None,',
+                '                )',
+            ]),
+            nl.join([
+                '                # LUMO_MROPE_TREE(mm): multimodal MTP draft expects inputs_embeds',
+                '                # (matches the compiled signature of the linear propose path).',
+                '                if self.supports_mm_inputs:',
+                '                    self.inputs_embeds[:num_tokens] = self.model.embed_input_ids(',
+                '                        self.input_ids[:num_tokens],',
+                '                        multimodal_embeddings=None,',
+                '                        is_multimodal=None,',
+                '                    )',
+                '                    _lt_in_ids = None',
+                '                    _lt_in_emb = self.inputs_embeds[:num_input_tokens]',
+                '                else:',
+                '                    _lt_in_ids = self.input_ids[:num_input_tokens]',
+                '                    _lt_in_emb = None',
+                '                _lt_ret = self.model(',
+                '                    input_ids=_lt_in_ids,',
+                '                    positions=self._get_positions(num_input_tokens),',
+                '                    hidden_states=self.hidden_states[:num_input_tokens],',
+                '                    inputs_embeds=_lt_in_emb,',
+                '                )',
+                '                # LUMO_MROPE_TREE: MTP returns a single tensor, not a tuple',
+                '                if self.model_returns_tuple():',
+                '                    last_hidden_states, hidden_states = _lt_ret',
+                '                else:',
+                '                    last_hidden_states = hidden_states = _lt_ret',
+            ]),
         ),
     ]
     for anchor, new in edits:
@@ -208,10 +240,14 @@ def _mtp_bundle(n: int, tree: str | None = None) -> str:
                       f"bundle_id: e0000000-{tag}-4000-9000-config-e-qwen36")
     # speculative_token_tree passes through load_tuned_config (the
     # spec_decode_fields_only allowlist is advisory, not enforced); we still
-    # add it to the allowlist below for provenance. num_speculative_tokens must
-    # equal the tree depth (max tuple length) so vLLM's MTP layer is re-forwarded
-    # once per level. vLLM only supports REGULAR trees (uniform children/level).
-    spec_block = f"  spec_decode:\n    method: qwen3_5_mtp\n    num_speculative_tokens: {n}"
+    # add it to the allowlist below for provenance. vLLM only supports REGULAR
+    # trees (uniform children/level). For a TREE, num_speculative_tokens must be
+    # the NODE COUNT (len(tree_choices)), not the depth -- the runner's draft
+    # output buffer is sized by num_speculative_tokens and propose_tree emits one
+    # draft per tree node (else: RuntimeError size a(depth) != b(nodes)).
+    import ast as _ast
+    n_spec = n if tree is None else len(_ast.literal_eval(tree))
+    spec_block = f"  spec_decode:\n    method: qwen3_5_mtp\n    num_speculative_tokens: {n_spec}"
     if tree is not None:
         # single-quote the tree so YAML keeps it a literal string for vLLM's
         # ast.literal_eval; embedded single quotes are not expected in node tuples.
