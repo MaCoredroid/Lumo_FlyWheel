@@ -2487,10 +2487,11 @@ def _lumo_fb_ir_filter_model_output(model_output, internal_ids):
     return model_output
 
 def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
-                                   spec_decode_metadata=None):
+                                   spec_decode_metadata=None,
+                                   common_attn_metadata=None):
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not (_lumo_fb_ir_runner_enabled() and active):
-        return sampler_output, spec_decode_metadata
+        return sampler_output, spec_decode_metadata, common_attn_metadata
     internal_ids = set(active.keys())
     req_ids = list(self.input_batch.req_ids)
     keep = [i for i, rid in enumerate(req_ids) if rid not in internal_ids]
@@ -2538,9 +2539,32 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             spec_decode_metadata.logits_indices = spec_decode_metadata.logits_indices[:parent_sampled]
         except Exception:
             pass
+    if common_attn_metadata is not None:
+        try:
+            parent_query_tokens = int(common_attn_metadata.query_start_loc_cpu[1].item())
+            common_attn_metadata.query_start_loc = common_attn_metadata.query_start_loc[:2]
+            common_attn_metadata.query_start_loc_cpu = common_attn_metadata.query_start_loc_cpu[:2]
+            common_attn_metadata.seq_lens = common_attn_metadata.seq_lens[:1]
+            if common_attn_metadata._seq_lens_cpu is not None:
+                common_attn_metadata._seq_lens_cpu = common_attn_metadata._seq_lens_cpu[:1]
+            if common_attn_metadata._num_computed_tokens_cpu is not None:
+                common_attn_metadata._num_computed_tokens_cpu = common_attn_metadata._num_computed_tokens_cpu[:1]
+            if common_attn_metadata.dcp_local_seq_lens is not None:
+                common_attn_metadata.dcp_local_seq_lens = common_attn_metadata.dcp_local_seq_lens[:1]
+            if common_attn_metadata.dcp_local_seq_lens_cpu is not None:
+                common_attn_metadata.dcp_local_seq_lens_cpu = common_attn_metadata.dcp_local_seq_lens_cpu[:1]
+            if common_attn_metadata.is_prefilling is not None:
+                common_attn_metadata.is_prefilling = common_attn_metadata.is_prefilling[:1]
+            common_attn_metadata.num_reqs = 1
+            common_attn_metadata.num_actual_tokens = parent_query_tokens
+            common_attn_metadata.max_query_len = parent_query_tokens
+            common_attn_metadata.block_table_tensor = common_attn_metadata.block_table_tensor[:1]
+            common_attn_metadata.slot_mapping = common_attn_metadata.slot_mapping[:parent_query_tokens]
+        except Exception:
+            pass
     _lumo_fb_ir_cleanup_rows(self, internal_ids)
     self._lumo_fb_ir_active = {}
-    return sampler_output, spec_decode_metadata
+    return sampler_output, spec_decode_metadata, common_attn_metadata
 
 def _lumo_fb_ir_cleanup_rows(self, internal_ids):
     for rid in internal_ids:
@@ -2648,8 +2672,9 @@ else:
         '            # are removed from the persistent batch, prune spec metadata',
         '            # too so the next EAGLE proposal keeps the parent-only F_b',
         '            # width-6 path instead of falling back on batch_size=2.',
-        '            sampler_output, spec_decode_metadata = _lumo_fb_ir_prune_after_sample(',
-        '                self, scheduler_output, sampler_output, spec_decode_metadata)',
+        '            sampler_output, spec_decode_metadata, spec_decode_common_attn_metadata = _lumo_fb_ir_prune_after_sample(',
+        '                self, scheduler_output, sampler_output, spec_decode_metadata,',
+        '                spec_decode_common_attn_metadata)',
     ])
     if old not in text:
         raise RuntimeError('F_b internal-row spec metadata prune anchor not found')
