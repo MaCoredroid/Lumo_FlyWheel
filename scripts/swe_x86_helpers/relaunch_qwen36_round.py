@@ -814,8 +814,8 @@ def _lumo_fb_policy_from_logits(logits):
         p1 = float(probs[0].item())
         p2 = float(probs[1].item()) if probs.numel() > 1 else 0.0
         ratio = p2 / max(p1, 1e-9)
-        p1_max = float(_lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX", "0.70"))
-        ratio_min = float(_lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN", "0.20"))
+        p1_max = float(_lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX", "0.45"))
+        ratio_min = float(_lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN", "0.50"))
         k = 2 if (p1 < p1_max and ratio > ratio_min) else 1
         return k, {
             "fb_policy_k": k,
