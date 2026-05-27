@@ -4220,7 +4220,8 @@ def _lumo_fb_ir_write_state_block_ids(self, req_id):
     except Exception:
         return None
 
-def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
+def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts,
+                                     first_sample_noop=True):
     if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") != "1":
         return
     req_state = self.requests.get(req_id)
@@ -4236,7 +4237,7 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
     _seen.add(req_id)
     # Same closed-form rule as scheduler-side promotion. Full accept at
     # a=active_depth intentionally promotes offset active_depth+1.
-    src_offset = 0 if _first_sample else accepted_drafts + 1
+    src_offset = 0 if (_first_sample and first_sample_noop) else accepted_drafts + 1
     if src_offset < 1:
         return
     moved = []
@@ -4271,6 +4272,7 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
                 "rid": req_id,
                 "accepted_drafts": int(accepted_drafts),
                 "accepted_prefix_len": int(accepted_drafts) + 1,
+                "first_sample_noop": bool(first_sample_noop),
                 "moves": moved,
             })
     except Exception as e:
@@ -4278,6 +4280,7 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
             "event": "kernel_promote_state_error",
             "rid": req_id,
             "accepted_drafts": int(accepted_drafts),
+            "first_sample_noop": bool(first_sample_noop),
             "error": repr(e),
         })
 
@@ -4579,7 +4582,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             # Active K2 rows are pruned before the base state update, so keep
             # the parent read slot physically aligned with the accepted prefix
             # here. The no-active K1 path remains disabled separately.
-            _lumo_fb_ir_kernel_promote_state(self, parent, winner_acc)
+            _lumo_fb_ir_kernel_promote_state(
+                self, parent, winner_acc, first_sample_noop=False)
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
