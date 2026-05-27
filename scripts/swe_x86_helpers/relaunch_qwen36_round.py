@@ -2342,6 +2342,11 @@ else:
 # and reuse it across siblings; otherwise path0/path1 independently sample
 # different roots and the second-root win case is lost.
 import os as _lumo_fb_rs_os
+_LUMO_FB_SHARED_ROOT_PAIRS = None
+
+def _lumo_fb_set_shared_root_pairs(pairs):
+    global _LUMO_FB_SHARED_ROOT_PAIRS
+    _LUMO_FB_SHARED_ROOT_PAIRS = pairs
 
 def _lumo_fb_sample_from_probs(probs, generator=None):
     q = torch.empty_like(probs)
@@ -2386,19 +2391,38 @@ def _lumo_fb_shared_root_rejection_sample(
         device=device,
     )
 
+    pairs = globals().get("_LUMO_FB_SHARED_ROOT_PAIRS", None)
+    if pairs:
+        pairs = [(int(a), int(b)) for a, b in pairs
+                 if 0 <= int(a) < batch_size and 0 <= int(b) < batch_size]
+        covered = set()
+        for a, b in pairs:
+            covered.add(a)
+            covered.add(b)
+        if len(covered) != batch_size:
+            return rejection_sample(
+                draft_token_ids, num_draft_tokens, max_spec_len,
+                cu_num_draft_tokens, draft_probs, target_logits,
+                bonus_token_ids, sampling_metadata)
+    else:
+        pairs = [(i, i + 1) for i in range(0, batch_size, 2)]
+
     if sampling_metadata.all_greedy:
         target_argmax = target_logits.argmax(dim=-1).to(torch.int32)
-        for req_idx in range(batch_size):
-            start = 0 if req_idx == 0 else int(cu_num_draft_tokens[req_idx - 1].item())
-            rejected = False
-            for pos in range(fb_depth):
-                tok = target_argmax[start + pos]
-                output_token_ids[req_idx, pos] = tok
-                if int(draft_token_ids[start + pos].item()) != int(tok.item()):
-                    rejected = True
-                    break
-            if not rejected:
-                output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
+        for parent_idx, sibling_idx in pairs:
+            parent_start = 0 if parent_idx == 0 else int(cu_num_draft_tokens[parent_idx - 1].item())
+            shared_root = target_argmax[parent_start]
+            for req_idx in (parent_idx, sibling_idx):
+                start = 0 if req_idx == 0 else int(cu_num_draft_tokens[req_idx - 1].item())
+                rejected = False
+                for pos in range(fb_depth):
+                    tok = shared_root if pos == 0 else target_argmax[start + pos]
+                    output_token_ids[req_idx, pos] = tok
+                    if int(draft_token_ids[start + pos].item()) != int(tok.item()):
+                        rejected = True
+                        break
+                if not rejected:
+                    output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
         return output_token_ids
 
     if sampling_metadata.all_random:
@@ -2415,14 +2439,14 @@ def _lumo_fb_shared_root_rejection_sample(
         draft_token_ids, draft_probs, target_probs, sampling_metadata, device)
     target_argmax = target_logits.argmax(dim=-1).to(torch.int32)
 
-    for pair_start in range(0, batch_size, 2):
-        start0 = 0 if pair_start == 0 else int(cu_num_draft_tokens[pair_start - 1].item())
-        root_generator = sampling_metadata.generators.get(pair_start)
-        if greedy_by_req[pair_start]:
+    for parent_idx, sibling_idx in pairs:
+        start0 = 0 if parent_idx == 0 else int(cu_num_draft_tokens[parent_idx - 1].item())
+        root_generator = sampling_metadata.generators.get(parent_idx)
+        if greedy_by_req[parent_idx]:
             shared_root = target_argmax[start0]
         else:
             shared_root = _lumo_fb_sample_from_probs(target_probs[start0], root_generator)
-        for req_idx in (pair_start, pair_start + 1):
+        for req_idx in (parent_idx, sibling_idx):
             start = 0 if req_idx == 0 else int(cu_num_draft_tokens[req_idx - 1].item())
             rejected = False
             for pos in range(fb_depth):
@@ -3094,7 +3118,27 @@ def _lumo_fb_ir_cleanup_rows(self, internal_ids):
         pass
 
 def _lumo_fb_ir_sample_tokens(self, grammar_output):
+    active = getattr(self, "_lumo_fb_ir_active", None)
+    if _lumo_fb_ir_runner_enabled() and active:
+        try:
+            from vllm.v1.sample import rejection_sampler as _lumo_fb_ir_rs
+            req_ids = list(self.input_batch.req_ids)
+            req_index = {rid: i for i, rid in enumerate(req_ids)}
+            pairs = []
+            for row_id, parent_id in active.items():
+                if parent_id in req_index and row_id in req_index:
+                    pairs.append((req_index[parent_id], req_index[row_id]))
+            if hasattr(_lumo_fb_ir_rs, "_lumo_fb_set_shared_root_pairs"):
+                _lumo_fb_ir_rs._lumo_fb_set_shared_root_pairs(pairs or None)
+        except Exception:
+            pass
     output = _lumo_fb_ir_prev_sample_tokens(self, grammar_output)
+    try:
+        from vllm.v1.sample import rejection_sampler as _lumo_fb_ir_rs
+        if hasattr(_lumo_fb_ir_rs, "_lumo_fb_set_shared_root_pairs"):
+            _lumo_fb_ir_rs._lumo_fb_set_shared_root_pairs(None)
+    except Exception:
+        pass
     if not _lumo_fb_ir_runner_enabled():
         return output
     active = getattr(self, "_lumo_fb_ir_active", None)
