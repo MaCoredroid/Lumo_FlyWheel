@@ -3385,6 +3385,11 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
         self._lumo_fb_kernel_seen_sample = _seen
     _first_sample = req_id not in _seen
     _seen.add(req_id)
+    try:
+        active_depth, _ = _lumo_fb_ir_read_control(
+            int(_lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "5")))
+    except Exception:
+        active_depth = max(1, accepted_drafts)
     moved = []
     for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
         if getattr(manager, "mamba_cache_mode", None) != "align":
@@ -3401,9 +3406,11 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
         curr_idx = max(0, _lumo_fb_ir_cdiv(
             int(req.num_computed_tokens) + int(num_sched), block_size) - 1)
         # The first prompt-root sample has no carried input token to advance.
-        # After that, every spec verify step consumes the previous sampled
-        # token plus the accepted draft prefix.
-        src_offset = 0 if _first_sample else accepted_drafts + 1
+        # After that, partial accepts consume the carried token plus the
+        # accepted draft prefix. Full accepts do not consume the sampled bonus,
+        # so cap promotion at active_depth.
+        src_offset = (0 if _first_sample
+                      else min(accepted_drafts + 1, int(active_depth)))
         src_idx = curr_idx + src_offset
         if src_idx >= len(blocks):
             continue
@@ -3643,7 +3650,18 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
         self._lumo_fb_kernel_seen_sample = _seen
     _first_sample = req_id not in _seen
     _seen.add(req_id)
-    src_offset = 0 if _first_sample else accepted_drafts + 1
+    try:
+        active_depth = int(_lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "5"))
+        path = _lumo_fb_ir_os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
+        if path and _lumo_fb_ir_os.path.exists(path):
+            with open(path) as fh:
+                payload = _lumo_fb_ir_json.load(fh)
+            if payload.get("depth") is not None:
+                active_depth = int(payload.get("depth"))
+    except Exception:
+        active_depth = max(1, accepted_drafts)
+    src_offset = (0 if _first_sample
+                  else min(accepted_drafts + 1, int(active_depth)))
     if src_offset < 1:
         return
     moved = []
