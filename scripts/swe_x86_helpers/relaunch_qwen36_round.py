@@ -3799,7 +3799,8 @@ def _lumo_fb_ir_accept_from_generated(tokens):
             break
     return max(0, len(valid) - 1)
 
-def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
+def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts,
+                                      first_sample_noop=True):
     if not _lumo_fb_ir_kernel_rows_enabled():
         return
     req = self.requests.get(req_id)
@@ -3835,7 +3836,7 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
         # - Accepting a drafts consumes a+1 tokens, so promote offset a+1.
         # - The initial prompt-root sample is not a spec-verify row and is the
         #   only no-op.
-        src_offset = 0 if _first_sample else accepted_drafts + 1
+        src_offset = 0 if (_first_sample and first_sample_noop) else accepted_drafts + 1
         src_idx = curr_idx + src_offset
         if src_idx >= len(blocks):
             continue
@@ -3861,6 +3862,7 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
             "event": "kernel_promote_manager_state",
             "rid": req_id,
             "accepted_drafts": int(accepted_drafts),
+            "first_sample_noop": bool(first_sample_noop),
             "moves": moved,
         })
 
@@ -4106,9 +4108,11 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                 _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, data.get("winner_rid"))
             elif (isinstance(data, dict)
                   and data.get("winner_rid") == parent_id
-                  and _lumo_fb_ir_os.environ.get("LUMO_FB_PROMOTE_PARENT_WINNERS") == "1"):
+                  and (_lumo_fb_ir_os.environ.get("LUMO_FB_PROMOTE_PARENT_WINNERS") == "1"
+                       or _lumo_fb_ir_kernel_rows_enabled())):
                 _lumo_fb_ir_promote_manager_state(
-                    self, parent_id, int(data.get("accepted", 0)))
+                    self, parent_id, int(data.get("accepted", 0)),
+                    first_sample_noop=False)
         for rid in internal_ids:
             if rid in scheduler_output.num_scheduled_tokens:
                 scheduler_output.total_num_scheduled_tokens -= scheduler_output.num_scheduled_tokens.pop(rid)
@@ -4121,8 +4125,8 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                 model_runner_output.sampled_token_ids = [model_runner_output.sampled_token_ids[i] for i in keep]
                 model_runner_output.req_id_to_index = {rid: i for i, rid in enumerate(model_runner_output.req_ids)}
         _lumo_fb_ir_free_owned(self, [rid for rid in internal_ids if rid not in winner_ids])
-    elif (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS_NOACTIVE_PROMOTE") == "1"
-          and _lumo_fb_ir_kernel_rows_enabled()
+    elif (_lumo_fb_ir_kernel_rows_enabled()
+          and _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS_NOACTIVE_PROMOTE", "1") != "0"
           and hasattr(model_runner_output, "req_ids")):
         try:
             for req_id, toks in zip(model_runner_output.req_ids, model_runner_output.sampled_token_ids):
@@ -4751,7 +4755,7 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not active:
         if (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-                and _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS_NOACTIVE_PROMOTE") == "1"):
+                and _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS_NOACTIVE_PROMOTE", "1") != "0"):
             try:
                 model_output = getattr(output, "model_runner_output", output)
                 raw_req_ids = list(getattr(model_output, "req_ids", []) or [])
