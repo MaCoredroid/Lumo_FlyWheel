@@ -323,25 +323,26 @@ import torch
     old = '''            assert num_accepted_tokens is not None
             num_accepted_tokens = num_accepted_tokens[spec_sequence_masks]
 '''
-    new = '''            # F_b kernel-row convention: the ordinary spec_state_indices table
-            # is the private write table.  One extra block-table column carries
-            # the shared read-only prefix state for every sibling row.
+    new = '''            # F_b kernel-row convention: block-table column 0 carries the
+            # shared read-only prefix state.  Columns 1..num_spec+1 are the
+            # private write table used by recurrent kernels.
             spec_initial_state_indices_tensor = None
             spec_initial_state_slot_tensor = None
             spec_write_state_slot_tensor = None
             if _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
-                _fb_read_col = int(self.num_spec + 1)
-                if block_table_tensor.size(1) <= _fb_read_col:
+                _fb_write_end = int(self.num_spec + 2)
+                if block_table_tensor.size(1) < _fb_write_end:
                     raise RuntimeError(
-                        "LUMO_FB_KERNEL_ROWS requires block_table read column "
-                        f"{_fb_read_col}, got width {block_table_tensor.size(1)}")
+                        "LUMO_FB_KERNEL_ROWS requires block_table write columns "
+                        f"through {_fb_write_end - 1}, got width {block_table_tensor.size(1)}")
+                spec_state_indices_tensor = block_table_tensor[
+                    spec_sequence_masks, 1:_fb_write_end
+                ]
                 spec_initial_state_indices_tensor = block_table_tensor[
-                    spec_sequence_masks, _fb_read_col
+                    spec_sequence_masks, 0
                 ].contiguous()
                 _fb_n = int(num_spec_decodes)
-                spec_initial_state_slot_tensor = torch.full(
-                    (_fb_n,), _fb_read_col, dtype=torch.int32,
-                    device=query_start_loc.device)
+                spec_initial_state_slot_tensor = None
                 spec_write_state_slot_tensor = torch.zeros(
                     (_fb_n,), dtype=torch.int32, device=query_start_loc.device)
 
@@ -364,13 +365,7 @@ import torch
                     self.spec_initial_state_indices_tensor[:batch_size]
                 )
                 spec_initial_state_indices_tensor[num_spec_decodes:].fill_(PAD_SLOT_ID)
-                self.spec_initial_state_slot_tensor[:num_spec_decodes].copy_(
-                    spec_initial_state_slot_tensor, non_blocking=True
-                )
-                spec_initial_state_slot_tensor = (
-                    self.spec_initial_state_slot_tensor[:batch_size]
-                )
-                spec_initial_state_slot_tensor[num_spec_decodes:].fill_(0)
+                spec_initial_state_slot_tensor = None
                 self.spec_write_state_slot_tensor[:num_spec_decodes].copy_(
                     spec_write_state_slot_tensor, non_blocking=True
                 )
@@ -439,7 +434,7 @@ else:
 '''
     new = '''                conv_state_indices=(
                     spec_state_indices_tensor
-                    if spec_initial_state_slot_tensor is not None
+                    if spec_initial_state_indices_tensor is not None
                     else spec_state_indices_tensor[:, 0][
                         : attn_metadata.num_spec_decodes
                     ]
@@ -448,7 +443,7 @@ else:
                 query_start_loc=spec_query_start_loc,
                 max_query_len=spec_state_indices_tensor.size(-1),
                 block_idx_last_scheduled_token=spec_write_state_slot_tensor,
-                initial_state_idx=spec_initial_state_slot_tensor,
+                initial_state_indices=spec_initial_state_indices_tensor,
                 validate_data=False,
 '''
     if old not in text:
@@ -459,6 +454,102 @@ else:
     import py_compile
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b kernel-row gdn_linear conv hook')
+
+cc = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/ops/causal_conv1d.py')
+text = cc.read_text()
+sentinel = '# LUMO_FB_KERNEL_ROWS_CONV_READ'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b kernel-row causal_conv read patch already present')
+else:
+    old = '''    block_idx_last_scheduled_token,  # (batch,)
+    initial_state_idx,  # (batch,)
+    o_ptr,  # (batch, dim, seqlen)
+'''
+    new = '''    block_idx_last_scheduled_token,  # (batch,)
+    initial_state_idx,  # (batch,)
+    initial_state_indices_ptr,  # (batch,), physical read state ids
+    o_ptr,  # (batch, dim, seqlen)
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv kernel arg anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''    IS_APC_ENABLED: tl.constexpr,
+    IS_SPEC_DECODING: tl.constexpr,
+    NP2_STATELEN: tl.constexpr,
+'''
+    new = '''    IS_APC_ENABLED: tl.constexpr,
+    IS_SPEC_DECODING: tl.constexpr,
+    HAS_INITIAL_STATE_INDICES: tl.constexpr,
+    NP2_STATELEN: tl.constexpr,
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv constexpr anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''    # cache_idx
+    conv_states_input_coord = tl.load(
+        conv_state_indices_ptr + idx_seq * stride_state_indices + conv_state_init
+    ).to(tl.int64)
+'''
+    new = '''    # cache_idx
+    # LUMO_FB_KERNEL_ROWS_CONV_READ: no-copy path rows read the shared prefix
+    # conv state by physical id, while conv_state_indices_ptr remains the
+    # private write table.
+    if HAS_INITIAL_STATE_INDICES:
+        conv_states_input_coord = tl.load(initial_state_indices_ptr + idx_seq).to(tl.int64)
+    else:
+        conv_states_input_coord = tl.load(
+            conv_state_indices_ptr + idx_seq * stride_state_indices + conv_state_init
+        ).to(tl.int64)
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv read anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''    initial_state_idx: torch.Tensor | None = None,
+    validate_data=False,
+):
+'''
+    new = '''    initial_state_idx: torch.Tensor | None = None,
+    initial_state_indices: torch.Tensor | None = None,
+    validate_data=False,
+):
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv wrapper arg anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''        block_idx_last_scheduled_token,
+        initial_state_idx,
+        out,
+'''
+    new = '''        block_idx_last_scheduled_token,
+        initial_state_idx,
+        initial_state_indices,
+        out,
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv launch arg anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''        IS_APC_ENABLED=block_idx_last_scheduled_token is not None,
+        IS_SPEC_DECODING=num_accepted_tokens is not None,
+        NP2_STATELEN=np2_statelen,
+'''
+    new = '''        IS_APC_ENABLED=block_idx_last_scheduled_token is not None,
+        IS_SPEC_DECODING=num_accepted_tokens is not None,
+        HAS_INITIAL_STATE_INDICES=initial_state_indices is not None,
+        NP2_STATELEN=np2_statelen,
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv launch meta anchor not found')
+    text = text.replace(old, new, 1)
+
+    cc.write_text(text)
+    import py_compile
+    py_compile.compile(str(cc), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b kernel-row causal_conv read hook')
 
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
@@ -3069,9 +3160,9 @@ def _lumo_fb_ir_kernel_rows_enabled():
     return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
 
 def _lumo_fb_ir_kernel_arrange_mamba_blocks(manager, req_blocks, curr_idx):
-    # Arrange one GDN row as [private writes..., shared read].
-    # The GDN metadata patch reads the initial recurrent state from column
-    # num_spec+1 and writes token states to columns 0..num_spec.  This helper
+    # Arrange one GDN row as [shared read, private writes...].
+    # The GDN metadata patch reads the initial recurrent state from column 0
+    # and writes token states to columns 1..num_spec+1.  This helper
     # creates that layout without copying recurrent state bytes.
     num_spec_blocks = int(getattr(manager.kv_cache_spec, "num_speculative_blocks", 0))
     if num_spec_blocks < 1:
@@ -3087,45 +3178,19 @@ def _lumo_fb_ir_kernel_arrange_mamba_blocks(manager, req_blocks, curr_idx):
     if read_block == getattr(manager, "_null_block", None):
         raise RuntimeError("LUMO_FB_KERNEL_ROWS read state block is null")
     owned = []
-    # The extra speculative block added by LUMO_FB_KERNEL_ROWS is the shared
-    # read column.  The preceding 1+num_spec token columns are private writes.
-    for logical_idx in range(read_idx, last_idx - 1):
+    # Column 0 stays as the shared read state.  The extra speculative block
+    # added by LUMO_FB_KERNEL_ROWS gives us enough private write columns.
+    for logical_idx in range(read_idx + 1, last_idx):
         dst = _lumo_fb_ir_new_block(manager)
         row_blocks[logical_idx] = dst
         owned.append(dst)
-    row_blocks[last_idx - 1] = read_block
     return row_blocks, owned, read_block
 
 def _lumo_fb_ir_prepare_parent_kernel_blocks(self, parent, num_scheduled_tokens):
-    if not _lumo_fb_ir_kernel_rows_enabled():
-        return []
-    owned = []
-    for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
-        if getattr(manager, "mamba_cache_mode", None) != "align":
-            continue
-        parent_blocks = list(manager.req_to_blocks.get(parent.request_id, ()))
-        if not parent_blocks:
-            continue
-        block_size = int(manager.block_size)
-        curr_idx = max(0, _lumo_fb_ir_cdiv(
-            parent.num_computed_tokens + num_scheduled_tokens, block_size) - 1)
-        row_blocks, new_blocks, read_block = _lumo_fb_ir_kernel_arrange_mamba_blocks(
-            manager, parent_blocks, curr_idx)
-        manager.req_to_blocks[parent.request_id] = row_blocks
-        owned.extend((group_idx, blk) for blk in new_blocks)
-        _lumo_fb_ir_sched_debug({
-            "event": "kernel_parent_blocks",
-            "parent": parent.request_id,
-            "group": group_idx,
-            "curr_idx": curr_idx,
-            "read_block": getattr(read_block, "block_id", None),
-            "write_blocks": [blk.block_id for blk in new_blocks],
-        })
-    if owned:
-        self._lumo_fb_ir_parent_kernel_owned = getattr(
-            self, "_lumo_fb_ir_parent_kernel_owned", {})
-        self._lumo_fb_ir_parent_kernel_owned.setdefault(parent.request_id, []).extend(owned)
-    return owned
+    # Parent/path0 already has the correct no-copy layout after the extra
+    # Mamba speculative block: col0 is the live prefix state populated by
+    # preprocess_mamba, and cols1..num_spec+1 are private speculative writes.
+    return []
 
 def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
     copies = []
