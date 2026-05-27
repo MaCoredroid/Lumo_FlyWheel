@@ -3855,6 +3855,7 @@ def _lumo_fb_ir_schedule(self):
         "fb_internal_row_count": out.lumo_fb_internal_row_count,
         "fb_parent_count": len(rows_by_parent),
     })
+    self._lumo_fb_ir_last_rows_by_parent = rows_by_parent
     if rows_by_parent:
         out.lumo_fb_internal_rows = rows_by_parent
         existing = list(getattr(out, "lumo_fb_block_copies", []) or [])
@@ -3867,6 +3868,7 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
     rows_by_parent = (
         getattr(scheduler_output, "lumo_fb_internal_rows", None)
         or getattr(model_runner_output, "lumo_fb_internal_rows", None)
+        or getattr(self, "_lumo_fb_ir_last_rows_by_parent", None)
         or {}
     )
     internal_ids = []
@@ -3949,6 +3951,7 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                 model_runner_output.sampled_token_ids = [model_runner_output.sampled_token_ids[i] for i in keep]
                 model_runner_output.req_id_to_index = {rid: i for i, rid in enumerate(model_runner_output.req_ids)}
         _lumo_fb_ir_free_owned(self, [rid for rid in internal_ids if rid not in winner_ids])
+        self._lumo_fb_ir_last_rows_by_parent = {}
     elif _lumo_fb_ir_kernel_rows_enabled() and hasattr(model_runner_output, "req_ids"):
         try:
             for req_id, toks in zip(model_runner_output.req_ids, model_runner_output.sampled_token_ids):
