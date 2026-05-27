@@ -1,0 +1,23 @@
+{
+  "label": "Fb_positive_assert_control_wrong_depth",
+  "outcome": "expected_failure",
+  "assert_live": true,
+  "error": "LUMO_FB_ASSERT_ACTUAL_WIDTH failed",
+  "note": "Positive control used proposer depth=4 and assert_depth=2 under Fb n_max=16. The runtime assert fired before any metric was emitted.",
+  "observed_event": {
+    "cudagraph_mode": "PIECEWISE",
+    "batch_desc": "BatchDescriptor(num_tokens=17, num_reqs=None, uniform=False, has_lora=False, num_active_loras=0)",
+    "active_depth": 2,
+    "expected_tokens_per_req": 3,
+    "num_reqs": 1,
+    "num_reqs_padded": 1,
+    "num_scheduled_tokens": [5],
+    "max_query_len": 5,
+    "target_unpadded_tokens": 5,
+    "target_forward_tokens": 17,
+    "logits_indices_len": 5,
+    "lm_head_rows": 5,
+    "sample_hidden_rows": 5
+  },
+  "conclusion": "Hot-plug n_max=16 graph launch is contaminated for tps search: logical depth 4 verifies 5 tokens but target forward executes 17 padded tokens under PIECEWISE CUDA graph."
+}
