@@ -3181,7 +3181,8 @@ def _lumo_fb_prepare_input_ids(self, scheduler_output, num_reqs,
     flat_indices = []
     flat_values = []
     for req_id, toks in scheduler_output.scheduled_spec_decode_tokens.items():
-        if "::lumo_fb::" not in req_id or not toks:
+        if (("::lumo_fb::" not in req_id and "::lumo_fb_ir::" not in req_id)
+                or not toks):
             continue
         req_idx = self.input_batch.req_id_to_index.get(req_id)
         if req_idx is None:
