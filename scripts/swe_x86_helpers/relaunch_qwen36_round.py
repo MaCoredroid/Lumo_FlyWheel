@@ -1774,14 +1774,6 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
     policy_k, policy_info = _lumo_fb_policy_from_logits(logits, requested_k)
     policy_info = dict(policy_info)
     policy_info.update(control_info)
-    if getattr(sampling_metadata, "all_greedy", False):
-        # In greedy decode, F_b must reduce exactly to the linear E path:
-        # the single target argmax root is deterministic, so sibling root
-        # diversity has no distributional role and only risks row interference.
-        policy_k = 1
-        policy_info = dict(policy_info)
-        policy_info["fb_policy_k"] = 1
-        policy_info["fb_policy_reason"] = "greedy_reduces_to_linear"
     if _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
         policy_k = 2
         policy_info = dict(policy_info)
@@ -3143,11 +3135,6 @@ def _lumo_fb_shared_root_rejection_sample(
                         break
                 if not rejected:
                     output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
-        _lumo_fb_sampler_debug(
-            "shared_root_greedy",
-            draft_token_ids, num_draft_tokens, max_spec_len,
-            cu_num_draft_tokens, target_logits, bonus_token_ids,
-            sampling_metadata, output_token_ids)
         return output_token_ids
 
     if sampling_metadata.all_random:
@@ -3201,11 +3188,6 @@ def _lumo_fb_shared_root_rejection_sample(
                     break
             if not rejected:
                 output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
-    _lumo_fb_sampler_debug(
-        "shared_root_random",
-        draft_token_ids, num_draft_tokens, max_spec_len,
-        cu_num_draft_tokens, target_logits, bonus_token_ids,
-        sampling_metadata, output_token_ids)
     return output_token_ids
 """
     old = nl.join([
@@ -4050,11 +4032,6 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
         pass
     if winners:
         scheduler_output.lumo_fb_internal_winners = winners
-        # The same sampled parent row may subsequently flow through the
-        # no-active K=1 promotion hook after internal rows have been pruned.
-        # Winner collapse already promoted the parent once; a second promotion
-        # swaps from the newly promoted column and corrupts the next state.
-        self._lumo_fb_ir_skip_noactive_promote_once = set(winners.keys())
     if len(keep) != len(req_ids):
         try:
             idx = _lumo_fb_ir_torch.tensor(keep, dtype=_lumo_fb_ir_torch.long,
@@ -4156,18 +4133,7 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                 raw_samples = list(getattr(model_output, "sampled_token_ids", []) or [])
                 # Keep the runner's cached block table in sync with the
                 # scheduler-side manager promotion for K=1/no-internal events.
-                skip_once = getattr(
-                    self, "_lumo_fb_ir_skip_noactive_promote_once", set())
                 for rid, toks in zip(raw_req_ids, raw_samples):
-                    if rid in skip_once:
-                        skip_once.discard(rid)
-                        _lumo_fb_ir_debug({
-                            "event": "kernel_noactive_promote_skipped",
-                            "rid": rid,
-                            "sampled": [int(t) for t in list(toks)[:8] if int(t) != -1],
-                            "accepted": int(_lumo_fb_ir_accepted_from_tokens(toks)),
-                        })
-                        continue
                     _lumo_fb_ir_debug({
                         "event": "kernel_noactive_sample",
                         "rid": rid,
