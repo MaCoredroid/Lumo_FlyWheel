@@ -2925,6 +2925,18 @@ def _lumo_fb_ir_state_block_ids(self, req_id):
     except Exception:
         return None
 
+def _lumo_fb_ir_set_accept_len(self, req_id, accept_len):
+    idx = self.input_batch.req_id_to_index.get(req_id)
+    if idx is None:
+        return
+    try:
+        self.input_batch.num_accepted_tokens_cpu[idx] = int(accept_len)
+        self.input_batch.num_accepted_tokens_cpu_tensor[idx] = int(accept_len)
+        if hasattr(self, "num_accepted_tokens"):
+            self.num_accepted_tokens.np[idx] = int(accept_len)
+    except Exception:
+        pass
+
 def _lumo_fb_ir_mamba_curr_state_idx(self, req_state, num_scheduled_tokens):
     try:
         copy_bufs = self._get_mamba_copy_bufs()
@@ -2984,8 +2996,17 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
                 row_state_idx = self.mamba_state_idx.get(parent_id)
             if row_state_idx is not None:
                 self.mamba_state_idx[row_id] = int(row_state_idx)
+            # Internal rows are materialized after the base Mamba preprocess
+            # copied num_accepted_tokens to GPU. Seed the row slot explicitly;
+            # otherwise the batched GDN forward may read stale offset data for
+            # the sibling row.
+            _lumo_fb_ir_set_accept_len(self, row_id, 1)
             active[row_id] = parent_id
     if active:
+        try:
+            self.num_accepted_tokens.copy_to_gpu(len(self.input_batch.req_ids))
+        except Exception:
+            pass
         self.input_batch.refresh_metadata()
         self._lumo_fb_ir_active = active
         scheduler_output.lumo_fb_row_materialize_us = int(
