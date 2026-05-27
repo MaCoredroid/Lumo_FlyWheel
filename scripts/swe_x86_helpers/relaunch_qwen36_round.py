@@ -3795,6 +3795,7 @@ def _lumo_fb_ir_set_accept_len(self, req_id, accept_len):
         self.input_batch.num_accepted_tokens_cpu_tensor[idx] = int(accept_len)
         if hasattr(self, "num_accepted_tokens"):
             self.num_accepted_tokens.np[idx] = int(accept_len)
+            self.num_accepted_tokens.copy_to_gpu(len(self.input_batch.req_ids))
     except Exception:
         pass
 
