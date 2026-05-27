@@ -4576,10 +4576,10 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             # accepted-prefix length for Mamba preprocess sync; otherwise the
             # next step can restore a stale length from an earlier K2 event.
             _lumo_fb_ir_set_accept_len(self, parent, int(winner_acc) + 1)
-            # Only internal winners need an explicit row-state collapse back
-            # into the parent.
-            if winner_rid != parent:
-                _lumo_fb_ir_kernel_promote_state(self, parent, winner_acc)
+            # Active K2 rows are pruned before the base state update, so keep
+            # the parent read slot physically aligned with the accepted prefix
+            # here. The no-active K1 path remains disabled separately.
+            _lumo_fb_ir_kernel_promote_state(self, parent, winner_acc)
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
