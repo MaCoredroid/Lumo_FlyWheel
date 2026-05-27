@@ -3686,6 +3686,57 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id):
         if hasattr(manager, "_allocated_block_reqs"):
             manager._allocated_block_reqs.add(parent_id)
 
+def _lumo_fb_ir_promote_internal_row_state(self, parent_id, row_id, accepted_drafts):
+    if not _lumo_fb_ir_kernel_rows_enabled():
+        return
+    row_block_ids_by_row = getattr(self, "_lumo_fb_ir_row_block_ids", None)
+    if not row_block_ids_by_row or row_id not in row_block_ids_by_row:
+        return
+    parent = self.requests.get(parent_id)
+    if parent is None:
+        return
+    try:
+        accepted_drafts = int(accepted_drafts)
+        row_groups = [list(group) for group in row_block_ids_by_row[row_id]]
+        num_sched = int(getattr(self, "_lumo_fb_ir_last_sched_tokens", {}).get(parent_id, 0))
+        moved = []
+        for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
+            if getattr(manager, "mamba_cache_mode", None) != "align":
+                continue
+            if group_idx >= len(row_groups) or not row_groups[group_idx]:
+                continue
+            block_size = int(manager.block_size)
+            curr_idx = max(0, _lumo_fb_ir_cdiv(
+                int(parent.num_computed_tokens) + int(num_sched), block_size) - 1)
+            src_idx = curr_idx + accepted_drafts + 1
+            if src_idx >= len(row_groups[group_idx]):
+                continue
+            row_groups[group_idx][curr_idx], row_groups[group_idx][src_idx] = (
+                row_groups[group_idx][src_idx], row_groups[group_idx][curr_idx])
+            moved.append({
+                "group": int(group_idx),
+                "curr_idx": int(curr_idx),
+                "src_idx": int(src_idx),
+                "curr_block": int(row_groups[group_idx][curr_idx]),
+            })
+        row_block_ids_by_row[row_id] = tuple(row_groups)
+        if moved:
+            _lumo_fb_ir_sched_debug({
+                "event": "kernel_promote_internal_row_state",
+                "parent": parent_id,
+                "rid": row_id,
+                "accepted_drafts": int(accepted_drafts),
+                "moves": moved,
+            })
+    except Exception as e:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_promote_internal_row_state_error",
+            "parent": parent_id,
+            "rid": row_id,
+            "accepted_drafts": int(accepted_drafts),
+            "error": repr(e),
+        })
+
 def _lumo_fb_ir_free_owned(self, row_ids):
     owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
     row_block_ids_by_row = getattr(self, "_lumo_fb_ir_row_block_ids", {})
@@ -3986,8 +4037,9 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
         }
         for parent_id, data in winners.items():
             if isinstance(data, dict) and data.get("winner_rid") in internal_ids:
-                _lumo_fb_ir_promote_manager_state(
-                    self, data.get("winner_rid"), int(data.get("accepted", 0)))
+                _lumo_fb_ir_promote_internal_row_state(
+                    self, parent_id, data.get("winner_rid"),
+                    int(data.get("accepted", 0)))
                 _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, data.get("winner_rid"))
             elif isinstance(data, dict) and data.get("winner_rid") == parent_id:
                 _lumo_fb_ir_promote_manager_state(
