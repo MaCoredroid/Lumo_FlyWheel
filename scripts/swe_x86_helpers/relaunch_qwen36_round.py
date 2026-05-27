@@ -4104,7 +4104,9 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                     self, parent_id, data.get("winner_rid"),
                     int(data.get("accepted", 0)))
                 _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, data.get("winner_rid"))
-            elif isinstance(data, dict) and data.get("winner_rid") == parent_id:
+            elif (isinstance(data, dict)
+                  and data.get("winner_rid") == parent_id
+                  and _lumo_fb_ir_os.environ.get("LUMO_FB_PROMOTE_PARENT_WINNERS") == "1"):
                 _lumo_fb_ir_promote_manager_state(
                     self, parent_id, int(data.get("accepted", 0)))
         for rid in internal_ids:
@@ -4569,10 +4571,11 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                             self.mamba_state_idx[parent] = self.mamba_state_idx[winner_rid]
                 except Exception:
                     pass
-            # Keep the runner's cached block table in sync with the scheduler's
-            # persistent block manager. These are separate state stores; both
-            # must promote the same accepted draft column.
-            _lumo_fb_ir_kernel_promote_state(self, parent, winner_acc)
+            # Parent-winning rows are the normal linear verifier path; let the
+            # base runner advance that state. Only internal winners need an
+            # explicit row-state collapse back into the parent.
+            if winner_rid != parent:
+                _lumo_fb_ir_kernel_promote_state(self, parent, winner_acc)
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
