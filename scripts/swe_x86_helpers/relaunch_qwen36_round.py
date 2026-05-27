@@ -4266,11 +4266,32 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 scored.append((rid, valid, raw_acc, draft, tree_acc))
             scored.sort(key=lambda item: (item[4], 0 if item[0] == parent else -1), reverse=True)
             winner_rid, winner_tokens, winner_raw_acc, winner_draft, winner_acc = scored[0]
+            def _lumo_fb_target_commit_tokens(_draft, _valid, _acc):
+                _draft = list(_draft or [])
+                _valid = list(_valid or [])
+                _out = []
+                for _depth in range(int(_acc) + 1):
+                    _tok = canonical.get(tuple(_draft[:_depth]))
+                    if _tok is None and _depth < len(_valid):
+                        _tok = _valid[_depth]
+                    if _tok is None:
+                        break
+                    _out.append(int(_tok))
+                return _out
+            winner_commit_tokens = _lumo_fb_target_commit_tokens(
+                winner_draft, winner_tokens, winner_acc)
+            if len(winner_commit_tokens) != int(winner_acc) + 1:
+                raise RuntimeError(
+                    "LUMO_FB target commit synthesis failed: "
+                    f"parent={parent} winner={winner_rid} accepted={winner_acc} "
+                    f"commit_len={len(winner_commit_tokens)}")
             parent_idx = req_ids.index(parent) if parent in req_ids else None
             winner_idx = req_ids.index(winner_rid) if winner_rid in req_ids else None
-            if winner_idx is not None and winner_acc < winner_raw_acc:
+            if winner_idx is not None:
                 try:
-                    sampler_output.sampled_token_ids[winner_idx, int(winner_acc) + 1:].fill_(-1)
+                    sampler_output.sampled_token_ids[winner_idx].fill_(-1)
+                    for _pos, _tok in enumerate(winner_commit_tokens):
+                        sampler_output.sampled_token_ids[winner_idx, _pos] = int(_tok)
                 except Exception:
                     pass
             if parent_idx is not None and winner_idx is not None and winner_idx != parent_idx:
@@ -4304,6 +4325,9 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     int(raw_acc) for rid, toks, raw_acc, draft, acc in sorted(
                         scored, key=lambda item: 0 if item[0] == parent else 1)
                 ],
+                "commit_tokens": list(winner_commit_tokens),
+                "winner_raw_tokens": list(winner_tokens[:int(winner_acc) + 1]),
+                "commit_source": "canonical_target",
             }
         if rows:
             _lumo_fb_ir_debug({
