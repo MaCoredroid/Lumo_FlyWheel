@@ -3525,8 +3525,12 @@ def _lumo_fb_ir_update_draft_token_ids(self, draft_token_ids):
                                 if _fb_ir_default_k >= 2 and len(toks) % 2 == 0
                                 else len(toks))
         active_depth, requested_k = _lumo_fb_ir_read_control(_fb_ir_default_depth)
-        if requested_k >= 2 and len(toks) == 2 * active_depth:
-            paths = [list(toks[:active_depth]), list(toks[active_depth:2 * active_depth])]
+        if requested_k >= 2 and active_depth > 0 and len(toks) % active_depth == 0 and len(toks) >= 2 * active_depth:
+            path_count = len(toks) // active_depth
+            paths = [
+                list(toks[i * active_depth:(i + 1) * active_depth])
+                for i in range(path_count)
+            ]
             if _lumo_fb_ir_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
                 paths[1] = list(paths[0])
             request._lumo_fb_internal_paths = paths
@@ -3558,20 +3562,23 @@ def _lumo_fb_ir_schedule(self):
             parent._lumo_fb_internal_paths = None
             continue
         num_sched = int(out.num_scheduled_tokens[parent_id])
-        row_id = _lumo_fb_ir_row_id(parent_id, 1)
         _lumo_fb_fork_t0 = _lumo_fb_ir_time.perf_counter_ns()
-        block_ids, row_copies = _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_sched)
         _lumo_fb_ir_prepare_parent_kernel_blocks(self, parent, num_sched)
-        state_fork_us += int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_fork_t0) // 1000)
-        copies.extend(row_copies)
-        rows_by_parent[parent_id] = {
-            "paths": [list(p) for p in paths[:2]],
-            "rows": [{
+        rows = []
+        for path_idx, path in enumerate(paths[1:], 1):
+            row_id = _lumo_fb_ir_row_id(parent_id, path_idx)
+            block_ids, row_copies = _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_sched)
+            copies.extend(row_copies)
+            rows.append({
                 "rid": row_id,
-                "path_idx": 1,
-                "draft": list(paths[1]),
+                "path_idx": int(path_idx),
+                "draft": list(path),
                 "block_ids": block_ids,
-            }],
+            })
+        state_fork_us += int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_fork_t0) // 1000)
+        rows_by_parent[parent_id] = {
+            "paths": [list(p) for p in paths],
+            "rows": rows,
         }
         parent._lumo_fb_internal_paths = None
     scheduler_us = int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_sched_t0) // 1000)
