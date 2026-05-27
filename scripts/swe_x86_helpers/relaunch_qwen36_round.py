@@ -2567,7 +2567,7 @@ def _lumo_fb_foreach_copy_(dst_views, src_views):
     for dst, src in zip(dst_views, src_views):
         dst.copy_(src)
 
-def _lumo_fb_copy_block_id(self, src, dst):
+def _lumo_fb_copy_block_id(self, src, dst, num_slots=None):
     copied_bytes = 0
     dst_views = []
     src_views = []
@@ -2581,12 +2581,20 @@ def _lumo_fb_copy_block_id(self, src, dst):
                 for t in kv:
                     dst_view = t[dst]
                     src_view = t[src]
+                    if num_slots is not None and dst_view.ndim >= 1:
+                        slots = min(int(num_slots), int(dst_view.shape[0]))
+                        dst_view = dst_view[:slots]
+                        src_view = src_view[:slots]
                     dst_views.append(dst_view)
                     src_views.append(src_view)
                     copied_bytes += int(dst_view.numel() * t.element_size())
             else:
                 dst_view = kv[dst]
                 src_view = kv[src]
+                if num_slots is not None and dst_view.ndim >= 1:
+                    slots = min(int(num_slots), int(dst_view.shape[0]))
+                    dst_view = dst_view[:slots]
+                    src_view = src_view[:slots]
                 dst_views.append(dst_view)
                 src_views.append(src_view)
                 copied_bytes += int(dst_view.numel() * kv.element_size())
@@ -2804,6 +2812,15 @@ def _lumo_fb_update_states(self, scheduler_output):
                             "bytes": int(_bytes),
                         })
                     _lumo_fb_copy_bytes += int(_bytes)
+                elif len(item) >= 4 and item[0] == "kv_partial":
+                    _bytes = _lumo_fb_copy_block_id(
+                        self, int(item[1]), int(item[2]), int(item[3]))
+                    _lumo_fb_copy_bytes += int(_bytes)
+                    _lumo_fb_copy_detail.append({
+                        "kind": "kv_partial", "src": int(item[1]),
+                        "dst": int(item[2]), "slots": int(item[3]),
+                        "bytes": int(_bytes),
+                    })
                 else:
                     src, dst = item
                     _bytes = _lumo_fb_copy_block_id(self, int(src), int(dst))
@@ -3600,7 +3617,9 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
                 row_blocks[logical_idx] = dst
                 owned.append((group_idx, dst))
                 if logical_idx == start_idx and (int(parent.num_computed_tokens) % block_size) != 0:
-                    copies.append((src.block_id, dst.block_id))
+                    copies.append((
+                        "kv_partial", src.block_id, dst.block_id,
+                        int(parent.num_computed_tokens) % block_size))
         row_block_ids.append([blk.block_id for blk in row_blocks])
     self._lumo_fb_ir_owned_blocks = getattr(self, "_lumo_fb_ir_owned_blocks", {})
     self._lumo_fb_ir_owned_blocks[row_id] = owned
