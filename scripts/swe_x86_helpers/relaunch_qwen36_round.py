@@ -532,12 +532,40 @@ else:
     # cache_idx
     mask = (idx_tokens < state_len)[:, None] & (idx_feats < dim)[None, :]
     if HAS_INITIAL_STATE_INDICES:
-        # LUMO_FB_KERNEL_ROWS_CONV_FANOUT: SSM stores one state per draft
-        # depth, while the conv kernel keeps a single multi-offset state that
-        # can serve any later accepted-token offset. Duplicate that conv state
-        # into every private write column so promoting any accepted-depth block
-        # carries a valid conv+SSM pair.
+        # LUMO_FB_KERNEL_ROWS_CONV_FANOUT: each private write column must carry
+        # the conv state for its own accepted prefix.  Column i corresponds to
+        # the state after consuming i+1 verify tokens.  Duplicating the final
+        # full-depth conv state into every column makes partial-accept collapse
+        # read a future state and corrupts path0 on the following step.
         for _lumo_fb_i in tl.static_range(0, FB_WRITE_COLS):
+            _lumo_fb_p = _lumo_fb_i + 1
+            _lumo_fb_val = state_len - _lumo_fb_p
+            conv_state_ptrs_source = (
+                conv_state_ptr
+                + (conv_states_input_coord * stride_conv_state_seq)
+                + conv_state_token_offset * stride_conv_state_tok
+                + (idx_feats * stride_conv_state_dim)[None, :]
+                + ((idx_tokens + _lumo_fb_p) * stride_conv_state_tok)[:, None]
+            )
+            _lumo_fb_mask = (
+                (conv_states_input_coord < num_cache_lines)
+                & ((idx_tokens + _lumo_fb_p) < state_len)[:, None]
+                & (idx_feats < dim)[None, :]
+            )
+            _lumo_fb_conv_state = tl.load(
+                conv_state_ptrs_source, _lumo_fb_mask, other=0.0)
+            _lumo_fb_x_ptrs = (
+                x_base[None, :]
+                + ((idx_tokens - _lumo_fb_val) * stride_x_token)[:, None]
+            )
+            _lumo_fb_mask_x = (
+                (idx_tokens - _lumo_fb_val >= 0)[:, None]
+                & (idx_tokens - _lumo_fb_val < seqlen)[:, None]
+                & (idx_feats < dim)[None, :]
+            )
+            _lumo_fb_loaded_x = tl.load(_lumo_fb_x_ptrs, _lumo_fb_mask_x, 0.0)
+            _lumo_fb_prefix_state = tl.where(
+                _lumo_fb_mask, _lumo_fb_conv_state, _lumo_fb_loaded_x)
             conv_states_offset = tl.load(
                 conv_state_indices_ptr
                 + idx_seq * stride_state_indices
@@ -548,7 +576,7 @@ else:
                 + (conv_states_offset * stride_conv_state_seq)
                 + (idx_feats * stride_conv_state_dim)
             )[None, :] + (idx_tokens * stride_conv_state_tok)[:, None]
-            tl.store(conv_state_ptrs_target, new_conv_state, mask)
+            tl.store(conv_state_ptrs_target, _lumo_fb_prefix_state, mask)
     else:
         conv_states_offset = tl.load(
             conv_state_indices_ptr + idx_seq * stride_state_indices + current_last_index
@@ -3615,6 +3643,17 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
                 row_blocks, new_blocks, read_block = _lumo_fb_ir_kernel_arrange_mamba_blocks(
                     manager, parent_blocks, curr_idx)
                 owned.extend((group_idx, blk) for blk in new_blocks)
+                parent_write_blocks = [
+                    blk.block_id for blk in parent_blocks[
+                        curr_idx + 1:curr_idx + 1 + len(new_blocks)]
+                ]
+                row_write_blocks = [blk.block_id for blk in new_blocks]
+                overlap = sorted(set(parent_write_blocks) & set(row_write_blocks))
+                if overlap:
+                    raise RuntimeError(
+                        "LUMO_FB_KERNEL_ROWS Mamba row write blocks alias parent: "
+                        f"parent={parent.request_id} row={row_id} group={group_idx} "
+                        f"overlap={overlap}")
                 _lumo_fb_ir_sched_debug({
                     "event": "kernel_row_blocks",
                     "row": row_id,
@@ -3622,7 +3661,9 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
                     "group": group_idx,
                     "curr_idx": curr_idx,
                     "read_block": getattr(read_block, "block_id", None),
-                    "write_blocks": [blk.block_id for blk in new_blocks],
+                    "parent_write_blocks": parent_write_blocks,
+                    "write_blocks": row_write_blocks,
+                    "write_disjoint_from_parent": not bool(overlap),
                 })
             else:
                 last_idx = min(len(row_blocks), curr_idx + 1 + num_spec_blocks)
@@ -3905,6 +3946,28 @@ def _lumo_fb_ir_schedule(self):
                 "path_idx": int(path_idx),
                 "draft": list(path),
                 "block_ids": block_ids,
+            })
+        if _lumo_fb_ir_kernel_rows_enabled():
+            owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
+            seen_mamba = {}
+            for row in rows:
+                row_id = row["rid"]
+                for group_idx, blk in owned_by_row.get(row_id, []):
+                    manager = self.kv_cache_manager.coordinator.single_type_managers[group_idx]
+                    if getattr(manager, "mamba_cache_mode", None) != "align":
+                        continue
+                    owner = seen_mamba.get(blk.block_id)
+                    if owner is not None:
+                        raise RuntimeError(
+                            "LUMO_FB_KERNEL_ROWS sibling Mamba write block alias: "
+                            f"parent={parent_id} block={blk.block_id} "
+                            f"owner={owner} row={row_id}")
+                    seen_mamba[blk.block_id] = row_id
+            _lumo_fb_ir_sched_debug({
+                "event": "kernel_row_isolation_ok",
+                "parent": parent_id,
+                "mamba_write_block_count": int(len(seen_mamba)),
+                "rows": [row["rid"] for row in rows],
             })
         state_fork_us += int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_fork_t0) // 1000)
         rows_by_parent[parent_id] = {
