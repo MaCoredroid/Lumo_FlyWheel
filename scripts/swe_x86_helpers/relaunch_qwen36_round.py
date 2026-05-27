@@ -1627,8 +1627,13 @@ def _lumo_fb_extend_paths_batched(self, root_tokens, base_positions, base_hidden
             input_batch_size=input_batch_size,
         )
         if k > 1:
+            _lumo_fb_default_stride = (
+                self.num_speculative_tokens + 1
+                if _lumo_fb_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+                else self.num_speculative_tokens
+            )
             slot_stride = int(_lumo_fb_os.environ.get(
-                "LUMO_FB_BATCHED_SLOT_STRIDE", str(self.num_speculative_tokens)))
+                "LUMO_FB_BATCHED_SLOT_STRIDE", str(_lumo_fb_default_stride)))
             slot_offsets = (
                 _lumo_fb_torch.arange(k, device=self._slot_mapping_buffer.device,
                                       dtype=self._slot_mapping_buffer.dtype)
@@ -1734,8 +1739,13 @@ def _lumo_fb_extend_top2_pos01_tree_batched(
             input_batch_size=input_batch_size,
         )
         if k > 1:
+            _lumo_fb_default_stride = (
+                self.num_speculative_tokens + 1
+                if _lumo_fb_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+                else self.num_speculative_tokens
+            )
             slot_stride = int(_lumo_fb_os.environ.get(
-                "LUMO_FB_BATCHED_SLOT_STRIDE", str(self.num_speculative_tokens)))
+                "LUMO_FB_BATCHED_SLOT_STRIDE", str(_lumo_fb_default_stride)))
             slot_offsets = (
                 _lumo_fb_torch.arange(k, device=self._slot_mapping_buffer.device,
                                       dtype=self._slot_mapping_buffer.dtype)
