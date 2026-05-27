@@ -79,6 +79,171 @@ LUMOSPECTRACE
 '''
 
 
+# F_b kernel-row foundation: let the GDN SSM recurrent update read its initial
+# state from one state slot and write the evolved per-token states to another
+# slot table. This is the primitive needed for no-copy K-path rows: siblings
+# read the shared prefix state, but each row stores its private evolution.
+_FB_KERNEL_ROWS_BLOCK = r"""
+python3 - <<'LUMOFBKERNELROWS'
+from pathlib import Path
+
+fg = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/fused_sigmoid_gating.py')
+text = fg.read_text()
+sentinel = '# LUMO_FB_KERNEL_ROWS_SSM'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b kernel-row SSM patch already present')
+else:
+    old = '"IS_SPEC_DECODING": lambda args: args["num_accepted_tokens"] is not None,'
+    new = old + '\n        "HAS_INITIAL_STATE_INDICES": lambda args: args["initial_state_indices"] is not None,'
+    if old not in text:
+        raise RuntimeError('F_b kernel-row SSM heuristic anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''    cu_seqlens,
+    ssm_state_indices,
+    num_accepted_tokens,
+    scale,
+'''
+    new = '''    cu_seqlens,
+    ssm_state_indices,
+    initial_state_indices,
+    num_accepted_tokens,
+    scale,
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row SSM kernel arg anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''    IS_CONTINUOUS_BATCHING: tl.constexpr,
+    IS_SPEC_DECODING: tl.constexpr,
+    IS_KDA: tl.constexpr,
+):'''
+    new = '''    IS_CONTINUOUS_BATCHING: tl.constexpr,
+    IS_SPEC_DECODING: tl.constexpr,
+    HAS_INITIAL_STATE_INDICES: tl.constexpr,
+    IS_KDA: tl.constexpr,
+):
+    # LUMO_FB_KERNEL_ROWS_SSM'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row SSM constexpr anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''        if IS_CONTINUOUS_BATCHING:
+            if IS_SPEC_DECODING:
+                i_t = tl.load(num_accepted_tokens + i_n).to(tl.int64) - 1
+            else:
+                i_t = 0
+            # Load state index and check for PAD_SLOT_ID (-1)
+            state_idx = tl.load(ssm_state_indices + i_n * stride_indices_seq + i_t).to(
+                tl.int64
+            )
+            # Skip if state index is invalid (PAD_SLOT_ID = -1)
+            if state_idx < 0:
+                return
+            p_h0 = h0 + state_idx * stride_init_state_token
+        else:
+            p_h0 = h0 + bos * HV * V * K'''
+    new = '''        if IS_CONTINUOUS_BATCHING:
+            if HAS_INITIAL_STATE_INDICES:
+                # F_b kernel rows: read the shared prefix state from a separate
+                # read-only slot, while stores below use ssm_state_indices as
+                # the private per-row write table.
+                state_idx = tl.load(initial_state_indices + i_n).to(tl.int64)
+            else:
+                if IS_SPEC_DECODING:
+                    i_t = tl.load(num_accepted_tokens + i_n).to(tl.int64) - 1
+                else:
+                    i_t = 0
+                # Load state index and check for PAD_SLOT_ID (-1)
+                state_idx = tl.load(ssm_state_indices + i_n * stride_indices_seq + i_t).to(
+                    tl.int64
+                )
+            # Skip if state index is invalid (PAD_SLOT_ID = -1)
+            if state_idx < 0:
+                return
+            p_h0 = h0 + state_idx * stride_init_state_token
+        else:
+            p_h0 = h0 + bos * HV * V * K'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row SSM read anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''    ssm_state_indices: torch.Tensor | None = None,
+    num_accepted_tokens: torch.Tensor | None = None,
+    use_qk_l2norm_in_kernel: bool = False,
+    is_kda: bool = False,
+):'''
+    new = '''    ssm_state_indices: torch.Tensor | None = None,
+    initial_state_indices: torch.Tensor | None = None,
+    num_accepted_tokens: torch.Tensor | None = None,
+    use_qk_l2norm_in_kernel: bool = False,
+    is_kda: bool = False,
+):'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row SSM wrapper arg anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''        cu_seqlens=cu_seqlens,
+        ssm_state_indices=ssm_state_indices,
+        num_accepted_tokens=num_accepted_tokens,
+        scale=scale,
+'''
+    new = '''        cu_seqlens=cu_seqlens,
+        ssm_state_indices=ssm_state_indices,
+        initial_state_indices=initial_state_indices,
+        num_accepted_tokens=num_accepted_tokens,
+        scale=scale,
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row SSM launch arg anchor not found')
+    text = text.replace(old, new, 1)
+
+    fg.write_text(text)
+    import py_compile
+    py_compile.compile(str(fg), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b kernel-row SSM read/write patch')
+
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FB_KERNEL_ROWS_GDN_LINEAR'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b kernel-row gdn_linear patch already present')
+else:
+    old = '''        spec_state_indices_tensor = attn_metadata.spec_state_indices_tensor  # noqa: E501
+        non_spec_state_indices_tensor = attn_metadata.non_spec_state_indices_tensor  # noqa: E501
+'''
+    new = '''        spec_state_indices_tensor = attn_metadata.spec_state_indices_tensor  # noqa: E501
+        # LUMO_FB_KERNEL_ROWS_GDN_LINEAR: optional separate read slot for SSM
+        # kernel rows.  When None, upstream read/write semantics are unchanged.
+        spec_initial_state_indices_tensor = getattr(
+            attn_metadata, "spec_initial_state_indices_tensor", None)
+        non_spec_state_indices_tensor = attn_metadata.non_spec_state_indices_tensor  # noqa: E501
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_linear metadata anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''                    ssm_state_indices=spec_state_indices_tensor,
+                    num_accepted_tokens=num_accepted_tokens,
+                    use_qk_l2norm_in_kernel=True,
+'''
+    new = '''                    ssm_state_indices=spec_state_indices_tensor,
+                    initial_state_indices=spec_initial_state_indices_tensor,
+                    num_accepted_tokens=num_accepted_tokens,
+                    use_qk_l2norm_in_kernel=True,
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_linear fused call anchor not found')
+    text = text.replace(old, new, 1)
+
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b kernel-row gdn_linear SSM hook')
+LUMOFBKERNELROWS
+"""
+
+
 # Force the TreeAttention backend for decoder self-attention when a BRANCHING
 # speculative_token_tree is configured. Needed because (1) vLLM 0.19.0 does not
 # honor VLLM_ATTENTION_BACKEND for model attention selection, and (2) tree spec
@@ -3458,14 +3623,15 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
     fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
+    fb_kernel_rows = "export LUMO_FB_KERNEL_ROWS=1\n" if os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""
     fb_adaptive = "export LUMO_FB_ADAPTIVE=1\n" if os.environ.get("LUMO_FB_ADAPTIVE") == "1" else ""
     fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
     fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
     fb_depth = f"export LUMO_FB_DEPTH={os.environ['LUMO_FB_DEPTH']}\n" if os.environ.get("LUMO_FB_DEPTH") else ""
     fb_control = os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_adaptive}{fb_batched}{fb_p1}{fb_ratio}" if fb else ""
-    return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_adaptive}{fb_batched}{fb_p1}{fb_ratio}" if fb else ""
+    return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "") + (_FB_KERNEL_ROWS_BLOCK if fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else "")
 
 
 def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
