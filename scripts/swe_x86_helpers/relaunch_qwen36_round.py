@@ -4183,6 +4183,10 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
     winners = {}
     try:
         raw = sampler_output.sampled_token_ids.detach().cpu().tolist()
+        draft_by_rid = {
+            rid: list(toks)
+            for rid, toks in getattr(scheduler_output, "scheduled_spec_decode_tokens", {}).items()
+        }
         rows = []
         for i, rid in enumerate(req_ids):
             if rid in internal_ids or rid in set(active.values()):
@@ -4193,6 +4197,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     "is_internal": rid in internal_ids,
                     "sampled": list(toks),
                     "accepted": max(0, len([t for t in toks if int(t) != -1]) - 1),
+                    "draft": draft_by_rid.get(rid),
                     "mamba_idx": self.mamba_state_idx.get(rid),
                     "state_block_ids": _lumo_fb_ir_state_block_ids(self, rid),
                 })
@@ -4210,12 +4215,45 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 if int(tok) == -1:
                     break
                 valid.append(int(tok))
-            by_parent.setdefault(parent, []).append((rid, valid, max(0, len(valid) - 1)))
+            by_parent.setdefault(parent, []).append((
+                rid, valid, max(0, len(valid) - 1), draft_by_rid.get(rid, [])))
         for parent, row_data in by_parent.items():
-            row_data.sort(key=lambda item: (item[2], 0 if item[0] == parent else -1), reverse=True)
-            winner_rid, winner_tokens, winner_acc = row_data[0]
+            ordered = sorted(row_data, key=lambda item: 0 if item[0] == parent else 1)
+            canonical = {}
+            max_depth = 0
+            for _rid, _valid, _raw_acc, _draft in ordered:
+                max_depth = max(max_depth, len(_draft or []))
+            for depth in range(max_depth):
+                prefixes = []
+                for _rid, _valid, _raw_acc, _draft in ordered:
+                    if len(_draft or []) > depth:
+                        prefix = tuple(_draft[:depth])
+                        if prefix not in prefixes:
+                            prefixes.append(prefix)
+                for prefix in prefixes:
+                    for _rid, _valid, _raw_acc, _draft in ordered:
+                        if len(_valid) > depth and len(_draft or []) > depth and tuple(_draft[:depth]) == prefix:
+                            canonical[prefix] = int(_valid[depth])
+                            break
+            scored = []
+            for rid, valid, raw_acc, draft in row_data:
+                tree_acc = 0
+                for depth, draft_tok in enumerate(draft or []):
+                    tok = canonical.get(tuple(draft[:depth]))
+                    if tok is None or int(draft_tok) != int(tok):
+                        break
+                    tree_acc += 1
+                tree_acc = min(int(tree_acc), int(raw_acc))
+                scored.append((rid, valid, raw_acc, draft, tree_acc))
+            scored.sort(key=lambda item: (item[4], 0 if item[0] == parent else -1), reverse=True)
+            winner_rid, winner_tokens, winner_raw_acc, winner_draft, winner_acc = scored[0]
             parent_idx = req_ids.index(parent) if parent in req_ids else None
             winner_idx = req_ids.index(winner_rid) if winner_rid in req_ids else None
+            if winner_idx is not None and winner_acc < winner_raw_acc:
+                try:
+                    sampler_output.sampled_token_ids[winner_idx, int(winner_acc) + 1:].fill_(-1)
+                except Exception:
+                    pass
             if parent_idx is not None and winner_idx is not None and winner_idx != parent_idx:
                 sampler_output.sampled_token_ids[parent_idx].copy_(sampler_output.sampled_token_ids[winner_idx])
                 try:
@@ -4240,8 +4278,12 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "winner_idx": 0 if winner_rid == parent else 1,
                 "accepted": int(winner_acc),
                 "accept_lens": [
-                    int(acc) for rid, toks, acc in sorted(
-                        row_data, key=lambda item: 0 if item[0] == parent else 1)
+                    int(acc) for rid, toks, raw_acc, draft, acc in sorted(
+                        scored, key=lambda item: 0 if item[0] == parent else 1)
+                ],
+                "raw_accept_lens": [
+                    int(raw_acc) for rid, toks, raw_acc, draft, acc in sorted(
+                        scored, key=lambda item: 0 if item[0] == parent else 1)
                 ],
             }
         if rows:
