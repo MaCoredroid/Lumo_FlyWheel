@@ -1774,6 +1774,14 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
     policy_k, policy_info = _lumo_fb_policy_from_logits(logits, requested_k)
     policy_info = dict(policy_info)
     policy_info.update(control_info)
+    if getattr(sampling_metadata, "all_greedy", False):
+        # In greedy decode, F_b must reduce exactly to the linear E path:
+        # the single target argmax root is deterministic, so sibling root
+        # diversity has no distributional role and only risks row interference.
+        policy_k = 1
+        policy_info = dict(policy_info)
+        policy_info["fb_policy_k"] = 1
+        policy_info["fb_policy_reason"] = "greedy_reduces_to_linear"
     if _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
         policy_k = 2
         policy_info = dict(policy_info)
