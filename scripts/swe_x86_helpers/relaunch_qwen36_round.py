@@ -3864,14 +3864,22 @@ def _lumo_fb_ir_schedule(self):
 def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
     if not _lumo_fb_ir_enabled():
         return _lumo_fb_ir_prev_update_output(self, scheduler_output, model_runner_output)
-    rows_by_parent = getattr(scheduler_output, "lumo_fb_internal_rows", {}) or {}
+    rows_by_parent = (
+        getattr(scheduler_output, "lumo_fb_internal_rows", None)
+        or getattr(model_runner_output, "lumo_fb_internal_rows", None)
+        or {}
+    )
     internal_ids = []
     for bundle in rows_by_parent.values():
         for row in bundle.get("rows", []):
             internal_ids.append(row.get("rid"))
     internal_ids = [rid for rid in internal_ids if rid]
     if internal_ids:
-        winners = getattr(scheduler_output, "lumo_fb_internal_winners", {}) or {}
+        winners = (
+            getattr(scheduler_output, "lumo_fb_internal_winners", None)
+            or getattr(model_runner_output, "lumo_fb_internal_winners", None)
+            or {}
+        )
         winner_ids = {
             data.get("winner_rid")
             for data in winners.values()
@@ -4360,6 +4368,12 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
         pass
     if winners:
         scheduler_output.lumo_fb_internal_winners = winners
+        try:
+            sampler_output.lumo_fb_internal_winners = winners
+            sampler_output.lumo_fb_internal_rows = getattr(
+                scheduler_output, "lumo_fb_internal_rows", None)
+        except Exception:
+            pass
         # A K>=2 internal-row winner collapse has already promoted the parent
         # state once in this active path.  The same parent sample can later
         # flow through the no-active kernel-row hook after internal rows are
