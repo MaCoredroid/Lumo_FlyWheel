@@ -1759,8 +1759,21 @@ def _lumo_fb_replace_req_id_in_batch(input_batch, old_id, new_id):
         input_batch.num_logprobs[new_id] = input_batch.num_logprobs.pop(old_id)
     return idx
 
+def _lumo_fb_foreach_copy_(dst_views, src_views):
+    if not dst_views:
+        return
+    try:
+        torch._foreach_copy_(dst_views, src_views)
+        return
+    except Exception:
+        pass
+    for dst, src in zip(dst_views, src_views):
+        dst.copy_(src)
+
 def _lumo_fb_copy_block_id(self, src, dst):
     copied_bytes = 0
+    dst_views = []
+    src_views = []
     seen = set()
     for kv in getattr(self, "kv_caches", []):
         if id(kv) in seen:
@@ -1769,17 +1782,26 @@ def _lumo_fb_copy_block_id(self, src, dst):
         try:
             if isinstance(kv, list):
                 for t in kv:
-                    t[dst].copy_(t[src])
-                    copied_bytes += int(t[dst].numel() * t.element_size())
+                    dst_view = t[dst]
+                    src_view = t[src]
+                    dst_views.append(dst_view)
+                    src_views.append(src_view)
+                    copied_bytes += int(dst_view.numel() * t.element_size())
             else:
-                kv[dst].copy_(kv[src])
-                copied_bytes += int(kv[dst].numel() * kv.element_size())
+                dst_view = kv[dst]
+                src_view = kv[src]
+                dst_views.append(dst_view)
+                src_views.append(src_view)
+                copied_bytes += int(dst_view.numel() * kv.element_size())
         except Exception:
             pass
+    _lumo_fb_foreach_copy_(dst_views, src_views)
     return copied_bytes
 
 def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
     copied_bytes = 0
+    dst_views = []
+    src_views = []
     try:
         mamba_group_ids = self._get_mamba_copy_bufs().mamba_group_ids
         if group_idx is not None:
@@ -1789,8 +1811,12 @@ def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
             for layer_name in self.kv_cache_config.kv_cache_groups[gid].layer_names:
                 attention = forward_context[layer_name]
                 for state in attention.kv_cache:
-                    state[int(dst)].copy_(state[int(src)])
-                    copied_bytes += int(state[int(dst)].numel() * state.element_size())
+                    dst_view = state[int(dst)]
+                    src_view = state[int(src)]
+                    dst_views.append(dst_view)
+                    src_views.append(src_view)
+                    copied_bytes += int(dst_view.numel() * state.element_size())
+        _lumo_fb_foreach_copy_(dst_views, src_views)
     except Exception:
         pass
     return copied_bytes
