@@ -3135,6 +3135,11 @@ def _lumo_fb_shared_root_rejection_sample(
                         break
                 if not rejected:
                     output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
+        _lumo_fb_sampler_debug(
+            "shared_root_greedy",
+            draft_token_ids, num_draft_tokens, max_spec_len,
+            cu_num_draft_tokens, target_logits, bonus_token_ids,
+            sampling_metadata, output_token_ids)
         return output_token_ids
 
     if sampling_metadata.all_random:
@@ -3188,6 +3193,11 @@ def _lumo_fb_shared_root_rejection_sample(
                     break
             if not rejected:
                 output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
+    _lumo_fb_sampler_debug(
+        "shared_root_random",
+        draft_token_ids, num_draft_tokens, max_spec_len,
+        cu_num_draft_tokens, target_logits, bonus_token_ids,
+        sampling_metadata, output_token_ids)
     return output_token_ids
 """
     old = nl.join([
