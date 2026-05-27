@@ -3400,12 +3400,10 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
             num_sched = 0
         curr_idx = max(0, _lumo_fb_ir_cdiv(
             int(req.num_computed_tokens) + int(num_sched), block_size) - 1)
-        # The verify forward advances recurrent state through accepted draft
-        # tokens only. The bonus/root target token is sampled from logits but is
-        # consumed by the next decode step, so it must not be included here.
-        src_offset = accepted_drafts
-        if src_offset == 0 and not _first_sample:
-            src_offset = 1
+        # The first prompt-root sample has no carried input token to advance.
+        # After that, every spec verify step consumes the previous sampled
+        # token plus the accepted draft prefix.
+        src_offset = 0 if _first_sample else accepted_drafts + 1
         src_idx = curr_idx + src_offset
         if src_idx >= len(blocks):
             continue
@@ -3645,9 +3643,7 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
         self._lumo_fb_kernel_seen_sample = _seen
     _first_sample = req_id not in _seen
     _seen.add(req_id)
-    src_offset = accepted_drafts
-    if src_offset == 0 and not _first_sample:
-        src_offset = 1
+    src_offset = 0 if _first_sample else accepted_drafts + 1
     if src_offset < 1:
         return
     moved = []
