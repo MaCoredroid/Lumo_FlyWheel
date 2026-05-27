@@ -3065,6 +3065,68 @@ def _lumo_fb_ir_cdiv(a, b):
 def _lumo_fb_ir_new_block(manager):
     return manager.block_pool.get_new_blocks(1)[0]
 
+def _lumo_fb_ir_kernel_rows_enabled():
+    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+
+def _lumo_fb_ir_kernel_arrange_mamba_blocks(manager, req_blocks, curr_idx):
+    # Arrange one GDN row as [private writes..., shared read].
+    # The GDN metadata patch reads the initial recurrent state from column
+    # num_spec+1 and writes token states to columns 0..num_spec.  This helper
+    # creates that layout without copying recurrent state bytes.
+    num_spec_blocks = int(getattr(manager.kv_cache_spec, "num_speculative_blocks", 0))
+    if num_spec_blocks < 1:
+        return list(req_blocks), [], None
+    row_blocks = list(req_blocks)
+    read_idx = int(curr_idx)
+    last_idx = read_idx + 1 + num_spec_blocks
+    if last_idx > len(row_blocks):
+        raise RuntimeError(
+            f"LUMO_FB_KERNEL_ROWS block table too short: need {last_idx}, "
+            f"got {len(row_blocks)}")
+    read_block = row_blocks[read_idx]
+    if read_block == getattr(manager, "_null_block", None):
+        raise RuntimeError("LUMO_FB_KERNEL_ROWS read state block is null")
+    owned = []
+    # The extra speculative block added by LUMO_FB_KERNEL_ROWS is the shared
+    # read column.  The preceding 1+num_spec token columns are private writes.
+    for logical_idx in range(read_idx, last_idx - 1):
+        dst = _lumo_fb_ir_new_block(manager)
+        row_blocks[logical_idx] = dst
+        owned.append(dst)
+    row_blocks[last_idx - 1] = read_block
+    return row_blocks, owned, read_block
+
+def _lumo_fb_ir_prepare_parent_kernel_blocks(self, parent, num_scheduled_tokens):
+    if not _lumo_fb_ir_kernel_rows_enabled():
+        return []
+    owned = []
+    for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
+        if getattr(manager, "mamba_cache_mode", None) != "align":
+            continue
+        parent_blocks = list(manager.req_to_blocks.get(parent.request_id, ()))
+        if not parent_blocks:
+            continue
+        block_size = int(manager.block_size)
+        curr_idx = max(0, _lumo_fb_ir_cdiv(
+            parent.num_computed_tokens + num_scheduled_tokens, block_size) - 1)
+        row_blocks, new_blocks, read_block = _lumo_fb_ir_kernel_arrange_mamba_blocks(
+            manager, parent_blocks, curr_idx)
+        manager.req_to_blocks[parent.request_id] = row_blocks
+        owned.extend((group_idx, blk) for blk in new_blocks)
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_parent_blocks",
+            "parent": parent.request_id,
+            "group": group_idx,
+            "curr_idx": curr_idx,
+            "read_block": getattr(read_block, "block_id", None),
+            "write_blocks": [blk.block_id for blk in new_blocks],
+        })
+    if owned:
+        self._lumo_fb_ir_parent_kernel_owned = getattr(
+            self, "_lumo_fb_ir_parent_kernel_owned", {})
+        self._lumo_fb_ir_parent_kernel_owned.setdefault(parent.request_id, []).extend(owned)
+    return owned
+
 def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
     copies = []
     owned = []
@@ -3079,16 +3141,30 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
         if getattr(manager, "mamba_cache_mode", None) == "align":
             num_spec_blocks = int(getattr(manager.kv_cache_spec, "num_speculative_blocks", 0))
             curr_idx = max(0, _lumo_fb_ir_cdiv(parent.num_computed_tokens + num_scheduled_tokens, block_size) - 1)
-            last_idx = min(len(row_blocks), curr_idx + 1 + num_spec_blocks)
-            for logical_idx in range(curr_idx, last_idx):
-                src = row_blocks[logical_idx]
-                if src == getattr(manager, "_null_block", None):
-                    continue
-                dst = _lumo_fb_ir_new_block(manager)
-                row_blocks[logical_idx] = dst
-                owned.append((group_idx, dst))
-                if logical_idx == curr_idx:
-                    copies.append(("mamba", group_idx, src.block_id, dst.block_id))
+            if _lumo_fb_ir_kernel_rows_enabled():
+                row_blocks, new_blocks, read_block = _lumo_fb_ir_kernel_arrange_mamba_blocks(
+                    manager, parent_blocks, curr_idx)
+                owned.extend((group_idx, blk) for blk in new_blocks)
+                _lumo_fb_ir_sched_debug({
+                    "event": "kernel_row_blocks",
+                    "row": row_id,
+                    "parent": parent.request_id,
+                    "group": group_idx,
+                    "curr_idx": curr_idx,
+                    "read_block": getattr(read_block, "block_id", None),
+                    "write_blocks": [blk.block_id for blk in new_blocks],
+                })
+            else:
+                last_idx = min(len(row_blocks), curr_idx + 1 + num_spec_blocks)
+                for logical_idx in range(curr_idx, last_idx):
+                    src = row_blocks[logical_idx]
+                    if src == getattr(manager, "_null_block", None):
+                        continue
+                    dst = _lumo_fb_ir_new_block(manager)
+                    row_blocks[logical_idx] = dst
+                    owned.append((group_idx, dst))
+                    if logical_idx == curr_idx:
+                        copies.append(("mamba", group_idx, src.block_id, dst.block_id))
         else:
             start_idx = max(0, int(parent.num_computed_tokens) // block_size)
             end_idx = min(len(row_blocks), _lumo_fb_ir_cdiv(parent.num_computed_tokens + num_scheduled_tokens, block_size))
@@ -3216,6 +3292,7 @@ def _lumo_fb_ir_schedule(self):
         row_id = _lumo_fb_ir_row_id(parent_id, 1)
         _lumo_fb_fork_t0 = _lumo_fb_ir_time.perf_counter_ns()
         block_ids, row_copies = _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_sched)
+        _lumo_fb_ir_prepare_parent_kernel_blocks(self, parent, num_sched)
         state_fork_us += int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_fork_t0) // 1000)
         copies.extend(row_copies)
         rows_by_parent[parent_id] = {
