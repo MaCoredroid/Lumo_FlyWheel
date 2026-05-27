@@ -3592,10 +3592,34 @@ def _lumo_fb_ir_kernel_arrange_mamba_blocks(manager, req_blocks, curr_idx):
     return row_blocks, owned, read_block
 
 def _lumo_fb_ir_prepare_parent_kernel_blocks(self, parent, num_scheduled_tokens):
-    # Parent/path0 already has the correct no-copy layout after the extra
-    # Mamba speculative block: col0 is the live prefix state populated by
-    # preprocess_mamba, and cols1..num_spec+1 are private speculative writes.
-    return []
+    if not _lumo_fb_ir_kernel_rows_enabled():
+        return None
+    parent_block_ids = []
+    for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
+        parent_blocks = list(manager.req_to_blocks.get(parent.request_id, ()))
+        if not parent_blocks:
+            parent_block_ids.append([])
+            continue
+        if getattr(manager, "mamba_cache_mode", None) != "align":
+            parent_block_ids.append([blk.block_id for blk in parent_blocks])
+            continue
+        block_size = int(manager.block_size)
+        curr_idx = max(0, _lumo_fb_ir_cdiv(
+            int(parent.num_computed_tokens) + int(num_scheduled_tokens),
+            block_size) - 1)
+        row_blocks, new_blocks, read_block = _lumo_fb_ir_kernel_arrange_mamba_blocks(
+            manager, parent_blocks, curr_idx)
+        manager.req_to_blocks[parent.request_id] = row_blocks
+        parent_block_ids.append([blk.block_id for blk in row_blocks])
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_parent_row_blocks",
+            "parent": parent.request_id,
+            "group": group_idx,
+            "curr_idx": curr_idx,
+            "read_block": getattr(read_block, "block_id", None),
+            "write_blocks": [blk.block_id for blk in new_blocks],
+        })
+    return tuple(parent_block_ids)
 
 def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
     copies = []
@@ -3894,7 +3918,8 @@ def _lumo_fb_ir_schedule(self):
             continue
         num_sched = int(out.num_scheduled_tokens[parent_id])
         _lumo_fb_fork_t0 = _lumo_fb_ir_time.perf_counter_ns()
-        _lumo_fb_ir_prepare_parent_kernel_blocks(self, parent, num_sched)
+        parent_block_ids = _lumo_fb_ir_prepare_parent_kernel_blocks(
+            self, parent, num_sched)
         rows = []
         for path_idx, path in enumerate(paths[1:], 1):
             row_id = _lumo_fb_ir_row_id(parent_id, path_idx)
@@ -3910,6 +3935,7 @@ def _lumo_fb_ir_schedule(self):
         rows_by_parent[parent_id] = {
             "paths": [list(p) for p in paths],
             "rows": rows,
+            "parent_block_ids": parent_block_ids,
         }
         parent._lumo_fb_internal_paths = None
     scheduler_us = int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_sched_t0) // 1000)
@@ -4257,6 +4283,30 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
         parent_sched = scheduler_output.num_scheduled_tokens.get(parent_id)
         if parent_state is None or parent_sched is None:
             continue
+        parent_block_ids = bundle.get("parent_block_ids")
+        if parent_block_ids:
+            try:
+                parent_state.block_ids = tuple(
+                    [list(group) for group in parent_block_ids])
+                parent_idx = self.input_batch.req_id_to_index.get(parent_id)
+                if parent_idx is not None:
+                    self.input_batch.block_table.clear_row(parent_idx)
+                    self.input_batch.block_table.add_row(
+                        parent_state.block_ids, parent_idx)
+                _lumo_fb_ir_debug({
+                    "event": "parent_kernel_row_materialized",
+                    "parent": parent_id,
+                    "idx": parent_idx,
+                    "mamba_idx": self.mamba_state_idx.get(parent_id),
+                    "state_block_ids": _lumo_fb_ir_state_block_ids(
+                        self, parent_id),
+                })
+            except Exception as e:
+                _lumo_fb_ir_debug({
+                    "event": "parent_kernel_row_materialize_error",
+                    "parent": parent_id,
+                    "error": repr(e),
+                })
         for row in bundle.get("rows", []):
             row_id = row["rid"]
             if row_id in self.requests:
