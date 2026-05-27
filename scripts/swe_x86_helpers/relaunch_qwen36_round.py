@@ -3835,7 +3835,9 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                             self.mamba_state_idx[parent] = self.mamba_state_idx[winner_rid]
                 except Exception:
                     pass
-            _lumo_fb_ir_kernel_promote_state(self, parent, winner_acc)
+            # Scheduler.update_from_output owns the persistent Mamba block
+            # promotion. Mutating the runner-side cached block table here can
+            # double-apply the same event and swap the accepted column back out.
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
@@ -3962,10 +3964,10 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                 model_output = getattr(output, "model_runner_output", output)
                 raw_req_ids = list(getattr(model_output, "req_ids", []) or [])
                 raw_samples = list(getattr(model_output, "sampled_token_ids", []) or [])
-                for rid, toks in zip(raw_req_ids, raw_samples):
-                    _lumo_fb_ir_kernel_promote_state(
-                        self, rid, _lumo_fb_ir_accepted_from_tokens(toks))
-                self.input_batch.refresh_metadata()
+                # Scheduler.update_from_output performs the kernel-row Mamba
+                # promotion for non-internal K=1 events. Keep the runner copy
+                # read-only between scheduler updates so promotion is applied
+                # exactly once.
             except Exception as e:
                 _lumo_fb_ir_debug({
                     "event": "kernel_promote_noactive_error",
