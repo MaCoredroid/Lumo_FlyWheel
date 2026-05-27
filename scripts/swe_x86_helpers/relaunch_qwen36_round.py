@@ -1419,7 +1419,7 @@ def _lumo_fb_read_control(max_depth):
         }
     if depth < 1 or depth > int(max_depth):
         raise RuntimeError(f"LUMO_FB active depth {depth} outside launch_n_max {max_depth}")
-    if k < 1 or k > 2:
+    if k < 0 or k > 2:
         raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
     info["launch_n_max"] = int(max_depth)
     info["active_depth"] = int(depth)
@@ -1903,6 +1903,11 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
             next_token_ids, token_indices_to_sample, common_attn_metadata,
             sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
     active_depth, requested_k, control_info = _lumo_fb_read_control(self.num_speculative_tokens)
+    if requested_k == 0:
+        return _lumo_fb_orig_propose(
+            self, target_token_ids, target_positions, target_hidden_states,
+            next_token_ids, token_indices_to_sample, common_attn_metadata,
+            sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
     if common_attn_metadata.batch_size() != 1:
         return _lumo_fb_orig_propose(
             self, target_token_ids, target_positions, target_hidden_states,
@@ -2212,7 +2217,7 @@ def _lumo_fb_sched_read_control(default_depth):
             k = int(payload["k"])
     if depth < 1:
         raise RuntimeError(f"LUMO_FB active depth {depth} invalid")
-    if k < 1 or k > 2:
+    if k < 0 or k > 2:
         raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
     return int(depth), int(k)
 
@@ -2348,6 +2353,13 @@ def _lumo_fb_expand_pending(self):
 def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") != "1":
         return _lumo_fb_orig_update_draft(self, draft_token_ids)
+    try:
+        _, _requested_k = _lumo_fb_sched_read_control(
+            int(_lumo_fb_os.environ.get("LUMO_FB_DEPTH", "1")))
+        if _requested_k == 0:
+            return _lumo_fb_orig_update_draft(self, draft_token_ids)
+    except Exception:
+        raise
     for req_id, spec_token_ids in zip(draft_token_ids.req_ids, draft_token_ids.draft_token_ids):
         request = self.requests.get(req_id)
         if request is None or request.is_finished():
@@ -3534,7 +3546,7 @@ def _lumo_fb_ir_read_control(default_depth):
             k = int(payload["k"])
     if depth < 1:
         raise RuntimeError(f"LUMO_FB active depth {depth} invalid")
-    if k < 1 or k > 2:
+    if k < 0 or k > 2:
         raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
     return int(depth), int(k)
 
@@ -3855,6 +3867,13 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
 def _lumo_fb_ir_update_draft_token_ids(self, draft_token_ids):
     if not _lumo_fb_ir_enabled():
         return _lumo_fb_ir_prev_update_draft(self, draft_token_ids)
+    try:
+        _, _requested_k = _lumo_fb_ir_read_control(
+            int(_lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "1")))
+        if _requested_k == 0:
+            return _lumo_fb_ir_prev_update_draft(self, draft_token_ids)
+    except Exception:
+        raise
     for req_id, spec_token_ids in zip(draft_token_ids.req_ids, draft_token_ids.draft_token_ids):
         request = self.requests.get(req_id)
         if request is None or request.is_finished():
