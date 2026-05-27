@@ -3393,10 +3393,11 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
             num_sched = 0
         curr_idx = max(0, _lumo_fb_ir_cdiv(
             int(req.num_computed_tokens) + int(num_sched), block_size) - 1)
-        # The verify forward advances recurrent state through accepted draft
-        # tokens only. The bonus/root target token is sampled from logits but is
-        # consumed by the next decode step, so it must not be included here.
-        src_idx = curr_idx + int(accepted_drafts)
+        # Kernel-row state columns are shifted: col0 is the read-only prefix
+        # and cols1..num_spec+1 are the evolved states for the actual verify
+        # input positions. Even acc=0 consumes one target token before the next
+        # step, so promote accepted_drafts + 1.
+        src_idx = curr_idx + int(accepted_drafts) + 1
         if src_idx >= len(blocks):
             continue
         blocks[curr_idx], blocks[src_idx] = blocks[src_idx], blocks[curr_idx]
@@ -3628,9 +3629,9 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
     curr_idx = self.mamba_state_idx.get(req_id)
     if req_state is None or curr_idx is None:
         return
-    src_offset = int(accepted_drafts)
-    if src_offset < 1:
-        return
+    # See scheduler-side promotion above: kernel-row col0 is the read prefix,
+    # so the first evolved state lives at +1 even when no drafts are accepted.
+    src_offset = int(accepted_drafts) + 1
     moved = []
     try:
         all_groups = [list(group) for group in req_state.block_ids]
