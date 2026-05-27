@@ -509,6 +509,55 @@ else:
         raise RuntimeError('F_b kernel-row causal_conv read anchor not found')
     text = text.replace(old, new, 1)
 
+    old = '''    if IS_SPEC_DECODING:
+        # The rolling of conv state:
+        #
+        # Before forward, the conv_state is:
+        # [history1, history2, ..., historyM].
+        #
+        # After forward, the conv_state becomes:
+        # [history2, ..., historyM, draft1, draft2, ..., draftN].
+        #
+        # After acceptance, it becomes:
+        #
+        # - accept 1 tokens: [history2, ..., historyM, draft1]
+        # - accept 2 tokens: [history3, ..., historyM, draft1, draft2]
+        # - and so on.
+        conv_state_token_offset = (
+            tl.load(num_accepted_tokens_ptr + idx_seq).to(tl.int64) - 1
+        )
+    else:
+        conv_state_token_offset = 0
+'''
+    new = '''    if HAS_INITIAL_STATE_INDICES:
+        # LUMO_FB_KERNEL_ROWS_CONV_OFFSET: kernel-row promotion already moves
+        # the physical read block to the exact accepted-prefix state. Do not
+        # apply the previous-step num_accepted_tokens offset a second time.
+        conv_state_token_offset = 0
+    elif IS_SPEC_DECODING:
+        # The rolling of conv state:
+        #
+        # Before forward, the conv_state is:
+        # [history1, history2, ..., historyM].
+        #
+        # After forward, the conv_state becomes:
+        # [history2, ..., historyM, draft1, draft2, ..., draftN].
+        #
+        # After acceptance, it becomes:
+        #
+        # - accept 1 tokens: [history2, ..., historyM, draft1]
+        # - accept 2 tokens: [history3, ..., historyM, draft1, draft2]
+        # - and so on.
+        conv_state_token_offset = (
+            tl.load(num_accepted_tokens_ptr + idx_seq).to(tl.int64) - 1
+        )
+    else:
+        conv_state_token_offset = 0
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv offset anchor not found')
+    text = text.replace(old, new, 1)
+
     old = '''    # Get the state from the initial_state_idx
     # cache_idx
     conv_states_offset = tl.load(
