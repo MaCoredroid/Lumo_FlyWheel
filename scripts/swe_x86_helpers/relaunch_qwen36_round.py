@@ -1373,11 +1373,35 @@ else:
 
 # LUMO_FB_PATHS_SCHED: internal K=2 path requests + longest-accepted collapse.
 import os as _lumo_fb_os
+import json as _lumo_fb_json
 from vllm.v1.core.sched.output import NewRequestData as _LumoFBNewRequestData
 
 _lumo_fb_orig_schedule = Scheduler.schedule
 _lumo_fb_orig_update_draft = Scheduler.update_draft_token_ids
 _lumo_fb_orig_update_output = Scheduler.update_from_output
+
+def _lumo_fb_sched_read_control(default_depth):
+    depth = int(_lumo_fb_os.environ.get("LUMO_FB_DEPTH", str(default_depth)))
+    k = int(_lumo_fb_os.environ.get("LUMO_FB_K", "2"))
+    path = _lumo_fb_os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
+    if path and _lumo_fb_os.path.exists(path):
+        st0 = _lumo_fb_os.stat(path)
+        with open(path) as fh:
+            payload = _lumo_fb_json.load(fh)
+        st1 = _lumo_fb_os.stat(path)
+        if (st0.st_mtime_ns != st1.st_mtime_ns
+                or st0.st_size != st1.st_size
+                or getattr(st0, "st_ino", None) != getattr(st1, "st_ino", None)):
+            raise RuntimeError(f"LUMO_FB_CONTROL_FILE changed during read: {path}")
+        if payload.get("depth") is not None:
+            depth = int(payload["depth"])
+        if payload.get("k") is not None:
+            k = int(payload["k"])
+    if depth < 1:
+        raise RuntimeError(f"LUMO_FB active depth {depth} invalid")
+    if k < 1 or k > 2:
+        raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
+    return int(depth), int(k)
 
 def _lumo_fb_block_ids_from_blocks(blocks):
     return tuple([blk.block_id for blk in group] for group in blocks)
@@ -1518,11 +1542,18 @@ def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
         if request.is_prefill_chunk:
             request.spec_token_ids = []
             continue
-        if len(spec_token_ids) == 6:
-            request._lumo_fb_pending_paths = [list(spec_token_ids[:3]), list(spec_token_ids[3:6])]
+        active_depth, requested_k = _lumo_fb_sched_read_control(len(spec_token_ids))
+        if requested_k >= 2 and len(spec_token_ids) == 2 * active_depth:
+            request._lumo_fb_pending_paths = [
+                list(spec_token_ids[:active_depth]),
+                list(spec_token_ids[active_depth:2 * active_depth]),
+            ]
             request.spec_token_ids = []
         else:
-            request.spec_token_ids = spec_token_ids
+            if _lumo_fb_os.environ.get("LUMO_FB_ASSERT_WIDTH") == "1" and len(spec_token_ids) != active_depth:
+                raise RuntimeError(
+                    f"LUMO_FB clone scheduler width mismatch: draft_len={len(spec_token_ids)} active_depth={active_depth} active_k={requested_k}")
+            request.spec_token_ids = list(spec_token_ids[:active_depth])
         try:
             if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
                 continue
