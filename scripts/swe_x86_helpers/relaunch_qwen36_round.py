@@ -4100,7 +4100,9 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                 model_runner_output.sampled_token_ids = [model_runner_output.sampled_token_ids[i] for i in keep]
                 model_runner_output.req_id_to_index = {rid: i for i, rid in enumerate(model_runner_output.req_ids)}
         _lumo_fb_ir_free_owned(self, [rid for rid in internal_ids if rid not in winner_ids])
-    elif _lumo_fb_ir_kernel_rows_enabled() and hasattr(model_runner_output, "req_ids"):
+    elif (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS_NOACTIVE_PROMOTE") == "1"
+          and _lumo_fb_ir_kernel_rows_enabled()
+          and hasattr(model_runner_output, "req_ids")):
         try:
             for req_id, toks in zip(model_runner_output.req_ids, model_runner_output.sampled_token_ids):
                 if req_id in scheduler_output.num_scheduled_tokens:
@@ -4718,7 +4720,8 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
         self._lumo_fb_ir_last_winners = None
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not active:
-        if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+        if (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+                and _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS_NOACTIVE_PROMOTE") == "1"):
             try:
                 model_output = getattr(output, "model_runner_output", output)
                 raw_req_ids = list(getattr(model_output, "req_ids", []) or [])
