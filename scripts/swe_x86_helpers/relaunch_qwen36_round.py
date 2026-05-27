@@ -793,6 +793,7 @@ else:
 # reusing the ordinary linear proposer path, one path at a time.
 import os as _lumo_fb_os
 import torch as _lumo_fb_torch
+import time as _lumo_fb_time
 from dataclasses import replace as _lumo_fb_replace
 from vllm.forward_context import set_forward_context as _lumo_fb_forward_context
 from vllm.v1.attention.backends.tree_attn import TreeAttentionMetadata as _LumoFBTreeMetadata
@@ -1068,6 +1069,7 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                      sampling_metadata, mm_embed_inputs=None,
                      num_rejected_tokens_gpu=None, slot_mappings=None):
     global _LUMO_FB_DBG_FH
+    _lumo_fb_prop_t0 = _lumo_fb_time.perf_counter_ns()
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") != "1":
         return _lumo_fb_orig_propose(
             self, target_token_ids, target_positions, target_hidden_states,
@@ -1194,6 +1196,7 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                 _LUMO_FB_DBG_FH.write(_j.dumps({
                     "ts": round(_t.time(), 4),
                     "k": 1,
+                    "fb_proposer_us": int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
                     "raw_roots": raw_roots.view(-1).tolist(),
                     "roots": [int(out[0, 0].item())],
                     "root_candidates": root_candidates[:8].tolist(),
@@ -1239,6 +1242,7 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                 _LUMO_FB_DBG_FH = open("/logs/fb_debug.jsonl", "a", buffering=1)
             _LUMO_FB_DBG_FH.write(_j.dumps({
                 "ts": round(_t.time(), 4),
+                "fb_proposer_us": int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
                 "raw_roots": raw_roots.view(-1).tolist(),
                 "roots": [int(out[0, 0].item()), int(out[0, self.num_speculative_tokens].item())],
                 "root_candidates": root_candidates[:8].tolist(),
@@ -1638,6 +1642,7 @@ else:
 
 # LUMO_FB_PATHS_RUNNER: GPU-side partial-block clone and winner-state rename.
 import os as _lumo_fb_os
+import time as _lumo_fb_time
 
 _lumo_fb_orig_update_states = GPUModelRunner._update_states
 
@@ -1841,12 +1846,42 @@ def _lumo_fb_update_states(self, scheduler_output):
         _lumo_fb_restore_parent_accept_lens(self)
         _lumo_fb_inherit_clone_mamba_state(self, scheduler_output)
         _lumo_fb_state_debug(self, scheduler_output, "after_update_states")
-        for item in getattr(scheduler_output, "lumo_fb_block_copies", []) or []:
-            if len(item) == 3 and item[0] == "mamba":
-                _lumo_fb_copy_mamba_block_id(self, item[1], item[2])
+        _lumo_fb_copies = list(getattr(scheduler_output, "lumo_fb_block_copies", []) or [])
+        _lumo_fb_copy_us = 0
+        if _lumo_fb_copies:
+            _lumo_fb_copy_t0 = _lumo_fb_time.perf_counter_ns()
+            _lumo_fb_cuda_start = None
+            _lumo_fb_cuda_end = None
+            if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
+                try:
+                    _lumo_fb_cuda_start = torch.cuda.Event(enable_timing=True)
+                    _lumo_fb_cuda_end = torch.cuda.Event(enable_timing=True)
+                    _lumo_fb_cuda_start.record()
+                except Exception:
+                    _lumo_fb_cuda_start = None
+                    _lumo_fb_cuda_end = None
+            for item in _lumo_fb_copies:
+                if len(item) == 3 and item[0] == "mamba":
+                    _lumo_fb_copy_mamba_block_id(self, item[1], item[2])
+                else:
+                    src, dst = item
+                    _lumo_fb_copy_block_id(self, int(src), int(dst))
+            if _lumo_fb_cuda_start is not None and _lumo_fb_cuda_end is not None:
+                try:
+                    _lumo_fb_cuda_end.record()
+                    _lumo_fb_cuda_end.synchronize()
+                    _lumo_fb_copy_us = int(_lumo_fb_cuda_start.elapsed_time(_lumo_fb_cuda_end) * 1000.0)
+                except Exception:
+                    _lumo_fb_copy_us = int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_copy_t0) // 1000)
             else:
-                src, dst = item
-                _lumo_fb_copy_block_id(self, int(src), int(dst))
+                _lumo_fb_copy_us = int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_copy_t0) // 1000)
+        scheduler_output.lumo_fb_state_copy_us = int(_lumo_fb_copy_us)
+        scheduler_output.lumo_fb_kv_blocks_copied = int(getattr(
+            scheduler_output, "lumo_fb_kv_blocks_copied",
+            sum(1 for item in _lumo_fb_copies if not (len(item) == 3 and item[0] == "mamba"))))
+        scheduler_output.lumo_fb_mamba_blocks_copied = int(getattr(
+            scheduler_output, "lumo_fb_mamba_blocks_copied",
+            sum(1 for item in _lumo_fb_copies if len(item) == 3 and item[0] == "mamba")))
     return ret
 
 GPUModelRunner._update_states = _lumo_fb_update_states
@@ -2365,6 +2400,8 @@ else:
 # attaches internal verifier rows to SchedulerOutput, and owns only the fresh
 # COW blocks allocated for those rows.
 import os as _lumo_fb_ir_os
+import json as _lumo_fb_ir_json
+import time as _lumo_fb_ir_time
 
 _lumo_fb_ir_prev_update_draft = Scheduler.update_draft_token_ids
 _lumo_fb_ir_prev_schedule = Scheduler.schedule
@@ -2373,6 +2410,20 @@ _lumo_fb_ir_prev_update_output = Scheduler.update_from_output
 def _lumo_fb_ir_enabled():
     return (_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+
+def _lumo_fb_ir_sched_debug(event):
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG") != "1":
+        return
+    try:
+        global _LUMO_FB_IR_SCHED_DBG_FH
+        try:
+            _LUMO_FB_IR_SCHED_DBG_FH
+        except NameError:
+            _LUMO_FB_IR_SCHED_DBG_FH = open("/logs/fb_overhead_debug.jsonl", "a", buffering=1)
+        event["ts"] = round(_lumo_fb_ir_time.time(), 4)
+        _LUMO_FB_IR_SCHED_DBG_FH.write(_lumo_fb_ir_json.dumps(event) + chr(10))
+    except Exception:
+        pass
 
 def _lumo_fb_ir_row_id(parent_id, path_idx):
     return f"{parent_id}::lumo_fb_ir::{path_idx}"
@@ -2507,9 +2558,13 @@ def _lumo_fb_ir_update_draft_token_ids(self, draft_token_ids):
 def _lumo_fb_ir_schedule(self):
     if not _lumo_fb_ir_enabled():
         return _lumo_fb_ir_prev_schedule(self)
+    _lumo_fb_sched_base_t0 = _lumo_fb_ir_time.perf_counter_ns()
     out = _lumo_fb_orig_schedule(self)
+    _lumo_fb_sched_base_us = int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_sched_base_t0) // 1000)
+    _lumo_fb_sched_t0 = _lumo_fb_ir_time.perf_counter_ns()
     rows_by_parent = {}
     copies = []
+    state_fork_us = 0
     for parent_id in list(out.num_scheduled_tokens.keys()):
         parent = self.requests.get(parent_id)
         paths = getattr(parent, "_lumo_fb_internal_paths", None) if parent is not None else None
@@ -2520,7 +2575,9 @@ def _lumo_fb_ir_schedule(self):
             continue
         num_sched = int(out.num_scheduled_tokens[parent_id])
         row_id = _lumo_fb_ir_row_id(parent_id, 1)
+        _lumo_fb_fork_t0 = _lumo_fb_ir_time.perf_counter_ns()
         block_ids, row_copies = _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_sched)
+        state_fork_us += int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_fork_t0) // 1000)
         copies.extend(row_copies)
         rows_by_parent[parent_id] = {
             "paths": [list(p) for p in paths[:2]],
@@ -2532,6 +2589,25 @@ def _lumo_fb_ir_schedule(self):
             }],
         }
         parent._lumo_fb_internal_paths = None
+    scheduler_us = int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_sched_t0) // 1000)
+    kv_copies = sum(1 for item in copies if not (len(item) == 3 and item[0] == "mamba"))
+    mamba_copies = sum(1 for item in copies if len(item) == 3 and item[0] == "mamba")
+    out.lumo_fb_scheduler_us = scheduler_us
+    out.lumo_fb_base_scheduler_us = _lumo_fb_sched_base_us
+    out.lumo_fb_state_fork_us = state_fork_us
+    out.lumo_fb_kv_blocks_copied = kv_copies
+    out.lumo_fb_mamba_blocks_copied = mamba_copies
+    out.lumo_fb_internal_row_count = sum(len(bundle.get("rows", [])) for bundle in rows_by_parent.values())
+    _lumo_fb_ir_sched_debug({
+        "event": "schedule",
+        "fb_base_scheduler_us": _lumo_fb_sched_base_us,
+        "fb_scheduler_us": scheduler_us,
+        "fb_state_fork_us": state_fork_us,
+        "fb_kv_blocks_copied": kv_copies,
+        "fb_mamba_blocks_copied": mamba_copies,
+        "fb_internal_row_count": out.lumo_fb_internal_row_count,
+        "fb_parent_count": len(rows_by_parent),
+    })
     if rows_by_parent:
         out.lumo_fb_internal_rows = rows_by_parent
         existing = list(getattr(out, "lumo_fb_block_copies", []) or [])
@@ -2630,6 +2706,7 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
     rows_by_parent = getattr(scheduler_output, "lumo_fb_internal_rows", {}) or {}
     if not rows_by_parent:
         return ret
+    _lumo_fb_materialize_t0 = _lumo_fb_ir_time.perf_counter_ns()
     active = {}
     for parent_id, bundle in rows_by_parent.items():
         parent_state = self.requests.get(parent_id)
@@ -2668,8 +2745,16 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
     if active:
         self.input_batch.refresh_metadata()
         self._lumo_fb_ir_active = active
+        scheduler_output.lumo_fb_row_materialize_us = int(
+            (_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_materialize_t0) // 1000)
         _lumo_fb_ir_debug({
             "event": "expanded",
+            "fb_scheduler_us": getattr(scheduler_output, "lumo_fb_scheduler_us", None),
+            "fb_state_fork_us": getattr(scheduler_output, "lumo_fb_state_fork_us", None),
+            "fb_state_copy_us": getattr(scheduler_output, "lumo_fb_state_copy_us", None),
+            "fb_kv_blocks_copied": getattr(scheduler_output, "lumo_fb_kv_blocks_copied", None),
+            "fb_mamba_blocks_copied": getattr(scheduler_output, "lumo_fb_mamba_blocks_copied", None),
+            "fb_row_materialize_us": getattr(scheduler_output, "lumo_fb_row_materialize_us", None),
             "rows": [{
                 "rid": rid,
                 "parent": parent,
@@ -2795,7 +2880,17 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 ],
             }
         if rows:
-            _lumo_fb_ir_debug({"event": "sampled", "rows": rows, "winners": winners})
+            _lumo_fb_ir_debug({
+                "event": "sampled",
+                "fb_scheduler_us": getattr(scheduler_output, "lumo_fb_scheduler_us", None),
+                "fb_state_fork_us": getattr(scheduler_output, "lumo_fb_state_fork_us", None),
+                "fb_state_copy_us": getattr(scheduler_output, "lumo_fb_state_copy_us", None),
+                "fb_kv_blocks_copied": getattr(scheduler_output, "lumo_fb_kv_blocks_copied", None),
+                "fb_mamba_blocks_copied": getattr(scheduler_output, "lumo_fb_mamba_blocks_copied", None),
+                "fb_row_materialize_us": getattr(scheduler_output, "lumo_fb_row_materialize_us", None),
+                "rows": rows,
+                "winners": winners,
+            })
     except Exception:
         pass
     if winners:
