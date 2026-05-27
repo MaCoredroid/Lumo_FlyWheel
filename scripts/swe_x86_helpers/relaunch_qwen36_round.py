@@ -3306,6 +3306,57 @@ def _lumo_fb_ir_free_owned(self, row_ids):
             except Exception:
                 pass
 
+def _lumo_fb_ir_accept_from_generated(tokens):
+    valid = []
+    for tok in list(tokens or []):
+        try:
+            if int(tok) == -1:
+                break
+            valid.append(int(tok))
+        except Exception:
+            break
+    return max(0, len(valid) - 1)
+
+def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
+    if not _lumo_fb_ir_kernel_rows_enabled():
+        return
+    req = self.requests.get(req_id)
+    if req is None:
+        return
+    moved = []
+    for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
+        if getattr(manager, "mamba_cache_mode", None) != "align":
+            continue
+        blocks = list(manager.req_to_blocks.get(req_id, ()))
+        if not blocks:
+            continue
+        block_size = int(manager.block_size)
+        num_sched = 0
+        try:
+            num_sched = int(getattr(self, "_lumo_fb_ir_last_sched_tokens", {}).get(req_id, 0))
+        except Exception:
+            num_sched = 0
+        curr_idx = max(0, _lumo_fb_ir_cdiv(
+            int(req.num_computed_tokens) + int(num_sched), block_size) - 1)
+        src_idx = curr_idx + int(accepted_drafts) + 1
+        if src_idx >= len(blocks):
+            continue
+        blocks[curr_idx], blocks[src_idx] = blocks[src_idx], blocks[curr_idx]
+        manager.req_to_blocks[req_id] = blocks
+        moved.append({
+            "group": int(group_idx),
+            "curr_idx": int(curr_idx),
+            "src_idx": int(src_idx),
+            "curr_block": int(blocks[curr_idx].block_id),
+        })
+    if moved:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_promote_manager_state",
+            "rid": req_id,
+            "accepted_drafts": int(accepted_drafts),
+            "moves": moved,
+        })
+
 def _lumo_fb_ir_update_draft_token_ids(self, draft_token_ids):
     if not _lumo_fb_ir_enabled():
         return _lumo_fb_ir_prev_update_draft(self, draft_token_ids)
@@ -3346,6 +3397,7 @@ def _lumo_fb_ir_schedule(self):
     rows_by_parent = {}
     copies = []
     state_fork_us = 0
+    self._lumo_fb_ir_last_sched_tokens = dict(out.num_scheduled_tokens)
     for parent_id in list(out.num_scheduled_tokens.keys()):
         parent = self.requests.get(parent_id)
         paths = getattr(parent, "_lumo_fb_internal_paths", None) if parent is not None else None
@@ -3414,7 +3466,12 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
         }
         for parent_id, data in winners.items():
             if isinstance(data, dict) and data.get("winner_rid") in internal_ids:
+                _lumo_fb_ir_promote_manager_state(
+                    self, data.get("winner_rid"), int(data.get("accepted", 0)))
                 _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, data.get("winner_rid"))
+            elif isinstance(data, dict) and data.get("winner_rid") == parent_id:
+                _lumo_fb_ir_promote_manager_state(
+                    self, parent_id, int(data.get("accepted", 0)))
         for rid in internal_ids:
             if rid in scheduler_output.num_scheduled_tokens:
                 scheduler_output.total_num_scheduled_tokens -= scheduler_output.num_scheduled_tokens.pop(rid)
@@ -3427,6 +3484,17 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                 model_runner_output.sampled_token_ids = [model_runner_output.sampled_token_ids[i] for i in keep]
                 model_runner_output.req_id_to_index = {rid: i for i, rid in enumerate(model_runner_output.req_ids)}
         _lumo_fb_ir_free_owned(self, [rid for rid in internal_ids if rid not in winner_ids])
+    elif _lumo_fb_ir_kernel_rows_enabled() and hasattr(model_runner_output, "req_ids"):
+        try:
+            for req_id, toks in zip(model_runner_output.req_ids, model_runner_output.sampled_token_ids):
+                if req_id in scheduler_output.num_scheduled_tokens:
+                    _lumo_fb_ir_promote_manager_state(
+                        self, req_id, _lumo_fb_ir_accept_from_generated(toks))
+        except Exception as e:
+            _lumo_fb_ir_sched_debug({
+                "event": "kernel_promote_manager_state_error",
+                "error": repr(e),
+            })
     return _lumo_fb_orig_update_output(self, scheduler_output, model_runner_output)
 
 Scheduler.update_draft_token_ids = _lumo_fb_ir_update_draft_token_ids
