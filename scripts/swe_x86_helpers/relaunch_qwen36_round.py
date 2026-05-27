@@ -4572,8 +4572,12 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 except Exception:
                     pass
             # Parent-winning rows are the normal linear verifier path; let the
-            # base runner advance that state. Only internal winners need an
-            # explicit row-state collapse back into the parent.
+            # base runner advance that state physically.  Still record the
+            # accepted-prefix length for Mamba preprocess sync; otherwise the
+            # next step can restore a stale length from an earlier K2 event.
+            _lumo_fb_ir_set_accept_len(self, parent, int(winner_acc) + 1)
+            # Only internal winners need an explicit row-state collapse back
+            # into the parent.
             if winner_rid != parent:
                 _lumo_fb_ir_kernel_promote_state(self, parent, winner_acc)
             winners[parent] = {
