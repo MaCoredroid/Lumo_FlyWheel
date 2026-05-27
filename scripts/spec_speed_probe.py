@@ -197,8 +197,8 @@ def summarize(rows: list[dict]) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--label", required=True, help="config label, e.g. E3 or Fa")
-    ap.add_argument("--n-prompts", type=int, default=len(PROMPTS))
-    ap.add_argument("--max-tokens", type=int, default=256)
+    ap.add_argument("--n-prompts", type=int, default=4)
+    ap.add_argument("--max-tokens", type=int, default=2048)
     ap.add_argument("--temp", type=float, default=0.6, help="match the sweep (0.6)")
     ap.add_argument("--top-p", type=float, default=0.95)
     ap.add_argument("--out", default=None)
@@ -259,6 +259,8 @@ def main() -> int:
     result = {
         "label": args.label, "temp": args.temp, "top_p": args.top_p,
         "max_tokens": args.max_tokens, "n_prompts": len(per_req),
+        "thinking_enabled": "template_default_true",
+        "decode_token_scope": "thinking_plus_answer",
         "launch_n_max": args.launch_n_max,
         "active_depth": args.fb_control_depth,
         "active_k": args.fb_control_k,
