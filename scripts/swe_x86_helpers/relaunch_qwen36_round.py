@@ -3896,17 +3896,7 @@ def _lumo_fb_ir_schedule(self):
         _lumo_fb_fork_t0 = _lumo_fb_ir_time.perf_counter_ns()
         _lumo_fb_ir_prepare_parent_kernel_blocks(self, parent, num_sched)
         rows = []
-        ignore_parent = False
-        if _lumo_fb_ir_kernel_rows_enabled():
-            # Keep total verifier width at max_num_seqs=4 while avoiding the
-            # parent row's in-place GDN state path.  The first internal row is
-            # path0, followed by the first two alternate tree rows; the parent
-            # row still exists in vLLM's batch but is ignored for F_b scoring.
-            row_items = list(enumerate(paths[:3], 0))
-            ignore_parent = True
-        else:
-            row_items = list(enumerate(paths[1:], 1))
-        for path_idx, path in row_items:
+        for path_idx, path in enumerate(paths[1:], 1):
             row_id = _lumo_fb_ir_row_id(parent_id, path_idx)
             block_ids, row_copies = _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_sched)
             copies.extend(row_copies)
@@ -3920,7 +3910,6 @@ def _lumo_fb_ir_schedule(self):
         rows_by_parent[parent_id] = {
             "paths": [list(p) for p in paths],
             "rows": rows,
-            "ignore_parent": bool(ignore_parent),
         }
         parent._lumo_fb_internal_paths = None
     scheduler_us = int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_sched_t0) // 1000)
@@ -4400,12 +4389,6 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             rid: list(toks)
             for rid, toks in getattr(scheduler_output, "scheduled_spec_decode_tokens", {}).items()
         }
-        scheduler_rows_by_parent = getattr(
-            scheduler_output, "lumo_fb_internal_rows", {}) or {}
-        ignore_parent_ids = {
-            parent for parent, bundle in scheduler_rows_by_parent.items()
-            if isinstance(bundle, dict) and bundle.get("ignore_parent")
-        }
         rows = []
         for i, rid in enumerate(req_ids):
             if rid in internal_ids or rid in set(active.values()):
@@ -4425,8 +4408,6 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             if rid in internal_ids:
                 parent = active.get(rid)
             elif rid in set(active.values()):
-                if rid in ignore_parent_ids:
-                    continue
                 parent = rid
             else:
                 continue
