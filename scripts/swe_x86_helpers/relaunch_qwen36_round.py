@@ -4180,6 +4180,23 @@ def _lumo_fb_ir_state_block_ids(self, req_id):
     except Exception:
         return None
 
+def _lumo_fb_ir_write_state_block_ids(self, req_id):
+    req_state = self.requests.get(req_id)
+    state_idx = self.mamba_state_idx.get(req_id)
+    if req_state is None or state_idx is None:
+        return None
+    try:
+        out = []
+        num_spec_blocks = int(self._get_mamba_copy_bufs().mamba_spec.num_speculative_blocks)
+        for gid in self._get_mamba_copy_bufs().mamba_group_ids:
+            blocks = req_state.block_ids[gid]
+            start = int(state_idx) + 1
+            end = min(len(blocks), start + num_spec_blocks)
+            out.append(list(blocks[start:end]))
+        return out
+    except Exception:
+        return None
+
 def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
     if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") != "1":
         return
@@ -4358,6 +4375,8 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
                 "parent_mamba_idx": self.mamba_state_idx.get(parent),
                 "state_block_ids": _lumo_fb_ir_state_block_ids(self, rid),
                 "parent_state_block_ids": _lumo_fb_ir_state_block_ids(self, parent),
+                "write_state_block_ids": _lumo_fb_ir_write_state_block_ids(self, rid),
+                "parent_write_state_block_ids": _lumo_fb_ir_write_state_block_ids(self, parent),
             } for rid, parent in active.items()],
         })
     return ret
@@ -4436,6 +4455,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     "draft": draft_by_rid.get(rid),
                     "mamba_idx": self.mamba_state_idx.get(rid),
                     "state_block_ids": _lumo_fb_ir_state_block_ids(self, rid),
+                    "write_state_block_ids": _lumo_fb_ir_write_state_block_ids(self, rid),
                 })
         by_parent = {}
         for i, rid in enumerate(req_ids):
