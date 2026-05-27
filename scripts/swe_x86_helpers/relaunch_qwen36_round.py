@@ -548,10 +548,24 @@ else:
         raise RuntimeError('F_b kernel-row causal_conv fanout anchor not found')
     text = text.replace(old, new, 1)
 
-    old = '''        if SILU_ACTIVATION:
+    old = '''        elif KERNEL_WIDTH == 6:
+            col0 = col1
+            col1 = col2
+            col2 = col3
+            col3 = col4
+            col4 = matrix_x
+
+        if SILU_ACTIVATION:
             acc = acc / (1 + tl.exp(-acc))
 '''
-    new = '''        if HAS_INITIAL_STATE_INDICES:
+    new = '''        elif KERNEL_WIDTH == 6:
+            col0 = col1
+            col1 = col2
+            col2 = col3
+            col3 = col4
+            col4 = matrix_x
+
+        if HAS_INITIAL_STATE_INDICES:
             # LUMO_FB_KERNEL_ROWS_CONV_PREFIX_WRITE: mirror the SSM kernel's
             # per-token state table. Each private write column stores the conv
             # state after exactly idx_token + 1 verified tokens, so promoting a
