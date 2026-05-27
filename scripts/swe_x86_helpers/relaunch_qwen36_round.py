@@ -531,25 +531,7 @@ else:
     new = '''    # Get the state from the initial_state_idx
     # cache_idx
     mask = (idx_tokens < state_len)[:, None] & (idx_feats < dim)[None, :]
-    if HAS_INITIAL_STATE_INDICES:
-        # LUMO_FB_KERNEL_ROWS_CONV_FANOUT: SSM stores one state per draft
-        # depth, while the conv kernel keeps a single multi-offset state that
-        # can serve any later accepted-token offset. Duplicate that conv state
-        # into every private write column so promoting any accepted-depth block
-        # carries a valid conv+SSM pair.
-        for _lumo_fb_i in tl.static_range(0, FB_WRITE_COLS):
-            conv_states_offset = tl.load(
-                conv_state_indices_ptr
-                + idx_seq * stride_state_indices
-                + _lumo_fb_i
-            ).to(tl.int64)
-            conv_state_ptrs_target = (
-                conv_state_ptr
-                + (conv_states_offset * stride_conv_state_seq)
-                + (idx_feats * stride_conv_state_dim)
-            )[None, :] + (idx_tokens * stride_conv_state_tok)[:, None]
-            tl.store(conv_state_ptrs_target, new_conv_state, mask)
-    else:
+    if not HAS_INITIAL_STATE_INDICES:
         conv_states_offset = tl.load(
             conv_state_indices_ptr + idx_seq * stride_state_indices + current_last_index
         ).to(tl.int64)
@@ -564,6 +546,54 @@ else:
 '''
     if old not in text:
         raise RuntimeError('F_b kernel-row causal_conv fanout anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''        if SILU_ACTIVATION:
+            acc = acc / (1 + tl.exp(-acc))
+'''
+    new = '''        if HAS_INITIAL_STATE_INDICES:
+            # LUMO_FB_KERNEL_ROWS_CONV_PREFIX_WRITE: mirror the SSM kernel's
+            # per-token state table. Each private write column stores the conv
+            # state after exactly idx_token + 1 verified tokens, so promoting a
+            # partial internal-row winner never carries rejected suffix state.
+            _lumo_fb_write_col = idx_token
+            if _lumo_fb_write_col < FB_WRITE_COLS:
+                _lumo_fb_conv_state = tl.zeros((NP2_STATELEN, BLOCK_N), dtype=tl.float32)
+                if KERNEL_WIDTH >= 2:
+                    _lumo_fb_conv_state = tl.where(
+                        idx_tokens[:, None] == 0, col0[None, :], _lumo_fb_conv_state)
+                if KERNEL_WIDTH >= 3:
+                    _lumo_fb_conv_state = tl.where(
+                        idx_tokens[:, None] == 1, col1[None, :], _lumo_fb_conv_state)
+                if KERNEL_WIDTH >= 4:
+                    _lumo_fb_conv_state = tl.where(
+                        idx_tokens[:, None] == 2, col2[None, :], _lumo_fb_conv_state)
+                if KERNEL_WIDTH >= 5:
+                    _lumo_fb_conv_state = tl.where(
+                        idx_tokens[:, None] == 3, col3[None, :], _lumo_fb_conv_state)
+                if KERNEL_WIDTH >= 6:
+                    _lumo_fb_conv_state = tl.where(
+                        idx_tokens[:, None] == 4, col4[None, :], _lumo_fb_conv_state)
+                conv_states_offset = tl.load(
+                    conv_state_indices_ptr
+                    + idx_seq * stride_state_indices
+                    + _lumo_fb_write_col
+                ).to(tl.int64)
+                conv_state_ptrs_target = (
+                    conv_state_ptr
+                    + (conv_states_offset * stride_conv_state_seq)
+                    + (idx_feats * stride_conv_state_dim)
+                )[None, :] + (idx_tokens * stride_conv_state_tok)[:, None]
+                _lumo_fb_mask = (
+                    (idx_tokens < state_len)[:, None] & (idx_feats < dim)[None, :]
+                )
+                tl.store(conv_state_ptrs_target, _lumo_fb_conv_state, _lumo_fb_mask)
+
+        if SILU_ACTIVATION:
+            acc = acc / (1 + tl.exp(-acc))
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv prefix-write anchor not found')
     text = text.replace(old, new, 1)
 
     old = '''    initial_state_idx: torch.Tensor | None = None,
