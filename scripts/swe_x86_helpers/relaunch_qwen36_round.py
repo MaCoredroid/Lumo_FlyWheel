@@ -532,40 +532,12 @@ else:
     # cache_idx
     mask = (idx_tokens < state_len)[:, None] & (idx_feats < dim)[None, :]
     if HAS_INITIAL_STATE_INDICES:
-        # LUMO_FB_KERNEL_ROWS_CONV_FANOUT: each private write column must carry
-        # the conv state for its own accepted prefix.  Column i corresponds to
-        # the state after consuming i+1 verify tokens.  Duplicating the final
-        # full-depth conv state into every column makes partial-accept collapse
-        # read a future state and corrupts path0 on the following step.
+        # LUMO_FB_KERNEL_ROWS_CONV_FANOUT: SSM stores one state per draft
+        # depth, while the conv kernel keeps a single multi-offset state that
+        # can serve any later accepted-token offset. Duplicate that conv state
+        # into every private write column so promoting any accepted-depth block
+        # carries a valid conv+SSM pair.
         for _lumo_fb_i in tl.static_range(0, FB_WRITE_COLS):
-            _lumo_fb_p = _lumo_fb_i + 1
-            _lumo_fb_val = state_len - _lumo_fb_p
-            conv_state_ptrs_source = (
-                conv_state_ptr
-                + (conv_states_input_coord * stride_conv_state_seq)
-                + conv_state_token_offset * stride_conv_state_tok
-                + (idx_feats * stride_conv_state_dim)[None, :]
-                + ((idx_tokens + _lumo_fb_p) * stride_conv_state_tok)[:, None]
-            )
-            _lumo_fb_mask = (
-                (conv_states_input_coord < num_cache_lines)
-                & ((idx_tokens + _lumo_fb_p) < state_len)[:, None]
-                & (idx_feats < dim)[None, :]
-            )
-            _lumo_fb_conv_state = tl.load(
-                conv_state_ptrs_source, _lumo_fb_mask, other=0.0)
-            _lumo_fb_x_ptrs = (
-                x_base[None, :]
-                + ((idx_tokens - _lumo_fb_val) * stride_x_token)[:, None]
-            )
-            _lumo_fb_mask_x = (
-                (idx_tokens - _lumo_fb_val >= 0)[:, None]
-                & (idx_tokens - _lumo_fb_val < seqlen)[:, None]
-                & (idx_feats < dim)[None, :]
-            )
-            _lumo_fb_loaded_x = tl.load(_lumo_fb_x_ptrs, _lumo_fb_mask_x, 0.0)
-            _lumo_fb_prefix_state = tl.where(
-                _lumo_fb_mask, _lumo_fb_conv_state, _lumo_fb_loaded_x)
             conv_states_offset = tl.load(
                 conv_state_indices_ptr
                 + idx_seq * stride_state_indices
@@ -576,7 +548,7 @@ else:
                 + (conv_states_offset * stride_conv_state_seq)
                 + (idx_feats * stride_conv_state_dim)
             )[None, :] + (idx_tokens * stride_conv_state_tok)[:, None]
-            tl.store(conv_state_ptrs_target, _lumo_fb_prefix_state, mask)
+            tl.store(conv_state_ptrs_target, new_conv_state, mask)
     else:
         conv_states_offset = tl.load(
             conv_state_indices_ptr + idx_seq * stride_state_indices + current_last_index
