@@ -443,6 +443,7 @@ else:
                 query_start_loc=spec_query_start_loc,
                 max_query_len=spec_state_indices_tensor.size(-1),
                 block_idx_last_scheduled_token=spec_write_state_slot_tensor,
+                initial_state_idx=spec_write_state_slot_tensor,
                 initial_state_indices=spec_initial_state_indices_tensor,
                 validate_data=False,
 '''
