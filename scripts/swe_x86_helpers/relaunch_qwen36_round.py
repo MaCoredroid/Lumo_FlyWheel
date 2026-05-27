@@ -2853,6 +2853,20 @@ def _lumo_fb_ir_debug(event):
     except Exception:
         pass
 
+def _lumo_fb_ir_state_block_ids(self, req_id):
+    req_state = self.requests.get(req_id)
+    state_idx = self.mamba_state_idx.get(req_id)
+    if req_state is None or state_idx is None:
+        return None
+    try:
+        out = []
+        for gid in self._get_mamba_copy_bufs().mamba_group_ids:
+            blocks = req_state.block_ids[gid]
+            out.append(blocks[state_idx] if state_idx < len(blocks) else None)
+        return out
+    except Exception:
+        return None
+
 def _lumo_fb_ir_update_states_runner(self, scheduler_output):
     ret = _lumo_fb_ir_prev_update_states_runner(self, scheduler_output)
     if not _lumo_fb_ir_runner_enabled():
@@ -2893,8 +2907,10 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
             scheduler_output.scheduled_spec_decode_tokens[row_id] = list(row["draft"])
             self.input_batch.add_request(req_state)
             self.input_batch.update_req_spec_token_ids(req_state, scheduler_output.scheduled_spec_decode_tokens)
-            if parent_id in self.mamba_state_idx:
-                self.mamba_state_idx[row_id] = self.mamba_state_idx[parent_id]
+            # Let preprocess_mamba derive and install the row's logical state
+            # index from its own cloned block table. Reusing the parent entry
+            # here lets sibling rows share mutable recurrent-state bookkeeping.
+            self.mamba_state_idx.pop(row_id, None)
             active[row_id] = parent_id
     if active:
         self.input_batch.refresh_metadata()
@@ -2917,6 +2933,8 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
                 "draft": scheduler_output.scheduled_spec_decode_tokens.get(rid),
                 "mamba_idx": self.mamba_state_idx.get(rid),
                 "parent_mamba_idx": self.mamba_state_idx.get(parent),
+                "state_block_ids": _lumo_fb_ir_state_block_ids(self, rid),
+                "parent_state_block_ids": _lumo_fb_ir_state_block_ids(self, parent),
             } for rid, parent in active.items()],
         })
     return ret
@@ -2988,6 +3006,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     "is_internal": rid in internal_ids,
                     "sampled": list(toks),
                     "accepted": max(0, len([t for t in toks if int(t) != -1]) - 1),
+                    "mamba_idx": self.mamba_state_idx.get(rid),
+                    "state_block_ids": _lumo_fb_ir_state_block_ids(self, rid),
                 })
         by_parent = {}
         for i, rid in enumerate(req_ids):
