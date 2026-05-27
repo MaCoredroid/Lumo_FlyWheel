@@ -1408,7 +1408,7 @@ def _lumo_fb_block_ids_from_blocks(blocks):
 
 def _lumo_fb_clone_blocks(self, parent, clone_id):
     copies = []
-    for manager in self.kv_cache_manager.coordinator.single_type_managers:
+    for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
         parent_blocks = list(manager.req_to_blocks.get(parent.request_id, ()))
         block_size = manager.block_size
         if getattr(manager, "mamba_cache_mode", None) == "align":
@@ -1424,7 +1424,7 @@ def _lumo_fb_clone_blocks(self, parent, clone_id):
                     continue
                 dst = manager.block_pool.get_new_blocks(1)[0]
                 clone_blocks.append(dst)
-                copies.append(("mamba", src.block_id, dst.block_id))
+                copies.append(("mamba", group_idx, src.block_id, dst.block_id))
             manager.req_to_blocks[clone_id] = clone_blocks
             manager.num_cached_block[clone_id] = min(
                 manager.num_cached_block.get(parent.request_id, len(clone_blocks)),
@@ -1760,6 +1760,7 @@ def _lumo_fb_replace_req_id_in_batch(input_batch, old_id, new_id):
     return idx
 
 def _lumo_fb_copy_block_id(self, src, dst):
+    copied_bytes = 0
     seen = set()
     for kv in getattr(self, "kv_caches", []):
         if id(kv) in seen:
@@ -1769,22 +1770,30 @@ def _lumo_fb_copy_block_id(self, src, dst):
             if isinstance(kv, list):
                 for t in kv:
                     t[dst].copy_(t[src])
+                    copied_bytes += int(t[dst].numel() * t.element_size())
             else:
                 kv[dst].copy_(kv[src])
+                copied_bytes += int(kv[dst].numel() * kv.element_size())
         except Exception:
             pass
+    return copied_bytes
 
-def _lumo_fb_copy_mamba_block_id(self, src, dst):
+def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
+    copied_bytes = 0
     try:
         mamba_group_ids = self._get_mamba_copy_bufs().mamba_group_ids
+        if group_idx is not None:
+            mamba_group_ids = [int(group_idx)]
         forward_context = self.compilation_config.static_forward_context
         for gid in mamba_group_ids:
             for layer_name in self.kv_cache_config.kv_cache_groups[gid].layer_names:
                 attention = forward_context[layer_name]
                 for state in attention.kv_cache:
                     state[int(dst)].copy_(state[int(src)])
+                    copied_bytes += int(state[int(dst)].numel() * state.element_size())
     except Exception:
         pass
+    return copied_bytes
 
 def _lumo_fb_apply_runner_collapses(self, scheduler_output):
     collapses = getattr(scheduler_output, "lumo_fb_collapses", None)
@@ -1943,6 +1952,8 @@ def _lumo_fb_update_states(self, scheduler_output):
         _lumo_fb_copy_us = 0
         if _lumo_fb_copies:
             _lumo_fb_copy_t0 = _lumo_fb_time.perf_counter_ns()
+            _lumo_fb_copy_bytes = 0
+            _lumo_fb_copy_detail = []
             _lumo_fb_cuda_start = None
             _lumo_fb_cuda_end = None
             if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
@@ -1954,11 +1965,30 @@ def _lumo_fb_update_states(self, scheduler_output):
                     _lumo_fb_cuda_start = None
                     _lumo_fb_cuda_end = None
             for item in _lumo_fb_copies:
-                if len(item) == 3 and item[0] == "mamba":
-                    _lumo_fb_copy_mamba_block_id(self, item[1], item[2])
+                if len(item) >= 3 and item[0] == "mamba":
+                    if len(item) >= 4:
+                        _bytes = _lumo_fb_copy_mamba_block_id(self, item[2], item[3], item[1])
+                        _lumo_fb_copy_detail.append({
+                            "kind": "mamba", "group": int(item[1]),
+                            "src": int(item[2]), "dst": int(item[3]),
+                            "bytes": int(_bytes),
+                        })
+                    else:
+                        _bytes = _lumo_fb_copy_mamba_block_id(self, item[1], item[2])
+                        _lumo_fb_copy_detail.append({
+                            "kind": "mamba_legacy_all_groups",
+                            "src": int(item[1]), "dst": int(item[2]),
+                            "bytes": int(_bytes),
+                        })
+                    _lumo_fb_copy_bytes += int(_bytes)
                 else:
                     src, dst = item
-                    _lumo_fb_copy_block_id(self, int(src), int(dst))
+                    _bytes = _lumo_fb_copy_block_id(self, int(src), int(dst))
+                    _lumo_fb_copy_bytes += int(_bytes)
+                    _lumo_fb_copy_detail.append({
+                        "kind": "kv", "src": int(src), "dst": int(dst),
+                        "bytes": int(_bytes),
+                    })
             if _lumo_fb_cuda_start is not None and _lumo_fb_cuda_end is not None:
                 try:
                     _lumo_fb_cuda_end.record()
@@ -1969,12 +1999,14 @@ def _lumo_fb_update_states(self, scheduler_output):
             else:
                 _lumo_fb_copy_us = int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_copy_t0) // 1000)
         scheduler_output.lumo_fb_state_copy_us = int(_lumo_fb_copy_us)
+        scheduler_output.lumo_fb_state_copy_bytes = int(locals().get("_lumo_fb_copy_bytes", 0))
+        scheduler_output.lumo_fb_state_copy_detail = locals().get("_lumo_fb_copy_detail", [])
         scheduler_output.lumo_fb_kv_blocks_copied = int(getattr(
             scheduler_output, "lumo_fb_kv_blocks_copied",
-            sum(1 for item in _lumo_fb_copies if not (len(item) == 3 and item[0] == "mamba"))))
+            sum(1 for item in _lumo_fb_copies if not (len(item) >= 3 and item[0] == "mamba"))))
         scheduler_output.lumo_fb_mamba_blocks_copied = int(getattr(
             scheduler_output, "lumo_fb_mamba_blocks_copied",
-            sum(1 for item in _lumo_fb_copies if len(item) == 3 and item[0] == "mamba")))
+            sum(1 for item in _lumo_fb_copies if len(item) >= 3 and item[0] == "mamba")))
     return ret
 
 GPUModelRunner._update_states = _lumo_fb_update_states
@@ -2603,7 +2635,7 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
                 row_blocks[logical_idx] = dst
                 owned.append((group_idx, dst))
                 if logical_idx == curr_idx:
-                    copies.append(("mamba", src.block_id, dst.block_id))
+                    copies.append(("mamba", group_idx, src.block_id, dst.block_id))
         else:
             start_idx = max(0, int(parent.num_computed_tokens) // block_size)
             end_idx = min(len(row_blocks), _lumo_fb_ir_cdiv(parent.num_computed_tokens + num_scheduled_tokens, block_size))
@@ -2744,8 +2776,8 @@ def _lumo_fb_ir_schedule(self):
         }
         parent._lumo_fb_internal_paths = None
     scheduler_us = int((_lumo_fb_ir_time.perf_counter_ns() - _lumo_fb_sched_t0) // 1000)
-    kv_copies = sum(1 for item in copies if not (len(item) == 3 and item[0] == "mamba"))
-    mamba_copies = sum(1 for item in copies if len(item) == 3 and item[0] == "mamba")
+    kv_copies = sum(1 for item in copies if not (len(item) >= 3 and item[0] == "mamba"))
+    mamba_copies = sum(1 for item in copies if len(item) >= 3 and item[0] == "mamba")
     out.lumo_fb_scheduler_us = scheduler_us
     out.lumo_fb_base_scheduler_us = _lumo_fb_sched_base_us
     out.lumo_fb_state_fork_us = state_fork_us
@@ -2867,6 +2899,19 @@ def _lumo_fb_ir_state_block_ids(self, req_id):
     except Exception:
         return None
 
+def _lumo_fb_ir_mamba_curr_state_idx(self, req_state, num_scheduled_tokens):
+    try:
+        copy_bufs = self._get_mamba_copy_bufs()
+        block_size = int(copy_bufs.mamba_spec.block_size)
+        num_speculative_blocks = int(copy_bufs.mamba_spec.num_speculative_blocks)
+        num_blocks = (
+            (int(req_state.num_computed_tokens) + int(num_scheduled_tokens)
+             + block_size - 1) // block_size
+        ) + num_speculative_blocks
+        return int(num_blocks - 1 - num_speculative_blocks)
+    except Exception:
+        return None
+
 def _lumo_fb_ir_update_states_runner(self, scheduler_output):
     ret = _lumo_fb_ir_prev_update_states_runner(self, scheduler_output)
     if not _lumo_fb_ir_runner_enabled():
@@ -2907,10 +2952,12 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
             scheduler_output.scheduled_spec_decode_tokens[row_id] = list(row["draft"])
             self.input_batch.add_request(req_state)
             self.input_batch.update_req_spec_token_ids(req_state, scheduler_output.scheduled_spec_decode_tokens)
-            # Let preprocess_mamba derive and install the row's logical state
-            # index from its own cloned block table. Reusing the parent entry
-            # here lets sibling rows share mutable recurrent-state bookkeeping.
-            self.mamba_state_idx.pop(row_id, None)
+            row_state_idx = _lumo_fb_ir_mamba_curr_state_idx(
+                self, req_state, parent_sched)
+            if row_state_idx is None:
+                row_state_idx = self.mamba_state_idx.get(parent_id)
+            if row_state_idx is not None:
+                self.mamba_state_idx[row_id] = int(row_state_idx)
             active[row_id] = parent_id
     if active:
         self.input_batch.refresh_metadata()
@@ -2922,6 +2969,8 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
             "fb_scheduler_us": getattr(scheduler_output, "lumo_fb_scheduler_us", None),
             "fb_state_fork_us": getattr(scheduler_output, "lumo_fb_state_fork_us", None),
             "fb_state_copy_us": getattr(scheduler_output, "lumo_fb_state_copy_us", None),
+            "fb_state_copy_bytes": getattr(scheduler_output, "lumo_fb_state_copy_bytes", None),
+            "fb_state_copy_detail": getattr(scheduler_output, "lumo_fb_state_copy_detail", None),
             "fb_kv_blocks_copied": getattr(scheduler_output, "lumo_fb_kv_blocks_copied", None),
             "fb_mamba_blocks_copied": getattr(scheduler_output, "lumo_fb_mamba_blocks_copied", None),
             "fb_row_materialize_us": getattr(scheduler_output, "lumo_fb_row_materialize_us", None),
@@ -3059,6 +3108,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "fb_scheduler_us": getattr(scheduler_output, "lumo_fb_scheduler_us", None),
                 "fb_state_fork_us": getattr(scheduler_output, "lumo_fb_state_fork_us", None),
                 "fb_state_copy_us": getattr(scheduler_output, "lumo_fb_state_copy_us", None),
+                "fb_state_copy_bytes": getattr(scheduler_output, "lumo_fb_state_copy_bytes", None),
+                "fb_state_copy_detail": getattr(scheduler_output, "lumo_fb_state_copy_detail", None),
                 "fb_kv_blocks_copied": getattr(scheduler_output, "lumo_fb_kv_blocks_copied", None),
                 "fb_mamba_blocks_copied": getattr(scheduler_output, "lumo_fb_mamba_blocks_copied", None),
                 "fb_row_materialize_us": getattr(scheduler_output, "lumo_fb_row_materialize_us", None),
