@@ -372,18 +372,19 @@ class ModelServer:
             except RuntimeError as exc:
                 self.stop(missing_ok=True)
                 error_text = str(exc)
+                retry_error_text = self._current_startup_error_text(error_text)
                 incompatible_fp8_kv = "fp8_e5m2 kv-cache is not supported with fp8 checkpoints."
                 insufficient_memory = "Free memory on device cuda:0"
                 no_kv_cache_memory = "No available memory for the cache blocks."
                 fp8_cutlass_internal_error = "cutlass_scaled_mm"
                 retry_utilization = gpu_memory_utilization
-                if incompatible_fp8_kv in error_text and kv_cache_dtype != "auto":
+                if incompatible_fp8_kv in retry_error_text and kv_cache_dtype != "auto":
                     kv_cache_dtype = "auto"
                     self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                     continue
-                if insufficient_memory in error_text:
+                if insufficient_memory in retry_error_text:
                     if self._should_retry_low_free_memory(
-                        error_text,
+                        retry_error_text,
                         retries=low_memory_grace_retries,
                         current=gpu_memory_utilization,
                     ):
@@ -392,7 +393,7 @@ class ModelServer:
                         self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                         continue
                     next_gpu_memory_utilization = self._next_gpu_memory_utilization(
-                        error_text,
+                        retry_error_text,
                         current=gpu_memory_utilization,
                     )
                     if next_gpu_memory_utilization is not None:
@@ -401,7 +402,7 @@ class ModelServer:
                         retry_utilization = next_gpu_memory_utilization
                         self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                         continue
-                if no_kv_cache_memory in error_text:
+                if no_kv_cache_memory in retry_error_text:
                     next_gpu_memory_utilization = self._next_gpu_memory_utilization_for_kv_cache_startup(current=gpu_memory_utilization)
                     if next_gpu_memory_utilization is not None:
                         low_memory_grace_retries = 0
@@ -409,7 +410,7 @@ class ModelServer:
                         retry_utilization = next_gpu_memory_utilization
                         self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                         continue
-                if fp8_cutlass_internal_error in error_text and not enforce_eager:
+                if fp8_cutlass_internal_error in retry_error_text and not enforce_eager:
                     enforce_eager = True
                     self._wait_vram_free(timeout_s=120, required_utilization=retry_utilization)
                     continue
@@ -624,6 +625,24 @@ class ModelServer:
         if free_gib < (total_gib * MIN_GPU_MEMORY_UTILIZATION):
             return False
         return (free_gib / total_gib) < 0.5
+
+    @staticmethod
+    def _current_startup_error_text(error_text: str) -> str:
+        """Return the current container's startup log section for retry decisions.
+
+        `_startup_failure_logs` appends the persistent host log after current
+        `docker logs`. A previous low-free-memory attempt can otherwise make a
+        later code/shape error look retryable and walk the GPU-utilization ladder.
+        """
+        marker = "[docker logs --tail 200]\n"
+        start = error_text.find(marker)
+        if start < 0:
+            return error_text
+        current = error_text[start + len(marker):]
+        next_section = current.find("\n[")
+        if next_section >= 0:
+            current = current[:next_section]
+        return current if current.strip() else error_text
 
     @staticmethod
     def _next_gpu_memory_utilization(error_text: str, current: float) -> float | None:

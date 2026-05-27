@@ -482,6 +482,7 @@ else:
     new = '''    IS_APC_ENABLED: tl.constexpr,
     IS_SPEC_DECODING: tl.constexpr,
     HAS_INITIAL_STATE_INDICES: tl.constexpr,
+    FB_WRITE_COLS: tl.constexpr,
     NP2_STATELEN: tl.constexpr,
 '''
     if old not in text:
@@ -532,7 +533,7 @@ else:
         # can serve any later accepted-token offset. Duplicate that conv state
         # into every private write column so promoting any accepted-depth block
         # carries a valid conv+SSM pair.
-        for _lumo_fb_i in tl.static_range(0, seqlen):
+        for _lumo_fb_i in tl.static_range(0, FB_WRITE_COLS):
             conv_states_offset = tl.load(
                 conv_state_indices_ptr
                 + idx_seq * stride_state_indices
@@ -594,6 +595,7 @@ else:
     new = '''        IS_APC_ENABLED=block_idx_last_scheduled_token is not None,
         IS_SPEC_DECODING=num_accepted_tokens is not None,
         HAS_INITIAL_STATE_INDICES=initial_state_indices is not None,
+        FB_WRITE_COLS=max_query_len if initial_state_indices is not None else 1,
         NP2_STATELEN=np2_statelen,
 '''
     if old not in text:
@@ -4254,6 +4256,18 @@ def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
     return src.replace(old, f"    kv_cache_dtype: {kv_cache_dtype}", 1)
 
 
+def _apply_gpu_memory_utilization(src: str, value: str | None) -> str:
+    if value is None:
+        return src
+    gpu_mem = float(value)
+    if not (0.0 < gpu_mem <= 0.95):
+        raise RuntimeError(f"invalid gpu memory utilization override: {value}")
+    old = "    gpu_memory_utilization: 0.9"
+    if src.count(old) != 1:
+        raise RuntimeError("gpu_memory_utilization anchor not unique in bundle")
+    return src.replace(old, f"    gpu_memory_utilization: {gpu_mem:.2f}", 1)
+
+
 def _d_bundle(kv_cache_dtype: str | None = None) -> str:
     base = "/tmp/lumo-track-b-bundle-qwen36/bundle.yaml"
     if kv_cache_dtype is None:
@@ -4267,6 +4281,8 @@ def _d_bundle(kv_cache_dtype: str | None = None) -> str:
 def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = None) -> str:
     src = Path("/tmp/lumo-track-b-bundle-qwen36-off/bundle.yaml").read_text()
     src = _apply_kv_cache_dtype(src, kv_cache_dtype)
+    src = _apply_gpu_memory_utilization(
+        src, os.environ.get("LUMO_GPU_MEMORY_UTILIZATION"))
     kvtag = "" if kv_cache_dtype is None else f"-kv{kv_cache_dtype}"
     tag = (f"mtp{n}" if tree is None else f"mtp{n}tree") + kvtag
     src = src.replace("bundle_id: 712fd011-4b16-4051-9e8c-875405b70f5b",

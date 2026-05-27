@@ -582,6 +582,24 @@ def test_next_gpu_memory_utilization_for_kv_cache_startup_raises_floor() -> None
     assert ModelServer._next_gpu_memory_utilization_for_kv_cache_startup(current=0.95) is None
 
 
+def test_current_startup_error_text_ignores_persistent_stale_log_memory_error() -> None:
+    error_text = (
+        "vLLM container failed during startup:\n"
+        "[docker logs --tail 200]\n"
+        "AssertionError('int64[] used as tl.static_range end value is not a constexpr')\n"
+        "[docker ps -a exact-name]\n"
+        "abc\tlumo-vllm\tExited\n"
+        "[/tmp/logs/vllm_qwen.log]\n"
+        "ValueError: Free memory on device cuda:0 (105.15/117.51 GiB) on startup "
+        "is less than desired GPU memory utilization (0.9, 105.76 GiB).\n"
+    )
+
+    current = ModelServer._current_startup_error_text(error_text)
+
+    assert "static_range" in current
+    assert "Free memory on device" not in current
+
+
 def test_wait_vram_free_uses_grace_period_when_nvidia_smi_is_unsupported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
