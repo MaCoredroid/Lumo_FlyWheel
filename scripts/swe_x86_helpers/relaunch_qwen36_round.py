@@ -3188,6 +3188,78 @@ else:
     import py_compile
     py_compile.compile(str(gm), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b internal-row spec metadata prune patch')
+
+text = gm.read_text()
+sentinel = '# LUMO_FB_ACTUAL_WIDTH_ASSERT'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b actual compute-width assert already present')
+else:
+    old = nl.join([
+        '                sample_hidden_states = hidden_states[logits_indices]',
+        '                logits = self.model.compute_logits(sample_hidden_states)',
+    ])
+    inject = nl.join([
+        '                sample_hidden_states = hidden_states[logits_indices]',
+        '                logits = self.model.compute_logits(sample_hidden_states)',
+        '                # LUMO_FB_ACTUAL_WIDTH_ASSERT: hot-plug search must prove',
+        '                # that target forward and lm_head compute at the active',
+        '                # draft width, not at the over-allocated launch width.',
+        '                if use_spec_decode and os.environ.get("LUMO_FB_PATHS") == "1":',
+        '                    try:',
+        '                        import json as _fbaw_json, time as _fbaw_time',
+        '                        _fbaw_ctrl_depth = None',
+        '                        _fbaw_ctrl_path = os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")',
+        '                        if os.path.exists(_fbaw_ctrl_path):',
+        '                            with open(_fbaw_ctrl_path) as _fbaw_cf:',
+        '                                _fbaw_payload = _fbaw_json.load(_fbaw_cf)',
+        '                            if _fbaw_payload.get("depth") is not None:',
+        '                                _fbaw_ctrl_depth = int(_fbaw_payload["depth"])',
+        '                        elif os.environ.get("LUMO_FB_DEPTH"):',
+        '                            _fbaw_ctrl_depth = int(os.environ["LUMO_FB_DEPTH"])',
+        '                        _fbaw_expected_per_req = (_fbaw_ctrl_depth + 1) if _fbaw_ctrl_depth is not None else None',
+        '                        _fbaw_event = {',
+        '                            "ts": round(_fbaw_time.time(), 4),',
+        '                            "cudagraph_mode": str(cudagraph_mode),',
+        '                            "batch_desc": str(batch_desc),',
+        '                            "active_depth": _fbaw_ctrl_depth,',
+        '                            "expected_tokens_per_req": _fbaw_expected_per_req,',
+        '                            "num_reqs": int(num_reqs),',
+        '                            "num_reqs_padded": int(num_reqs_padded),',
+        '                            "num_scheduled_tokens": [int(x) for x in num_scheduled_tokens_np.tolist()],',
+        '                            "max_query_len": int(max_num_scheduled_tokens),',
+        '                            "target_unpadded_tokens": int(num_tokens_unpadded),',
+        '                            "target_forward_tokens": int(num_tokens_padded),',
+        '                            "logits_indices_len": int(len(logits_indices)),',
+        '                            "lm_head_rows": int(logits.shape[0]) if logits is not None else None,',
+        '                            "sample_hidden_rows": int(sample_hidden_states.shape[0]),',
+        '                        }',
+        '                        if os.environ.get("LUMO_FB_DEBUG") == "1":',
+        '                            global _LUMO_FB_ACTUAL_WIDTH_FH',
+        '                            try:',
+        '                                _LUMO_FB_ACTUAL_WIDTH_FH',
+        '                            except NameError:',
+        '                                _LUMO_FB_ACTUAL_WIDTH_FH = open("/logs/fb_actual_width_debug.jsonl", "a", buffering=1)',
+        '                            _LUMO_FB_ACTUAL_WIDTH_FH.write(_fbaw_json.dumps(_fbaw_event) + chr(10))',
+        '                        if os.environ.get("LUMO_FB_ASSERT_ACTUAL_WIDTH") == "1" and _fbaw_expected_per_req is not None:',
+        '                            _fbaw_expected_total = int(num_reqs) * int(_fbaw_expected_per_req)',
+        '                            if (int(max_num_scheduled_tokens) != int(_fbaw_expected_per_req)',
+        '                                    or int(num_tokens_unpadded) != _fbaw_expected_total',
+        '                                    or int(num_tokens_padded) != _fbaw_expected_total',
+        '                                    or int(len(logits_indices)) != _fbaw_expected_total',
+        '                                    or int(logits.shape[0]) != _fbaw_expected_total):',
+        '                                raise RuntimeError(f"LUMO_FB_ASSERT_ACTUAL_WIDTH failed: {_fbaw_event}")',
+        '                    except RuntimeError:',
+        '                        raise',
+        '                    except Exception:',
+        '                        pass',
+    ])
+    if old not in text:
+        raise RuntimeError('F_b actual compute-width common logits anchor not found')
+    text = text.replace(old, inject, 1)
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b actual compute-width assert patch')
 LUMOFBPATHS
 '''
 
@@ -3221,7 +3293,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
     fb_depth = f"export LUMO_FB_DEPTH={os.environ['LUMO_FB_DEPTH']}\n" if os.environ.get("LUMO_FB_DEPTH") else ""
     fb_control = os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_adaptive}{fb_batched}{fb_p1}{fb_ratio}" if fb else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_adaptive}{fb_batched}{fb_p1}{fb_ratio}" if fb else ""
     return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
 
 
