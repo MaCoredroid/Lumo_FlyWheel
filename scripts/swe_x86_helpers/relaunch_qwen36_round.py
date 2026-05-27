@@ -148,6 +148,10 @@ else:
                 # F_b kernel rows: read the shared prefix state from a separate
                 # read-only slot, while stores below use ssm_state_indices as
                 # the private per-row write table.
+                if IS_SPEC_DECODING:
+                    i_t = tl.load(num_accepted_tokens + i_n).to(tl.int64) - 1
+                else:
+                    i_t = 0
                 state_idx = tl.load(initial_state_indices + i_n).to(tl.int64)
             else:
                 if IS_SPEC_DECODING:
