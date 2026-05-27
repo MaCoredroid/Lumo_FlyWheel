@@ -508,6 +508,59 @@ else:
         raise RuntimeError('F_b kernel-row causal_conv read anchor not found')
     text = text.replace(old, new, 1)
 
+    old = '''    # Get the state from the initial_state_idx
+    # cache_idx
+    conv_states_offset = tl.load(
+        conv_state_indices_ptr + idx_seq * stride_state_indices + current_last_index
+    ).to(tl.int64)
+    conv_state_ptrs_target = (
+        conv_state_ptr
+        + (conv_states_offset * stride_conv_state_seq)  # Offset from seq
+        + (idx_feats * stride_conv_state_dim)
+    )[None, :] + (  # [BLOCK_N,]
+        idx_tokens * stride_conv_state_tok
+    )[:, None]
+    mask = (idx_tokens < state_len)[:, None] & (idx_feats < dim)[None, :]
+    tl.store(conv_state_ptrs_target, new_conv_state, mask)
+'''
+    new = '''    # Get the state from the initial_state_idx
+    # cache_idx
+    mask = (idx_tokens < state_len)[:, None] & (idx_feats < dim)[None, :]
+    if HAS_INITIAL_STATE_INDICES:
+        # LUMO_FB_KERNEL_ROWS_CONV_FANOUT: SSM stores one state per draft
+        # depth, while the conv kernel keeps a single multi-offset state that
+        # can serve any later accepted-token offset. Duplicate that conv state
+        # into every private write column so promoting any accepted-depth block
+        # carries a valid conv+SSM pair.
+        for _lumo_fb_i in tl.static_range(0, seqlen):
+            conv_states_offset = tl.load(
+                conv_state_indices_ptr
+                + idx_seq * stride_state_indices
+                + _lumo_fb_i
+            ).to(tl.int64)
+            conv_state_ptrs_target = (
+                conv_state_ptr
+                + (conv_states_offset * stride_conv_state_seq)
+                + (idx_feats * stride_conv_state_dim)
+            )[None, :] + (idx_tokens * stride_conv_state_tok)[:, None]
+            tl.store(conv_state_ptrs_target, new_conv_state, mask)
+    else:
+        conv_states_offset = tl.load(
+            conv_state_indices_ptr + idx_seq * stride_state_indices + current_last_index
+        ).to(tl.int64)
+        conv_state_ptrs_target = (
+            conv_state_ptr
+            + (conv_states_offset * stride_conv_state_seq)  # Offset from seq
+            + (idx_feats * stride_conv_state_dim)
+        )[None, :] + (  # [BLOCK_N,]
+            idx_tokens * stride_conv_state_tok
+        )[:, None]
+        tl.store(conv_state_ptrs_target, new_conv_state, mask)
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row causal_conv fanout anchor not found')
+    text = text.replace(old, new, 1)
+
     old = '''    initial_state_idx: torch.Tensor | None = None,
     validate_data=False,
 ):
