@@ -240,6 +240,225 @@ else:
     import py_compile
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b kernel-row gdn_linear SSM hook')
+
+ga = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/gdn_attn.py')
+text = ga.read_text()
+sentinel = '# LUMO_FB_KERNEL_ROWS_GDN_ATTN'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b kernel-row gdn_attn patch already present')
+else:
+    old = '''from dataclasses import dataclass
+
+import torch
+'''
+    new = '''from dataclasses import dataclass
+import os as _lumo_fb_kernel_os
+
+import torch
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_attn import anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''    spec_state_indices_tensor: torch.Tensor | None = None  # shape: [batch, num_spec]
+    non_spec_state_indices_tensor: torch.Tensor | None = (
+'''
+    new = '''    spec_state_indices_tensor: torch.Tensor | None = None  # shape: [batch, num_spec]
+    # LUMO_FB_KERNEL_ROWS_GDN_ATTN: separate read-only prefix state slot for
+    # no-copy path rows. spec_state_indices_tensor remains the private write
+    # table used by the recurrent kernels.
+    spec_initial_state_indices_tensor: torch.Tensor | None = None
+    spec_initial_state_slot_tensor: torch.Tensor | None = None
+    spec_write_state_slot_tensor: torch.Tensor | None = None
+    non_spec_state_indices_tensor: torch.Tensor | None = (
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_attn dataclass anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''        self.non_spec_state_indices_tensor: torch.Tensor = torch.empty(
+            (self.decode_cudagraph_max_bs,),
+            dtype=torch.int32,
+            device=device,
+        )
+'''
+    new = '''        self.spec_initial_state_indices_tensor: torch.Tensor = torch.empty(
+            (self.decode_cudagraph_max_bs,),
+            dtype=torch.int32,
+            device=device,
+        )
+        self.spec_initial_state_slot_tensor: torch.Tensor = torch.empty(
+            (self.decode_cudagraph_max_bs,),
+            dtype=torch.int32,
+            device=device,
+        )
+        self.spec_write_state_slot_tensor: torch.Tensor = torch.empty(
+            (self.decode_cudagraph_max_bs,),
+            dtype=torch.int32,
+            device=device,
+        )
+        self.non_spec_state_indices_tensor: torch.Tensor = torch.empty(
+            (self.decode_cudagraph_max_bs,),
+            dtype=torch.int32,
+            device=device,
+        )
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_attn cudagraph alloc anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''            spec_state_indices_tensor = None
+            non_spec_state_indices_tensor = block_table_tensor[:, 0]
+'''
+    new = '''            spec_state_indices_tensor = None
+            spec_initial_state_indices_tensor = None
+            spec_initial_state_slot_tensor = None
+            spec_write_state_slot_tensor = None
+            non_spec_state_indices_tensor = block_table_tensor[:, 0]
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_attn nonspec init anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''            assert num_accepted_tokens is not None
+            num_accepted_tokens = num_accepted_tokens[spec_sequence_masks]
+'''
+    new = '''            # F_b kernel-row convention: the ordinary spec_state_indices table
+            # is the private write table.  One extra block-table column carries
+            # the shared read-only prefix state for every sibling row.
+            spec_initial_state_indices_tensor = None
+            spec_initial_state_slot_tensor = None
+            spec_write_state_slot_tensor = None
+            if _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+                _fb_read_col = int(self.num_spec + 1)
+                if block_table_tensor.size(1) <= _fb_read_col:
+                    raise RuntimeError(
+                        "LUMO_FB_KERNEL_ROWS requires block_table read column "
+                        f"{_fb_read_col}, got width {block_table_tensor.size(1)}")
+                spec_initial_state_indices_tensor = block_table_tensor[
+                    spec_sequence_masks, _fb_read_col
+                ].contiguous()
+                _fb_n = int(num_spec_decodes)
+                spec_initial_state_slot_tensor = torch.full(
+                    (_fb_n,), _fb_read_col, dtype=torch.int32,
+                    device=query_start_loc.device)
+                spec_write_state_slot_tensor = torch.zeros(
+                    (_fb_n,), dtype=torch.int32, device=query_start_loc.device)
+
+            assert num_accepted_tokens is not None
+            num_accepted_tokens = num_accepted_tokens[spec_sequence_masks]
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_attn spec initial anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''            self.spec_sequence_masks[:num_spec_decodes].copy_(
+                spec_sequence_masks[:num_spec_decodes], non_blocking=True
+            )
+'''
+    new = '''            if spec_initial_state_indices_tensor is not None:
+                self.spec_initial_state_indices_tensor[:num_spec_decodes].copy_(
+                    spec_initial_state_indices_tensor, non_blocking=True
+                )
+                spec_initial_state_indices_tensor = (
+                    self.spec_initial_state_indices_tensor[:batch_size]
+                )
+                spec_initial_state_indices_tensor[num_spec_decodes:].fill_(PAD_SLOT_ID)
+                self.spec_initial_state_slot_tensor[:num_spec_decodes].copy_(
+                    spec_initial_state_slot_tensor, non_blocking=True
+                )
+                spec_initial_state_slot_tensor = (
+                    self.spec_initial_state_slot_tensor[:batch_size]
+                )
+                spec_initial_state_slot_tensor[num_spec_decodes:].fill_(0)
+                self.spec_write_state_slot_tensor[:num_spec_decodes].copy_(
+                    spec_write_state_slot_tensor, non_blocking=True
+                )
+                spec_write_state_slot_tensor = (
+                    self.spec_write_state_slot_tensor[:batch_size]
+                )
+                spec_write_state_slot_tensor[num_spec_decodes:].fill_(0)
+
+            self.spec_sequence_masks[:num_spec_decodes].copy_(
+                spec_sequence_masks[:num_spec_decodes], non_blocking=True
+            )
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_attn cudagraph copy anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''            spec_state_indices_tensor=spec_state_indices_tensor,
+            non_spec_state_indices_tensor=non_spec_state_indices_tensor,
+'''
+    new = '''            spec_state_indices_tensor=spec_state_indices_tensor,
+            spec_initial_state_indices_tensor=spec_initial_state_indices_tensor,
+            spec_initial_state_slot_tensor=spec_initial_state_slot_tensor,
+            spec_write_state_slot_tensor=spec_write_state_slot_tensor,
+            non_spec_state_indices_tensor=non_spec_state_indices_tensor,
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_attn metadata ctor anchor not found')
+    text = text.replace(old, new, 1)
+
+    ga.write_text(text)
+    import py_compile
+    py_compile.compile(str(ga), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b kernel-row gdn_attn metadata hook')
+
+text = gl.read_text()
+sentinel = '# LUMO_FB_KERNEL_ROWS_GDN_LINEAR_CONV'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b kernel-row gdn_linear conv patch already present')
+else:
+    old = '''        spec_initial_state_indices_tensor = getattr(
+            attn_metadata, "spec_initial_state_indices_tensor", None)
+        non_spec_state_indices_tensor = attn_metadata.non_spec_state_indices_tensor  # noqa: E501
+'''
+    new = '''        spec_initial_state_indices_tensor = getattr(
+            attn_metadata, "spec_initial_state_indices_tensor", None)
+        # LUMO_FB_KERNEL_ROWS_GDN_LINEAR_CONV: conv update uses the same
+        # block-table convention as SSM: read from shared prefix slot, write to
+        # the row-private slot.
+        spec_initial_state_slot_tensor = getattr(
+            attn_metadata, "spec_initial_state_slot_tensor", None)
+        spec_write_state_slot_tensor = getattr(
+            attn_metadata, "spec_write_state_slot_tensor", None)
+        non_spec_state_indices_tensor = attn_metadata.non_spec_state_indices_tensor  # noqa: E501
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_linear conv metadata anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''                conv_state_indices=spec_state_indices_tensor[:, 0][
+                    : attn_metadata.num_spec_decodes
+                ],
+                num_accepted_tokens=num_accepted_tokens,
+                query_start_loc=spec_query_start_loc,
+                max_query_len=spec_state_indices_tensor.size(-1),
+                validate_data=False,
+'''
+    new = '''                conv_state_indices=(
+                    spec_state_indices_tensor
+                    if spec_initial_state_slot_tensor is not None
+                    else spec_state_indices_tensor[:, 0][
+                        : attn_metadata.num_spec_decodes
+                    ]
+                ),
+                num_accepted_tokens=num_accepted_tokens,
+                query_start_loc=spec_query_start_loc,
+                max_query_len=spec_state_indices_tensor.size(-1),
+                block_idx_last_scheduled_token=spec_write_state_slot_tensor,
+                initial_state_idx=spec_initial_state_slot_tensor,
+                validate_data=False,
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row gdn_linear conv call anchor not found')
+    text = text.replace(old, new, 1)
+
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b kernel-row gdn_linear conv hook')
 LUMOFBKERNELROWS
 """
 
