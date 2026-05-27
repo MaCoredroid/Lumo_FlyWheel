@@ -459,6 +459,49 @@ else:
     import py_compile
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b kernel-row gdn_linear conv hook')
+
+ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
+text = ma.read_text()
+sentinel = '# LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b kernel-row Mamba extra-block patch already present')
+else:
+    old = '''from abc import abstractmethod
+from collections.abc import Iterable
+
+import torch
+'''
+    new = '''from abc import abstractmethod
+from collections.abc import Iterable
+import os as _lumo_fb_kernel_os
+
+import torch
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row Mamba abstract import anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''            num_speculative_blocks=(
+                vllm_config.speculative_config.num_speculative_tokens
+                if vllm_config.speculative_config
+                else 0
+            ),
+'''
+    new = '''            num_speculative_blocks=(
+                (vllm_config.speculative_config.num_speculative_tokens
+                 + (1 if _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else 0))
+                if vllm_config.speculative_config
+                else 0
+            ),  # LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK
+'''
+    if old not in text:
+        raise RuntimeError('F_b kernel-row Mamba abstract spec-block anchor not found')
+    text = text.replace(old, new, 1)
+
+    ma.write_text(text)
+    import py_compile
+    py_compile.compile(str(ma), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b kernel-row Mamba extra state-block patch')
 LUMOFBKERNELROWS
 """
 
