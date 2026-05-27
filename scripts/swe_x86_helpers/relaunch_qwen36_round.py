@@ -4032,6 +4032,11 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
         pass
     if winners:
         scheduler_output.lumo_fb_internal_winners = winners
+        # A K>=2 internal-row winner collapse has already promoted the parent
+        # state once in this active path.  The same parent sample can later
+        # flow through the no-active kernel-row hook after internal rows are
+        # pruned; skip that parent exactly once to avoid promoting it twice.
+        self._lumo_fb_ir_skip_noactive_promote_once = set(winners.keys())
     if len(keep) != len(req_ids):
         try:
             idx = _lumo_fb_ir_torch.tensor(keep, dtype=_lumo_fb_ir_torch.long,
@@ -4133,7 +4138,20 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                 raw_samples = list(getattr(model_output, "sampled_token_ids", []) or [])
                 # Keep the runner's cached block table in sync with the
                 # scheduler-side manager promotion for K=1/no-internal events.
+                skip_once = None
+                if int(_lumo_fb_ir_os.environ.get("LUMO_FB_K", "1")) >= 2:
+                    skip_once = getattr(
+                        self, "_lumo_fb_ir_skip_noactive_promote_once", None)
                 for rid, toks in zip(raw_req_ids, raw_samples):
+                    if skip_once is not None and rid in skip_once:
+                        skip_once.discard(rid)
+                        _lumo_fb_ir_debug({
+                            "event": "kernel_noactive_promote_skipped",
+                            "rid": rid,
+                            "sampled": [int(t) for t in list(toks)[:8] if int(t) != -1],
+                            "accepted": int(_lumo_fb_ir_accepted_from_tokens(toks)),
+                        })
+                        continue
                     _lumo_fb_ir_debug({
                         "event": "kernel_noactive_sample",
                         "rid": rid,
