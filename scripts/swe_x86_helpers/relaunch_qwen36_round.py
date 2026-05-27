@@ -1886,7 +1886,8 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                      num_rejected_tokens_gpu=None, slot_mappings=None):
     global _LUMO_FB_DBG_FH
     _lumo_fb_prop_t0 = _lumo_fb_time.perf_counter_ns()
-    if _lumo_fb_os.environ.get("LUMO_FB_PATHS") != "1":
+    if (_lumo_fb_os.environ.get("LUMO_FB_PATHS") != "1"
+            and _lumo_fb_os.environ.get("LUMO_FB_KERNEL_ROWS") != "1"):
         return _lumo_fb_orig_propose(
             self, target_token_ids, target_positions, target_hidden_states,
             next_token_ids, token_indices_to_sample, common_attn_metadata,
@@ -2028,7 +2029,8 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
         except Exception:
             pass
         return out
-    if _lumo_fb_os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1":
+    if (_lumo_fb_os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1"
+            or _lumo_fb_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"):
         root_vec = _lumo_fb_torch.cat([
             _lumo_fb_path0_root.reshape(-1)[:1],
             (_lumo_fb_path0_root if _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
@@ -3173,7 +3175,8 @@ def _lumo_fb_prepare_input_ids(self, scheduler_output, num_reqs,
     ret = _lumo_fb_orig_prepare_input_ids(
         self, scheduler_output, num_reqs, total_num_scheduled_tokens,
         cu_num_tokens)
-    if _lumo_fb_prep_os.environ.get("LUMO_FB_PATHS") != "1":
+    if (_lumo_fb_prep_os.environ.get("LUMO_FB_PATHS") != "1"
+            and _lumo_fb_prep_os.environ.get("LUMO_FB_KERNEL_ROWS") != "1"):
         return ret
     flat_indices = []
     flat_values = []
@@ -3487,8 +3490,9 @@ _lumo_fb_ir_prev_schedule = Scheduler.schedule
 _lumo_fb_ir_prev_update_output = Scheduler.update_from_output
 
 def _lumo_fb_ir_enabled():
-    return (_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
-            and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
+             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
 
 def _lumo_fb_ir_read_control(default_depth):
     depth = int(_lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", str(default_depth)))
@@ -4034,8 +4038,9 @@ _lumo_fb_ir_prev_update_states_runner = GPUModelRunner._update_states
 _lumo_fb_ir_prev_sample_tokens = GPUModelRunner.sample_tokens
 
 def _lumo_fb_ir_runner_enabled():
-    return (_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
-            and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
+             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
 
 def _lumo_fb_ir_is_row_id(req_id):
     return isinstance(req_id, str) and "::lumo_fb_ir::" in req_id
@@ -4564,10 +4569,8 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                 raw_samples = list(getattr(model_output, "sampled_token_ids", []) or [])
                 # Keep the runner's cached block table in sync with the
                 # scheduler-side manager promotion for K=1/no-internal events.
-                skip_once = None
-                if int(_lumo_fb_ir_os.environ.get("LUMO_FB_K", "1")) >= 2:
-                    skip_once = getattr(
-                        self, "_lumo_fb_ir_skip_noactive_promote_once", None)
+                skip_once = getattr(
+                    self, "_lumo_fb_ir_skip_noactive_promote_once", None)
                 for rid, toks in zip(raw_req_ids, raw_samples):
                     if skip_once is not None and rid in skip_once:
                         skip_once.discard(rid)
