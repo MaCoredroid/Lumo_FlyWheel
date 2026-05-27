@@ -784,6 +784,13 @@ class ModelServer:
             + " 2>&1 | tee -a "
             + shlex.quote(str(log_path))
         )
+        shell_arg = shell_cmd
+        if len(shell_cmd) > 100_000:
+            launch_script = self.logs_root / f"{self.container_name}-launch.sh"
+            launch_script.parent.mkdir(parents=True, exist_ok=True)
+            launch_script.write_text(shell_cmd, encoding="utf-8")
+            launch_script.chmod(0o700)
+            shell_arg = "bash " + shlex.quote(str(launch_script))
 
         volume_args = [
             "-v",
@@ -837,7 +844,7 @@ class ModelServer:
             "bash",
             self.image,
             "-lc",
-            shell_cmd,
+            shell_arg,
         ]
 
     def _logs_alias_volume_args(self) -> list[str]:
