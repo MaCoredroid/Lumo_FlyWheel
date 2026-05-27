@@ -90,13 +90,15 @@ def read_trace(pre: int, post: int) -> list[dict]:
     return rows
 
 
-def write_fb_control(path: Path, depth: int, k: int) -> None:
+def write_fb_control(path: Path, depth: int, k: int, assert_depth: int | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "depth": int(depth),
         "k": int(k),
         "updated_at": round(time.time(), 6),
     }
+    if assert_depth is not None:
+        payload["assert_depth"] = int(assert_depth)
     tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
     tmp.write_text(json.dumps(payload, sort_keys=True) + "\n")
     tmp.replace(path)
@@ -204,6 +206,8 @@ def main() -> int:
     ap.add_argument("--out", default=None)
     ap.add_argument("--fb-control-depth", type=int, default=None)
     ap.add_argument("--fb-control-k", type=int, default=None)
+    ap.add_argument("--fb-assert-depth", type=int, default=None,
+                    help="positive-control only: expected actual width for the runtime assert")
     ap.add_argument("--fb-control-file", default=DEFAULT_FB_CONTROL)
     ap.add_argument("--launch-n-max", type=int, default=None)
     ap.add_argument("--certifiable", action=argparse.BooleanOptionalAction, default=True)
@@ -216,8 +220,10 @@ def main() -> int:
     hotplug = args.fb_control_depth is not None
     certifiable = bool(args.certifiable and not hotplug)
     if hotplug:
-        write_fb_control(Path(args.fb_control_file), args.fb_control_depth, args.fb_control_k)
-        print(f"poked F_b control: depth={args.fb_control_depth} k={args.fb_control_k} -> {args.fb_control_file}")
+        write_fb_control(Path(args.fb_control_file), args.fb_control_depth,
+                         args.fb_control_k, assert_depth=args.fb_assert_depth)
+        extra = f" assert_depth={args.fb_assert_depth}" if args.fb_assert_depth is not None else ""
+        print(f"poked F_b control: depth={args.fb_control_depth} k={args.fb_control_k}{extra} -> {args.fb_control_file}")
 
     key = get_api_key()
     if not key:
