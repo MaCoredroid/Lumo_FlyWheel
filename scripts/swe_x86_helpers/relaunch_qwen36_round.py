@@ -4456,6 +4456,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
     except Exception:
         pass
     if winners:
+        self._lumo_fb_ir_last_winners = winners
         scheduler_output.lumo_fb_internal_winners = winners
         try:
             sampler_output.lumo_fb_internal_winners = winners
@@ -4560,6 +4561,32 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
         pass
     if not _lumo_fb_ir_runner_enabled():
         return output
+    last_winners = getattr(self, "_lumo_fb_ir_last_winners", None)
+    if last_winners:
+        try:
+            model_output = getattr(output, "model_runner_output", output)
+            req_ids = list(getattr(model_output, "req_ids", []) or [])
+            for parent, data in list(last_winners.items()):
+                if parent in req_ids and isinstance(data, dict):
+                    idx = req_ids.index(parent)
+                    commit_tokens = [int(t) for t in list(data.get("commit_tokens") or [])]
+                    if commit_tokens:
+                        model_output.sampled_token_ids[idx] = commit_tokens
+            model_output.lumo_fb_internal_winners = last_winners
+            if hasattr(output, "model_runner_output"):
+                output.model_runner_output = model_output
+            else:
+                output = model_output
+            _lumo_fb_ir_debug({
+                "event": "patched_model_output_winners",
+                "winners": last_winners,
+            })
+        except Exception as e:
+            _lumo_fb_ir_debug({
+                "event": "patch_model_output_winners_error",
+                "error": repr(e),
+            })
+        self._lumo_fb_ir_last_winners = None
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not active:
         if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
