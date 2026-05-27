@@ -3880,6 +3880,50 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
             or getattr(model_runner_output, "lumo_fb_internal_winners", None)
             or {}
         )
+        if not winners:
+            try:
+                out_req_ids = list(getattr(model_runner_output, "req_ids", []) or [])
+                out_samples = list(getattr(model_runner_output, "sampled_token_ids", []) or [])
+                out_by_req = dict(zip(out_req_ids, out_samples))
+                for parent_id, data in rows_by_parent.items():
+                    toks = out_by_req.get(parent_id)
+                    if toks is None:
+                        continue
+                    valid = []
+                    for tok in list(toks):
+                        if int(tok) == -1:
+                            break
+                        valid.append(int(tok))
+                    candidates = [(parent_id, list((data.get("paths") or [[]])[0]))]
+                    for row in data.get("rows", []):
+                        candidates.append((row.get("rid"), list(row.get("draft") or [])))
+                    scored = []
+                    for rid, draft in candidates:
+                        acc = 0
+                        for pos, draft_tok in enumerate(draft):
+                            if pos >= max(0, len(valid) - 1):
+                                break
+                            if int(draft_tok) != int(valid[pos]):
+                                break
+                            acc += 1
+                        scored.append((rid, acc))
+                    scored.sort(key=lambda item: (item[1], 0 if item[0] == parent_id else -1), reverse=True)
+                    if scored:
+                        winners[parent_id] = {
+                            "winner_rid": scored[0][0],
+                            "accepted": int(scored[0][1]),
+                            "reconstructed": True,
+                        }
+                if winners:
+                    _lumo_fb_ir_sched_debug({
+                        "event": "reconstructed_internal_winners",
+                        "winners": winners,
+                    })
+            except Exception as e:
+                _lumo_fb_ir_sched_debug({
+                    "event": "reconstruct_internal_winners_error",
+                    "error": repr(e),
+                })
         winner_ids = {
             data.get("winner_rid")
             for data in winners.values()
