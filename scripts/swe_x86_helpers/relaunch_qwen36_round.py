@@ -3495,6 +3495,63 @@ def _lumo_fb_ir_state_block_ids(self, req_id):
     except Exception:
         return None
 
+def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") != "1":
+        return
+    req_state = self.requests.get(req_id)
+    curr_idx = self.mamba_state_idx.get(req_id)
+    if req_state is None or curr_idx is None:
+        return
+    src_offset = int(accepted_drafts) + 1
+    if src_offset < 1:
+        return
+    moved = []
+    try:
+        all_groups = [list(group) for group in req_state.block_ids]
+        for gid in self._get_mamba_copy_bufs().mamba_group_ids:
+            blocks = all_groups[gid]
+            src_idx = int(curr_idx) + src_offset
+            if src_idx >= len(blocks):
+                continue
+            blocks[int(curr_idx)], blocks[src_idx] = blocks[src_idx], blocks[int(curr_idx)]
+            all_groups[gid] = blocks
+            moved.append({
+                "group": int(gid),
+                "curr_idx": int(curr_idx),
+                "src_idx": int(src_idx),
+                "curr_block": int(blocks[int(curr_idx)]),
+            })
+        if moved:
+            req_state.block_ids = tuple(all_groups)
+            idx = self.input_batch.req_id_to_index.get(req_id)
+            if idx is not None:
+                self.input_batch.block_table.clear_row(idx)
+                self.input_batch.block_table.add_row(req_state.block_ids, idx)
+            _lumo_fb_ir_debug({
+                "event": "kernel_promote_state",
+                "rid": req_id,
+                "accepted_drafts": int(accepted_drafts),
+                "moves": moved,
+            })
+    except Exception as e:
+        _lumo_fb_ir_debug({
+            "event": "kernel_promote_state_error",
+            "rid": req_id,
+            "accepted_drafts": int(accepted_drafts),
+            "error": repr(e),
+        })
+
+def _lumo_fb_ir_accepted_from_tokens(tokens):
+    valid = []
+    for tok in list(tokens):
+        try:
+            if int(tok) == -1:
+                break
+            valid.append(int(tok))
+        except Exception:
+            break
+    return max(0, len(valid) - 1)
+
 def _lumo_fb_ir_set_accept_len(self, req_id, accept_len):
     idx = self.input_batch.req_id_to_index.get(req_id)
     if idx is None:
@@ -3710,6 +3767,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                             self.mamba_state_idx[parent] = self.mamba_state_idx[winner_rid]
                 except Exception:
                     pass
+            _lumo_fb_ir_kernel_promote_state(self, parent, winner_acc)
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
@@ -3831,6 +3889,20 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
         return output
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not active:
+        if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+            try:
+                model_output = getattr(output, "model_runner_output", output)
+                raw_req_ids = list(getattr(model_output, "req_ids", []) or [])
+                raw_samples = list(getattr(model_output, "sampled_token_ids", []) or [])
+                for rid, toks in zip(raw_req_ids, raw_samples):
+                    _lumo_fb_ir_kernel_promote_state(
+                        self, rid, _lumo_fb_ir_accepted_from_tokens(toks))
+                self.input_batch.refresh_metadata()
+            except Exception as e:
+                _lumo_fb_ir_debug({
+                    "event": "kernel_promote_noactive_error",
+                    "error": repr(e),
+                })
         return output
     self._lumo_fb_ir_active = {}
     internal_ids = set(active.keys())
