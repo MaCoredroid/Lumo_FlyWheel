@@ -3868,11 +3868,14 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
     if not _lumo_fb_ir_enabled():
         return _lumo_fb_ir_prev_update_output(self, scheduler_output, model_runner_output)
     rows_queue = list(getattr(self, "_lumo_fb_ir_rows_queue", []) or [])
+    queue_len_before = len(rows_queue)
     queued_rows_by_parent = rows_queue.pop(0) if rows_queue else None
     self._lumo_fb_ir_rows_queue = rows_queue
+    scheduler_rows_by_parent = getattr(scheduler_output, "lumo_fb_internal_rows", None)
+    runner_rows_by_parent = getattr(model_runner_output, "lumo_fb_internal_rows", None)
     rows_by_parent = (
-        getattr(scheduler_output, "lumo_fb_internal_rows", None)
-        or getattr(model_runner_output, "lumo_fb_internal_rows", None)
+        scheduler_rows_by_parent
+        or runner_rows_by_parent
         or queued_rows_by_parent
         or {}
     )
@@ -3881,6 +3884,30 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
         for row in bundle.get("rows", []):
             internal_ids.append(row.get("rid"))
     internal_ids = [rid for rid in internal_ids if rid]
+    try:
+        if (_lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG") == "1"
+                and (_lumo_fb_ir_kernel_rows_enabled()
+                     or queue_len_before
+                     or scheduler_rows_by_parent
+                     or runner_rows_by_parent
+                     or internal_ids)):
+            _lumo_fb_ir_sched_debug({
+                "event": "update_boundary",
+                "queue_len_before": int(queue_len_before),
+                "queue_len_after": int(len(rows_queue)),
+                "queued_parent_count": int(len(queued_rows_by_parent or {})),
+                "scheduler_parent_count": int(len(scheduler_rows_by_parent or {})),
+                "runner_parent_count": int(len(runner_rows_by_parent or {})),
+                "rows_parent_count": int(len(rows_by_parent or {})),
+                "internal_id_count": int(len(internal_ids)),
+                "model_req_ids": list(getattr(model_runner_output, "req_ids", []) or []),
+                "sample_row_count": int(len(getattr(model_runner_output, "sampled_token_ids", []) or [])),
+            })
+    except Exception as e:
+        _lumo_fb_ir_sched_debug({
+            "event": "update_boundary_error",
+            "error": repr(e),
+        })
     if internal_ids:
         winners = (
             getattr(scheduler_output, "lumo_fb_internal_winners", None)
