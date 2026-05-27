@@ -4274,6 +4274,8 @@ def _lumo_fb_ir_set_accept_len(self, req_id, accept_len):
     if idx is None:
         return
     try:
+        self._lumo_fb_accept_lens = getattr(self, "_lumo_fb_accept_lens", {})
+        self._lumo_fb_accept_lens[req_id] = int(accept_len)
         self.input_batch.num_accepted_tokens_cpu[idx] = int(accept_len)
         self.input_batch.num_accepted_tokens_cpu_tensor[idx] = int(accept_len)
         if hasattr(self, "num_accepted_tokens"):
