@@ -4088,6 +4088,24 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
         except Exception:
             pass
     _lumo_fb_ir_cleanup_rows(self, internal_ids)
+    if winners:
+        # cleanup_rows condenses the persistent input batch after removing
+        # internal verifier rows. Re-apply the parent's logical accepted-prefix
+        # length after that compaction so the next conv preprocess slices the
+        # promoted speculative state at the same prefix winner-collapse chose.
+        restored_accept_lens = {}
+        for parent, winner in winners.items():
+            accept_len = int(winner.get("accepted", 0)) + 1
+            _lumo_fb_ir_set_accept_len(self, parent, accept_len)
+            restored_accept_lens[parent] = accept_len
+        try:
+            self.num_accepted_tokens.copy_to_gpu(len(self.input_batch.req_ids))
+        except Exception:
+            pass
+        _lumo_fb_ir_debug({
+            "event": "kernel_post_cleanup_accept_lens",
+            "accept_lens": restored_accept_lens,
+        })
     self._lumo_fb_ir_active = {}
     return sampler_output, spec_decode_metadata, common_attn_metadata
 
