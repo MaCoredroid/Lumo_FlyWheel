@@ -3740,6 +3740,15 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
             continue
         blocks[curr_idx], blocks[src_idx] = blocks[src_idx], blocks[curr_idx]
         manager.req_to_blocks[req_id] = blocks
+        row_block_ids_by_row = getattr(self, "_lumo_fb_ir_row_block_ids", None)
+        if row_block_ids_by_row is not None and req_id in row_block_ids_by_row:
+            try:
+                row_groups = [list(group) for group in row_block_ids_by_row[req_id]]
+                if int(group_idx) < len(row_groups):
+                    row_groups[int(group_idx)] = [blk.block_id for blk in blocks]
+                    row_block_ids_by_row[req_id] = tuple(row_groups)
+            except Exception:
+                pass
         moved.append({
             "group": int(group_idx),
             "curr_idx": int(curr_idx),
