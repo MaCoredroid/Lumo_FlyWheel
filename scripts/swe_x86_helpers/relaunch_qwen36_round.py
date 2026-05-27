@@ -3378,6 +3378,13 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
     req = self.requests.get(req_id)
     if req is None:
         return
+    accepted_drafts = int(accepted_drafts)
+    _seen = getattr(self, "_lumo_fb_kernel_seen_sample", None)
+    if _seen is None:
+        _seen = set()
+        self._lumo_fb_kernel_seen_sample = _seen
+    _first_sample = req_id not in _seen
+    _seen.add(req_id)
     moved = []
     for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
         if getattr(manager, "mamba_cache_mode", None) != "align":
@@ -3396,7 +3403,10 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts):
         # The verify forward advances recurrent state through accepted draft
         # tokens only. The bonus/root target token is sampled from logits but is
         # consumed by the next decode step, so it must not be included here.
-        src_idx = curr_idx + int(accepted_drafts)
+        src_offset = accepted_drafts
+        if src_offset == 0 and not _first_sample:
+            src_offset = 1
+        src_idx = curr_idx + src_offset
         if src_idx >= len(blocks):
             continue
         blocks[curr_idx], blocks[src_idx] = blocks[src_idx], blocks[curr_idx]
@@ -3628,7 +3638,16 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts):
     curr_idx = self.mamba_state_idx.get(req_id)
     if req_state is None or curr_idx is None:
         return
-    src_offset = int(accepted_drafts)
+    accepted_drafts = int(accepted_drafts)
+    _seen = getattr(self, "_lumo_fb_kernel_seen_sample", None)
+    if _seen is None:
+        _seen = set()
+        self._lumo_fb_kernel_seen_sample = _seen
+    _first_sample = req_id not in _seen
+    _seen.add(req_id)
+    src_offset = accepted_drafts
+    if src_offset == 0 and not _first_sample:
+        src_offset = 1
     if src_offset < 1:
         return
     moved = []
