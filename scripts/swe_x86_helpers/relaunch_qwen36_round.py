@@ -65,7 +65,7 @@ else:
         '            except NameError:',
         '                _LUMO_SPEC_FH = open(_lo.environ.get("LUMO_PER_REQ_SPEC_TRACE", "/logs/per_req_spec_trace.jsonl"), "a", buffering=1)',
         '            _linv = (num_invalid_spec_tokens.get(request_id, 0) if num_invalid_spec_tokens else 0)',
-        '            _LUMO_SPEC_FH.write(_lj.dumps({"ts": round(_lt.time(), 4), "rid": request_id, "draft": num_draft_tokens, "acc": num_accepted_tokens, "inv": _linv}) + chr(10))',
+        '            _LUMO_SPEC_FH.write(_lj.dumps({"ts": round(_lt.time(), 4), "rid": request_id, "draft": num_draft_tokens, "proposal_width": num_draft_tokens, "verify_width": num_draft_tokens, "acc": num_accepted_tokens, "inv": _linv}) + chr(10))',
         '        except Exception:',
         '            pass',
         '        if not self.log_stats or not num_draft_tokens:',
@@ -806,6 +806,7 @@ else:
 # root top-2 is taken from the first MTP logits and each root is extended by
 # reusing the ordinary linear proposer path, one path at a time.
 import os as _lumo_fb_os
+import json as _lumo_fb_json
 import torch as _lumo_fb_torch
 import time as _lumo_fb_time
 from dataclasses import replace as _lumo_fb_replace
@@ -815,14 +816,47 @@ from vllm.v1.spec_decode.eagle import eagle_step_update_slot_mapping_and_metadat
 
 _lumo_fb_orig_propose = EagleProposer.propose
 
+def _lumo_fb_read_control(max_depth):
+    depth = int(_lumo_fb_os.environ.get("LUMO_FB_DEPTH", str(max_depth)))
+    k = int(_lumo_fb_os.environ.get("LUMO_FB_K", "2"))
+    info = {"fb_control_source": "env"}
+    path = _lumo_fb_os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
+    if path and _lumo_fb_os.path.exists(path):
+        st0 = _lumo_fb_os.stat(path)
+        with open(path) as fh:
+            payload = _lumo_fb_json.load(fh)
+        st1 = _lumo_fb_os.stat(path)
+        if (st0.st_mtime_ns != st1.st_mtime_ns
+                or st0.st_size != st1.st_size
+                or getattr(st0, "st_ino", None) != getattr(st1, "st_ino", None)):
+            raise RuntimeError(f"LUMO_FB_CONTROL_FILE changed during read: {path}")
+        if payload.get("depth") is not None:
+            depth = int(payload["depth"])
+        if payload.get("k") is not None:
+            k = int(payload["k"])
+        info = {
+            "fb_control_source": "file",
+            "fb_control_file": path,
+            "fb_control_mtime_ns": int(st1.st_mtime_ns),
+        }
+    if depth < 1 or depth > int(max_depth):
+        raise RuntimeError(f"LUMO_FB active depth {depth} outside launch_n_max {max_depth}")
+    if k < 1 or k > 2:
+        raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
+    info["launch_n_max"] = int(max_depth)
+    info["active_depth"] = int(depth)
+    info["active_k"] = int(k)
+    return int(depth), int(k), info
+
 def _lumo_fb_sample_logits(self, hidden_states):
     if self.use_local_argmax_reduction:
         return None
     return self.model.compute_logits(hidden_states)
 
-def _lumo_fb_policy_from_logits(logits):
+def _lumo_fb_policy_from_logits(logits, max_k=None):
+    requested_k = int(max_k if max_k is not None else _lumo_fb_os.environ.get("LUMO_FB_K", "2"))
     if _lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE") != "1":
-        return int(_lumo_fb_os.environ.get("LUMO_FB_K", "2")), {}
+        return requested_k, {"fb_policy_k": requested_k, "fb_policy_reason": "fixed_k"}
     try:
         vals = _lumo_fb_torch.topk(logits.float(), min(8, logits.shape[-1]), dim=-1).values.view(-1)
         probs = _lumo_fb_torch.softmax(vals, dim=-1)
@@ -831,7 +865,7 @@ def _lumo_fb_policy_from_logits(logits):
         ratio = p2 / max(p1, 1e-9)
         p1_max = float(_lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX", "0.45"))
         ratio_min = float(_lumo_fb_os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN", "0.50"))
-        k = 2 if (p1 < p1_max and ratio > ratio_min) else 1
+        k = 2 if (requested_k >= 2 and p1 < p1_max and ratio > ratio_min) else 1
         return k, {
             "fb_policy_k": k,
             "fb_root_p1": round(p1, 6),
@@ -1089,7 +1123,8 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
             self, target_token_ids, target_positions, target_hidden_states,
             next_token_ids, token_indices_to_sample, common_attn_metadata,
             sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
-    if self.num_speculative_tokens != 3 or common_attn_metadata.batch_size() != 1:
+    active_depth, requested_k, control_info = _lumo_fb_read_control(self.num_speculative_tokens)
+    if common_attn_metadata.batch_size() != 1:
         return _lumo_fb_orig_propose(
             self, target_token_ids, target_positions, target_hidden_states,
             next_token_ids, token_indices_to_sample, common_attn_metadata,
@@ -1162,7 +1197,9 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
             self, target_token_ids, target_positions, target_hidden_states,
             next_token_ids, token_indices_to_sample, common_attn_metadata,
             sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
-    policy_k, policy_info = _lumo_fb_policy_from_logits(logits)
+    policy_k, policy_info = _lumo_fb_policy_from_logits(logits, requested_k)
+    policy_info = dict(policy_info)
+    policy_info.update(control_info)
     if _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
         policy_k = 2
         policy_info = dict(policy_info)
@@ -1198,8 +1235,8 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
         path0 = _lumo_fb_extend_one(
             self, _lumo_fb_path0_root, positions, base_hidden_states,
             common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
-            num_rejected_tokens_gpu)
-        out = path0[:, :self.num_speculative_tokens]
+            num_rejected_tokens_gpu, draft_len=active_depth)
+        out = path0[:, :active_depth]
         try:
             if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
                 import json as _j, time as _t
@@ -1210,6 +1247,9 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                 _LUMO_FB_DBG_FH.write(_j.dumps({
                     "ts": round(_t.time(), 4),
                     "k": 1,
+                    "launch_n_max": int(self.num_speculative_tokens),
+                    "active_depth": int(active_depth),
+                    "active_k": int(requested_k),
                     "fb_proposer_us": int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
                     "raw_roots": raw_roots.view(-1).tolist(),
                     "roots": [int(out[0, 0].item())],
@@ -1228,24 +1268,24 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
         ], dim=0)
         paths = _lumo_fb_extend_paths_batched(
             self, root_vec, positions, base_hidden_states, common_attn_metadata,
-            dict(per_layer_attn_metadata), num_rejected_tokens_gpu)
-        path0 = paths[0:1, :self.num_speculative_tokens]
-        path1 = paths[1:2, :self.num_speculative_tokens]
+            dict(per_layer_attn_metadata), num_rejected_tokens_gpu, draft_len=active_depth)
+        path0 = paths[0:1, :active_depth]
+        path1 = paths[1:2, :active_depth]
     elif _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
         path0 = _lumo_fb_extend_one(
             self, _lumo_fb_path0_root, positions, base_hidden_states,
             common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
-            num_rejected_tokens_gpu)
+            num_rejected_tokens_gpu, draft_len=active_depth)
         path1 = path0.clone()
     else:
         path0 = _lumo_fb_extend_one(
             self, _lumo_fb_path0_root, positions, base_hidden_states,
             common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
-            num_rejected_tokens_gpu)
+            num_rejected_tokens_gpu, draft_len=active_depth)
         path1 = _lumo_fb_extend_one(
             self, roots[1], positions, base_hidden_states,
             common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
-            num_rejected_tokens_gpu)
+            num_rejected_tokens_gpu, draft_len=active_depth)
     out = _lumo_fb_torch.cat([path0, path1], dim=1)
     try:
         if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
@@ -1256,9 +1296,13 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                 _LUMO_FB_DBG_FH = open("/logs/fb_debug.jsonl", "a", buffering=1)
             _LUMO_FB_DBG_FH.write(_j.dumps({
                 "ts": round(_t.time(), 4),
+                "launch_n_max": int(self.num_speculative_tokens),
+                "active_depth": int(active_depth),
+                "active_k": int(requested_k),
+                "policy_k": int(policy_k),
                 "fb_proposer_us": int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
                 "raw_roots": raw_roots.view(-1).tolist(),
-                "roots": [int(out[0, 0].item()), int(out[0, self.num_speculative_tokens].item())],
+                "roots": [int(out[0, 0].item()), int(out[0, active_depth].item())],
                 "root_candidates": root_candidates[:8].tolist(),
                 "draft": out.tolist(),
                 "policy": policy_info,
@@ -2286,7 +2330,13 @@ def _lumo_fb_shared_root_rejection_sample(
             or _lumo_fb_rs_os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1"
             or draft_probs is not None
             or len(num_draft_tokens) % 2 != 0
-            or any(int(n) != 3 for n in num_draft_tokens)):
+            or len(num_draft_tokens) == 0):
+        return rejection_sample(
+            draft_token_ids, num_draft_tokens, max_spec_len,
+            cu_num_draft_tokens, draft_probs, target_logits,
+            bonus_token_ids, sampling_metadata)
+    fb_depth = int(num_draft_tokens[0])
+    if fb_depth < 1 or any(int(n) != fb_depth for n in num_draft_tokens):
         return rejection_sample(
             draft_token_ids, num_draft_tokens, max_spec_len,
             cu_num_draft_tokens, draft_probs, target_logits,
@@ -2306,14 +2356,14 @@ def _lumo_fb_shared_root_rejection_sample(
         for req_idx in range(batch_size):
             start = 0 if req_idx == 0 else int(cu_num_draft_tokens[req_idx - 1].item())
             rejected = False
-            for pos in range(3):
+            for pos in range(fb_depth):
                 tok = target_argmax[start + pos]
                 output_token_ids[req_idx, pos] = tok
                 if int(draft_token_ids[start + pos].item()) != int(tok.item()):
                     rejected = True
                     break
             if not rejected:
-                output_token_ids[req_idx, 3] = bonus_token_ids[req_idx, 0]
+                output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
         return output_token_ids
 
     if sampling_metadata.all_random:
@@ -2340,7 +2390,7 @@ def _lumo_fb_shared_root_rejection_sample(
         for req_idx in (pair_start, pair_start + 1):
             start = 0 if req_idx == 0 else int(cu_num_draft_tokens[req_idx - 1].item())
             rejected = False
-            for pos in range(3):
+            for pos in range(fb_depth):
                 tok_idx = start + pos
                 draft_id = draft_token_ids[tok_idx].to(torch.int32)
                 if pos == 0:
@@ -2366,7 +2416,7 @@ def _lumo_fb_shared_root_rejection_sample(
                     rejected = True
                     break
             if not rejected:
-                output_token_ids[req_idx, 3] = bonus_token_ids[req_idx, 0]
+                output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
     return output_token_ids
 """
     old = nl.join([
@@ -2424,6 +2474,29 @@ _lumo_fb_ir_prev_update_output = Scheduler.update_from_output
 def _lumo_fb_ir_enabled():
     return (_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+
+def _lumo_fb_ir_read_control(default_depth):
+    depth = int(_lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", str(default_depth)))
+    k = int(_lumo_fb_ir_os.environ.get("LUMO_FB_K", "2"))
+    path = _lumo_fb_ir_os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
+    if path and _lumo_fb_ir_os.path.exists(path):
+        st0 = _lumo_fb_ir_os.stat(path)
+        with open(path) as fh:
+            payload = _lumo_fb_ir_json.load(fh)
+        st1 = _lumo_fb_ir_os.stat(path)
+        if (st0.st_mtime_ns != st1.st_mtime_ns
+                or st0.st_size != st1.st_size
+                or getattr(st0, "st_ino", None) != getattr(st1, "st_ino", None)):
+            raise RuntimeError(f"LUMO_FB_CONTROL_FILE changed during read: {path}")
+        if payload.get("depth") is not None:
+            depth = int(payload["depth"])
+        if payload.get("k") is not None:
+            k = int(payload["k"])
+    if depth < 1:
+        raise RuntimeError(f"LUMO_FB active depth {depth} invalid")
+    if k < 1 or k > 2:
+        raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
+    return int(depth), int(k)
 
 def _lumo_fb_ir_sched_debug(event):
     if _lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG") != "1":
@@ -2559,15 +2632,19 @@ def _lumo_fb_ir_update_draft_token_ids(self, draft_token_ids):
             request._lumo_fb_internal_paths = None
             continue
         toks = list(spec_token_ids)
-        if len(toks) == 6 and int(_lumo_fb_ir_os.environ.get("LUMO_FB_K", "2")) >= 2:
-            paths = [list(toks[:3]), list(toks[3:6])]
+        active_depth, requested_k = _lumo_fb_ir_read_control(len(toks))
+        if requested_k >= 2 and len(toks) == 2 * active_depth:
+            paths = [list(toks[:active_depth]), list(toks[active_depth:2 * active_depth])]
             if _lumo_fb_ir_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
                 paths[1] = list(paths[0])
             request._lumo_fb_internal_paths = paths
             request.spec_token_ids = list(paths[0])
         else:
+            if _lumo_fb_ir_os.environ.get("LUMO_FB_ASSERT_WIDTH") == "1" and len(toks) != active_depth:
+                raise RuntimeError(
+                    f"LUMO_FB scheduler width mismatch: draft_len={len(toks)} active_depth={active_depth} active_k={requested_k}")
             request._lumo_fb_internal_paths = None
-            request.spec_token_ids = toks[:3]
+            request.spec_token_ids = toks[:active_depth]
 
 def _lumo_fb_ir_schedule(self):
     if not _lumo_fb_ir_enabled():
@@ -3103,7 +3180,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     # (config F only). Realized KV is auto/bf16, which TreeAttention supports.
     dbg = "export LUMO_TREE_DRAFT_DEBUG=1\n" if (tree and tree_debug) else ""
     tree_blocks = _TREE_ATTN_BLOCK + _MROPE_TREE_BLOCK + _TREE_REJECTION_BLOCK
-    fb_k = os.environ.get("LUMO_FB_K", "2")
+    fb_k = os.environ.get("LUMO_FB_K", "1")
     fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
     fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
@@ -3111,7 +3188,9 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
     fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\nexport LUMO_FB_DEPTH=3\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_adaptive}{fb_batched}{fb_p1}{fb_ratio}" if fb else ""
+    fb_depth = f"export LUMO_FB_DEPTH={os.environ['LUMO_FB_DEPTH']}\n" if os.environ.get("LUMO_FB_DEPTH") else ""
+    fb_control = os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_adaptive}{fb_batched}{fb_p1}{fb_ratio}" if fb else ""
     return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
 
 

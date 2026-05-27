@@ -32,10 +32,12 @@ E-vs-F comparison, NOT to equal the B=4 dgx_steptrace numbers from the SWE sweep
 A no-spec config (OFF) produces no spec-trace events -> reported as events=0.
 """
 from __future__ import annotations
-import argparse, collections, json, subprocess, time, urllib.request
+import argparse, collections, json, os, subprocess, time, urllib.request
 from pathlib import Path
 
 TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl"
+DEFAULT_FB_CONTROL = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_control.json"
+DEFAULT_HOTPLUG_REF_N8 = "output/spec_speed_probe/E8_depth_search_256.json"
 PORT = 9950
 CONTAINER = "lumo-vllm-track-b-suffix"
 
@@ -86,6 +88,67 @@ def read_trace(pre: int, post: int) -> list[dict]:
                     except Exception:
                         pass
     return rows
+
+
+def write_fb_control(path: Path, depth: int, k: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "depth": int(depth),
+        "k": int(k),
+        "updated_at": round(time.time(), 6),
+    }
+    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+    tmp.write_text(json.dumps(payload, sort_keys=True) + "\n")
+    tmp.replace(path)
+
+
+def validate_widths(rows: list[dict], active_depth: int | None) -> dict:
+    mismatches = []
+    for idx, row in enumerate(rows):
+        proposal_width = int(row.get("proposal_width", row.get("draft", -1)))
+        verify_width = int(row.get("verify_width", row.get("draft", -1)))
+        expected = int(active_depth) if active_depth is not None else verify_width
+        if proposal_width != verify_width or verify_width != expected:
+            mismatches.append({
+                "event_index": idx,
+                "rid": row.get("rid"),
+                "proposal_width": proposal_width,
+                "verify_width": verify_width,
+                "expected_width": expected,
+            })
+            if len(mismatches) >= 20:
+                break
+    return {
+        "valid_width": not mismatches,
+        "proposal_equals_verify": not mismatches,
+        "mismatch_count_sampled": len(mismatches),
+        "mismatches": mismatches,
+    }
+
+
+def hotplug_reference_delta(path: Path, agg: dict) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        ref = json.loads(path.read_text())
+        ref_agg = ref.get("aggregate", {})
+        return {
+            "path": str(path),
+            "reference_acc_per_event": ref_agg.get("mean_acc_per_event"),
+            "reference_decode_tps": ref_agg.get("decode_tps"),
+            "delta_acc_per_event": (
+                round(agg.get("mean_acc_per_event") - ref_agg.get("mean_acc_per_event"), 3)
+                if agg.get("mean_acc_per_event") is not None and ref_agg.get("mean_acc_per_event") is not None
+                else None
+            ),
+            "delta_decode_tps": (
+                round(agg.get("decode_tps") - ref_agg.get("decode_tps"), 3)
+                if agg.get("decode_tps") is not None and ref_agg.get("decode_tps") is not None
+                else None
+            ),
+        }
+    except Exception as exc:
+        return {"path": str(path), "error": str(exc)}
 
 
 def chat(prompt: str, key: str, max_tokens: int, temp: float, top_p: float):
@@ -139,7 +202,22 @@ def main() -> int:
     ap.add_argument("--temp", type=float, default=0.6, help="match the sweep (0.6)")
     ap.add_argument("--top-p", type=float, default=0.95)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--fb-control-depth", type=int, default=None)
+    ap.add_argument("--fb-control-k", type=int, default=None)
+    ap.add_argument("--fb-control-file", default=DEFAULT_FB_CONTROL)
+    ap.add_argument("--launch-n-max", type=int, default=None)
+    ap.add_argument("--certifiable", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--hotplug-reference", default=None)
     args = ap.parse_args()
+
+    if (args.fb_control_depth is None) != (args.fb_control_k is None):
+        raise SystemExit("--fb-control-depth and --fb-control-k must be supplied together")
+
+    hotplug = args.fb_control_depth is not None
+    certifiable = bool(args.certifiable and not hotplug)
+    if hotplug:
+        write_fb_control(Path(args.fb_control_file), args.fb_control_depth, args.fb_control_k)
+        print(f"poked F_b control: depth={args.fb_control_depth} k={args.fb_control_k} -> {args.fb_control_file}")
 
     key = get_api_key()
     if not key:
@@ -171,10 +249,23 @@ def main() -> int:
     agg["mean_event_ms"] = round(tot_span / tot_gaps * 1000, 2) if tot_gaps > 0 else None
     agg["decode_span_s"] = round(tot_span, 4)
     agg["committed_tokens"] = tot_committed
+    width_validation = validate_widths(all_rows, args.fb_control_depth)
+
+    ref_path = Path(args.hotplug_reference) if args.hotplug_reference else None
+    if hotplug and ref_path is None and args.fb_control_depth == 8 and Path(DEFAULT_HOTPLUG_REF_N8).exists():
+        ref_path = Path(DEFAULT_HOTPLUG_REF_N8)
+    ref_delta = hotplug_reference_delta(ref_path, agg) if ref_path else None
 
     result = {
         "label": args.label, "temp": args.temp, "top_p": args.top_p,
         "max_tokens": args.max_tokens, "n_prompts": len(per_req),
+        "launch_n_max": args.launch_n_max,
+        "active_depth": args.fb_control_depth,
+        "active_k": args.fb_control_k,
+        "certifiable": certifiable,
+        "fb_control_file": args.fb_control_file if hotplug else None,
+        "width_validation": width_validation,
+        "hotplug_reference": ref_delta,
         "aggregate": agg, "per_request": per_req,
     }
     out = Path(args.out or f"output/spec_speed_probe/{args.label}.json")
@@ -188,7 +279,15 @@ def main() -> int:
     print(f"  wasted_nodes/event={a.get('wasted_nodes_per_event')}  mean_event_ms={a.get('mean_event_ms')}  "
           f"decode_tps={a.get('decode_tps')}")
     print(f"  acc_dist={a.get('acc_dist')}")
+    print(f"  provenance: launch_n_max={args.launch_n_max} active_depth={args.fb_control_depth} "
+          f"active_k={args.fb_control_k} certifiable={certifiable}")
+    print(f"  width_validation={width_validation['valid_width']}")
+    if ref_delta:
+        print(f"  hotplug_reference={ref_delta}")
     print(f"  -> {out}")
+    if not width_validation["valid_width"]:
+        print("ERROR: proposal_width != verify_width or verify_width != active_depth; probe invalid")
+        return 2
     return 0
 
 
