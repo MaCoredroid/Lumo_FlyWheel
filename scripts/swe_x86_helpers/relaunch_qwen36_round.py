@@ -2973,8 +2973,11 @@ else:
 # logical request root. Random sampling must draw that root target token once
 # and reuse it across siblings; otherwise path0/path1 independently sample
 # different roots and the second-root win case is lost.
+import json as _lumo_fb_rs_json
 import os as _lumo_fb_rs_os
+import time as _lumo_fb_rs_time
 _LUMO_FB_SHARED_ROOT_PAIRS = None
+_LUMO_FB_SAMPLER_DEBUG_COUNT = 0
 
 def _lumo_fb_set_shared_root_pairs(pairs):
     global _LUMO_FB_SHARED_ROOT_PAIRS
@@ -2987,6 +2990,80 @@ def _lumo_fb_sample_from_probs(probs, generator=None):
     else:
         q.exponential_(generator=generator)
     return torch.argmax(probs / q).to(torch.int32)
+
+def _lumo_fb_sampler_to_list(value):
+    if value is None:
+        return None
+    if hasattr(value, "detach"):
+        return value.detach().cpu().tolist()
+    if isinstance(value, (list, tuple)):
+        return [int(v) if not isinstance(v, (list, tuple)) else _lumo_fb_sampler_to_list(v)
+                for v in value]
+    try:
+        return int(value)
+    except Exception:
+        return str(value)
+
+def _lumo_fb_sampler_debug(
+    tag,
+    draft_token_ids,
+    num_draft_tokens,
+    max_spec_len,
+    cu_num_draft_tokens,
+    target_logits,
+    bonus_token_ids,
+    sampling_metadata,
+    output_token_ids,
+):
+    global _LUMO_FB_SAMPLER_DEBUG_COUNT
+    if _lumo_fb_rs_os.environ.get("LUMO_FB_DEBUG") != "1":
+        return
+    limit = int(_lumo_fb_rs_os.environ.get("LUMO_FB_SAMPLER_DEBUG_LIMIT", "128"))
+    if _LUMO_FB_SAMPLER_DEBUG_COUNT >= limit:
+        return
+    _LUMO_FB_SAMPLER_DEBUG_COUNT += 1
+    target_argmax = target_logits.argmax(dim=-1).to(torch.int32)
+    row = {
+        "event": "fb_sampler_debug",
+        "idx": _LUMO_FB_SAMPLER_DEBUG_COUNT - 1,
+        "tag": tag,
+        "ts": _lumo_fb_rs_time.time(),
+        "max_spec_len": int(max_spec_len),
+        "num_draft_tokens": [int(x) for x in num_draft_tokens],
+        "cu_num_draft_tokens": _lumo_fb_sampler_to_list(cu_num_draft_tokens),
+        "draft_token_ids": _lumo_fb_sampler_to_list(draft_token_ids),
+        "target_argmax": _lumo_fb_sampler_to_list(target_argmax),
+        "target_logits_shape": list(target_logits.shape),
+        "bonus_token_ids": _lumo_fb_sampler_to_list(bonus_token_ids),
+        "output_token_ids": _lumo_fb_sampler_to_list(output_token_ids),
+        "all_greedy": bool(getattr(sampling_metadata, "all_greedy", False)),
+        "all_random": bool(getattr(sampling_metadata, "all_random", False)),
+    }
+    path = _lumo_fb_rs_os.environ.get(
+        "LUMO_FB_SAMPLER_DEBUG_PATH", "/logs/fb_sampler_debug.jsonl")
+    with open(path, "a") as fh:
+        fh.write(_lumo_fb_rs_json.dumps(row) + "\n")
+
+def _lumo_fb_rejection_sample_with_debug(
+    tag,
+    draft_token_ids,
+    num_draft_tokens,
+    max_spec_len,
+    cu_num_draft_tokens,
+    draft_probs,
+    target_logits,
+    bonus_token_ids,
+    sampling_metadata,
+):
+    output_token_ids = rejection_sample(
+        draft_token_ids, num_draft_tokens, max_spec_len,
+        cu_num_draft_tokens, draft_probs, target_logits,
+        bonus_token_ids, sampling_metadata)
+    _lumo_fb_sampler_debug(
+        tag, draft_token_ids, num_draft_tokens, max_spec_len,
+        cu_num_draft_tokens, target_logits, bonus_token_ids,
+        sampling_metadata, output_token_ids)
+    return output_token_ids
 
 def _lumo_fb_shared_root_rejection_sample(
     draft_token_ids,
@@ -3003,13 +3080,15 @@ def _lumo_fb_shared_root_rejection_sample(
             or draft_probs is not None
             or len(num_draft_tokens) % 2 != 0
             or len(num_draft_tokens) == 0):
-        return rejection_sample(
+        return _lumo_fb_rejection_sample_with_debug(
+            "fallback_unpaired_or_disabled",
             draft_token_ids, num_draft_tokens, max_spec_len,
             cu_num_draft_tokens, draft_probs, target_logits,
             bonus_token_ids, sampling_metadata)
     fb_depth = int(num_draft_tokens[0])
     if fb_depth < 1 or any(int(n) != fb_depth for n in num_draft_tokens):
-        return rejection_sample(
+        return _lumo_fb_rejection_sample_with_debug(
+            "fallback_uneven_depth",
             draft_token_ids, num_draft_tokens, max_spec_len,
             cu_num_draft_tokens, draft_probs, target_logits,
             bonus_token_ids, sampling_metadata)
@@ -3032,7 +3111,8 @@ def _lumo_fb_shared_root_rejection_sample(
             covered.add(a)
             covered.add(b)
         if len(covered) != batch_size:
-            return rejection_sample(
+            return _lumo_fb_rejection_sample_with_debug(
+                "fallback_incomplete_pairs",
                 draft_token_ids, num_draft_tokens, max_spec_len,
                 cu_num_draft_tokens, draft_probs, target_logits,
                 bonus_token_ids, sampling_metadata)
