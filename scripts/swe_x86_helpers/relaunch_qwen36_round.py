@@ -1542,7 +1542,11 @@ def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
         if request.is_prefill_chunk:
             request.spec_token_ids = []
             continue
-        active_depth, requested_k = _lumo_fb_sched_read_control(len(spec_token_ids))
+        _fb_sched_default_k = int(_lumo_fb_os.environ.get("LUMO_FB_K", "2"))
+        _fb_sched_default_depth = (len(spec_token_ids) // 2
+                                   if _fb_sched_default_k >= 2 and len(spec_token_ids) % 2 == 0
+                                   else len(spec_token_ids))
+        active_depth, requested_k = _lumo_fb_sched_read_control(_fb_sched_default_depth)
         if requested_k >= 2 and len(spec_token_ids) == 2 * active_depth:
             request._lumo_fb_pending_paths = [
                 list(spec_token_ids[:active_depth]),
@@ -2663,7 +2667,11 @@ def _lumo_fb_ir_update_draft_token_ids(self, draft_token_ids):
             request._lumo_fb_internal_paths = None
             continue
         toks = list(spec_token_ids)
-        active_depth, requested_k = _lumo_fb_ir_read_control(len(toks))
+        _fb_ir_default_k = int(_lumo_fb_ir_os.environ.get("LUMO_FB_K", "2"))
+        _fb_ir_default_depth = (len(toks) // 2
+                                if _fb_ir_default_k >= 2 and len(toks) % 2 == 0
+                                else len(toks))
+        active_depth, requested_k = _lumo_fb_ir_read_control(_fb_ir_default_depth)
         if requested_k >= 2 and len(toks) == 2 * active_depth:
             paths = [list(toks[:active_depth]), list(toks[active_depth:2 * active_depth])]
             if _lumo_fb_ir_os.environ.get("LUMO_FB_DUP_PATH1") == "1":
