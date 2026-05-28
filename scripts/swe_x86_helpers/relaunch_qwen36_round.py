@@ -1238,6 +1238,44 @@ else:
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b batch-invariant GDN out projection patch')
 
+gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = gm.read_text()
+sentinel = '# LUMO_FB_INTERNAL_ROW_CAPACITY'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b internal-row capacity patch already present')
+else:
+    old = '''        self.max_num_tokens = scheduler_config.max_num_batched_tokens
+        self.max_num_reqs = scheduler_config.max_num_seqs
+'''
+    new = '''        self.max_num_tokens = scheduler_config.max_num_batched_tokens
+        self.max_num_reqs = scheduler_config.max_num_seqs
+        # LUMO_FB_INTERNAL_ROW_CAPACITY: internal verifier rows are not public
+        # requests, but they do need runner-side batch slots. Keep scheduler
+        # concurrency unchanged and over-allocate only the GPU runner buffers.
+        if _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+            _lumo_fb_branch_depth = int(
+                _lumo_fb_kernel_os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH", "2"))
+            _lumo_fb_row_multiplier = int(
+                _lumo_fb_kernel_os.environ.get(
+                    "LUMO_FB_INTERNAL_ROW_MULTIPLIER",
+                    str(2 ** max(1, _lumo_fb_branch_depth))))
+            self.max_num_reqs = max(
+                self.max_num_reqs,
+                scheduler_config.max_num_seqs * _lumo_fb_row_multiplier)
+'''
+    if old not in text:
+        raise RuntimeError('F_b internal-row capacity anchor not found')
+    if 'import os as _lumo_fb_kernel_os' not in text:
+        old_import = 'import os\n'
+        if old_import not in text:
+            raise RuntimeError('F_b internal-row capacity import anchor not found')
+        text = text.replace(old_import, old_import + 'import os as _lumo_fb_kernel_os\n', 1)
+    text = text.replace(old, new, 1)
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b internal-row capacity patch')
+
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
 sentinel = '# LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK'
