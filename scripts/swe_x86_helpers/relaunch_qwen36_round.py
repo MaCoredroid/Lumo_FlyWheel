@@ -4739,11 +4739,15 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             # accepted-prefix length for Mamba preprocess sync; otherwise the
             # next step can restore a stale length from an earlier K2 event.
             _lumo_fb_ir_set_accept_len(self, parent, int(state_accepted_drafts) + 1)
-            # Active K2 rows are pruned before the base state update, so keep
-            # the parent read slot physically aligned with the accepted prefix
-            # here. The no-active K1 path remains disabled separately.
-            _lumo_fb_ir_kernel_promote_state(
-                self, parent, state_accepted_drafts, first_sample_noop=False)
+            # Active K2 rows are pruned before the base state update, but the
+            # physical state-block promotion must happen after that update has
+            # written the verified-token states.  K1/no-active already promotes
+            # in sample_tokens after _update_states_after_model_execute; mirror
+            # that ordering for K2 instead of swapping blocks pre-update.
+            pending_active_promotes = getattr(
+                self, "_lumo_fb_ir_pending_active_promotes", {})
+            pending_active_promotes[parent] = int(state_accepted_drafts)
+            self._lumo_fb_ir_pending_active_promotes = pending_active_promotes
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
@@ -4921,6 +4925,26 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                 "event": "patch_model_output_winners_error",
                 "error": repr(e),
             })
+        pending_active_promotes = getattr(
+            self, "_lumo_fb_ir_pending_active_promotes", {})
+        for parent, data in list(last_winners.items()):
+            try:
+                if parent in pending_active_promotes:
+                    accepted = int(pending_active_promotes.pop(parent))
+                    _lumo_fb_ir_kernel_promote_state(
+                        self, parent, accepted, first_sample_noop=False)
+                    _lumo_fb_ir_debug({
+                        "event": "kernel_active_promote_deferred",
+                        "rid": parent,
+                        "accepted": int(accepted),
+                    })
+            except Exception as e:
+                _lumo_fb_ir_debug({
+                    "event": "kernel_active_promote_deferred_error",
+                    "rid": parent,
+                    "error": repr(e),
+                })
+        self._lumo_fb_ir_pending_active_promotes = pending_active_promotes
         self._lumo_fb_ir_last_winners = None
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not active:
