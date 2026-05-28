@@ -3631,22 +3631,14 @@ def _lumo_fb_ir_kernel_arrange_mamba_blocks(manager, req_blocks, curr_idx):
     row_blocks = list(req_blocks)
     read_idx = int(curr_idx)
     last_idx = read_idx + 1 + num_spec_blocks
-    if read_idx >= len(row_blocks):
+    if last_idx > len(row_blocks):
         raise RuntimeError(
-            f"LUMO_FB_KERNEL_ROWS read state missing: need {read_idx + 1}, "
+            f"LUMO_FB_KERNEL_ROWS block table too short: need {last_idx}, "
             f"got {len(row_blocks)}")
     read_block = row_blocks[read_idx]
     if read_block == getattr(manager, "_null_block", None):
         raise RuntimeError("LUMO_FB_KERNEL_ROWS read state block is null")
     owned = []
-    # Long generations can advance the live read column within the rolling
-    # state-block table. The parent only needs its own speculative write cols,
-    # but an internal row still needs private write cols at read_idx+1..N.
-    # Allocate row-only columns instead of requiring the parent table to have
-    # already materialized them.
-    if last_idx > len(row_blocks):
-        row_blocks.extend([getattr(manager, "_null_block", None)] *
-                          (last_idx - len(row_blocks)))
     # Column 0 stays as the shared read state.  The extra speculative block
     # added by LUMO_FB_KERNEL_ROWS gives us enough private write columns.
     for logical_idx in range(read_idx + 1, last_idx):
