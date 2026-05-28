@@ -5752,10 +5752,87 @@ def _lumo_fb_ir_filter_model_output(model_output, internal_ids):
     model_output.req_id_to_index = {rid: i for i, rid in enumerate(model_output.req_ids)}
     if getattr(model_output, "logprobs", None) is not None:
         try:
-            model_output.logprobs = [model_output.logprobs[i] for i in keep]
+        model_output.logprobs = [model_output.logprobs[i] for i in keep]
         except Exception:
             pass
     return model_output
+
+def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
+                                                commit_len):
+    # Runner-side companion to split partial-KV attention. The internal row
+    # verifies using dense suffix K/V plus shared parent prefix KV, so on an
+    # internal win only the accepted suffix slots need to be copied into the
+    # parent's existing attention blocks. Prefix KV is never materialized per row.
+    if not (_lumo_fb_ir_kernel_rows_enabled()
+            and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
+        return 0
+    parent_state = self.requests.get(parent_id)
+    winner_state = self.requests.get(winner_id)
+    if parent_state is None or winner_state is None:
+        return 0
+    try:
+        start_token = int(parent_state.num_computed_tokens)
+        remaining = int(commit_len)
+        copied_bytes = 0
+        details = []
+        try:
+            mamba_group_ids = set(int(g) for g in self._get_mamba_copy_bufs().mamba_group_ids)
+        except Exception:
+            mamba_group_ids = set()
+        for group_idx, manager in enumerate(self.kv_cache_config.kv_cache_groups):
+            if int(group_idx) in mamba_group_ids:
+                continue
+            try:
+                # group ids in req_state.block_ids match scheduler KV groups;
+                # the runtime cache group object carries the same block size.
+                block_size = int(getattr(manager.kv_cache_spec, "block_size", 0))
+            except Exception:
+                block_size = 0
+            if block_size <= 0:
+                continue
+            if group_idx >= len(parent_state.block_ids) or group_idx >= len(winner_state.block_ids):
+                continue
+            parent_blocks = list(parent_state.block_ids[group_idx])
+            winner_blocks = list(winner_state.block_ids[group_idx])
+            pos = start_token
+            left = remaining
+            while left > 0:
+                logical_idx = pos // block_size
+                slot = pos % block_size
+                if logical_idx >= len(parent_blocks) or logical_idx >= len(winner_blocks):
+                    break
+                n = min(left, block_size - slot)
+                src = int(winner_blocks[logical_idx])
+                dst = int(parent_blocks[logical_idx])
+                if src != dst and "_lumo_fb_copy_block_slot_range" in globals():
+                    copied = int(_lumo_fb_copy_block_slot_range(
+                        self, src, dst, slot, n))
+                    copied_bytes += copied
+                    details.append({
+                        "group": int(group_idx), "src": src, "dst": dst,
+                        "slot": int(slot), "slots": int(n),
+                        "bytes": int(copied),
+                    })
+                pos += n
+                left -= n
+        _lumo_fb_ir_debug({
+            "event": "split_kv_suffix_commit_copy",
+            "parent": parent_id,
+            "winner": winner_id,
+            "commit_len": int(commit_len),
+            "bytes": int(copied_bytes),
+            "details": details[:16],
+        })
+        return int(copied_bytes)
+    except Exception as e:
+        _lumo_fb_ir_debug({
+            "event": "split_kv_suffix_commit_copy_error",
+            "parent": parent_id,
+            "winner": winner_id,
+            "commit_len": int(commit_len),
+            "error": repr(e),
+        })
+        return 0
 
 def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                                    spec_decode_metadata=None,
