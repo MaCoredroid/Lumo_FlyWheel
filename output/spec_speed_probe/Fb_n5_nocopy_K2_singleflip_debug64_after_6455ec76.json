@@ -1,0 +1,85 @@
+{
+  "label": "Fb_n5_nocopy_K2_singleflip_debug64_after_6455ec76",
+  "temp": 0.6,
+  "top_p": 0.95,
+  "max_tokens": 64,
+  "n_prompts": 2,
+  "thinking_enabled": "template_default_true",
+  "decode_token_scope": "thinking_plus_answer",
+  "launch_n_max": 5,
+  "active_depth": 5,
+  "active_k": 2,
+  "certifiable": false,
+  "fb_control_file": "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_control.json",
+  "width_validation": {
+    "valid_width": true,
+    "proposal_equals_verify": true,
+    "mismatch_count_sampled": 0,
+    "mismatches": []
+  },
+  "hotplug_reference": null,
+  "aggregate": {
+    "events": 30,
+    "mean_acc_per_event": 3.5,
+    "mean_draft_per_event": 5.0,
+    "accepted_per_node": 0.7,
+    "wasted_nodes_per_event": 1.5,
+    "committed_tokens": 135,
+    "decode_span_s": 9.0005,
+    "mean_event_ms": 321.45,
+    "decode_tps": 14.999,
+    "acc_dist": {
+      "0": 3,
+      "1": 4,
+      "2": 3,
+      "3": 1,
+      "4": 3,
+      "5": 16
+    }
+  },
+  "per_request": [
+    {
+      "events": 15,
+      "mean_acc_per_event": 3.533,
+      "mean_draft_per_event": 5.0,
+      "accepted_per_node": 0.7067,
+      "wasted_nodes_per_event": 1.467,
+      "committed_tokens": 68,
+      "decode_span_s": 4.5111,
+      "mean_event_ms": 322.22,
+      "decode_tps": 15.074,
+      "acc_dist": {
+        "0": 2,
+        "1": 2,
+        "2": 1,
+        "4": 1,
+        "5": 9
+      },
+      "prompt_idx": 0,
+      "api_wall_s": 5.569,
+      "completion_tokens": 64
+    },
+    {
+      "events": 15,
+      "mean_acc_per_event": 3.467,
+      "mean_draft_per_event": 5.0,
+      "accepted_per_node": 0.6933,
+      "wasted_nodes_per_event": 1.533,
+      "committed_tokens": 67,
+      "decode_span_s": 4.4894,
+      "mean_event_ms": 320.67,
+      "decode_tps": 14.924,
+      "acc_dist": {
+        "0": 1,
+        "1": 2,
+        "2": 2,
+        "3": 1,
+        "4": 2,
+        "5": 7
+      },
+      "prompt_idx": 1,
+      "api_wall_s": 5.128,
+      "completion_tokens": 64
+    }
+  ]
+}
