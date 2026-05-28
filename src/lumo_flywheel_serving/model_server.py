@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
@@ -330,6 +331,7 @@ class ModelServer:
         self.ensure_runtime_scaffolding()
         self._ensure_image_present()
         config, active_bundle_path, active_bundle = self.resolved_model_config(model_id)
+        config = self._apply_diagnostic_model_overrides(config)
         kernel_activation = require_supported_kernel_runtime_activation(
             active_bundle.kernel_selection if active_bundle is not None else None
         )
@@ -706,8 +708,6 @@ class ModelServer:
             "127.0.0.1",
             "--port",
             str(self.port),
-            "--quantization",
-            config.quantization,
             "--dtype",
             config.dtype,
             "--kv-cache-dtype",
@@ -721,6 +721,8 @@ class ModelServer:
             "--max-num-seqs",
             str(config.max_num_seqs),
         ]
+        if config.quantization.lower() not in {"", "none", "auto"}:
+            vllm_args[9:9] = ["--quantization", config.quantization]
         if config.enable_prefix_caching:
             vllm_args.append("--enable-prefix-caching")
         if config.enable_chunked_prefill:
@@ -875,6 +877,29 @@ class ModelServer:
         if self.logs_root == CONTAINER_LOGS_ALIAS_PATH:
             return []
         return ["-v", f"{self.logs_root}:{CONTAINER_LOGS_ALIAS_PATH}"]
+
+    @staticmethod
+    def _apply_diagnostic_model_overrides(config: ModelConfig) -> ModelConfig:
+        """Opt-in precision diagnostic hook.
+
+        The production registry intentionally pins Qwen3.6 to the FP8
+        checkpoint. F_b debugging sometimes needs to test whether a byte-gate
+        failure is caused by FP8 batch-shape numerics. Keep that escape hatch
+        explicit and env-gated so normal launches remain registry-driven.
+        """
+        overrides: dict[str, object] = {}
+        local_path = os.environ.get("LUMO_MODEL_LOCAL_PATH_OVERRIDE")
+        quantization = os.environ.get("LUMO_MODEL_QUANTIZATION_OVERRIDE")
+        dtype = os.environ.get("LUMO_MODEL_DTYPE_OVERRIDE")
+        if local_path:
+            overrides["local_path"] = Path(local_path)
+        if quantization is not None:
+            overrides["quantization"] = quantization
+        if dtype is not None:
+            overrides["dtype"] = dtype
+        if not overrides:
+            return config
+        return replace(config, **overrides)
 
     @staticmethod
     def _batch_invariant_env_args() -> list[str]:
