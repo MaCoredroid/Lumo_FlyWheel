@@ -1,0 +1,38 @@
+{
+  "label": "Fb_samebuild_K0K1K2_fulldecode_greedy_after_8de73fd3",
+  "prompt": "Implement quicksort in Python and explain the pivot-choice tradeoffs.",
+  "max_tokens": 160,
+  "temperature": 0,
+  "results": [
+    {
+      "control_k": 0,
+      "control_depth": 5,
+      "sha256_full_decode": "99b8c663102982cf2c1cd781f5110b71105a32922b50d84e52005c65f8b825c3",
+      "bytes": 700,
+      "chars": 700,
+      "wall_s": 39.786,
+      "finish_reason": "length",
+      "full_decode": "Here's a thinking process:\n\n1.  **Understand User Request:**\n   - **Task:** Implement quicksort in Python\n   - **Additional Requirement:** Explain pivot-choice tradeoffs\n\n2.  **Quicksort Implementation (Python):**\n   - Need a clean, standard implementation\n   - Should handle edge cases (empty list, single element)\n   - Can use in-place or out-of-place version. In-place is more efficient and standard for quicksort.\n   - I'll implement an in-place version with a helper function for recursion, plus a clean public interface.\n   - Need to choose a pivot strategy for the implementation. I'll use \"middle element\" or \"last element\" for simplicity, but I'll make it clear and mention that pivot choice"
+    },
+    {
+      "control_k": 1,
+      "control_depth": 5,
+      "sha256_full_decode": "99b8c663102982cf2c1cd781f5110b71105a32922b50d84e52005c65f8b825c3",
+      "bytes": 700,
+      "chars": 700,
+      "wall_s": 9.908,
+      "finish_reason": "length",
+      "full_decode": "Here's a thinking process:\n\n1.  **Understand User Request:**\n   - **Task:** Implement quicksort in Python\n   - **Additional Requirement:** Explain pivot-choice tradeoffs\n\n2.  **Quicksort Implementation (Python):**\n   - Need a clean, standard implementation\n   - Should handle edge cases (empty list, single element)\n   - Can use in-place or out-of-place version. In-place is more efficient and standard for quicksort.\n   - I'll implement an in-place version with a helper function for recursion, plus a clean public interface.\n   - Need to choose a pivot strategy for the implementation. I'll use \"middle element\" or \"last element\" for simplicity, but I'll make it clear and mention that pivot choice"
+    },
+    {
+      "control_k": 2,
+      "control_depth": 5,
+      "sha256_full_decode": "99b8c663102982cf2c1cd781f5110b71105a32922b50d84e52005c65f8b825c3",
+      "bytes": 700,
+      "chars": 700,
+      "wall_s": 16.091,
+      "finish_reason": "length",
+      "full_decode": "Here's a thinking process:\n\n1.  **Understand User Request:**\n   - **Task:** Implement quicksort in Python\n   - **Additional Requirement:** Explain pivot-choice tradeoffs\n\n2.  **Quicksort Implementation (Python):**\n   - Need a clean, standard implementation\n   - Should handle edge cases (empty list, single element)\n   - Can use in-place or out-of-place version. In-place is more efficient and standard for quicksort.\n   - I'll implement an in-place version with a helper function for recursion, plus a clean public interface.\n   - Need to choose a pivot strategy for the implementation. I'll use \"middle element\" or \"last element\" for simplicity, but I'll make it clear and mention that pivot choice"
+    }
+  ]
+}
