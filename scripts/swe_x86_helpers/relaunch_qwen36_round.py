@@ -4394,6 +4394,114 @@ def _lumo_fb_ir_set_accept_len(self, req_id, accept_len):
             "error": repr(e),
         })
 
+def _lumo_fb_ir_head(value, limit=16):
+    try:
+        if value is None:
+            return None
+        if hasattr(value, "detach"):
+            tensor = value.detach()
+            shape = list(tensor.shape)
+            flat = tensor.reshape(-1).cpu().tolist()
+            return {"shape": shape, "head": flat[:limit]}
+        if isinstance(value, dict):
+            return {
+                str(k): _lumo_fb_ir_head(v, limit)
+                for k, v in list(value.items())[:limit]
+            }
+        if isinstance(value, (list, tuple)):
+            return [_lumo_fb_ir_head(v, limit) for v in list(value)[:limit]]
+        return value
+    except Exception as e:
+        return {"error": repr(e), "type": type(value).__name__}
+
+def _lumo_fb_ir_debug_pre_base_update(self, label, scheduler_output,
+                                      sampler_output,
+                                      spec_decode_metadata=None,
+                                      common_attn_metadata=None):
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG_PREUPDATE") != "1":
+        return
+    try:
+        req_ids = list(getattr(self.input_batch, "req_ids", []) or [])
+        sched_tokens = dict(getattr(scheduler_output, "num_scheduled_tokens", {}) or {})
+        drafts = dict(getattr(scheduler_output, "scheduled_spec_decode_tokens", {}) or {})
+        active = dict(getattr(self, "_lumo_fb_ir_active", {}) or {})
+        rows = []
+        for rid in req_ids:
+            rows.append({
+                "rid": rid,
+                "is_internal": _lumo_fb_ir_is_row_id(rid),
+                "parent": active.get(rid, rid),
+                "num_scheduled": sched_tokens.get(rid),
+                "draft": list(drafts.get(rid, []) or [])[:8],
+                "mamba_idx": self.mamba_state_idx.get(rid),
+                "state_block_ids": _lumo_fb_ir_state_block_ids(self, rid),
+                "write_state_block_ids": _lumo_fb_ir_write_state_block_ids(self, rid),
+            })
+        event = {
+            "event": "pre_base_update",
+            "label": label,
+            "input_req_ids": req_ids,
+            "active": active,
+            "rows": rows,
+            "scheduler_total_num_scheduled_tokens": getattr(
+                scheduler_output, "total_num_scheduled_tokens", None),
+            "scheduler_num_scheduled_tokens": sched_tokens,
+            "sampler_sampled_token_ids": _lumo_fb_ir_head(
+                getattr(sampler_output, "sampled_token_ids", None)),
+            "input_num_accepted_tokens_cpu": _lumo_fb_ir_head(
+                getattr(self.input_batch, "num_accepted_tokens_cpu", None)),
+            "input_num_accepted_tokens_cpu_tensor": _lumo_fb_ir_head(
+                getattr(self.input_batch, "num_accepted_tokens_cpu_tensor", None)),
+        }
+        if hasattr(self, "num_accepted_tokens"):
+            event["runner_num_accepted_tokens"] = _lumo_fb_ir_head(
+                getattr(getattr(self, "num_accepted_tokens", None), "np", None))
+        if spec_decode_metadata is not None:
+            event["spec"] = {
+                "draft_token_ids": _lumo_fb_ir_head(
+                    getattr(spec_decode_metadata, "draft_token_ids", None)),
+                "num_draft_tokens": _lumo_fb_ir_head(
+                    getattr(spec_decode_metadata, "num_draft_tokens", None)),
+                "cu_num_draft_tokens": _lumo_fb_ir_head(
+                    getattr(spec_decode_metadata, "cu_num_draft_tokens", None)),
+                "cu_num_sampled_tokens": _lumo_fb_ir_head(
+                    getattr(spec_decode_metadata, "cu_num_sampled_tokens", None)),
+                "target_logits_indices": _lumo_fb_ir_head(
+                    getattr(spec_decode_metadata, "target_logits_indices", None)),
+                "bonus_logits_indices": _lumo_fb_ir_head(
+                    getattr(spec_decode_metadata, "bonus_logits_indices", None)),
+                "logits_indices": _lumo_fb_ir_head(
+                    getattr(spec_decode_metadata, "logits_indices", None)),
+            }
+        if common_attn_metadata is not None:
+            event["attn"] = {
+                "num_reqs": getattr(common_attn_metadata, "num_reqs", None),
+                "num_actual_tokens": getattr(
+                    common_attn_metadata, "num_actual_tokens", None),
+                "max_query_len": getattr(common_attn_metadata, "max_query_len", None),
+                "query_start_loc": _lumo_fb_ir_head(
+                    getattr(common_attn_metadata, "query_start_loc", None)),
+                "query_start_loc_cpu": _lumo_fb_ir_head(
+                    getattr(common_attn_metadata, "query_start_loc_cpu", None)),
+                "seq_lens": _lumo_fb_ir_head(
+                    getattr(common_attn_metadata, "seq_lens", None)),
+                "_seq_lens_cpu": _lumo_fb_ir_head(
+                    getattr(common_attn_metadata, "_seq_lens_cpu", None)),
+                "_num_computed_tokens_cpu": _lumo_fb_ir_head(
+                    getattr(common_attn_metadata, "_num_computed_tokens_cpu", None)),
+                "block_table_tensor": _lumo_fb_ir_head(
+                    getattr(common_attn_metadata, "block_table_tensor", None), 32),
+                "slot_mapping": _lumo_fb_ir_head(
+                    getattr(common_attn_metadata, "slot_mapping", None), 32),
+            }
+        _lumo_fb_ir_debug(event)
+    except Exception as e:
+        _lumo_fb_ir_debug({
+            "event": "pre_base_update_debug_error",
+            "label": label,
+            "error": repr(e),
+        })
+
 def _lumo_fb_ir_mamba_curr_state_idx(self, req_state, num_scheduled_tokens):
     try:
         copy_bufs = self._get_mamba_copy_bufs()
@@ -5021,6 +5129,10 @@ else:
         '            sampler_output, spec_decode_metadata, spec_decode_common_attn_metadata = _lumo_fb_ir_prune_after_sample(',
         '                self, scheduler_output, sampler_output, spec_decode_metadata,',
         '                spec_decode_common_attn_metadata)',
+        '        if "_lumo_fb_ir_debug_pre_base_update" in globals():',
+        '            _lumo_fb_ir_debug_pre_base_update(',
+        '                self, "before_update", scheduler_output, sampler_output,',
+        '                spec_decode_metadata, spec_decode_common_attn_metadata)',
         '        self._update_states_after_model_execute(',
         '            sampler_output.sampled_token_ids, scheduler_output',
         '        )',
