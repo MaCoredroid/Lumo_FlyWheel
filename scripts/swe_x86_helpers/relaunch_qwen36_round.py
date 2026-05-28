@@ -762,7 +762,7 @@ else:
                         "head": _flat[:8].cpu().tolist(),
                     }
                 _lumo_fb_ridx_state_pre = None
-                if _lumo_fb_ridx_os.environ.get("LUMO_FB_RIDX_STATE_SUMMARY", "1") == "1":
+                if _lumo_fb_ridx_os.environ.get("LUMO_FB_RIDX_STATE_SUMMARY", "0") == "1":
                     _lumo_fb_ridx_layers = _lumo_fb_ridx_os.environ.get(
                         "LUMO_FB_RIDX_STATE_LAYERS", "0,1,2")
                     _lumo_fb_ridx_do_state = True
@@ -840,7 +840,7 @@ else:
         import os as _lumo_fb_ridx_post_os
         if (
             _lumo_fb_ridx_post_os.environ.get("LUMO_FB_DEBUG") == "1"
-            and _lumo_fb_ridx_post_os.environ.get("LUMO_FB_RIDX_STATE_SUMMARY", "1") == "1"
+            and _lumo_fb_ridx_post_os.environ.get("LUMO_FB_RIDX_STATE_SUMMARY", "0") == "1"
             and spec_sequence_masks is not None
             and spec_state_indices_tensor is not None
         ):
@@ -917,7 +917,7 @@ else:
         # SSM update itself is changing row0.
         import os as _lumo_fb_rinput_os
         if (
-            _lumo_fb_rinput_os.environ.get("LUMO_FB_DEBUG") == "1"
+            _lumo_fb_rinput_os.environ.get("LUMO_FB_TENSOR_DEBUG") == "1"
             and spec_sequence_masks is not None
             and getattr(attn_metadata, "num_spec_decodes", 0) > 0
         ):
@@ -997,7 +997,7 @@ else:
         _lumo_fb_gdn_proj_do = False
         _lumo_fb_gdn_proj_pre = None
         _lumo_fb_gdn_proj_mixed = None
-        if _lumo_fb_gdn_proj_os.environ.get("LUMO_FB_DEBUG") == "1":
+        if _lumo_fb_gdn_proj_os.environ.get("LUMO_FB_TENSOR_DEBUG") == "1":
             _lumo_fb_gdn_proj_layers = _lumo_fb_gdn_proj_os.environ.get(
                 "LUMO_FB_RIDX_STATE_LAYERS", "0,1,2")
             _lumo_fb_gdn_proj_do = True
