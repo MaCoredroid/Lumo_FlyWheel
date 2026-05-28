@@ -5752,7 +5752,7 @@ def _lumo_fb_ir_filter_model_output(model_output, internal_ids):
     model_output.req_id_to_index = {rid: i for i, rid in enumerate(model_output.req_ids)}
     if getattr(model_output, "logprobs", None) is not None:
         try:
-        model_output.logprobs = [model_output.logprobs[i] for i in keep]
+            model_output.logprobs = [model_output.logprobs[i] for i in keep]
         except Exception:
             pass
     return model_output
