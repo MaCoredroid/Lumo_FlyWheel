@@ -5216,12 +5216,30 @@ def _apply_gpu_memory_utilization(src: str, value: str | None) -> str:
     return src.replace(old, f"    gpu_memory_utilization: {gpu_mem:.2f}", 1)
 
 
+def _apply_enforce_eager(src: str, value: str | None) -> str:
+    if value is None or value.lower() not in {"1", "true", "yes", "on"}:
+        return src
+    line = "    enforce_eager: true"
+    if "    enforce_eager:" in src:
+        import re as _re
+        return _re.sub(r"(?m)^    enforce_eager: .*$", line, src, count=1)
+    anchor = "  vllm_config:\n"
+    if src.count(anchor) != 1:
+        raise RuntimeError("vllm_config anchor not unique in bundle")
+    return src.replace(anchor, anchor + line + "\n", 1)
+
+
 def _d_bundle(kv_cache_dtype: str | None = None) -> str:
     base = "/tmp/lumo-track-b-bundle-qwen36/bundle.yaml"
-    if kv_cache_dtype is None:
+    enforce_eager = os.environ.get("LUMO_ENFORCE_EAGER")
+    if kv_cache_dtype is None and enforce_eager is None:
         return base
-    src = _apply_kv_cache_dtype(Path(base).read_text(), kv_cache_dtype)
-    out = Path(f"/tmp/lumo-track-b-bundle-qwen36-kv{kv_cache_dtype}"); out.mkdir(exist_ok=True)
+    src = Path(base).read_text()
+    src = _apply_kv_cache_dtype(src, kv_cache_dtype)
+    src = _apply_enforce_eager(src, enforce_eager)
+    kvtag = "" if kv_cache_dtype is None else f"-kv{kv_cache_dtype}"
+    eager_tag = "-eager" if enforce_eager is not None else ""
+    out = Path(f"/tmp/lumo-track-b-bundle-qwen36{kvtag}{eager_tag}"); out.mkdir(exist_ok=True)
     (out / "bundle.yaml").write_text(src)
     return str(out / "bundle.yaml")
 
@@ -5231,8 +5249,10 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     src = _apply_kv_cache_dtype(src, kv_cache_dtype)
     src = _apply_gpu_memory_utilization(
         src, os.environ.get("LUMO_GPU_MEMORY_UTILIZATION"))
+    src = _apply_enforce_eager(src, os.environ.get("LUMO_ENFORCE_EAGER"))
     kvtag = "" if kv_cache_dtype is None else f"-kv{kv_cache_dtype}"
-    tag = (f"mtp{n}" if tree is None else f"mtp{n}tree") + kvtag
+    eager_tag = "-eager" if os.environ.get("LUMO_ENFORCE_EAGER") is not None else ""
+    tag = (f"mtp{n}" if tree is None else f"mtp{n}tree") + kvtag + eager_tag
     src = src.replace("bundle_id: 712fd011-4b16-4051-9e8c-875405b70f5b",
                       f"bundle_id: e0000000-{tag}-4000-9000-config-e-qwen36")
     # speculative_token_tree passes through load_tuned_config (the
