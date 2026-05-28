@@ -3573,8 +3573,7 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
     debug_shapes = []
     def _append_slot_views(t, src_block, dst_block, slot, count, mapped):
         nonlocal copied_bytes
-        probe = t[int(dst_block)]
-        shape = list(probe.shape)
+        shape = list(t.shape)
         debug_shapes.append({
             "shape": shape,
             "src_block": int(src_block),
@@ -3583,22 +3582,23 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
             "count": int(count),
             "mapped": bool(mapped),
         })
-        if probe.ndim >= 2 and int(probe.shape[0]) == 2:
-            slot_dim = int(probe.shape[1])
+        if t.ndim >= 3 and int(t.shape[0]) == 2:
+            slot_dim = int(t.shape[2])
             if int(slot) >= slot_dim:
                 return False
             end_slot = min(int(slot) + int(count), slot_dim)
-            dst_view = t[int(dst_block)][:, int(slot):end_slot]
-            src_view = t[int(src_block)][:, int(slot):end_slot]
-        elif probe.ndim >= 1:
+            dst_view = t[:, int(dst_block), int(slot):end_slot]
+            src_view = t[:, int(src_block), int(slot):end_slot]
+        else:
+            probe = t[int(dst_block)]
+            if probe.ndim < 1:
+                return False
             slot_dim = int(probe.shape[0])
             if int(slot) >= slot_dim:
                 return False
             end_slot = min(int(slot) + int(count), slot_dim)
             dst_view = t[int(dst_block)][int(slot):end_slot]
             src_view = t[int(src_block)][int(slot):end_slot]
-        else:
-            return False
         dst_views.append(dst_view)
         src_views.append(src_view)
         copied_bytes += int(dst_view.numel() * t.element_size())
@@ -3621,13 +3621,13 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
                     if _append_slot_views(
                             t, int(src), int(dst), start_slot, num_slots, False):
                         continue
-                    probe = t[int(dst)]
-                    if probe.ndim >= 2 and int(probe.shape[0]) == 2:
-                        kernel_block_size = int(probe.shape[1])
-                    elif probe.ndim >= 1:
-                        kernel_block_size = int(probe.shape[0])
+                    if t.ndim >= 3 and int(t.shape[0]) == 2:
+                        kernel_block_size = int(t.shape[2])
                     else:
-                        continue
+                        probe = t[int(dst)]
+                        if probe.ndim < 1:
+                            continue
+                        kernel_block_size = int(probe.shape[0])
                     blocks_per_kv_block = 1
                     if (manager_block_size is not None
                             and kernel_block_size > 0
@@ -3641,6 +3641,12 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
                         local_slot = int(logical_slot % kernel_block_size)
                         span = min(remaining, kernel_block_size - local_slot)
                         if not _append_slot_views(
+                                t,
+                                int(src) + subblock,
+                                int(dst) + subblock,
+                                local_slot,
+                                span,
+                                True) and not _append_slot_views(
                                 t,
                                 int(src) * blocks_per_kv_block + subblock,
                                 int(dst) * blocks_per_kv_block + subblock,
