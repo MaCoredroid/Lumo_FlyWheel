@@ -4481,9 +4481,22 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
                 row_blocks[logical_idx] = dst
                 owned.append((group_idx, dst))
                 if logical_idx == start_idx and (int(parent.num_computed_tokens) % block_size) != 0:
-                    copies.append((
-                        "kv_partial", src.block_id, dst.block_id,
-                        int(parent.num_computed_tokens) % block_size))
+                    if (_lumo_fb_ir_kernel_rows_enabled()
+                            and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
+                        _lumo_fb_ir_sched_debug({
+                            "event": "kv_partial_prefix_copy_skipped",
+                            "parent": parent.request_id,
+                            "row": row_id,
+                            "group": group_idx,
+                            "src": src.block_id,
+                            "dst": dst.block_id,
+                            "slots": int(parent.num_computed_tokens) % block_size,
+                            "note": "experimental no-copy mode; requires split prefix/suffix attention to be correct when prefix is not block-aligned",
+                        })
+                    else:
+                        copies.append((
+                            "kv_partial", src.block_id, dst.block_id,
+                            int(parent.num_computed_tokens) % block_size))
         row_block_ids.append([blk.block_id for blk in row_blocks])
     self._lumo_fb_ir_owned_blocks = getattr(self, "_lumo_fb_ir_owned_blocks", {})
     self._lumo_fb_ir_owned_blocks[row_id] = owned
@@ -6196,6 +6209,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_position_tree = f"export LUMO_FB_POSITION_TREE={os.environ['LUMO_FB_POSITION_TREE']}\n" if os.environ.get("LUMO_FB_POSITION_TREE") else ""
     fb_tree_branch_depth = f"export LUMO_FB_TREE_BRANCH_DEPTH={os.environ['LUMO_FB_TREE_BRANCH_DEPTH']}\n" if os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH") else ""
     fb_sampler_trace = "export LUMO_FB_SAMPLER_TRACE=1\n" if os.environ.get("LUMO_FB_SAMPLER_TRACE") == "1" else ""
+    fb_no_kv_prefix_copy = "export LUMO_FB_NO_KV_PREFIX_COPY=1\n" if os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1" else ""
     fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
     fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
     fb_depth = f"export LUMO_FB_DEPTH={os.environ['LUMO_FB_DEPTH']}\n" if os.environ.get("LUMO_FB_DEPTH") else ""
@@ -6219,7 +6233,7 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
     stale_fb_guard = "" if fb else _NO_STALE_FB_PATCHES_BLOCK
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + base + _SPEC_TRACE_BLOCK
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
