@@ -3543,7 +3543,8 @@ def _lumo_fb_copy_block_id(self, src, dst, num_slots=None):
     _lumo_fb_foreach_copy_(dst_views, src_views)
     return copied_bytes
 
-def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots):
+def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
+                                   group_idx=None):
     copied_bytes = 0
     dst_views = []
     src_views = []
@@ -3552,7 +3553,21 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots):
     if num_slots <= 0:
         return 0
     seen = set()
-    for kv in getattr(self, "kv_caches", []):
+    kv_iter = []
+    if group_idx is not None:
+        try:
+            forward_context = self.compilation_config.static_forward_context
+            group = self.kv_cache_config.kv_cache_groups[int(group_idx)]
+            for layer_name in group.layer_names:
+                layer = forward_context.get(layer_name)
+                kv = getattr(layer, "kv_cache", None)
+                if kv is not None:
+                    kv_iter.append(kv)
+        except Exception:
+            kv_iter = []
+    if not kv_iter:
+        kv_iter = list(getattr(self, "kv_caches", []))
+    for kv in kv_iter:
         if id(kv) in seen:
             continue
         seen.add(id(kv))
@@ -4910,7 +4925,7 @@ def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
                 dst = int(parent_blocks[logical_idx])
                 if src != dst and "_lumo_fb_copy_block_slot_range" in globals():
                     copied_bytes += int(_lumo_fb_copy_block_slot_range(
-                        self, src, dst, slot, n))
+                        self, src, dst, slot, n, group_idx=group_idx))
                 pos += n
                 left -= n
         _lumo_fb_ir_debug({
@@ -5913,7 +5928,7 @@ def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
                 dst = int(parent_blocks[logical_idx])
                 if src != dst and "_lumo_fb_copy_block_slot_range" in globals():
                     copied = int(_lumo_fb_copy_block_slot_range(
-                        self, src, dst, slot, n))
+                        self, src, dst, slot, n, group_idx=group_idx))
                     copied_bytes += copied
                     details.append({
                         "group": int(group_idx), "src": src, "dst": dst,
