@@ -4310,11 +4310,11 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts,
             if idx is not None:
                 self.input_batch.block_table.clear_row(idx)
                 self.input_batch.block_table.add_row(req_state.block_ids, idx)
-            # The promoted SSM column is physical, but the conv kernel stores a
-            # final speculative rolling state and uses num_accepted_tokens to
-            # slice it back to the accepted prefix. Keep that logical offset in
-            # sync for no-internal K=1 kernel-row steps.
-            _lumo_fb_ir_set_accept_len(self, req_id, accepted_drafts + 1)
+            # The promoted state block is already the exact accepted-prefix
+            # conv+SSM state. Reset the next conv read to offset zero; carrying
+            # the old accepted length would slice inside the promoted block and
+            # corrupt depth>1 internal-row collapses.
+            _lumo_fb_ir_set_accept_len(self, req_id, 1)
             _lumo_fb_ir_debug({
                 "event": "kernel_promote_state",
                 "rid": req_id,
