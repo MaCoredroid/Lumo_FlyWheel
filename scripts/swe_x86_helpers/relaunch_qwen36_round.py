@@ -1251,10 +1251,10 @@ if sentinel in text:
     print('[TRACK-B-PRELAUNCH] F_b split partial-KV attention patch already present')
 else:
     old = '''from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import ClassVar
 '''
     new = '''from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import ClassVar
 import os as _lumo_fb_fa_os
 '''
     if old not in text:
