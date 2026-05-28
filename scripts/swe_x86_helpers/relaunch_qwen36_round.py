@@ -5512,19 +5512,10 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     pass
             if parent_idx is not None and winner_idx is not None and winner_idx != parent_idx:
                 sampler_output.sampled_token_ids[parent_idx].copy_(sampler_output.sampled_token_ids[winner_idx])
-                try:
-                    parent_state = self.requests.get(parent)
-                    winner_state = self.requests.get(winner_rid)
-                    if parent_state is not None and winner_state is not None:
-                        parent_state.block_ids = tuple([list(group) for group in winner_state.block_ids])
-                        pidx = self.input_batch.req_id_to_index.get(parent)
-                        if pidx is not None:
-                            self.input_batch.block_table.clear_row(pidx)
-                            self.input_batch.block_table.add_row(parent_state.block_ids, pidx)
-                        if winner_rid in self.mamba_state_idx:
-                            self.mamba_state_idx[parent] = self.mamba_state_idx[winner_rid]
-                except Exception:
-                    pass
+                # Internal-row state ownership is finalized by the scheduler's
+                # promote+transfer path after the runner rows are pruned. Doing
+                # a second block-table/mamba-index transfer here leaves the
+                # parent recurrent state desynced on the next step.
             # Parent-winning rows are the normal linear verifier path; let the
             # base runner advance that state physically.  Still record the
             # accepted-prefix length for Mamba preprocess sync; otherwise the
@@ -5533,8 +5524,10 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             # Active K2 rows are pruned before the base state update, so keep
             # the parent read slot physically aligned with the accepted prefix
             # here. The no-active K1 path remains disabled separately.
-            _lumo_fb_ir_kernel_promote_state(
-                self, parent, state_accepted_drafts, first_sample_noop=False)
+            if not winner_is_internal:
+                _lumo_fb_ir_kernel_promote_state(
+                    self, parent, state_accepted_drafts,
+                    first_sample_noop=False)
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
