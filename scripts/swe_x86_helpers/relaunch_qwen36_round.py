@@ -5107,7 +5107,27 @@ GPUModelRunner.sample_tokens = _lumo_fb_ir_sample_tokens
 text = gm.read_text()
 sentinel = '# LUMO_FB_INTERNAL_ROWS_PRE_DRAFT_CLEANUP'
 if sentinel in text:
-    print('[TRACK-B-PRELAUNCH] F_b internal-row pre-draft cleanup already present')
+    debug_call = nl.join([
+        '        if "_lumo_fb_ir_debug_pre_base_update" in globals():',
+        '            _lumo_fb_ir_debug_pre_base_update(',
+        '                self, "before_update", scheduler_output, sampler_output,',
+        '                spec_decode_metadata, spec_decode_common_attn_metadata)',
+    ])
+    update_call = nl.join([
+        '        self._update_states_after_model_execute(',
+        '            sampler_output.sampled_token_ids, scheduler_output',
+        '        )',
+    ])
+    if debug_call not in text:
+        if update_call not in text:
+            raise RuntimeError('F_b pre-update trace upgrade anchor not found')
+        text = text.replace(update_call, debug_call + nl + update_call, 1)
+        gm.write_text(text)
+        import py_compile
+        py_compile.compile(str(gm), doraise=True)
+        print('[TRACK-B-PRELAUNCH] upgraded F_b internal-row pre-update trace patch')
+    else:
+        print('[TRACK-B-PRELAUNCH] F_b internal-row pre-draft cleanup already present')
 else:
     old = nl.join([
         '        self._update_states_after_model_execute(',
