@@ -3555,10 +3555,12 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
     seen = set()
     kv_iter = []
     fallback_iter = list(getattr(self, "kv_caches", []))
+    manager_block_size = None
     if group_idx is not None:
         try:
             forward_context = self.compilation_config.static_forward_context
             group = self.kv_cache_config.kv_cache_groups[int(group_idx)]
+            manager_block_size = int(group.kv_cache_spec.block_size)
             for layer_name in group.layer_names:
                 layer = forward_context.get(layer_name)
                 kv = getattr(layer, "kv_cache", None)
@@ -3583,27 +3585,43 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
                 else:
                     tensors = [kv]
                 for t in tensors:
-                    dst_view = t[dst]
-                    src_view = t[src]
-                    if (
-                        dst_view.ndim >= 2
-                        and int(dst_view.shape[0]) == 2
-                        and int(dst_view.shape[1]) > start_slot
-                    ):
-                        end_slot = min(start_slot + num_slots, int(dst_view.shape[1]))
-                        if end_slot <= start_slot:
-                            continue
-                        dst_view = dst_view[:, start_slot:end_slot]
-                        src_view = src_view[:, start_slot:end_slot]
-                    elif dst_view.ndim >= 1:
-                        end_slot = min(start_slot + num_slots, int(dst_view.shape[0]))
-                        if end_slot <= start_slot:
-                            continue
-                        dst_view = dst_view[start_slot:end_slot]
-                        src_view = src_view[start_slot:end_slot]
-                    dst_views.append(dst_view)
-                    src_views.append(src_view)
-                    copied_bytes += int(dst_view.numel() * t.element_size())
+                    probe = t[int(dst)]
+                    if probe.ndim >= 2 and int(probe.shape[0]) == 2:
+                        kernel_block_size = int(probe.shape[1])
+                        slot_axis = 1
+                    elif probe.ndim >= 1:
+                        kernel_block_size = int(probe.shape[0])
+                        slot_axis = 0
+                    else:
+                        continue
+                    blocks_per_kv_block = 1
+                    if (manager_block_size is not None
+                            and kernel_block_size > 0
+                            and manager_block_size % kernel_block_size == 0):
+                        blocks_per_kv_block = max(
+                            1, int(manager_block_size // kernel_block_size))
+                    remaining = int(num_slots)
+                    logical_slot = int(start_slot)
+                    while remaining > 0:
+                        subblock = int(logical_slot // kernel_block_size)
+                        local_slot = int(logical_slot % kernel_block_size)
+                        span = min(remaining, kernel_block_size - local_slot)
+                        src_block = int(src) * blocks_per_kv_block + subblock
+                        dst_block = int(dst) * blocks_per_kv_block + subblock
+                        dst_view = t[dst_block]
+                        src_view = t[src_block]
+                        end_slot = local_slot + span
+                        if slot_axis == 1:
+                            dst_view = dst_view[:, local_slot:end_slot]
+                            src_view = src_view[:, local_slot:end_slot]
+                        else:
+                            dst_view = dst_view[local_slot:end_slot]
+                            src_view = src_view[local_slot:end_slot]
+                        dst_views.append(dst_view)
+                        src_views.append(src_view)
+                        copied_bytes += int(dst_view.numel() * t.element_size())
+                        logical_slot += span
+                        remaining -= span
             except Exception:
                 pass
     _lumo_fb_foreach_copy_(dst_views, src_views)
