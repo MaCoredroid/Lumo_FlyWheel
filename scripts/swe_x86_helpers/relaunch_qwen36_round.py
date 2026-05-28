@@ -2936,6 +2936,29 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
             if paths.shape[0] > 0:
                 paths = paths.clone()
                 paths[0, :active_depth] = _lumo_fb_k1_trunk[0, :active_depth]
+            if (_lumo_fb_os.environ.get("LUMO_FB_SINGLE_FLIP_TREE", "1") == "1"
+                    and paths.shape[0] > 1):
+                trunk = _lumo_fb_k1_trunk[0, :active_depth].to(paths.device)
+                selected = [0]
+                seen_first_diff = set()
+                for row_idx in range(1, int(paths.shape[0])):
+                    row = paths[row_idx, :active_depth]
+                    diffs = (row != trunk).nonzero(as_tuple=False).reshape(-1)
+                    if int(diffs.numel()) == 0:
+                        continue
+                    first_diff = int(diffs[0].item())
+                    if first_diff in seen_first_diff:
+                        continue
+                    if first_diff > 0 and not bool((row[:first_diff] == trunk[:first_diff]).all().item()):
+                        continue
+                    seen_first_diff.add(first_diff)
+                    selected.append(row_idx)
+                    if len(selected) >= active_depth + 1:
+                        break
+                if len(selected) > 1:
+                    select_idx = _lumo_fb_torch.tensor(
+                        selected, dtype=_lumo_fb_torch.long, device=paths.device)
+                    paths = paths.index_select(0, select_idx).contiguous()
             out = paths[:, :active_depth].reshape(1, -1)
             try:
                 if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
@@ -2951,7 +2974,9 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                         "active_k": int(requested_k),
                         "policy_k": int(policy_k),
                         "row_count": int(paths.shape[0]),
-                        "tree_shape": "top2_prefix_rows",
+                        "tree_shape": ("top2_single_flip_rows"
+                                       if _lumo_fb_os.environ.get("LUMO_FB_SINGLE_FLIP_TREE", "1") == "1"
+                                       else "top2_prefix_rows"),
                         "tree_branch_depth": int(_lumo_fb_os.environ.get(
                             "LUMO_FB_TREE_BRANCH_DEPTH", "3")),
                         "fb_proposer_us": int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
