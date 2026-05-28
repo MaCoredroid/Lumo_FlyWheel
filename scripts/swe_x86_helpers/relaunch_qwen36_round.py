@@ -4418,7 +4418,7 @@ def _lumo_fb_ir_debug_pre_base_update(self, label, scheduler_output,
                                       sampler_output,
                                       spec_decode_metadata=None,
                                       common_attn_metadata=None):
-    if _lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG_PREUPDATE") != "1":
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG") != "1":
         return
     try:
         req_ids = list(getattr(self.input_batch, "req_ids", []) or [])
