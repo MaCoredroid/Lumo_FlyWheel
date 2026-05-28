@@ -4768,6 +4768,20 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             scored.sort(key=lambda item: (item[4], 0 if item[0] == parent else -1), reverse=True)
             winner_rid, winner_tokens, winner_raw_acc, winner_draft, winner_acc = scored[0]
             winner_is_internal = winner_rid != parent
+            path0_raw_acc = 0
+            path0_tree_acc = 0
+            raw_best_acc = 0
+            tree_best_acc = 0
+            if scored:
+                try:
+                    ordered_scored = sorted(
+                        scored, key=lambda item: 0 if item[0] == parent else 1)
+                    path0_raw_acc = int(ordered_scored[0][2])
+                    path0_tree_acc = int(ordered_scored[0][4])
+                    raw_best_acc = max(int(item[2]) for item in scored)
+                    tree_best_acc = max(int(item[4]) for item in scored)
+                except Exception:
+                    pass
             state_accepted_drafts = (
                 max(0, int(winner_acc) - 1)
                 if winner_is_internal
@@ -4800,6 +4814,42 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     "LUMO_FB target commit synthesis failed: "
                     f"parent={parent} winner={winner_rid} accepted={winner_acc} "
                     f"commit_len={len(winner_commit_tokens)}")
+            second_pos0_capture = False
+            second_pos1_capture = False
+            try:
+                parent_draft = []
+                for rid, _valid, _raw_acc, draft, _tree_acc in scored:
+                    if rid == parent:
+                        parent_draft = list(draft or [])
+                        break
+                if parent_draft and winner_commit_tokens:
+                    roots = []
+                    for _rid, _valid, _raw_acc, draft, _tree_acc in scored:
+                        draft = list(draft or [])
+                        if draft and draft[0] not in roots:
+                            roots.append(draft[0])
+                    second_pos0_capture = (
+                        len(roots) > 1
+                        and int(winner_commit_tokens[0]) == int(roots[1])
+                        and int(winner_commit_tokens[0]) != int(parent_draft[0])
+                    )
+                    if len(winner_commit_tokens) > 1:
+                        kids = []
+                        for _rid, _valid, _raw_acc, draft, _tree_acc in scored:
+                            draft = list(draft or [])
+                            if (len(draft) > 1 and parent_draft
+                                    and int(draft[0]) == int(parent_draft[0])
+                                    and draft[1] not in kids):
+                                kids.append(draft[1])
+                        second_pos1_capture = (
+                            len(kids) > 1
+                            and int(winner_commit_tokens[0]) == int(parent_draft[0])
+                            and int(winner_commit_tokens[1]) == int(kids[1])
+                            and int(winner_commit_tokens[1]) != int(kids[0])
+                        )
+            except Exception:
+                second_pos0_capture = False
+                second_pos1_capture = False
             parent_idx = req_ids.index(parent) if parent in req_ids else None
             winner_idx = req_ids.index(winner_rid) if winner_rid in req_ids else None
             if winner_idx is not None:
@@ -4849,6 +4899,14 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "accepted": int(state_accepted_drafts),
                 "tree_accepted": int(winner_acc),
                 "state_accepted": int(state_accepted_drafts),
+                "commit_len": int(len(winner_commit_tokens)),
+                "path0_raw_acc": int(path0_raw_acc),
+                "path0_tree_acc": int(path0_tree_acc),
+                "raw_best_acc": int(raw_best_acc),
+                "tree_best_acc": int(tree_best_acc),
+                "winner_is_internal": bool(winner_is_internal),
+                "second_pos0_capture": bool(second_pos0_capture),
+                "second_pos1_capture": bool(second_pos1_capture),
                 "accept_lens": [
                     int(acc) for rid, toks, raw_acc, draft, acc in sorted(
                         scored, key=lambda item: 0 if item[0] == parent else 1)
