@@ -4436,10 +4436,10 @@ def _lumo_fb_ir_promote_manager_state(self, req_id, accepted_drafts,
     if req is None:
         return
     accepted_drafts = int(accepted_drafts)
-    _seen = getattr(self, "_lumo_fb_kernel_seen_sample", None)
+    _seen = getattr(self, "_lumo_fb_manager_seen_sample", None)
     if _seen is None:
         _seen = set()
-        self._lumo_fb_kernel_seen_sample = _seen
+        self._lumo_fb_manager_seen_sample = _seen
     _first_sample = req_id not in _seen
     _seen.add(req_id)
     moved = []
@@ -4879,10 +4879,10 @@ def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts,
     if req_state is None or curr_idx is None:
         return
     accepted_drafts = int(accepted_drafts)
-    _seen = getattr(self, "_lumo_fb_kernel_seen_sample", None)
+    _seen = getattr(self, "_lumo_fb_kernel_state_seen_sample", None)
     if _seen is None:
         _seen = set()
-        self._lumo_fb_kernel_seen_sample = _seen
+        self._lumo_fb_kernel_state_seen_sample = _seen
     _first_sample = req_id not in _seen
     _seen.add(req_id)
     # Same closed-form rule as scheduler-side promotion. Full accept at
