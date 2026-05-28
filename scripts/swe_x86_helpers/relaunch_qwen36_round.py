@@ -5084,6 +5084,14 @@ def _lumo_fb_ir_read_internal_max_commit(default_value):
         pass
     return int(default_value)
 
+def _lumo_fb_ir_default_internal_max_commit():
+    try:
+        return int(_lumo_fb_ir_os.environ.get(
+            "LUMO_FB_TREE_BRANCH_DEPTH",
+            _lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "2")))
+    except Exception:
+        return 2
+
 def _lumo_fb_ir_state_block_ids(self, req_id):
     req_state = self.requests.get(req_id)
     state_idx = self.mamba_state_idx.get(req_id)
