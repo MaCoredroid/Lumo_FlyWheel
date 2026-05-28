@@ -4291,7 +4291,8 @@ def _lumo_fb_shared_root_rejection_sample(
     if (_lumo_fb_rs_os.environ.get("LUMO_FB_PATHS") != "1"
             or _lumo_fb_rs_os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1"
             or draft_probs is not None
-            or len(num_draft_tokens) % 2 != 0
+            or (len(num_draft_tokens) % 2 != 0
+                and _lumo_fb_rs_os.environ.get("LUMO_FB_POSITION_TREE") != "1")
             or len(num_draft_tokens) == 0):
         return _lumo_fb_rejection_sample_with_debug(
             "fallback_unpaired_or_disabled",
