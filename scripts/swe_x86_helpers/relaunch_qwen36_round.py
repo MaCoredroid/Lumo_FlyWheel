@@ -2334,8 +2334,10 @@ def _lumo_fb_extend_top2_pos01_tree_batched(
         base_common_attn_metadata, per_layer_attn_metadata,
         num_rejected_tokens_gpu, draft_len=None):
     # Bounded per-position top-2 tree flattened to rows:
-    # branch at draft positions 0 and 1 (2x2 = 4 rows), then greedily extend
-    # each row to depth N.  Row 0 is the ordinary top-1 E/K1 chain.
+    # branch at the first L draft positions (default L=3 => 8 rows), then
+    # greedily extend each row to depth N. Row 0 is the ordinary top-1 E/K1
+    # chain; the caller may splice in the exact single-row trunk as an extra
+    # guard while the batched proposer is being stabilized.
     if draft_len is None:
         draft_len = self.num_speculative_tokens
     draft_len = int(draft_len)
@@ -2446,6 +2448,8 @@ def _lumo_fb_extend_top2_pos01_tree_batched(
             self, root_tokens[:1], base_positions, base_hidden_states,
             base_common_attn_metadata, per_layer_attn_metadata,
             num_rejected_tokens_gpu, draft_len=draft_len)
+    branch_depth = int(_lumo_fb_os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH", "3"))
+    branch_depth = max(1, min(branch_depth, draft_len))
 
     k0 = 2
     if self.uses_mrope:
@@ -2476,44 +2480,52 @@ def _lumo_fb_extend_top2_pos01_tree_batched(
         cad._seq_lens_cpu = None
         cad._num_computed_tokens_cpu = None
 
-    hidden_after_root, positions_after_root, cad_after_root, logits_after_root = _run_step(
-        root_tokens, positions, hidden_states, cad, draft_index=1)
-    if logits_after_root is None:
-        return _lumo_fb_extend_paths_batched(
-            self, root_tokens, base_positions, base_hidden_states,
-            base_common_attn_metadata, per_layer_attn_metadata,
-            num_rejected_tokens_gpu, draft_len=draft_len)
-    second_top2 = _lumo_fb_torch.topk(logits_after_root, 2, dim=-1).indices
-    branch_idx = _lumo_fb_torch.tensor(
-        [0, 0, 1, 1], dtype=_lumo_fb_torch.long, device=root_tokens.device)
-    cpu_branch_idx = branch_idx.to(device="cpu")
-    root_col = root_tokens.index_select(0, branch_idx)
-    second_col = second_top2.reshape(-1)
-    draft_token_ids_list = [root_col, second_col]
-    k = 4
-    hidden_states = hidden_after_root.index_select(0, branch_idx).clone()
-    if self.uses_mrope:
-        positions = positions_after_root.index_select(1, branch_idx).clone()
-    else:
-        positions = positions_after_root.index_select(0, branch_idx).clone()
-    cad = _lumo_fb_replace(
-        cad_after_root,
-        query_start_loc=self.arange[: k + 1],
-        query_start_loc_cpu=_lumo_fb_torch.from_numpy(
-            self.token_arange_np[: k + 1]
-        ).clone(),
-        seq_lens=cad_after_root.seq_lens.index_select(0, branch_idx).clone(),
-        _seq_lens_cpu=_cpu_index(cad_after_root._seq_lens_cpu, cpu_branch_idx),
-        _num_computed_tokens_cpu=_cpu_index(
-            cad_after_root._num_computed_tokens_cpu, cpu_branch_idx),
-        num_reqs=k,
-        num_actual_tokens=k,
-        max_query_len=1,
-        block_table_tensor=cad_after_root.block_table_tensor.index_select(
-            0, branch_idx).clone(),
-        slot_mapping=cad_after_root.slot_mapping.index_select(0, branch_idx).clone(),
-    )
-    for consumed_index in range(1, draft_len - 1):
+    draft_token_ids_list = [root_tokens]
+    k = k0
+    for consumed_index in range(0, branch_depth - 1):
+        hidden_after, positions_after, cad_after, logits_after = _run_step(
+            draft_token_ids_list[-1], positions, hidden_states, cad,
+            draft_index=consumed_index + 1)
+        if logits_after is None:
+            return _lumo_fb_extend_paths_batched(
+                self, root_tokens, base_positions, base_hidden_states,
+                base_common_attn_metadata, per_layer_attn_metadata,
+                num_rejected_tokens_gpu, draft_len=draft_len)
+        top2 = _lumo_fb_torch.topk(logits_after, 2, dim=-1).indices
+        branch_idx = _lumo_fb_torch.arange(
+            k, dtype=_lumo_fb_torch.long, device=root_tokens.device
+        ).repeat_interleave(2)
+        cpu_branch_idx = branch_idx.to(device="cpu")
+        draft_token_ids_list = [
+            col.index_select(0, branch_idx).clone()
+            for col in draft_token_ids_list
+        ]
+        draft_token_ids_list.append(top2.reshape(-1))
+        k = int(branch_idx.numel())
+        hidden_states = hidden_after.index_select(0, branch_idx).clone()
+        if self.uses_mrope:
+            positions = positions_after.index_select(1, branch_idx).clone()
+        else:
+            positions = positions_after.index_select(0, branch_idx).clone()
+        cad = _lumo_fb_replace(
+            cad_after,
+            query_start_loc=self.arange[: k + 1],
+            query_start_loc_cpu=_lumo_fb_torch.from_numpy(
+                self.token_arange_np[: k + 1]
+            ).clone(),
+            seq_lens=cad_after.seq_lens.index_select(0, branch_idx).clone(),
+            _seq_lens_cpu=_cpu_index(cad_after._seq_lens_cpu, cpu_branch_idx),
+            _num_computed_tokens_cpu=_cpu_index(
+                cad_after._num_computed_tokens_cpu, cpu_branch_idx),
+            num_reqs=k,
+            num_actual_tokens=k,
+            max_query_len=1,
+            block_table_tensor=cad_after.block_table_tensor.index_select(
+                0, branch_idx).clone(),
+            slot_mapping=cad_after.slot_mapping.index_select(0, branch_idx).clone(),
+        )
+
+    for consumed_index in range(branch_depth - 1, draft_len - 1):
         hidden_states, positions, cad, logits = _run_step(
             draft_token_ids_list[-1], positions, hidden_states, cad,
             draft_index=consumed_index + 1)
@@ -2718,7 +2730,9 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                         "active_k": int(requested_k),
                         "policy_k": int(policy_k),
                         "row_count": int(paths.shape[0]),
-                        "tree_shape": "top2_pos0_pos1_rows",
+                        "tree_shape": "top2_prefix_rows",
+                        "tree_branch_depth": int(_lumo_fb_os.environ.get(
+                            "LUMO_FB_TREE_BRANCH_DEPTH", "3")),
                         "fb_proposer_us": int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
                         "raw_roots": raw_roots.view(-1).tolist(),
                         "roots": [int(paths[i, 0].item()) for i in range(paths.shape[0])],
@@ -6023,6 +6037,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_adaptive = "export LUMO_FB_ADAPTIVE=1\n" if os.environ.get("LUMO_FB_ADAPTIVE") == "1" else ""
     fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_position_tree = f"export LUMO_FB_POSITION_TREE={os.environ['LUMO_FB_POSITION_TREE']}\n" if os.environ.get("LUMO_FB_POSITION_TREE") else ""
+    fb_tree_branch_depth = f"export LUMO_FB_TREE_BRANCH_DEPTH={os.environ['LUMO_FB_TREE_BRANCH_DEPTH']}\n" if os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH") else ""
     fb_sampler_trace = "export LUMO_FB_SAMPLER_TRACE=1\n" if os.environ.get("LUMO_FB_SAMPLER_TRACE") == "1" else ""
     fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
     fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
@@ -6047,7 +6062,7 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + dbg + fb_env + base + _SPEC_TRACE_BLOCK
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""))
