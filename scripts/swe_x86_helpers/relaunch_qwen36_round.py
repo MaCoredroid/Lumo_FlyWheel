@@ -1266,7 +1266,7 @@ else:
     if old not in text:
         raise RuntimeError('F_b internal-row capacity anchor not found')
     if 'import os as _lumo_fb_kernel_os' not in text:
-        old_import = 'import os\n'
+        old_import = 'import time\n'
         if old_import not in text:
             raise RuntimeError('F_b internal-row capacity import anchor not found')
         text = text.replace(old_import, old_import + 'import os as _lumo_fb_kernel_os\n', 1)
