@@ -5549,6 +5549,44 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "commit_source": "canonical_target",
                 "internal_bonus_deferred": False,
             }
+            if _lumo_fb_ir_os.environ.get("LUMO_FB_SUPERSET_DIAG") == "1":
+                try:
+                    global _LUMO_FB_SUPERSET_DIAG_FH
+                    try:
+                        _LUMO_FB_SUPERSET_DIAG_FH
+                    except NameError:
+                        _LUMO_FB_SUPERSET_DIAG_FH = open(
+                            "/logs/fb_superset_diag.jsonl", "a", buffering=1)
+                    _diag_rows = []
+                    for _rid, _valid, _raw_acc, _draft, _tree_acc in sorted(
+                            scored, key=lambda item: 0 if item[0] == parent else 1):
+                        _diag_rows.append({
+                            "rid": _rid,
+                            "is_parent": _rid == parent,
+                            "raw_acc": int(_raw_acc),
+                            "tree_acc": int(_tree_acc),
+                            "draft": list(_draft or [])[:8],
+                            "valid": list(_valid or [])[:8],
+                        })
+                    _LUMO_FB_SUPERSET_DIAG_FH.write(_lumo_fb_ir_json.dumps({
+                        "ts": round(_lumo_fb_ir_time.time(), 4),
+                        "parent": parent,
+                        "winner_rid": winner_rid,
+                        "winner_is_internal": bool(winner_is_internal),
+                        "winner_acc": int(winner_acc),
+                        "state_accepted": int(state_accepted_drafts),
+                        "commit_len": int(len(winner_commit_tokens)),
+                        "path0_raw_acc": int(path0_raw_acc),
+                        "path0_tree_acc": int(path0_tree_acc),
+                        "raw_best_acc": int(raw_best_acc),
+                        "tree_best_acc": int(tree_best_acc),
+                        "second_pos0_capture": bool(second_pos0_capture),
+                        "second_pos1_capture": bool(second_pos1_capture),
+                        "commit_tokens": list(winner_commit_tokens)[:8],
+                        "rows": _diag_rows,
+                    }) + chr(10))
+                except Exception:
+                    pass
         if rows:
             _lumo_fb_ir_debug({
                 "event": "sampled",
