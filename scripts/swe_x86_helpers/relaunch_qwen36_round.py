@@ -1244,6 +1244,183 @@ else:
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b batch-invariant GDN out projection patch')
 
+fa = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/flash_attn.py')
+text = fa.read_text()
+sentinel = '# LUMO_FB_SPLIT_PARTIAL_KV_ATTN'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b split partial-KV attention patch already present')
+else:
+    old = '''from dataclasses import dataclass
+from typing import TYPE_CHECKING
+'''
+    new = '''from dataclasses import dataclass
+from typing import TYPE_CHECKING
+import os as _lumo_fb_fa_os
+'''
+    if old not in text:
+        raise RuntimeError('F_b split partial-KV attention import anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''        attn_metadata = FlashAttentionMetadata(
+            num_actual_tokens=num_actual_tokens,
+            max_query_len=max_query_len,
+            query_start_loc=query_start_loc,
+            max_seq_len=max_seq_len,
+            seq_lens=seq_lens,
+            block_table=block_table_tensor,
+            slot_mapping=slot_mapping,
+            max_dcp_context_kv_len=max_dcp_context_kv_len,
+            dcp_context_kv_lens=dcp_context_kv_lens,
+            use_cascade=use_cascade,
+            common_prefix_len=common_prefix_len,
+            scheduler_metadata=scheduler_metadata,
+            cu_prefix_query_lens=cu_prefix_query_lens,
+            prefix_kv_lens=prefix_kv_lens,
+            suffix_kv_lens=suffix_kv_lens,
+            prefix_scheduler_metadata=prefix_scheduler_metadata,
+            max_num_splits=max_num_splits,
+            causal=causal,
+        )
+        return attn_metadata
+'''
+    new = '''        attn_metadata = FlashAttentionMetadata(
+            num_actual_tokens=num_actual_tokens,
+            max_query_len=max_query_len,
+            query_start_loc=query_start_loc,
+            max_seq_len=max_seq_len,
+            seq_lens=seq_lens,
+            block_table=block_table_tensor,
+            slot_mapping=slot_mapping,
+            max_dcp_context_kv_len=max_dcp_context_kv_len,
+            dcp_context_kv_lens=dcp_context_kv_lens,
+            use_cascade=use_cascade,
+            common_prefix_len=common_prefix_len,
+            scheduler_metadata=scheduler_metadata,
+            cu_prefix_query_lens=cu_prefix_query_lens,
+            prefix_kv_lens=prefix_kv_lens,
+            suffix_kv_lens=suffix_kv_lens,
+            prefix_scheduler_metadata=prefix_scheduler_metadata,
+            max_num_splits=max_num_splits,
+            causal=causal,
+        )
+        # LUMO_FB_SPLIT_PARTIAL_KV_ATTN: internal F_b rows must not copy the
+        # parent's partially-filled KV block. When the verify batch has multiple
+        # equal-width speculative rows, run attention as:
+        #   shared prefix from row0's paged KV cache + dense causal suffix from
+        #   this forward's K/V tensors.
+        # This is the add-a-row architecture: sibling rows read the same prefix
+        # blocks and own only their tiny speculative suffix.
+        if (
+            _lumo_fb_fa_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+            and _lumo_fb_fa_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"
+            and num_reqs > 1
+            and max_query_len > 1
+            and not use_cascade
+            and self.dcp_world_size == 1
+        ):
+            query_lens = query_start_loc[1 : num_reqs + 1] - query_start_loc[:num_reqs]
+            prefix_lens = seq_lens[:num_reqs] - query_lens
+            if int(query_lens.min().item()) == int(query_lens.max().item()):
+                prefix_len = int(prefix_lens[0].item())
+                if prefix_len > 0 and int(prefix_lens.min().item()) == int(prefix_lens.max().item()):
+                    attn_metadata.lumo_fb_split_partial_kv = True
+                    attn_metadata.lumo_fb_split_prefix_len = prefix_len
+                    attn_metadata.lumo_fb_split_cu_prefix_query_lens = torch.tensor(
+                        [0, num_actual_tokens], dtype=torch.int32, device=self.device)
+                    attn_metadata.lumo_fb_split_prefix_kv_lens = torch.tensor(
+                        [prefix_len], dtype=torch.int32, device=self.device)
+        return attn_metadata
+'''
+    if old not in text:
+        raise RuntimeError('F_b split partial-KV attention metadata anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = '''        if not attn_metadata.use_cascade:
+            cu_seqlens_q = attn_metadata.query_start_loc
+'''
+    new = '''        if getattr(attn_metadata, "lumo_fb_split_partial_kv", False):
+            # Shared-prefix + dense-suffix attention. Prefix reads row0's
+            # block table up to the exact token prefix length, including a
+            # partial final block. Suffix uses this forward's dense K/V and
+            # therefore does not require copied prefix slots in row-private KV.
+            cu_seqlens_q = attn_metadata.query_start_loc
+            max_seqlen_q = attn_metadata.max_query_len
+            prefix_len = int(attn_metadata.lumo_fb_split_prefix_len)
+            sliding_window_size = (
+                list(self.sliding_window)
+                if self.sliding_window is not None
+                else None
+            )
+            if sliding_window_size is not None and sliding_window_size != [-1, -1]:
+                raise RuntimeError("LUMO_FB split partial-KV attention does not support sliding window")
+            prefix_descale_shape = (
+                attn_metadata.lumo_fb_split_cu_prefix_query_lens.shape[0] - 1,
+                self.num_kv_heads,
+            )
+            suffix_descale_shape = (cu_seqlens_q.shape[0] - 1, self.num_kv_heads)
+            prefix_output, prefix_lse = flash_attn_varlen_func(
+                q=query[:num_actual_tokens],
+                k=key_cache,
+                v=value_cache,
+                cu_seqlens_q=attn_metadata.lumo_fb_split_cu_prefix_query_lens,
+                seqused_k=attn_metadata.lumo_fb_split_prefix_kv_lens,
+                max_seqlen_q=num_actual_tokens,
+                max_seqlen_k=prefix_len,
+                softmax_scale=self.scale,
+                causal=False,
+                alibi_slopes=self.alibi_slopes,
+                window_size=sliding_window_size,
+                block_table=attn_metadata.block_table[:1],
+                softcap=self.logits_soft_cap,
+                return_softmax_lse=True,
+                scheduler_metadata=None,
+                fa_version=self.vllm_flash_attn_version,
+                q_descale=layer._q_scale.expand(prefix_descale_shape),
+                k_descale=layer._k_scale.expand(prefix_descale_shape),
+                v_descale=layer._v_scale.expand(prefix_descale_shape),
+                num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,
+                s_aux=self.sinks,
+            )
+            suffix_output, suffix_lse = flash_attn_varlen_func(
+                q=query[:num_actual_tokens],
+                k=key[:num_actual_tokens],
+                v=value[:num_actual_tokens],
+                cu_seqlens_q=cu_seqlens_q,
+                cu_seqlens_k=cu_seqlens_q,
+                max_seqlen_q=max_seqlen_q,
+                max_seqlen_k=max_seqlen_q,
+                softmax_scale=self.scale,
+                causal=True,
+                alibi_slopes=self.alibi_slopes,
+                window_size=sliding_window_size,
+                softcap=self.logits_soft_cap,
+                return_softmax_lse=True,
+                fa_version=self.vllm_flash_attn_version,
+                q_descale=layer._q_scale.expand(suffix_descale_shape),
+                k_descale=layer._k_scale.expand(suffix_descale_shape),
+                v_descale=layer._v_scale.expand(suffix_descale_shape),
+                num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,
+            )
+            merge_attn_states(
+                output[:num_actual_tokens],
+                prefix_output,
+                prefix_lse,
+                suffix_output,
+                suffix_lse,
+            )
+            return output
+
+        if not attn_metadata.use_cascade:
+            cu_seqlens_q = attn_metadata.query_start_loc
+'''
+    if old not in text:
+        raise RuntimeError('F_b split partial-KV attention forward anchor not found')
+    text = text.replace(old, new, 1)
+    fa.write_text(text)
+    import py_compile
+    py_compile.compile(str(fa), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b split partial-KV attention patch')
+
 gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
 text = gm.read_text()
 sentinel = '# LUMO_FB_INTERNAL_ROW_CAPACITY'
@@ -3336,6 +3513,41 @@ def _lumo_fb_copy_block_id(self, src, dst, num_slots=None):
     _lumo_fb_foreach_copy_(dst_views, src_views)
     return copied_bytes
 
+def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots):
+    copied_bytes = 0
+    dst_views = []
+    src_views = []
+    start_slot = int(start_slot)
+    num_slots = int(num_slots)
+    if num_slots <= 0:
+        return 0
+    seen = set()
+    for kv in getattr(self, "kv_caches", []):
+        if id(kv) in seen:
+            continue
+        seen.add(id(kv))
+        try:
+            if isinstance(kv, list):
+                tensors = kv
+            else:
+                tensors = [kv]
+            for t in tensors:
+                dst_view = t[dst]
+                src_view = t[src]
+                if dst_view.ndim >= 1:
+                    end_slot = min(start_slot + num_slots, int(dst_view.shape[0]))
+                    if end_slot <= start_slot:
+                        continue
+                    dst_view = dst_view[start_slot:end_slot]
+                    src_view = src_view[start_slot:end_slot]
+                dst_views.append(dst_view)
+                src_views.append(src_view)
+                copied_bytes += int(dst_view.numel() * t.element_size())
+        except Exception:
+            pass
+    _lumo_fb_foreach_copy_(dst_views, src_views)
+    return copied_bytes
+
 def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
     copied_bytes = 0
     dst_views = []
@@ -4575,6 +4787,63 @@ def _lumo_fb_ir_mirror_manager_blocks_from_ids(self, req_id, block_id_groups):
         ok = True
     return ok
 
+def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
+                                                commit_len):
+    # In split partial-KV mode, internal attention rows do not own a populated
+    # copy of the parent's partial prefix block. Keep the parent's KV block
+    # table and copy back only the accepted speculative suffix slots.
+    if not (_lumo_fb_ir_kernel_rows_enabled()
+            and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
+        return 0
+    parent_state = self.requests.get(parent_id)
+    winner_state = self.requests.get(winner_id)
+    if parent_state is None or winner_state is None:
+        return 0
+    try:
+        start_token = int(parent_state.num_computed_tokens)
+        remaining = int(commit_len)
+        copied_bytes = 0
+        for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
+            if getattr(manager, "mamba_cache_mode", None) == "align":
+                continue
+            if group_idx >= len(parent_state.block_ids) or group_idx >= len(winner_state.block_ids):
+                continue
+            block_size = int(manager.block_size)
+            parent_blocks = list(parent_state.block_ids[group_idx])
+            winner_blocks = list(winner_state.block_ids[group_idx])
+            pos = start_token
+            left = remaining
+            while left > 0:
+                logical_idx = pos // block_size
+                slot = pos % block_size
+                if logical_idx >= len(parent_blocks) or logical_idx >= len(winner_blocks):
+                    break
+                n = min(left, block_size - slot)
+                src = int(winner_blocks[logical_idx])
+                dst = int(parent_blocks[logical_idx])
+                if src != dst and "_lumo_fb_copy_block_slot_range" in globals():
+                    copied_bytes += int(_lumo_fb_copy_block_slot_range(
+                        self, src, dst, slot, n))
+                pos += n
+                left -= n
+        _lumo_fb_ir_debug({
+            "event": "split_kv_suffix_commit_copy",
+            "parent": parent_id,
+            "winner": winner_id,
+            "commit_len": int(commit_len),
+            "bytes": int(copied_bytes),
+        })
+        return int(copied_bytes)
+    except Exception as e:
+        _lumo_fb_ir_debug({
+            "event": "split_kv_suffix_commit_copy_error",
+            "parent": parent_id,
+            "winner": winner_id,
+            "commit_len": int(commit_len),
+            "error": repr(e),
+        })
+        return 0
+
 def _lumo_fb_ir_promote_internal_row_state(self, parent_id, row_id, accepted_drafts):
     if not _lumo_fb_ir_kernel_rows_enabled():
         return
@@ -5670,7 +5939,22 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     parent_state = self.requests.get(parent)
                     winner_state = self.requests.get(winner_rid)
                     if parent_state is not None and winner_state is not None:
-                        parent_state.block_ids = tuple([list(group) for group in winner_state.block_ids])
+                        if (_lumo_fb_ir_kernel_rows_enabled()
+                                and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
+                            _lumo_fb_ir_copy_winner_suffix_kv_to_parent(
+                                self, parent, winner_rid, len(winner_commit_tokens))
+                            merged_groups = []
+                            for _gid, _parent_group in enumerate(parent_state.block_ids):
+                                if (_gid < len(winner_state.block_ids)
+                                        and getattr(
+                                            self.kv_cache_manager.coordinator.single_type_managers[_gid],
+                                            "mamba_cache_mode", None) == "align"):
+                                    merged_groups.append(list(winner_state.block_ids[_gid]))
+                                else:
+                                    merged_groups.append(list(_parent_group))
+                            parent_state.block_ids = tuple(merged_groups)
+                        else:
+                            parent_state.block_ids = tuple([list(group) for group in winner_state.block_ids])
                         pidx = self.input_batch.req_id_to_index.get(parent)
                         if pidx is not None:
                             self.input_batch.block_table.clear_row(pidx)
