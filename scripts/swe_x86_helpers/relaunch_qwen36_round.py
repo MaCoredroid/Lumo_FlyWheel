@@ -5423,11 +5423,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     tree_best_acc = max(int(item[4]) for item in scored)
                 except Exception:
                     pass
-            state_accepted_drafts = (
-                max(0, int(winner_acc) - 1)
-                if winner_is_internal
-                else int(winner_acc)
-            )
+            state_accepted_drafts = int(winner_acc)
             def _lumo_fb_target_commit_tokens(_draft, _valid, _acc, _include_bonus=True):
                 _draft = list(_draft or [])
                 _valid = list(_valid or [])
@@ -5443,8 +5439,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 return _out
             winner_commit_tokens = _lumo_fb_target_commit_tokens(
                 winner_draft, winner_tokens, winner_acc,
-                _include_bonus=not winner_is_internal)
-            expected_commit_len = int(winner_acc) + (0 if winner_is_internal else 1)
+                _include_bonus=True)
+            expected_commit_len = int(winner_acc) + 1
             if expected_commit_len <= 0:
                 expected_commit_len = 1
                 winner_commit_tokens = _lumo_fb_target_commit_tokens(
@@ -5551,7 +5547,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "commit_tokens": list(winner_commit_tokens),
                 "winner_raw_tokens": list(winner_tokens[:len(winner_commit_tokens)]),
                 "commit_source": "canonical_target",
-                "internal_bonus_deferred": bool(winner_is_internal),
+                "internal_bonus_deferred": False,
             }
         if rows:
             _lumo_fb_ir_debug({
