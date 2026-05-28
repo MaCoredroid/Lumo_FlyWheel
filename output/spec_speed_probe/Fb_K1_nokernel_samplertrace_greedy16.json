@@ -1,0 +1,54 @@
+{
+  "label": "Fb_K1_nokernel_samplertrace_greedy16",
+  "temp": 0.0,
+  "top_p": 1.0,
+  "max_tokens": 16,
+  "n_prompts": 1,
+  "thinking_enabled": "template_default_true",
+  "decode_token_scope": "thinking_plus_answer",
+  "launch_n_max": null,
+  "active_depth": null,
+  "active_k": null,
+  "certifiable": true,
+  "fb_control_file": null,
+  "width_validation": {
+    "valid_width": true,
+    "proposal_equals_verify": true,
+    "mismatch_count_sampled": 0,
+    "mismatches": []
+  },
+  "hotplug_reference": null,
+  "aggregate": {
+    "events": 15,
+    "mean_acc_per_event": 0.0,
+    "mean_draft_per_event": 5.0,
+    "accepted_per_node": 0.0,
+    "wasted_nodes_per_event": 5.0,
+    "committed_tokens": 15,
+    "decode_span_s": 3.0617,
+    "mean_event_ms": 218.69,
+    "decode_tps": 4.899,
+    "acc_dist": {
+      "0": 15
+    }
+  },
+  "per_request": [
+    {
+      "events": 15,
+      "mean_acc_per_event": 0.0,
+      "mean_draft_per_event": 5.0,
+      "accepted_per_node": 0.0,
+      "wasted_nodes_per_event": 5.0,
+      "committed_tokens": 15,
+      "decode_span_s": 3.0617,
+      "mean_event_ms": 218.69,
+      "decode_tps": 4.899,
+      "acc_dist": {
+        "0": 15
+      },
+      "prompt_idx": 0,
+      "api_wall_s": 32.616,
+      "completion_tokens": 16
+    }
+  ]
+}
