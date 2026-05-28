@@ -4900,9 +4900,35 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
         }
         for parent_id, data in winners.items():
             if isinstance(data, dict) and data.get("winner_rid") in internal_ids:
-                _lumo_fb_ir_promote_internal_row_state(
-                    self, parent_id, data.get("winner_rid"),
-                    int(data.get("state_accepted", data.get("accepted", 0))))
+                runner_block_ids = data.get("runner_parent_block_ids")
+                if runner_block_ids:
+                    try:
+                        row_block_ids_by_row = getattr(
+                            self, "_lumo_fb_ir_row_block_ids", {})
+                        row_block_ids_by_row[data.get("winner_rid")] = tuple(
+                            [list(group) for group in runner_block_ids])
+                        self._lumo_fb_ir_row_block_ids = row_block_ids_by_row
+                        _lumo_fb_ir_sched_debug({
+                            "event": "kernel_transfer_runner_promoted_state",
+                            "parent": parent_id,
+                            "rid": data.get("winner_rid"),
+                            "accepted": int(data.get(
+                                "state_accepted", data.get("accepted", 0))),
+                            "runner_parent_mamba_idx": data.get(
+                                "runner_parent_mamba_idx"),
+                        })
+                    except Exception as e:
+                        _lumo_fb_ir_sched_debug({
+                            "event": "kernel_transfer_runner_promoted_state_error",
+                            "parent": parent_id,
+                            "rid": data.get("winner_rid"),
+                            "error": repr(e),
+                        })
+                        runner_block_ids = None
+                if not runner_block_ids:
+                    _lumo_fb_ir_promote_internal_row_state(
+                        self, parent_id, data.get("winner_rid"),
+                        int(data.get("state_accepted", data.get("accepted", 0))))
                 _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, data.get("winner_rid"))
             elif (isinstance(data, dict)
                   and data.get("winner_rid") == parent_id
@@ -5555,6 +5581,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 second_pos1_capture = False
             parent_idx = req_ids.index(parent) if parent in req_ids else None
             winner_idx = req_ids.index(winner_rid) if winner_rid in req_ids else None
+            runner_parent_block_ids = None
+            runner_parent_mamba_idx = None
             if winner_idx is not None:
                 try:
                     sampler_output.sampled_token_ids[winner_idx].fill_(-1)
@@ -5587,6 +5615,16 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             # here. The no-active K1 path remains disabled separately.
             _lumo_fb_ir_kernel_promote_state(
                 self, parent, state_accepted_drafts, first_sample_noop=False)
+            if winner_is_internal:
+                try:
+                    parent_state = self.requests.get(parent)
+                    if parent_state is not None:
+                        runner_parent_block_ids = tuple(
+                            [list(group) for group in parent_state.block_ids])
+                    runner_parent_mamba_idx = self.mamba_state_idx.get(parent)
+                except Exception:
+                    runner_parent_block_ids = None
+                    runner_parent_mamba_idx = None
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
@@ -5613,6 +5651,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "winner_raw_tokens": list(winner_tokens[:len(winner_commit_tokens)]),
                 "commit_source": "canonical_target",
                 "internal_bonus_deferred": False,
+                "runner_parent_block_ids": runner_parent_block_ids,
+                "runner_parent_mamba_idx": runner_parent_mamba_idx,
             }
             if _lumo_fb_ir_os.environ.get("LUMO_FB_SUPERSET_DIAG") == "1":
                 try:
