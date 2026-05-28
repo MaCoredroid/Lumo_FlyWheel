@@ -4350,9 +4350,7 @@ def _lumo_fb_ir_read_internal_max_commit(default_value):
 
 def _lumo_fb_ir_default_internal_max_commit():
     try:
-        return int(_lumo_fb_ir_os.environ.get(
-            "LUMO_FB_TREE_BRANCH_DEPTH",
-            _lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "2")))
+        return int(_lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "2"))
     except Exception:
         return 2
 
@@ -5086,9 +5084,7 @@ def _lumo_fb_ir_read_internal_max_commit(default_value):
 
 def _lumo_fb_ir_default_internal_max_commit():
     try:
-        return int(_lumo_fb_ir_os.environ.get(
-            "LUMO_FB_TREE_BRANCH_DEPTH",
-            _lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "2")))
+        return int(_lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "2"))
     except Exception:
         return 2
 
@@ -5548,10 +5544,9 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     tree_acc += 1
                 tree_acc = min(int(tree_acc), int(raw_acc))
                 if rid != parent:
-                    # Bound the row-tree to the certified internal branch
-                    # depth. This must track the actual row-tree branch depth:
-                    # a stale lower cap makes K>=2 fail the strict-superset
-                    # gate even when a sibling matched more target positions.
+                    # Bound only to active draft depth. The row tree may branch
+                    # for the first few positions and then continue linearly,
+                    # but the full row is still a verified candidate path.
                     tree_acc = min(
                         tree_acc,
                         _lumo_fb_ir_read_internal_max_commit(
