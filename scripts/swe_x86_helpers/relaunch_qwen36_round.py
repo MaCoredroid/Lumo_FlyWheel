@@ -734,7 +734,7 @@ else:
         # trace for F_b kernel rows.  The parent/path0 row is row 0 in the
         # active K batch; siblings must never change row 0's read index.
         import os as _lumo_fb_ridx_os
-        if _lumo_fb_ridx_os.environ.get("LUMO_FB_DEBUG") == "1":
+        if _lumo_fb_ridx_os.environ.get("LUMO_FB_GDN_DEBUG") == "1":
             try:
                 import json as _lumo_fb_ridx_json
                 import time as _lumo_fb_ridx_time
@@ -839,7 +839,7 @@ else:
         # the promoted value from these slots, not a sibling row's state.
         import os as _lumo_fb_ridx_post_os
         if (
-            _lumo_fb_ridx_post_os.environ.get("LUMO_FB_DEBUG") == "1"
+            _lumo_fb_ridx_post_os.environ.get("LUMO_FB_GDN_DEBUG") == "1"
             and _lumo_fb_ridx_post_os.environ.get("LUMO_FB_RIDX_STATE_SUMMARY", "0") == "1"
             and spec_sequence_masks is not None
             and spec_state_indices_tensor is not None
