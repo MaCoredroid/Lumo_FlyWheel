@@ -4148,7 +4148,7 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
             if isinstance(data, dict) and data.get("winner_rid") in internal_ids:
                 _lumo_fb_ir_promote_internal_row_state(
                     self, parent_id, data.get("winner_rid"),
-                    int(data.get("accepted", 0)))
+                    int(data.get("state_accepted", data.get("accepted", 0))))
                 _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, data.get("winner_rid"))
             elif (isinstance(data, dict)
                   and data.get("winner_rid") == parent_id
@@ -4579,11 +4579,18 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 scored.append((rid, valid, raw_acc, draft, tree_acc))
             scored.sort(key=lambda item: (item[4], 0 if item[0] == parent else -1), reverse=True)
             winner_rid, winner_tokens, winner_raw_acc, winner_draft, winner_acc = scored[0]
-            def _lumo_fb_target_commit_tokens(_draft, _valid, _acc):
+            winner_is_internal = winner_rid != parent
+            state_accepted_drafts = (
+                max(0, int(winner_acc) - 1)
+                if winner_is_internal
+                else int(winner_acc)
+            )
+            def _lumo_fb_target_commit_tokens(_draft, _valid, _acc, _include_bonus=True):
                 _draft = list(_draft or [])
                 _valid = list(_valid or [])
                 _out = []
-                for _depth in range(int(_acc) + 1):
+                _limit = int(_acc) + (1 if _include_bonus else 0)
+                for _depth in range(_limit):
                     _tok = canonical.get(tuple(_draft[:_depth]))
                     if _tok is None and _depth < len(_valid):
                         _tok = _valid[_depth]
@@ -4592,8 +4599,15 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     _out.append(int(_tok))
                 return _out
             winner_commit_tokens = _lumo_fb_target_commit_tokens(
-                winner_draft, winner_tokens, winner_acc)
-            if len(winner_commit_tokens) != int(winner_acc) + 1:
+                winner_draft, winner_tokens, winner_acc,
+                _include_bonus=not winner_is_internal)
+            expected_commit_len = int(winner_acc) + (0 if winner_is_internal else 1)
+            if expected_commit_len <= 0:
+                expected_commit_len = 1
+                winner_commit_tokens = _lumo_fb_target_commit_tokens(
+                    winner_draft, winner_tokens, 0, _include_bonus=True)
+                state_accepted_drafts = 0
+            if len(winner_commit_tokens) != expected_commit_len:
                 raise RuntimeError(
                     "LUMO_FB target commit synthesis failed: "
                     f"parent={parent} winner={winner_rid} accepted={winner_acc} "
@@ -4626,16 +4640,18 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             # base runner advance that state physically.  Still record the
             # accepted-prefix length for Mamba preprocess sync; otherwise the
             # next step can restore a stale length from an earlier K2 event.
-            _lumo_fb_ir_set_accept_len(self, parent, int(winner_acc) + 1)
+            _lumo_fb_ir_set_accept_len(self, parent, int(state_accepted_drafts) + 1)
             # Active K2 rows are pruned before the base state update, so keep
             # the parent read slot physically aligned with the accepted prefix
             # here. The no-active K1 path remains disabled separately.
             _lumo_fb_ir_kernel_promote_state(
-                self, parent, winner_acc, first_sample_noop=False)
+                self, parent, state_accepted_drafts, first_sample_noop=False)
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
-                "accepted": int(winner_acc),
+                "accepted": int(state_accepted_drafts),
+                "tree_accepted": int(winner_acc),
+                "state_accepted": int(state_accepted_drafts),
                 "accept_lens": [
                     int(acc) for rid, toks, raw_acc, draft, acc in sorted(
                         scored, key=lambda item: 0 if item[0] == parent else 1)
@@ -4645,8 +4661,9 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                         scored, key=lambda item: 0 if item[0] == parent else 1)
                 ],
                 "commit_tokens": list(winner_commit_tokens),
-                "winner_raw_tokens": list(winner_tokens[:int(winner_acc) + 1]),
+                "winner_raw_tokens": list(winner_tokens[:len(winner_commit_tokens)]),
                 "commit_source": "canonical_target",
+                "internal_bonus_deferred": bool(winner_is_internal),
             }
         if rows:
             _lumo_fb_ir_debug({
