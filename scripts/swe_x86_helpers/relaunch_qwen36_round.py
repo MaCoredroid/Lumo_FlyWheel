@@ -3570,6 +3570,39 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
             kv_iter = []
     if not kv_iter:
         kv_iter = list(fallback_iter)
+    debug_shapes = []
+    def _append_slot_views(t, src_block, dst_block, slot, count, mapped):
+        nonlocal copied_bytes
+        probe = t[int(dst_block)]
+        shape = list(probe.shape)
+        debug_shapes.append({
+            "shape": shape,
+            "src_block": int(src_block),
+            "dst_block": int(dst_block),
+            "slot": int(slot),
+            "count": int(count),
+            "mapped": bool(mapped),
+        })
+        if probe.ndim >= 2 and int(probe.shape[0]) == 2:
+            slot_dim = int(probe.shape[1])
+            if int(slot) >= slot_dim:
+                return False
+            end_slot = min(int(slot) + int(count), slot_dim)
+            dst_view = t[int(dst_block)][:, int(slot):end_slot]
+            src_view = t[int(src_block)][:, int(slot):end_slot]
+        elif probe.ndim >= 1:
+            slot_dim = int(probe.shape[0])
+            if int(slot) >= slot_dim:
+                return False
+            end_slot = min(int(slot) + int(count), slot_dim)
+            dst_view = t[int(dst_block)][int(slot):end_slot]
+            src_view = t[int(src_block)][int(slot):end_slot]
+        else:
+            return False
+        dst_views.append(dst_view)
+        src_views.append(src_view)
+        copied_bytes += int(dst_view.numel() * t.element_size())
+        return True
     for _pass_idx, _iter in enumerate((kv_iter, fallback_iter)):
         if _pass_idx == 1 and dst_views:
             break
@@ -3585,13 +3618,14 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
                 else:
                     tensors = [kv]
                 for t in tensors:
+                    if _append_slot_views(
+                            t, int(src), int(dst), start_slot, num_slots, False):
+                        continue
                     probe = t[int(dst)]
                     if probe.ndim >= 2 and int(probe.shape[0]) == 2:
                         kernel_block_size = int(probe.shape[1])
-                        slot_axis = 1
                     elif probe.ndim >= 1:
                         kernel_block_size = int(probe.shape[0])
-                        slot_axis = 0
                     else:
                         continue
                     blocks_per_kv_block = 1
@@ -3606,25 +3640,39 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
                         subblock = int(logical_slot // kernel_block_size)
                         local_slot = int(logical_slot % kernel_block_size)
                         span = min(remaining, kernel_block_size - local_slot)
-                        src_block = int(src) * blocks_per_kv_block + subblock
-                        dst_block = int(dst) * blocks_per_kv_block + subblock
-                        dst_view = t[dst_block]
-                        src_view = t[src_block]
-                        end_slot = local_slot + span
-                        if slot_axis == 1:
-                            dst_view = dst_view[:, local_slot:end_slot]
-                            src_view = src_view[:, local_slot:end_slot]
-                        else:
-                            dst_view = dst_view[local_slot:end_slot]
-                            src_view = src_view[local_slot:end_slot]
-                        dst_views.append(dst_view)
-                        src_views.append(src_view)
-                        copied_bytes += int(dst_view.numel() * t.element_size())
+                        if not _append_slot_views(
+                                t,
+                                int(src) * blocks_per_kv_block + subblock,
+                                int(dst) * blocks_per_kv_block + subblock,
+                                local_slot,
+                                span,
+                                True):
+                            break
                         logical_slot += span
                         remaining -= span
-            except Exception:
-                pass
+            except Exception as e:
+                debug_shapes.append({"error": repr(e)})
     _lumo_fb_foreach_copy_(dst_views, src_views)
+    if copied_bytes == 0:
+        try:
+            import os as _lumo_fb_copy_os
+            if _lumo_fb_copy_os.environ.get("LUMO_FB_DEBUG") == "1":
+                import json as _lumo_fb_copy_json
+                import time as _lumo_fb_copy_time
+                with open("/logs/fb_internal_debug.jsonl", "a", buffering=1) as _fh:
+                    _fh.write(_lumo_fb_copy_json.dumps({
+                        "event": "split_kv_slot_copy_zero_debug",
+                        "src": int(src),
+                        "dst": int(dst),
+                        "start_slot": int(start_slot),
+                        "num_slots": int(num_slots),
+                        "group_idx": None if group_idx is None else int(group_idx),
+                        "manager_block_size": manager_block_size,
+                        "attempts": debug_shapes[:12],
+                        "ts": round(_lumo_fb_copy_time.time(), 4),
+                    }) + chr(10))
+        except Exception:
+            pass
     return copied_bytes
 
 def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
