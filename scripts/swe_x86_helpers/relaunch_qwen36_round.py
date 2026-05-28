@@ -3543,8 +3543,7 @@ def _lumo_fb_copy_block_id(self, src, dst, num_slots=None):
     _lumo_fb_foreach_copy_(dst_views, src_views)
     return copied_bytes
 
-def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
-                                   group_idx=None):
+def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots):
     copied_bytes = 0
     dst_views = []
     src_views = []
@@ -3553,132 +3552,30 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
     if num_slots <= 0:
         return 0
     seen = set()
-    kv_iter = []
-    fallback_iter = list(getattr(self, "kv_caches", []))
-    manager_block_size = None
-    if group_idx is not None:
+    for kv in getattr(self, "kv_caches", []):
+        if id(kv) in seen:
+            continue
+        seen.add(id(kv))
         try:
-            forward_context = self.compilation_config.static_forward_context
-            group = self.kv_cache_config.kv_cache_groups[int(group_idx)]
-            manager_block_size = int(group.kv_cache_spec.block_size)
-            for layer_name in group.layer_names:
-                layer = forward_context.get(layer_name)
-                kv = getattr(layer, "kv_cache", None)
-                if kv is not None:
-                    kv_iter.append(kv)
-        except Exception:
-            kv_iter = []
-    if not kv_iter:
-        kv_iter = list(fallback_iter)
-    debug_shapes = []
-    def _append_slot_views(t, src_block, dst_block, slot, count, mapped):
-        nonlocal copied_bytes
-        shape = list(t.shape)
-        debug_shapes.append({
-            "shape": shape,
-            "src_block": int(src_block),
-            "dst_block": int(dst_block),
-            "slot": int(slot),
-            "count": int(count),
-            "mapped": bool(mapped),
-        })
-        if t.ndim >= 3 and int(t.shape[0]) == 2:
-            slot_dim = int(t.shape[2])
-            if int(slot) >= slot_dim:
-                return False
-            end_slot = min(int(slot) + int(count), slot_dim)
-            dst_view = t[:, int(dst_block), int(slot):end_slot]
-            src_view = t[:, int(src_block), int(slot):end_slot]
-        else:
-            probe = t[int(dst_block)]
-            if probe.ndim < 1:
-                return False
-            slot_dim = int(probe.shape[0])
-            if int(slot) >= slot_dim:
-                return False
-            end_slot = min(int(slot) + int(count), slot_dim)
-            dst_view = t[int(dst_block)][int(slot):end_slot]
-            src_view = t[int(src_block)][int(slot):end_slot]
-        dst_views.append(dst_view)
-        src_views.append(src_view)
-        copied_bytes += int(dst_view.numel() * t.element_size())
-        return True
-    for _pass_idx, _iter in enumerate((kv_iter, fallback_iter)):
-        if _pass_idx == 1 and dst_views:
-            break
-        if _pass_idx == 1:
-            seen.clear()
-        for kv in _iter:
-            if id(kv) in seen:
-                continue
-            seen.add(id(kv))
-            try:
-                if isinstance(kv, list):
-                    tensors = kv
-                else:
-                    tensors = [kv]
-                for t in tensors:
-                    if _append_slot_views(
-                            t, int(src), int(dst), start_slot, num_slots, False):
+            if isinstance(kv, list):
+                tensors = kv
+            else:
+                tensors = [kv]
+            for t in tensors:
+                dst_view = t[dst]
+                src_view = t[src]
+                if dst_view.ndim >= 1:
+                    end_slot = min(start_slot + num_slots, int(dst_view.shape[0]))
+                    if end_slot <= start_slot:
                         continue
-                    if t.ndim >= 3 and int(t.shape[0]) == 2:
-                        kernel_block_size = int(t.shape[2])
-                    else:
-                        probe = t[int(dst)]
-                        if probe.ndim < 1:
-                            continue
-                        kernel_block_size = int(probe.shape[0])
-                    blocks_per_kv_block = 1
-                    if (manager_block_size is not None
-                            and kernel_block_size > 0
-                            and manager_block_size % kernel_block_size == 0):
-                        blocks_per_kv_block = max(
-                            1, int(manager_block_size // kernel_block_size))
-                    remaining = int(num_slots)
-                    logical_slot = int(start_slot)
-                    while remaining > 0:
-                        subblock = int(logical_slot // kernel_block_size)
-                        local_slot = int(logical_slot % kernel_block_size)
-                        span = min(remaining, kernel_block_size - local_slot)
-                        if not _append_slot_views(
-                                t,
-                                int(src) + subblock,
-                                int(dst) + subblock,
-                                local_slot,
-                                span,
-                                True) and not _append_slot_views(
-                                t,
-                                int(src) * blocks_per_kv_block + subblock,
-                                int(dst) * blocks_per_kv_block + subblock,
-                                local_slot,
-                                span,
-                                True):
-                            break
-                        logical_slot += span
-                        remaining -= span
-            except Exception as e:
-                debug_shapes.append({"error": repr(e)})
-    _lumo_fb_foreach_copy_(dst_views, src_views)
-    if copied_bytes == 0:
-        try:
-            import os as _lumo_fb_copy_os
-            if _lumo_fb_copy_os.environ.get("LUMO_FB_DEBUG") == "1":
-                import json as _lumo_fb_copy_json
-                import time as _lumo_fb_copy_time
-                with open("/logs/fb_internal_debug.jsonl", "a", buffering=1) as _fh:
-                    _fh.write(_lumo_fb_copy_json.dumps({
-                        "event": "split_kv_slot_copy_zero_debug",
-                        "src": int(src),
-                        "dst": int(dst),
-                        "start_slot": int(start_slot),
-                        "num_slots": int(num_slots),
-                        "group_idx": None if group_idx is None else int(group_idx),
-                        "manager_block_size": manager_block_size,
-                        "attempts": debug_shapes[:12],
-                        "ts": round(_lumo_fb_copy_time.time(), 4),
-                    }) + chr(10))
+                    dst_view = dst_view[start_slot:end_slot]
+                    src_view = src_view[start_slot:end_slot]
+                dst_views.append(dst_view)
+                src_views.append(src_view)
+                copied_bytes += int(dst_view.numel() * t.element_size())
         except Exception:
             pass
+    _lumo_fb_foreach_copy_(dst_views, src_views)
     return copied_bytes
 
 def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
@@ -5013,7 +4910,7 @@ def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
                 dst = int(parent_blocks[logical_idx])
                 if src != dst and "_lumo_fb_copy_block_slot_range" in globals():
                     copied_bytes += int(_lumo_fb_copy_block_slot_range(
-                        self, src, dst, slot, n, group_idx=group_idx))
+                        self, src, dst, slot, n))
                 pos += n
                 left -= n
         _lumo_fb_ir_debug({
@@ -5536,9 +5433,6 @@ def _lumo_fb_ir_runner_enabled():
              and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
             or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
 
-def _lumo_fb_ir_kernel_rows_enabled():
-    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-
 def _lumo_fb_ir_is_row_id(req_id):
     return isinstance(req_id, str) and "::lumo_fb_ir::" in req_id
 
@@ -6016,7 +5910,7 @@ def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
                 dst = int(parent_blocks[logical_idx])
                 if src != dst and "_lumo_fb_copy_block_slot_range" in globals():
                     copied = int(_lumo_fb_copy_block_slot_range(
-                        self, src, dst, slot, n, group_idx=group_idx))
+                        self, src, dst, slot, n))
                     copied_bytes += copied
                     details.append({
                         "group": int(group_idx), "src": src, "dst": dst,
@@ -6281,7 +6175,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                                 else:
                                     merged_groups.append(list(_parent_group))
                             parent_state.block_ids = tuple(merged_groups)
-                        elif not split_kv_parent_state_applied:
+                        else:
                             parent_state.block_ids = tuple([list(group) for group in winner_state.block_ids])
                         pidx = self.input_batch.req_id_to_index.get(parent)
                         if pidx is not None:
