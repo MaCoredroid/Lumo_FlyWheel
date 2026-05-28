@@ -686,9 +686,47 @@ else:
                             "head": _tensor.reshape(-1).cpu().tolist()[:_limit],
                         }
                     return _value
+                def _lumo_fb_ridx_state_summary(_cache, _idx):
+                    if _idx is None or int(_idx) < 0:
+                        return None
+                    _idx = int(_idx)
+                    _row = _cache[_idx].detach().float()
+                    _flat = _row.reshape(-1)
+                    return {
+                        "idx": _idx,
+                        "shape": list(_row.shape),
+                        "sum": float(_flat.sum().item()),
+                        "abs_sum": float(_flat.abs().sum().item()),
+                        "head": _flat[:8].cpu().tolist(),
+                    }
+                _lumo_fb_ridx_state_pre = None
+                if _lumo_fb_ridx_os.environ.get("LUMO_FB_RIDX_STATE_SUMMARY") == "1":
+                    _lumo_fb_ridx_layers = _lumo_fb_ridx_os.environ.get(
+                        "LUMO_FB_RIDX_STATE_LAYERS", "")
+                    _lumo_fb_ridx_do_state = True
+                    if _lumo_fb_ridx_layers:
+                        _lumo_fb_ridx_do_state = str(self.layer_idx) in {
+                            _x.strip() for _x in _lumo_fb_ridx_layers.split(",") if _x.strip()}
+                    if _lumo_fb_ridx_do_state and spec_initial_state_indices_tensor is not None:
+                        _lumo_fb_ridx_parent_read = int(
+                            spec_initial_state_indices_tensor.detach().reshape(-1)[0].item())
+                        _lumo_fb_ridx_parent_writes = None
+                        if spec_state_indices_tensor is not None:
+                            _lumo_fb_ridx_parent_writes = (
+                                spec_state_indices_tensor.detach().reshape(
+                                    spec_state_indices_tensor.shape[0], -1)[0].cpu().tolist())
+                        _lumo_fb_ridx_state_pre = {
+                            "parent_read_idx": _lumo_fb_ridx_parent_read,
+                            "parent_write_indices": _lumo_fb_ridx_parent_writes,
+                            "conv_parent_read": _lumo_fb_ridx_state_summary(
+                                conv_state, _lumo_fb_ridx_parent_read),
+                            "ssm_parent_read": _lumo_fb_ridx_state_summary(
+                                ssm_state, _lumo_fb_ridx_parent_read),
+                        }
                 with open("/logs/fb_recurrent_index_debug.jsonl", "a", buffering=1) as _lumo_fb_ridx_fh:
                     _lumo_fb_ridx_fh.write(_lumo_fb_ridx_json.dumps({
                         "event": "gdn_recurrent_indices",
+                        "phase": "pre",
                         "ts": round(_lumo_fb_ridx_time.time(), 4),
                         "layer_idx": int(self.layer_idx) if self.layer_idx is not None else None,
                         "prefix": str(getattr(self, "prefix", "")),
@@ -704,6 +742,7 @@ else:
                         "spec_initial_state_slot_tensor": _lumo_fb_ridx_head(spec_initial_state_slot_tensor),
                         "spec_write_state_slot_tensor": _lumo_fb_ridx_head(spec_write_state_slot_tensor),
                         "num_accepted_tokens": _lumo_fb_ridx_head(num_accepted_tokens),
+                        "state_pre": _lumo_fb_ridx_state_pre,
                     }) + chr(10))
             except Exception:
                 pass
@@ -717,6 +756,90 @@ else:
     import py_compile
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b recurrent index debug patch')
+
+text = gl.read_text()
+sentinel = '# LUMO_FB_RECURRENT_STATE_POST_DEBUG'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b recurrent state post debug already present')
+else:
+    old = '''        elif spec_sequence_masks is not None:
+            core_attn_out[:num_actual_tokens] = core_attn_out_spec.squeeze(0)
+        else:
+            core_attn_out[:num_actual_tokens] = core_attn_out_non_spec.squeeze(0)
+'''
+    new = '''        elif spec_sequence_masks is not None:
+            core_attn_out[:num_actual_tokens] = core_attn_out_spec.squeeze(0)
+        else:
+            core_attn_out[:num_actual_tokens] = core_attn_out_non_spec.squeeze(0)
+
+        # LUMO_FB_RECURRENT_STATE_POST_DEBUG: post-kernel write checksum for
+        # path0's private recurrent write slots. The following step should read
+        # the promoted value from these slots, not a sibling row's state.
+        import os as _lumo_fb_ridx_post_os
+        if (
+            _lumo_fb_ridx_post_os.environ.get("LUMO_FB_DEBUG") == "1"
+            and _lumo_fb_ridx_post_os.environ.get("LUMO_FB_RIDX_STATE_SUMMARY") == "1"
+            and spec_sequence_masks is not None
+            and spec_state_indices_tensor is not None
+        ):
+            try:
+                _lumo_fb_ridx_layers = _lumo_fb_ridx_post_os.environ.get(
+                    "LUMO_FB_RIDX_STATE_LAYERS", "")
+                _lumo_fb_ridx_do_state = True
+                if _lumo_fb_ridx_layers:
+                    _lumo_fb_ridx_do_state = str(self.layer_idx) in {
+                        _x.strip() for _x in _lumo_fb_ridx_layers.split(",") if _x.strip()}
+                if _lumo_fb_ridx_do_state:
+                    import json as _lumo_fb_ridx_post_json
+                    import time as _lumo_fb_ridx_post_time
+                    def _lumo_fb_ridx_post_summary(_cache, _idx):
+                        if _idx is None or int(_idx) < 0:
+                            return None
+                        _idx = int(_idx)
+                        _row = _cache[_idx].detach().float()
+                        _flat = _row.reshape(-1)
+                        return {
+                            "idx": _idx,
+                            "shape": list(_row.shape),
+                            "sum": float(_flat.sum().item()),
+                            "abs_sum": float(_flat.abs().sum().item()),
+                            "head": _flat[:8].cpu().tolist(),
+                        }
+                    _lumo_fb_parent_writes = (
+                        spec_state_indices_tensor.detach().reshape(
+                            spec_state_indices_tensor.shape[0], -1)[0].cpu().tolist())
+                    _lumo_fb_state_post = {
+                        "parent_write_indices": _lumo_fb_parent_writes,
+                        "conv_parent_writes": [
+                            _lumo_fb_ridx_post_summary(conv_state, _idx)
+                            for _idx in _lumo_fb_parent_writes[:6]
+                        ],
+                        "ssm_parent_writes": [
+                            _lumo_fb_ridx_post_summary(ssm_state, _idx)
+                            for _idx in _lumo_fb_parent_writes[:6]
+                        ],
+                    }
+                    with open("/logs/fb_recurrent_index_debug.jsonl", "a", buffering=1) as _lumo_fb_ridx_fh:
+                        _lumo_fb_ridx_fh.write(_lumo_fb_ridx_post_json.dumps({
+                            "event": "gdn_recurrent_state_checksums",
+                            "phase": "post",
+                            "ts": round(_lumo_fb_ridx_post_time.time(), 4),
+                            "layer_idx": int(self.layer_idx) if self.layer_idx is not None else None,
+                            "prefix": str(getattr(self, "prefix", "")),
+                            "num_actual_tokens": int(num_actual_tokens),
+                            "num_spec_decodes": int(getattr(attn_metadata, "num_spec_decodes", 0)),
+                            "state_post": _lumo_fb_state_post,
+                        }) + chr(10))
+            except Exception:
+                pass
+'''
+    if old not in text:
+        raise RuntimeError('F_b recurrent state post debug anchor not found')
+    text = text.replace(old, new, 1)
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b recurrent state post debug patch')
 
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
