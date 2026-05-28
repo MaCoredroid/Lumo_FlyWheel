@@ -78,6 +78,56 @@ else:
 LUMOSPECTRACE
 '''
 
+_QWEN36_FP8_CONFIG_FIX_BLOCK = r'''
+python3 - <<'LUMOQ36FP8CFG'
+from pathlib import Path
+import json
+
+cfg_path = Path('/models/qwen3.6-27b-fp8/config.json')
+if not cfg_path.exists():
+    print('[TRACK-B-PRELAUNCH] qwen3.6 fp8 config not present; skip quant metadata fix')
+else:
+    cfg = json.loads(cfg_path.read_text())
+    if cfg.get('quantization_config') is not None:
+        print('[TRACK-B-PRELAUNCH] qwen3.6 fp8 quant metadata already present')
+    else:
+        text_cfg = cfg.get('text_config') or {}
+        layer_types = list(text_cfg.get('layer_types') or [])
+        modules_to_not_convert = [
+            'lm_head',
+            'model.language_model.embed_tokens',
+            'mtp.fc',
+        ]
+        for idx, layer_type in enumerate(layer_types):
+            if layer_type == 'linear_attention':
+                base = f'model.language_model.layers.{idx}.linear_attn'
+                modules_to_not_convert.extend([
+                    f'{base}.conv1d',
+                    f'{base}.in_proj_a',
+                    f'{base}.in_proj_b',
+                ])
+        # Vision-side weights in this checkpoint are bf16 and should stay
+        # unquantized. Include stable prefixes rather than enumerating each
+        # block so the fix is robust to minor vision-depth changes.
+        modules_to_not_convert.extend([
+            'model.visual',
+        ])
+        cfg['quantization_config'] = {
+            'quant_method': 'fp8',
+            'activation_scheme': 'dynamic',
+            'weight_per_tensor': False,
+            'act_per_tensor': False,
+            'weight_block_size': [128, 128],
+            'modules_to_not_convert': modules_to_not_convert,
+        }
+        bak = cfg_path.with_suffix('.json.lumo_pre_fp8_fix.bak')
+        if not bak.exists():
+            bak.write_text(cfg_path.read_text())
+        cfg_path.write_text(json.dumps(cfg, indent=2, sort_keys=False) + '\n')
+        print('[TRACK-B-PRELAUNCH] injected qwen3.6 fp8 block-quant metadata')
+LUMOQ36FP8CFG
+'''
+
 
 # F_b kernel-row foundation: let the GDN SSM recurrent update read its initial
 # state from one state slot and write the evolved per-token states to another
@@ -5892,7 +5942,9 @@ print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
     fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
-    return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "") + (_FB_KERNEL_ROWS_BLOCK if fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else "")
+    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + dbg + fb_env + base + _SPEC_TRACE_BLOCK
+            + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
+            + (_FB_KERNEL_ROWS_BLOCK if fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""))
 
 
 def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
