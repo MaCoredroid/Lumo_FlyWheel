@@ -1139,7 +1139,7 @@ else:
                         _lumo_fb_pad_rows = max(
                             _lumo_fb_nspec,
                             int(_lumo_fb_gdn_proj_os.environ.get(
-                                "LUMO_FB_PROJ_PAD_ROWS", "4")))
+                                "LUMO_FB_PROJ_PAD_ROWS", "8")))
                         if _lumo_fb_row_len > 0 and _lumo_fb_pad_rows > _lumo_fb_nspec:
                             _lumo_fb_padded = hidden_states.new_zeros(
                                 (_lumo_fb_pad_rows * _lumo_fb_row_len,
@@ -1148,15 +1148,20 @@ else:
                                 _lumo_fb_len = _lumo_fb_e - _lumo_fb_s
                                 _lumo_fb_ps = _lumo_fb_i * _lumo_fb_row_len
                                 _lumo_fb_padded[_lumo_fb_ps:_lumo_fb_ps + _lumo_fb_len] = hidden_states[_lumo_fb_s:_lumo_fb_e]
+                            _lumo_fb_qkvz_padded, _ = self.in_proj_qkvz(_lumo_fb_padded)
                             _lumo_fb_ba_padded, _ = self.in_proj_ba(_lumo_fb_padded)
+                            _lumo_fb_qkvz_parts = []
                             _lumo_fb_ba_parts = []
                             for _lumo_fb_i, (_lumo_fb_s, _lumo_fb_e) in enumerate(_lumo_fb_spans):
                                 _lumo_fb_len = _lumo_fb_e - _lumo_fb_s
                                 _lumo_fb_ps = _lumo_fb_i * _lumo_fb_row_len
+                                _lumo_fb_qkvz_parts.append(_lumo_fb_qkvz_padded[_lumo_fb_ps:_lumo_fb_ps + _lumo_fb_len])
                                 _lumo_fb_ba_parts.append(_lumo_fb_ba_padded[_lumo_fb_ps:_lumo_fb_ps + _lumo_fb_len])
+                            mixed_qkvz = torch.cat(_lumo_fb_qkvz_parts, dim=0)
                             ba = torch.cat(_lumo_fb_ba_parts, dim=0)
                         elif _lumo_fb_row_len > 0:
                             _lumo_fb_reshaped = hidden_states[:_lumo_fb_nspec * _lumo_fb_row_len]
+                            mixed_qkvz, _ = self.in_proj_qkvz(_lumo_fb_reshaped)
                             ba, _ = self.in_proj_ba(_lumo_fb_reshaped)
                 except Exception:
                     pass
@@ -1212,7 +1217,7 @@ else:
                     _lumo_fb_pad_rows = max(
                         _lumo_fb_nspec,
                         int(_lumo_fb_gdn_proj_os.environ.get(
-                            "LUMO_FB_PROJ_PAD_ROWS", "4")))
+                            "LUMO_FB_PROJ_PAD_ROWS", "8")))
                     if _lumo_fb_row_len > 0 and _lumo_fb_pad_rows > _lumo_fb_nspec:
                         _lumo_fb_padded = core_attn_out.new_zeros(
                             (_lumo_fb_pad_rows * _lumo_fb_row_len,
