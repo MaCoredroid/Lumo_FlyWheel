@@ -841,6 +841,82 @@ else:
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b recurrent state post debug patch')
 
+text = gl.read_text()
+sentinel = '# LUMO_FB_RECURRENT_INPUT_DEBUG'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b recurrent input debug already present')
+else:
+    old = '''        if attn_metadata.num_prefills > 0:
+            g, beta = fused_gdn_gating(self.A_log, a, b, self.dt_bias)
+'''
+    new = '''        # LUMO_FB_RECURRENT_INPUT_DEBUG: checksum row0's recurrent inputs
+        # immediately before the SSM update.  If K1 and K2 differ here, the leak
+        # is upstream of the recurrent kernel; if they match, the fused batched
+        # SSM update itself is changing row0.
+        import os as _lumo_fb_rinput_os
+        if (
+            _lumo_fb_rinput_os.environ.get("LUMO_FB_DEBUG") == "1"
+            and spec_sequence_masks is not None
+            and getattr(attn_metadata, "num_spec_decodes", 0) > 0
+        ):
+            try:
+                _lumo_fb_rinput_layers = _lumo_fb_rinput_os.environ.get(
+                    "LUMO_FB_RIDX_STATE_LAYERS", "0,1,2")
+                _lumo_fb_rinput_do = True
+                if _lumo_fb_rinput_layers:
+                    _lumo_fb_rinput_do = str(self.layer_idx) in {
+                        _x.strip() for _x in _lumo_fb_rinput_layers.split(",") if _x.strip()}
+                if _lumo_fb_rinput_do:
+                    import json as _lumo_fb_rinput_json
+                    import time as _lumo_fb_rinput_time
+                    def _lumo_fb_rinput_summary(_tensor, _row_tokens=6):
+                        if _tensor is None:
+                            return None
+                        _t = _tensor.detach().float()
+                        if _t.ndim >= 2:
+                            _row = _t[:, :_row_tokens].contiguous()
+                        else:
+                            _row = _t[:_row_tokens].contiguous()
+                        _flat = _row.reshape(-1)
+                        return {
+                            "shape": list(_t.shape),
+                            "row_shape": list(_row.shape),
+                            "sum": float(_flat.sum().item()),
+                            "abs_sum": float(_flat.abs().sum().item()),
+                            "head": _flat[:8].cpu().tolist(),
+                        }
+                    _lumo_fb_rinput_state = {
+                        "query_spec": _lumo_fb_rinput_summary(query_spec),
+                        "key_spec": _lumo_fb_rinput_summary(key_spec),
+                        "value_spec": _lumo_fb_rinput_summary(value_spec),
+                        "a": _lumo_fb_rinput_summary(a),
+                        "b": _lumo_fb_rinput_summary(b),
+                    }
+                    with open("/logs/fb_recurrent_index_debug.jsonl", "a", buffering=1) as _lumo_fb_rinput_fh:
+                        _lumo_fb_rinput_fh.write(_lumo_fb_rinput_json.dumps({
+                            "event": "gdn_recurrent_input_checksums",
+                            "phase": "pre_ssm",
+                            "ts": round(_lumo_fb_rinput_time.time(), 4),
+                            "layer_idx": int(self.layer_idx) if self.layer_idx is not None else None,
+                            "prefix": str(getattr(self, "prefix", "")),
+                            "num_actual_tokens": int(num_actual_tokens),
+                            "num_spec_decodes": int(getattr(attn_metadata, "num_spec_decodes", 0)),
+                            "inputs": _lumo_fb_rinput_state,
+                        }) + chr(10))
+            except Exception:
+                pass
+
+        if attn_metadata.num_prefills > 0:
+            g, beta = fused_gdn_gating(self.A_log, a, b, self.dt_bias)
+'''
+    if old not in text:
+        raise RuntimeError('F_b recurrent input debug anchor not found')
+    text = text.replace(old, new, 1)
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b recurrent input debug patch')
+
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
 sentinel = '# LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK'
