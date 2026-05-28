@@ -1,0 +1,108 @@
+{
+  "label": "Fb_n5_nocopy_singleflip_K1_diag3_after_b50b3eb3",
+  "temp": 0.6,
+  "top_p": 0.95,
+  "max_tokens": 256,
+  "n_prompts": 3,
+  "thinking_enabled": "template_default_true",
+  "decode_token_scope": "thinking_plus_answer",
+  "launch_n_max": null,
+  "active_depth": 5,
+  "active_k": 1,
+  "certifiable": false,
+  "fb_control_file": "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_control.json",
+  "width_validation": {
+    "valid_width": true,
+    "proposal_equals_verify": true,
+    "mismatch_count_sampled": 0,
+    "mismatches": []
+  },
+  "hotplug_reference": null,
+  "aggregate": {
+    "events": 186,
+    "mean_acc_per_event": 3.124,
+    "mean_draft_per_event": 5.0,
+    "accepted_per_node": 0.6247,
+    "wasted_nodes_per_event": 1.876,
+    "committed_tokens": 767,
+    "decode_span_s": 41.1518,
+    "mean_event_ms": 224.87,
+    "decode_tps": 18.638,
+    "acc_dist": {
+      "0": 22,
+      "1": 25,
+      "2": 25,
+      "3": 22,
+      "4": 20,
+      "5": 72
+    }
+  },
+  "per_request": [
+    {
+      "events": 55,
+      "mean_acc_per_event": 3.636,
+      "mean_draft_per_event": 5.0,
+      "accepted_per_node": 0.7273,
+      "wasted_nodes_per_event": 1.364,
+      "committed_tokens": 255,
+      "decode_span_s": 12.1506,
+      "mean_event_ms": 225.01,
+      "decode_tps": 20.987,
+      "acc_dist": {
+        "0": 5,
+        "1": 4,
+        "2": 6,
+        "3": 6,
+        "4": 4,
+        "5": 30
+      },
+      "prompt_idx": 0,
+      "api_wall_s": 12.642,
+      "completion_tokens": 256
+    },
+    {
+      "events": 71,
+      "mean_acc_per_event": 2.62,
+      "mean_draft_per_event": 5.0,
+      "accepted_per_node": 0.5239,
+      "wasted_nodes_per_event": 2.38,
+      "committed_tokens": 257,
+      "decode_span_s": 15.7329,
+      "mean_event_ms": 224.76,
+      "decode_tps": 16.335,
+      "acc_dist": {
+        "0": 11,
+        "1": 13,
+        "2": 13,
+        "3": 6,
+        "4": 11,
+        "5": 17
+      },
+      "prompt_idx": 1,
+      "api_wall_s": 16.208,
+      "completion_tokens": 256
+    },
+    {
+      "events": 60,
+      "mean_acc_per_event": 3.25,
+      "mean_draft_per_event": 5.0,
+      "accepted_per_node": 0.65,
+      "wasted_nodes_per_event": 1.75,
+      "committed_tokens": 255,
+      "decode_span_s": 13.2683,
+      "mean_event_ms": 224.89,
+      "decode_tps": 19.219,
+      "acc_dist": {
+        "0": 6,
+        "1": 8,
+        "2": 6,
+        "3": 10,
+        "4": 5,
+        "5": 25
+      },
+      "prompt_idx": 2,
+      "api_wall_s": 13.739,
+      "completion_tokens": 256
+    }
+  ]
+}
