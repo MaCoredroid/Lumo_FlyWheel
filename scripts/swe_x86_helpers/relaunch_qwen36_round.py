@@ -88,43 +88,55 @@ if not cfg_path.exists():
     print('[TRACK-B-PRELAUNCH] qwen3.6 fp8 config not present; skip quant metadata fix')
 else:
     cfg = json.loads(cfg_path.read_text())
-    if cfg.get('quantization_config') is not None:
+    text_cfg = cfg.get('text_config') or {}
+    layer_types = list(text_cfg.get('layer_types') or [])
+    modules_to_not_convert = [
+        'lm_head',
+        'model.language_model.embed_tokens',
+        'mtp.fc',
+    ]
+    for idx, layer_type in enumerate(layer_types):
+        if layer_type == 'linear_attention':
+            base = f'model.language_model.layers.{idx}.linear_attn'
+            modules_to_not_convert.extend([
+                f'{base}.conv1d',
+                f'{base}.in_proj_a',
+                f'{base}.in_proj_b',
+            ])
+    vision_depth = int((cfg.get('vision_config') or {}).get('depth') or 0)
+    for prefix in ('model.visual', 'visual'):
+        for idx in range(vision_depth):
+            base = f'{prefix}.blocks.{idx}'
+            modules_to_not_convert.extend([
+                f'{base}.attn.proj',
+                f'{base}.attn.qkv',
+                f'{base}.mlp.linear_fc1',
+                f'{base}.mlp.linear_fc2',
+            ])
+        modules_to_not_convert.extend([
+            f'{prefix}.merger.linear_fc1',
+            f'{prefix}.merger.linear_fc2',
+            f'{prefix}.patch_embed.proj',
+            f'{prefix}.pos_embed',
+        ])
+    existing = cfg.get('quantization_config') or {}
+    desired = {
+        'quant_method': 'fp8',
+        'activation_scheme': 'dynamic',
+        'weight_per_tensor': False,
+        'act_per_tensor': False,
+        'weight_block_size': [128, 128],
+        'modules_to_not_convert': sorted(set(modules_to_not_convert)),
+    }
+    if existing == desired:
         print('[TRACK-B-PRELAUNCH] qwen3.6 fp8 quant metadata already present')
     else:
-        text_cfg = cfg.get('text_config') or {}
-        layer_types = list(text_cfg.get('layer_types') or [])
-        modules_to_not_convert = [
-            'lm_head',
-            'model.language_model.embed_tokens',
-            'mtp.fc',
-        ]
-        for idx, layer_type in enumerate(layer_types):
-            if layer_type == 'linear_attention':
-                base = f'model.language_model.layers.{idx}.linear_attn'
-                modules_to_not_convert.extend([
-                    f'{base}.conv1d',
-                    f'{base}.in_proj_a',
-                    f'{base}.in_proj_b',
-                ])
-        # Vision-side weights in this checkpoint are bf16 and should stay
-        # unquantized. Include stable prefixes rather than enumerating each
-        # block so the fix is robust to minor vision-depth changes.
-        modules_to_not_convert.extend([
-            'model.visual',
-        ])
-        cfg['quantization_config'] = {
-            'quant_method': 'fp8',
-            'activation_scheme': 'dynamic',
-            'weight_per_tensor': False,
-            'act_per_tensor': False,
-            'weight_block_size': [128, 128],
-            'modules_to_not_convert': modules_to_not_convert,
-        }
+        cfg['quantization_config'] = desired
         bak = cfg_path.with_suffix('.json.lumo_pre_fp8_fix.bak')
         if not bak.exists():
             bak.write_text(cfg_path.read_text())
         cfg_path.write_text(json.dumps(cfg, indent=2, sort_keys=False) + '\n')
-        print('[TRACK-B-PRELAUNCH] injected qwen3.6 fp8 block-quant metadata')
+        print('[TRACK-B-PRELAUNCH] injected/updated qwen3.6 fp8 block-quant metadata')
 LUMOQ36FP8CFG
 '''
 
