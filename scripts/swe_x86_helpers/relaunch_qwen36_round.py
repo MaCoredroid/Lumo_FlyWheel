@@ -4368,6 +4368,50 @@ def _lumo_fb_shared_root_rejection_sample(
         return _lumo_fb_sample_from_probs(
             target_probs[tok_idx], sampling_metadata.generators.get(row_idx))
 
+    if pairs:
+        # Generic prefix-tree verifier for K>=2 row groups.  The earlier
+        # pairwise root coupling overwrote the parent once per sibling row,
+        # drawing multiple target samples for one logical token and breaking
+        # the strict-superset invariant.  Here every logical prefix gets one
+        # target sample, shared by all rows with that prefix.
+        parent_to_rows = {}
+        for parent_idx, sibling_idx in pairs:
+            parent_to_rows.setdefault(int(parent_idx), set()).add(int(parent_idx))
+            parent_to_rows[int(parent_idx)].add(int(sibling_idx))
+        for parent_idx, rows_set in parent_to_rows.items():
+            group_rows = sorted(rows_set)
+            rejected = {int(req_idx): False for req_idx in group_rows}
+            prefix_targets = {}
+            for pos in range(fb_depth):
+                for req_idx in group_rows:
+                    if rejected[int(req_idx)]:
+                        continue
+                    start = _lumo_fb_row_start(req_idx)
+                    prefix = tuple(
+                        int(draft_token_ids[start + j].item())
+                        for j in range(pos)
+                    )
+                    if prefix not in prefix_targets:
+                        prefix_targets[prefix] = _lumo_fb_logical_target(req_idx, pos)
+                    tok = prefix_targets[prefix]
+                    draft_id = draft_token_ids[start + pos].to(torch.int32)
+                    if int(draft_id.item()) == int(tok.item()):
+                        output_token_ids[req_idx, pos] = draft_id
+                    else:
+                        output_token_ids[req_idx, pos] = tok
+                        rejected[int(req_idx)] = True
+                # Continue the loop so rows on other prefixes can still verify
+                # their own deeper positions after a sibling rejects.
+            for req_idx in group_rows:
+                if not rejected[int(req_idx)]:
+                    output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
+        _lumo_fb_sampler_debug(
+            "shared_tree_prefix_generic",
+            draft_token_ids, num_draft_tokens, max_spec_len,
+            cu_num_draft_tokens, target_logits, bonus_token_ids,
+            sampling_metadata, output_token_ids)
+        return output_token_ids
+
     if is_position_tree:
         # Top-2-at-position-0/1 tree rows are laid out in groups of four:
         # [root0/child0, root0/child1, root1/child0, root1/child1].  The root
