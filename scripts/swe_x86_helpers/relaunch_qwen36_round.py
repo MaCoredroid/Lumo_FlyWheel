@@ -1924,23 +1924,30 @@ def _lumo_fb_read_control(max_depth):
     info = {"fb_control_source": "env"}
     path = _lumo_fb_os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
     if path and _lumo_fb_os.path.exists(path):
-        st0 = _lumo_fb_os.stat(path)
-        with open(path) as fh:
-            payload = _lumo_fb_json.load(fh)
-        st1 = _lumo_fb_os.stat(path)
-        if (st0.st_mtime_ns != st1.st_mtime_ns
-                or st0.st_size != st1.st_size
-                or getattr(st0, "st_ino", None) != getattr(st1, "st_ino", None)):
-            raise RuntimeError(f"LUMO_FB_CONTROL_FILE changed during read: {path}")
-        if payload.get("depth") is not None:
-            depth = int(payload["depth"])
-        if payload.get("k") is not None:
-            k = int(payload["k"])
-        info = {
-            "fb_control_source": "file",
-            "fb_control_file": path,
-            "fb_control_mtime_ns": int(st1.st_mtime_ns),
-        }
+        try:
+            st0 = _lumo_fb_os.stat(path)
+            with open(path) as fh:
+                payload = _lumo_fb_json.load(fh)
+            st1 = _lumo_fb_os.stat(path)
+            if (st0.st_mtime_ns != st1.st_mtime_ns
+                    or st0.st_size != st1.st_size
+                    or getattr(st0, "st_ino", None) != getattr(st1, "st_ino", None)):
+                raise RuntimeError(f"LUMO_FB_CONTROL_FILE changed during read: {path}")
+            if payload.get("depth") is not None:
+                depth = int(payload["depth"])
+            if payload.get("k") is not None:
+                k = int(payload["k"])
+            info = {
+                "fb_control_source": "file",
+                "fb_control_file": path,
+                "fb_control_mtime_ns": int(st1.st_mtime_ns),
+            }
+        except Exception as exc:
+            info = {
+                "fb_control_source": "env",
+                "fb_control_file": path,
+                "fb_control_error": repr(exc),
+            }
     if depth < 1 or depth > int(max_depth):
         raise RuntimeError(f"LUMO_FB active depth {depth} outside launch_n_max {max_depth}")
     if k < 0 or k > 2:
