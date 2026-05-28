@@ -2675,6 +2675,50 @@ def _lumo_fb_copy_block_id(self, src, dst, num_slots=None):
     _lumo_fb_foreach_copy_(dst_views, src_views)
     return copied_bytes
 
+def _lumo_fb_copy_block_range_id(self, src, dst, start_slot, num_slots):
+    copied_bytes = 0
+    dst_views = []
+    src_views = []
+    seen = set()
+    start_slot = int(start_slot)
+    num_slots = int(num_slots)
+    if num_slots <= 0:
+        return 0
+    for kv in getattr(self, "kv_caches", []):
+        if id(kv) in seen:
+            continue
+        seen.add(id(kv))
+        try:
+            if isinstance(kv, list):
+                for t in kv:
+                    dst_view = t[int(dst)]
+                    src_view = t[int(src)]
+                    if dst_view.ndim >= 1:
+                        end_slot = min(start_slot + num_slots, int(dst_view.shape[0]))
+                        if end_slot <= start_slot:
+                            continue
+                        dst_view = dst_view[start_slot:end_slot]
+                        src_view = src_view[start_slot:end_slot]
+                    dst_views.append(dst_view)
+                    src_views.append(src_view)
+                    copied_bytes += int(dst_view.numel() * t.element_size())
+            else:
+                dst_view = kv[int(dst)]
+                src_view = kv[int(src)]
+                if dst_view.ndim >= 1:
+                    end_slot = min(start_slot + num_slots, int(dst_view.shape[0]))
+                    if end_slot <= start_slot:
+                        continue
+                    dst_view = dst_view[start_slot:end_slot]
+                    src_view = src_view[start_slot:end_slot]
+                dst_views.append(dst_view)
+                src_views.append(src_view)
+                copied_bytes += int(dst_view.numel() * kv.element_size())
+        except Exception:
+            pass
+    _lumo_fb_foreach_copy_(dst_views, src_views)
+    return copied_bytes
+
 def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
     copied_bytes = 0
     dst_views = []
@@ -3657,6 +3701,7 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
     copies = []
     owned = []
     row_block_ids = []
+    kv_splits = []
     for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
         parent_blocks = list(manager.req_to_blocks.get(parent.request_id, ()))
         row_blocks = list(parent_blocks)
@@ -3714,16 +3759,27 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
                 dst = _lumo_fb_ir_new_block(manager)
                 row_blocks[logical_idx] = dst
                 owned.append((group_idx, dst))
-                if logical_idx == start_idx and (int(parent.num_computed_tokens) % block_size) != 0:
-                    copies.append((
-                        "kv_partial", src.block_id, dst.block_id,
-                        int(parent.num_computed_tokens) % block_size))
+                prefix_in_block = (
+                    int(parent.num_computed_tokens) % block_size
+                    if logical_idx == start_idx
+                    else 0
+                )
+                kv_splits.append({
+                    "group": int(group_idx),
+                    "logical_idx": int(logical_idx),
+                    "src": int(src.block_id),
+                    "dst": int(dst.block_id),
+                    "block_size": int(block_size),
+                    "prefix_in_block": int(prefix_in_block),
+                })
         row_block_ids.append([blk.block_id for blk in row_blocks])
     self._lumo_fb_ir_owned_blocks = getattr(self, "_lumo_fb_ir_owned_blocks", {})
     self._lumo_fb_ir_owned_blocks[row_id] = owned
     self._lumo_fb_ir_row_block_ids = getattr(self, "_lumo_fb_ir_row_block_ids", {})
     self._lumo_fb_ir_row_block_ids[row_id] = tuple(row_block_ids)
-    return tuple(row_block_ids), copies
+    self._lumo_fb_ir_kv_splits = getattr(self, "_lumo_fb_ir_kv_splits", {})
+    self._lumo_fb_ir_kv_splits[row_id] = tuple(kv_splits)
+    return tuple(row_block_ids), copies, tuple(kv_splits)
 
 def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id):
     owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
@@ -3819,8 +3875,10 @@ def _lumo_fb_ir_promote_internal_row_state(self, parent_id, row_id, accepted_dra
 def _lumo_fb_ir_free_owned(self, row_ids):
     owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
     row_block_ids_by_row = getattr(self, "_lumo_fb_ir_row_block_ids", {})
+    kv_splits_by_row = getattr(self, "_lumo_fb_ir_kv_splits", {})
     for row_id in row_ids:
         row_block_ids_by_row.pop(row_id, None)
+        kv_splits_by_row.pop(row_id, None)
         owned = owned_by_row.pop(row_id, [])
         by_group = {}
         for group_idx, block in owned:
@@ -3976,13 +4034,14 @@ def _lumo_fb_ir_schedule(self):
         rows = []
         for path_idx, path in enumerate(paths[1:], 1):
             row_id = _lumo_fb_ir_row_id(parent_id, path_idx)
-            block_ids, row_copies = _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_sched)
+            block_ids, row_copies, kv_splits = _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_sched)
             copies.extend(row_copies)
             rows.append({
                 "rid": row_id,
                 "path_idx": int(path_idx),
                 "draft": list(path),
                 "block_ids": block_ids,
+                "kv_splits": [dict(item) for item in kv_splits],
             })
         if _lumo_fb_ir_kernel_rows_enabled():
             owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
@@ -4370,6 +4429,116 @@ def _lumo_fb_ir_mamba_curr_state_idx(self, req_state, num_scheduled_tokens):
     except Exception:
         return None
 
+def _lumo_fb_ir_apply_kv_kernel_splits(self, req_id, splits):
+    if not splits:
+        return 0, []
+    idx = self.input_batch.req_id_to_index.get(req_id)
+    if idx is None:
+        return 0, []
+    copied_bytes = 0
+    detail = []
+    for split in splits:
+        try:
+            group_idx = int(split["group"])
+            logical_idx = int(split["logical_idx"])
+            src = int(split["src"])
+            dst = int(split["dst"])
+            prefix_in_block = int(split.get("prefix_in_block", 0))
+            block_table = self.input_batch.block_table[group_idx]
+            blocks_per_kv_block = int(getattr(block_table, "blocks_per_kv_block", 1))
+            kernel_block_size = int(getattr(block_table, "block_size", split.get("block_size", 0)))
+            if blocks_per_kv_block <= 1 or kernel_block_size <= 0:
+                raise RuntimeError(
+                    "LUMO_FB KV row split requires hybrid kernel block table: "
+                    f"req={req_id} group={group_idx} bpk={blocks_per_kv_block} "
+                    f"kbs={kernel_block_size}")
+            start_col = logical_idx * blocks_per_kv_block
+            end_col = start_col + blocks_per_kv_block
+            if end_col > int(block_table.num_blocks_per_row[idx]):
+                raise RuntimeError(
+                    "LUMO_FB KV row split exceeds block-table row: "
+                    f"req={req_id} group={group_idx} end={end_col} "
+                    f"row_blocks={int(block_table.num_blocks_per_row[idx])}")
+            switch_subblock = prefix_in_block // kernel_block_size
+            boundary_slots = prefix_in_block % kernel_block_size
+            if switch_subblock > blocks_per_kv_block:
+                switch_subblock = blocks_per_kv_block
+                boundary_slots = 0
+            # Prefix kernel blocks stay aliased to the parent's physical block.
+            for sub in range(0, switch_subblock):
+                block_table.block_table.np[idx, start_col + sub] = (
+                    src * blocks_per_kv_block + sub)
+            # The boundary kernel block and all suffix blocks are private row
+            # storage.  Only the already-committed tokens inside the boundary
+            # subblock need to be copied; this replaces the previous whole-prefix
+            # block copy.
+            for sub in range(switch_subblock, blocks_per_kv_block):
+                block_table.block_table.np[idx, start_col + sub] = (
+                    dst * blocks_per_kv_block + sub)
+            if boundary_slots > 0 and switch_subblock < blocks_per_kv_block:
+                start_slot = switch_subblock * kernel_block_size
+                _bytes = _lumo_fb_copy_block_range_id(
+                    self, src, dst, start_slot, boundary_slots)
+                copied_bytes += int(_bytes)
+                detail.append({
+                    "kind": "kv_kernel_boundary",
+                    "group": int(group_idx),
+                    "src": int(src),
+                    "dst": int(dst),
+                    "start_slot": int(start_slot),
+                    "slots": int(boundary_slots),
+                    "bytes": int(_bytes),
+                })
+            detail.append({
+                "kind": "kv_kernel_split",
+                "group": int(group_idx),
+                "logical_idx": int(logical_idx),
+                "src": int(src),
+                "dst": int(dst),
+                "prefix_in_block": int(prefix_in_block),
+                "kernel_block_size": int(kernel_block_size),
+                "blocks_per_kv_block": int(blocks_per_kv_block),
+                "shared_prefix_kernel_blocks": int(switch_subblock),
+            })
+        except Exception as e:
+            _lumo_fb_ir_debug({
+                "event": "kv_kernel_split_error",
+                "rid": req_id,
+                "split": dict(split) if isinstance(split, dict) else split,
+                "error": repr(e),
+            })
+            raise
+    return copied_bytes, detail
+
+def _lumo_fb_ir_materialize_kv_prefix_for_commit(self, req_id):
+    splits_by_row = getattr(self, "_lumo_fb_ir_kv_splits", {})
+    splits = list(splits_by_row.get(req_id, []) or [])
+    copied_bytes = 0
+    detail = []
+    for split in splits:
+        prefix_in_block = int(split.get("prefix_in_block", 0))
+        if prefix_in_block <= 0:
+            continue
+        _bytes = _lumo_fb_copy_block_range_id(
+            self, int(split["src"]), int(split["dst"]), 0, prefix_in_block)
+        copied_bytes += int(_bytes)
+        detail.append({
+            "kind": "kv_commit_prefix",
+            "group": int(split["group"]),
+            "src": int(split["src"]),
+            "dst": int(split["dst"]),
+            "slots": int(prefix_in_block),
+            "bytes": int(_bytes),
+        })
+    if detail:
+        _lumo_fb_ir_debug({
+            "event": "kv_commit_prefix_materialized",
+            "rid": req_id,
+            "bytes": int(copied_bytes),
+            "detail": detail,
+        })
+    return copied_bytes, detail
+
 def _lumo_fb_ir_update_states_runner(self, scheduler_output):
     ret = _lumo_fb_ir_prev_update_states_runner(self, scheduler_output)
     if not _lumo_fb_ir_runner_enabled():
@@ -4409,6 +4578,17 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
             scheduler_output.total_num_scheduled_tokens += int(parent_sched)
             scheduler_output.scheduled_spec_decode_tokens[row_id] = list(row["draft"])
             self.input_batch.add_request(req_state)
+            self._lumo_fb_ir_kv_splits = getattr(self, "_lumo_fb_ir_kv_splits", {})
+            self._lumo_fb_ir_kv_splits[row_id] = tuple(row.get("kv_splits", []) or [])
+            _kv_split_bytes, _kv_split_detail = _lumo_fb_ir_apply_kv_kernel_splits(
+                self, row_id, row.get("kv_splits", []) or [])
+            if _kv_split_bytes or _kv_split_detail:
+                scheduler_output.lumo_fb_state_copy_bytes = int(
+                    getattr(scheduler_output, "lumo_fb_state_copy_bytes", 0) or 0
+                ) + int(_kv_split_bytes)
+                scheduler_output.lumo_fb_state_copy_detail = list(
+                    getattr(scheduler_output, "lumo_fb_state_copy_detail", []) or []
+                ) + list(_kv_split_detail)
             self.input_batch.update_req_spec_token_ids(req_state, scheduler_output.scheduled_spec_decode_tokens)
             row_state_idx = _lumo_fb_ir_mamba_curr_state_idx(
                 self, req_state, parent_sched)
@@ -4635,6 +4815,15 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     parent_state = self.requests.get(parent)
                     winner_state = self.requests.get(winner_rid)
                     if parent_state is not None and winner_state is not None:
+                        _commit_kv_bytes, _commit_kv_detail = _lumo_fb_ir_materialize_kv_prefix_for_commit(
+                            self, winner_rid)
+                        if _commit_kv_bytes or _commit_kv_detail:
+                            scheduler_output.lumo_fb_state_copy_bytes = int(
+                                getattr(scheduler_output, "lumo_fb_state_copy_bytes", 0) or 0
+                            ) + int(_commit_kv_bytes)
+                            scheduler_output.lumo_fb_state_copy_detail = list(
+                                getattr(scheduler_output, "lumo_fb_state_copy_detail", []) or []
+                            ) + list(_commit_kv_detail)
                         parent_state.block_ids = tuple([list(group) for group in winner_state.block_ids])
                         pidx = self.input_batch.req_id_to_index.get(parent)
                         if pidx is not None:
@@ -4758,6 +4947,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
     return sampler_output, spec_decode_metadata, common_attn_metadata
 
 def _lumo_fb_ir_cleanup_rows(self, internal_ids):
+    kv_splits_by_row = getattr(self, "_lumo_fb_ir_kv_splits", {})
     for rid in internal_ids:
         try:
             self.input_batch.remove_request(rid)
@@ -4765,6 +4955,7 @@ def _lumo_fb_ir_cleanup_rows(self, internal_ids):
             pass
         self.requests.pop(rid, None)
         self.mamba_state_idx.pop(rid, None)
+        kv_splits_by_row.pop(rid, None)
     try:
         self.input_batch.condense()
         self.input_batch.refresh_metadata()
