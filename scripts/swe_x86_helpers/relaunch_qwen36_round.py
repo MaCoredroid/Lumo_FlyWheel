@@ -1026,6 +1026,68 @@ else:
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b GDN projection input debug patch')
 
+text = gl.read_text()
+sentinel = '# LUMO_FB_ROW_SERIAL_BA_PROJ'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b row-serial BA projection patch already present')
+else:
+    old = '''            mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)
+            ba, _ = self.in_proj_ba(hidden_states)
+            if _lumo_fb_gdn_proj_do:
+                _lumo_fb_gdn_proj_mixed = {
+                    "mixed_qkvz_token0": _lumo_fb_gdn_proj_summary(mixed_qkvz, 1),
+                    "ba_token0": _lumo_fb_gdn_proj_summary(ba, 1),
+                }
+
+            if self.gqa_interleaved_layout:
+'''
+    new = '''            mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)
+            ba, _ = self.in_proj_ba(hidden_states)
+            # LUMO_FB_ROW_SERIAL_BA_PROJ: the small BA projection feeds GDN
+            # gating and is batch-shape sensitive under K>1.  Recompute it per
+            # spec row so path0 uses the same GEMM shape as K=1; qkvz remains
+            # batched because diagnostics showed it is stable.
+            if _lumo_fb_gdn_proj_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+                try:
+                    _lumo_fb_ctx = get_forward_context()
+                    _lumo_fb_meta = _lumo_fb_ctx.attn_metadata
+                    if isinstance(_lumo_fb_meta, dict):
+                        _lumo_fb_meta = _lumo_fb_meta.get(self.prefix)
+                    _lumo_fb_nspec = int(getattr(_lumo_fb_meta, "num_spec_decodes", 0))
+                    _lumo_fb_qsl = getattr(_lumo_fb_meta, "spec_query_start_loc", None)
+                    if (
+                        _lumo_fb_nspec > 1
+                        and getattr(_lumo_fb_meta, "num_prefills", 0) == 0
+                        and getattr(_lumo_fb_meta, "num_decodes", 0) == 0
+                        and _lumo_fb_qsl is not None
+                    ):
+                        _lumo_fb_qsl_cpu = _lumo_fb_qsl[: _lumo_fb_nspec + 1].detach().cpu().tolist()
+                        _lumo_fb_ba_parts = []
+                        for _lumo_fb_i in range(_lumo_fb_nspec):
+                            _lumo_fb_s = int(_lumo_fb_qsl_cpu[_lumo_fb_i])
+                            _lumo_fb_e = int(_lumo_fb_qsl_cpu[_lumo_fb_i + 1])
+                            _lumo_fb_ba_i, _ = self.in_proj_ba(hidden_states[_lumo_fb_s:_lumo_fb_e])
+                            _lumo_fb_ba_parts.append(_lumo_fb_ba_i)
+                        if _lumo_fb_ba_parts:
+                            ba = torch.cat(_lumo_fb_ba_parts, dim=0)
+                except Exception:
+                    pass
+            if _lumo_fb_gdn_proj_do:
+                _lumo_fb_gdn_proj_mixed = {
+                    "mixed_qkvz_token0": _lumo_fb_gdn_proj_summary(mixed_qkvz, 1),
+                    "ba_token0": _lumo_fb_gdn_proj_summary(ba, 1),
+                }
+
+            if self.gqa_interleaved_layout:
+'''
+    if old not in text:
+        raise RuntimeError('F_b row-serial BA projection anchor not found')
+    text = text.replace(old, new, 1)
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b row-serial BA projection patch')
+
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
 sentinel = '# LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK'
