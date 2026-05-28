@@ -3594,6 +3594,21 @@ def _lumo_fb_ir_read_control(default_depth):
         raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
     return int(depth), int(k)
 
+def _lumo_fb_ir_read_internal_max_commit(default_value):
+    value = _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_MAX_COMMIT")
+    path = _lumo_fb_ir_os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
+    if path and _lumo_fb_ir_os.path.exists(path):
+        try:
+            with open(path) as fh:
+                payload = _lumo_fb_ir_json.load(fh)
+            if payload.get("internal_max_commit") is not None:
+                value = payload.get("internal_max_commit")
+        except Exception:
+            pass
+    if value is None:
+        value = default_value
+    return max(0, int(value))
+
 def _lumo_fb_ir_sched_debug(event):
     if _lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG") != "1":
         return
@@ -4582,8 +4597,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     # work; parent/K1 remains full-depth n=5.
                     tree_acc = min(
                         tree_acc,
-                        int(_lumo_fb_ir_os.environ.get(
-                            "LUMO_FB_INTERNAL_MAX_COMMIT", "2")))
+                        _lumo_fb_ir_read_internal_max_commit(2))
                 scored.append((rid, valid, raw_acc, draft, tree_acc))
             scored.sort(key=lambda item: (item[4], 0 if item[0] == parent else -1), reverse=True)
             winner_rid, winner_tokens, winner_raw_acc, winner_draft, winner_acc = scored[0]
@@ -4637,14 +4651,15 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             second_pos0_capture = False
             second_pos1_capture = False
             try:
+                diag_rows = sorted(row_data, key=lambda item: 0 if item[0] == parent else 1)
                 parent_draft = []
-                for rid, _valid, _raw_acc, draft, _tree_acc in scored:
+                for rid, _valid, _raw_acc, draft in diag_rows:
                     if rid == parent:
                         parent_draft = list(draft or [])
                         break
                 if parent_draft and winner_commit_tokens:
                     roots = []
-                    for _rid, _valid, _raw_acc, draft, _tree_acc in scored:
+                    for _rid, _valid, _raw_acc, draft in diag_rows:
                         draft = list(draft or [])
                         if draft and draft[0] not in roots:
                             roots.append(draft[0])
@@ -4655,7 +4670,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     )
                     if len(winner_commit_tokens) > 1:
                         kids = []
-                        for _rid, _valid, _raw_acc, draft, _tree_acc in scored:
+                        for _rid, _valid, _raw_acc, draft in diag_rows:
                             draft = list(draft or [])
                             if (len(draft) > 1 and parent_draft
                                     and int(draft[0]) == int(parent_draft[0])
