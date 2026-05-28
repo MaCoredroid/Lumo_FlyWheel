@@ -5346,9 +5346,19 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                   and data.get("winner_rid") == parent_id
                   and (_lumo_fb_ir_os.environ.get("LUMO_FB_PROMOTE_PARENT_WINNERS") == "1"
                        or _lumo_fb_ir_kernel_rows_enabled())):
-                _lumo_fb_ir_promote_manager_state(
-                    self, parent_id, int(data.get("accepted", 0)),
-                    first_sample_noop=False)
+                runner_block_ids = data.get("runner_parent_block_ids")
+                if runner_block_ids and _lumo_fb_ir_mirror_manager_blocks_from_ids(
+                        self, parent_id, runner_block_ids):
+                    _lumo_fb_ir_sched_debug({
+                        "event": "kernel_mirror_parent_winner_state",
+                        "parent": parent_id,
+                        "accepted": int(data.get("state_accepted",
+                                                 data.get("accepted", 0))),
+                    })
+                else:
+                    _lumo_fb_ir_promote_manager_state(
+                        self, parent_id, int(data.get("accepted", 0)),
+                        first_sample_noop=False)
         for rid in internal_ids:
             if rid in scheduler_output.num_scheduled_tokens:
                 scheduler_output.total_num_scheduled_tokens -= scheduler_output.num_scheduled_tokens.pop(rid)
@@ -6175,20 +6185,15 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                             self.mamba_state_idx[parent] = self.mamba_state_idx[winner_rid]
                 except Exception:
                     pass
-            # Parent-winning rows are the normal linear verifier path; let the
-            # base runner advance that state physically.  Still record the
-            # accepted-prefix length for Mamba preprocess sync; otherwise the
-            # next step can restore a stale length from an earlier K2 event.
+            # Promote exactly once in the runner for both parent and internal
+            # winners, then make the scheduler manager mirror this exact block
+            # table.  Doing independent scheduler-side arithmetic promotion can
+            # desync row allocation from the runner-visible parent state.
             _lumo_fb_ir_set_accept_len(self, parent, int(state_accepted_drafts) + 1)
-            # Only internal-winner collapse needs a manual runner-side state
-            # promotion before the ordinary parent-only state update.  For
-            # parent wins, promoting here and then letting the base update run
-            # advances the recurrent state twice and breaks the strict K2
-            # superset invariant over long decodes.
-            if winner_is_internal:
+            if _lumo_fb_ir_kernel_rows_enabled():
                 _lumo_fb_ir_kernel_promote_state(
                     self, parent, state_accepted_drafts, first_sample_noop=False)
-            if winner_is_internal:
+            if _lumo_fb_ir_kernel_rows_enabled():
                 try:
                     parent_state = self.requests.get(parent)
                     if parent_state is not None:
