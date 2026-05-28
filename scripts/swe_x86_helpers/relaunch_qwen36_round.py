@@ -917,6 +917,115 @@ else:
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b recurrent input debug patch')
 
+text = gl.read_text()
+sentinel = '# LUMO_FB_GDN_PROJECTION_INPUT_DEBUG'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b GDN projection input debug already present')
+else:
+    old = '''        # ============================================================
+        # Part 1: Input Projection
+        # ============================================================
+        if hasattr(self, "in_proj_qkv"):
+'''
+    new = '''        # ============================================================
+        # Part 1: Input Projection
+        # ============================================================
+        # LUMO_FB_GDN_PROJECTION_INPUT_DEBUG
+        import os as _lumo_fb_gdn_proj_os
+        _lumo_fb_gdn_proj_do = False
+        _lumo_fb_gdn_proj_pre = None
+        _lumo_fb_gdn_proj_mixed = None
+        if _lumo_fb_gdn_proj_os.environ.get("LUMO_FB_DEBUG") == "1":
+            _lumo_fb_gdn_proj_layers = _lumo_fb_gdn_proj_os.environ.get(
+                "LUMO_FB_RIDX_STATE_LAYERS", "0,1,2")
+            _lumo_fb_gdn_proj_do = True
+            if _lumo_fb_gdn_proj_layers:
+                _lumo_fb_gdn_proj_do = str(self.layer_idx) in {
+                    _x.strip() for _x in _lumo_fb_gdn_proj_layers.split(",") if _x.strip()}
+        def _lumo_fb_gdn_proj_summary(_tensor, _tokens=1):
+            if _tensor is None:
+                return None
+            _t = _tensor.detach().float()
+            _row = _t[:_tokens].contiguous()
+            _flat = _row.reshape(-1)
+            return {
+                "shape": list(_t.shape),
+                "row_shape": list(_row.shape),
+                "sum": float(_flat.sum().item()),
+                "abs_sum": float(_flat.abs().sum().item()),
+                "head": _flat[:8].cpu().tolist(),
+            }
+        if _lumo_fb_gdn_proj_do:
+            try:
+                _lumo_fb_gdn_proj_pre = {
+                    "hidden_states_token0": _lumo_fb_gdn_proj_summary(hidden_states, 1),
+                }
+            except Exception:
+                _lumo_fb_gdn_proj_pre = None
+        if hasattr(self, "in_proj_qkv"):
+'''
+    if old not in text:
+        raise RuntimeError('F_b GDN projection input debug pre anchor not found')
+    text = text.replace(old, new, 1)
+    old = '''            b = b.contiguous()
+            a = a.contiguous()
+        else:
+            mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)
+            ba, _ = self.in_proj_ba(hidden_states)
+'''
+    new = '''            b = b.contiguous()
+            a = a.contiguous()
+            if _lumo_fb_gdn_proj_do:
+                _lumo_fb_gdn_proj_mixed = {
+                    "mixed_qkv_token0": _lumo_fb_gdn_proj_summary(mixed_qkv, 1),
+                    "ba_token0": _lumo_fb_gdn_proj_summary(ba, 1),
+                }
+        else:
+            mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)
+            ba, _ = self.in_proj_ba(hidden_states)
+            if _lumo_fb_gdn_proj_do:
+                _lumo_fb_gdn_proj_mixed = {
+                    "mixed_qkvz_token0": _lumo_fb_gdn_proj_summary(mixed_qkvz, 1),
+                    "ba_token0": _lumo_fb_gdn_proj_summary(ba, 1),
+                }
+'''
+    if old not in text:
+        raise RuntimeError('F_b GDN projection input debug projection anchor not found')
+    text = text.replace(old, new, 1)
+    old = '''        # ============================================================
+        # Part 2: Core Attention (Custom Op)
+        # ============================================================
+'''
+    new = '''        if _lumo_fb_gdn_proj_do:
+            try:
+                import json as _lumo_fb_gdn_proj_json
+                import time as _lumo_fb_gdn_proj_time
+                with open("/logs/fb_recurrent_index_debug.jsonl", "a", buffering=1) as _lumo_fb_gdn_proj_fh:
+                    _lumo_fb_gdn_proj_fh.write(_lumo_fb_gdn_proj_json.dumps({
+                        "event": "gdn_projection_input_checksums",
+                        "phase": "pre_core",
+                        "ts": round(_lumo_fb_gdn_proj_time.time(), 4),
+                        "layer_idx": int(self.layer_idx) if self.layer_idx is not None else None,
+                        "prefix": str(getattr(self, "prefix", "")),
+                        "num_tokens": int(num_tokens),
+                        "pre": _lumo_fb_gdn_proj_pre,
+                        "projection": _lumo_fb_gdn_proj_mixed,
+                    }) + chr(10))
+            except Exception:
+                pass
+
+        # ============================================================
+        # Part 2: Core Attention (Custom Op)
+        # ============================================================
+'''
+    if old not in text:
+        raise RuntimeError('F_b GDN projection input debug write anchor not found')
+    text = text.replace(old, new, 1)
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b GDN projection input debug patch')
+
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
 sentinel = '# LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK'
