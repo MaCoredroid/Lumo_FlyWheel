@@ -6281,7 +6281,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                                 else:
                                     merged_groups.append(list(_parent_group))
                             parent_state.block_ids = tuple(merged_groups)
-                        else:
+                        elif not split_kv_parent_state_applied:
                             parent_state.block_ids = tuple([list(group) for group in winner_state.block_ids])
                         pidx = self.input_batch.req_id_to_index.get(parent)
                         if pidx is not None:
