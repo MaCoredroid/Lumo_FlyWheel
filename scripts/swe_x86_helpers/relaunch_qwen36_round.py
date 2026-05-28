@@ -4734,19 +4734,16 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                             self.mamba_state_idx[parent] = self.mamba_state_idx[winner_rid]
                 except Exception:
                     pass
-            # Parent-winning rows are the normal linear verifier path.  Still
-            # record the accepted-prefix length for Mamba preprocess sync;
-            # otherwise the next step can restore a stale length from an
-            # earlier K2 event.
+            # Parent-winning rows are the normal linear verifier path; let the
+            # base runner advance that state physically.  Still record the
+            # accepted-prefix length for Mamba preprocess sync; otherwise the
+            # next step can restore a stale length from an earlier K2 event.
             _lumo_fb_ir_set_accept_len(self, parent, int(state_accepted_drafts) + 1)
-            # Only an internal-row winner needs an immediate runner-side
-            # promotion after its block table is transferred to the parent.
-            # Parent winners are also promoted by the scheduler update path; a
-            # second active-path runner promotion perturbs path0 after partial
-            # accepts when sibling rows are present.
-            if winner_is_internal:
-                _lumo_fb_ir_kernel_promote_state(
-                    self, parent, state_accepted_drafts, first_sample_noop=False)
+            # Active K2 rows are pruned before the base state update, so keep
+            # the parent read slot physically aligned with the accepted prefix
+            # here. The no-active K1 path remains disabled separately.
+            _lumo_fb_ir_kernel_promote_state(
+                self, parent, state_accepted_drafts, first_sample_noop=False)
             winners[parent] = {
                 "winner_rid": winner_rid,
                 "winner_idx": 0 if winner_rid == parent else 1,
