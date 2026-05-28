@@ -1,0 +1,19 @@
+=== /root/.cache/vllm ===
+total 20
+drwxr-xr-x 4 root root 4096 May 28 17:23 .
+drwxr-xr-x 1 root root 4096 May 28 17:19 ..
+drwxr-xr-x 2 root root 4096 May 28 17:19 modelinfos
+drwxr-xr-x 3 root root 4096 May 28 17:23 torch_compile_cache
+=== /root/.cache/torch ===
+=== vllm cache tree ===
+-rw------- root root 742 2026-05-28 17:19 /root/.cache/vllm/modelinfos/vllm-model_executor-models-qwen3_5_mtp-Qwen3_5MTP.json
+-rw------- root root 760 2026-05-28 17:19 /root/.cache/vllm/modelinfos/vllm-model_executor-models-qwen3_5-Qwen3_5ForConditionalGeneration.json
+drwxr-xr-x root root 4096 2026-05-28 17:19 /root/.cache/vllm/modelinfos
+drwxr-xr-x root root 4096 2026-05-28 17:23 /root/.cache/vllm
+drwxr-xr-x root root 4096 2026-05-28 17:23 /root/.cache/vllm/torch_compile_cache
+drwxr-xr-x root root 4096 2026-05-28 17:23 /root/.cache/vllm/torch_compile_cache/5903eef293
+drwxr-xr-x root root 4096 2026-05-28 17:24 /root/.cache/vllm/torch_compile_cache/5903eef293/rank_0_0
+drwxr-xr-x root root 4096 2026-05-28 17:24 /root/.cache/vllm/torch_compile_cache/5903eef293/rank_0_0/backbone
+drwxr-xr-x root root 4096 2026-05-28 17:24 /root/.cache/vllm/torch_compile_cache/5903eef293/rank_0_0/eagle_head
+=== torch cache tree ===
+/root/.cache/torch_missing

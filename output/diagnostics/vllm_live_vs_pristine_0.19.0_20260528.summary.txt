@@ -1,0 +1,17 @@
+diff_path=/home/mark/shared/lumoFlyWheel/output/diagnostics/vllm_live_vs_pristine_0.19.0_20260528.diff
+diff_bytes=282569
+modified_file_count=14
+model_executor/layers/fla/ops/fused_sigmoid_gating.py
+model_executor/layers/mamba/abstract.py
+model_executor/layers/mamba/gdn_linear_attn.py
+model_executor/layers/mamba/ops/causal_conv1d.py
+parser/abstract_parser.py
+reasoning/qwen3_reasoning_parser.py
+v1/attention/backends/flash_attn.py
+v1/attention/backends/gdn_attn.py
+v1/core/sched/scheduler.py
+v1/core/single_type_kv_cache_manager.py
+v1/sample/rejection_sampler.py
+v1/spec_decode/eagle.py
+v1/worker/gpu_model_runner.py
+v1/worker/p2b_debug_export.py
