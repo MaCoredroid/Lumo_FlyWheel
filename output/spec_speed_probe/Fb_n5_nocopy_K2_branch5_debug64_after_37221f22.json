@@ -1,0 +1,86 @@
+{
+  "label": "Fb_n5_nocopy_K2_branch5_debug64_after_37221f22",
+  "temp": 0.6,
+  "top_p": 0.95,
+  "max_tokens": 64,
+  "n_prompts": 2,
+  "thinking_enabled": "template_default_true",
+  "decode_token_scope": "thinking_plus_answer",
+  "launch_n_max": 5,
+  "active_depth": 5,
+  "active_k": 2,
+  "certifiable": false,
+  "fb_control_file": "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_control.json",
+  "width_validation": {
+    "valid_width": true,
+    "proposal_equals_verify": true,
+    "mismatch_count_sampled": 0,
+    "mismatches": []
+  },
+  "hotplug_reference": null,
+  "aggregate": {
+    "events": 29,
+    "mean_acc_per_event": 3.448,
+    "mean_draft_per_event": 5.0,
+    "accepted_per_node": 0.6897,
+    "wasted_nodes_per_event": 1.552,
+    "committed_tokens": 129,
+    "decode_span_s": 13.7942,
+    "mean_event_ms": 510.9,
+    "decode_tps": 9.352,
+    "acc_dist": {
+      "0": 3,
+      "1": 3,
+      "2": 3,
+      "3": 3,
+      "4": 3,
+      "5": 14
+    }
+  },
+  "per_request": [
+    {
+      "events": 14,
+      "mean_acc_per_event": 3.714,
+      "mean_draft_per_event": 5.0,
+      "accepted_per_node": 0.7429,
+      "wasted_nodes_per_event": 1.286,
+      "committed_tokens": 66,
+      "decode_span_s": 6.6451,
+      "mean_event_ms": 511.16,
+      "decode_tps": 9.932,
+      "acc_dist": {
+        "0": 1,
+        "1": 1,
+        "2": 2,
+        "3": 1,
+        "4": 1,
+        "5": 8
+      },
+      "prompt_idx": 0,
+      "api_wall_s": 11.427,
+      "completion_tokens": 64
+    },
+    {
+      "events": 15,
+      "mean_acc_per_event": 3.2,
+      "mean_draft_per_event": 5.0,
+      "accepted_per_node": 0.64,
+      "wasted_nodes_per_event": 1.8,
+      "committed_tokens": 63,
+      "decode_span_s": 7.1491,
+      "mean_event_ms": 510.65,
+      "decode_tps": 8.812,
+      "acc_dist": {
+        "0": 2,
+        "1": 2,
+        "2": 1,
+        "3": 2,
+        "4": 2,
+        "5": 6
+      },
+      "prompt_idx": 1,
+      "api_wall_s": 7.975,
+      "completion_tokens": 64
+    }
+  ]
+}
