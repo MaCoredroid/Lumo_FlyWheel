@@ -1,0 +1,23 @@
+{
+  "label": "Fb_splitkv_samebuild_K0K1K2_greedy_after_2cd40698",
+  "rows": [
+    {
+      "k": 0,
+      "len": 700,
+      "sha256_full_decode": "99b8c663102982cf2c1cd781f5110b71105a32922b50d84e52005c65f8b825c3",
+      "full_decode": "Here's a thinking process:\n\n1.  **Understand User Request:**\n   - **Task:** Implement quicksort in Python\n   - **Additional Requirement:** Explain pivot-choice tradeoffs\n\n2.  **Quicksort Implementation (Python):**\n   - Need a clean, standard implementation\n   - Should handle edge cases (empty list, single element)\n   - Can use in-place or out-of-place version. In-place is more efficient and standard for quicksort.\n   - I'll implement an in-place version with a helper function for recursion, plus a clean public interface.\n   - Need to choose a pivot strategy for the implementation. I'll use \"middle element\" or \"last element\" for simplicity, but I'll make it clear and mention that pivot choice"
+    },
+    {
+      "k": 1,
+      "len": 700,
+      "sha256_full_decode": "99b8c663102982cf2c1cd781f5110b71105a32922b50d84e52005c65f8b825c3",
+      "full_decode": "Here's a thinking process:\n\n1.  **Understand User Request:**\n   - **Task:** Implement quicksort in Python\n   - **Additional Requirement:** Explain pivot-choice tradeoffs\n\n2.  **Quicksort Implementation (Python):**\n   - Need a clean, standard implementation\n   - Should handle edge cases (empty list, single element)\n   - Can use in-place or out-of-place version. In-place is more efficient and standard for quicksort.\n   - I'll implement an in-place version with a helper function for recursion, plus a clean public interface.\n   - Need to choose a pivot strategy for the implementation. I'll use \"middle element\" or \"last element\" for simplicity, but I'll make it clear and mention that pivot choice"
+    },
+    {
+      "k": 2,
+      "len": 591,
+      "sha256_full_decode": "7acf271df0017d15b864e37734db1525241cc99c3131821d4e38b47b1ebe04fd",
+      "full_decode": "Here's a thinking process:\n\n1.  **Understand User Request:**\n   - **Task 1:** Implement quicksort in Python.\n   - **Explain:** Explain the pivot-choice tradeoffs.\n   - **Language:** Python.\n   - **Key Components of Quicksort:**\n   - **Algorithm:** Divide and conquer.\n   - **Steps:**\n     1. Choose a pivot.\n     2. Partition the array into elements less than, equal to pivot, and greater than pivot.\n     3. Recursively sort the less-than and greater-than and greater-than parts.\n   4. Combine (empty or single element) -> return.\n   - **Implementation Details:**\n     - In-place vs. out-of"
+    }
+  ]
+}

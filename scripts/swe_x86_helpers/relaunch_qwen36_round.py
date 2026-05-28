@@ -5776,6 +5776,13 @@ def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
     parent_state = self.requests.get(parent_id)
     winner_state = self.requests.get(winner_id)
     if parent_state is None or winner_state is None:
+        _lumo_fb_ir_debug({
+            "event": "split_kv_suffix_commit_copy_missing_state",
+            "parent": parent_id,
+            "winner": winner_id,
+            "has_parent": parent_state is not None,
+            "has_winner": winner_state is not None,
+        })
         return 0
     try:
         start_token = int(parent_state.num_computed_tokens)
