@@ -671,7 +671,8 @@ else:
         # LUMO_FB_RECURRENT_INDEX_DEBUG: per-step recurrent read/write index
         # trace for F_b kernel rows.  The parent/path0 row is row 0 in the
         # active K batch; siblings must never change row 0's read index.
-        if _lumo_fb_kernel_os.environ.get("LUMO_FB_DEBUG") == "1":
+        import os as _lumo_fb_ridx_os
+        if _lumo_fb_ridx_os.environ.get("LUMO_FB_DEBUG") == "1":
             try:
                 import json as _lumo_fb_ridx_json
                 import time as _lumo_fb_ridx_time
