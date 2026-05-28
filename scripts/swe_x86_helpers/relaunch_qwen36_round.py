@@ -2686,10 +2686,23 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
              else roots[1]).reshape(-1)[:1],
         ], dim=0)
         if _lumo_fb_os.environ.get("LUMO_FB_POSITION_TREE", "1") == "1":
+            # Strict-superset invariant: K2 row 0 must be the exact K1 draft
+            # chain. The row-tree batched proposer can perturb row0 under the
+            # wider MTP batch shape, which lowers trunk acceptance even though
+            # verify/commit remains lossless. Preserve correctness first by
+            # splicing the canonical K1 trunk into row0; the later kernel work
+            # can make this a single batch-shape-invariant proposer forward.
+            _lumo_fb_k1_trunk = _lumo_fb_extend_one(
+                self, _lumo_fb_path0_root, positions, base_hidden_states,
+                common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+                num_rejected_tokens_gpu, draft_len=active_depth)
             paths = _lumo_fb_extend_top2_pos01_tree_batched(
                 self, root_vec, positions, base_hidden_states, common_attn_metadata,
                 dict(per_layer_attn_metadata), num_rejected_tokens_gpu,
                 draft_len=active_depth)
+            if paths.shape[0] > 0:
+                paths = paths.clone()
+                paths[0, :active_depth] = _lumo_fb_k1_trunk[0, :active_depth]
             out = paths[:, :active_depth].reshape(1, -1)
             try:
                 if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
