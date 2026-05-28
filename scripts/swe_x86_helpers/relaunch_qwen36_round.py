@@ -5968,7 +5968,11 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
     fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
     fb_kernel_rows = "export LUMO_FB_KERNEL_ROWS=1\n" if os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""
-    fb_batch_invariant = "export VLLM_BATCH_INVARIANT=1\n" if os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""
+    # Batch-invariant vLLM must be enabled through the host-side ModelServer
+    # knob so the launch command also gets a concrete attention backend. A raw
+    # inner-container VLLM_BATCH_INVARIANT export makes vLLM fail at init with
+    # attention_backend=None.
+    fb_batch_invariant = ""
     fb_adaptive = "export LUMO_FB_ADAPTIVE=1\n" if os.environ.get("LUMO_FB_ADAPTIVE") == "1" else ""
     fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_position_tree = f"export LUMO_FB_POSITION_TREE={os.environ['LUMO_FB_POSITION_TREE']}\n" if os.environ.get("LUMO_FB_POSITION_TREE") else ""
@@ -6122,6 +6126,8 @@ def main() -> int:
     args = ap.parse_args()
     is_tree = args.config == "F"
     is_fb = args.config == "Fb"
+    if is_fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+        os.environ["LUMO_BATCH_INVARIANT_VLLM"] = "1"
     if args.tree is not None and not is_tree:
         ap.error("--tree is only valid with --config F")
     tree = (args.tree or _default_tree(args.mtp)) if is_tree else None
