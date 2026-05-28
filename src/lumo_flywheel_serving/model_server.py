@@ -346,7 +346,12 @@ class ModelServer:
         self._wait_vram_free(timeout_s=120, required_utilization=MIN_GPU_MEMORY_UTILIZATION)
         kv_cache_dtype = self._initial_kv_cache_dtype(config)
         gpu_memory_utilization = config.gpu_memory_utilization
-        enforce_eager = False
+        enforce_eager = os.environ.get("LUMO_ENFORCE_EAGER", "").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         low_memory_grace_retries = 0
         while True:
             launch = self._run(
