@@ -4252,6 +4252,23 @@ def _lumo_fb_ir_debug(event):
     except Exception:
         pass
 
+def _lumo_fb_ir_read_internal_max_commit(default_value):
+    try:
+        control = _lumo_fb_ir_os.environ.get("LUMO_FB_CONTROL_FILE")
+        if control:
+            try:
+                with open(control, "r") as _fh:
+                    payload = _lumo_fb_ir_json.load(_fh)
+                if payload.get("internal_max_commit") is not None:
+                    return int(payload.get("internal_max_commit"))
+            except (OSError, ValueError, TypeError, _lumo_fb_ir_json.JSONDecodeError):
+                pass
+        if _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_MAX_COMMIT") is not None:
+            return int(_lumo_fb_ir_os.environ["LUMO_FB_INTERNAL_MAX_COMMIT"])
+    except (ValueError, TypeError):
+        pass
+    return int(default_value)
+
 def _lumo_fb_ir_state_block_ids(self, req_id):
     req_state = self.requests.get(req_id)
     state_idx = self.mamba_state_idx.get(req_id)
@@ -4369,8 +4386,13 @@ def _lumo_fb_ir_set_accept_len(self, req_id, accept_len):
         self.input_batch.num_accepted_tokens_cpu_tensor[idx] = int(accept_len)
         if hasattr(self, "num_accepted_tokens"):
             self.num_accepted_tokens.np[idx] = int(accept_len)
-    except Exception:
-        pass
+    except Exception as e:
+        _lumo_fb_ir_debug({
+            "event": "set_accept_len_error",
+            "rid": req_id,
+            "accept_len": int(accept_len),
+            "error": repr(e),
+        })
 
 def _lumo_fb_ir_mamba_curr_state_idx(self, req_state, num_scheduled_tokens):
     try:
@@ -4497,8 +4519,11 @@ def _lumo_fb_ir_filter_drafts(self, internal_ids):
                     pass
         elif isinstance(toks, list):
             self._draft_token_ids = [toks[i] for i in keep]
-    except Exception:
-        pass
+    except Exception as e:
+        _lumo_fb_ir_debug({
+            "event": "filter_drafts_error",
+            "error": repr(e),
+        })
 
 def _lumo_fb_ir_filter_model_output(model_output, internal_ids):
     if model_output is None or not hasattr(model_output, "req_ids"):
@@ -4760,8 +4785,11 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "rows": rows,
                 "winners": winners,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        _lumo_fb_ir_debug({
+            "event": "prune_after_sample_error",
+            "error": repr(e),
+        })
     if winners:
         self._lumo_fb_ir_last_winners = winners
         scheduler_output.lumo_fb_internal_winners = winners
