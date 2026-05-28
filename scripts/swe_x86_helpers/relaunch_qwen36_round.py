@@ -6017,6 +6017,43 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             winner_idx = req_ids.index(winner_rid) if winner_rid in req_ids else None
             runner_parent_block_ids = None
             runner_parent_mamba_idx = None
+            split_kv_parent_state_applied = False
+            if (winner_is_internal
+                    and _lumo_fb_ir_kernel_rows_enabled()
+                    and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
+                try:
+                    parent_state = self.requests.get(parent)
+                    winner_state = self.requests.get(winner_rid)
+                    if parent_state is not None and winner_state is not None:
+                        _lumo_fb_ir_copy_winner_suffix_kv_to_parent(
+                            self, parent, winner_rid, len(winner_commit_tokens))
+                        try:
+                            _mamba_group_ids = set(
+                                int(_gid) for _gid in self._get_mamba_copy_bufs().mamba_group_ids)
+                        except Exception:
+                            _mamba_group_ids = set()
+                        merged_groups = []
+                        for _gid, _parent_group in enumerate(parent_state.block_ids):
+                            if (_gid < len(winner_state.block_ids)
+                                    and int(_gid) in _mamba_group_ids):
+                                merged_groups.append(list(winner_state.block_ids[_gid]))
+                            else:
+                                merged_groups.append(list(_parent_group))
+                        parent_state.block_ids = tuple(merged_groups)
+                        pidx = self.input_batch.req_id_to_index.get(parent)
+                        if pidx is not None:
+                            self.input_batch.block_table.clear_row(pidx)
+                            self.input_batch.block_table.add_row(parent_state.block_ids, pidx)
+                        if winner_rid in self.mamba_state_idx:
+                            self.mamba_state_idx[parent] = self.mamba_state_idx[winner_rid]
+                        split_kv_parent_state_applied = True
+                except Exception as e:
+                    _lumo_fb_ir_debug({
+                        "event": "split_kv_parent_state_apply_error",
+                        "parent": parent,
+                        "winner": winner_rid,
+                        "error": repr(e),
+                    })
             if winner_idx is not None:
                 try:
                     sampler_output.sampled_token_ids[winner_idx].fill_(-1)
@@ -6030,7 +6067,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     parent_state = self.requests.get(parent)
                     winner_state = self.requests.get(winner_rid)
                     if parent_state is not None and winner_state is not None:
-                        if (_lumo_fb_ir_kernel_rows_enabled()
+                        if (not split_kv_parent_state_applied
+                                and _lumo_fb_ir_kernel_rows_enabled()
                                 and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
                             _lumo_fb_ir_copy_winner_suffix_kv_to_parent(
                                 self, parent, winner_rid, len(winner_commit_tokens))
