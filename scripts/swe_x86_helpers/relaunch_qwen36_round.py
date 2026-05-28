@@ -3554,6 +3554,7 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
         return 0
     seen = set()
     kv_iter = []
+    fallback_iter = list(getattr(self, "kv_caches", []))
     if group_idx is not None:
         try:
             forward_context = self.compilation_config.static_forward_context
@@ -3566,30 +3567,35 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
         except Exception:
             kv_iter = []
     if not kv_iter:
-        kv_iter = list(getattr(self, "kv_caches", []))
-    for kv in kv_iter:
-        if id(kv) in seen:
-            continue
-        seen.add(id(kv))
-        try:
-            if isinstance(kv, list):
-                tensors = kv
-            else:
-                tensors = [kv]
-            for t in tensors:
-                dst_view = t[dst]
-                src_view = t[src]
-                if dst_view.ndim >= 1:
-                    end_slot = min(start_slot + num_slots, int(dst_view.shape[0]))
-                    if end_slot <= start_slot:
-                        continue
-                    dst_view = dst_view[start_slot:end_slot]
-                    src_view = src_view[start_slot:end_slot]
-                dst_views.append(dst_view)
-                src_views.append(src_view)
-                copied_bytes += int(dst_view.numel() * t.element_size())
-        except Exception:
-            pass
+        kv_iter = list(fallback_iter)
+    for _pass_idx, _iter in enumerate((kv_iter, fallback_iter)):
+        if _pass_idx == 1 and dst_views:
+            break
+        if _pass_idx == 1:
+            seen.clear()
+        for kv in _iter:
+            if id(kv) in seen:
+                continue
+            seen.add(id(kv))
+            try:
+                if isinstance(kv, list):
+                    tensors = kv
+                else:
+                    tensors = [kv]
+                for t in tensors:
+                    dst_view = t[dst]
+                    src_view = t[src]
+                    if dst_view.ndim >= 1:
+                        end_slot = min(start_slot + num_slots, int(dst_view.shape[0]))
+                        if end_slot <= start_slot:
+                            continue
+                        dst_view = dst_view[start_slot:end_slot]
+                        src_view = src_view[start_slot:end_slot]
+                    dst_views.append(dst_view)
+                    src_views.append(src_view)
+                    copied_bytes += int(dst_view.numel() * t.element_size())
+            except Exception:
+                pass
     _lumo_fb_foreach_copy_(dst_views, src_views)
     return copied_bytes
 
