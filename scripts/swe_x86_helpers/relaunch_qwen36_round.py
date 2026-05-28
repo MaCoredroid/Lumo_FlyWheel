@@ -4330,7 +4330,11 @@ def _lumo_fb_shared_root_rejection_sample(
                 cu_num_draft_tokens, draft_probs, target_logits,
                 bonus_token_ids, sampling_metadata)
     else:
-        pairs = [(i, i + 1) for i in range(0, batch_size, 2)]
+        if (_lumo_fb_rs_os.environ.get("LUMO_FB_POSITION_TREE") == "1"
+                and batch_size > 2):
+            pairs = [(0, i) for i in range(1, batch_size)]
+        else:
+            pairs = [(i, i + 1) for i in range(0, batch_size, 2)]
 
     is_position_tree = (
         _lumo_fb_rs_os.environ.get("LUMO_FB_POSITION_TREE") == "1"
