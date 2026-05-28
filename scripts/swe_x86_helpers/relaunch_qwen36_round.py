@@ -1088,6 +1088,53 @@ else:
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b row-serial BA projection patch')
 
+text = gl.read_text()
+sentinel = '# LUMO_FB_ROW_SERIAL_GDN_OUT_PROJ'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b row-serial GDN out projection patch already present')
+else:
+    old = '''        core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
+        output[:num_tokens], _ = self.out_proj(core_attn_out)
+'''
+    new = '''        core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
+        # LUMO_FB_ROW_SERIAL_GDN_OUT_PROJ: keep path0 numerically identical to
+        # K=1 by using the same per-row GEMM shape for the GDN output projection
+        # under kernel-row verification.
+        _lumo_fb_out_done = False
+        if _lumo_fb_gdn_proj_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+            try:
+                _lumo_fb_ctx = get_forward_context()
+                _lumo_fb_meta = _lumo_fb_ctx.attn_metadata
+                if isinstance(_lumo_fb_meta, dict):
+                    _lumo_fb_meta = _lumo_fb_meta.get(self.prefix)
+                _lumo_fb_nspec = int(getattr(_lumo_fb_meta, "num_spec_decodes", 0))
+                _lumo_fb_qsl = getattr(_lumo_fb_meta, "spec_query_start_loc", None)
+                if (
+                    _lumo_fb_nspec > 1
+                    and getattr(_lumo_fb_meta, "num_prefills", 0) == 0
+                    and getattr(_lumo_fb_meta, "num_decodes", 0) == 0
+                    and _lumo_fb_qsl is not None
+                ):
+                    _lumo_fb_qsl_cpu = _lumo_fb_qsl[: _lumo_fb_nspec + 1].detach().cpu().tolist()
+                    for _lumo_fb_i in range(_lumo_fb_nspec):
+                        _lumo_fb_s = int(_lumo_fb_qsl_cpu[_lumo_fb_i])
+                        _lumo_fb_e = int(_lumo_fb_qsl_cpu[_lumo_fb_i + 1])
+                        output[_lumo_fb_s:_lumo_fb_e], _ = self.out_proj(
+                            core_attn_out[_lumo_fb_s:_lumo_fb_e])
+                    _lumo_fb_out_done = True
+            except Exception:
+                _lumo_fb_out_done = False
+        if not _lumo_fb_out_done:
+            output[:num_tokens], _ = self.out_proj(core_attn_out)
+'''
+    if old not in text:
+        raise RuntimeError('F_b row-serial GDN out projection anchor not found')
+    text = text.replace(old, new, 1)
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b row-serial GDN out projection patch')
+
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
 sentinel = '# LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK'
