@@ -1089,9 +1089,9 @@ else:
     print('[TRACK-B-PRELAUNCH] applied F_b GDN projection input debug patch')
 
 text = gl.read_text()
-sentinel = '# LUMO_FB_ROW_SERIAL_BA_PROJ'
+sentinel = '# LUMO_FB_BATCH_INVARIANT_BA_PROJ'
 if sentinel in text:
-    print('[TRACK-B-PRELAUNCH] F_b row-serial BA projection patch already present')
+    print('[TRACK-B-PRELAUNCH] F_b batch-invariant BA projection patch already present')
 else:
     old = '''            mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)
             ba, _ = self.in_proj_ba(hidden_states)
@@ -1105,10 +1105,10 @@ else:
 '''
     new = '''            mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)
             ba, _ = self.in_proj_ba(hidden_states)
-            # LUMO_FB_ROW_SERIAL_BA_PROJ: the small BA projection feeds GDN
-            # gating and is batch-shape sensitive under K>1.  Recompute it per
-            # spec row so path0 uses the same GEMM shape as K=1; qkvz remains
-            # batched because diagnostics showed it is stable.
+            # LUMO_FB_BATCH_INVARIANT_BA_PROJ: make the BA projection shape
+            # independent across active K by padding spec rows to a fixed row
+            # group and issuing one batched projection. This preserves the
+            # row-scaled architecture; it is not a per-row projection loop.
             if _lumo_fb_gdn_proj_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
                 try:
                     _lumo_fb_ctx = get_forward_context()
@@ -1124,14 +1124,34 @@ else:
                         and _lumo_fb_qsl is not None
                     ):
                         _lumo_fb_qsl_cpu = _lumo_fb_qsl[: _lumo_fb_nspec + 1].detach().cpu().tolist()
-                        _lumo_fb_ba_parts = []
-                        for _lumo_fb_i in range(_lumo_fb_nspec):
-                            _lumo_fb_s = int(_lumo_fb_qsl_cpu[_lumo_fb_i])
-                            _lumo_fb_e = int(_lumo_fb_qsl_cpu[_lumo_fb_i + 1])
-                            _lumo_fb_ba_i, _ = self.in_proj_ba(hidden_states[_lumo_fb_s:_lumo_fb_e])
-                            _lumo_fb_ba_parts.append(_lumo_fb_ba_i)
-                        if _lumo_fb_ba_parts:
+                        _lumo_fb_spans = [
+                            (int(_lumo_fb_qsl_cpu[_lumo_fb_i]),
+                             int(_lumo_fb_qsl_cpu[_lumo_fb_i + 1]))
+                            for _lumo_fb_i in range(_lumo_fb_nspec)
+                        ]
+                        _lumo_fb_row_len = max((_e - _s for _s, _e in _lumo_fb_spans), default=0)
+                        _lumo_fb_pad_rows = max(
+                            _lumo_fb_nspec,
+                            int(_lumo_fb_gdn_proj_os.environ.get(
+                                "LUMO_FB_PROJ_PAD_ROWS", "4")))
+                        if _lumo_fb_row_len > 0 and _lumo_fb_pad_rows > _lumo_fb_nspec:
+                            _lumo_fb_padded = hidden_states.new_zeros(
+                                (_lumo_fb_pad_rows * _lumo_fb_row_len,
+                                 hidden_states.shape[-1]))
+                            for _lumo_fb_i, (_lumo_fb_s, _lumo_fb_e) in enumerate(_lumo_fb_spans):
+                                _lumo_fb_len = _lumo_fb_e - _lumo_fb_s
+                                _lumo_fb_ps = _lumo_fb_i * _lumo_fb_row_len
+                                _lumo_fb_padded[_lumo_fb_ps:_lumo_fb_ps + _lumo_fb_len] = hidden_states[_lumo_fb_s:_lumo_fb_e]
+                            _lumo_fb_ba_padded, _ = self.in_proj_ba(_lumo_fb_padded)
+                            _lumo_fb_ba_parts = []
+                            for _lumo_fb_i, (_lumo_fb_s, _lumo_fb_e) in enumerate(_lumo_fb_spans):
+                                _lumo_fb_len = _lumo_fb_e - _lumo_fb_s
+                                _lumo_fb_ps = _lumo_fb_i * _lumo_fb_row_len
+                                _lumo_fb_ba_parts.append(_lumo_fb_ba_padded[_lumo_fb_ps:_lumo_fb_ps + _lumo_fb_len])
                             ba = torch.cat(_lumo_fb_ba_parts, dim=0)
+                        elif _lumo_fb_row_len > 0:
+                            _lumo_fb_reshaped = hidden_states[:_lumo_fb_nspec * _lumo_fb_row_len]
+                            ba, _ = self.in_proj_ba(_lumo_fb_reshaped)
                 except Exception:
                     pass
             if _lumo_fb_gdn_proj_do:
@@ -1143,25 +1163,24 @@ else:
             if self.gqa_interleaved_layout:
 '''
     if old not in text:
-        raise RuntimeError('F_b row-serial BA projection anchor not found')
+        raise RuntimeError('F_b batch-invariant BA projection anchor not found')
     text = text.replace(old, new, 1)
     gl.write_text(text)
     import py_compile
     py_compile.compile(str(gl), doraise=True)
-    print('[TRACK-B-PRELAUNCH] applied F_b row-serial BA projection patch')
+    print('[TRACK-B-PRELAUNCH] applied F_b batch-invariant BA projection patch')
 
 text = gl.read_text()
-sentinel = '# LUMO_FB_ROW_SERIAL_GDN_OUT_PROJ'
+sentinel = '# LUMO_FB_BATCH_INVARIANT_GDN_OUT_PROJ'
 if sentinel in text:
-    print('[TRACK-B-PRELAUNCH] F_b row-serial GDN out projection patch already present')
+    print('[TRACK-B-PRELAUNCH] F_b batch-invariant GDN out projection patch already present')
 else:
     old = '''        core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
         output[:num_tokens], _ = self.out_proj(core_attn_out)
 '''
     new = '''        core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
-        # LUMO_FB_ROW_SERIAL_GDN_OUT_PROJ: keep path0 numerically identical to
-        # K=1 by using the same per-row GEMM shape for the GDN output projection
-        # under kernel-row verification.
+        # LUMO_FB_BATCH_INVARIANT_GDN_OUT_PROJ: use one fixed-shape batched
+        # output projection for spec rows, then scatter the real rows back.
         _lumo_fb_out_done = False
         if _lumo_fb_gdn_proj_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
             try:
@@ -1178,24 +1197,46 @@ else:
                     and _lumo_fb_qsl is not None
                 ):
                     _lumo_fb_qsl_cpu = _lumo_fb_qsl[: _lumo_fb_nspec + 1].detach().cpu().tolist()
-                    for _lumo_fb_i in range(_lumo_fb_nspec):
-                        _lumo_fb_s = int(_lumo_fb_qsl_cpu[_lumo_fb_i])
-                        _lumo_fb_e = int(_lumo_fb_qsl_cpu[_lumo_fb_i + 1])
-                        output[_lumo_fb_s:_lumo_fb_e], _ = self.out_proj(
-                            core_attn_out[_lumo_fb_s:_lumo_fb_e])
-                    _lumo_fb_out_done = True
+                    _lumo_fb_spans = [
+                        (int(_lumo_fb_qsl_cpu[_lumo_fb_i]),
+                         int(_lumo_fb_qsl_cpu[_lumo_fb_i + 1]))
+                        for _lumo_fb_i in range(_lumo_fb_nspec)
+                    ]
+                    _lumo_fb_row_len = max((_e - _s for _s, _e in _lumo_fb_spans), default=0)
+                    _lumo_fb_pad_rows = max(
+                        _lumo_fb_nspec,
+                        int(_lumo_fb_gdn_proj_os.environ.get(
+                            "LUMO_FB_PROJ_PAD_ROWS", "4")))
+                    if _lumo_fb_row_len > 0 and _lumo_fb_pad_rows > _lumo_fb_nspec:
+                        _lumo_fb_padded = core_attn_out.new_zeros(
+                            (_lumo_fb_pad_rows * _lumo_fb_row_len,
+                             core_attn_out.shape[-1]))
+                        for _lumo_fb_i, (_lumo_fb_s, _lumo_fb_e) in enumerate(_lumo_fb_spans):
+                            _lumo_fb_len = _lumo_fb_e - _lumo_fb_s
+                            _lumo_fb_ps = _lumo_fb_i * _lumo_fb_row_len
+                            _lumo_fb_padded[_lumo_fb_ps:_lumo_fb_ps + _lumo_fb_len] = core_attn_out[_lumo_fb_s:_lumo_fb_e]
+                        _lumo_fb_out_padded, _ = self.out_proj(_lumo_fb_padded)
+                        for _lumo_fb_i, (_lumo_fb_s, _lumo_fb_e) in enumerate(_lumo_fb_spans):
+                            _lumo_fb_len = _lumo_fb_e - _lumo_fb_s
+                            _lumo_fb_ps = _lumo_fb_i * _lumo_fb_row_len
+                            output[_lumo_fb_s:_lumo_fb_e] = _lumo_fb_out_padded[_lumo_fb_ps:_lumo_fb_ps + _lumo_fb_len]
+                        _lumo_fb_out_done = True
+                    elif _lumo_fb_row_len > 0:
+                        output[:_lumo_fb_nspec * _lumo_fb_row_len], _ = self.out_proj(
+                            core_attn_out[:_lumo_fb_nspec * _lumo_fb_row_len])
+                        _lumo_fb_out_done = True
             except Exception:
                 _lumo_fb_out_done = False
         if not _lumo_fb_out_done:
             output[:num_tokens], _ = self.out_proj(core_attn_out)
 '''
     if old not in text:
-        raise RuntimeError('F_b row-serial GDN out projection anchor not found')
+        raise RuntimeError('F_b batch-invariant GDN out projection anchor not found')
     text = text.replace(old, new, 1)
     gl.write_text(text)
     import py_compile
     py_compile.compile(str(gl), doraise=True)
-    print('[TRACK-B-PRELAUNCH] applied F_b row-serial GDN out projection patch')
+    print('[TRACK-B-PRELAUNCH] applied F_b batch-invariant GDN out projection patch')
 
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
