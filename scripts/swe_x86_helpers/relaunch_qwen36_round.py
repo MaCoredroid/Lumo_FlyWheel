@@ -4519,6 +4519,37 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id):
         if hasattr(manager, "_allocated_block_reqs"):
             manager._allocated_block_reqs.add(parent_id)
 
+def _lumo_fb_ir_mirror_manager_blocks_from_ids(self, req_id, block_id_groups):
+    if not block_id_groups:
+        return False
+    ok = False
+    for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
+        if group_idx >= len(block_id_groups):
+            continue
+        block_ids = list(block_id_groups[group_idx] or [])
+        if not block_ids:
+            continue
+        existing = list(manager.req_to_blocks.get(req_id, ()))
+        by_id = {blk.block_id: blk for blk in existing}
+        new_blocks = []
+        for block_id in block_ids:
+            block = by_id.get(int(block_id))
+            if block is None:
+                new_blocks = []
+                break
+            new_blocks.append(block)
+        if not new_blocks:
+            continue
+        manager.req_to_blocks[req_id] = new_blocks
+        manager.num_cached_block[req_id] = min(
+            manager.num_cached_block.get(req_id, len(new_blocks)),
+            len(new_blocks),
+        )
+        if hasattr(manager, "_allocated_block_reqs"):
+            manager._allocated_block_reqs.add(req_id)
+        ok = True
+    return ok
+
 def _lumo_fb_ir_promote_internal_row_state(self, parent_id, row_id, accepted_drafts):
     if not _lumo_fb_ir_kernel_rows_enabled():
         return
@@ -4953,10 +4984,21 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
           and _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS_NOACTIVE_PROMOTE", "1") != "0"
           and hasattr(model_runner_output, "req_ids")):
         try:
+            runner_promoted = getattr(
+                model_runner_output, "lumo_fb_noactive_promoted", {}) or {}
             for req_id, toks in zip(model_runner_output.req_ids, model_runner_output.sampled_token_ids):
                 if req_id in scheduler_output.num_scheduled_tokens:
-                    _lumo_fb_ir_promote_manager_state(
-                        self, req_id, _lumo_fb_ir_accept_from_generated(toks))
+                    promoted = runner_promoted.get(req_id)
+                    if promoted and _lumo_fb_ir_mirror_manager_blocks_from_ids(
+                            self, req_id, promoted.get("runner_block_ids")):
+                        _lumo_fb_ir_sched_debug({
+                            "event": "kernel_noactive_mirror_runner_state",
+                            "rid": req_id,
+                            "accepted": int(promoted.get("accepted", 0)),
+                        })
+                    else:
+                        _lumo_fb_ir_promote_manager_state(
+                            self, req_id, _lumo_fb_ir_accept_from_generated(toks))
         except Exception as e:
             _lumo_fb_ir_sched_debug({
                 "event": "kernel_promote_manager_state_error",
@@ -5851,6 +5893,7 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                 model_output = getattr(output, "model_runner_output", output)
                 raw_req_ids = list(getattr(model_output, "req_ids", []) or [])
                 raw_samples = list(getattr(model_output, "sampled_token_ids", []) or [])
+                noactive_promoted = {}
                 # Keep the runner's cached block table in sync with the
                 # scheduler-side manager promotion for K=1/no-internal events.
                 skip_once = getattr(
@@ -5871,8 +5914,25 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                         "sampled": [int(t) for t in list(toks)[:8] if int(t) != -1],
                         "accepted": int(_lumo_fb_ir_accepted_from_tokens(toks)),
                     })
+                    _accepted = _lumo_fb_ir_accepted_from_tokens(toks)
                     _lumo_fb_ir_kernel_promote_state(
-                        self, rid, _lumo_fb_ir_accepted_from_tokens(toks))
+                        self, rid, _accepted)
+                    try:
+                        _state = self.requests.get(rid)
+                        if _state is not None:
+                            noactive_promoted[rid] = {
+                                "accepted": int(_accepted),
+                                "runner_block_ids": tuple(
+                                    [list(group) for group in _state.block_ids]),
+                            }
+                    except Exception:
+                        pass
+                if noactive_promoted:
+                    model_output.lumo_fb_noactive_promoted = noactive_promoted
+                    if hasattr(output, "model_runner_output"):
+                        output.model_runner_output = model_output
+                    else:
+                        output = model_output
                 self.input_batch.refresh_metadata()
             except Exception as e:
                 _lumo_fb_ir_debug({
