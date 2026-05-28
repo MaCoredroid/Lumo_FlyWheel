@@ -3585,7 +3585,17 @@ def _lumo_fb_copy_block_slot_range(self, src, dst, start_slot, num_slots,
                 for t in tensors:
                     dst_view = t[dst]
                     src_view = t[src]
-                    if dst_view.ndim >= 1:
+                    if (
+                        dst_view.ndim >= 2
+                        and int(dst_view.shape[0]) == 2
+                        and int(dst_view.shape[1]) > start_slot
+                    ):
+                        end_slot = min(start_slot + num_slots, int(dst_view.shape[1]))
+                        if end_slot <= start_slot:
+                            continue
+                        dst_view = dst_view[:, start_slot:end_slot]
+                        src_view = src_view[:, start_slot:end_slot]
+                    elif dst_view.ndim >= 1:
                         end_slot = min(start_slot + num_slots, int(dst_view.shape[0]))
                         if end_slot <= start_slot:
                             continue
