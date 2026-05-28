@@ -5870,6 +5870,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
     fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
     fb_depth = f"export LUMO_FB_DEPTH={os.environ['LUMO_FB_DEPTH']}\n" if os.environ.get("LUMO_FB_DEPTH") else ""
+    fb_debug = "export LUMO_FB_DEBUG=1\n" if os.environ.get("LUMO_FB_DEBUG") == "1" else ""
     fb_control = os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
     fb_seed_control = """python3 - <<'LUMOFBCTRL'
 import json, os, pathlib, time
@@ -5888,7 +5889,7 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\nexport LUMO_FB_DEBUG=1\n{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
     return dbg + fb_env + base + _SPEC_TRACE_BLOCK + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "") + (_FB_KERNEL_ROWS_BLOCK if fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else "")
 
 
