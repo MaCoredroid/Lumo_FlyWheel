@@ -4798,6 +4798,13 @@ def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
     parent_state = self.requests.get(parent_id)
     winner_state = self.requests.get(winner_id)
     if parent_state is None or winner_state is None:
+        _lumo_fb_ir_debug({
+            "event": "split_kv_suffix_commit_copy_missing_state",
+            "parent": parent_id,
+            "winner": winner_id,
+            "has_parent": parent_state is not None,
+            "has_winner": winner_state is not None,
+        })
         return 0
     try:
         start_token = int(parent_state.num_computed_tokens)
@@ -6020,12 +6027,15 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                                 and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
                             _lumo_fb_ir_copy_winner_suffix_kv_to_parent(
                                 self, parent, winner_rid, len(winner_commit_tokens))
+                            try:
+                                _mamba_group_ids = set(
+                                    int(_gid) for _gid in self._get_mamba_copy_bufs().mamba_group_ids)
+                            except Exception:
+                                _mamba_group_ids = set()
                             merged_groups = []
                             for _gid, _parent_group in enumerate(parent_state.block_ids):
                                 if (_gid < len(winner_state.block_ids)
-                                        and getattr(
-                                            self.kv_cache_manager.coordinator.single_type_managers[_gid],
-                                            "mamba_cache_mode", None) == "align"):
+                                        and int(_gid) in _mamba_group_ids):
                                     merged_groups.append(list(winner_state.block_ids[_gid]))
                                 else:
                                     merged_groups.append(list(_parent_group))
