@@ -4348,6 +4348,14 @@ def _lumo_fb_ir_read_internal_max_commit(default_value):
         value = default_value
     return max(0, int(value))
 
+def _lumo_fb_ir_default_internal_max_commit():
+    try:
+        return int(_lumo_fb_ir_os.environ.get(
+            "LUMO_FB_TREE_BRANCH_DEPTH",
+            _lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", "2")))
+    except Exception:
+        return 2
+
 def _lumo_fb_ir_sched_debug(event):
     if _lumo_fb_ir_os.environ.get("LUMO_FB_DEBUG") != "1":
         return
@@ -5533,11 +5541,13 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 tree_acc = min(int(tree_acc), int(raw_acc))
                 if rid != parent:
                     # Bound the row-tree to the certified internal branch
-                    # depth. Deeper internal continuation still needs kernel
-                    # work; parent/K1 remains full-depth n=5.
+                    # depth. This must track the actual row-tree branch depth:
+                    # a stale lower cap makes K>=2 fail the strict-superset
+                    # gate even when a sibling matched more target positions.
                     tree_acc = min(
                         tree_acc,
-                        _lumo_fb_ir_read_internal_max_commit(2))
+                        _lumo_fb_ir_read_internal_max_commit(
+                            _lumo_fb_ir_default_internal_max_commit()))
                 scored.append((rid, valid, raw_acc, draft, tree_acc))
             scored.sort(key=lambda item: (item[4], 0 if item[0] == parent else -1), reverse=True)
             winner_rid, winner_tokens, winner_raw_acc, winner_draft, winner_acc = scored[0]
