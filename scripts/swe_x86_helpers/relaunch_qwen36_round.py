@@ -655,6 +655,68 @@ else:
     py_compile.compile(str(cc), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_b kernel-row causal_conv read hook')
 
+text = gl.read_text()
+sentinel = '# LUMO_FB_RECURRENT_INDEX_DEBUG'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b recurrent index debug already present')
+else:
+    old = '''        num_actual_tokens = attn_metadata.num_actual_tokens
+        num_accepted_tokens = attn_metadata.num_accepted_tokens
+
+        mixed_qkv = mixed_qkv[:num_actual_tokens]
+'''
+    new = '''        num_actual_tokens = attn_metadata.num_actual_tokens
+        num_accepted_tokens = attn_metadata.num_accepted_tokens
+
+        # LUMO_FB_RECURRENT_INDEX_DEBUG: per-step recurrent read/write index
+        # trace for F_b kernel rows.  The parent/path0 row is row 0 in the
+        # active K batch; siblings must never change row 0's read index.
+        if _lumo_fb_kernel_os.environ.get("LUMO_FB_DEBUG") == "1":
+            try:
+                import json as _lumo_fb_ridx_json
+                import time as _lumo_fb_ridx_time
+                def _lumo_fb_ridx_head(_value, _limit=24):
+                    if _value is None:
+                        return None
+                    if hasattr(_value, "detach"):
+                        _tensor = _value.detach()
+                        return {
+                            "shape": list(_tensor.shape),
+                            "head": _tensor.reshape(-1).cpu().tolist()[:_limit],
+                        }
+                    return _value
+                with open("/logs/fb_recurrent_index_debug.jsonl", "a", buffering=1) as _lumo_fb_ridx_fh:
+                    _lumo_fb_ridx_fh.write(_lumo_fb_ridx_json.dumps({
+                        "event": "gdn_recurrent_indices",
+                        "ts": round(_lumo_fb_ridx_time.time(), 4),
+                        "layer_idx": int(self.layer_idx) if self.layer_idx is not None else None,
+                        "prefix": str(getattr(self, "prefix", "")),
+                        "num_actual_tokens": int(num_actual_tokens),
+                        "num_spec_decodes": int(getattr(attn_metadata, "num_spec_decodes", 0)),
+                        "num_decodes": int(getattr(attn_metadata, "num_decodes", 0)),
+                        "num_prefills": int(getattr(attn_metadata, "num_prefills", 0)),
+                        "spec_query_start_loc": _lumo_fb_ridx_head(spec_query_start_loc),
+                        "spec_sequence_masks": _lumo_fb_ridx_head(spec_sequence_masks),
+                        "spec_token_indx": _lumo_fb_ridx_head(spec_token_indx),
+                        "spec_initial_state_indices_tensor": _lumo_fb_ridx_head(spec_initial_state_indices_tensor),
+                        "spec_state_indices_tensor": _lumo_fb_ridx_head(spec_state_indices_tensor),
+                        "spec_initial_state_slot_tensor": _lumo_fb_ridx_head(spec_initial_state_slot_tensor),
+                        "spec_write_state_slot_tensor": _lumo_fb_ridx_head(spec_write_state_slot_tensor),
+                        "num_accepted_tokens": _lumo_fb_ridx_head(num_accepted_tokens),
+                    }) + chr(10))
+            except Exception:
+                pass
+
+        mixed_qkv = mixed_qkv[:num_actual_tokens]
+'''
+    if old not in text:
+        raise RuntimeError('F_b recurrent index debug anchor not found')
+    text = text.replace(old, new, 1)
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b recurrent index debug patch')
+
 ma = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/abstract.py')
 text = ma.read_text()
 sentinel = '# LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK'
