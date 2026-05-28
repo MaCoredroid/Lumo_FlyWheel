@@ -44,20 +44,6 @@ else:
         '    ) -> SpecDecodingStats | None:',
         '        ' + sentinel,
         '        import json as _lj, time as _lt, os as _lo',
-        '        if _lo.environ.get("LUMO_FB_ASSERT_WIDTH") == "1":',
-        '            _ctrl_depth = None',
-        '            try:',
-        '                _ctrl_path = _lo.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")',
-        '                if _lo.path.exists(_ctrl_path):',
-        '                    with open(_ctrl_path) as _cf:',
-        '                        _ctrl_payload = _lj.load(_cf)',
-        '                    _ctrl_depth = int(_ctrl_payload.get("depth")) if _ctrl_payload.get("depth") is not None else None',
-        '                elif _lo.environ.get("LUMO_FB_DEPTH"):',
-        '                    _ctrl_depth = int(_lo.environ.get("LUMO_FB_DEPTH"))',
-        '            except Exception:',
-        '                _ctrl_depth = None',
-        '            if _ctrl_depth is not None and int(num_draft_tokens) != int(_ctrl_depth):',
-        '                raise RuntimeError(f"LUMO_FB_ASSERT_WIDTH failed: verify_width={num_draft_tokens} active_depth={_ctrl_depth}")',
         '        try:',
         '            global _LUMO_SPEC_FH',
         '            try:',
@@ -76,6 +62,26 @@ else:
     py_compile.compile(str(p), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied per-agent spec-decode step trace patch')
 LUMOSPECTRACE
+'''
+
+_NO_STALE_FB_PATCHES_BLOCK = r'''
+python3 - <<'LUMONOSTALEFB'
+from pathlib import Path
+root = Path('/usr/local/lib/python3.12/dist-packages/vllm')
+hits = []
+for path in root.rglob('*.py'):
+    try:
+        text = path.read_text(errors='ignore')
+    except Exception:
+        continue
+    if 'LUMO_FB' in text:
+        hits.append(str(path.relative_to(root)))
+if hits:
+    raise RuntimeError(
+        'Non-Fb launch found stale F_b vLLM source patches: '
+        + ', '.join(hits[:20]))
+print('[TRACK-B-PRELAUNCH] no stale F_b vLLM source patches found')
+LUMONOSTALEFB
 '''
 
 _QWEN36_FP8_CONFIG_FIX_BLOCK = r'''
@@ -6214,7 +6220,8 @@ print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
     fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
-    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + dbg + fb_env + base + _SPEC_TRACE_BLOCK
+    stale_fb_guard = "" if fb else _NO_STALE_FB_PATCHES_BLOCK
+    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + base + _SPEC_TRACE_BLOCK
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""))
 
