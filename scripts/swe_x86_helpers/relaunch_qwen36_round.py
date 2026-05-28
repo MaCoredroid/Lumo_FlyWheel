@@ -3913,8 +3913,105 @@ def _lumo_fb_shared_root_rejection_sample(
     else:
         pairs = [(i, i + 1) for i in range(0, batch_size, 2)]
 
+    is_position_tree = (
+        _lumo_fb_rs_os.environ.get("LUMO_FB_POSITION_TREE") == "1"
+        and batch_size % 4 == 0
+        and fb_depth >= 2
+    )
     if sampling_metadata.all_greedy:
-        target_argmax = target_logits.argmax(dim=-1).to(torch.int32)
+        greedy_by_req = [True] * batch_size
+    elif sampling_metadata.all_random:
+        greedy_by_req = [False] * batch_size
+    else:
+        greedy_by_req = (sampling_metadata.temperature == GREEDY_TEMPERATURE).detach().cpu().tolist()
+
+    target_argmax = target_logits.argmax(dim=-1).to(torch.int32)
+    target_probs = None
+    uniform_probs = None
+    recovered_token_ids = None
+    if not sampling_metadata.all_greedy:
+        target_probs = target_logits.softmax(dim=-1, dtype=torch.float32)
+        uniform_probs = generate_uniform_probs(
+            draft_token_ids.shape[0], num_draft_tokens,
+            sampling_metadata.generators, device)
+        recovered_token_ids = sample_recovered_tokens(
+            max_spec_len, num_draft_tokens, cu_num_draft_tokens,
+            draft_token_ids, draft_probs, target_probs, sampling_metadata, device)
+
+    def _lumo_fb_row_start(req_idx):
+        return 0 if req_idx == 0 else int(cu_num_draft_tokens[req_idx - 1].item())
+
+    def _lumo_fb_logical_target(row_idx, pos):
+        start = _lumo_fb_row_start(row_idx)
+        tok_idx = start + pos
+        if greedy_by_req[row_idx]:
+            return target_argmax[tok_idx]
+        return _lumo_fb_sample_from_probs(
+            target_probs[tok_idx], sampling_metadata.generators.get(row_idx))
+
+    if is_position_tree:
+        # Top-2-at-position-0/1 tree rows are laid out in groups of four:
+        # [root0/child0, root0/child1, root1/child0, root1/child1].  The root
+        # target sample is one logical request token shared by all four rows;
+        # the depth-1 sample is shared by the two rows with the same root.
+        for group_start in range(0, batch_size, 4):
+            group_rows = list(range(group_start, group_start + 4))
+            shared_root = _lumo_fb_logical_target(group_rows[0], 0)
+            child_samples = {
+                0: _lumo_fb_logical_target(group_rows[0], 1),
+                2: _lumo_fb_logical_target(group_rows[2], 1),
+            }
+            for local_idx, req_idx in enumerate(group_rows):
+                start = _lumo_fb_row_start(req_idx)
+                rejected = False
+                root_draft = draft_token_ids[start].to(torch.int32)
+                if int(root_draft.item()) == int(shared_root.item()):
+                    output_token_ids[req_idx, 0] = root_draft
+                else:
+                    output_token_ids[req_idx, 0] = shared_root
+                    rejected = True
+                if rejected:
+                    continue
+
+                child_group = 0 if local_idx < 2 else 2
+                shared_child = child_samples[child_group]
+                child_draft = draft_token_ids[start + 1].to(torch.int32)
+                if int(child_draft.item()) == int(shared_child.item()):
+                    output_token_ids[req_idx, 1] = child_draft
+                else:
+                    output_token_ids[req_idx, 1] = shared_child
+                    rejected = True
+                if rejected:
+                    continue
+
+                for pos in range(2, fb_depth):
+                    tok_idx = start + pos
+                    draft_id = draft_token_ids[tok_idx].to(torch.int32)
+                    if greedy_by_req[req_idx]:
+                        tok = target_argmax[tok_idx]
+                        output_token_ids[req_idx, pos] = tok
+                        if int(draft_id.item()) != int(tok.item()):
+                            rejected = True
+                            break
+                        continue
+                    target_prob = target_probs[tok_idx, draft_id.to(torch.int64)]
+                    uniform_prob = uniform_probs[tok_idx]
+                    if target_prob > 0 and target_prob >= uniform_prob:
+                        output_token_ids[req_idx, pos] = draft_id
+                    else:
+                        output_token_ids[req_idx, pos] = recovered_token_ids[tok_idx]
+                        rejected = True
+                        break
+                if not rejected:
+                    output_token_ids[req_idx, fb_depth] = bonus_token_ids[req_idx, 0]
+        _lumo_fb_sampler_debug(
+            "shared_tree_position_tree",
+            draft_token_ids, num_draft_tokens, max_spec_len,
+            cu_num_draft_tokens, target_logits, bonus_token_ids,
+            sampling_metadata, output_token_ids)
+        return output_token_ids
+
+    if sampling_metadata.all_greedy:
         for parent_idx, sibling_idx in pairs:
             parent_start = 0 if parent_idx == 0 else int(cu_num_draft_tokens[parent_idx - 1].item())
             shared_root = target_argmax[parent_start]
@@ -3935,20 +4032,6 @@ def _lumo_fb_shared_root_rejection_sample(
             cu_num_draft_tokens, target_logits, bonus_token_ids,
             sampling_metadata, output_token_ids)
         return output_token_ids
-
-    if sampling_metadata.all_random:
-        greedy_by_req = [False] * batch_size
-    else:
-        greedy_by_req = (sampling_metadata.temperature == GREEDY_TEMPERATURE).detach().cpu().tolist()
-
-    target_probs = target_logits.softmax(dim=-1, dtype=torch.float32)
-    uniform_probs = generate_uniform_probs(
-        draft_token_ids.shape[0], num_draft_tokens,
-        sampling_metadata.generators, device)
-    recovered_token_ids = sample_recovered_tokens(
-        max_spec_len, num_draft_tokens, cu_num_draft_tokens,
-        draft_token_ids, draft_probs, target_probs, sampling_metadata, device)
-    target_argmax = target_logits.argmax(dim=-1).to(torch.int32)
 
     for parent_idx, sibling_idx in pairs:
         start0 = 0 if parent_idx == 0 else int(cu_num_draft_tokens[parent_idx - 1].item())
