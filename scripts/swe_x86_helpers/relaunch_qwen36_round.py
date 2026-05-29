@@ -8293,9 +8293,8 @@ LUMOFBCTRL
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
-            + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
+            + (tree_blocks if tree else "") + (_FB_BLOCK if (fb or fa_unique) else "")
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")
-            + (_FB_INTERNAL_ROWS_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else ""))
 
 
