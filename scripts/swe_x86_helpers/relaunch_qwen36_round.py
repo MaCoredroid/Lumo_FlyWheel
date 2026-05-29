@@ -2314,12 +2314,150 @@ def _lumo_fb_policy_from_logits(logits, max_k=None):
     except Exception:
         return 1, {"fb_policy_k": 1, "fb_policy_reason": "policy_error"}
 
+def _lumo_fb_alt_record_from_logits(logits, row0_token, position):
+    try:
+        row = logits.reshape(-1, logits.shape[-1])[:1].float()
+        topn = min(8, int(row.shape[-1]))
+        vals, idx = _lumo_fb_torch.topk(row, topn, dim=-1)
+        probs = _lumo_fb_torch.softmax(vals, dim=-1)
+        row0 = int(row0_token.reshape(-1)[0].item())
+        top_tokens = [int(x) for x in idx[0].detach().cpu().tolist()]
+        top_probs = [float(x) for x in probs[0].detach().cpu().tolist()]
+        row0_p = 0.0
+        alt_tok = row0
+        alt_p = 0.0
+        for tok, prob in zip(top_tokens, top_probs):
+            if tok == row0:
+                row0_p = float(prob)
+                break
+        for tok, prob in zip(top_tokens, top_probs):
+            if tok != row0 and tok != 0:
+                alt_tok = int(tok)
+                alt_p = float(prob)
+                break
+        if row0_p <= 0.0 and top_tokens and top_tokens[0] == row0:
+            row0_p = float(top_probs[0])
+        gap = float(row0_p - alt_p)
+        ratio = float(alt_p / max(row0_p, 1e-9))
+        return {
+            "position": int(position),
+            "row0_token": row0,
+            "alt_token": int(alt_tok),
+            "row0_p": row0_p,
+            "alt_p": alt_p,
+            "gap": gap,
+            "ratio": ratio,
+            "top_tokens": top_tokens,
+            "top_probs": top_probs,
+        }
+    except Exception as exc:
+        return {
+            "position": int(position),
+            "row0_token": int(row0_token.reshape(-1)[0].item()),
+            "alt_token": int(row0_token.reshape(-1)[0].item()),
+            "row0_p": 0.0,
+            "alt_p": 0.0,
+            "gap": 0.0,
+            "ratio": 0.0,
+            "error": repr(exc),
+        }
+
+def _lumo_fb_build_free_row1(row0, records):
+    row0_1d = row0.reshape(-1)
+    depth = int(row0_1d.numel())
+    usable = [rec for rec in records[:depth]
+              if int(rec.get("alt_token", rec.get("row0_token", -1))) != int(rec.get("row0_token", -1))]
+    if not usable:
+        return row0.clone(), {
+            "row1_enabled": False,
+            "flip_pos": -1,
+            "gate_reason": "no_cached_alt",
+            "candidate_valid": False,
+        }
+    p1_max = float(_lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1_P1_MAX", "0.45"))
+    ratio_min = float(_lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1_RATIO_MIN", "0.50"))
+    low_conf = [
+        rec for rec in usable
+        if float(rec.get("row0_p", 0.0)) < p1_max
+        and float(rec.get("ratio", 0.0)) > ratio_min
+    ]
+    pool = low_conf if low_conf else usable
+    best = max(pool, key=lambda rec: (
+        float(rec.get("ratio", 0.0)),
+        float(rec.get("alt_p", 0.0)),
+        -int(rec.get("position", 0)),
+    ))
+    flip_pos = int(best.get("position", -1))
+    row1 = row0.clone()
+    if 0 <= flip_pos < depth:
+        row1.reshape(-1)[flip_pos] = int(best["alt_token"])
+    always = _lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1_ALWAYS") == "1"
+    gated = bool(low_conf)
+    enabled = always or gated
+    return row1, {
+        "row1_enabled": bool(enabled),
+        "flip_pos": int(flip_pos),
+        "gate_reason": (
+            "always_on"
+            if always else
+            (f"low_conf_pos{flip_pos}" if gated else "gate_closed")
+        ),
+        "candidate_valid": True,
+    }
+
+def _lumo_fb_free_row1_event(active_depth, row0, row1, records, decision,
+                             requested_k, verified_rows, fb_proposer_us,
+                             policy_info=None):
+    row0_list = [int(x) for x in row0.reshape(-1)[:active_depth].detach().cpu().tolist()]
+    row1_list = [int(x) for x in row1.reshape(-1)[:active_depth].detach().cpu().tolist()]
+    rows_generated = 2 if decision.get("candidate_valid") else 1
+    return {
+        "event": "fb_free_row1_decision",
+        "active_depth": int(active_depth),
+        "active_k": int(requested_k),
+        "row0": row0_list,
+        "row1": row1_list,
+        "row1_enabled": bool(decision.get("row1_enabled", False)),
+        "row1_source": "mtp_cached_alt",
+        "flip_pos": int(decision.get("flip_pos", -1)),
+        "proposer_free": True,
+        "extra_extend_one_calls": 0,
+        "position_tree_enabled": False,
+        "generated_rows": int(rows_generated if verified_rows > 1 else verified_rows),
+        "candidate_rows": int(rows_generated),
+        "verified_rows": int(verified_rows),
+        "row0_p": [round(float(rec.get("row0_p", 0.0)), 6) for rec in records[:active_depth]],
+        "row1_alt_p": [round(float(rec.get("alt_p", 0.0)), 6) for rec in records[:active_depth]],
+        "row0_alt_ratio": [round(float(rec.get("ratio", 0.0)), 6) for rec in records[:active_depth]],
+        "gate_reason": str(decision.get("gate_reason", "")),
+        "fb_proposer_us": int(fb_proposer_us),
+        "policy": policy_info or {},
+    }
+
+def _lumo_fb_debug_write(event):
+    if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
+        return
+    try:
+        global _LUMO_FB_DBG_FH
+        try:
+            _LUMO_FB_DBG_FH
+        except NameError:
+            _LUMO_FB_DBG_FH = open("/logs/fb_debug.jsonl", "a", buffering=1)
+        _LUMO_FB_DBG_FH.write(_lumo_fb_json.dumps(event) + chr(10))
+    except Exception:
+        pass
+
 def _lumo_fb_extend_one(self, root_token, base_positions, base_hidden_states,
                         base_common_attn_metadata, batch_size, per_layer_attn_metadata,
-                        num_rejected_tokens_gpu, draft_len=None):
+                        num_rejected_tokens_gpu, draft_len=None,
+                        return_free_row1_metadata=False, root_logits=None):
     if draft_len is None:
         draft_len = self.num_speculative_tokens
     draft_token_ids_list = [root_token]
+    free_row1_records = []
+    if return_free_row1_metadata and root_logits is not None:
+        free_row1_records.append(
+            _lumo_fb_alt_record_from_logits(root_logits, root_token, 0))
     positions = base_positions.clone()
     hidden_states = base_hidden_states.clone()
     cad = _lumo_fb_replace(
@@ -2415,9 +2553,22 @@ def _lumo_fb_extend_one(self, root_token, base_positions, base_hidden_states,
             else:
                 last_hidden_states, hidden_states = ret_hidden_states
         hidden_states = hidden_states[:batch_size]
-        draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
+        if return_free_row1_metadata:
+            step_logits = _lumo_fb_sample_logits(self, last_hidden_states[:batch_size])
+            if step_logits is None:
+                draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
+            else:
+                draft_token_ids = _lumo_fb_torch.argmax(step_logits, dim=-1).to(_lumo_fb_torch.int64)
+                free_row1_records.append(
+                    _lumo_fb_alt_record_from_logits(
+                        step_logits, draft_token_ids, token_index + 1))
+        else:
+            draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
         draft_token_ids_list.append(draft_token_ids)
-    return _lumo_fb_torch.stack(draft_token_ids_list, dim=1)
+    out = _lumo_fb_torch.stack(draft_token_ids_list, dim=1)
+    if return_free_row1_metadata:
+        return out, free_row1_records
+    return out
 
 def _lumo_fb_repeat_cpu_shadow(value, k):
     if value is None:
@@ -2887,6 +3038,45 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
     _lumo_fb_path0_root = raw_roots[0] if (
         policy_k == 1 or _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
     ) else roots[0]
+    if (requested_k >= 2
+            and _lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1") == "1"):
+        path0, free_records = _lumo_fb_extend_one(
+            self, _lumo_fb_path0_root, positions, base_hidden_states,
+            common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+            num_rejected_tokens_gpu, draft_len=active_depth,
+            return_free_row1_metadata=True, root_logits=logits)
+        path0 = path0[:, :active_depth]
+        while len(free_records) < active_depth:
+            pos = len(free_records)
+            tok = path0.reshape(-1)[pos]
+            free_records.append({
+                "position": int(pos),
+                "row0_token": int(tok.item()),
+                "alt_token": int(tok.item()),
+                "row0_p": 0.0,
+                "alt_p": 0.0,
+                "gap": 0.0,
+                "ratio": 0.0,
+                "error": "missing_logits",
+            })
+        path1, free_decision = _lumo_fb_build_free_row1(path0, free_records)
+        shadow = _lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1_SHADOW") == "1"
+        active_row1 = bool(free_decision.get("row1_enabled", False)) and not shadow
+        verified_rows = 2 if active_row1 else 1
+        out = (_lumo_fb_torch.cat([path0, path1[:, :active_depth]], dim=1)
+               if active_row1 else path0)
+        _lumo_fb_debug_write(_lumo_fb_free_row1_event(
+            active_depth=active_depth,
+            row0=path0,
+            row1=path1[:, :active_depth],
+            records=free_records,
+            decision=free_decision,
+            requested_k=requested_k,
+            verified_rows=verified_rows,
+            fb_proposer_us=int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
+            policy_info=policy_info,
+        ))
+        return out
     if policy_k == 1:
         path0 = _lumo_fb_extend_one(
             self, _lumo_fb_path0_root, positions, base_hidden_states,
@@ -6973,6 +7163,11 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_position_tree = f"export LUMO_FB_POSITION_TREE={os.environ['LUMO_FB_POSITION_TREE']}\n" if os.environ.get("LUMO_FB_POSITION_TREE") else ""
     fb_tree_branch_depth = f"export LUMO_FB_TREE_BRANCH_DEPTH={os.environ['LUMO_FB_TREE_BRANCH_DEPTH']}\n" if os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH") else ""
+    fb_free_row1 = "export LUMO_FB_FREE_ROW1=1\n" if os.environ.get("LUMO_FB_FREE_ROW1") == "1" else ""
+    fb_free_row1_shadow = "export LUMO_FB_FREE_ROW1_SHADOW=1\n" if os.environ.get("LUMO_FB_FREE_ROW1_SHADOW") == "1" else ""
+    fb_free_row1_always = "export LUMO_FB_FREE_ROW1_ALWAYS=1\n" if os.environ.get("LUMO_FB_FREE_ROW1_ALWAYS") == "1" else ""
+    fb_free_row1_p1 = f"export LUMO_FB_FREE_ROW1_P1_MAX={os.environ['LUMO_FB_FREE_ROW1_P1_MAX']}\n" if os.environ.get("LUMO_FB_FREE_ROW1_P1_MAX") else ""
+    fb_free_row1_ratio = f"export LUMO_FB_FREE_ROW1_RATIO_MIN={os.environ['LUMO_FB_FREE_ROW1_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_FREE_ROW1_RATIO_MIN") else ""
     fb_sampler_trace = "export LUMO_FB_SAMPLER_TRACE=1\n" if os.environ.get("LUMO_FB_SAMPLER_TRACE") == "1" else ""
     fb_no_kv_prefix_copy = "export LUMO_FB_NO_KV_PREFIX_COPY=1\n" if os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1" else ""
     fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
@@ -6998,7 +7193,7 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
     stale_fb_guard = "" if fb else _NO_STALE_FB_PATCHES_BLOCK
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + base + _SPEC_TRACE_BLOCK
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
