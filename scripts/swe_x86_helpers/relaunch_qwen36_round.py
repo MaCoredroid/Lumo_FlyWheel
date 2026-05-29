@@ -4796,23 +4796,32 @@ def _lumo_fb_ir_alloc_blocks(self, parent, row_id, num_scheduled_tokens):
     self._lumo_fb_ir_row_block_ids[row_id] = tuple(row_block_ids)
     return tuple(row_block_ids), copies
 
-def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id):
+def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
+                                         target_block_id_groups=None):
     owned_by_row = getattr(self, "_lumo_fb_ir_owned_blocks", {})
     row_block_ids_by_row = getattr(self, "_lumo_fb_ir_row_block_ids", {})
     owned = owned_by_row.pop(row_id, [])
     row_block_ids = row_block_ids_by_row.pop(row_id, None)
-    if not owned or row_block_ids is None:
+    if row_block_ids is None and not target_block_id_groups:
+        return
+    target_groups = target_block_id_groups or row_block_ids
+    if not owned:
         return
     by_group = {}
     for group_idx, block in owned:
         by_group.setdefault(group_idx, {})[block.block_id] = block
+    transfer_summary = []
     for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
-        if group_idx >= len(row_block_ids):
+        if group_idx >= len(target_groups):
             continue
         parent_blocks = list(manager.req_to_blocks.get(parent_id, ()))
         parent_by_id = {blk.block_id: blk for blk in parent_blocks}
         owned_by_id = by_group.get(group_idx, {})
-        new_ids = list(row_block_ids[group_idx])
+        new_ids = list(target_groups[group_idx] or [])
+        if not new_ids:
+            if owned_by_id:
+                manager.block_pool.free_blocks(reversed(list(owned_by_id.values())))
+            continue
         new_id_set = set(new_ids)
         new_blocks = []
         for block_id in new_ids:
@@ -4820,7 +4829,14 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id):
             if block is not None:
                 new_blocks.append(block)
         if len(new_blocks) != len(new_ids):
+            if owned_by_id:
+                manager.block_pool.free_blocks(reversed(list(owned_by_id.values())))
             continue
+        first_changed = None
+        for idx, block_id in enumerate(new_ids):
+            if idx >= len(parent_blocks) or int(parent_blocks[idx].block_id) != int(block_id):
+                first_changed = idx
+                break
         to_free = [
             blk for blk in parent_blocks
             if blk.block_id not in new_id_set
@@ -4828,13 +4844,35 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id):
         ]
         if to_free:
             manager.block_pool.free_blocks(reversed(to_free))
+        unused_owned = [
+            blk for block_id, blk in owned_by_id.items()
+            if block_id not in new_id_set
+            and blk != getattr(manager, "_null_block", None)
+        ]
+        if unused_owned:
+            manager.block_pool.free_blocks(reversed(unused_owned))
         manager.req_to_blocks[parent_id] = new_blocks
+        cached_limit = len(new_blocks) if first_changed is None else int(first_changed)
         manager.num_cached_block[parent_id] = min(
-            manager.num_cached_block.get(parent_id, len(new_blocks)),
-            len(new_blocks),
+            manager.num_cached_block.get(parent_id, cached_limit),
+            cached_limit,
         )
         if hasattr(manager, "_allocated_block_reqs"):
             manager._allocated_block_reqs.add(parent_id)
+        transfer_summary.append({
+            "group": int(group_idx),
+            "adopted_owned": sorted(int(block_id) for block_id in owned_by_id if block_id in new_id_set),
+            "freed_owned": sorted(int(blk.block_id) for blk in unused_owned),
+            "freed_parent": sorted(int(blk.block_id) for blk in to_free),
+            "first_changed": first_changed,
+        })
+    if transfer_summary:
+        _lumo_fb_ir_sched_debug({
+            "event": "kv_pointer_transfer_owned_to_parent",
+            "parent": parent_id,
+            "rid": row_id,
+            "groups": transfer_summary,
+        })
 
 def _lumo_fb_ir_mirror_manager_blocks_from_ids(self, req_id, block_id_groups):
     if not block_id_groups:
@@ -5341,7 +5379,9 @@ def _lumo_fb_ir_update_from_output(self, scheduler_output, model_runner_output):
                     _lumo_fb_ir_promote_internal_row_state(
                         self, parent_id, data.get("winner_rid"),
                         int(data.get("state_accepted", data.get("accepted", 0))))
-                _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, data.get("winner_rid"))
+                _lumo_fb_ir_transfer_owned_to_parent(
+                    self, parent_id, data.get("winner_rid"),
+                    target_block_id_groups=runner_block_ids)
             elif (isinstance(data, dict)
                   and data.get("winner_rid") == parent_id
                   and (_lumo_fb_ir_os.environ.get("LUMO_FB_PROMOTE_PARENT_WINNERS") == "1"
@@ -5938,6 +5978,110 @@ def _lumo_fb_ir_copy_winner_suffix_kv_to_parent(self, parent_id, winner_id,
         })
         return 0
 
+def _lumo_fb_ir_pointer_swap_winner_suffix_to_parent(self, parent_id, winner_id,
+                                                     commit_len):
+    result = {
+        "event": "split_kv_suffix_pointer_swap",
+        "parent": parent_id,
+        "winner": winner_id,
+        "commit_len": int(commit_len),
+        "bytes": 0,
+        "groups": [],
+        "swapped_blocks": 0,
+        "partial_head": False,
+    }
+    if not (_lumo_fb_ir_kernel_rows_enabled()
+            and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
+        result["skipped"] = "disabled"
+        return result
+    parent_state = self.requests.get(parent_id)
+    winner_state = self.requests.get(winner_id)
+    if parent_state is None or winner_state is None:
+        result["skipped"] = "missing_state"
+        result["has_parent"] = parent_state is not None
+        result["has_winner"] = winner_state is not None
+        _lumo_fb_ir_debug(result)
+        return result
+    try:
+        start_token = int(parent_state.num_computed_tokens)
+        end_token = start_token + int(commit_len)
+        result["start_token"] = int(start_token)
+        result["end_token"] = int(end_token)
+        try:
+            mamba_group_ids = set(
+                int(g) for g in self._get_mamba_copy_bufs().mamba_group_ids)
+        except Exception:
+            mamba_group_ids = set()
+        merged_groups = [list(group) for group in parent_state.block_ids]
+        for group_idx, manager in enumerate(self.kv_cache_config.kv_cache_groups):
+            if int(group_idx) in mamba_group_ids:
+                continue
+            try:
+                block_size = int(getattr(manager.kv_cache_spec, "block_size", 0))
+            except Exception:
+                block_size = 0
+            if block_size <= 0:
+                continue
+            if group_idx >= len(parent_state.block_ids) or group_idx >= len(winner_state.block_ids):
+                continue
+            parent_blocks = list(parent_state.block_ids[group_idx])
+            winner_blocks = list(winner_state.block_ids[group_idx])
+            partial_head = (int(commit_len) > 0 and (start_token % block_size) != 0)
+            if partial_head:
+                result["partial_head"] = True
+            first_idx = ((start_token + block_size - 1) // block_size
+                         if partial_head else start_token // block_size)
+            last_excl = (end_token + block_size - 1) // block_size
+            swapped = []
+            skipped = []
+            if partial_head:
+                skipped.append({
+                    "logical_idx": int(start_token // block_size),
+                    "reason": "partial_head",
+                    "slot": int(start_token % block_size),
+                })
+            for logical_idx in range(int(first_idx), int(last_excl)):
+                block_start = logical_idx * block_size
+                if block_start >= end_token:
+                    continue
+                if logical_idx >= len(parent_blocks) or logical_idx >= len(winner_blocks):
+                    skipped.append({
+                        "logical_idx": int(logical_idx),
+                        "reason": "missing_block",
+                    })
+                    continue
+                src = int(winner_blocks[logical_idx])
+                dst = int(parent_blocks[logical_idx])
+                if src == dst:
+                    continue
+                parent_blocks[logical_idx] = src
+                swapped.append({
+                    "logical_idx": int(logical_idx),
+                    "src": src,
+                    "dst": dst,
+                    "block_start": int(block_start),
+                })
+            if swapped:
+                merged_groups[group_idx] = parent_blocks
+                result["swapped_blocks"] += len(swapped)
+            if swapped or skipped:
+                result["groups"].append({
+                    "group": int(group_idx),
+                    "block_size": int(block_size),
+                    "partial_head": bool(partial_head),
+                    "first_idx": int(first_idx),
+                    "last_excl": int(last_excl),
+                    "swapped": swapped[:16],
+                    "skipped": skipped[:16],
+                })
+        parent_state.block_ids = tuple(merged_groups)
+        _lumo_fb_ir_debug(result)
+        return result
+    except Exception as e:
+        result["error"] = repr(e)
+        _lumo_fb_ir_debug(result)
+        return result
+
 def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                                    spec_decode_metadata=None,
                                    common_attn_metadata=None):
@@ -6108,6 +6252,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             runner_parent_block_ids = None
             runner_parent_mamba_idx = None
             split_kv_parent_state_applied = False
+            kv_pointer_swap_result = None
             if (winner_is_internal
                     and _lumo_fb_ir_kernel_rows_enabled()
                     and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
@@ -6115,7 +6260,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     parent_state = self.requests.get(parent)
                     winner_state = self.requests.get(winner_rid)
                     if parent_state is not None and winner_state is not None:
-                        _lumo_fb_ir_copy_winner_suffix_kv_to_parent(
+                        kv_pointer_swap_result = _lumo_fb_ir_pointer_swap_winner_suffix_to_parent(
                             self, parent, winner_rid, len(winner_commit_tokens))
                         try:
                             _mamba_group_ids = set(
@@ -6160,7 +6305,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                         if (not split_kv_parent_state_applied
                                 and _lumo_fb_ir_kernel_rows_enabled()
                                 and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
-                            _lumo_fb_ir_copy_winner_suffix_kv_to_parent(
+                            kv_pointer_swap_result = _lumo_fb_ir_pointer_swap_winner_suffix_to_parent(
                                 self, parent, winner_rid, len(winner_commit_tokens))
                             try:
                                 _mamba_group_ids = set(
@@ -6229,6 +6374,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "winner_raw_tokens": list(winner_tokens[:len(winner_commit_tokens)]),
                 "commit_source": "canonical_target",
                 "internal_bonus_deferred": False,
+                "kv_pointer_swap": kv_pointer_swap_result,
                 "runner_parent_block_ids": runner_parent_block_ids,
                 "runner_parent_mamba_idx": runner_parent_mamba_idx,
             }
@@ -6266,6 +6412,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                         "second_pos0_capture": bool(second_pos0_capture),
                         "second_pos1_capture": bool(second_pos1_capture),
                         "commit_tokens": list(winner_commit_tokens)[:8],
+                        "kv_pointer_swap": kv_pointer_swap_result,
                         "rows": _diag_rows,
                     }) + chr(10))
                 except Exception:
