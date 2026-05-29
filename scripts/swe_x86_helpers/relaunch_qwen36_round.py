@@ -6225,6 +6225,54 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     tree_best_acc = max(int(item[4]) for item in scored)
                 except Exception:
                     pass
+            partial_head_fallback_result = None
+            if winner_is_internal:
+                try:
+                    parent_state = self.requests.get(parent)
+                    start_token = int(parent_state.num_computed_tokens) if parent_state is not None else 0
+                    mamba_group_ids = set(
+                        int(_gid) for _gid in self._get_mamba_copy_bufs().mamba_group_ids)
+                    partial_groups = []
+                    for group_idx, manager in enumerate(self.kv_cache_config.kv_cache_groups):
+                        if int(group_idx) in mamba_group_ids:
+                            continue
+                        block_size = int(getattr(manager.kv_cache_spec, "block_size", 0))
+                        if block_size > 0 and (start_token % block_size) != 0:
+                            partial_groups.append({
+                                "group": int(group_idx),
+                                "block_size": int(block_size),
+                                "slot": int(start_token % block_size),
+                            })
+                    if partial_groups:
+                        partial_head_fallback_result = {
+                            "event": "split_kv_suffix_pointer_swap",
+                            "parent": parent,
+                            "winner": winner_rid,
+                            "commit_len": int(winner_acc) + 1,
+                            "bytes": 0,
+                            "groups": partial_groups,
+                            "swapped_blocks": 0,
+                            "partial_head": True,
+                            "skipped": "partial_head_parent_fallback",
+                            "start_token": int(start_token),
+                        }
+                        for _item in scored:
+                            if _item[0] == parent:
+                                winner_rid, winner_tokens, winner_raw_acc, winner_draft, winner_acc = _item
+                                winner_is_internal = False
+                                break
+                except Exception as e:
+                    partial_head_fallback_result = {
+                        "event": "split_kv_suffix_pointer_swap",
+                        "parent": parent,
+                        "winner": winner_rid,
+                        "commit_len": int(winner_acc) + 1,
+                        "bytes": 0,
+                        "swapped_blocks": 0,
+                        "partial_head": True,
+                        "skipped": "partial_head_detection_error",
+                        "error": repr(e),
+                    }
             state_accepted_drafts = int(winner_acc)
             def _lumo_fb_target_commit_tokens(_draft, _valid, _acc, _include_bonus=True):
                 _draft = list(_draft or [])
@@ -6295,7 +6343,7 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
             runner_parent_block_ids = None
             runner_parent_mamba_idx = None
             split_kv_parent_state_applied = False
-            kv_pointer_swap_result = None
+            kv_pointer_swap_result = partial_head_fallback_result
             if (winner_is_internal
                     and _lumo_fb_ir_kernel_rows_enabled()
                     and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
