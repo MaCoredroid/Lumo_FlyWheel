@@ -461,7 +461,8 @@ import torch
             spec_initial_state_indices_tensor = None
             spec_initial_state_slot_tensor = None
             spec_write_state_slot_tensor = None
-            if _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+            if (_lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+                    or _lumo_fb_kernel_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"):
                 _fb_write_end = int(self.num_spec + 2)
                 if block_table_tensor.size(1) < _fb_write_end:
                     raise RuntimeError(
@@ -1554,7 +1555,10 @@ import torch
     new = '''            num_speculative_blocks=(
                 (
                     vllm_config.speculative_config.num_speculative_tokens
-                    + (1 if _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else 0)
+                    + (1 if (
+                        _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+                        or _lumo_fb_kernel_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"
+                    ) else 0)
                 )
                 if vllm_config.speculative_config
                 else 0
@@ -2360,35 +2364,34 @@ else:
                     and all(tuple(_p) == tuple([0] * len(tuple(_p)))
                             for _p in _choices)
                 )
-                if not _is_spine:
-                    if block_table_tensor.size(1) < _node_count + 2:
-                        raise RuntimeError(
-                            "LUMO_FA_UNIQUE_NODES requires root + node write "
-                            f"state slots: need {_node_count + 2}, got "
-                            f"{block_table_tensor.size(1)}")
-                    _row = block_table_tensor[spec_sequence_masks, :_node_count + 2][0]
-                    _write_slots = _row[1:_node_count + 2].contiguous()
-                    _initial_slots = torch.empty(
-                        (_node_count + 1,), dtype=torch.int32,
-                        device=query_start_loc.device)
-                    _initial_slots[0] = _row[0]
-                    for _i, _parent in enumerate(_parents):
-                        _initial_slots[_i + 1] = _write_slots[0 if _parent < 0 else _parent + 1]
-                    spec_initial_state_indices_tensor = _initial_slots
-                    spec_initial_state_slot_tensor = None
-                    spec_write_state_slot_tensor = torch.zeros(
-                        (_node_count + 1,), dtype=torch.int32,
-                        device=query_start_loc.device)
-                    spec_state_indices_tensor = _write_slots.view(_node_count + 1, 1)
-                    spec_query_start_loc = torch.arange(
-                        _node_count + 2, dtype=torch.int32,
-                        device=query_start_loc.device)
-                    num_spec_decodes = _node_count + 1
-                    num_spec_decode_tokens = _node_count + 1
-                    num_accepted_tokens = torch.ones(
-                        (_node_count + 1,), dtype=torch.int32,
-                        device=query_start_loc.device)
-                    fa_unique_expanded_node_mode = True
+                if block_table_tensor.size(1) < _node_count + 2:
+                    raise RuntimeError(
+                        "LUMO_FA_UNIQUE_NODES requires root + node write "
+                        f"state slots: need {_node_count + 2}, got "
+                        f"{block_table_tensor.size(1)}")
+                _row = block_table_tensor[spec_sequence_masks, :_node_count + 2][0]
+                _write_slots = _row[1:_node_count + 2].contiguous()
+                _initial_slots = torch.empty(
+                    (_node_count + 1,), dtype=torch.int32,
+                    device=query_start_loc.device)
+                _initial_slots[0] = _row[0]
+                for _i, _parent in enumerate(_parents):
+                    _initial_slots[_i + 1] = _write_slots[0 if _parent < 0 else _parent + 1]
+                spec_initial_state_indices_tensor = _initial_slots
+                spec_initial_state_slot_tensor = None
+                spec_write_state_slot_tensor = torch.zeros(
+                    (_node_count + 1,), dtype=torch.int32,
+                    device=query_start_loc.device)
+                spec_state_indices_tensor = _write_slots.view(_node_count + 1, 1)
+                spec_query_start_loc = torch.arange(
+                    _node_count + 2, dtype=torch.int32,
+                    device=query_start_loc.device)
+                num_spec_decodes = _node_count + 1
+                num_spec_decode_tokens = _node_count + 1
+                num_accepted_tokens = torch.ones(
+                    (_node_count + 1,), dtype=torch.int32,
+                    device=query_start_loc.device)
+                fa_unique_expanded_node_mode = True
                 fa_tree_parent_indices_tensor = torch.tensor(
                     [-2] + _parents, dtype=torch.int32,
                     device=query_start_loc.device)
@@ -2403,7 +2406,7 @@ else:
                         "event": "round_f_unified_step",
                         "stage": "stage3_spine_only_unique_node_state_tree" if _is_spine else "stage3_unique_node_state_tree_expanded",
                         "component_under_test": "fa_unique_node_state_tree_verifier",
-                        "verifier_path": "LUMO_FA_UNIQUE_NODES/spine_chain" if _is_spine else "LUMO_FA_UNIQUE_NODES/expanded_parent_state_rows",
+                        "verifier_path": "LUMO_FA_UNIQUE_NODES/spine_expanded_parent_state_rows" if _is_spine else "LUMO_FA_UNIQUE_NODES/expanded_parent_state_rows",
                         "internal_rows_enabled": False,
                         "kernel_rows_enabled": False,
                         "no_kv_prefix_copy_enabled": True,
@@ -2421,7 +2424,7 @@ else:
                         "extra_proposer_for_trimmed_nodes": 0,
                         "accepted_path_commit_only": True,
                         "tree_attention": False,
-                        "gdn_parent_gather": bool(not _is_spine),
+                        "gdn_parent_gather": True,
                         "depth_positions": True,
                         "tree_sampler": False,
                         "top1_spine_accept_depth": None,
@@ -2446,7 +2449,7 @@ else:
                             if spec_state_indices_tensor is not None else None
                         ),
                         "spine_chain_degenerate_unique_tree": bool(_is_spine),
-                        "expanded_parent_state_rows": bool(not _is_spine),
+                        "expanded_parent_state_rows": True,
                     }) + chr(10))
                 except Exception:
                     pass
@@ -7989,6 +7992,15 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_depth = f"export LUMO_FB_DEPTH={os.environ['LUMO_FB_DEPTH']}\n" if os.environ.get("LUMO_FB_DEPTH") else ""
     fb_debug = "export LUMO_FB_DEBUG=1\n" if os.environ.get("LUMO_FB_DEBUG") == "1" else ""
     fb_superset_diag = "export LUMO_FB_SUPERSET_DIAG=1\n" if os.environ.get("LUMO_FB_SUPERSET_DIAG") == "1" else ""
+    fb_debug_exports = ""
+    for _name in (
+        "LUMO_FB_GDN_DEBUG",
+        "LUMO_FB_RIDX_STATE_SUMMARY",
+        "LUMO_FB_TENSOR_DEBUG",
+        "LUMO_FB_RIDX_STATE_LAYERS",
+    ):
+        if os.environ.get(_name):
+            fb_debug_exports += f"export {_name}={os.environ[_name]}\n"
     fb_control = os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
     fb_seed_control = """python3 - <<'LUMOFBCTRL'
 import json, os, pathlib, time
@@ -8007,14 +8019,14 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fa_unique_env}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else fa_unique_env
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_debug_exports}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fa_unique_env}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else (fa_unique_env + fb_debug + fb_debug_exports)
     mtp_draft_trace = f"export LUMO_MTP_DRAFT_TRACE_FILE={os.environ['LUMO_MTP_DRAFT_TRACE_FILE']}\n" if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
     mtp_draft_trace_block = _MTP_DRAFT_TRACE_BLOCK if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
-            + (_FB_KERNEL_ROWS_BLOCK if (fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") else "")
+            + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else ""))
 
 
