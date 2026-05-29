@@ -240,6 +240,42 @@ LUMOQ36FP8CFG
 '''
 
 
+_CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX_BLOCK = r'''
+python3 - <<'LUMOCCONVASSERT'
+from pathlib import Path
+import py_compile
+
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/ops/causal_conv1d.py')
+text = p.read_text()
+sentinel = '# LUMO_CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] causal_conv1d cudagraph assert fix already present')
+else:
+    old = """        assert num_cache_lines >= batch
+        assert weight.stride(1) == 1  # Need this
+"""
+    new = """        # LUMO_CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX: during full decode CUDA-graph
+        # capture, batch is the capture size while num_cache_lines is the Mamba
+        # state pool width. When conv_state_indices is provided, the valid batch
+        # invariant is the index-table length, not num_cache_lines >= batch.
+        if conv_state_indices is None:
+            assert num_cache_lines >= batch
+        else:
+            assert batch == conv_state_indices.shape[0], (
+                f"ERROR: conv_state_indices should have shape ({batch},*) but got {conv_state_indices.shape}"
+            )
+        assert weight.stride(1) == 1  # Need this
+"""
+    if old not in text:
+        raise RuntimeError('causal_conv1d cudagraph assert anchor not found')
+    text = text.replace(old, new, 1)
+    p.write_text(text)
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied causal_conv1d cudagraph assert fix')
+LUMOCCONVASSERT
+'''
+
+
 # F_b kernel-row foundation: let the GDN SSM recurrent update read its initial
 # state from one state slot and write the evolved per-token states to another
 # slot table. This is the primitive needed for no-copy K-path rows: siblings
@@ -8337,7 +8373,8 @@ LUMOFBCTRL
         or os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE")
     ) else ""
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
-    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
+    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + _CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX_BLOCK
+            + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")
