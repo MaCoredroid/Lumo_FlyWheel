@@ -2591,9 +2591,6 @@ def _lumo_fa_tree_delta_torch(
     parent_indices: torch.Tensor,
     use_qk_l2norm_in_kernel: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    if use_qk_l2norm_in_kernel:
-        q = l2norm_fwd(q)
-        k = l2norm_fwd(k)
     q = q.squeeze(0)
     k = k.squeeze(0)
     v = v.squeeze(0)
@@ -2603,26 +2600,30 @@ def _lumo_fa_tree_delta_torch(
     if h_v % h_k != 0:
         raise RuntimeError(f"LUMO_FA_TREE_DELTA_TORCH requires value heads divisible by key heads, got {h_v=} {h_k=}")
     repeat = h_v // h_k
-    if repeat != 1:
-        q = q.repeat_interleave(repeat, dim=1)
-        k = k.repeat_interleave(repeat, dim=1)
-
-    g, beta = fused_gdn_gating(A_log=A_log, a=a, b=b, dt_bias=dt_bias)
-    alpha = torch.exp(g.squeeze(0).to(torch.float32))
-    beta = beta.squeeze(0).to(torch.float32)
-    q_f = q.to(torch.float32) * (k.shape[-1] ** -0.5)
+    q_f = q.to(torch.float32)
     k_f = k.to(torch.float32)
+    if use_qk_l2norm_in_kernel:
+        q_f = q_f * torch.rsqrt(torch.sum(q_f * q_f, dim=-1, keepdim=True) + 1e-6)
+        k_f = k_f * torch.rsqrt(torch.sum(k_f * k_f, dim=-1, keepdim=True) + 1e-6)
+    if repeat != 1:
+        q_f = q_f.repeat_interleave(repeat, dim=1)
+        k_f = k_f.repeat_interleave(repeat, dim=1)
+
+    g, _ = fused_gdn_gating(A_log=A_log, a=a, b=b, dt_bias=dt_bias)
+    alpha = torch.exp(g.squeeze(0).to(torch.float32))
+    beta = torch.sigmoid(b.to(torch.float32))
+    q_f = q_f * (k.shape[-1] ** -0.5)
     v_f = v.to(torch.float32)
 
-    parents = parent_indices.to(device=q.device, dtype=torch.long)
-    actual_parents = torch.empty((n,), dtype=torch.long, device=q.device)
+    parents = parent_indices.to(device=q_f.device, dtype=torch.long)
+    actual_parents = torch.empty((n,), dtype=torch.long, device=q_f.device)
     actual_parents[0] = -1
     for i in range(1, n):
         parent = int(parents[i].item())
         actual_parents[i] = 0 if parent < 0 else parent + 1
 
-    ancestor = torch.zeros((n, n), dtype=torch.bool, device=q.device)
-    gamma = torch.empty((n, h_v), dtype=torch.float32, device=q.device)
+    ancestor = torch.zeros((n, n), dtype=torch.bool, device=q_f.device)
+    gamma = torch.empty((n, h_v), dtype=torch.float32, device=q_f.device)
     for i in range(n):
         parent = int(actual_parents[i].item())
         gamma[i] = alpha[i] if parent < 0 else gamma[parent] * alpha[i]
@@ -2641,7 +2642,7 @@ def _lumo_fa_tree_delta_torch(
     beta_hn = beta.transpose(0, 1)
     ratio = gamma_hn[:, :, None] / gamma_hn[:, None, :].clamp_min(1e-20)
     lower = ancestor.to(torch.float32).unsqueeze(0) * beta_hn[:, :, None] * ratio * kk
-    system = torch.eye(n, dtype=torch.float32, device=q.device).unsqueeze(0) + lower
+    system = torch.eye(n, dtype=torch.float32, device=q_f.device).unsqueeze(0) + lower
 
     initial_projection = torch.einsum("hvk,nhk->nhv", prefix_state, k_f)
     rhs = beta[:, :, None] * (v_f - gamma[:, :, None] * initial_projection)
@@ -2651,7 +2652,7 @@ def _lumo_fa_tree_delta_torch(
         upper=False,
     )
 
-    ancestor_or_self = ancestor.to(torch.float32) + torch.eye(n, dtype=torch.float32, device=q.device)
+    ancestor_or_self = ancestor.to(torch.float32) + torch.eye(n, dtype=torch.float32, device=q_f.device)
     coeff = ancestor_or_self.unsqueeze(0) * ratio
     states = (
         gamma[:, :, None, None] * prefix_state.unsqueeze(0)
