@@ -64,6 +64,66 @@ else:
 LUMOSPECTRACE
 '''
 
+_MTP_DRAFT_TRACE_BLOCK = r'''
+python3 - <<'LUMOMTPDRAFTTRACE'
+from pathlib import Path
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py')
+text = p.read_text()
+sentinel = '# LUMO_MTP_DRAFT_TRACE'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] MTP draft trace patch already present')
+else:
+    patch = r"""
+
+# LUMO_MTP_DRAFT_TRACE: optional native MTP draft-token trace. This is
+# observational only and is used to replay exact E3 drafts into the F_b
+# verifier-isolation experiment.
+import os as _lumo_mtp_trace_os
+import json as _lumo_mtp_trace_json
+import time as _lumo_mtp_trace_time
+
+_lumo_mtp_trace_orig_propose = EagleProposer.propose
+_lumo_mtp_trace_idx = 0
+
+def _lumo_mtp_trace_propose(self, target_token_ids, target_positions,
+                            target_hidden_states, next_token_ids,
+                            token_indices_to_sample, common_attn_metadata,
+                            sampling_metadata, mm_embed_inputs=None,
+                            num_rejected_tokens_gpu=None,
+                            slot_mappings=None):
+    global _lumo_mtp_trace_idx
+    out = _lumo_mtp_trace_orig_propose(
+        self, target_token_ids, target_positions, target_hidden_states,
+        next_token_ids, token_indices_to_sample, common_attn_metadata,
+        sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
+    path = _lumo_mtp_trace_os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE")
+    if path:
+        try:
+            global _LUMO_MTP_DRAFT_TRACE_FH
+            try:
+                _LUMO_MTP_DRAFT_TRACE_FH
+            except NameError:
+                _LUMO_MTP_DRAFT_TRACE_FH = open(path, "a", buffering=1)
+            _LUMO_MTP_DRAFT_TRACE_FH.write(_lumo_mtp_trace_json.dumps({
+                "event": "mtp_draft",
+                "idx": int(_lumo_mtp_trace_idx),
+                "ts": round(_lumo_mtp_trace_time.time(), 4),
+                "draft": out.detach().cpu().tolist(),
+            }) + chr(10))
+            _lumo_mtp_trace_idx += 1
+        except Exception:
+            pass
+    return out
+
+EagleProposer.propose = _lumo_mtp_trace_propose
+"""
+    p.write_text(text + patch)
+    import py_compile
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied MTP draft trace patch')
+LUMOMTPDRAFTTRACE
+'''
+
 _NO_STALE_FB_PATCHES_BLOCK = r'''
 python3 - <<'LUMONOSTALEFB'
 from pathlib import Path
@@ -1492,8 +1552,10 @@ import torch
             ),
 '''
     new = '''            num_speculative_blocks=(
-                (vllm_config.speculative_config.num_speculative_tokens
-                 + (1 if _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else 0))
+                (
+                    vllm_config.speculative_config.num_speculative_tokens
+                    + (1 if _lumo_fb_kernel_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else 0)
+                )
                 if vllm_config.speculative_config
                 else 0
             ),  # LUMO_FB_KERNEL_ROWS_EXTRA_STATE_BLOCK
@@ -2219,6 +2281,565 @@ else:
 LUMOTREEREJECT
 '''
 
+_FA_UNIQUE_NODES_BLOCK = r'''
+python3 - <<'LUMOFAUNIQUENODES'
+from pathlib import Path
+
+ga = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/gdn_attn.py')
+text = ga.read_text()
+sentinel = '# LUMO_FA_UNIQUE_NODES_GDN_ATTN'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a unique-node GDN metadata patch already present')
+else:
+    if 'import os as _lumo_fb_kernel_os' not in text:
+        old = 'from dataclasses import dataclass\n\nimport torch\n'
+        new = 'from dataclasses import dataclass\nimport os as _lumo_fb_kernel_os\n\nimport torch\n'
+        if old not in text:
+            raise RuntimeError('F_a unique-node gdn_attn import anchor not found')
+        text = text.replace(old, new, 1)
+    if 'import ast as _lumo_fa_ast' not in text:
+        text = text.replace(
+            'import os as _lumo_fb_kernel_os\n',
+            'import os as _lumo_fb_kernel_os\nimport ast as _lumo_fa_ast\nimport json as _lumo_fa_json\nimport time as _lumo_fa_time\n',
+            1,
+        )
+
+    old = '        m = common_attn_metadata\n\n        query_start_loc = m.query_start_loc\n'
+    new = '        m = common_attn_metadata\n        fa_tree_parent_indices_tensor = None\n        fa_unique_node_mode = False\n        fa_unique_expanded_node_mode = False\n\n        query_start_loc = m.query_start_loc\n'
+    if old not in text:
+        raise RuntimeError('F_a unique-node metadata default anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = """    spec_write_state_slot_tensor: torch.Tensor | None = None
+    non_spec_state_indices_tensor: torch.Tensor | None = (
+"""
+    new = """    spec_write_state_slot_tensor: torch.Tensor | None = None
+    # LUMO_FA_UNIQUE_NODES_GDN_ATTN: packed-tree verifier state map.
+    # The target verifier remains one scheduler request; GDN layers process
+    # root+selected unique nodes as one-token recurrent sequences whose
+    # initial state is gathered from the parent node's write slot.
+    fa_tree_parent_indices_tensor: torch.Tensor | None = None
+    fa_unique_node_mode: bool = False
+    fa_unique_expanded_node_mode: bool = False
+    non_spec_state_indices_tensor: torch.Tensor | None = (
+"""
+    if old not in text:
+        old = """    spec_state_indices_tensor: torch.Tensor | None = None  # shape: [batch, num_spec]
+    non_spec_state_indices_tensor: torch.Tensor | None = (
+"""
+        new = """    spec_state_indices_tensor: torch.Tensor | None = None  # shape: [batch, num_spec]
+    # LUMO_FA_UNIQUE_NODES_GDN_ATTN: packed-tree verifier metadata.
+    fa_tree_parent_indices_tensor: torch.Tensor | None = None
+    fa_unique_node_mode: bool = False
+    fa_unique_expanded_node_mode: bool = False
+    non_spec_state_indices_tensor: torch.Tensor | None = (
+"""
+        if old not in text:
+            raise RuntimeError('F_a unique-node dataclass anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = """            assert num_accepted_tokens is not None
+            num_accepted_tokens = num_accepted_tokens[spec_sequence_masks]
+"""
+    new = """            assert num_accepted_tokens is not None
+            num_accepted_tokens = num_accepted_tokens[spec_sequence_masks]
+
+            _spec = getattr(self.vllm_config, "speculative_config", None)
+            _tree_src = getattr(_spec, "speculative_token_tree", None) if _spec is not None else None
+            if _tree_src and int(num_spec_decodes) == 1:
+                _choices = list(_lumo_fa_ast.literal_eval(_tree_src))
+                _node_count = len(_choices)
+                _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}
+                _parents = [
+                    _path_to_idx.get(tuple(_p[:-1]), -1)
+                    for _p in _choices
+                ]
+                _max_depth = max((len(tuple(_p)) for _p in _choices), default=0)
+                _is_spine = (
+                    _node_count == _max_depth
+                    and all(tuple(_p) == tuple([0] * len(tuple(_p)))
+                            for _p in _choices)
+                )
+                if not _is_spine:
+                    if block_table_tensor.size(1) < _node_count + 2:
+                        raise RuntimeError(
+                            "LUMO_FA_UNIQUE_NODES requires root + node write "
+                            f"state slots: need {_node_count + 2}, got "
+                            f"{block_table_tensor.size(1)}")
+                    _row = block_table_tensor[spec_sequence_masks, :_node_count + 2][0]
+                    _write_slots = _row[1:_node_count + 2].contiguous()
+                    _initial_slots = torch.empty(
+                        (_node_count + 1,), dtype=torch.int32,
+                        device=query_start_loc.device)
+                    _initial_slots[0] = _row[0]
+                    for _i, _parent in enumerate(_parents):
+                        _initial_slots[_i + 1] = _write_slots[0 if _parent < 0 else _parent + 1]
+                    spec_initial_state_indices_tensor = _initial_slots
+                    spec_initial_state_slot_tensor = None
+                    spec_write_state_slot_tensor = torch.zeros(
+                        (_node_count + 1,), dtype=torch.int32,
+                        device=query_start_loc.device)
+                    spec_state_indices_tensor = _write_slots.view(_node_count + 1, 1)
+                    spec_query_start_loc = torch.arange(
+                        _node_count + 2, dtype=torch.int32,
+                        device=query_start_loc.device)
+                    num_spec_decodes = _node_count + 1
+                    num_spec_decode_tokens = _node_count + 1
+                    num_accepted_tokens = torch.ones(
+                        (_node_count + 1,), dtype=torch.int32,
+                        device=query_start_loc.device)
+                    fa_unique_expanded_node_mode = True
+                fa_tree_parent_indices_tensor = torch.tensor(
+                    [-2] + _parents, dtype=torch.int32,
+                    device=query_start_loc.device)
+                fa_unique_node_mode = True
+                try:
+                    _fh = globals().get("_LUMO_FA_UNIFIED_FH")
+                    if _fh is None:
+                        _fh = open("/logs/fb_debug.jsonl", "a", buffering=1)
+                        globals()["_LUMO_FA_UNIFIED_FH"] = _fh
+                    _fh.write(_lumo_fa_json.dumps({
+                        "ts": round(_lumo_fa_time.time(), 4),
+                        "event": "round_f_unified_step",
+                        "stage": "stage3_spine_only_unique_node_state_tree" if _is_spine else "stage3_unique_node_state_tree_expanded",
+                        "component_under_test": "fa_unique_node_state_tree_verifier",
+                        "verifier_path": "LUMO_FA_UNIQUE_NODES/spine_chain" if _is_spine else "LUMO_FA_UNIQUE_NODES/expanded_parent_state_rows",
+                        "internal_rows_enabled": False,
+                        "kernel_rows_enabled": False,
+                        "no_kv_prefix_copy_enabled": True,
+                        "candidate_pool_nodes": int(_node_count),
+                        "selected_nodes": int(_node_count),
+                        "verified_nodes": int(_node_count),
+                        "unique_tree_nodes": int(_node_count),
+                        "trimmed_nodes": 0,
+                        "max_depth": int(_max_depth),
+                        "sources": {"mtp_top1": int(_node_count), "mtp_alt": 0, "suffix": 0},
+                        "path_rows": 0,
+                        "scheduler_visible_clone_requests": 0,
+                        "prefix_kv_copy_bytes": 0,
+                        "recomputed_shared_prefix_nodes": 0,
+                        "extra_proposer_for_trimmed_nodes": 0,
+                        "accepted_path_commit_only": True,
+                        "tree_attention": False,
+                        "gdn_parent_gather": bool(not _is_spine),
+                        "depth_positions": True,
+                        "tree_sampler": False,
+                        "top1_spine_accept_depth": None,
+                        "accepted_depth": None,
+                        "accepted_node_path": [],
+                        "estimated_event_ms": None,
+                        "event_budget_ms": None,
+                        "tree_score": None,
+                        "proposer_us": 0,
+                        "trim_us": 0,
+                        "verify_us": 0,
+                        "tree_attention_us": 0,
+                        "gdn_parent_gather_us": 0,
+                        "depth_sync_us": 0,
+                        "commit_us": 0,
+                        "gdn_state_bytes_copied": 0,
+                        "kv_suffix_bytes_copied": 0,
+                        "physical_minimum_invariant_failures": [],
+                        "parent_map": [-2] + [int(_p) for _p in _parents],
+                        "state_rows": (
+                            list(spec_state_indices_tensor.shape)
+                            if spec_state_indices_tensor is not None else None
+                        ),
+                        "spine_chain_degenerate_unique_tree": bool(_is_spine),
+                        "expanded_parent_state_rows": bool(not _is_spine),
+                    }) + chr(10))
+                except Exception:
+                    pass
+            elif spec_state_indices_tensor is not None and int(num_spec_decodes) == 1:
+                _node_count = int(spec_state_indices_tensor.size(-1))
+                _max_depth = int(_node_count)
+                _parents = [-1] + [int(_i) for _i in range(_node_count - 1)]
+                fa_tree_parent_indices_tensor = torch.tensor(
+                    _parents, dtype=torch.int32, device=query_start_loc.device)
+                fa_unique_node_mode = True
+                try:
+                    _fh = globals().get("_LUMO_FA_UNIFIED_FH")
+                    if _fh is None:
+                        _fh = open("/logs/fb_debug.jsonl", "a", buffering=1)
+                        globals()["_LUMO_FA_UNIFIED_FH"] = _fh
+                    _fh.write(_lumo_fa_json.dumps({
+                        "ts": round(_lumo_fa_time.time(), 4),
+                        "event": "round_f_unified_step",
+                        "stage": "stage3_spine_only_unique_node_state_tree",
+                        "component_under_test": "fa_unique_node_state_tree_verifier",
+                        "verifier_path": "LUMO_FA_UNIQUE_NODES/e3_spine_chain",
+                        "internal_rows_enabled": False,
+                        "kernel_rows_enabled": False,
+                        "no_kv_prefix_copy_enabled": True,
+                        "candidate_pool_nodes": int(_node_count),
+                        "selected_nodes": int(_node_count),
+                        "verified_nodes": int(_node_count),
+                        "unique_tree_nodes": int(_node_count),
+                        "trimmed_nodes": 0,
+                        "max_depth": int(_max_depth),
+                        "sources": {"mtp_top1": int(_node_count), "mtp_alt": 0, "suffix": 0},
+                        "path_rows": 0,
+                        "scheduler_visible_clone_requests": 0,
+                        "prefix_kv_copy_bytes": 0,
+                        "recomputed_shared_prefix_nodes": 0,
+                        "extra_proposer_for_trimmed_nodes": 0,
+                        "accepted_path_commit_only": True,
+                        "tree_attention": False,
+                        "gdn_parent_gather": False,
+                        "depth_positions": True,
+                        "tree_sampler": False,
+                        "top1_spine_accept_depth": None,
+                        "accepted_depth": None,
+                        "accepted_node_path": [],
+                        "estimated_event_ms": None,
+                        "event_budget_ms": None,
+                        "tree_score": None,
+                        "proposer_us": 0,
+                        "trim_us": 0,
+                        "verify_us": 0,
+                        "tree_attention_us": 0,
+                        "gdn_parent_gather_us": 0,
+                        "depth_sync_us": 0,
+                        "commit_us": 0,
+                        "gdn_state_bytes_copied": 0,
+                        "kv_suffix_bytes_copied": 0,
+                        "physical_minimum_invariant_failures": [],
+                        "parent_map": [int(_p) for _p in _parents],
+                        "state_rows": list(spec_state_indices_tensor.shape),
+                        "spine_chain_degenerate_unique_tree": True,
+                        "expanded_parent_state_rows": False,
+                    }) + chr(10))
+                except Exception:
+                    pass
+"""
+    if old not in text:
+        raise RuntimeError('F_a unique-node spec metadata anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = """            and num_spec_decodes <= self.decode_cudagraph_max_bs
+            and num_spec_decode_tokens <= self.decode_cudagraph_max_bs
+        ):
+"""
+    new = """            and num_spec_decodes <= self.decode_cudagraph_max_bs
+            and num_spec_decode_tokens <= self.decode_cudagraph_max_bs
+            and not bool(locals().get("fa_unique_node_mode", False))
+        ):
+"""
+    if old not in text:
+        raise RuntimeError('F_a unique-node cudagraph guard anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = """            spec_write_state_slot_tensor=spec_write_state_slot_tensor,
+            non_spec_state_indices_tensor=non_spec_state_indices_tensor,
+"""
+    new = """            spec_write_state_slot_tensor=spec_write_state_slot_tensor,
+            fa_tree_parent_indices_tensor=fa_tree_parent_indices_tensor,
+            fa_unique_node_mode=bool(fa_unique_node_mode),
+            fa_unique_expanded_node_mode=bool(fa_unique_expanded_node_mode),
+            non_spec_state_indices_tensor=non_spec_state_indices_tensor,
+"""
+    if old not in text:
+        old = """            spec_state_indices_tensor=spec_state_indices_tensor,
+            non_spec_state_indices_tensor=non_spec_state_indices_tensor,
+"""
+        new = """            spec_state_indices_tensor=spec_state_indices_tensor,
+            fa_tree_parent_indices_tensor=fa_tree_parent_indices_tensor,
+            fa_unique_node_mode=bool(fa_unique_node_mode),
+            fa_unique_expanded_node_mode=bool(fa_unique_expanded_node_mode),
+            non_spec_state_indices_tensor=non_spec_state_indices_tensor,
+"""
+        if old not in text:
+            raise RuntimeError('F_a unique-node metadata ctor anchor not found')
+    text = text.replace(old, new, 1)
+
+    ga.write_text(text)
+    import py_compile
+    py_compile.compile(str(ga), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a unique-node GDN metadata patch')
+
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FA_UNIQUE_NODES_GDN_LINEAR'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a unique-node GDN linear telemetry patch already present')
+else:
+    if 'import os as _lumo_fa_os' not in text:
+        text = text.replace(
+            'import torch\n',
+            'import torch\nimport os as _lumo_fa_os\nimport json as _lumo_fa_json\nimport time as _lumo_fa_time\n',
+            1,
+        )
+    old = """        mixed_qkv = mixed_qkv[:num_actual_tokens]
+        b = b[:num_actual_tokens]
+"""
+    new = """        fa_unique_node_mode = bool(getattr(attn_metadata, "fa_unique_node_mode", False))
+        fa_unique_expanded_node_mode = bool(getattr(attn_metadata, "fa_unique_expanded_node_mode", False))
+        if fa_unique_node_mode:
+            try:
+                global _LUMO_FA_UNIQUE_GDN_FH
+                try:
+                    _LUMO_FA_UNIQUE_GDN_FH
+                except NameError:
+                    _LUMO_FA_UNIQUE_GDN_FH = open("/logs/fa_unique_gdn_debug.jsonl", "a", buffering=1)
+                _LUMO_FA_UNIQUE_GDN_FH.write(_lumo_fa_json.dumps({
+                    "ts": round(_lumo_fa_time.time(), 4),
+                    "event": "fa_unique_gdn_layer",
+                    "layer": self.prefix,
+                    "num_actual_tokens": int(num_actual_tokens),
+                    "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                    "num_spec_decode_tokens": int(attn_metadata.num_spec_decode_tokens),
+                    "expanded_parent_state_rows": bool(fa_unique_expanded_node_mode),
+                    "mixed_qkv_shape": list(mixed_qkv.shape),
+                    "b_shape": list(b.shape),
+                    "state_rows": list(spec_state_indices_tensor.shape) if spec_state_indices_tensor is not None else None,
+                    "initial_rows": (
+                        list(locals().get("spec_initial_state_indices_tensor").shape)
+                        if locals().get("spec_initial_state_indices_tensor") is not None
+                        else None
+                    ),
+                    "parents": (
+                        getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
+                        .detach().cpu().tolist()
+                        if getattr(attn_metadata, "fa_tree_parent_indices_tensor", None) is not None
+                        else None
+                    ),
+                }) + chr(10))
+            except Exception:
+                pass
+
+        mixed_qkv = mixed_qkv[:num_actual_tokens]
+        b = b[:num_actual_tokens]
+"""
+    if old not in text:
+        raise RuntimeError('F_a unique-node gdn_linear telemetry anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = """        # 1.1: Process the multi-query part
+        if spec_sequence_masks is not None:
+            mixed_qkv_spec = causal_conv1d_update(
+                mixed_qkv_spec,
+                conv_state,
+                conv_weights,
+                self.conv1d.bias,
+                self.activation,
+                conv_state_indices=(
+                    spec_state_indices_tensor
+                    if spec_initial_state_indices_tensor is not None
+                    else spec_state_indices_tensor[:, 0][
+                        : attn_metadata.num_spec_decodes
+                    ]
+                ),
+                num_accepted_tokens=num_accepted_tokens,
+                query_start_loc=spec_query_start_loc,
+                max_query_len=spec_state_indices_tensor.size(-1),
+                block_idx_last_scheduled_token=spec_write_state_slot_tensor,
+                initial_state_idx=spec_write_state_slot_tensor,
+                initial_state_indices=spec_initial_state_indices_tensor,
+                validate_data=False,
+            )
+"""
+    new = """        # 1.1: Process the multi-query part
+        if spec_sequence_masks is not None and fa_unique_expanded_node_mode:
+            _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
+            _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
+            _depths = []
+            for _i, _parent in enumerate(_parents):
+                if _i == 0:
+                    _depths.append(0)
+                else:
+                    _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+            _conv_out = torch.empty_like(mixed_qkv_spec)
+            for _depth in range((max(_depths) + 1) if _depths else 0):
+                _rows = [i for i, d in enumerate(_depths) if d == _depth]
+                if not _rows:
+                    continue
+                _row_idx = torch.tensor(_rows, dtype=torch.long, device=mixed_qkv_spec.device)
+                _sub_query_start = torch.arange(
+                    len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
+                _sub = causal_conv1d_update(
+                    mixed_qkv_spec.index_select(0, _row_idx),
+                    conv_state,
+                    conv_weights,
+                    self.conv1d.bias,
+                    self.activation,
+                    conv_state_indices=spec_state_indices_tensor.index_select(0, _row_idx),
+                    num_accepted_tokens=num_accepted_tokens.index_select(0, _row_idx),
+                    query_start_loc=_sub_query_start,
+                    max_query_len=1,
+                    block_idx_last_scheduled_token=spec_write_state_slot_tensor.index_select(0, _row_idx),
+                    initial_state_idx=spec_write_state_slot_tensor.index_select(0, _row_idx),
+                    initial_state_indices=spec_initial_state_indices_tensor.index_select(0, _row_idx),
+                    validate_data=False,
+                )
+                _conv_out.index_copy_(0, _row_idx, _sub)
+            mixed_qkv_spec = _conv_out
+        elif spec_sequence_masks is not None:
+            mixed_qkv_spec = causal_conv1d_update(
+                mixed_qkv_spec,
+                conv_state,
+                conv_weights,
+                self.conv1d.bias,
+                self.activation,
+                conv_state_indices=(
+                    spec_state_indices_tensor
+                    if spec_initial_state_indices_tensor is not None
+                    else spec_state_indices_tensor[:, 0][
+                        : attn_metadata.num_spec_decodes
+                    ]
+                ),
+                num_accepted_tokens=num_accepted_tokens,
+                query_start_loc=spec_query_start_loc,
+                max_query_len=spec_state_indices_tensor.size(-1),
+                block_idx_last_scheduled_token=spec_write_state_slot_tensor,
+                initial_state_idx=spec_write_state_slot_tensor,
+                initial_state_indices=spec_initial_state_indices_tensor,
+                validate_data=False,
+            )
+"""
+    if old not in text:
+        print('[TRACK-B-PRELAUNCH] skip F_a expanded-node conv patch; F_b kernel-row hook absent')
+    else:
+        text = text.replace(old, new, 1)
+
+    old = """        query_spec, key_spec, value_spec = self.rearrange_mixed_qkv(mixed_qkv_spec)
+        query_non_spec, key_non_spec, value_non_spec = self.rearrange_mixed_qkv(
+            mixed_qkv_non_spec
+        )
+"""
+    new = """        query_spec, key_spec, value_spec = self.rearrange_mixed_qkv(mixed_qkv_spec)
+        query_non_spec, key_non_spec, value_non_spec = self.rearrange_mixed_qkv(
+            mixed_qkv_non_spec
+        )
+        if fa_unique_node_mode:
+            try:
+                _LUMO_FA_UNIQUE_GDN_FH.write(_lumo_fa_json.dumps({
+                    "ts": round(_lumo_fa_time.time(), 4),
+                    "event": "fa_unique_gdn_shapes",
+                    "layer": self.prefix,
+                    "expanded_parent_state_rows": bool(fa_unique_expanded_node_mode),
+                    "query_spec_shape": list(query_spec.shape) if query_spec is not None else None,
+                    "key_spec_shape": list(key_spec.shape) if key_spec is not None else None,
+                    "value_spec_shape": list(value_spec.shape) if value_spec is not None else None,
+                    "a_shape": list(a.shape),
+                    "b_shape": list(b.shape),
+                }) + chr(10))
+            except Exception:
+                pass
+"""
+    if old not in text:
+        raise RuntimeError('F_a unique-node shape telemetry anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = """        # 2.1: Process the multi-query part
+        if spec_sequence_masks is not None:
+            core_attn_out_spec, last_recurrent_state = (
+                fused_sigmoid_gating_delta_rule_update(
+                    A_log=self.A_log,
+                    a=a,
+                    b=b,
+                    dt_bias=self.dt_bias,
+                    q=query_spec,
+                    k=key_spec,
+                    v=value_spec,
+                    initial_state=ssm_state,
+                    inplace_final_state=True,
+                    cu_seqlens=spec_query_start_loc[
+                        : attn_metadata.num_spec_decodes + 1
+                    ],
+                    ssm_state_indices=spec_state_indices_tensor,
+                    initial_state_indices=spec_initial_state_indices_tensor,
+                    num_accepted_tokens=num_accepted_tokens,
+                    use_qk_l2norm_in_kernel=True,
+                )
+            )
+        else:
+            core_attn_out_spec, last_recurrent_state = None, None
+"""
+    new = """        # 2.1: Process the multi-query part
+        if spec_sequence_masks is not None and fa_unique_expanded_node_mode:
+            def _lumo_fa_select_token(_tensor, _idx):
+                if _tensor is None:
+                    return None
+                if _tensor.ndim >= 3 and _tensor.shape[1] == attn_metadata.num_spec_decode_tokens:
+                    return _tensor.index_select(1, _idx)
+                if _tensor.ndim >= 1 and _tensor.shape[0] == attn_metadata.num_spec_decode_tokens:
+                    return _tensor.index_select(0, _idx)
+                return _tensor
+
+            _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
+            _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
+            _depths = []
+            for _i, _parent in enumerate(_parents):
+                if _i == 0:
+                    _depths.append(0)
+                else:
+                    _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+            core_attn_out_spec = None
+            last_recurrent_state = None
+            for _depth in range((max(_depths) + 1) if _depths else 0):
+                _rows = [i for i, d in enumerate(_depths) if d == _depth]
+                if not _rows:
+                    continue
+                _row_idx = torch.tensor(_rows, dtype=torch.long, device=query_spec.device)
+                _sub_query_start = torch.arange(
+                    len(_rows) + 1, dtype=torch.int32, device=query_spec.device)
+                _sub_out, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
+                    A_log=self.A_log,
+                    a=_lumo_fa_select_token(a, _row_idx),
+                    b=_lumo_fa_select_token(b, _row_idx),
+                    dt_bias=self.dt_bias,
+                    q=query_spec.index_select(1, _row_idx),
+                    k=key_spec.index_select(1, _row_idx),
+                    v=value_spec.index_select(1, _row_idx),
+                    initial_state=ssm_state,
+                    inplace_final_state=True,
+                    cu_seqlens=_sub_query_start,
+                    ssm_state_indices=spec_state_indices_tensor.index_select(0, _row_idx),
+                    initial_state_indices=spec_initial_state_indices_tensor.index_select(0, _row_idx),
+                    num_accepted_tokens=num_accepted_tokens.index_select(0, _row_idx),
+                    use_qk_l2norm_in_kernel=True,
+                )
+                if core_attn_out_spec is None:
+                    core_attn_out_spec = torch.empty(
+                        (1, attn_metadata.num_spec_decode_tokens, *_sub_out.shape[2:]),
+                        dtype=_sub_out.dtype, device=_sub_out.device)
+                core_attn_out_spec.index_copy_(1, _row_idx, _sub_out)
+        elif spec_sequence_masks is not None:
+            core_attn_out_spec, last_recurrent_state = (
+                fused_sigmoid_gating_delta_rule_update(
+                    A_log=self.A_log,
+                    a=a,
+                    b=b,
+                    dt_bias=self.dt_bias,
+                    q=query_spec,
+                    k=key_spec,
+                    v=value_spec,
+                    initial_state=ssm_state,
+                    inplace_final_state=True,
+                    cu_seqlens=spec_query_start_loc[
+                        : attn_metadata.num_spec_decodes + 1
+                    ],
+                    ssm_state_indices=spec_state_indices_tensor,
+                    initial_state_indices=spec_initial_state_indices_tensor,
+                    num_accepted_tokens=num_accepted_tokens,
+                    use_qk_l2norm_in_kernel=True,
+                )
+            )
+        else:
+            core_attn_out_spec, last_recurrent_state = None, None
+"""
+    if old not in text:
+        print('[TRACK-B-PRELAUNCH] skip F_a expanded-node SSM patch; F_b kernel-row hook absent')
+    else:
+        text = text.replace(old, new, 1)
+
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a unique-node GDN linear telemetry patch')
+LUMOFAUNIQUENODES
+'''
+
 _FB_BLOCK = r'''
 python3 - <<'LUMOFBPATHS'
 from pathlib import Path
@@ -2314,12 +2935,299 @@ def _lumo_fb_policy_from_logits(logits, max_k=None):
     except Exception:
         return 1, {"fb_policy_k": 1, "fb_policy_reason": "policy_error"}
 
+def _lumo_fb_alt_record_from_logits(logits, row0_token, position):
+    try:
+        row = logits.reshape(-1, logits.shape[-1])[:1].float()
+        topn = min(8, int(row.shape[-1]))
+        vals, idx = _lumo_fb_torch.topk(row, topn, dim=-1)
+        probs = _lumo_fb_torch.softmax(vals, dim=-1)
+        row0 = int(row0_token.reshape(-1)[0].item())
+        top_tokens = [int(x) for x in idx[0].detach().cpu().tolist()]
+        top_probs = [float(x) for x in probs[0].detach().cpu().tolist()]
+        row0_p = 0.0
+        alt_tok = row0
+        alt_p = 0.0
+        for tok, prob in zip(top_tokens, top_probs):
+            if tok == row0:
+                row0_p = float(prob)
+                break
+        for tok, prob in zip(top_tokens, top_probs):
+            if tok != row0 and tok != 0:
+                alt_tok = int(tok)
+                alt_p = float(prob)
+                break
+        if row0_p <= 0.0 and top_tokens and top_tokens[0] == row0:
+            row0_p = float(top_probs[0])
+        gap = float(row0_p - alt_p)
+        ratio = float(alt_p / max(row0_p, 1e-9))
+        return {
+            "position": int(position),
+            "row0_token": row0,
+            "alt_token": int(alt_tok),
+            "row0_p": row0_p,
+            "alt_p": alt_p,
+            "gap": gap,
+            "ratio": ratio,
+            "top_tokens": top_tokens,
+            "top_probs": top_probs,
+        }
+    except Exception as exc:
+        return {
+            "position": int(position),
+            "row0_token": int(row0_token.reshape(-1)[0].item()),
+            "alt_token": int(row0_token.reshape(-1)[0].item()),
+            "row0_p": 0.0,
+            "alt_p": 0.0,
+            "gap": 0.0,
+            "ratio": 0.0,
+            "error": repr(exc),
+        }
+
+def _lumo_fb_build_free_row1(row0, records):
+    row0_1d = row0.reshape(-1)
+    depth = int(row0_1d.numel())
+    usable = [rec for rec in records[:depth]
+              if int(rec.get("alt_token", rec.get("row0_token", -1))) != int(rec.get("row0_token", -1))]
+    if not usable:
+        return row0.clone(), {
+            "row1_enabled": False,
+            "flip_pos": -1,
+            "gate_reason": "no_cached_alt",
+            "candidate_valid": False,
+        }
+    p1_max = float(_lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1_P1_MAX", "0.45"))
+    ratio_min = float(_lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1_RATIO_MIN", "0.50"))
+    low_conf = [
+        rec for rec in usable
+        if float(rec.get("row0_p", 0.0)) < p1_max
+        and float(rec.get("ratio", 0.0)) > ratio_min
+    ]
+    pool = low_conf if low_conf else usable
+    best = max(pool, key=lambda rec: (
+        float(rec.get("ratio", 0.0)),
+        float(rec.get("alt_p", 0.0)),
+        -int(rec.get("position", 0)),
+    ))
+    flip_pos = int(best.get("position", -1))
+    row1 = row0.clone()
+    if 0 <= flip_pos < depth:
+        row1.reshape(-1)[flip_pos] = int(best["alt_token"])
+    always = _lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1_ALWAYS") == "1"
+    gated = bool(low_conf)
+    enabled = always or gated
+    return row1, {
+        "row1_enabled": bool(enabled),
+        "flip_pos": int(flip_pos),
+        "gate_reason": (
+            "always_on"
+            if always else
+            (f"low_conf_pos{flip_pos}" if gated else "gate_closed")
+        ),
+        "candidate_valid": True,
+    }
+
+def _lumo_fb_free_row1_event(active_depth, row0, row1, records, decision,
+                             requested_k, verified_rows, fb_proposer_us,
+                             policy_info=None):
+    row0_list = [int(x) for x in row0.reshape(-1)[:active_depth].detach().cpu().tolist()]
+    row1_list = [int(x) for x in row1.reshape(-1)[:active_depth].detach().cpu().tolist()]
+    rows_generated = 2 if decision.get("candidate_valid") else 1
+    return {
+        "event": "fb_free_row1_decision",
+        "active_depth": int(active_depth),
+        "active_k": int(requested_k),
+        "row0": row0_list,
+        "row1": row1_list,
+        "row1_enabled": bool(decision.get("row1_enabled", False)),
+        "row1_source": "mtp_cached_alt",
+        "flip_pos": int(decision.get("flip_pos", -1)),
+        "proposer_free": True,
+        "extra_extend_one_calls": 0,
+        "position_tree_enabled": False,
+        "generated_rows": int(rows_generated if verified_rows > 1 else verified_rows),
+        "candidate_rows": int(rows_generated),
+        "verified_rows": int(verified_rows),
+        "row0_p": [round(float(rec.get("row0_p", 0.0)), 6) for rec in records[:active_depth]],
+        "row1_alt_p": [round(float(rec.get("alt_p", 0.0)), 6) for rec in records[:active_depth]],
+        "row0_alt_ratio": [round(float(rec.get("ratio", 0.0)), 6) for rec in records[:active_depth]],
+        "gate_reason": str(decision.get("gate_reason", "")),
+        "fb_proposer_us": int(fb_proposer_us),
+        "policy": policy_info or {},
+    }
+
+def _lumo_fb_unified_step_event(active_depth, records, decision, verified_rows,
+                                proposer_us, trim_us=0, verify_us=0,
+                                commit_us=0):
+    candidate_alt_nodes = sum(
+        1 for rec in records[:active_depth]
+        if int(rec.get("alt_token", rec.get("row0_token", -1))) != int(rec.get("row0_token", -1))
+    )
+    candidate_pool_nodes = int(active_depth) + int(candidate_alt_nodes)
+    selected_nodes = int(verified_rows)
+    trimmed_nodes = max(0, candidate_pool_nodes - selected_nodes)
+    invariant_failures = []
+    if selected_nodes != int(verified_rows):
+        invariant_failures.append("selected_nodes_ne_verified_nodes")
+    return {
+        "event": "round_f_unified_step",
+        "stage": "stage2_cached_alt_shadow" if int(verified_rows) == int(active_depth) else "stage2_cached_alt_active_row_compat",
+        "candidate_pool_nodes": int(candidate_pool_nodes),
+        "selected_nodes": int(selected_nodes),
+        "verified_nodes": int(verified_rows),
+        "trimmed_nodes": int(trimmed_nodes),
+        "max_depth": int(active_depth),
+        "sources": {
+            "mtp_top1": int(active_depth),
+            "mtp_alt": int(candidate_alt_nodes),
+            "suffix": 0,
+        },
+        "path_rows": 0 if int(verified_rows) == int(active_depth) else 1,
+        "scheduler_visible_clone_requests": 0 if int(verified_rows) == int(active_depth) else 1,
+        "prefix_kv_copy_bytes": 0,
+        "recomputed_shared_prefix_nodes": 0,
+        "extra_proposer_for_trimmed_nodes": 0,
+        "accepted_path_commit_only": True,
+        "tree_attention": False,
+        "gdn_parent_gather": False,
+        "depth_positions": True,
+        "tree_sampler": False,
+        "top1_spine_accept_depth": None,
+        "accepted_depth": None,
+        "accepted_node_path": [],
+        "estimated_event_ms": None,
+        "event_budget_ms": None,
+        "tree_score": None,
+        "proposer_us": int(proposer_us),
+        "trim_us": int(trim_us),
+        "verify_us": int(verify_us),
+        "tree_attention_us": 0,
+        "gdn_parent_gather_us": 0,
+        "depth_sync_us": 0,
+        "commit_us": int(commit_us),
+        "gdn_state_bytes_copied": 0,
+        "kv_suffix_bytes_copied": 0,
+        "physical_minimum_invariant_failures": invariant_failures,
+        "gate_reason": str(decision.get("gate_reason", "")),
+        "row1_enabled": bool(decision.get("row1_enabled", False)),
+    }
+
+def _lumo_fb_spine_only_state_tree_event(active_depth, proposer_us,
+                                         spine_source="lumo_fb_extend_one_k1_trunk",
+                                         replay_idx=None):
+    internal_rows = _lumo_fb_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1"
+    kernel_rows = _lumo_fb_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+    no_kv_prefix_copy = _lumo_fb_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"
+    replay = spine_source == "replay_native_e3_mtp_draft"
+    invariant_failures = []
+    if not internal_rows:
+        invariant_failures.append("lumo_fb_internal_rows_off")
+    if not kernel_rows:
+        invariant_failures.append("lumo_fb_kernel_rows_off")
+    if not no_kv_prefix_copy:
+        invariant_failures.append("lumo_fb_no_kv_prefix_copy_off")
+    return {
+        "event": "round_f_unified_step",
+        "stage": "stage3_spine_only_state_tree",
+        "component_under_test": (
+            "verifier_replay_isolation"
+            if replay else "proposer_wrapper_plus_real_k1_verifier"
+        ),
+        "verifier_path": "LUMO_FB_INTERNAL_ROWS/KERNEL_ROWS_K1",
+        "internal_rows_enabled": bool(internal_rows),
+        "kernel_rows_enabled": bool(kernel_rows),
+        "no_kv_prefix_copy_enabled": bool(no_kv_prefix_copy),
+        "candidate_pool_nodes": int(active_depth),
+        "selected_nodes": int(active_depth),
+        "verified_nodes": int(active_depth),
+        "trimmed_nodes": 0,
+        "max_depth": int(active_depth),
+        "sources": {
+            "mtp_top1": int(active_depth),
+            "mtp_alt": 0,
+            "suffix": 0,
+        },
+        "path_rows": 0,
+        "scheduler_visible_clone_requests": 0,
+        "prefix_kv_copy_bytes": 0,
+        "recomputed_shared_prefix_nodes": 0,
+        "extra_proposer_for_trimmed_nodes": 0,
+        "accepted_path_commit_only": True,
+        "tree_attention": False,
+        "gdn_parent_gather": True,
+        "depth_positions": True,
+        "tree_sampler": False,
+        "top1_spine_accept_depth": None,
+        "accepted_depth": None,
+        "accepted_node_path": [],
+        "estimated_event_ms": None,
+        "event_budget_ms": None,
+        "tree_score": None,
+        "proposer_us": int(proposer_us),
+        "trim_us": 0,
+        "verify_us": 0,
+        "tree_attention_us": 0,
+        "gdn_parent_gather_us": 0,
+        "depth_sync_us": 0,
+        "commit_us": 0,
+        "gdn_state_bytes_copied": 0,
+        "kv_suffix_bytes_copied": 0,
+        "physical_minimum_invariant_failures": invariant_failures,
+        "spine_source": str(spine_source),
+        "replay_idx": replay_idx,
+    }
+
+def _lumo_fb_debug_write(event):
+    if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
+        return
+    try:
+        global _LUMO_FB_DBG_FH
+        try:
+            _LUMO_FB_DBG_FH
+        except NameError:
+            _LUMO_FB_DBG_FH = open("/logs/fb_debug.jsonl", "a", buffering=1)
+        _LUMO_FB_DBG_FH.write(_lumo_fb_json.dumps(event) + chr(10))
+    except Exception:
+        pass
+
+_lumo_fb_replay_cache = None
+_lumo_fb_replay_idx = 0
+
+def _lumo_fb_replay_next(device):
+    global _lumo_fb_replay_cache, _lumo_fb_replay_idx
+    path = _lumo_fb_os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE")
+    if not path:
+        return None
+    if _lumo_fb_replay_cache is None:
+        rows = []
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                payload = _lumo_fb_json.loads(line)
+                if payload.get("event") == "mtp_draft":
+                    rows.append(payload["draft"])
+        _lumo_fb_replay_cache = rows
+        _lumo_fb_replay_idx = 0
+    if _lumo_fb_replay_idx >= len(_lumo_fb_replay_cache):
+        raise RuntimeError(
+            f"LUMO_FB_REPLAY_DRAFT_FILE exhausted at {_lumo_fb_replay_idx}")
+    draft = _lumo_fb_replay_cache[_lumo_fb_replay_idx]
+    _lumo_fb_replay_idx += 1
+    return _lumo_fb_torch.tensor(
+        draft, dtype=_lumo_fb_torch.int64, device=device), int(_lumo_fb_replay_idx - 1)
+
 def _lumo_fb_extend_one(self, root_token, base_positions, base_hidden_states,
                         base_common_attn_metadata, batch_size, per_layer_attn_metadata,
-                        num_rejected_tokens_gpu, draft_len=None):
+                        num_rejected_tokens_gpu, draft_len=None,
+                        return_free_row1_metadata=False, root_logits=None):
     if draft_len is None:
         draft_len = self.num_speculative_tokens
     draft_token_ids_list = [root_token]
+    free_row1_records = []
+    if return_free_row1_metadata and root_logits is not None:
+        free_row1_records.append(
+            _lumo_fb_alt_record_from_logits(root_logits, root_token, 0))
     positions = base_positions.clone()
     hidden_states = base_hidden_states.clone()
     cad = _lumo_fb_replace(
@@ -2415,9 +3323,22 @@ def _lumo_fb_extend_one(self, root_token, base_positions, base_hidden_states,
             else:
                 last_hidden_states, hidden_states = ret_hidden_states
         hidden_states = hidden_states[:batch_size]
-        draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
+        if return_free_row1_metadata:
+            step_logits = _lumo_fb_sample_logits(self, last_hidden_states[:batch_size])
+            if step_logits is None:
+                draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
+            else:
+                draft_token_ids = _lumo_fb_torch.argmax(step_logits, dim=-1).to(_lumo_fb_torch.int64)
+                free_row1_records.append(
+                    _lumo_fb_alt_record_from_logits(
+                        step_logits, draft_token_ids, token_index + 1))
+        else:
+            draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
         draft_token_ids_list.append(draft_token_ids)
-    return _lumo_fb_torch.stack(draft_token_ids_list, dim=1)
+    out = _lumo_fb_torch.stack(draft_token_ids_list, dim=1)
+    if return_free_row1_metadata:
+        return out, free_row1_records
+    return out
 
 def _lumo_fb_repeat_cpu_shadow(value, k):
     if value is None:
@@ -2887,12 +3808,92 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
     _lumo_fb_path0_root = raw_roots[0] if (
         policy_k == 1 or _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
     ) else roots[0]
+    if requested_k == 1 and _lumo_fb_os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE"):
+        replay = _lumo_fb_replay_next(device=base_hidden_states.device)
+        out, replay_idx = replay
+        out = out[:, :active_depth].contiguous()
+        spine_source = "replay_native_e3_mtp_draft"
+        _lumo_fb_debug_write(_lumo_fb_spine_only_state_tree_event(
+            active_depth=active_depth,
+            proposer_us=int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
+            spine_source=spine_source,
+            replay_idx=replay_idx,
+        ))
+        try:
+            if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
+                _lumo_fb_debug_write({
+                    "ts": round(_lumo_fb_time.time(), 4),
+                    "event": "fb_state_tree_spine_draft",
+                    "active_depth": int(active_depth),
+                    "active_k": int(requested_k),
+                    "raw_roots": raw_roots.view(-1).tolist(),
+                    "root_candidates": root_candidates[:8].tolist(),
+                    "draft": out.tolist(),
+                    "spine_source": spine_source,
+                    "replay_idx": replay_idx,
+                    "policy": policy_info,
+                })
+        except Exception:
+            pass
+        return out
+    if (requested_k >= 2
+            and _lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1") == "1"):
+        path0, free_records = _lumo_fb_extend_one(
+            self, _lumo_fb_path0_root, positions, base_hidden_states,
+            common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+            num_rejected_tokens_gpu, draft_len=active_depth,
+            return_free_row1_metadata=True, root_logits=logits)
+        path0 = path0[:, :active_depth]
+        while len(free_records) < active_depth:
+            pos = len(free_records)
+            tok = path0.reshape(-1)[pos]
+            free_records.append({
+                "position": int(pos),
+                "row0_token": int(tok.item()),
+                "alt_token": int(tok.item()),
+                "row0_p": 0.0,
+                "alt_p": 0.0,
+                "gap": 0.0,
+                "ratio": 0.0,
+                "error": "missing_logits",
+            })
+        path1, free_decision = _lumo_fb_build_free_row1(path0, free_records)
+        shadow = _lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1_SHADOW") == "1"
+        active_row1 = bool(free_decision.get("row1_enabled", False)) and not shadow
+        verified_rows = 2 if active_row1 else 1
+        out = (_lumo_fb_torch.cat([path0, path1[:, :active_depth]], dim=1)
+               if active_row1 else path0)
+        _free_proposer_us = int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000)
+        _lumo_fb_debug_write(_lumo_fb_free_row1_event(
+            active_depth=active_depth,
+            row0=path0,
+            row1=path1[:, :active_depth],
+            records=free_records,
+            decision=free_decision,
+            requested_k=requested_k,
+            verified_rows=verified_rows,
+            fb_proposer_us=_free_proposer_us,
+            policy_info=policy_info,
+        ))
+        _lumo_fb_debug_write(_lumo_fb_unified_step_event(
+            active_depth=active_depth,
+            records=free_records,
+            decision=free_decision,
+            verified_rows=(active_depth if not active_row1 else 2 * active_depth),
+            proposer_us=_free_proposer_us,
+        ))
+        return out
     if policy_k == 1:
         path0 = _lumo_fb_extend_one(
             self, _lumo_fb_path0_root, positions, base_hidden_states,
             common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
             num_rejected_tokens_gpu, draft_len=active_depth)
         out = path0[:, :active_depth]
+        _lumo_fb_debug_write(_lumo_fb_spine_only_state_tree_event(
+            active_depth=active_depth,
+            proposer_us=int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
+            spine_source="lumo_fb_extend_one_k1_trunk",
+        ))
         try:
             if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
                 import json as _j, time as _t
@@ -6957,6 +7958,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     # backend (target verify + draft). vLLM's selector has no tree logic and does
     # not honor VLLM_ATTENTION_BACKEND in 0.19.0, so we source-edit the selector
     # (config F only). Realized KV is auto/bf16, which TreeAttention supports.
+    fa_unique = os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"
     dbg = "export LUMO_TREE_DRAFT_DEBUG=1\n" if (tree and tree_debug) else ""
     tree_blocks = _TREE_ATTN_BLOCK + _MROPE_TREE_BLOCK + _TREE_REJECTION_BLOCK
     fb_k = os.environ.get("LUMO_FB_K", "1")
@@ -6964,6 +7966,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
     fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
     fb_kernel_rows = "export LUMO_FB_KERNEL_ROWS=1\n" if os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""
+    fa_unique_env = "export LUMO_FA_UNIQUE_NODES=1\n" if fa_unique else ""
     # Batch-invariant vLLM must be enabled through the host-side ModelServer
     # knob so the launch command also gets a concrete attention backend. A raw
     # inner-container VLLM_BATCH_INVARIANT export makes vLLM fail at init with
@@ -6973,6 +7976,12 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_position_tree = f"export LUMO_FB_POSITION_TREE={os.environ['LUMO_FB_POSITION_TREE']}\n" if os.environ.get("LUMO_FB_POSITION_TREE") else ""
     fb_tree_branch_depth = f"export LUMO_FB_TREE_BRANCH_DEPTH={os.environ['LUMO_FB_TREE_BRANCH_DEPTH']}\n" if os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH") else ""
+    fb_replay_draft = f"export LUMO_FB_REPLAY_DRAFT_FILE={os.environ['LUMO_FB_REPLAY_DRAFT_FILE']}\n" if os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE") else ""
+    fb_free_row1 = "export LUMO_FB_FREE_ROW1=1\n" if os.environ.get("LUMO_FB_FREE_ROW1") == "1" else ""
+    fb_free_row1_shadow = "export LUMO_FB_FREE_ROW1_SHADOW=1\n" if os.environ.get("LUMO_FB_FREE_ROW1_SHADOW") == "1" else ""
+    fb_free_row1_always = "export LUMO_FB_FREE_ROW1_ALWAYS=1\n" if os.environ.get("LUMO_FB_FREE_ROW1_ALWAYS") == "1" else ""
+    fb_free_row1_p1 = f"export LUMO_FB_FREE_ROW1_P1_MAX={os.environ['LUMO_FB_FREE_ROW1_P1_MAX']}\n" if os.environ.get("LUMO_FB_FREE_ROW1_P1_MAX") else ""
+    fb_free_row1_ratio = f"export LUMO_FB_FREE_ROW1_RATIO_MIN={os.environ['LUMO_FB_FREE_ROW1_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_FREE_ROW1_RATIO_MIN") else ""
     fb_sampler_trace = "export LUMO_FB_SAMPLER_TRACE=1\n" if os.environ.get("LUMO_FB_SAMPLER_TRACE") == "1" else ""
     fb_no_kv_prefix_copy = "export LUMO_FB_NO_KV_PREFIX_COPY=1\n" if os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1" else ""
     fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
@@ -6998,11 +8007,15 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
-    stale_fb_guard = "" if fb else _NO_STALE_FB_PATCHES_BLOCK
-    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + base + _SPEC_TRACE_BLOCK
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fa_unique_env}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else fa_unique_env
+    mtp_draft_trace = f"export LUMO_MTP_DRAFT_TRACE_FILE={os.environ['LUMO_MTP_DRAFT_TRACE_FILE']}\n" if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
+    mtp_draft_trace_block = _MTP_DRAFT_TRACE_BLOCK if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
+    stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
+    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
+            + mtp_draft_trace_block
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
-            + (_FB_KERNEL_ROWS_BLOCK if fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""))
+            + (_FB_KERNEL_ROWS_BLOCK if (fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") else "")
+            + (_FA_UNIQUE_NODES_BLOCK if fa_unique else ""))
 
 
 def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
@@ -7126,7 +8139,8 @@ def main() -> int:
     args = ap.parse_args()
     is_tree = args.config == "F"
     is_fb = args.config == "Fb"
-    if is_fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1":
+    if ((is_fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
+            or os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"):
         os.environ["LUMO_BATCH_INVARIANT_VLLM"] = "1"
     if args.tree is not None and not is_tree:
         ap.error("--tree is only valid with --config F")

@@ -36,6 +36,8 @@ import argparse, collections, json, os, subprocess, time, urllib.request
 from pathlib import Path
 
 TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl"
+FB_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_debug.jsonl"
+FB_OVERHEAD_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_overhead_debug.jsonl"
 DEFAULT_FB_CONTROL = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_control.json"
 DEFAULT_HOTPLUG_REF_N8 = "output/spec_speed_probe/E8_depth_search_256.json"
 PORT = 9950
@@ -87,6 +89,31 @@ def read_trace(pre: int, post: int) -> list[dict]:
                         rows.append(json.loads(line))
                     except Exception:
                         pass
+    return rows
+
+
+def jsonl_count(path: str) -> int:
+    p = Path(path)
+    if not p.exists():
+        return 0
+    with p.open() as f:
+        return sum(1 for _ in f)
+
+
+def read_jsonl_range(path: str, pre: int, post: int) -> list[dict]:
+    rows = []
+    if not Path(path).exists():
+        return rows
+    with open(path) as f:
+        for i, line in enumerate(f, 1):
+            if pre < i <= post:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rows.append(json.loads(line))
+                except Exception:
+                    pass
     return rows
 
 
@@ -199,6 +226,79 @@ def summarize(rows: list[dict]) -> dict:
     }
 
 
+def summarize_free_row1(debug_rows: list[dict], overhead_rows: list[dict]) -> dict:
+    decisions = [r for r in debug_rows if r.get("event") == "fb_free_row1_decision"]
+    if not decisions:
+        return {"events": 0}
+    enabled = [r for r in decisions if r.get("row1_enabled")]
+    sources = collections.Counter(r.get("row1_source", "unknown") for r in decisions)
+    generated_verified = collections.Counter(
+        (r.get("generated_rows"), r.get("verified_rows")) for r in decisions)
+    proposer_free = sum(1 for r in enabled if r.get("proposer_free") is True)
+    extra_extend = sum(int(r.get("extra_extend_one_calls") or 0) for r in decisions)
+    winner_rows = []
+    for row in overhead_rows:
+        if row.get("event") != "scheduler_winner_source":
+            continue
+        winners = row.get("winners") or {}
+        if isinstance(winners, dict):
+            winner_rows.extend(v for v in winners.values() if isinstance(v, dict))
+    row1_wins = [
+        w for w in winner_rows
+        if w.get("winner_is_internal") is True or int(w.get("winner_idx", 0) or 0) > 0
+    ]
+    gains = []
+    low_row0_gains = []
+    row0_accepts = []
+    row1_accepts = []
+    best_accepts = []
+    for w in winner_rows:
+        accepts = w.get("accept_lens") or []
+        if len(accepts) >= 2:
+            row0 = int(accepts[0])
+            row1 = int(accepts[1])
+            best = max(int(x) for x in accepts)
+        else:
+            row0 = int(w.get("path0_tree_acc", w.get("path0_raw_acc", 0)) or 0)
+            row1 = None
+            best = int(w.get("tree_best_acc", w.get("accepted", row0)) or row0)
+        row0_accepts.append(row0)
+        if row1 is not None:
+            row1_accepts.append(row1)
+        best_accepts.append(best)
+        gain = best - row0
+        gains.append(gain)
+        if row0 <= 2:
+            low_row0_gains.append(gain)
+    def _mean(vals: list[int | float]) -> float | None:
+        return round(sum(vals) / len(vals), 3) if vals else None
+    return {
+        "events": len(decisions),
+        "row1_enabled_count": len(enabled),
+        "row1_enabled_rate": round(len(enabled) / len(decisions), 4),
+        "row1_source_dist": dict(sorted(sources.items())),
+        "generated_verified_rows": {
+            f"{k[0]}:{k[1]}": v for k, v in sorted(generated_verified.items())
+        },
+        "proposer_free_rate_enabled": (
+            round(proposer_free / len(enabled), 4) if enabled else None
+        ),
+        "extra_extend_one_calls": int(extra_extend),
+        "position_tree_enabled_count": sum(1 for r in decisions if r.get("position_tree_enabled")),
+        "mean_proposer_us": _mean([r.get("fb_proposer_us", 0) for r in decisions]),
+        "gate_reason_dist": dict(sorted(collections.Counter(
+            r.get("gate_reason", "unknown") for r in decisions).items())),
+        "winner_events": len(winner_rows),
+        "row1_win_rate": round(len(row1_wins) / len(winner_rows), 4) if winner_rows else None,
+        "mean_row0_accept_len": _mean(row0_accepts),
+        "mean_row1_accept_len": _mean(row1_accepts),
+        "mean_best_accept_len": _mean(best_accepts),
+        "mean_row1_gain_enabled": _mean(gains),
+        "mean_row1_gain_when_row0_le_2": _mean(low_row0_gains),
+        "row0_le_2_events": len(low_row0_gains),
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--label", required=True, help="config label, e.g. E3 or Fa")
@@ -235,6 +335,8 @@ def main() -> int:
     if not key:
         raise SystemExit("could not read VLLM_API_KEY from container (is it serving?)")
 
+    fb_debug_pre = jsonl_count(FB_DEBUG)
+    fb_overhead_pre = jsonl_count(FB_OVERHEAD_DEBUG)
     per_req, all_rows = [], []
     for i, prompt in enumerate(PROMPTS[: args.n_prompts]):
         pre = trace_count()
@@ -267,6 +369,10 @@ def main() -> int:
     if hotplug and ref_path is None and args.fb_control_depth == 8 and Path(DEFAULT_HOTPLUG_REF_N8).exists():
         ref_path = Path(DEFAULT_HOTPLUG_REF_N8)
     ref_delta = hotplug_reference_delta(ref_path, agg) if ref_path else None
+    free_row1 = summarize_free_row1(
+        read_jsonl_range(FB_DEBUG, fb_debug_pre, jsonl_count(FB_DEBUG)),
+        read_jsonl_range(FB_OVERHEAD_DEBUG, fb_overhead_pre, jsonl_count(FB_OVERHEAD_DEBUG)),
+    )
 
     result = {
         "label": args.label, "temp": args.temp, "top_p": args.top_p,
@@ -280,6 +386,7 @@ def main() -> int:
         "fb_control_file": args.fb_control_file if hotplug else None,
         "width_validation": width_validation,
         "hotplug_reference": ref_delta,
+        "free_row1": free_row1,
         "aggregate": agg, "per_request": per_req,
     }
     out = Path(args.out or f"output/spec_speed_probe/{args.label}.json")
@@ -296,6 +403,8 @@ def main() -> int:
     print(f"  provenance: launch_n_max={args.launch_n_max} active_depth={args.fb_control_depth} "
           f"active_k={args.fb_control_k} certifiable={certifiable}")
     print(f"  width_validation={width_validation['valid_width']}")
+    if free_row1.get("events"):
+        print(f"  free_row1={free_row1}")
     if ref_delta:
         print(f"  hotplug_reference={ref_delta}")
     print(f"  -> {out}")
