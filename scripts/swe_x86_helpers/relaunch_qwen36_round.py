@@ -2697,6 +2697,81 @@ def _lumo_fa_tree_delta_torch(
     initial_state.index_copy_(0, write_indices, states.to(initial_state.dtype))
     return output.unsqueeze(0).to(v.dtype), states.to(initial_state.dtype)
 
+# LUMO_FA_ACTIVATION_REPLAY_COMMIT: accepted-path commit is standard linear GDN.
+_LUMO_FA_REPLAY_LAYERS = []
+
+def _lumo_fa_replay_reset_if_first_layer(prefix: str) -> None:
+    if ".layers.0." in prefix:
+        _LUMO_FA_REPLAY_LAYERS.clear()
+
+def _lumo_fa_replay_remember(record: dict) -> None:
+    _LUMO_FA_REPLAY_LAYERS.append(record)
+
+def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
+    n = int(accepted_token_count)
+    if n <= 0:
+        _LUMO_FA_REPLAY_LAYERS.clear()
+        return
+    for rec in list(_LUMO_FA_REPLAY_LAYERS):
+        tokens = min(n, int(rec["num_tokens"]))
+        if tokens <= 0:
+            continue
+        module = rec["module"]
+        prefix_idx = int(rec["initial_state_indices"].reshape(-1)[0].item())
+        device = rec["mixed_qkv_input"].device
+        state_idx = torch.tensor([prefix_idx], dtype=torch.int32, device=device)
+        state_cols = torch.full((1, tokens), prefix_idx, dtype=torch.int32, device=device)
+        accepted = torch.tensor([tokens], dtype=torch.int32, device=device)
+        qsl = torch.tensor([0, tokens], dtype=torch.int32, device=device)
+        mixed = rec["mixed_qkv_input"][:tokens]
+        try:
+            mixed = causal_conv1d_update(
+                mixed,
+                rec["conv_state"],
+                rec["conv_weights"],
+                module.conv1d.bias,
+                module.activation,
+                conv_state_indices=state_cols,
+                num_accepted_tokens=accepted,
+                query_start_loc=qsl,
+                max_query_len=tokens,
+                block_idx_last_scheduled_token=state_idx,
+                initial_state_idx=state_idx,
+                initial_state_indices=state_idx,
+                validate_data=False,
+            )
+        except TypeError:
+            mixed = causal_conv1d_update(
+                mixed,
+                rec["conv_state"],
+                rec["conv_weights"],
+                module.conv1d.bias,
+                module.activation,
+                conv_state_indices=state_idx,
+                num_accepted_tokens=accepted,
+                query_start_loc=qsl,
+                max_query_len=tokens,
+                validate_data=False,
+            )
+        q, k, v = module.rearrange_mixed_qkv(mixed)
+        fused_sigmoid_gating_delta_rule_update(
+            A_log=module.A_log,
+            a=rec["a"][:tokens],
+            b=rec["b"][:tokens],
+            dt_bias=module.dt_bias,
+            q=q,
+            k=k,
+            v=v,
+            initial_state=rec["ssm_state"],
+            inplace_final_state=True,
+            cu_seqlens=qsl,
+            ssm_state_indices=state_cols,
+            initial_state_indices=state_idx,
+            num_accepted_tokens=accepted,
+            use_qk_l2norm_in_kernel=True,
+        )
+    _LUMO_FA_REPLAY_LAYERS.clear()
+
 @CustomOp.register("chunk_gated_delta_rule")
 """
         if old not in text:
@@ -2772,6 +2847,7 @@ def _lumo_fa_tree_delta_torch(
             )
 """
     new = """        # 1.1: Process the multi-query part
+        _lumo_fa_replay_mixed_qkv_input = mixed_qkv_spec
         if spec_sequence_masks is not None and fa_unique_expanded_node_mode:
             _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
             _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
@@ -2858,6 +2934,27 @@ def _lumo_fa_tree_delta_torch(
                 }) + chr(10))
             except Exception:
                 pass
+            if (
+                fa_unique_expanded_node_mode
+                and _lumo_fa_os.environ.get("LUMO_FA_ACTIVATION_REPLAY_COMMIT", "1") == "1"
+                and spec_initial_state_indices_tensor is not None
+                and query_spec is not None
+            ):
+                try:
+                    _lumo_fa_replay_reset_if_first_layer(self.prefix)
+                    _lumo_fa_replay_remember({
+                        "module": self,
+                        "num_tokens": int(attn_metadata.num_spec_decode_tokens),
+                        "mixed_qkv_input": _lumo_fa_replay_mixed_qkv_input.detach(),
+                        "a": a.detach(),
+                        "b": b.detach(),
+                        "conv_state": conv_state,
+                        "conv_weights": conv_weights,
+                        "ssm_state": ssm_state,
+                        "initial_state_indices": spec_initial_state_indices_tensor.detach(),
+                    })
+                except Exception:
+                    pass
 """
     if old not in text:
         raise RuntimeError('F_a unique-node shape telemetry anchor not found')
@@ -3006,6 +3103,71 @@ def _lumo_fa_tree_delta_torch(
     import py_compile
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_a unique-node GDN linear telemetry patch')
+
+gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = gm.read_text()
+sentinel = '# LUMO_FA_ACTIVATION_REPLAY_COMMIT_RUNNER'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a activation replay commit runner patch already present')
+else:
+    patch = r"""
+
+# LUMO_FA_ACTIVATION_REPLAY_COMMIT_RUNNER: after tree verification samples the
+# accepted linear path, replay that path through the standard GDN update.
+import os as _lumo_fa_replay_os
+import json as _lumo_fa_replay_json
+import time as _lumo_fa_replay_time
+from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_fa_replay_gdn
+
+_lumo_fa_replay_prev_sample_tokens = GPUModelRunner.sample_tokens
+
+def _lumo_fa_replay_sample_tokens(self, grammar_output):
+    out = _lumo_fa_replay_prev_sample_tokens(self, grammar_output)
+    if (_lumo_fa_replay_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"
+            and _lumo_fa_replay_os.environ.get("LUMO_FA_ACTIVATION_REPLAY_COMMIT", "1") == "1"):
+        try:
+            model_output = getattr(out, "model_runner_output", out)
+            samples = list(getattr(model_output, "sampled_token_ids", []) or [])
+            accepted_len = 0
+            if samples:
+                toks = samples[0]
+                accepted_len = sum(1 for tok in list(toks) if int(tok) >= 0)
+            if accepted_len > 0:
+                _lumo_fa_replay_gdn._lumo_fa_activation_replay_commit(accepted_len)
+            try:
+                fh = globals().get("_LUMO_FA_REPLAY_COMMIT_FH")
+                if fh is None:
+                    fh = open("/logs/fa_activation_replay_commit.jsonl", "a", buffering=1)
+                    globals()["_LUMO_FA_REPLAY_COMMIT_FH"] = fh
+                fh.write(_lumo_fa_replay_json.dumps({
+                    "ts": round(_lumo_fa_replay_time.time(), 4),
+                    "event": "fa_activation_replay_commit",
+                    "accepted_len": int(accepted_len),
+                    "sample_head": [int(x) for x in (list(samples[0])[:8] if samples else [])],
+                }) + chr(10))
+            except Exception:
+                pass
+        except Exception as exc:
+            try:
+                fh = globals().get("_LUMO_FA_REPLAY_COMMIT_FH")
+                if fh is None:
+                    fh = open("/logs/fa_activation_replay_commit.jsonl", "a", buffering=1)
+                    globals()["_LUMO_FA_REPLAY_COMMIT_FH"] = fh
+                fh.write(_lumo_fa_replay_json.dumps({
+                    "ts": round(_lumo_fa_replay_time.time(), 4),
+                    "event": "fa_activation_replay_commit_error",
+                    "error": repr(exc),
+                }) + chr(10))
+            except Exception:
+                pass
+    return out
+
+GPUModelRunner.sample_tokens = _lumo_fa_replay_sample_tokens
+"""
+    gm.write_text(text + patch)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a activation replay commit runner patch')
 LUMOFAUNIQUENODES
 '''
 
