@@ -5490,6 +5490,22 @@ def _lumo_fb_ir_debug(event):
     except Exception:
         pass
 
+def _lumo_fb_ir_superset_diag(event):
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_SUPERSET_DIAG") != "1":
+        return
+    try:
+        global _LUMO_FB_SUPERSET_DIAG_FH
+        try:
+            _LUMO_FB_SUPERSET_DIAG_FH
+        except NameError:
+            _LUMO_FB_SUPERSET_DIAG_FH = open(
+                "/logs/fb_superset_diag.jsonl", "a", buffering=1)
+        event["ts"] = round(_lumo_fb_ir_time.time(), 4)
+        _LUMO_FB_SUPERSET_DIAG_FH.write(
+            _lumo_fb_ir_json.dumps(event) + chr(10))
+    except Exception:
+        pass
+
 def _lumo_fb_ir_read_internal_max_commit(default_value):
     try:
         control = _lumo_fb_ir_os.environ.get("LUMO_FB_CONTROL_FILE")
@@ -5812,6 +5828,11 @@ def _lumo_fb_ir_update_states_runner(self, scheduler_output):
             _lumo_fb_ir_set_accept_len(self, row_id, 1)
             active[row_id] = parent_id
     if active:
+        _lumo_fb_ir_superset_diag({
+            "event": "runner_expanded_active",
+            "active_count": int(len(active)),
+            "parents": sorted(list(set(active.values())))[:8],
+        })
         try:
             self.num_accepted_tokens.copy_to_gpu(len(self.input_batch.req_ids))
         except Exception:
@@ -6087,6 +6108,19 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                                    common_attn_metadata=None):
     active = getattr(self, "_lumo_fb_ir_active", None)
     if not (_lumo_fb_ir_runner_enabled() and active):
+        if _lumo_fb_ir_runner_enabled():
+            try:
+                _count = int(getattr(self, "_lumo_fb_prune_noactive_diag_count", 0))
+                if _count < 8:
+                    self._lumo_fb_prune_noactive_diag_count = _count + 1
+                    _lumo_fb_ir_superset_diag({
+                        "event": "prune_no_active",
+                        "has_active_attr": hasattr(self, "_lumo_fb_ir_active"),
+                        "input_req_count": len(list(
+                            getattr(self.input_batch, "req_ids", []) or [])),
+                    })
+            except Exception:
+                pass
         return sampler_output, spec_decode_metadata, common_attn_metadata
     internal_ids = set(active.keys())
     req_ids = list(self.input_batch.req_ids)
@@ -6626,6 +6660,12 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
     if "_lumo_fb_ir_prune_after_sample" in globals():
         # The pre-update prune path must see the internal rows and active map so
         # it can collapse the winning row before vLLM mutates persistent state.
+        _lumo_fb_ir_superset_diag({
+            "event": "sample_tokens_active_preserved",
+            "active_count": int(len(active)),
+            "output_req_count": len(list(getattr(
+                getattr(output, "model_runner_output", output), "req_ids", []) or [])),
+        })
         return output
     self._lumo_fb_ir_active = {}
     internal_ids = set(active.keys())
