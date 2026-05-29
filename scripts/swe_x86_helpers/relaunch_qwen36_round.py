@@ -2721,38 +2721,18 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
         device = rec["mixed_qkv_input"].device
         state_idx = torch.tensor([prefix_idx], dtype=torch.int32, device=device)
         state_cols = torch.full((1, tokens), prefix_idx, dtype=torch.int32, device=device)
-        accepted = torch.tensor([tokens], dtype=torch.int32, device=device)
-        qsl = torch.tensor([0, tokens], dtype=torch.int32, device=device)
+        rec["conv_state"][prefix_idx].copy_(rec["conv_prefix_state"])
+        rec["ssm_state"][prefix_idx].copy_(rec["ssm_prefix_state"])
         mixed = rec["mixed_qkv_input"][:tokens]
-        try:
-            mixed = causal_conv1d_update(
-                mixed,
-                rec["conv_state"],
-                rec["conv_weights"],
-                module.conv1d.bias,
-                module.activation,
-                conv_state_indices=state_cols,
-                num_accepted_tokens=accepted,
-                query_start_loc=qsl,
-                max_query_len=tokens,
-                block_idx_last_scheduled_token=state_idx,
-                initial_state_idx=state_idx,
-                initial_state_indices=state_idx,
-                validate_data=False,
-            )
-        except TypeError:
-            mixed = causal_conv1d_update(
-                mixed,
-                rec["conv_state"],
-                rec["conv_weights"],
-                module.conv1d.bias,
-                module.activation,
-                conv_state_indices=state_idx,
-                num_accepted_tokens=accepted,
-                query_start_loc=qsl,
-                max_query_len=tokens,
-                validate_data=False,
-            )
+        mixed = causal_conv1d_update(
+            mixed.transpose(0, 1).unsqueeze(0),
+            rec["conv_state"],
+            rec["conv_weights"],
+            module.conv1d.bias,
+            module.activation,
+            conv_state_indices=state_idx,
+            validate_data=False,
+        ).squeeze(0).transpose(0, 1).contiguous()
         q, k, v = module.rearrange_mixed_qkv(mixed)
         fused_sigmoid_gating_delta_rule_update(
             A_log=module.A_log,
@@ -2764,10 +2744,10 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
             v=v,
             initial_state=rec["ssm_state"],
             inplace_final_state=True,
-            cu_seqlens=qsl,
+            cu_seqlens=None,
             ssm_state_indices=state_cols,
-            initial_state_indices=state_idx,
-            num_accepted_tokens=accepted,
+            initial_state_indices=None,
+            num_accepted_tokens=None,
             use_qk_l2norm_in_kernel=True,
         )
     _LUMO_FA_REPLAY_LAYERS.clear()
@@ -2949,8 +2929,10 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                         "a": a.detach(),
                         "b": b.detach(),
                         "conv_state": conv_state,
+                        "conv_prefix_state": conv_state[int(spec_initial_state_indices_tensor.reshape(-1)[0].item())].detach().clone(),
                         "conv_weights": conv_weights,
                         "ssm_state": ssm_state,
+                        "ssm_prefix_state": ssm_state[int(spec_initial_state_indices_tensor.reshape(-1)[0].item())].detach().clone(),
                         "initial_state_indices": spec_initial_state_indices_tensor.detach(),
                     })
                 except Exception:
