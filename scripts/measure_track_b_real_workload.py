@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import collections
+import hashlib
 import json
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,6 +22,9 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from lumo_flywheel_serving.metrics import compute_task_metrics, parse_prometheus_text, resolve_metric_schema  # noqa: E402
+
+SPEC_TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl"
+FB_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_debug.jsonl"
 
 
 def _now() -> str:
@@ -66,6 +72,152 @@ def _load_seed(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _load_swe_bench_entries(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    subset = json.loads(path.read_text(encoding="utf-8"))
+    instance_ids = list(subset.get("instance_ids") or [])
+    if not instance_ids:
+        raise RuntimeError(f"SWE-bench subset has no instance_ids: {path}")
+    os.environ.setdefault("HF_HOME", str(REPO_ROOT / ".cache" / "huggingface"))
+    from datasets import load_dataset
+
+    ds = load_dataset(str(subset.get("dataset_name") or "princeton-nlp/SWE-bench_Verified"),
+                      split=str(subset.get("split") or "test"))
+    wanted = set(str(iid) for iid in instance_ids)
+    rows_by_id = {str(ex["instance_id"]): ex for ex in ds if str(ex["instance_id"]) in wanted}
+    missing = sorted(wanted - set(rows_by_id))
+    if missing:
+        raise RuntimeError(f"SWE-bench subset instances missing from dataset: {missing}")
+    entries: list[dict[str, Any]] = []
+    for iid in instance_ids:
+        ex = rows_by_id[str(iid)]
+        problem = str(ex.get("problem_statement") or "").strip()
+        repo = str(ex.get("repo") or "unknown")
+        base_commit = str(ex.get("base_commit") or "")
+        prompt = (
+            "You are working on a SWE-bench Verified task.\n"
+            f"Instance: {iid}\n"
+            f"Repository: {repo}\n"
+            f"Base commit: {base_commit}\n\n"
+            "Problem statement:\n"
+            f"{problem}\n\n"
+            "Reason about the fix. Do not use tools; provide the likely code-change plan and key files."
+        )
+        entries.append({
+            "instance_id": str(iid),
+            "repo": repo,
+            "prompt": prompt,
+            "prompt_tokens": max(1, len(prompt.split())),
+            "request_max_output_tokens": 512,
+            "class": "swe_bench_verified",
+        })
+    workload = {
+        "workload_distribution_id": f"swe_bench_verified_subset:{path.name}",
+        "dataset_name": subset.get("dataset_name"),
+        "split": subset.get("split"),
+        "subset_path": str(path),
+        "instance_ids": instance_ids,
+    }
+    return workload, entries
+
+
+def _jsonl_count(path: str) -> int:
+    p = Path(path)
+    if not p.exists():
+        return 0
+    with p.open() as f:
+        return sum(1 for _ in f)
+
+
+def _read_jsonl_range(path: str, pre: int, post: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not Path(path).exists():
+        return rows
+    with open(path, encoding="utf-8") as f:
+        for i, line in enumerate(f, 1):
+            if pre < i <= post:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(payload, dict):
+                    rows.append(payload)
+    return rows
+
+
+def _summarize_spec_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {"events": 0}
+    accs = [int(r.get("acc", 0) or 0) for r in rows]
+    drafts = [int(r.get("draft", 0) or 0) for r in rows]
+    ts = [float(r.get("ts", 0.0) or 0.0) for r in rows]
+    span = max(0.0, ts[-1] - ts[0]) if len(ts) > 1 else 0.0
+    return {
+        "events": len(rows),
+        "mean_acc_per_event": round(sum(accs) / len(accs), 3),
+        "mean_draft_per_event": round(sum(drafts) / len(drafts), 3),
+        "accepted_per_node": round(sum(accs) / sum(drafts), 4) if sum(drafts) else None,
+        "mean_event_ms": round(span / (len(rows) - 1) * 1000, 3) if len(rows) > 1 and span > 0 else None,
+        "acc_dist": dict(sorted(collections.Counter(accs).items())),
+        "acc_sequence_sha256": hashlib.sha256(
+            json.dumps(accs, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+        "draft_sequence_sha256": hashlib.sha256(
+            json.dumps(drafts, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+        "acc_sequence": accs,
+        "draft_sequence": drafts,
+    }
+
+
+def _summarize_unified_debug(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    unified = [r for r in rows if r.get("event") == "round_f_unified_step"]
+    free = [r for r in rows if r.get("event") == "fb_free_row1_decision"]
+    failures = []
+    for row in unified:
+        failures.extend(row.get("physical_minimum_invariant_failures") or [])
+    def _rate(pred) -> float | None:
+        return round(sum(1 for row in unified if pred(row)) / len(unified), 4) if unified else None
+    def _int_field(row: dict[str, Any], key: str, default: int = -1) -> int:
+        value = row.get(key, default)
+        if value is None:
+            return default
+        return int(value)
+    return {
+        "round_f_unified_events": len(unified),
+        "free_row1_events": len(free),
+        "selected_eq_verified_rate": _rate(lambda r: r.get("selected_nodes") == r.get("verified_nodes")),
+        "path_rows_zero_rate": _rate(lambda r: _int_field(r, "path_rows") == 0),
+        "scheduler_clone_zero_rate": _rate(lambda r: _int_field(r, "scheduler_visible_clone_requests") == 0),
+        "prefix_kv_copy_bytes_total": sum(int(r.get("prefix_kv_copy_bytes", 0) or 0) for r in unified),
+        "extra_proposer_for_trimmed_nodes_total": sum(int(r.get("extra_proposer_for_trimmed_nodes", 0) or 0) for r in unified),
+        "candidate_pool_nodes_mean": (
+            round(sum(float(r.get("candidate_pool_nodes", 0) or 0) for r in unified) / len(unified), 3)
+            if unified else None
+        ),
+        "selected_nodes_mean": (
+            round(sum(float(r.get("selected_nodes", 0) or 0) for r in unified) / len(unified), 3)
+            if unified else None
+        ),
+        "trimmed_nodes_mean": (
+            round(sum(float(r.get("trimmed_nodes", 0) or 0) for r in unified) / len(unified), 3)
+            if unified else None
+        ),
+        "invariant_failures": dict(sorted(collections.Counter(failures).items())),
+        "free_row1_extra_extend_one_calls": sum(int(r.get("extra_extend_one_calls", 0) or 0) for r in free),
+        "free_row1_proposer_free_rate_enabled": (
+            round(
+                sum(1 for r in free if r.get("row1_enabled") and r.get("proposer_free") is True)
+                / max(1, sum(1 for r in free if r.get("row1_enabled"))),
+                4,
+            )
+            if free else None
+        ),
+    }
+
+
 def _metrics(metrics_url: str) -> dict[str, float]:
     response = requests.get(metrics_url, timeout=20)
     _raise_for_status_with_body(response)
@@ -88,6 +240,8 @@ def _metric_summary(before: dict[str, float], after: dict[str, float], *, reques
     prefill_sum_s = float(metrics.get("prefill_sum_s") or 0.0)
     prompt_tokens = float(metrics.get("prompt_tokens") or 0.0)
     kv_tokens = float(metrics.get("kv_computed_tokens") or 0.0)
+    accepted = float(metrics.get("spec_decode_num_accepted_tokens") or 0.0)
+    draft_tokens = float(metrics.get("spec_decode_num_draft_tokens") or 0.0)
     return {
         "available": True,
         "request_count": request_count,
@@ -102,6 +256,8 @@ def _metric_summary(before: dict[str, float], after: dict[str, float], *, reques
             "ttft_count": int(metrics.get("ttft_count") or 0),
             "cache_queries": float(metrics.get("cache_queries") or 0.0),
             "cache_hits": float(metrics.get("cache_hits") or 0.0),
+            "spec_decode_num_accepted_tokens": accepted,
+            "spec_decode_num_draft_tokens": draft_tokens,
         },
         "step_consumption": {
             "prompt_tokens_per_request": round(prompt_tokens / max(request_count, 1), 3),
@@ -111,6 +267,7 @@ def _metric_summary(before: dict[str, float], after: dict[str, float], *, reques
             "decode_tokens_per_s": round(gen_tokens / decode_sum_s, 6) if decode_sum_s > 0 else None,
             "wall_decode_tokens_per_s": round(gen_tokens / elapsed_s, 6) if elapsed_s > 0 else None,
             "cache_hit_rate_pct": metrics.get("cache_hit_rate_pct"),
+            "accepted_per_draft_token": round(accepted / draft_tokens, 6) if draft_tokens > 0 else None,
         },
         "bottleneck_hint": "decode" if decode_sum_s >= prefill_sum_s else "prefill",
     }
@@ -134,6 +291,8 @@ def _aggregate_metric_summaries(summaries: list[dict[str, Any]], *, request_coun
         "ttft_count": 0.0,
         "cache_queries": 0.0,
         "cache_hits": 0.0,
+        "spec_decode_num_accepted_tokens": 0.0,
+        "spec_decode_num_draft_tokens": 0.0,
     }
     for summary in summaries:
         delta = summary.get("metrics_delta") if isinstance(summary.get("metrics_delta"), dict) else {}
@@ -144,6 +303,8 @@ def _aggregate_metric_summaries(summaries: list[dict[str, Any]], *, request_coun
     prefill_sum_s = totals["prefill_sum_s"]
     kv_tokens = totals["kv_computed_tokens"]
     cache_queries = totals["cache_queries"]
+    accepted = totals["spec_decode_num_accepted_tokens"]
+    draft_tokens = totals["spec_decode_num_draft_tokens"]
     return {
         "available": True,
         "request_count": request_count,
@@ -157,6 +318,7 @@ def _aggregate_metric_summaries(summaries: list[dict[str, Any]], *, request_coun
             "decode_tokens_per_s": round(gen_tokens / decode_sum_s, 6) if decode_sum_s > 0 else None,
             "wall_decode_tokens_per_s": round(gen_tokens / elapsed_s, 6) if elapsed_s > 0 else None,
             "cache_hit_rate_pct": (totals["cache_hits"] / cache_queries * 100.0) if cache_queries > 0 else None,
+            "accepted_per_draft_token": round(accepted / draft_tokens, 6) if draft_tokens > 0 else None,
         },
         "bottleneck_hint": "decode" if decode_sum_s >= prefill_sum_s else "prefill",
     }
@@ -186,6 +348,8 @@ def _post_response(
     if max_output_token_cap is not None:
         output_tokens = min(output_tokens, max_output_token_cap)
     prompt = " ".join(["token"] * max(prompt_tokens, 1))
+    if entry.get("prompt"):
+        prompt = str(entry["prompt"])
     request_payload: dict[str, Any] = {
         "model": model,
         "input": prompt,
@@ -256,8 +420,12 @@ def _run_warm_batch(
 
 
 def measure(args: argparse.Namespace) -> dict[str, Any]:
-    workload, seed_path = _load_workload(args.workload_file)
-    seed_rows = _load_seed(seed_path)
+    if args.swe_bench_subset_json:
+        workload, seed_rows = _load_swe_bench_entries(Path(args.swe_bench_subset_json))
+        seed_path = Path(args.swe_bench_subset_json)
+    else:
+        workload, seed_path = _load_workload(args.workload_file)
+        seed_rows = _load_seed(seed_path)
     request_overrides = json.loads(args.request_overrides_json)
     if not isinstance(request_overrides, dict):
         raise RuntimeError("--request-overrides-json must decode to a JSON object")
@@ -266,6 +434,8 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
     if args.reset_prefix_cache:
         reset = requests.post(args.reset_prefix_cache_url, headers={"Authorization": f"Bearer {args.api_key}"}, timeout=30)
         _raise_for_status_with_body(reset)
+    spec_trace_pre = _jsonl_count(SPEC_TRACE)
+    fb_debug_pre = _jsonl_count(FB_DEBUG)
     max_output_cap = args.max_output_token_cap if args.max_output_token_cap > 0 else None
     warm_per_window = args.completions_per_task - args.cold_completions
     if warm_per_window < 1:
@@ -332,6 +502,10 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         request_count=args.task_count * warm_per_window,
         elapsed_s=warm_elapsed,
     )
+    spec_trace_summary = _summarize_spec_trace(
+        _read_jsonl_range(SPEC_TRACE, spec_trace_pre, _jsonl_count(SPEC_TRACE)))
+    unified_debug_summary = _summarize_unified_debug(
+        _read_jsonl_range(FB_DEBUG, fb_debug_pre, _jsonl_count(FB_DEBUG)))
     decode_tps = None
     if aggregate.get("available"):
         step = aggregate.get("step_consumption") if isinstance(aggregate.get("step_consumption"), dict) else {}
@@ -367,6 +541,8 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         "speedup_vs_baseline": speedup,
         "pass": bool(decode_tps is not None and float(decode_tps) >= target_tps),
         "aggregate_warm_metrics_consumption": aggregate,
+        "spec_trace_summary": spec_trace_summary,
+        "unified_debug_summary": unified_debug_summary,
         "windows": windows,
     }
 
@@ -374,6 +550,8 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Measure Track B on the real L0c workload: first 5 completions, last 4 warm.")
     parser.add_argument("--workload-file", type=Path, default=REPO_ROOT / "benchmark_blueprints" / "workloads" / "responses-sdk-adapter-cutover-heavy" / "workload.yaml")
+    parser.add_argument("--swe-bench-subset-json", default="",
+                        help="Use a pinned scripts/build_swe_bench_subset.py JSON file as the real-task prompt source.")
     parser.add_argument("--endpoint", default="http://127.0.0.1:9950/v1")
     parser.add_argument("--health-url", default="http://127.0.0.1:9950/health")
     parser.add_argument("--metrics-url", default="http://127.0.0.1:9950/metrics")

@@ -229,6 +229,8 @@ def _task_metrics_from_snapshots(
     ttft_key = _schema_histogram_base(schema, "ttft", "ttft_seconds")
     prefill_key = _schema_histogram_base(schema, "prefill_time", "prefill_seconds")
     decode_key = _schema_histogram_base(schema, "decode_time", "decode_seconds")
+    accepted_key = "vllm:spec_decode_num_accepted_tokens_total"
+    draft_tokens_key = "vllm:spec_decode_num_draft_tokens_total"
 
     kv_computed_tokens = _required_delta(before, after, f"{kv_key}_sum")
     gen_tokens = _required_delta(before, after, gen_key)
@@ -238,6 +240,8 @@ def _task_metrics_from_snapshots(
     ttft_count = _required_delta(before, after, f"{ttft_key}_count")
     prefill_sum_s = _required_delta(before, after, f"{prefill_key}_sum")
     decode_sum_s = _required_delta(before, after, f"{decode_key}_sum")
+    accepted = max(0.0, after.get(accepted_key, 0.0) - before.get(accepted_key, 0.0))
+    draft_tokens = max(0.0, after.get(draft_tokens_key, 0.0) - before.get(draft_tokens_key, 0.0))
 
     return {
         "ttft_ms": (ttft_sum_s / ttft_count * 1000) if ttft_count > 0 else None,
@@ -253,6 +257,9 @@ def _task_metrics_from_snapshots(
         "ttft_count": ttft_count,
         "cache_queries": cache_queries,
         "cache_hits": cache_hits,
+        "spec_decode_num_accepted_tokens": accepted,
+        "spec_decode_num_draft_tokens": draft_tokens,
+        "accepted_per_draft_token": accepted / draft_tokens if draft_tokens > 0 else None,
     }
 
 

@@ -64,6 +64,66 @@ else:
 LUMOSPECTRACE
 '''
 
+_MTP_DRAFT_TRACE_BLOCK = r'''
+python3 - <<'LUMOMTPDRAFTTRACE'
+from pathlib import Path
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py')
+text = p.read_text()
+sentinel = '# LUMO_MTP_DRAFT_TRACE'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] MTP draft trace patch already present')
+else:
+    patch = r"""
+
+# LUMO_MTP_DRAFT_TRACE: optional native MTP draft-token trace. This is
+# observational only and is used to replay exact E3 drafts into the F_b
+# verifier-isolation experiment.
+import os as _lumo_mtp_trace_os
+import json as _lumo_mtp_trace_json
+import time as _lumo_mtp_trace_time
+
+_lumo_mtp_trace_orig_propose = EagleProposer.propose
+_lumo_mtp_trace_idx = 0
+
+def _lumo_mtp_trace_propose(self, target_token_ids, target_positions,
+                            target_hidden_states, next_token_ids,
+                            token_indices_to_sample, common_attn_metadata,
+                            sampling_metadata, mm_embed_inputs=None,
+                            num_rejected_tokens_gpu=None,
+                            slot_mappings=None):
+    global _lumo_mtp_trace_idx
+    out = _lumo_mtp_trace_orig_propose(
+        self, target_token_ids, target_positions, target_hidden_states,
+        next_token_ids, token_indices_to_sample, common_attn_metadata,
+        sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
+    path = _lumo_mtp_trace_os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE")
+    if path:
+        try:
+            global _LUMO_MTP_DRAFT_TRACE_FH
+            try:
+                _LUMO_MTP_DRAFT_TRACE_FH
+            except NameError:
+                _LUMO_MTP_DRAFT_TRACE_FH = open(path, "a", buffering=1)
+            _LUMO_MTP_DRAFT_TRACE_FH.write(_lumo_mtp_trace_json.dumps({
+                "event": "mtp_draft",
+                "idx": int(_lumo_mtp_trace_idx),
+                "ts": round(_lumo_mtp_trace_time.time(), 4),
+                "draft": out.detach().cpu().tolist(),
+            }) + chr(10))
+            _lumo_mtp_trace_idx += 1
+        except Exception:
+            pass
+    return out
+
+EagleProposer.propose = _lumo_mtp_trace_propose
+"""
+    p.write_text(text + patch)
+    import py_compile
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied MTP draft trace patch')
+LUMOMTPDRAFTTRACE
+'''
+
 _NO_STALE_FB_PATCHES_BLOCK = r'''
 python3 - <<'LUMONOSTALEFB'
 from pathlib import Path
@@ -2434,6 +2494,106 @@ def _lumo_fb_free_row1_event(active_depth, row0, row1, records, decision,
         "policy": policy_info or {},
     }
 
+def _lumo_fb_unified_step_event(active_depth, records, decision, verified_rows,
+                                proposer_us, trim_us=0, verify_us=0,
+                                commit_us=0):
+    candidate_alt_nodes = sum(
+        1 for rec in records[:active_depth]
+        if int(rec.get("alt_token", rec.get("row0_token", -1))) != int(rec.get("row0_token", -1))
+    )
+    candidate_pool_nodes = int(active_depth) + int(candidate_alt_nodes)
+    selected_nodes = int(verified_rows)
+    trimmed_nodes = max(0, candidate_pool_nodes - selected_nodes)
+    invariant_failures = []
+    if selected_nodes != int(verified_rows):
+        invariant_failures.append("selected_nodes_ne_verified_nodes")
+    return {
+        "event": "round_f_unified_step",
+        "stage": "stage2_cached_alt_shadow" if int(verified_rows) == int(active_depth) else "stage2_cached_alt_active_row_compat",
+        "candidate_pool_nodes": int(candidate_pool_nodes),
+        "selected_nodes": int(selected_nodes),
+        "verified_nodes": int(verified_rows),
+        "trimmed_nodes": int(trimmed_nodes),
+        "max_depth": int(active_depth),
+        "sources": {
+            "mtp_top1": int(active_depth),
+            "mtp_alt": int(candidate_alt_nodes),
+            "suffix": 0,
+        },
+        "path_rows": 0 if int(verified_rows) == int(active_depth) else 1,
+        "scheduler_visible_clone_requests": 0 if int(verified_rows) == int(active_depth) else 1,
+        "prefix_kv_copy_bytes": 0,
+        "recomputed_shared_prefix_nodes": 0,
+        "extra_proposer_for_trimmed_nodes": 0,
+        "accepted_path_commit_only": True,
+        "tree_attention": False,
+        "gdn_parent_gather": False,
+        "depth_positions": True,
+        "tree_sampler": False,
+        "top1_spine_accept_depth": None,
+        "accepted_depth": None,
+        "accepted_node_path": [],
+        "estimated_event_ms": None,
+        "event_budget_ms": None,
+        "tree_score": None,
+        "proposer_us": int(proposer_us),
+        "trim_us": int(trim_us),
+        "verify_us": int(verify_us),
+        "tree_attention_us": 0,
+        "gdn_parent_gather_us": 0,
+        "depth_sync_us": 0,
+        "commit_us": int(commit_us),
+        "gdn_state_bytes_copied": 0,
+        "kv_suffix_bytes_copied": 0,
+        "physical_minimum_invariant_failures": invariant_failures,
+        "gate_reason": str(decision.get("gate_reason", "")),
+        "row1_enabled": bool(decision.get("row1_enabled", False)),
+    }
+
+def _lumo_fb_spine_only_state_tree_event(active_depth, proposer_us,
+                                         spine_source="lumo_fb_extend_one_k1_trunk"):
+    return {
+        "event": "round_f_unified_step",
+        "stage": "stage3_spine_only_state_tree",
+        "candidate_pool_nodes": int(active_depth),
+        "selected_nodes": int(active_depth),
+        "verified_nodes": int(active_depth),
+        "trimmed_nodes": 0,
+        "max_depth": int(active_depth),
+        "sources": {
+            "mtp_top1": int(active_depth),
+            "mtp_alt": 0,
+            "suffix": 0,
+        },
+        "path_rows": 0,
+        "scheduler_visible_clone_requests": 0,
+        "prefix_kv_copy_bytes": 0,
+        "recomputed_shared_prefix_nodes": 0,
+        "extra_proposer_for_trimmed_nodes": 0,
+        "accepted_path_commit_only": True,
+        "tree_attention": False,
+        "gdn_parent_gather": True,
+        "depth_positions": True,
+        "tree_sampler": False,
+        "top1_spine_accept_depth": None,
+        "accepted_depth": None,
+        "accepted_node_path": [],
+        "estimated_event_ms": None,
+        "event_budget_ms": None,
+        "tree_score": None,
+        "proposer_us": int(proposer_us),
+        "trim_us": 0,
+        "verify_us": 0,
+        "tree_attention_us": 0,
+        "gdn_parent_gather_us": 0,
+        "depth_sync_us": 0,
+        "commit_us": 0,
+        "gdn_state_bytes_copied": 0,
+        "kv_suffix_bytes_copied": 0,
+        "physical_minimum_invariant_failures": [],
+        "spine_source": str(spine_source),
+    }
+
 def _lumo_fb_debug_write(event):
     if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
         return
@@ -2446,6 +2606,34 @@ def _lumo_fb_debug_write(event):
         _LUMO_FB_DBG_FH.write(_lumo_fb_json.dumps(event) + chr(10))
     except Exception:
         pass
+
+_lumo_fb_replay_cache = None
+_lumo_fb_replay_idx = 0
+
+def _lumo_fb_replay_next(device):
+    global _lumo_fb_replay_cache, _lumo_fb_replay_idx
+    path = _lumo_fb_os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE")
+    if not path:
+        return None
+    if _lumo_fb_replay_cache is None:
+        rows = []
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                payload = _lumo_fb_json.loads(line)
+                if payload.get("event") == "mtp_draft":
+                    rows.append(payload["draft"])
+        _lumo_fb_replay_cache = rows
+        _lumo_fb_replay_idx = 0
+    if _lumo_fb_replay_idx >= len(_lumo_fb_replay_cache):
+        raise RuntimeError(
+            f"LUMO_FB_REPLAY_DRAFT_FILE exhausted at {_lumo_fb_replay_idx}")
+    draft = _lumo_fb_replay_cache[_lumo_fb_replay_idx]
+    _lumo_fb_replay_idx += 1
+    return _lumo_fb_torch.tensor(
+        draft, dtype=_lumo_fb_torch.int64, device=device), int(_lumo_fb_replay_idx - 1)
 
 def _lumo_fb_extend_one(self, root_token, base_positions, base_hidden_states,
                         base_common_attn_metadata, batch_size, per_layer_attn_metadata,
@@ -3038,6 +3226,44 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
     _lumo_fb_path0_root = raw_roots[0] if (
         policy_k == 1 or _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
     ) else roots[0]
+    if _lumo_fb_os.environ.get("LUMO_FB_STATE_TREE_SPINE_ONLY") == "1":
+        if requested_k != 1:
+            raise RuntimeError("LUMO_FB_STATE_TREE_SPINE_ONLY requires LUMO_FB_K=1")
+        replay = _lumo_fb_replay_next(device=base_hidden_states.device)
+        if replay is not None:
+            out, replay_idx = replay
+            out = out[:, :active_depth].contiguous()
+            spine_source = "replay_native_e3_mtp_draft"
+        else:
+            path0 = _lumo_fb_extend_one(
+                self, _lumo_fb_path0_root, positions, base_hidden_states,
+                common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+                num_rejected_tokens_gpu, draft_len=active_depth)
+            out = path0[:, :active_depth]
+            replay_idx = None
+            spine_source = "lumo_fb_extend_one_k1_trunk"
+        _lumo_fb_debug_write(_lumo_fb_spine_only_state_tree_event(
+            active_depth=active_depth,
+            proposer_us=int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
+            spine_source=spine_source,
+        ))
+        try:
+            if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
+                _lumo_fb_debug_write({
+                    "ts": round(_lumo_fb_time.time(), 4),
+                    "event": "fb_state_tree_spine_draft",
+                    "active_depth": int(active_depth),
+                    "active_k": int(requested_k),
+                    "raw_roots": raw_roots.view(-1).tolist(),
+                    "root_candidates": root_candidates[:8].tolist(),
+                    "draft": out.tolist(),
+                    "spine_source": spine_source,
+                    "replay_idx": replay_idx,
+                    "policy": policy_info,
+                })
+        except Exception:
+            pass
+        return out
     if (requested_k >= 2
             and _lumo_fb_os.environ.get("LUMO_FB_FREE_ROW1") == "1"):
         path0, free_records = _lumo_fb_extend_one(
@@ -3065,6 +3291,7 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
         verified_rows = 2 if active_row1 else 1
         out = (_lumo_fb_torch.cat([path0, path1[:, :active_depth]], dim=1)
                if active_row1 else path0)
+        _free_proposer_us = int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000)
         _lumo_fb_debug_write(_lumo_fb_free_row1_event(
             active_depth=active_depth,
             row0=path0,
@@ -3073,8 +3300,15 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
             decision=free_decision,
             requested_k=requested_k,
             verified_rows=verified_rows,
-            fb_proposer_us=int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
+            fb_proposer_us=_free_proposer_us,
             policy_info=policy_info,
+        ))
+        _lumo_fb_debug_write(_lumo_fb_unified_step_event(
+            active_depth=active_depth,
+            records=free_records,
+            decision=free_decision,
+            verified_rows=(active_depth if not active_row1 else 2 * active_depth),
+            proposer_us=_free_proposer_us,
         ))
         return out
     if policy_k == 1:
@@ -7163,6 +7397,8 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_position_tree = f"export LUMO_FB_POSITION_TREE={os.environ['LUMO_FB_POSITION_TREE']}\n" if os.environ.get("LUMO_FB_POSITION_TREE") else ""
     fb_tree_branch_depth = f"export LUMO_FB_TREE_BRANCH_DEPTH={os.environ['LUMO_FB_TREE_BRANCH_DEPTH']}\n" if os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH") else ""
+    fb_state_tree_spine = "export LUMO_FB_STATE_TREE_SPINE_ONLY=1\n" if os.environ.get("LUMO_FB_STATE_TREE_SPINE_ONLY") == "1" else ""
+    fb_replay_draft = f"export LUMO_FB_REPLAY_DRAFT_FILE={os.environ['LUMO_FB_REPLAY_DRAFT_FILE']}\n" if os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE") else ""
     fb_free_row1 = "export LUMO_FB_FREE_ROW1=1\n" if os.environ.get("LUMO_FB_FREE_ROW1") == "1" else ""
     fb_free_row1_shadow = "export LUMO_FB_FREE_ROW1_SHADOW=1\n" if os.environ.get("LUMO_FB_FREE_ROW1_SHADOW") == "1" else ""
     fb_free_row1_always = "export LUMO_FB_FREE_ROW1_ALWAYS=1\n" if os.environ.get("LUMO_FB_FREE_ROW1_ALWAYS") == "1" else ""
@@ -7193,9 +7429,12 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_state_tree_spine}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else ""
+    mtp_draft_trace = f"export LUMO_MTP_DRAFT_TRACE_FILE={os.environ['LUMO_MTP_DRAFT_TRACE_FILE']}\n" if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
+    mtp_draft_trace_block = _MTP_DRAFT_TRACE_BLOCK if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
     stale_fb_guard = "" if fb else _NO_STALE_FB_PATCHES_BLOCK
-    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + base + _SPEC_TRACE_BLOCK
+    return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
+            + mtp_draft_trace_block
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""))
 

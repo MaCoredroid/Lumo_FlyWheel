@@ -1,0 +1,16 @@
+{
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "split": "test",
+  "tier": 0,
+  "seed": 20260529,
+  "target_n": 2,
+  "generated_at": "2026-05-29T07:44:56Z",
+  "instance_ids": [
+    "django__django-12050",
+    "sympy__sympy-14711"
+  ],
+  "by_repo": {
+    "django/django": 1,
+    "sympy/sympy": 1
+  }
+}
