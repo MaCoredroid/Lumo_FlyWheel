@@ -2397,36 +2397,35 @@ else:
                     and all(tuple(_p) == tuple([0] * len(tuple(_p)))
                             for _p in _choices)
                 )
-                if block_table_tensor.size(1) < _node_count + 2:
+                if block_table_tensor.size(1) < _node_count + 1:
                     raise RuntimeError(
-                        "LUMO_FA_UNIQUE_NODES requires root + node write "
-                        f"state slots: need {_node_count + 2}, got "
+                        "LUMO_FA_UNIQUE_NODES requires prefix + node write "
+                        f"state slots: need {_node_count + 1}, got "
                         f"{block_table_tensor.size(1)}")
-                _row = block_table_tensor[spec_sequence_masks, :_node_count + 2][0]
-                _write_slots = _row[1:_node_count + 2].contiguous()
+                _row = block_table_tensor[spec_sequence_masks, :_node_count + 1][0]
+                _write_slots = _row[1:_node_count + 1].contiguous()
                 _initial_slots = torch.empty(
-                    (_node_count + 1,), dtype=torch.int32,
+                    (_node_count,), dtype=torch.int32,
                     device=query_start_loc.device)
-                _initial_slots[0] = _row[0]
                 for _i, _parent in enumerate(_parents):
-                    _initial_slots[_i + 1] = _write_slots[0 if _parent < 0 else _parent + 1]
+                    _initial_slots[_i] = _row[0] if _parent < 0 else _write_slots[_parent]
                 spec_initial_state_indices_tensor = _initial_slots
                 spec_initial_state_slot_tensor = None
                 spec_write_state_slot_tensor = torch.zeros(
-                    (_node_count + 1,), dtype=torch.int32,
+                    (_node_count,), dtype=torch.int32,
                     device=query_start_loc.device)
-                spec_state_indices_tensor = _write_slots.view(_node_count + 1, 1)
+                spec_state_indices_tensor = _write_slots.view(_node_count, 1)
                 spec_query_start_loc = torch.arange(
-                    _node_count + 2, dtype=torch.int32,
+                    _node_count + 1, dtype=torch.int32,
                     device=query_start_loc.device)
-                num_spec_decodes = _node_count + 1
-                num_spec_decode_tokens = _node_count + 1
+                num_spec_decodes = _node_count
+                num_spec_decode_tokens = _node_count
                 num_accepted_tokens = torch.ones(
-                    (_node_count + 1,), dtype=torch.int32,
+                    (_node_count,), dtype=torch.int32,
                     device=query_start_loc.device)
                 fa_unique_expanded_node_mode = True
                 fa_tree_parent_indices_tensor = torch.tensor(
-                    [-2] + _parents, dtype=torch.int32,
+                    _parents, dtype=torch.int32,
                     device=query_start_loc.device)
                 fa_unique_node_mode = True
                 try:
@@ -2476,13 +2475,14 @@ else:
                         "gdn_state_bytes_copied": 0,
                         "kv_suffix_bytes_copied": 0,
                         "physical_minimum_invariant_failures": [],
-                        "parent_map": [-2] + [int(_p) for _p in _parents],
+                        "parent_map": [int(_p) for _p in _parents],
                         "state_rows": (
                             list(spec_state_indices_tensor.shape)
                             if spec_state_indices_tensor is not None else None
                         ),
                         "spine_chain_degenerate_unique_tree": bool(_is_spine),
                         "expanded_parent_state_rows": True,
+                        "synthetic_root_state_row": False,
                     }) + chr(10))
                 except Exception:
                     pass
@@ -2648,12 +2648,7 @@ def _lumo_fa_tree_delta_torch(
     q_f = q_f * (k.shape[-1] ** -0.5)
     v_f = v.to(torch.float32)
 
-    parents = parent_indices.to(device=q_f.device, dtype=torch.long)
-    actual_parents = torch.empty((n,), dtype=torch.long, device=q_f.device)
-    actual_parents[0] = -1
-    for i in range(1, n):
-        parent = int(parents[i].item())
-        actual_parents[i] = 0 if parent < 0 else parent + 1
+    actual_parents = parent_indices.to(device=q_f.device, dtype=torch.long)
 
     ancestor = torch.zeros((n, n), dtype=torch.bool, device=q_f.device)
     gamma = torch.empty((n, h_v), dtype=torch.float32, device=q_f.device)
@@ -2777,10 +2772,7 @@ def _lumo_fa_tree_delta_torch(
             _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
             _depths = []
             for _i, _parent in enumerate(_parents):
-                if _i == 0:
-                    _depths.append(0)
-                else:
-                    _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+                _depths.append(0 if int(_parent) < 0 else _depths[int(_parent)] + 1)
             _conv_out = torch.empty_like(mixed_qkv_spec)
             for _depth in range((max(_depths) + 1) if _depths else 0):
                 _rows = [i for i, d in enumerate(_depths) if d == _depth]
@@ -2939,10 +2931,7 @@ def _lumo_fa_tree_delta_torch(
             _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
             _depths = []
             for _i, _parent in enumerate(_parents):
-                if _i == 0:
-                    _depths.append(0)
-                else:
-                    _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+                _depths.append(0 if int(_parent) < 0 else _depths[int(_parent)] + 1)
             core_attn_out_spec = None
             last_recurrent_state = None
             for _depth in range((max(_depths) + 1) if _depths else 0):
