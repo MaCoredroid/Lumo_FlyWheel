@@ -6126,6 +6126,12 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
     req_ids = list(self.input_batch.req_ids)
     keep = [i for i, rid in enumerate(req_ids) if rid not in internal_ids]
     winners = {}
+    _lumo_fb_ir_superset_diag({
+        "event": "prune_active_entry",
+        "active_count": int(len(active)),
+        "input_req_count": int(len(req_ids)),
+        "internal_count": int(len(internal_ids)),
+    })
     try:
         raw = sampler_output.sampled_token_ids.detach().cpu().tolist()
         draft_by_rid = {
@@ -6469,6 +6475,12 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
         _lumo_fb_ir_debug({
             "event": "prune_after_sample_error",
             "error": repr(e),
+        })
+        _lumo_fb_ir_superset_diag({
+            "event": "prune_after_sample_error",
+            "error": repr(e),
+            "active_count": int(len(active)),
+            "input_req_count": int(len(req_ids)),
         })
     if winners:
         self._lumo_fb_ir_last_winners = winners
