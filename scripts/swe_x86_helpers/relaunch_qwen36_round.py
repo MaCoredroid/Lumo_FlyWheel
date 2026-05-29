@@ -2397,40 +2397,35 @@ else:
                     and all(tuple(_p) == tuple([0] * len(tuple(_p)))
                             for _p in _choices)
                 )
-                if block_table_tensor.size(1) < _node_count + 2:
+                if block_table_tensor.size(1) < _node_count + 1:
                     raise RuntimeError(
                         "LUMO_FA_UNIQUE_NODES requires prefix + node write "
-                        f"state slots: need {_node_count + 2}, got "
+                        f"state slots: need {_node_count + 1}, got "
                         f"{block_table_tensor.size(1)}")
-                _row = block_table_tensor[spec_sequence_masks, :_node_count + 2][0]
-                _write_slots = _row[1:_node_count + 2].contiguous()
+                _row = block_table_tensor[spec_sequence_masks, :_node_count + 1][0]
+                _write_slots = _row[1:_node_count + 1].contiguous()
                 _initial_slots = torch.empty(
-                    (_node_count + 1,), dtype=torch.int32,
+                    (_node_count,), dtype=torch.int32,
                     device=query_start_loc.device)
-                _initial_slots[0] = _row[0]
                 for _i, _parent in enumerate(_parents):
-                    _initial_slots[_i + 1] = _write_slots[0 if _parent < 0 else _parent + 1]
+                    _initial_slots[_i] = _row[0] if _parent < 0 else _write_slots[_parent]
                 spec_initial_state_indices_tensor = _initial_slots
                 spec_initial_state_slot_tensor = None
                 spec_write_state_slot_tensor = torch.zeros(
-                    (_node_count + 1,), dtype=torch.int32,
+                    (_node_count,), dtype=torch.int32,
                     device=query_start_loc.device)
-                spec_state_indices_tensor = _write_slots.view(_node_count + 1, 1)
+                spec_state_indices_tensor = _write_slots.view(_node_count, 1)
                 spec_query_start_loc = torch.arange(
-                    _node_count + 2, dtype=torch.int32,
+                    _node_count + 1, dtype=torch.int32,
                     device=query_start_loc.device)
-                num_spec_decodes = _node_count + 1
-                num_spec_decode_tokens = _node_count + 1
+                num_spec_decodes = _node_count
+                num_spec_decode_tokens = _node_count
                 num_accepted_tokens = torch.ones(
-                    (_node_count + 1,), dtype=torch.int32,
+                    (_node_count,), dtype=torch.int32,
                     device=query_start_loc.device)
                 fa_unique_expanded_node_mode = True
-                _parent_rows = [-1] + [
-                    (0 if int(_p) < 0 else int(_p) + 1)
-                    for _p in _parents
-                ]
                 fa_tree_parent_indices_tensor = torch.tensor(
-                    _parent_rows, dtype=torch.int32,
+                    _parents, dtype=torch.int32,
                     device=query_start_loc.device)
                 fa_unique_node_mode = True
                 try:
@@ -2480,7 +2475,7 @@ else:
                         "gdn_state_bytes_copied": 0,
                         "kv_suffix_bytes_copied": 0,
                         "physical_minimum_invariant_failures": [],
-                        "parent_map": [int(_p) for _p in _parent_rows],
+                        "parent_map": [int(_p) for _p in _parents],
                         "state_rows": (
                             list(spec_state_indices_tensor.shape)
                             if spec_state_indices_tensor is not None else None
@@ -3000,104 +2995,6 @@ def _lumo_fa_tree_delta_torch(
     import py_compile
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_a unique-node GDN linear telemetry patch')
-
-gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
-text = gm.read_text()
-_runner_repls = [
-    (
-"""def _lumo_fb_ir_runner_enabled():
-    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
-             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
-            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
-
-def _lumo_fb_ir_kernel_rows_enabled():
-    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-""",
-"""def _lumo_fb_ir_runner_enabled():
-    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
-             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
-            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
-
-def _lumo_fb_ir_kernel_rows_enabled():
-    return (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
-""",
-    ),
-    (
-"""def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts,
-                                     first_sample_noop=True):
-    if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") != "1":
-        return
-""",
-"""def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts,
-                                     first_sample_noop=True):
-    if not _lumo_fb_ir_kernel_rows_enabled():
-        return
-""",
-    ),
-    (
-"""                    _lumo_fb_ir_kernel_promote_state(
-                        self, rid, _accepted)
-""",
-"""                    _lumo_fb_ir_kernel_promote_state(
-                        self, rid, _accepted,
-                        first_sample_noop=(
-                            _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") != "1"))
-""",
-    ),
-]
-_runner_changed = False
-for _old, _new in _runner_repls:
-    if _old in text:
-        text = text.replace(_old, _new, 1)
-        _runner_changed = True
-if _runner_changed:
-    gm.write_text(text)
-    import py_compile
-    py_compile.compile(str(gm), doraise=True)
-    print('[TRACK-B-PRELAUNCH] refreshed F_a unique-node runner state promotion hook')
-else:
-    print('[TRACK-B-PRELAUNCH] F_a unique-node runner state promotion hook already current')
-
-sch = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py')
-text = sch.read_text()
-_sched_repls = [
-    (
-"""def _lumo_fb_ir_enabled():
-    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
-             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
-            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
-""",
-"""def _lumo_fb_ir_enabled():
-    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
-             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
-            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
-""",
-    ),
-    (
-"""def _lumo_fb_ir_kernel_rows_enabled():
-    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-""",
-"""def _lumo_fb_ir_kernel_rows_enabled():
-    return (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
-""",
-    ),
-]
-_sched_changed = False
-for _old, _new in _sched_repls:
-    if _old in text:
-        text = text.replace(_old, _new)
-        _sched_changed = True
-if _sched_changed:
-    sch.write_text(text)
-    import py_compile
-    py_compile.compile(str(sch), doraise=True)
-    print('[TRACK-B-PRELAUNCH] refreshed F_a unique-node scheduler state promotion hook')
-else:
-    print('[TRACK-B-PRELAUNCH] F_a unique-node scheduler state promotion hook already current')
 LUMOFAUNIQUENODES
 '''
 
@@ -5868,8 +5765,7 @@ _lumo_fb_ir_prev_update_output = Scheduler.update_from_output
 def _lumo_fb_ir_enabled():
     return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
              and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
-            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
+            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
 
 def _lumo_fb_ir_read_control(default_depth):
     depth = int(_lumo_fb_ir_os.environ.get("LUMO_FB_DEPTH", str(default_depth)))
@@ -5939,8 +5835,7 @@ def _lumo_fb_ir_new_block(manager):
     return manager.block_pool.get_new_blocks(1)[0]
 
 def _lumo_fb_ir_kernel_rows_enabled():
-    return (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
+    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
 
 def _lumo_fb_ir_kernel_arrange_mamba_blocks(manager, req_blocks, curr_idx):
     # Arrange one GDN row as [shared read, private writes...].
@@ -6735,12 +6630,10 @@ _lumo_fb_ir_prev_sample_tokens = GPUModelRunner.sample_tokens
 def _lumo_fb_ir_runner_enabled():
     return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
              and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
-            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
+            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
 
 def _lumo_fb_ir_kernel_rows_enabled():
-    return (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
+    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
 
 def _lumo_fb_ir_is_row_id(req_id):
     return isinstance(req_id, str) and "::lumo_fb_ir::" in req_id
@@ -6831,7 +6724,7 @@ def _lumo_fb_ir_write_state_block_ids(self, req_id):
 
 def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts,
                                      first_sample_noop=True):
-    if not _lumo_fb_ir_kernel_rows_enabled():
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") != "1":
         return
     req_state = self.requests.get(req_id)
     curr_idx = self.mamba_state_idx.get(req_id)
@@ -7962,9 +7855,7 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                     })
                     _accepted = _lumo_fb_ir_accepted_from_tokens(toks)
                     _lumo_fb_ir_kernel_promote_state(
-                        self, rid, _accepted,
-                        first_sample_noop=(
-                            _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") != "1"))
+                        self, rid, _accepted)
                     try:
                         _state = self.requests.get(rid)
                         if _state is not None:
