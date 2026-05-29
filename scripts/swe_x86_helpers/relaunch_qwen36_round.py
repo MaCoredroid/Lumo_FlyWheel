@@ -5473,6 +5473,9 @@ def _lumo_fb_ir_runner_enabled():
              and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
             or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
 
+def _lumo_fb_ir_kernel_rows_enabled():
+    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+
 def _lumo_fb_ir_is_row_id(req_id):
     return isinstance(req_id, str) and "::lumo_fb_ir::" in req_id
 
