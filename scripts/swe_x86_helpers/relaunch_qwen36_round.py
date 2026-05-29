@@ -84,6 +84,32 @@ import time as _lumo_mtp_trace_time
 
 _lumo_mtp_trace_orig_propose = EagleProposer.propose
 _lumo_mtp_trace_idx = 0
+_lumo_mtp_replay_cache = None
+_lumo_mtp_replay_idx = 0
+
+def _lumo_mtp_replay_next(device):
+    global _lumo_mtp_replay_cache, _lumo_mtp_replay_idx
+    path = _lumo_mtp_trace_os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE")
+    if not path:
+        return None
+    if _lumo_mtp_replay_cache is None:
+        rows = []
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                payload = _lumo_mtp_trace_json.loads(line)
+                if payload.get("event") == "mtp_draft":
+                    rows.append(payload["draft"])
+        _lumo_mtp_replay_cache = rows
+        _lumo_mtp_replay_idx = 0
+    if _lumo_mtp_replay_idx >= len(_lumo_mtp_replay_cache):
+        raise RuntimeError(
+            f"LUMO_FB_REPLAY_DRAFT_FILE exhausted at {_lumo_mtp_replay_idx}")
+    draft = _lumo_mtp_replay_cache[_lumo_mtp_replay_idx]
+    _lumo_mtp_replay_idx += 1
+    return torch.tensor(draft, dtype=torch.int64, device=device), int(_lumo_mtp_replay_idx - 1)
 
 def _lumo_mtp_trace_propose(self, target_token_ids, target_positions,
                             target_hidden_states, next_token_ids,
@@ -96,6 +122,12 @@ def _lumo_mtp_trace_propose(self, target_token_ids, target_positions,
         self, target_token_ids, target_positions, target_hidden_states,
         next_token_ids, token_indices_to_sample, common_attn_metadata,
         sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
+    replay = _lumo_mtp_replay_next(out.device)
+    if replay is not None:
+        replay_out, replay_idx = replay
+        out = replay_out[:, :out.shape[1]].contiguous()
+    else:
+        replay_idx = None
     path = _lumo_mtp_trace_os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE")
     if path:
         try:
@@ -107,6 +139,7 @@ def _lumo_mtp_trace_propose(self, target_token_ids, target_positions,
             _LUMO_MTP_DRAFT_TRACE_FH.write(_lumo_mtp_trace_json.dumps({
                 "event": "mtp_draft",
                 "idx": int(_lumo_mtp_trace_idx),
+                "replay_idx": replay_idx,
                 "ts": round(_lumo_mtp_trace_time.time(), 4),
                 "draft": out.detach().cpu().tolist(),
             }) + chr(10))
@@ -8153,9 +8186,12 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_debug_exports}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fa_unique_env}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else (fa_unique_env + fb_debug + fb_debug_exports)
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_debug_exports}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fa_unique_env}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else (fa_unique_env + fb_debug + fb_debug_exports + fb_replay_draft)
     mtp_draft_trace = f"export LUMO_MTP_DRAFT_TRACE_FILE={os.environ['LUMO_MTP_DRAFT_TRACE_FILE']}\n" if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
-    mtp_draft_trace_block = _MTP_DRAFT_TRACE_BLOCK if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
+    mtp_draft_trace_block = _MTP_DRAFT_TRACE_BLOCK if (
+        os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE")
+        or os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE")
+    ) else ""
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
