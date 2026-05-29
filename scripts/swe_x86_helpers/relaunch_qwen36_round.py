@@ -8295,6 +8295,7 @@ LUMOFBCTRL
             + mtp_draft_trace_block
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")
+            + (_FB_INTERNAL_ROWS_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else ""))
 
 
