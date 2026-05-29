@@ -6623,6 +6623,10 @@ def _lumo_fb_ir_sample_tokens(self, grammar_output):
                     "error": repr(e),
                 })
         return output
+    if "_lumo_fb_ir_prune_after_sample" in globals():
+        # The pre-update prune path must see the internal rows and active map so
+        # it can collapse the winning row before vLLM mutates persistent state.
+        return output
     self._lumo_fb_ir_active = {}
     internal_ids = set(active.keys())
     model_output = getattr(output, "model_runner_output", output)
