@@ -2610,7 +2610,7 @@ def _lumo_fa_tree_delta_torch(
     g, beta = fused_gdn_gating(A_log=A_log, a=a, b=b, dt_bias=dt_bias)
     alpha = torch.exp(g.squeeze(0).to(torch.float32))
     beta = beta.squeeze(0).to(torch.float32)
-    q_f = q.to(torch.float32)
+    q_f = q.to(torch.float32) * (k.shape[-1] ** -0.5)
     k_f = k.to(torch.float32)
     v_f = v.to(torch.float32)
 

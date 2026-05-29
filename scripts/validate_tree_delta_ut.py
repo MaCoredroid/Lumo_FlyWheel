@@ -60,7 +60,7 @@ def sequential_tree_delta(
         write = beta[i] * (v[i] - alpha[i] * projected)
         states[i] = alpha[i] * parent_state + torch.outer(write, k[i])
         writes[i] = write
-        outputs[i] = states[i] @ k[i]
+        outputs[i] = (states[i] @ k[i]) * (d_k ** -0.5)
     return states, writes, outputs
 
 
@@ -94,7 +94,7 @@ def tree_ut_delta(
             if ancestor_or_self[i, j] != 0:
                 state = state + (gamma[i] / gamma[j]) * torch.outer(writes[j], k[j])
         states[i] = state
-    outputs = torch.einsum("nvk,nk->nv", states, k)
+    outputs = torch.einsum("nvk,nk->nv", states, k) * (k.shape[-1] ** -0.5)
     return states, writes, outputs
 
 
@@ -115,7 +115,7 @@ def sequential_multihead_tree_delta(
         projected = torch.einsum("hvk,hk->hv", parent_state, k[i])
         write = beta[i, :, None] * (v[i] - alpha[i, :, None] * projected)
         states[i] = alpha[i, :, None, None] * parent_state + torch.einsum("hv,hk->hvk", write, k[i])
-        outputs[i] = torch.einsum("hvk,hk->hv", states[i], k[i])
+        outputs[i] = torch.einsum("hvk,hk->hv", states[i], k[i]) * (d_k ** -0.5)
     return states, outputs
 
 
@@ -155,7 +155,7 @@ def tree_ut_multihead_delta(
         gamma[:, :, None, None] * initial_state.unsqueeze(0)
         + torch.einsum("hij,hjv,hjk->ihvk", coeff, writes, k.permute(1, 0, 2))
     )
-    outputs = torch.einsum("ihvk,ihk->ihv", states, k)
+    outputs = torch.einsum("ihvk,ihk->ihv", states, k) * (k.shape[-1] ** -0.5)
     return states, outputs
 
 
