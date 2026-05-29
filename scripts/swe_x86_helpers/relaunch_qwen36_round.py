@@ -3000,6 +3000,104 @@ def _lumo_fa_tree_delta_torch(
     import py_compile
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_a unique-node GDN linear telemetry patch')
+
+gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = gm.read_text()
+_runner_repls = [
+    (
+"""def _lumo_fb_ir_runner_enabled():
+    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
+             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
+
+def _lumo_fb_ir_kernel_rows_enabled():
+    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+""",
+"""def _lumo_fb_ir_runner_enabled():
+    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
+             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
+
+def _lumo_fb_ir_kernel_rows_enabled():
+    return (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
+""",
+    ),
+    (
+"""def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts,
+                                     first_sample_noop=True):
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") != "1":
+        return
+""",
+"""def _lumo_fb_ir_kernel_promote_state(self, req_id, accepted_drafts,
+                                     first_sample_noop=True):
+    if not _lumo_fb_ir_kernel_rows_enabled():
+        return
+""",
+    ),
+    (
+"""                    _lumo_fb_ir_kernel_promote_state(
+                        self, rid, _accepted)
+""",
+"""                    _lumo_fb_ir_kernel_promote_state(
+                        self, rid, _accepted,
+                        first_sample_noop=(
+                            _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") != "1"))
+""",
+    ),
+]
+_runner_changed = False
+for _old, _new in _runner_repls:
+    if _old in text:
+        text = text.replace(_old, _new, 1)
+        _runner_changed = True
+if _runner_changed:
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] refreshed F_a unique-node runner state promotion hook')
+else:
+    print('[TRACK-B-PRELAUNCH] F_a unique-node runner state promotion hook already current')
+
+sch = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py')
+text = sch.read_text()
+_sched_repls = [
+    (
+"""def _lumo_fb_ir_enabled():
+    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
+             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
+""",
+"""def _lumo_fb_ir_enabled():
+    return ((_lumo_fb_ir_os.environ.get("LUMO_FB_PATHS") == "1"
+             and _lumo_fb_ir_os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1")
+            or _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
+""",
+    ),
+    (
+"""def _lumo_fb_ir_kernel_rows_enabled():
+    return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+""",
+"""def _lumo_fb_ir_kernel_rows_enabled():
+    return (_lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
+            or _lumo_fb_ir_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1")
+""",
+    ),
+]
+_sched_changed = False
+for _old, _new in _sched_repls:
+    if _old in text:
+        text = text.replace(_old, _new)
+        _sched_changed = True
+if _sched_changed:
+    sch.write_text(text)
+    import py_compile
+    py_compile.compile(str(sch), doraise=True)
+    print('[TRACK-B-PRELAUNCH] refreshed F_a unique-node scheduler state promotion hook')
+else:
+    print('[TRACK-B-PRELAUNCH] F_a unique-node scheduler state promotion hook already current')
 LUMOFAUNIQUENODES
 '''
 
