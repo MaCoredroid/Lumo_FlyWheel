@@ -47,11 +47,12 @@ def sequential_tree_delta(
     alpha: torch.Tensor,
     parents: tuple[int, ...],
     initial_state: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     n = len(parents)
     d_v, d_k = initial_state.shape
     states = torch.empty((n, d_v, d_k), dtype=k.dtype, device=k.device)
     writes = torch.empty((n, d_v), dtype=k.dtype, device=k.device)
+    outputs = torch.empty((n, d_v), dtype=k.dtype, device=k.device)
 
     for i, parent in enumerate(parents):
         parent_state = initial_state if parent < 0 else states[parent]
@@ -59,7 +60,8 @@ def sequential_tree_delta(
         write = beta[i] * (v[i] - alpha[i] * projected)
         states[i] = alpha[i] * parent_state + torch.outer(write, k[i])
         writes[i] = write
-    return states, writes
+        outputs[i] = states[i] @ k[i]
+    return states, writes, outputs
 
 
 def tree_ut_delta(
@@ -69,7 +71,7 @@ def tree_ut_delta(
     alpha: torch.Tensor,
     parents: tuple[int, ...],
     initial_state: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     n = len(parents)
     eye = torch.eye(n, dtype=k.dtype, device=k.device)
     ancestor = build_ancestor_mask(parents, k.device).to(k.dtype)
@@ -92,7 +94,69 @@ def tree_ut_delta(
             if ancestor_or_self[i, j] != 0:
                 state = state + (gamma[i] / gamma[j]) * torch.outer(writes[j], k[j])
         states[i] = state
-    return states, writes
+    outputs = torch.einsum("nvk,nk->nv", states, k)
+    return states, writes, outputs
+
+
+def sequential_multihead_tree_delta(
+    k: torch.Tensor,
+    v: torch.Tensor,
+    beta: torch.Tensor,
+    alpha: torch.Tensor,
+    parents: tuple[int, ...],
+    initial_state: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    n, h, d_k = k.shape
+    d_v = v.shape[-1]
+    states = torch.empty((n, h, d_v, d_k), dtype=k.dtype, device=k.device)
+    outputs = torch.empty((n, h, d_v), dtype=k.dtype, device=k.device)
+    for i, parent in enumerate(parents):
+        parent_state = initial_state if parent < 0 else states[parent]
+        projected = torch.einsum("hvk,hk->hv", parent_state, k[i])
+        write = beta[i, :, None] * (v[i] - alpha[i, :, None] * projected)
+        states[i] = alpha[i, :, None, None] * parent_state + torch.einsum("hv,hk->hvk", write, k[i])
+        outputs[i] = torch.einsum("hvk,hk->hv", states[i], k[i])
+    return states, outputs
+
+
+def tree_ut_multihead_delta(
+    k_key_heads: torch.Tensor,
+    v: torch.Tensor,
+    beta: torch.Tensor,
+    alpha: torch.Tensor,
+    parents: tuple[int, ...],
+    initial_state: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    n = len(parents)
+    h_v = v.shape[1]
+    h_k = k_key_heads.shape[1]
+    if h_v % h_k != 0:
+        raise ValueError("value heads must be divisible by key heads")
+    k = k_key_heads.repeat_interleave(h_v // h_k, dim=1)
+    ancestor = build_ancestor_mask(parents, k.device).to(k.dtype)
+    eye = torch.eye(n, dtype=k.dtype, device=k.device)
+
+    gamma = torch.empty_like(alpha)
+    for i, parent in enumerate(parents):
+        gamma[i] = alpha[i] if parent < 0 else gamma[parent] * alpha[i]
+
+    kk = torch.einsum("nhd,mhd->hnm", k, k)
+    gamma_hn = gamma.transpose(0, 1)
+    beta_hn = beta.transpose(0, 1)
+    ratio = gamma_hn[:, :, None] / gamma_hn[:, None, :]
+    system = eye.unsqueeze(0) + ancestor.unsqueeze(0) * beta_hn[:, :, None] * ratio * kk
+
+    initial_projection = torch.einsum("hvk,nhk->nhv", initial_state, k)
+    rhs = beta[:, :, None] * (v - gamma[:, :, None] * initial_projection)
+    writes = torch.linalg.solve_triangular(system, rhs.permute(1, 0, 2).contiguous(), upper=False)
+
+    coeff = (ancestor + eye).unsqueeze(0) * ratio
+    states = (
+        gamma[:, :, None, None] * initial_state.unsqueeze(0)
+        + torch.einsum("hij,hjv,hjk->ihvk", coeff, writes, k.permute(1, 0, 2))
+    )
+    outputs = torch.einsum("ihvk,ihk->ihv", states, k)
+    return states, outputs
 
 
 def make_inputs(
@@ -130,13 +194,15 @@ def run_case(case: Case, *, seed: int, d_k: int, d_v: int, device: torch.device)
         dtype=case.dtype,
         device=device,
     )
-    ref_states, ref_writes = sequential_tree_delta(k, v, beta, alpha, case.parents, initial_state)
-    got_states, got_writes = tree_ut_delta(k, v, beta, alpha, case.parents, initial_state)
+    ref_states, ref_writes, ref_outputs = sequential_tree_delta(k, v, beta, alpha, case.parents, initial_state)
+    got_states, got_writes, got_outputs = tree_ut_delta(k, v, beta, alpha, case.parents, initial_state)
 
     state_abs = (got_states - ref_states).abs().max().item()
     write_abs = (got_writes - ref_writes).abs().max().item()
+    output_abs = (got_outputs - ref_outputs).abs().max().item()
     state_rel = (got_states - ref_states).abs().max().div(ref_states.abs().max().clamp_min(1e-12)).item()
     write_rel = (got_writes - ref_writes).abs().max().div(ref_writes.abs().max().clamp_min(1e-12)).item()
+    output_rel = (got_outputs - ref_outputs).abs().max().div(ref_outputs.abs().max().clamp_min(1e-12)).item()
     return {
         "case": case.name,
         "dtype": str(case.dtype).replace("torch.", ""),
@@ -144,6 +210,39 @@ def run_case(case: Case, *, seed: int, d_k: int, d_v: int, device: torch.device)
         "state_max_rel": state_rel,
         "write_max_abs": write_abs,
         "write_max_rel": write_rel,
+        "output_max_abs": output_abs,
+        "output_max_rel": output_rel,
+    }
+
+
+def run_multihead_case(*, seed: int, device: torch.device) -> dict[str, float | str]:
+    dtype = torch.float64
+    parents = (-1, 0, 0, 1, 1, 2, 4, 4)
+    n = len(parents)
+    h_k = 2
+    h_v = 6
+    d_k = 8
+    d_v = 5
+    generator = torch.Generator(device=device)
+    generator.manual_seed(seed)
+    k = torch.randn((n, h_k, d_k), generator=generator, dtype=dtype, device=device)
+    k = k / k.norm(dim=-1, keepdim=True).clamp_min(1e-12)
+    v = torch.randn((n, h_v, d_v), generator=generator, dtype=dtype, device=device)
+    beta = torch.rand((n, h_v), generator=generator, dtype=dtype, device=device) * 0.65 + 0.05
+    alpha = torch.rand((n, h_v), generator=generator, dtype=dtype, device=device) * 0.25 + 0.72
+    initial_state = torch.randn((h_v, d_v, d_k), generator=generator, dtype=dtype, device=device) * 0.2
+
+    ref_states, ref_outputs = sequential_multihead_tree_delta(
+        k.repeat_interleave(h_v // h_k, dim=1), v, beta, alpha, parents, initial_state
+    )
+    got_states, got_outputs = tree_ut_multihead_delta(k, v, beta, alpha, parents, initial_state)
+    return {
+        "case": "branched_gated_gqa_multihead_fp64",
+        "dtype": "float64",
+        "state_max_abs": (got_states - ref_states).abs().max().item(),
+        "state_max_rel": (got_states - ref_states).abs().max().div(ref_states.abs().max().clamp_min(1e-12)).item(),
+        "output_max_abs": (got_outputs - ref_outputs).abs().max().item(),
+        "output_max_rel": (got_outputs - ref_outputs).abs().max().div(ref_outputs.abs().max().clamp_min(1e-12)).item(),
     }
 
 
@@ -168,15 +267,31 @@ def main() -> int:
     for offset, case in enumerate(cases):
         result = run_case(case, seed=args.seed + offset, d_k=args.d_k, d_v=args.d_v, device=device)
         tolerance = tolerances[case.dtype]
-        ok = result["state_max_abs"] <= tolerance and result["write_max_abs"] <= tolerance
+        ok = (
+            result["state_max_abs"] <= tolerance
+            and result["write_max_abs"] <= tolerance
+            and result["output_max_abs"] <= tolerance
+        )
         failed = failed or not ok
         print(
             f"{'PASS' if ok else 'FAIL'} {result['case']} dtype={result['dtype']} "
             f"state_max_abs={result['state_max_abs']:.3e} "
             f"state_max_rel={result['state_max_rel']:.3e} "
             f"write_max_abs={result['write_max_abs']:.3e} "
-            f"write_max_rel={result['write_max_rel']:.3e}"
+            f"write_max_rel={result['write_max_rel']:.3e} "
+            f"output_max_abs={result['output_max_abs']:.3e} "
+            f"output_max_rel={result['output_max_rel']:.3e}"
         )
+    result = run_multihead_case(seed=args.seed + 100, device=device)
+    ok = result["state_max_abs"] <= 1e-10 and result["output_max_abs"] <= 1e-10
+    failed = failed or not ok
+    print(
+        f"{'PASS' if ok else 'FAIL'} {result['case']} dtype={result['dtype']} "
+        f"state_max_abs={result['state_max_abs']:.3e} "
+        f"state_max_rel={result['state_max_rel']:.3e} "
+        f"output_max_abs={result['output_max_abs']:.3e} "
+        f"output_max_rel={result['output_max_rel']:.3e}"
+    )
     return 1 if failed else 0
 
 

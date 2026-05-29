@@ -2572,6 +2572,102 @@ else:
             'import torch\nimport os as _lumo_fa_os\nimport json as _lumo_fa_json\nimport time as _lumo_fa_time\n',
             1,
         )
+    if '# LUMO_FA_TREE_DELTA_TORCH' not in text:
+        old = '\n@CustomOp.register("chunk_gated_delta_rule")\n'
+        new = r"""
+# LUMO_FA_TREE_DELTA_TORCH: topo-ordered tree-ancestor WY/UT delta update.
+def _lumo_fa_tree_delta_torch(
+    *,
+    A_log: torch.Tensor,
+    a: torch.Tensor,
+    b: torch.Tensor,
+    dt_bias: torch.Tensor,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    initial_state: torch.Tensor,
+    ssm_state_indices: torch.Tensor,
+    initial_state_indices: torch.Tensor | None,
+    parent_indices: torch.Tensor,
+    use_qk_l2norm_in_kernel: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if use_qk_l2norm_in_kernel:
+        q = l2norm_fwd(q)
+        k = l2norm_fwd(k)
+    q = q.squeeze(0)
+    k = k.squeeze(0)
+    v = v.squeeze(0)
+    n = int(q.shape[0])
+    h_k = int(k.shape[1])
+    h_v = int(v.shape[1])
+    if h_v % h_k != 0:
+        raise RuntimeError(f"LUMO_FA_TREE_DELTA_TORCH requires value heads divisible by key heads, got {h_v=} {h_k=}")
+    repeat = h_v // h_k
+    if repeat != 1:
+        q = q.repeat_interleave(repeat, dim=1)
+        k = k.repeat_interleave(repeat, dim=1)
+
+    g, beta = fused_gdn_gating(A_log=A_log, a=a, b=b, dt_bias=dt_bias)
+    alpha = torch.exp(g.squeeze(0).to(torch.float32))
+    beta = beta.squeeze(0).to(torch.float32)
+    q_f = q.to(torch.float32)
+    k_f = k.to(torch.float32)
+    v_f = v.to(torch.float32)
+
+    parents = parent_indices.to(device=q.device, dtype=torch.long)
+    actual_parents = torch.empty((n,), dtype=torch.long, device=q.device)
+    actual_parents[0] = -1
+    for i in range(1, n):
+        parent = int(parents[i].item())
+        actual_parents[i] = 0 if parent < 0 else parent + 1
+
+    ancestor = torch.zeros((n, n), dtype=torch.bool, device=q.device)
+    gamma = torch.empty((n, h_v), dtype=torch.float32, device=q.device)
+    for i in range(n):
+        parent = int(actual_parents[i].item())
+        gamma[i] = alpha[i] if parent < 0 else gamma[parent] * alpha[i]
+        while parent >= 0:
+            ancestor[i, parent] = True
+            parent = int(actual_parents[parent].item())
+
+    if initial_state_indices is not None:
+        prefix_idx = int(initial_state_indices[0].item())
+    else:
+        prefix_idx = int(ssm_state_indices.reshape(-1)[0].item())
+    prefix_state = initial_state[prefix_idx].to(torch.float32)
+
+    kk = torch.einsum("nhd,mhd->hnm", k_f, k_f)
+    gamma_hn = gamma.transpose(0, 1)
+    beta_hn = beta.transpose(0, 1)
+    ratio = gamma_hn[:, :, None] / gamma_hn[:, None, :].clamp_min(1e-20)
+    lower = ancestor.to(torch.float32).unsqueeze(0) * beta_hn[:, :, None] * ratio * kk
+    system = torch.eye(n, dtype=torch.float32, device=q.device).unsqueeze(0) + lower
+
+    initial_projection = torch.einsum("hvk,nhk->nhv", prefix_state, k_f)
+    rhs = beta[:, :, None] * (v_f - gamma[:, :, None] * initial_projection)
+    writes = torch.linalg.solve_triangular(
+        system,
+        rhs.permute(1, 0, 2).contiguous(),
+        upper=False,
+    )
+
+    ancestor_or_self = ancestor.to(torch.float32) + torch.eye(n, dtype=torch.float32, device=q.device)
+    coeff = ancestor_or_self.unsqueeze(0) * ratio
+    states = (
+        gamma[:, :, None, None] * prefix_state.unsqueeze(0)
+        + torch.einsum("hij,hjv,hjk->ihvk", coeff, writes, k_f.permute(1, 0, 2))
+    )
+    output = torch.einsum("ihvk,ihk->ihv", states, q_f)
+
+    write_indices = ssm_state_indices.reshape(n, -1)[:, 0].to(torch.long)
+    initial_state.index_copy_(0, write_indices, states.to(initial_state.dtype))
+    return output.unsqueeze(0).to(v.dtype), states.to(initial_state.dtype)
+
+@CustomOp.register("chunk_gated_delta_rule")
+"""
+        if old not in text:
+            raise RuntimeError('F_a tree-delta helper insertion anchor not found')
+        text = text.replace(old, new, 1)
     old = """        mixed_qkv = mixed_qkv[:num_actual_tokens]
         b = b[:num_actual_tokens]
 """
@@ -2759,7 +2855,43 @@ else:
             core_attn_out_spec, last_recurrent_state = None, None
 """
     new = """        # 2.1: Process the multi-query part
-        if spec_sequence_masks is not None and fa_unique_expanded_node_mode:
+        if (
+            spec_sequence_masks is not None
+            and fa_unique_expanded_node_mode
+            and _lumo_fa_os.environ.get("LUMO_FA_TREE_DELTA_TORCH") == "1"
+        ):
+            def _lumo_fa_select_token(_tensor, _idx):
+                if _tensor is None:
+                    return None
+                if _tensor.ndim >= 3 and _tensor.shape[1] == attn_metadata.num_spec_decode_tokens:
+                    return _tensor.index_select(1, _idx)
+                if _tensor.ndim >= 1 and _tensor.shape[0] == attn_metadata.num_spec_decode_tokens:
+                    return _tensor.index_select(0, _idx)
+                return _tensor
+
+            _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
+            if _parents_t is None:
+                raise RuntimeError("LUMO_FA_TREE_DELTA_TORCH requires fa_tree_parent_indices_tensor")
+            _all_rows = torch.arange(
+                attn_metadata.num_spec_decode_tokens,
+                dtype=torch.long,
+                device=query_spec.device,
+            )
+            core_attn_out_spec, last_recurrent_state = _lumo_fa_tree_delta_torch(
+                A_log=self.A_log,
+                a=_lumo_fa_select_token(a, _all_rows),
+                b=_lumo_fa_select_token(b, _all_rows),
+                dt_bias=self.dt_bias,
+                q=query_spec,
+                k=key_spec,
+                v=value_spec,
+                initial_state=ssm_state,
+                ssm_state_indices=spec_state_indices_tensor,
+                initial_state_indices=spec_initial_state_indices_tensor,
+                parent_indices=_parents_t,
+                use_qk_l2norm_in_kernel=True,
+            )
+        elif spec_sequence_masks is not None and fa_unique_expanded_node_mode:
             def _lumo_fa_select_token(_tensor, _idx):
                 if _tensor is None:
                     return None
@@ -7998,6 +8130,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         "LUMO_FB_RIDX_STATE_SUMMARY",
         "LUMO_FB_TENSOR_DEBUG",
         "LUMO_FB_RIDX_STATE_LAYERS",
+        "LUMO_FA_TREE_DELTA_TORCH",
     ):
         if os.environ.get(_name):
             fb_debug_exports += f"export {_name}={os.environ[_name]}\n"
