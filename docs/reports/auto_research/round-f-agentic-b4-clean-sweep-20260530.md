@@ -45,6 +45,7 @@ path statistic is unavailable.
 | E3 chain | 3 | 1 | 3 | 2.323 | 0.774 | 37.15 | 89.50 | n/a | n/a | 1/4 | clean rerun; prefix cache cold at start |
 | F tree-delta spine | 3 | 1 | 3 | 2.363 | 0.788 | 34.21 | 98.42 | n/a | n/a | 1/4 | clean rerun; FULL requested, GDN forced FULL_AND_PIECEWISE |
 | F tree-delta width2 | 3 | 2 | 14 | 1.981 | 0.142 | 14.85 | 199.47 | unavailable | unavailable | 1/4 | clean rerun; launched before accepted-path logger |
+| F tree-delta width2 remeasure | 3 | 2 | 14 | 2.048 | 0.146 | 15.89 | 190.80 | 3635/18607 (19.5%) | 7158/36965 (19.4%) | 2/4 | clean rerun; accepted-path logger live |
 | F tree-delta width2 | 5 | 2 | 62 | 2.421 | 0.039 | 7.44 | 455.81 | 1646/6422 (25.6%) | 4400/14962 (29.4%) | 1/4 | clean rerun; accepted-path logger live; GPU memory target lowered to 0.85 after launch-threshold miss at 0.86 |
 
 Depth-3 result: tree-delta spine remains lossless on the real B=4 agentic
@@ -91,6 +92,21 @@ the width-2 depth-3 branch is not a speed win.
 - Nsight export: available, but no CUDA kernel tables in sqlite.
 - Alt-branch path log: unavailable for this arm because it was launched before
   commit `692d3be3` added `tree_accept_path.jsonl`.
+
+### F Tree-Delta Width2 Depth 3 Remeasure
+
+- Experiment: `output/roundf_clean_agentic_b4_Fw2_d3_remeasure_20260530T2254Z`
+- Clean-slate proof: `clean_slate.json`
+- Summary: `summary.json`
+- Sliced traces: `dgx_steptrace_window.jsonl`, `per_req_spec_trace_window.jsonl`,
+  `tree_accept_path_window.jsonl`
+- Acceptance distribution: `{0: 4037, 1: 1798, 2: 1475, 3: 10738}`
+- Alt-branch path events: `3635/18607` events (`19.5%`) included at least one
+  non-top-1 child; `7158/36965` accepted path tokens (`19.4%`) were at or below
+  an alternate branch.
+- Tasks: `astropy__astropy-12907` and `astropy__astropy-13236` resolved; the
+  other two failed.
+- Nsight export: available, but no CUDA kernel tables in sqlite.
 
 ### F Tree-Delta Width2 Depth 5
 
