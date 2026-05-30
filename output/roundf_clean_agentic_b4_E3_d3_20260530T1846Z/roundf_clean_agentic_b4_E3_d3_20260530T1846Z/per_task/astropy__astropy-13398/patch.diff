@@ -1,0 +1,28 @@
+diff --git a/astropy/coordinates/builtin_frames/__init__.py b/astropy/coordinates/builtin_frames/__init__.py
+index 6fd688c28..17f464246 100644
+--- a/astropy/coordinates/builtin_frames/__init__.py
++++ b/astropy/coordinates/builtin_frames/__init__.py
+@@ -49,6 +49,7 @@ from . import icrs_cirs_transforms
+ from . import cirs_observed_transforms
+ from . import icrs_observed_transforms
+ from . import intermediate_rotation_transforms
++from . import itrs_observed_transforms
+ from . import ecliptic_transforms
+ 
+ # Import this after importing other frames, since this requires various
+diff --git a/astropy/wcs/setup_package.py b/astropy/wcs/setup_package.py
+index 3b7b416d5..c4602f44a 100644
+--- a/astropy/wcs/setup_package.py
++++ b/astropy/wcs/setup_package.py
+@@ -9,7 +9,10 @@ import sys
+ from collections import defaultdict
+ 
+ from setuptools import Extension
+-from setuptools.dep_util import newer_group
++try:
++    from setuptools.dep_util import newer_group
++except ImportError:
++    newer_group = None
+ 
+ import numpy
+ 
