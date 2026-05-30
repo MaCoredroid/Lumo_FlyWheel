@@ -2555,7 +2555,7 @@ else:
                     _drafts = [int(x) for x in _draft_cpu[_start:_start + _n]]
                     _tokens = [
                         int(x) for x in _out_cpu[_req_i]
-                        if int(x) != PLACEHOLDER_TOKEN_ID and int(x) < vocab_size
+                        if 0 <= int(x) < vocab_size
                     ]
                     _cur_parent = -1
                     _final_row = 0
@@ -2572,8 +2572,20 @@ else:
                     _rows.append(int(_final_row))
                     _start += _n
                 _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = _rows
-            except Exception:
-                pass
+            except Exception as _exc:
+                try:
+                    import json as _arj, time as _art
+                    global _LUMO_TREE_ACCEPTED_ROW_ERR_FH
+                    try:
+                        _LUMO_TREE_ACCEPTED_ROW_ERR_FH
+                    except NameError:
+                        _LUMO_TREE_ACCEPTED_ROW_ERR_FH = open("/logs/tree_accepted_row_commit_error.jsonl", "a", buffering=1)
+                    _LUMO_TREE_ACCEPTED_ROW_ERR_FH.write(_arj.dumps({
+                        "ts": round(_art.time(), 4),
+                        "error": repr(_exc),
+                    }) + chr(10))
+                except Exception:
+                    pass
 """
     if anchor not in text:
         raise RuntimeError('tree accepted-row commit sampler anchor not found')
