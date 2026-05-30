@@ -3014,8 +3014,6 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
         device = rec["mixed_qkv_input"].device
         state_idx = torch.tensor([prefix_idx], dtype=torch.int32, device=device)
         state_cols = torch.full((1, tokens), prefix_idx, dtype=torch.int32, device=device)
-        rec["conv_state"][prefix_idx].copy_(rec["conv_prefix_state"])
-        rec["ssm_state"][prefix_idx].copy_(rec["ssm_prefix_state"])
         mixed = rec["mixed_qkv_input"][:tokens]
         mixed = causal_conv1d_update(
             mixed.transpose(0, 1).unsqueeze(0),
