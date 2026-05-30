@@ -2584,6 +2584,8 @@ else:
     py_compile.compile(str(rs), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied tree accepted-row commit sampler patch')
 
+raise SystemExit(0)
+
 gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
 text = gl.read_text()
 sentinel = '# LUMO_FA_BRANCH_ACCEPTED_ROW_STATE_COPY'
@@ -4320,6 +4322,149 @@ if changed:
 else:
     print('[TRACK-B-PRELAUNCH] F_a activation replay state-copy commit already present')
 LUMOFASTATECOPYCOMMIT
+'''
+
+_FA_BRANCH_ACCEPTED_ROW_STATE_COPY_BLOCK = r'''
+python3 - <<'LUMOFABRANCHROWCOPY'
+from pathlib import Path
+
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FA_BRANCH_ACCEPTED_ROW_STATE_COPY'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] branch accepted-row state-copy patch already present')
+else:
+    record_old = """                    try:
+                        _depth_rows_for_record = getattr(attn_metadata, "fa_tree_depth_rows", None)
+                        if _depth_rows_for_record is not None:
+                            _record_group_size = int(len(_depth_rows_for_record))
+                        if _record_group_size <= 0:
+                            _record_group_size = int(_lumo_fa_os.environ.get("LUMO_FA_TREE_GROUP_SIZE", "4"))
+                        _total_tree_rows = int(attn_metadata.num_spec_decode_tokens)
+                        if _record_group_size > 0 and _total_tree_rows % _record_group_size == 0:
+                            _record_req_count = int(_total_tree_rows // _record_group_size)
+                    except Exception:
+                        _record_group_size = 0
+                        _record_req_count = 0
+"""
+    record_new = """                    try:
+                        _total_tree_rows = int(attn_metadata.num_spec_decode_tokens)
+                        _req_hint = int(globals().get("_LUMO_FA_LAST_TREE_REQ_COUNT", 0) or 0)
+                        if _req_hint > 0 and _total_tree_rows % _req_hint == 0:
+                            _record_req_count = int(_req_hint)
+                            _record_group_size = int(_total_tree_rows // _req_hint)
+                        else:
+                            _depth_rows_for_record = getattr(attn_metadata, "fa_tree_depth_rows", None)
+                            if _depth_rows_for_record is not None:
+                                _record_group_size = int(len(_depth_rows_for_record))
+                            if _record_group_size <= 0:
+                                _record_group_size = int(_lumo_fa_os.environ.get("LUMO_FA_TREE_GROUP_SIZE", "4"))
+                            if _record_group_size > 0 and _total_tree_rows % _record_group_size == 0:
+                                _record_req_count = int(_total_tree_rows // _record_group_size)
+                    except Exception:
+                        _record_group_size = 0
+                        _record_req_count = 0
+"""
+    if record_old in text:
+        text = text.replace(record_old, record_new, 1)
+
+    detail_old = """            "commit_mode": "state_copy",
+            "accepted_counts": accepted_counts,
+            "record_count": len(_LUMO_FA_REPLAY_LAYERS),
+"""
+    detail_new = """            "commit_mode": "state_copy_branch_row",
+            "accepted_counts": accepted_counts,
+            "accepted_tree_rows": [int(x) for x in list(globals().get("_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", []) or [])],
+            "record_count": len(_LUMO_FA_REPLAY_LAYERS),
+"""
+    if detail_old in text:
+        text = text.replace(detail_old, detail_new, 1)
+
+    group_old = """        record_group_size = int(rec.get("tree_group_size") or 0)
+        if record_group_size > 0 and total_tokens % record_group_size == 0:
+            group_size = record_group_size
+        elif len(accepted_counts) > 1 and total_tokens % len(accepted_counts) == 0:
+            group_size = max(1, total_tokens // len(accepted_counts))
+        else:
+            group_size = total_tokens
+        record_req_count = int(rec.get("tree_req_count") or 0)
+        req_count = max(1, total_tokens // group_size)
+        if record_req_count > 0:
+            req_count = min(req_count, record_req_count)
+        if expected_req_count is not None:
+            try:
+                req_count = min(req_count, int(expected_req_count))
+            except Exception:
+                pass
+        req_count = min(req_count, len(accepted_counts))
+"""
+    group_new = """        record_group_size = int(rec.get("tree_group_size") or 0)
+        record_req_count = int(rec.get("tree_req_count") or 0)
+        try:
+            expected_req = int(expected_req_count or 0)
+        except Exception:
+            expected_req = 0
+        if expected_req > 0 and total_tokens % expected_req == 0:
+            req_count = expected_req
+            group_size = total_tokens // expected_req
+        elif record_req_count > 0 and total_tokens % record_req_count == 0:
+            req_count = record_req_count
+            group_size = total_tokens // record_req_count
+        elif record_group_size > 0 and total_tokens % record_group_size == 0:
+            group_size = record_group_size
+            req_count = max(1, total_tokens // group_size)
+        elif len(accepted_counts) > 1 and total_tokens % len(accepted_counts) == 0:
+            req_count = len(accepted_counts)
+            group_size = max(1, total_tokens // req_count)
+        else:
+            group_size = total_tokens
+            req_count = 1
+        req_count = min(max(1, int(req_count)), len(accepted_counts))
+        accepted_tree_rows = list(globals().get("_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", []) or [])
+"""
+    if group_old not in text:
+        raise RuntimeError('branch accepted-row state-copy group anchor not found')
+    text = text.replace(group_old, group_new, 1)
+
+    final_old = """            base = req_i * group_size
+            final_row = base + tokens - 1
+            prefix_idx = int(initial_flat[base].item())
+"""
+    final_new = """            base = req_i * group_size
+            fallback_local = max(0, min(tokens - 1, group_size - 1))
+            local_row = fallback_local
+            if req_i < len(accepted_tree_rows):
+                try:
+                    candidate = int(accepted_tree_rows[req_i])
+                    if 0 <= candidate < group_size:
+                        local_row = candidate
+                except Exception:
+                    local_row = fallback_local
+            final_row = base + local_row
+            prefix_idx = int(initial_flat[base].item())
+"""
+    if final_old not in text:
+        raise RuntimeError('branch accepted-row state-copy final_row anchor not found')
+    text = text.replace(final_old, final_new, 1)
+
+    summary_old = """                "commit_mode": "state_copy",
+                "accepted_counts": accepted_counts,
+                "copied_requests": int(copied),
+"""
+    summary_new = """                "commit_mode": "state_copy_branch_row",
+                "accepted_counts": accepted_counts,
+                "accepted_tree_rows": [int(x) for x in list(globals().get("_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", []) or [])],
+                "copied_requests": int(copied),
+"""
+    if summary_old in text:
+        text = text.replace(summary_old, summary_new, 1)
+
+    text = sentinel + '\n' + text
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied branch accepted-row state-copy patch')
+LUMOFABRANCHROWCOPY
 '''
 
 _FA_UNIQUE_BATCH4_PACK_BLOCK = r'''
@@ -10054,7 +10199,8 @@ LUMOFBCTRL
             + (_FA_TREE_DELTA_VALID_N_BLOCK if fa_unique else "")
             + (_FA_GDN_CORE_CUDAGRAPH_UNSAFE_BLOCK if (fa_unique and os.environ.get("LUMO_FA_CUDAGRAPH_UNSAFE_GDN_CORE") == "1") else "")
             + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else "")
-            + (_FA_REPLAY_STATE_COPY_COMMIT_BLOCK if fa_unique else ""))
+            + (_FA_REPLAY_STATE_COPY_COMMIT_BLOCK if fa_unique else "")
+            + (_FA_BRANCH_ACCEPTED_ROW_STATE_COPY_BLOCK if fa_unique else ""))
 
 
 def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
