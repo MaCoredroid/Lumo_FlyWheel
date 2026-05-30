@@ -3690,7 +3690,6 @@ else:
                     device=query_start_loc.device)
                 num_spec_decodes = _req_count * _group_size
                 num_spec_decode_tokens = _req_count * _group_size
-                batch_size = max(int(batch_size), int(num_spec_decodes))
                 num_accepted_tokens = torch.ones(
                     (_req_count * _group_size,), dtype=torch.int32,
                     device=query_start_loc.device)
