@@ -3228,19 +3228,20 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                 and query_spec is not None
             ):
                 try:
-                    _parents_for_record = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
                     _record_group_size = 0
                     _record_req_count = 0
-                    if _parents_for_record is not None:
-                        try:
-                            _root_count = int((_parents_for_record.reshape(-1) < 0).sum().item())
-                            _total_tree_rows = int(attn_metadata.num_spec_decode_tokens)
-                            if _root_count > 0 and _total_tree_rows % _root_count == 0:
-                                _record_group_size = int(_total_tree_rows // _root_count)
-                                _record_req_count = int(_root_count)
-                        except Exception:
-                            _record_group_size = 0
-                            _record_req_count = 0
+                    try:
+                        _depth_rows_for_record = getattr(attn_metadata, "fa_tree_depth_rows", None)
+                        if _depth_rows_for_record is not None:
+                            _record_group_size = int(len(_depth_rows_for_record))
+                        if _record_group_size <= 0:
+                            _record_group_size = int(_lumo_fa_os.environ.get("LUMO_FA_TREE_GROUP_SIZE", "4"))
+                        _total_tree_rows = int(attn_metadata.num_spec_decode_tokens)
+                        if _record_group_size > 0 and _total_tree_rows % _record_group_size == 0:
+                            _record_req_count = int(_total_tree_rows // _record_group_size)
+                    except Exception:
+                        _record_group_size = 0
+                        _record_req_count = 0
                     _lumo_fa_replay_reset_if_first_layer(self.prefix)
                     _lumo_fa_replay_remember({
                         "module": self,
