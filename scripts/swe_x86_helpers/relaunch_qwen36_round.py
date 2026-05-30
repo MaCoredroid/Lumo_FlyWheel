@@ -3930,8 +3930,28 @@ python3 - <<'LUMOFAUNIQUEBATCH4STARTUP'
 from pathlib import Path
 ga = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/gdn_attn.py')
 text = ga.read_text()
+alloc_anchor = (
+    '        self.spec_write_state_slot_tensor: torch.Tensor = torch.empty(\n'
+    '            (self.decode_cudagraph_max_bs,),\n'
+    '            dtype=torch.int32,\n'
+    '            device=device,\n'
+    '        )\n'
+)
+if 'self.fa_tree_parent_indices_tensor' not in text and alloc_anchor in text:
+    text = text.replace(
+        alloc_anchor,
+        alloc_anchor
+        + '        self.fa_tree_parent_indices_tensor: torch.Tensor = torch.empty(\n'
+        + '            (self.decode_cudagraph_max_bs,),\n'
+        + '            dtype=torch.int32,\n'
+        + '            device=device,\n'
+        + '        )\n',
+        1,
+    )
 bad = '                batch_size = max(int(batch_size), int(num_spec_decodes))\n'
 changed = False
+if 'self.fa_tree_parent_indices_tensor' in text and alloc_anchor in text:
+    changed = True
 if bad in text:
     text = text.replace(bad, '')
     changed = True
@@ -3949,6 +3969,63 @@ if mask_anchor in text:
         '                    (num_spec_decodes,), dtype=torch.bool,\n'
         '                    device=query_start_loc.device)\n'
         '                num_accepted_tokens = torch.ones(\n',
+        1,
+    )
+    changed = True
+parent_anchor = (
+    '                fa_tree_parent_indices_tensor = torch.tensor(\n'
+    '                    _all_actual_parents, dtype=torch.int32,\n'
+    '                    device=query_start_loc.device)\n'
+)
+if parent_anchor in text:
+    text = text.replace(
+        parent_anchor,
+        '                _fa_parent_local = torch.tensor(\n'
+        '                    _all_actual_parents, dtype=torch.int32,\n'
+        '                    device=query_start_loc.device)\n'
+        '                if (\n'
+        '                    hasattr(self, "fa_tree_parent_indices_tensor")\n'
+        '                    and int(_fa_parent_local.numel()) <= int(self.fa_tree_parent_indices_tensor.numel())\n'
+        '                ):\n'
+        '                    self.fa_tree_parent_indices_tensor[:_fa_parent_local.numel()].copy_(\n'
+        '                        _fa_parent_local, non_blocking=True)\n'
+        '                    fa_tree_parent_indices_tensor = self.fa_tree_parent_indices_tensor[\n'
+        '                        :_fa_parent_local.numel()]\n'
+        '                else:\n'
+        '                    fa_tree_parent_indices_tensor = _fa_parent_local\n',
+        1,
+    )
+    changed = True
+depth_anchor = (
+    '                fa_tree_depth_row_tensors = tuple(\n'
+    '                    torch.tensor(_rows, dtype=torch.long, device=query_start_loc.device)\n'
+    '                    for _rows in fa_tree_depth_rows\n'
+    '                )\n'
+    '                fa_tree_depth_query_start_tensors = tuple(\n'
+    '                    torch.arange(len(_rows) + 1, dtype=torch.int32, device=query_start_loc.device)\n'
+    '                    for _rows in fa_tree_depth_rows\n'
+    '                )\n'
+)
+if depth_anchor in text:
+    text = text.replace(
+        depth_anchor,
+        '                _fa_depth_cache = getattr(self, "_lumo_fa_tree_depth_cache", None)\n'
+        '                if _fa_depth_cache is None:\n'
+        '                    _fa_depth_cache = {}\n'
+        '                    self._lumo_fa_tree_depth_cache = _fa_depth_cache\n'
+        '                _fa_depth_key = (int(num_spec_decodes), fa_tree_depth_rows)\n'
+        '                if _fa_depth_key not in _fa_depth_cache:\n'
+        '                    _fa_depth_cache[_fa_depth_key] = (\n'
+        '                        tuple(\n'
+        '                            torch.tensor(_rows, dtype=torch.long, device=query_start_loc.device)\n'
+        '                            for _rows in fa_tree_depth_rows\n'
+        '                        ),\n'
+        '                        tuple(\n'
+        '                            torch.arange(len(_rows) + 1, dtype=torch.int32, device=query_start_loc.device)\n'
+        '                            for _rows in fa_tree_depth_rows\n'
+        '                        ),\n'
+        '                    )\n'
+        '                fa_tree_depth_row_tensors, fa_tree_depth_query_start_tensors = _fa_depth_cache[_fa_depth_key]\n',
         1,
     )
     changed = True
