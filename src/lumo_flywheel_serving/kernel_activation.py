@@ -440,7 +440,10 @@ def _apply_cuda_graph_capture(
     if value is None:
         resolved["cuda_graph_capture"] = "vllm-default"
         return
-    normalized = str(value)
+    if isinstance(value, bool):
+        normalized = "on" if value else "off"
+    else:
+        normalized = str(value)
     if normalized == "off":
         if compile_mode_applied:
             compilation_config["cudagraph_mode"] = "NONE"
