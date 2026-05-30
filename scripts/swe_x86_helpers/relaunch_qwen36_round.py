@@ -2378,7 +2378,7 @@ else:
         )
 
     old = '        m = common_attn_metadata\n\n        query_start_loc = m.query_start_loc\n'
-    new = '        m = common_attn_metadata\n        fa_tree_parent_indices_tensor = None\n        fa_unique_node_mode = False\n        fa_unique_expanded_node_mode = False\n\n        query_start_loc = m.query_start_loc\n'
+    new = '        m = common_attn_metadata\n        fa_tree_parent_indices_tensor = None\n        fa_tree_depth_rows = None\n        fa_tree_depth_row_tensors = None\n        fa_tree_depth_query_start_tensors = None\n        fa_unique_node_mode = False\n        fa_unique_expanded_node_mode = False\n\n        query_start_loc = m.query_start_loc\n'
     if old not in text:
         raise RuntimeError('F_a unique-node metadata default anchor not found')
     text = text.replace(old, new, 1)
@@ -2392,6 +2392,9 @@ else:
     # root+selected unique nodes as one-token recurrent sequences whose
     # initial state is gathered from the parent node's write slot.
     fa_tree_parent_indices_tensor: torch.Tensor | None = None
+    fa_tree_depth_rows: tuple[tuple[int, ...], ...] | None = None
+    fa_tree_depth_row_tensors: tuple[torch.Tensor, ...] | None = None
+    fa_tree_depth_query_start_tensors: tuple[torch.Tensor, ...] | None = None
     fa_unique_node_mode: bool = False
     fa_unique_expanded_node_mode: bool = False
     non_spec_state_indices_tensor: torch.Tensor | None = (
@@ -2403,6 +2406,9 @@ else:
         new = """    spec_state_indices_tensor: torch.Tensor | None = None  # shape: [batch, num_spec]
     # LUMO_FA_UNIQUE_NODES_GDN_ATTN: packed-tree verifier metadata.
     fa_tree_parent_indices_tensor: torch.Tensor | None = None
+    fa_tree_depth_rows: tuple[tuple[int, ...], ...] | None = None
+    fa_tree_depth_row_tensors: tuple[torch.Tensor, ...] | None = None
+    fa_tree_depth_query_start_tensors: tuple[torch.Tensor, ...] | None = None
     fa_unique_node_mode: bool = False
     fa_unique_expanded_node_mode: bool = False
     non_spec_state_indices_tensor: torch.Tensor | None = (
@@ -2464,6 +2470,24 @@ else:
                 fa_tree_parent_indices_tensor = torch.tensor(
                     [-2] + _parents, dtype=torch.int32,
                     device=query_start_loc.device)
+                _actual_parents = [-1]
+                _depths = [0]
+                for _parent in _parents:
+                    _actual = 0 if int(_parent) < 0 else int(_parent) + 1
+                    _actual_parents.append(_actual)
+                    _depths.append(_depths[_actual] + 1)
+                fa_tree_depth_rows = tuple(
+                    tuple(_i for _i, _d in enumerate(_depths) if _d == _depth)
+                    for _depth in range(max(_depths) + 1)
+                )
+                fa_tree_depth_row_tensors = tuple(
+                    torch.tensor(_rows, dtype=torch.long, device=query_start_loc.device)
+                    for _rows in fa_tree_depth_rows
+                )
+                fa_tree_depth_query_start_tensors = tuple(
+                    torch.arange(len(_rows) + 1, dtype=torch.int32, device=query_start_loc.device)
+                    for _rows in fa_tree_depth_rows
+                )
                 fa_unique_node_mode = True
                 try:
                     _fh = globals().get("_LUMO_FA_UNIFIED_FH")
@@ -2528,6 +2552,24 @@ else:
                 _parents = [-1] + [int(_i) for _i in range(_node_count - 1)]
                 fa_tree_parent_indices_tensor = torch.tensor(
                     _parents, dtype=torch.int32, device=query_start_loc.device)
+                _actual_parents = [-1]
+                _depths = [0]
+                for _parent in _parents[1:]:
+                    _actual = 0 if int(_parent) < 0 else int(_parent) + 1
+                    _actual_parents.append(_actual)
+                    _depths.append(_depths[_actual] + 1)
+                fa_tree_depth_rows = tuple(
+                    tuple(_i for _i, _d in enumerate(_depths) if _d == _depth)
+                    for _depth in range(max(_depths) + 1)
+                )
+                fa_tree_depth_row_tensors = tuple(
+                    torch.tensor(_rows, dtype=torch.long, device=query_start_loc.device)
+                    for _rows in fa_tree_depth_rows
+                )
+                fa_tree_depth_query_start_tensors = tuple(
+                    torch.arange(len(_rows) + 1, dtype=torch.int32, device=query_start_loc.device)
+                    for _rows in fa_tree_depth_rows
+                )
                 fa_unique_node_mode = True
                 try:
                     _fh = globals().get("_LUMO_FA_UNIFIED_FH")
@@ -2594,11 +2636,42 @@ else:
 """
     new = """            and num_spec_decodes <= self.decode_cudagraph_max_bs
             and num_spec_decode_tokens <= self.decode_cudagraph_max_bs
-            and not bool(locals().get("fa_unique_node_mode", False))
         ):
 """
     if old not in text:
         raise RuntimeError('F_a unique-node cudagraph guard anchor not found')
+    text = text.replace(old, new, 1)
+
+    old = """            assert spec_sequence_masks is not None
+            self.spec_state_indices_tensor[:num_spec_decodes].copy_(
+                spec_state_indices_tensor, non_blocking=True
+            )
+            spec_state_indices_tensor = self.spec_state_indices_tensor[:batch_size]
+            spec_state_indices_tensor[num_spec_decodes:].fill_(PAD_SLOT_ID)
+
+            if spec_initial_state_indices_tensor is not None:
+"""
+    new = """            assert spec_sequence_masks is not None
+            if bool(locals().get("fa_unique_node_mode", False)):
+                _fa_state_cols = int(spec_state_indices_tensor.size(-1))
+                self.spec_state_indices_tensor[
+                    :num_spec_decodes, :_fa_state_cols
+                ].copy_(spec_state_indices_tensor, non_blocking=True)
+                spec_state_indices_tensor = self.spec_state_indices_tensor[
+                    :batch_size, :_fa_state_cols
+                ]
+                spec_state_indices_tensor[num_spec_decodes:].fill_(PAD_SLOT_ID)
+            else:
+                self.spec_state_indices_tensor[:num_spec_decodes].copy_(
+                    spec_state_indices_tensor, non_blocking=True
+                )
+                spec_state_indices_tensor = self.spec_state_indices_tensor[:batch_size]
+                spec_state_indices_tensor[num_spec_decodes:].fill_(PAD_SLOT_ID)
+
+            if spec_initial_state_indices_tensor is not None:
+"""
+    if old not in text:
+        raise RuntimeError('F_a unique-node cudagraph state copy anchor not found')
     text = text.replace(old, new, 1)
 
     old = """            spec_write_state_slot_tensor=spec_write_state_slot_tensor,
@@ -2606,6 +2679,9 @@ else:
 """
     new = """            spec_write_state_slot_tensor=spec_write_state_slot_tensor,
             fa_tree_parent_indices_tensor=fa_tree_parent_indices_tensor,
+            fa_tree_depth_rows=fa_tree_depth_rows,
+            fa_tree_depth_row_tensors=fa_tree_depth_row_tensors,
+            fa_tree_depth_query_start_tensors=fa_tree_depth_query_start_tensors,
             fa_unique_node_mode=bool(fa_unique_node_mode),
             fa_unique_expanded_node_mode=bool(fa_unique_expanded_node_mode),
             non_spec_state_indices_tensor=non_spec_state_indices_tensor,
@@ -2616,6 +2692,9 @@ else:
 """
         new = """            spec_state_indices_tensor=spec_state_indices_tensor,
             fa_tree_parent_indices_tensor=fa_tree_parent_indices_tensor,
+            fa_tree_depth_rows=fa_tree_depth_rows,
+            fa_tree_depth_row_tensors=fa_tree_depth_row_tensors,
+            fa_tree_depth_query_start_tensors=fa_tree_depth_query_start_tensors,
             fa_unique_node_mode=bool(fa_unique_node_mode),
             fa_unique_expanded_node_mode=bool(fa_unique_expanded_node_mode),
             non_spec_state_indices_tensor=non_spec_state_indices_tensor,
@@ -2733,6 +2812,184 @@ def _lumo_fa_tree_delta_torch(
     initial_state.index_copy_(0, write_indices, states.to(initial_state.dtype))
     return output.unsqueeze(0).to(v.dtype), states.to(initial_state.dtype)
 
+# LUMO_FA_TREE_DELTA_TRITON: graph-native fused forward verifier kernel.
+@triton.jit(do_not_specialize=["N"])
+def _lumo_fa_tree_delta_triton_kernel(
+    q,
+    k,
+    v,
+    g,
+    beta_gated,
+    out,
+    state,
+    ssm_state_indices,
+    initial_state_indices,
+    parent_indices,
+    scale,
+    N: tl.int64,
+    HK: tl.constexpr,
+    HV: tl.constexpr,
+    K: tl.constexpr,
+    V: tl.constexpr,
+    BK: tl.constexpr,
+    BV: tl.constexpr,
+    BN: tl.constexpr,
+    stride_state_token: tl.constexpr,
+    stride_state_head: tl.constexpr,
+    stride_state_value: tl.constexpr,
+    stride_state_key: tl.constexpr,
+    stride_indices_seq: tl.constexpr,
+    HAS_INITIAL_STATE_INDICES: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+):
+    i_v = tl.program_id(0)
+    i_hv = tl.program_id(1)
+    i_hk = i_hv // (HV // HK)
+    o_k = tl.arange(0, BK)
+    o_v = i_v * BV + tl.arange(0, BV)
+    m_k = o_k < K
+    m_v = o_v < V
+    m_h = m_v[:, None] & m_k[None, :]
+
+    head_state_off = (
+        i_hv * stride_state_head
+        + o_v[:, None] * stride_state_value
+        + o_k[None, :] * stride_state_key
+    )
+    if HAS_INITIAL_STATE_INDICES:
+        prefix_idx = tl.load(initial_state_indices + 0).to(tl.int64)
+    else:
+        prefix_idx = tl.load(ssm_state_indices + 0).to(tl.int64)
+    prefix_h = tl.load(
+        state + prefix_idx * stride_state_token + head_state_off,
+        mask=m_h,
+        other=0.0,
+    ).to(tl.float32)
+
+    for i in tl.static_range(0, BN):
+        if i < N:
+            if i == 0:
+                parent_actual = tl.full((), -1, tl.int64)
+            else:
+                parent_raw = tl.load(parent_indices + i).to(tl.int64)
+                parent_actual = tl.where(parent_raw < 0, 0, parent_raw + 1)
+            parent_safe = tl.maximum(parent_actual, 0)
+            parent_write_idx = tl.load(
+                ssm_state_indices + parent_safe * stride_indices_seq
+            ).to(tl.int64)
+            parent_h = tl.load(
+                state + parent_write_idx * stride_state_token + head_state_off,
+                mask=m_h,
+                other=0.0,
+            ).to(tl.float32)
+            h = tl.where(parent_actual >= 0, parent_h, prefix_h)
+
+            q_i = tl.load(
+                q + (i * HK + i_hk) * K + o_k,
+                mask=m_k,
+                other=0.0,
+            ).to(tl.float32)
+            k_i = tl.load(
+                k + (i * HK + i_hk) * K + o_k,
+                mask=m_k,
+                other=0.0,
+            ).to(tl.float32)
+            if USE_QK_L2NORM_IN_KERNEL:
+                q_i = q_i * tl.rsqrt(tl.sum(q_i * q_i) + 1e-6)
+                k_i = k_i * tl.rsqrt(tl.sum(k_i * k_i) + 1e-6)
+            q_i = q_i * scale
+
+            g_i = tl.load(g + i * HV + i_hv).to(tl.float32)
+            beta_i = tl.load(beta_gated + i * HV + i_hv).to(tl.float32)
+            v_i = tl.load(
+                v + (i * HV + i_hv) * V + o_v,
+                mask=m_v,
+                other=0.0,
+            ).to(tl.float32)
+
+            h = h * tl.exp(g_i)
+            delta_v = (v_i - tl.sum(h * k_i[None, :], axis=1)) * beta_i
+            h = h + delta_v[:, None] * k_i[None, :]
+            o_i = tl.sum(h * q_i[None, :], axis=1)
+
+            tl.store(
+                out + (i * HV + i_hv) * V + o_v,
+                o_i,
+                mask=m_v,
+            )
+            write_idx = tl.load(ssm_state_indices + i * stride_indices_seq).to(tl.int64)
+            tl.store(
+                state + write_idx * stride_state_token + head_state_off,
+                h,
+                mask=m_h,
+            )
+
+def _lumo_fa_tree_delta_triton(
+    *,
+    A_log: torch.Tensor,
+    a: torch.Tensor,
+    b: torch.Tensor,
+    dt_bias: torch.Tensor,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    initial_state: torch.Tensor,
+    ssm_state_indices: torch.Tensor,
+    initial_state_indices: torch.Tensor | None,
+    parent_indices: torch.Tensor,
+    use_qk_l2norm_in_kernel: bool,
+) -> tuple[torch.Tensor, None]:
+    q = q.contiguous()
+    k = k.contiguous()
+    v = v.contiguous()
+    a = a.contiguous()
+    b = b.contiguous()
+    n = int(q.shape[1])
+    hk = int(k.shape[2])
+    hv = int(v.shape[2])
+    key_dim = int(k.shape[3])
+    value_dim = int(v.shape[3])
+    if hv % hk != 0:
+        raise RuntimeError(f"LUMO_FA_TREE_DELTA_TRITON requires value heads divisible by key heads, got {hv=} {hk=}")
+    if key_dim > 256:
+        raise RuntimeError(f"LUMO_FA_TREE_DELTA_TRITON supports K<=256, got {key_dim}")
+    g, beta_gated = fused_gdn_gating(A_log=A_log, a=a, b=b, dt_bias=dt_bias)
+    out = torch.empty_like(v)
+    bk = triton.next_power_of_2(key_dim)
+    bv = min(triton.next_power_of_2(value_dim), 32)
+    bn = triton.next_power_of_2(n)
+    grid = (triton.cdiv(value_dim, bv), hv)
+    _lumo_fa_tree_delta_triton_kernel[grid](
+        q,
+        k,
+        v,
+        g,
+        beta_gated,
+        out,
+        initial_state,
+        ssm_state_indices,
+        initial_state_indices,
+        parent_indices,
+        key_dim ** -0.5,
+        n,
+        hk,
+        hv,
+        key_dim,
+        value_dim,
+        bk,
+        bv,
+        bn,
+        initial_state.stride(0),
+        initial_state.stride(1),
+        initial_state.stride(2),
+        initial_state.stride(3),
+        ssm_state_indices.stride(0),
+        initial_state_indices is not None,
+        use_qk_l2norm_in_kernel,
+        num_warps=4,
+    )
+    return out, None
+
 # LUMO_FA_ACTIVATION_REPLAY_COMMIT: accepted-path commit is standard linear GDN.
 _LUMO_FA_REPLAY_LAYERS = []
 
@@ -2822,10 +3079,14 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                         else None
                     ),
                     "parents": (
-                        getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
-                        .detach().cpu().tolist()
-                        if getattr(attn_metadata, "fa_tree_parent_indices_tensor", None) is not None
-                        else None
+                        None
+                        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
+                        else (
+                            getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
+                            .detach().cpu().tolist()
+                            if getattr(attn_metadata, "fa_tree_parent_indices_tensor", None) is not None
+                            else None
+                        )
                     ),
                 }) + chr(10))
             except Exception:
@@ -2865,22 +3126,35 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
     new = """        # 1.1: Process the multi-query part
         _lumo_fa_replay_mixed_qkv_input = mixed_qkv_spec
         if spec_sequence_masks is not None and fa_unique_expanded_node_mode:
-            _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
-            _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
-            _depths = []
-            for _i, _parent in enumerate(_parents):
-                if _i == 0:
-                    _depths.append(0)
-                else:
-                    _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+            _depth_rows = getattr(attn_metadata, "fa_tree_depth_rows", None)
+            _depth_row_tensors = getattr(attn_metadata, "fa_tree_depth_row_tensors", None)
+            _depth_query_start_tensors = getattr(attn_metadata, "fa_tree_depth_query_start_tensors", None)
+            if _depth_rows is None:
+                _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
+                _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
+                _depths = []
+                for _i, _parent in enumerate(_parents):
+                    if _i == 0:
+                        _depths.append(0)
+                    else:
+                        _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+                _depth_rows = tuple(
+                    tuple(i for i, d in enumerate(_depths) if d == depth)
+                    for depth in range((max(_depths) + 1) if _depths else 0)
+                )
+                _depth_row_tensors = tuple(
+                    torch.tensor(_rows, dtype=torch.long, device=mixed_qkv_spec.device)
+                    for _rows in _depth_rows
+                )
+                _depth_query_start_tensors = tuple(
+                    torch.arange(len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
+                    for _rows in _depth_rows
+                )
             _conv_out = torch.empty_like(mixed_qkv_spec)
-            for _depth in range((max(_depths) + 1) if _depths else 0):
-                _rows = [i for i, d in enumerate(_depths) if d == _depth]
+            for _rows, _row_idx, _sub_query_start in zip(
+                _depth_rows, _depth_row_tensors, _depth_query_start_tensors):
                 if not _rows:
                     continue
-                _row_idx = torch.tensor(_rows, dtype=torch.long, device=mixed_qkv_spec.device)
-                _sub_query_start = torch.arange(
-                    len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
                 _sub = causal_conv1d_update(
                     mixed_qkv_spec.index_select(0, _row_idx),
                     conv_state,
@@ -2965,10 +3239,14 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                         "a": a.detach(),
                         "b": b.detach(),
                         "conv_state": conv_state,
-                        "conv_prefix_state": conv_state[int(spec_initial_state_indices_tensor.reshape(-1)[0].item())].detach().clone(),
+                        "conv_prefix_state": conv_state.index_select(
+                            0, spec_initial_state_indices_tensor.reshape(-1)[:1].to(torch.long)
+                        ).squeeze(0).detach().clone(),
                         "conv_weights": conv_weights,
                         "ssm_state": ssm_state,
-                        "ssm_prefix_state": ssm_state[int(spec_initial_state_indices_tensor.reshape(-1)[0].item())].detach().clone(),
+                        "ssm_prefix_state": ssm_state.index_select(
+                            0, spec_initial_state_indices_tensor.reshape(-1)[:1].to(torch.long)
+                        ).squeeze(0).detach().clone(),
                         "initial_state_indices": spec_initial_state_indices_tensor.detach(),
                     })
                 except Exception:
@@ -3007,7 +3285,10 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
         if (
             spec_sequence_masks is not None
             and fa_unique_expanded_node_mode
-            and _lumo_fa_os.environ.get("LUMO_FA_TREE_DELTA_TORCH") == "1"
+            and (
+                _lumo_fa_os.environ.get("LUMO_FA_TREE_DELTA_TORCH") == "1"
+                or _lumo_fa_os.environ.get("LUMO_FA_TREE_DELTA_TRITON") == "1"
+            )
         ):
             def _lumo_fa_select_token(_tensor, _idx):
                 if _tensor is None:
@@ -3021,15 +3302,22 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
             _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
             if _parents_t is None:
                 raise RuntimeError("LUMO_FA_TREE_DELTA_TORCH requires fa_tree_parent_indices_tensor")
+            _lumo_tree_delta_impl = (
+                _lumo_fa_tree_delta_triton
+                if _lumo_fa_os.environ.get("LUMO_FA_TREE_DELTA_TRITON") == "1"
+                else _lumo_fa_tree_delta_torch
+            )
             _all_rows = torch.arange(
                 attn_metadata.num_spec_decode_tokens,
                 dtype=torch.long,
                 device=query_spec.device,
             )
-            core_attn_out_spec, last_recurrent_state = _lumo_fa_tree_delta_torch(
+            _tree_a = _lumo_fa_select_token(a, _all_rows)
+            _tree_b = _lumo_fa_select_token(b, _all_rows)
+            core_attn_out_spec, last_recurrent_state = _lumo_tree_delta_impl(
                 A_log=self.A_log,
-                a=_lumo_fa_select_token(a, _all_rows),
-                b=_lumo_fa_select_token(b, _all_rows),
+                a=_tree_a,
+                b=_tree_b,
                 dt_bias=self.dt_bias,
                 q=query_spec,
                 k=key_spec,
@@ -8345,6 +8633,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         "LUMO_FB_TENSOR_DEBUG",
         "LUMO_FB_RIDX_STATE_LAYERS",
         "LUMO_FA_TREE_DELTA_TORCH",
+        "LUMO_FA_TREE_DELTA_TRITON",
     ):
         if os.environ.get(_name):
             fb_debug_exports += f"export {_name}={os.environ[_name]}\n"
