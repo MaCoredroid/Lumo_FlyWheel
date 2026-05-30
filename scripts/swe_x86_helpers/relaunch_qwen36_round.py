@@ -3228,10 +3228,25 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                 and query_spec is not None
             ):
                 try:
+                    _parents_for_record = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
+                    _record_group_size = 0
+                    _record_req_count = 0
+                    if _parents_for_record is not None:
+                        try:
+                            _root_count = int((_parents_for_record.reshape(-1) < 0).sum().item())
+                            _total_tree_rows = int(attn_metadata.num_spec_decode_tokens)
+                            if _root_count > 0 and _total_tree_rows % _root_count == 0:
+                                _record_group_size = int(_total_tree_rows // _root_count)
+                                _record_req_count = int(_root_count)
+                        except Exception:
+                            _record_group_size = 0
+                            _record_req_count = 0
                     _lumo_fa_replay_reset_if_first_layer(self.prefix)
                     _lumo_fa_replay_remember({
                         "module": self,
                         "num_tokens": int(attn_metadata.num_spec_decode_tokens),
+                        "tree_group_size": int(_record_group_size),
+                        "tree_req_count": int(_record_req_count),
                         "mixed_qkv_input": _lumo_fa_replay_mixed_qkv_input.detach(),
                         "a": a.detach(),
                         "b": b.detach(),
@@ -3518,11 +3533,18 @@ else:
         total_tokens = int(rec["num_tokens"])
         if total_tokens <= 0:
             continue
-        if len(accepted_counts) > 1 and total_tokens % len(accepted_counts) == 0:
+        record_group_size = int(rec.get("tree_group_size") or 0)
+        if record_group_size > 0 and total_tokens % record_group_size == 0:
+            group_size = record_group_size
+        elif len(accepted_counts) > 1 and total_tokens % len(accepted_counts) == 0:
             group_size = max(1, total_tokens // len(accepted_counts))
         else:
             group_size = total_tokens
-        req_count = min(len(accepted_counts), max(1, total_tokens // group_size))
+        record_req_count = int(rec.get("tree_req_count") or 0)
+        req_count = max(1, total_tokens // group_size)
+        if record_req_count > 0:
+            req_count = min(req_count, record_req_count)
+        req_count = min(req_count, len(accepted_counts))
         module = rec["module"]
         device = rec["mixed_qkv_input"].device
         initial_flat = rec["initial_state_indices"].reshape(-1)
@@ -3535,6 +3557,8 @@ else:
                     "total_tokens": total_tokens,
                     "group_size": int(group_size),
                     "req_count": int(req_count),
+                    "record_group_size": int(record_group_size),
+                    "record_req_count": int(record_req_count),
                     "initial_rows": int(initial_flat.numel()),
                     "mixed_shape": list(rec["mixed_qkv_input"].shape),
                 }) + chr(10))
