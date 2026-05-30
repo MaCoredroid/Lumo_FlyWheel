@@ -2513,6 +2513,279 @@ else:
 LUMOTREEREJECTRANDOMFIX
 '''
 
+_TREE_ACCEPTED_ROW_COMMIT_BLOCK = r'''
+python3 - <<'LUMOTREEACCEPTEDROWCOMMIT'
+from pathlib import Path
+
+rs = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py')
+text = rs.read_text()
+sentinel = '# LUMO_TREE_ACCEPTED_ROW_COMMIT'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] tree accepted-row commit sampler patch already present')
+else:
+    anchor = """        output_token_ids = rejection_sample(
+            metadata.draft_token_ids,
+            metadata.num_draft_tokens,
+            metadata.max_spec_len,
+            metadata.cu_num_draft_tokens,
+            draft_probs,
+            target_logits,
+            bonus_token_ids,
+            sampling_metadata,
+            tree_parent_indices=lumo_tree_parent_indices,
+            tree_token_ids=lumo_tree_token_ids,
+        )
+"""
+    inject = anchor + """
+        # LUMO_TREE_ACCEPTED_ROW_COMMIT: for branched trees, a generated
+        # sequence position is not the same as the flattened verifier row.
+        # Record the actual accepted tree row per request so GDN state-copy
+        # commits copy the accepted branch leaf, not the linear top-1 row.
+        if lumo_tree_parent_indices is not None:
+            try:
+                from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+                _parents_cpu = lumo_tree_parent_indices.detach().cpu().tolist()
+                _draft_cpu = metadata.draft_token_ids.detach().cpu().tolist()
+                _out_cpu = output_token_ids.detach().cpu().tolist()
+                _rows = []
+                _start = 0
+                for _req_i, _n in enumerate(metadata.num_draft_tokens):
+                    _n = int(_n)
+                    _parents = [int(x) for x in _parents_cpu[_start:_start + _n]]
+                    _drafts = [int(x) for x in _draft_cpu[_start:_start + _n]]
+                    _tokens = [
+                        int(x) for x in _out_cpu[_req_i]
+                        if int(x) != PLACEHOLDER_TOKEN_ID and int(x) < vocab_size
+                    ]
+                    _cur_parent = -1
+                    _final_row = 0
+                    for _tok in _tokens:
+                        _matched = -1
+                        for _pos in range(_n):
+                            if _parents[_pos] == _cur_parent and _drafts[_pos] == _tok:
+                                _matched = _pos
+                                break
+                        if _matched < 0:
+                            break
+                        _cur_parent = _matched
+                        _final_row = _matched + 1
+                    _rows.append(int(_final_row))
+                    _start += _n
+                _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = _rows
+            except Exception:
+                pass
+"""
+    if anchor not in text:
+        raise RuntimeError('tree accepted-row commit sampler anchor not found')
+    text = text.replace(anchor, inject, 1)
+    text = sentinel + '\n' + text
+    rs.write_text(text)
+    import py_compile
+    py_compile.compile(str(rs), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied tree accepted-row commit sampler patch')
+
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FA_BRANCH_ACCEPTED_ROW_STATE_COPY'
+record_old = """                    try:
+                        _depth_rows_for_record = getattr(attn_metadata, "fa_tree_depth_rows", None)
+                        if _depth_rows_for_record is not None:
+                            _record_group_size = int(len(_depth_rows_for_record))
+                        if _record_group_size <= 0:
+                            _record_group_size = int(_lumo_fa_os.environ.get("LUMO_FA_TREE_GROUP_SIZE", "4"))
+                        _total_tree_rows = int(attn_metadata.num_spec_decode_tokens)
+                        if _record_group_size > 0 and _total_tree_rows % _record_group_size == 0:
+                            _record_req_count = int(_total_tree_rows // _record_group_size)
+                    except Exception:
+                        _record_group_size = 0
+                        _record_req_count = 0
+"""
+record_new = """                    try:
+                        _total_tree_rows = int(attn_metadata.num_spec_decode_tokens)
+                        _req_hint = int(globals().get("_LUMO_FA_LAST_TREE_REQ_COUNT", 0) or 0)
+                        if _req_hint > 0 and _total_tree_rows % _req_hint == 0:
+                            _record_req_count = int(_req_hint)
+                            _record_group_size = int(_total_tree_rows // _req_hint)
+                        else:
+                            _depth_rows_for_record = getattr(attn_metadata, "fa_tree_depth_rows", None)
+                            if _depth_rows_for_record is not None:
+                                _record_group_size = int(len(_depth_rows_for_record))
+                            if _record_group_size <= 0:
+                                _record_group_size = int(_lumo_fa_os.environ.get("LUMO_FA_TREE_GROUP_SIZE", "4"))
+                            if _record_group_size > 0 and _total_tree_rows % _record_group_size == 0:
+                                _record_req_count = int(_total_tree_rows // _record_group_size)
+                    except Exception:
+                        _record_group_size = 0
+                        _record_req_count = 0
+"""
+if record_old in text:
+    text = text.replace(record_old, record_new, 1)
+
+start = text.find('def _lumo_fa_activation_replay_commit(\n')
+if start < 0:
+    start = text.find('def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:\n')
+if start < 0:
+    start = text.find('def _lumo_fa_activation_replay_commit(accepted_token_count) -> None:\n')
+end = text.find('\n@CustomOp.register("chunk_gated_delta_rule")\n', start)
+if start < 0 or end < 0:
+    raise RuntimeError('F_a activation replay commit function anchor not found for branch accepted-row patch')
+if sentinel not in text[start:end]:
+    new = r"""def _lumo_fa_activation_replay_commit(
+    accepted_token_count,
+    expected_total_tokens=None,
+    expected_req_count=None,
+) -> None:
+    # LUMO_FA_BRANCH_ACCEPTED_ROW_STATE_COPY: copy the actual accepted tree
+    # row per request. Flattened tree row order is not a linear path when the
+    # verifier has siblings, so base + accepted_count - 1 corrupts branch state.
+    _commit_t0 = _lumo_fa_time.perf_counter()
+    if isinstance(accepted_token_count, (list, tuple)):
+        accepted_counts = [int(x) for x in accepted_token_count]
+    else:
+        try:
+            accepted_counts = [int(x) for x in accepted_token_count.tolist()]
+        except Exception:
+            accepted_counts = [int(accepted_token_count)]
+    if not accepted_counts or max(accepted_counts) <= 0:
+        _LUMO_FA_REPLAY_LAYERS.clear()
+        return
+    accepted_tree_rows = list(globals().get("_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", []) or [])
+    try:
+        _fh = globals().get("_LUMO_FA_REPLAY_COMMIT_DETAIL_FH")
+        if _fh is None:
+            _fh = open("/logs/fa_activation_replay_commit_detail.jsonl", "a", buffering=1)
+            globals()["_LUMO_FA_REPLAY_COMMIT_DETAIL_FH"] = _fh
+        _fh.write(_lumo_fa_json.dumps({
+            "ts": round(_lumo_fa_time.time(), 4),
+            "event": "fa_activation_replay_commit_detail",
+            "commit_mode": "state_copy_branch_row",
+            "accepted_counts": accepted_counts,
+            "accepted_tree_rows": [int(x) for x in accepted_tree_rows],
+            "record_count": len(_LUMO_FA_REPLAY_LAYERS),
+            "expected_total_tokens": expected_total_tokens,
+            "expected_req_count": expected_req_count,
+        }) + chr(10))
+    except Exception:
+        pass
+    replay_layers = _LUMO_FA_REPLAY_LAYERS
+    try:
+        _expected_total = int(expected_total_tokens or 0)
+        if _expected_total > 0 and _LUMO_FA_REPLAY_LAYER_SETS:
+            _candidate_keys = sorted(
+                int(k) for k in _LUMO_FA_REPLAY_LAYER_SETS
+                if int(k) >= _expected_total
+            )
+            if not _candidate_keys and _expected_total in _LUMO_FA_REPLAY_LAYER_SETS:
+                _candidate_keys = [_expected_total]
+            if _candidate_keys:
+                replay_layers = _LUMO_FA_REPLAY_LAYER_SETS[_candidate_keys[0]]
+    except Exception:
+        replay_layers = _LUMO_FA_REPLAY_LAYERS
+    copied = 0
+    missing_state_indices = 0
+    used_tree_rows = []
+    for rec in list(replay_layers):
+        total_tokens = int(rec["num_tokens"])
+        if total_tokens <= 0:
+            continue
+        record_group_size = int(rec.get("tree_group_size") or 0)
+        record_req_count = int(rec.get("tree_req_count") or 0)
+        group_size = 0
+        req_count = 0
+        try:
+            expected_req = int(expected_req_count or 0)
+        except Exception:
+            expected_req = 0
+        if expected_req > 0 and total_tokens % expected_req == 0:
+            req_count = expected_req
+            group_size = total_tokens // expected_req
+        elif record_req_count > 0 and total_tokens % record_req_count == 0:
+            req_count = record_req_count
+            group_size = total_tokens // record_req_count
+        elif record_group_size > 0 and total_tokens % record_group_size == 0:
+            group_size = record_group_size
+            req_count = max(1, total_tokens // group_size)
+        elif len(accepted_counts) > 1 and total_tokens % len(accepted_counts) == 0:
+            req_count = len(accepted_counts)
+            group_size = max(1, total_tokens // req_count)
+        else:
+            group_size = total_tokens
+            req_count = 1
+        req_count = min(max(1, int(req_count)), len(accepted_counts))
+        initial_flat = rec["initial_state_indices"].reshape(-1).to(torch.long)
+        state_indices = rec.get("state_indices")
+        if state_indices is None:
+            missing_state_indices += 1
+            continue
+        state_flat = state_indices.reshape(total_tokens, -1)[:, 0].to(torch.long)
+        try:
+            _fh = globals().get("_LUMO_FA_REPLAY_COMMIT_DETAIL_FH")
+            if _fh is not None:
+                _fh.write(_lumo_fa_json.dumps({
+                    "ts": round(_lumo_fa_time.time(), 4),
+                    "event": "fa_activation_replay_record",
+                    "commit_mode": "state_copy_branch_row",
+                    "total_tokens": total_tokens,
+                    "group_size": int(group_size),
+                    "req_count": int(req_count),
+                    "record_group_size": int(record_group_size),
+                    "record_req_count": int(record_req_count),
+                    "initial_rows": int(initial_flat.numel()),
+                    "state_rows": list(state_indices.shape),
+                    "mixed_shape": list(rec["mixed_qkv_input"].shape),
+                }) + chr(10))
+        except Exception:
+            pass
+        for req_i in range(req_count):
+            n = int(accepted_counts[req_i])
+            tokens = min(n, group_size, total_tokens - req_i * group_size)
+            if tokens <= 0:
+                continue
+            base = req_i * group_size
+            fallback_local = max(0, min(tokens - 1, group_size - 1))
+            local_row = fallback_local
+            if req_i < len(accepted_tree_rows):
+                try:
+                    candidate = int(accepted_tree_rows[req_i])
+                    if 0 <= candidate < group_size:
+                        local_row = candidate
+                except Exception:
+                    local_row = fallback_local
+            final_row = base + local_row
+            prefix_idx = int(initial_flat[base].item())
+            final_idx = int(state_flat[final_row].item())
+            if final_idx != prefix_idx:
+                rec["conv_state"][prefix_idx].copy_(rec["conv_state"][final_idx], non_blocking=True)
+                rec["ssm_state"][prefix_idx].copy_(rec["ssm_state"][final_idx], non_blocking=True)
+            copied += 1
+            used_tree_rows.append(int(local_row))
+    try:
+        _fh = globals().get("_LUMO_FA_REPLAY_COMMIT_DETAIL_FH")
+        if _fh is not None:
+            _fh.write(_lumo_fa_json.dumps({
+                "ts": round(_lumo_fa_time.time(), 4),
+                "event": "fa_activation_replay_commit_summary",
+                "commit_mode": "state_copy_branch_row",
+                "accepted_counts": accepted_counts,
+                "accepted_tree_rows": [int(x) for x in accepted_tree_rows],
+                "used_tree_rows": used_tree_rows[:16],
+                "copied_requests": int(copied),
+                "missing_state_indices": int(missing_state_indices),
+                "commit_enqueue_us": int((_lumo_fa_time.perf_counter() - _commit_t0) * 1000000),
+            }) + chr(10))
+    except Exception:
+        pass
+"""
+    text = text[:start] + new + text[end:]
+    text = sentinel + '\n' + text
+
+gl.write_text(text)
+import py_compile
+py_compile.compile(str(gl), doraise=True)
+print('[TRACK-B-PRELAUNCH] applied branch accepted-row state-copy patch')
+LUMOTREEACCEPTEDROWCOMMIT
+'''
+
 _FA_UNIQUE_NODES_BLOCK = r'''
 python3 - <<'LUMOFAUNIQUENODES'
 from pathlib import Path
@@ -9703,6 +9976,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         + _MROPE_TREE_BLOCK
         + _TREE_REJECTION_BLOCK
         + _TREE_REJECTION_RANDOM_FIX_BLOCK
+        + _TREE_ACCEPTED_ROW_COMMIT_BLOCK
     )
     fb_k = os.environ.get("LUMO_FB_K", "1")
     fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
