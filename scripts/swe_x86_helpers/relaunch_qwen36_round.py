@@ -2631,6 +2631,62 @@ else:
             _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = _rows
         except Exception:
             pass
+        try:
+            import json as _tapj, os as _tapo, time as _tapt
+            global _LUMO_TREE_ACCEPT_PATH_FH
+            try:
+                _LUMO_TREE_ACCEPT_PATH_FH
+            except NameError:
+                _LUMO_TREE_ACCEPT_PATH_FH = open(
+                    _tapo.environ.get("LUMO_TREE_ACCEPT_PATH_LOG", "/logs/tree_accept_path.jsonl"),
+                    "a",
+                    buffering=1,
+                )
+            _parents_cpu = tree_parent_indices.detach().cpu().tolist()
+            _start = 0
+            _now = round(_tapt.time(), 4)
+            for _req_i, _n in enumerate(num_draft_tokens):
+                _n = int(_n)
+                _parents = [int(x) for x in _parents_cpu[_start:_start + _n]]
+                _final_row = int(_rows[_req_i]) if _req_i < len(_rows) else 0
+                _accepted_node_ids = []
+                if _final_row > 0:
+                    _node = _final_row - 1
+                    _guard = 0
+                    while 0 <= _node < _n and _guard <= _n:
+                        _accepted_node_ids.append(int(_node))
+                        _node = int(_parents[_node])
+                        _guard += 1
+                    _accepted_node_ids.reverse()
+                _child_ranks = []
+                for _node in _accepted_node_ids:
+                    _parent = int(_parents[_node])
+                    _rank = 0
+                    for _pos in range(int(_node)):
+                        if int(_parents[_pos]) == _parent:
+                            _rank += 1
+                    _child_ranks.append(int(_rank))
+                _seen_alt = False
+                _alt_tokens = 0
+                for _rank in _child_ranks:
+                    if int(_rank) != 0:
+                        _seen_alt = True
+                    if _seen_alt:
+                        _alt_tokens += 1
+                _LUMO_TREE_ACCEPT_PATH_FH.write(_tapj.dumps({
+                    "ts": _now,
+                    "req_index": int(_req_i),
+                    "node_count": int(_n),
+                    "accepted_node_ids": _accepted_node_ids,
+                    "accepted_child_ranks": _child_ranks,
+                    "accepted_len": int(len(_accepted_node_ids)),
+                    "accepted_final_row": int(_final_row),
+                    "has_alt_branch": bool(any(int(_rank) != 0 for _rank in _child_ranks)),
+                    "accepted_alt_tokens": int(_alt_tokens),
+                }) + chr(10))
+                _start += _n
+        except Exception:
+            pass
         return output_token_ids
 """
     if branch_old not in text:

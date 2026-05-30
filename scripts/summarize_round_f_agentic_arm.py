@@ -125,6 +125,38 @@ def _step_summary(rows: list[dict]) -> dict:
     }
 
 
+def _tree_accept_summary(rows: list[dict]) -> dict:
+    if not rows:
+        return {
+            "available": False,
+            "events": 0,
+        }
+    accepted = 0
+    alt_tokens = 0
+    alt_events = 0
+    by_node_count: Counter[int] = Counter()
+    for row in rows:
+        acc_len = int(row.get("accepted_len") or 0)
+        alt_len = int(row.get("accepted_alt_tokens") or 0)
+        accepted += acc_len
+        alt_tokens += alt_len
+        if bool(row.get("has_alt_branch")):
+            alt_events += 1
+        node_count = row.get("node_count")
+        if node_count is not None:
+            by_node_count[int(node_count)] += 1
+    return {
+        "available": True,
+        "events": len(rows),
+        "alt_branch_events": alt_events,
+        "alt_branch_event_fraction": alt_events / len(rows) if rows else None,
+        "accepted_tokens_from_paths": accepted,
+        "accepted_alt_branch_tokens": alt_tokens,
+        "accepted_alt_branch_token_fraction": (alt_tokens / accepted) if accepted else None,
+        "node_count_events": dict(sorted(by_node_count.items())),
+    }
+
+
 def _mean(values):
     vals = [float(v) for v in values if v is not None and not math.isnan(float(v))]
     return sum(vals) / len(vals) if vals else None
@@ -158,15 +190,25 @@ def summarize(exp_dir: Path, label: str, nodes: int | None, start_ts: float | No
     end = task.get("end_ts")
     spec_rows = _read_jsonl(exp_dir / "per_req_spec_trace.jsonl")
     step_rows = _read_jsonl(exp_dir / "dgx_steptrace.jsonl")
+    tree_accept_rows = _read_jsonl(exp_dir / "tree_accept_path.jsonl")
     if start is not None:
         spec_rows = [r for r in spec_rows if float(r.get("ts", 0.0)) >= start - 2.0]
         step_rows = [r for r in step_rows if float(r.get("ts", 0.0)) >= start - 2.0]
+        tree_accept_rows = [
+            r for r in tree_accept_rows if float(r.get("ts", 0.0)) >= start - 2.0
+        ]
     if end is not None:
         spec_rows = [r for r in spec_rows if float(r.get("ts", 0.0)) <= end + 5.0]
         step_rows = [r for r in step_rows if float(r.get("ts", 0.0)) <= end + 5.0]
+        tree_accept_rows = [
+            r for r in tree_accept_rows if float(r.get("ts", 0.0)) <= end + 5.0
+        ]
     elif spec_rows:
         latest = max(float(r.get("ts", 0.0)) for r in spec_rows)
         step_rows = [r for r in step_rows if float(r.get("ts", 0.0)) <= latest + 5.0]
+        tree_accept_rows = [
+            r for r in tree_accept_rows if float(r.get("ts", 0.0)) <= latest + 5.0
+        ]
 
     acc = sum(int(r.get("acc", 0)) for r in spec_rows)
     draft = sum(int(r.get("draft", 0)) for r in spec_rows)
@@ -186,6 +228,7 @@ def summarize(exp_dir: Path, label: str, nodes: int | None, start_ts: float | No
             "accept_per_draft": (acc / draft) if draft else None,
             "acc_dist": dict(sorted(dist.items())),
         },
+        "tree_accept_paths": _tree_accept_summary(tree_accept_rows),
         "steptrace": _step_summary(step_rows),
         "tasks": task,
         "nsight": _nsight_tables(nsight_sqlite) if nsight_sqlite else {"available": False},

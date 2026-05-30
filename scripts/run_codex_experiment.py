@@ -36,6 +36,7 @@ NSYS = "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys"
 STEPTRACE = "/tmp/swe_dgx_steptrace.jsonl"
 REQUEST_METRICS = "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl"
 PER_REQ_SPEC_TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl"
+TREE_ACCEPT_PATH_TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_accept_path.jsonl"
 
 
 def sh(cmd: list[str], **kw) -> subprocess.CompletedProcess:
@@ -88,7 +89,7 @@ def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -
     # Reset the per-agent spec trace BEFORE relaunch: the fresh container opens a
     # new file handle, so each round's trace starts clean (and we never delete it
     # out from under a live handle -- the cause of the round-1 unlinked-inode loss).
-    sh(["rm", "-f", PER_REQ_SPEC_TRACE])
+    sh(["rm", "-f", PER_REQ_SPEC_TRACE, TREE_ACCEPT_PATH_TRACE])
     log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F','Fb') else '-'} "
         f"kv={kv_cache_dtype or 'bundle-default'} (model load ~ several min)")
     r = sh(cmd, timeout=1200)
@@ -209,6 +210,8 @@ def rsync_back(args) -> Path:
     # per-agent spec-step trace (bind-mounted from the vLLM container) -- clean
     # per-request decode steps/acceptance regardless of batch size
     sh(["cp", PER_REQ_SPEC_TRACE, str(local / "per_req_spec_trace.jsonl")])
+    if Path(TREE_ACCEPT_PATH_TRACE).exists():
+        sh(["cp", TREE_ACCEPT_PATH_TRACE, str(local / "tree_accept_path.jsonl")])
     return local
 
 
@@ -234,6 +237,8 @@ def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
     paths = [f"{rel}/*/per_task/{task_id}", f"{rel}/per_task/{task_id}",
              f"{rel}/driver.log", f"{rel}/dgx_steptrace.jsonl",
              f"{rel}/per_req_spec_trace.jsonl"]
+    if (REPO / rel / "tree_accept_path.jsonl").exists():
+        paths.append(f"{rel}/tree_accept_path.jsonl")
     if joined:
         paths.append(str(joined.relative_to(REPO)))
     nrep = REPO / f"{rel}/nsight_{args.exp_tag}.nsys-rep"
