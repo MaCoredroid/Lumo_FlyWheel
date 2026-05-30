@@ -2513,6 +2513,192 @@ else:
 LUMOTREEREJECTRANDOMFIX
 '''
 
+_TREE_ACCEPTED_ROW_KERNEL_BLOCK = r'''
+python3 - <<'LUMOTREEACCEPTEDROWKERNEL'
+from pathlib import Path
+
+rs = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py')
+text = rs.read_text()
+sentinel = '# LUMO_TREE_ACCEPTED_ROW_KERNEL'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] tree accepted-row kernel patch already present')
+else:
+    branch_old = """    if tree_parent_indices is not None and tree_token_ids is not None:
+        assert tree_parent_indices.is_contiguous()
+        assert tree_token_ids.is_contiguous()
+        if sampling_metadata.all_greedy:
+            lumo_tree_sample_kernel[(batch_size,)](
+                output_token_ids,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                max_spec_len,
+            )
+        else:
+            target_probs = target_logits.softmax(dim=-1, dtype=torch.float32)
+            uniform_probs = generate_uniform_probs(
+                num_tokens,
+                num_draft_tokens,
+                sampling_metadata.generators,
+                device,
+            )
+            recovered_token_ids = sample_recovered_tokens(
+                max_spec_len,
+                num_draft_tokens,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                draft_probs,
+                target_probs,
+                sampling_metadata,
+                device,
+            )
+            lumo_tree_prob_sample_kernel[(batch_size,)](
+                output_token_ids,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                draft_probs,
+                target_probs,
+                recovered_token_ids,
+                uniform_probs,
+                max_spec_len,
+                vocab_size,
+                NO_DRAFT_PROBS=draft_probs is None,
+            )
+        return output_token_ids
+"""
+    branch_new = """    if tree_parent_indices is not None and tree_token_ids is not None:
+        assert tree_parent_indices.is_contiguous()
+        assert tree_token_ids.is_contiguous()
+        accepted_tree_rows = torch.zeros(
+            (batch_size,),
+            dtype=torch.int32,
+            device=device,
+        )
+        if sampling_metadata.all_greedy:
+            lumo_tree_sample_kernel[(batch_size,)](
+                output_token_ids,
+                accepted_tree_rows,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                max_spec_len,
+            )
+        else:
+            target_probs = target_logits.softmax(dim=-1, dtype=torch.float32)
+            uniform_probs = generate_uniform_probs(
+                num_tokens,
+                num_draft_tokens,
+                sampling_metadata.generators,
+                device,
+            )
+            recovered_token_ids = sample_recovered_tokens(
+                max_spec_len,
+                num_draft_tokens,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                draft_probs,
+                target_probs,
+                sampling_metadata,
+                device,
+            )
+            lumo_tree_prob_sample_kernel[(batch_size,)](
+                output_token_ids,
+                accepted_tree_rows,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                draft_probs,
+                target_probs,
+                recovered_token_ids,
+                uniform_probs,
+                max_spec_len,
+                vocab_size,
+                NO_DRAFT_PROBS=draft_probs is None,
+            )
+        try:
+            _rows = [int(x) for x in accepted_tree_rows.detach().cpu().tolist()]
+            globals()["_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL"] = _rows
+            from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+            _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = _rows
+        except Exception:
+            pass
+        return output_token_ids
+"""
+    if branch_old not in text:
+        raise RuntimeError('tree accepted-row kernel branch anchor not found')
+    text = text.replace(branch_old, branch_new, 1)
+
+    sig_old = """def lumo_tree_sample_kernel(
+    output_token_ids_ptr,  # [batch_size, max_spec_len + 1]
+    cu_num_draft_tokens_ptr,  # [batch_size]
+"""
+    sig_new = """def lumo_tree_sample_kernel(
+    output_token_ids_ptr,  # [batch_size, max_spec_len + 1]
+    accepted_tree_rows_ptr,  # [batch_size], local row after accepted draft path
+    cu_num_draft_tokens_ptr,  # [batch_size]
+"""
+    if sig_old not in text:
+        raise RuntimeError('tree accepted-row greedy kernel signature anchor not found')
+    text = text.replace(sig_old, sig_new, 1)
+
+    greedy_old = """                if matched_child >= 0:
+                    current_parent = matched_child
+                else:
+                    done = True
+"""
+    greedy_new = """                if matched_child >= 0:
+                    current_parent = matched_child
+                    tl.store(accepted_tree_rows_ptr + req_idx, current_parent + 1)
+                else:
+                    done = True
+"""
+    if greedy_old not in text:
+        raise RuntimeError('tree accepted-row greedy store anchor not found')
+    text = text.replace(greedy_old, greedy_new, 1)
+
+    prob_sig_old = """def lumo_tree_prob_sample_kernel(
+    output_token_ids_ptr,  # [batch_size, max_spec_len + 1]
+    cu_num_draft_tokens_ptr,  # [batch_size]
+"""
+    prob_sig_new = """def lumo_tree_prob_sample_kernel(
+    output_token_ids_ptr,  # [batch_size, max_spec_len + 1]
+    accepted_tree_rows_ptr,  # [batch_size], local row after accepted draft path
+    cu_num_draft_tokens_ptr,  # [batch_size]
+"""
+    if prob_sig_old not in text:
+        raise RuntimeError('tree accepted-row prob kernel signature anchor not found')
+    text = text.replace(prob_sig_old, prob_sig_new, 1)
+
+    prob_old = """                out_pos += 1
+                current_parent = accepted_child
+            else:
+"""
+    prob_new = """                out_pos += 1
+                current_parent = accepted_child
+                tl.store(accepted_tree_rows_ptr + req_idx, current_parent + 1)
+            else:
+"""
+    if prob_old not in text:
+        raise RuntimeError('tree accepted-row prob store anchor not found')
+    text = text.replace(prob_old, prob_new, 1)
+
+    text = sentinel + '\n' + text
+    rs.write_text(text)
+    import py_compile
+    py_compile.compile(str(rs), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied tree accepted-row kernel patch')
+LUMOTREEACCEPTEDROWKERNEL
+'''
+
 _TREE_ACCEPTED_ROW_COMMIT_BLOCK = r'''
 python3 - <<'LUMOTREEACCEPTEDROWCOMMIT'
 from pathlib import Path
@@ -2544,34 +2730,36 @@ else:
         if lumo_tree_parent_indices is not None:
             try:
                 from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
-                _parents_cpu = lumo_tree_parent_indices.detach().cpu().tolist()
-                _draft_cpu = metadata.draft_token_ids.detach().cpu().tolist()
-                _out_cpu = output_token_ids.detach().cpu().tolist()
-                _vocab_size = int(logits.shape[-1])
-                _rows = []
-                _start = 0
-                for _req_i, _n in enumerate(metadata.num_draft_tokens):
-                    _n = int(_n)
-                    _parents = [int(x) for x in _parents_cpu[_start:_start + _n]]
-                    _drafts = [int(x) for x in _draft_cpu[_start:_start + _n]]
-                    _tokens = [
-                        int(x) for x in _out_cpu[_req_i]
-                        if 0 <= int(x) < _vocab_size
-                    ]
-                    _cur_parent = -1
-                    _final_row = 0
-                    for _tok in _tokens:
-                        _matched = -1
-                        for _pos in range(_n):
-                            if _parents[_pos] == _cur_parent and _drafts[_pos] == _tok:
-                                _matched = _pos
+                _rows = list(globals().get("_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL", []) or [])
+                if len(_rows) != len(metadata.num_draft_tokens):
+                    _parents_cpu = lumo_tree_parent_indices.detach().cpu().tolist()
+                    _draft_cpu = metadata.draft_token_ids.detach().cpu().tolist()
+                    _out_cpu = output_token_ids.detach().cpu().tolist()
+                    _vocab_size = int(logits.shape[-1])
+                    _rows = []
+                    _start = 0
+                    for _req_i, _n in enumerate(metadata.num_draft_tokens):
+                        _n = int(_n)
+                        _parents = [int(x) for x in _parents_cpu[_start:_start + _n]]
+                        _drafts = [int(x) for x in _draft_cpu[_start:_start + _n]]
+                        _tokens = [
+                            int(x) for x in _out_cpu[_req_i]
+                            if 0 <= int(x) < _vocab_size
+                        ]
+                        _cur_parent = -1
+                        _final_row = 0
+                        for _tok in _tokens:
+                            _matched = -1
+                            for _pos in range(_n):
+                                if _parents[_pos] == _cur_parent and _drafts[_pos] == _tok:
+                                    _matched = _pos
+                                    break
+                            if _matched < 0:
                                 break
-                        if _matched < 0:
-                            break
-                        _cur_parent = _matched
-                        _final_row = _matched + 1
-                    _rows.append(int(_final_row))
-                    _start += _n
+                            _cur_parent = _matched
+                            _final_row = _matched + 1
+                        _rows.append(int(_final_row))
+                        _start += _n
                 _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = _rows
             except Exception as _exc:
                 try:
@@ -10134,6 +10322,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         + _MROPE_TREE_BLOCK
         + _TREE_REJECTION_BLOCK
         + _TREE_REJECTION_RANDOM_FIX_BLOCK
+        + _TREE_ACCEPTED_ROW_KERNEL_BLOCK
         + _TREE_ACCEPTED_ROW_COMMIT_BLOCK
     )
     fb_k = os.environ.get("LUMO_FB_K", "1")
