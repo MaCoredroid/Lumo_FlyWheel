@@ -3690,9 +3690,6 @@ else:
                     device=query_start_loc.device)
                 num_spec_decodes = _req_count * _group_size
                 num_spec_decode_tokens = _req_count * _group_size
-                spec_sequence_masks = torch.ones(
-                    (num_spec_decodes,), dtype=torch.bool,
-                    device=query_start_loc.device)
                 num_accepted_tokens = torch.ones(
                     (_req_count * _group_size,), dtype=torch.int32,
                     device=query_start_loc.device)
@@ -3969,6 +3966,34 @@ if mask_anchor in text:
         '                    (num_spec_decodes,), dtype=torch.bool,\n'
         '                    device=query_start_loc.device)\n'
         '                num_accepted_tokens = torch.ones(\n',
+        1,
+    )
+    changed = True
+bad_mask_block = (
+    '                spec_sequence_masks = torch.ones(\n'
+    '                    (num_spec_decodes,), dtype=torch.bool,\n'
+    '                    device=query_start_loc.device)\n'
+)
+if bad_mask_block in text:
+    text = text.replace(bad_mask_block, '')
+    changed = True
+copy_anchor = (
+    '            self.spec_sequence_masks[:num_spec_decodes].copy_(\n'
+    '                spec_sequence_masks[:num_spec_decodes], non_blocking=True\n'
+    '            )\n'
+)
+if copy_anchor in text and '_fa_spec_masks_for_copy' not in text:
+    text = text.replace(
+        copy_anchor,
+        '            if bool(locals().get("fa_unique_node_mode", False)):\n'
+        '                _fa_spec_masks_for_copy = torch.ones(\n'
+        '                    (num_spec_decodes,), dtype=torch.bool,\n'
+        '                    device=spec_state_indices_tensor.device)\n'
+        '            else:\n'
+        '                _fa_spec_masks_for_copy = spec_sequence_masks[:num_spec_decodes]\n'
+        '            self.spec_sequence_masks[:num_spec_decodes].copy_(\n'
+        '                _fa_spec_masks_for_copy, non_blocking=True\n'
+        '            )\n',
         1,
     )
     changed = True
