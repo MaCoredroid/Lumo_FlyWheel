@@ -3690,6 +3690,9 @@ else:
                     device=query_start_loc.device)
                 num_spec_decodes = _req_count * _group_size
                 num_spec_decode_tokens = _req_count * _group_size
+                spec_sequence_masks = torch.ones(
+                    (num_spec_decodes,), dtype=torch.bool,
+                    device=query_start_loc.device)
                 num_accepted_tokens = torch.ones(
                     (_req_count * _group_size,), dtype=torch.int32,
                     device=query_start_loc.device)
@@ -3928,14 +3931,34 @@ from pathlib import Path
 ga = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/gdn_attn.py')
 text = ga.read_text()
 bad = '                batch_size = max(int(batch_size), int(num_spec_decodes))\n'
+changed = False
 if bad in text:
     text = text.replace(bad, '')
+    changed = True
+mask_anchor = (
+    '                num_spec_decodes = _req_count * _group_size\n'
+    '                num_spec_decode_tokens = _req_count * _group_size\n'
+    '                num_accepted_tokens = torch.ones(\n'
+)
+if mask_anchor in text:
+    text = text.replace(
+        mask_anchor,
+        '                num_spec_decodes = _req_count * _group_size\n'
+        '                num_spec_decode_tokens = _req_count * _group_size\n'
+        '                spec_sequence_masks = torch.ones(\n'
+        '                    (num_spec_decodes,), dtype=torch.bool,\n'
+        '                    device=query_start_loc.device)\n'
+        '                num_accepted_tokens = torch.ones(\n',
+        1,
+    )
+    changed = True
+if changed:
     ga.write_text(text)
     import py_compile
     py_compile.compile(str(ga), doraise=True)
-    print('[TRACK-B-PRELAUNCH] removed stale F_a batch4 batch_size assignment')
+    print('[TRACK-B-PRELAUNCH] repaired stale F_a batch4 startup metadata')
 else:
-    print('[TRACK-B-PRELAUNCH] stale F_a batch4 batch_size assignment absent')
+    print('[TRACK-B-PRELAUNCH] stale F_a batch4 startup metadata absent')
 LUMOFAUNIQUEBATCH4STARTUP
 '''
 
