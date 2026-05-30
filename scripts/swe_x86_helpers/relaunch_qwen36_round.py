@@ -3627,6 +3627,302 @@ else:
 LUMOFAUNIQUEBATCH4DIAG
 '''
 
+_FA_UNIQUE_BATCH4_PACK_BLOCK = r'''
+python3 - <<'LUMOFAUNIQUEBATCH4PACK'
+from pathlib import Path
+
+ga = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/gdn_attn.py')
+text = ga.read_text()
+sentinel = '# LUMO_FA_UNIQUE_BATCH4_PACK'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a unique-node batch4 pack already present')
+else:
+    start = text.find('            if _tree_src and int(num_spec_decodes) == 1:\n')
+    end = text.find('            elif spec_state_indices_tensor is not None and int(num_spec_decodes) == 1:\n', start)
+    if start < 0 or end < 0:
+        raise RuntimeError('F_a unique-node batch4 metadata anchor not found')
+    new = r"""            if _tree_src and int(num_spec_decodes) >= 1:
+                _pre_num_spec_decodes = int(num_spec_decodes)
+                _choices = list(_lumo_fa_ast.literal_eval(_tree_src))
+                _node_count = len(_choices)
+                _group_size = _node_count + 1
+                _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}
+                _parents = [
+                    _path_to_idx.get(tuple(_p[:-1]), -1)
+                    for _p in _choices
+                ]
+                _max_depth = max((len(tuple(_p)) for _p in _choices), default=0)
+                _is_spine = (
+                    _node_count == _max_depth
+                    and all(tuple(_p) == tuple([0] * len(tuple(_p)))
+                            for _p in _choices)
+                )
+                if block_table_tensor.size(1) < _node_count + 2:
+                    raise RuntimeError(
+                        "LUMO_FA_UNIQUE_NODES requires root + node write "
+                        f"state slots: need {_node_count + 2}, got "
+                        f"{block_table_tensor.size(1)}")
+                _rows = block_table_tensor[
+                    spec_sequence_masks, :_node_count + 2
+                ].contiguous()
+                _req_count = int(_rows.shape[0])
+                _write_slots_2d = _rows[:, 1:_node_count + 2].contiguous()
+                _initial_slots_2d = torch.empty(
+                    (_req_count, _group_size), dtype=torch.int32,
+                    device=query_start_loc.device)
+                _initial_slots_2d[:, 0] = _rows[:, 0]
+                for _i, _parent in enumerate(_parents):
+                    _initial_slots_2d[:, _i + 1] = _write_slots_2d[
+                        :, 0 if _parent < 0 else _parent + 1
+                    ]
+                spec_initial_state_indices_tensor = (
+                    _initial_slots_2d.reshape(-1).contiguous()
+                )
+                spec_initial_state_slot_tensor = None
+                spec_write_state_slot_tensor = torch.zeros(
+                    (_req_count * _group_size,), dtype=torch.int32,
+                    device=query_start_loc.device)
+                spec_state_indices_tensor = (
+                    _write_slots_2d.reshape(-1, 1).contiguous()
+                )
+                spec_query_start_loc = torch.arange(
+                    _req_count * _group_size + 1, dtype=torch.int32,
+                    device=query_start_loc.device)
+                num_spec_decodes = _req_count * _group_size
+                num_spec_decode_tokens = _req_count * _group_size
+                batch_size = max(int(batch_size), int(num_spec_decodes))
+                num_accepted_tokens = torch.ones(
+                    (_req_count * _group_size,), dtype=torch.int32,
+                    device=query_start_loc.device)
+                fa_unique_expanded_node_mode = True
+                _local_actual_parents = [-1]
+                for _parent in _parents:
+                    _local_actual_parents.append(
+                        0 if int(_parent) < 0 else int(_parent) + 1
+                    )
+                _all_actual_parents = []
+                for _req_i in range(_req_count):
+                    _base = _req_i * _group_size
+                    for _parent in _local_actual_parents:
+                        _all_actual_parents.append(
+                            -1 if int(_parent) < 0 else _base + int(_parent)
+                        )
+                fa_tree_parent_indices_tensor = torch.tensor(
+                    _all_actual_parents, dtype=torch.int32,
+                    device=query_start_loc.device)
+                _depths = []
+                for _parent in _all_actual_parents:
+                    _depths.append(0 if int(_parent) < 0 else _depths[int(_parent)] + 1)
+                fa_tree_depth_rows = tuple(
+                    tuple(_i for _i, _d in enumerate(_depths) if _d == _depth)
+                    for _depth in range(max(_depths) + 1)
+                )
+                fa_tree_depth_row_tensors = tuple(
+                    torch.tensor(_rows, dtype=torch.long, device=query_start_loc.device)
+                    for _rows in fa_tree_depth_rows
+                )
+                fa_tree_depth_query_start_tensors = tuple(
+                    torch.arange(len(_rows) + 1, dtype=torch.int32, device=query_start_loc.device)
+                    for _rows in fa_tree_depth_rows
+                )
+                fa_unique_node_mode = True
+                try:
+                    _fh = globals().get("_LUMO_FA_UNIFIED_FH")
+                    if _fh is None:
+                        _fh = open("/logs/fb_debug.jsonl", "a", buffering=1)
+                        globals()["_LUMO_FA_UNIFIED_FH"] = _fh
+                    _fh.write(_lumo_fa_json.dumps({
+                        "ts": round(_lumo_fa_time.time(), 4),
+                        "event": "round_f_unified_step",
+                        "stage": "stage3_spine_only_unique_node_state_tree" if _is_spine else "stage3_unique_node_state_tree_expanded",
+                        "component_under_test": "fa_unique_node_state_tree_verifier",
+                        "verifier_path": "LUMO_FA_UNIQUE_NODES/batch_packed_parent_state_rows",
+                        "pre_num_spec_decodes": int(_pre_num_spec_decodes),
+                        "request_count": int(_req_count),
+                        "tree_group_size": int(_group_size),
+                        "internal_rows_enabled": False,
+                        "kernel_rows_enabled": False,
+                        "no_kv_prefix_copy_enabled": True,
+                        "candidate_pool_nodes": int(_node_count),
+                        "selected_nodes": int(_node_count),
+                        "verified_nodes": int(_node_count),
+                        "unique_tree_nodes": int(_node_count),
+                        "trimmed_nodes": 0,
+                        "max_depth": int(_max_depth),
+                        "sources": {"mtp_top1": int(_node_count), "mtp_alt": 0, "suffix": 0},
+                        "path_rows": 0,
+                        "scheduler_visible_clone_requests": 0,
+                        "prefix_kv_copy_bytes": 0,
+                        "recomputed_shared_prefix_nodes": 0,
+                        "extra_proposer_for_trimmed_nodes": 0,
+                        "accepted_path_commit_only": True,
+                        "tree_attention": False,
+                        "gdn_parent_gather": True,
+                        "depth_positions": True,
+                        "tree_sampler": False,
+                        "top1_spine_accept_depth": None,
+                        "accepted_depth": None,
+                        "accepted_node_path": [],
+                        "estimated_event_ms": None,
+                        "event_budget_ms": None,
+                        "tree_score": None,
+                        "proposer_us": 0,
+                        "trim_us": 0,
+                        "verify_us": 0,
+                        "tree_attention_us": 0,
+                        "gdn_parent_gather_us": 0,
+                        "depth_sync_us": 0,
+                        "commit_us": 0,
+                        "gdn_state_bytes_copied": 0,
+                        "kv_suffix_bytes_copied": 0,
+                        "physical_minimum_invariant_failures": [],
+                        "parent_map": [int(_p) for _p in _all_actual_parents],
+                        "state_rows": (
+                            list(spec_state_indices_tensor.shape)
+                            if spec_state_indices_tensor is not None else None
+                        ),
+                        "initial_rows": list(spec_initial_state_indices_tensor.shape),
+                        "spine_chain_degenerate_unique_tree": bool(_is_spine),
+                        "expanded_parent_state_rows": True,
+                    }) + chr(10))
+                except Exception:
+                    pass
+"""
+    text = text[:start] + new + text[end:]
+    text = sentinel + '\n' + text
+    ga.write_text(text)
+    import py_compile
+    py_compile.compile(str(ga), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a unique-node batch4 pack')
+
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FA_TREE_DELTA_ACTUAL_PARENT_ROWS'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a tree-delta actual-parent patch already present')
+else:
+    text = text.replace(
+        """    if initial_state_indices is not None:
+        prefix_idx = int(initial_state_indices[0].item())
+    else:
+        prefix_idx = int(ssm_state_indices.reshape(-1)[0].item())
+    prefix_state = initial_state[prefix_idx].to(torch.float32)
+""",
+        """    if initial_state_indices is not None:
+        prefix_indices = initial_state_indices.reshape(-1).to(torch.long)
+    else:
+        prefix_indices = ssm_state_indices.reshape(n, -1)[:, 0].to(torch.long)
+    prefix_state = initial_state.index_select(0, prefix_indices).to(torch.float32)
+""",
+        1,
+    )
+    text = text.replace(
+        """    parents = parent_indices.to(device=q_f.device, dtype=torch.long)
+    actual_parents = torch.empty((n,), dtype=torch.long, device=q_f.device)
+    actual_parents[0] = -1
+    for i in range(1, n):
+        parent = int(parents[i].item())
+        actual_parents[i] = 0 if parent < 0 else parent + 1
+""",
+        """    actual_parents = parent_indices.to(device=q_f.device, dtype=torch.long)
+""",
+        1,
+    )
+    text = text.replace(
+        '    initial_projection = torch.einsum("hvk,nhk->nhv", prefix_state, k_f)\n',
+        '    initial_projection = torch.einsum("nhvk,nhk->nhv", prefix_state, k_f)\n',
+        1,
+    )
+    text = text.replace(
+        """    states = (
+        gamma[:, :, None, None] * prefix_state.unsqueeze(0)
+        + torch.einsum("hij,hjv,hjk->ihvk", coeff, writes, k_f.permute(1, 0, 2))
+    )
+""",
+        """    states = (
+        gamma[:, :, None, None] * prefix_state
+        + torch.einsum("hij,hjv,hjk->ihvk", coeff, writes, k_f.permute(1, 0, 2))
+    )
+""",
+        1,
+    )
+    old = """    if HAS_INITIAL_STATE_INDICES:
+        prefix_idx = tl.load(initial_state_indices + 0).to(tl.int64)
+    else:
+        prefix_idx = tl.load(ssm_state_indices + 0).to(tl.int64)
+    prefix_h = tl.load(
+        state + prefix_idx * stride_state_token + head_state_off,
+        mask=m_h,
+        other=0.0,
+    ).to(tl.float32)
+
+    for i in tl.static_range(0, BN):
+        if i < N:
+            if i == 0:
+                parent_actual = tl.full((), -1, tl.int64)
+            else:
+                parent_raw = tl.load(parent_indices + i).to(tl.int64)
+                parent_actual = tl.where(parent_raw < 0, 0, parent_raw + 1)
+            parent_safe = tl.maximum(parent_actual, 0)
+            parent_write_idx = tl.load(
+                ssm_state_indices + parent_safe * stride_indices_seq
+            ).to(tl.int64)
+            parent_h = tl.load(
+                state + parent_write_idx * stride_state_token + head_state_off,
+                mask=m_h,
+                other=0.0,
+            ).to(tl.float32)
+            h = tl.where(parent_actual >= 0, parent_h, prefix_h)
+"""
+    new = """    for i in tl.static_range(0, BN):
+        if i < N:
+            parent_actual = tl.load(parent_indices + i).to(tl.int64)
+            parent_safe = tl.maximum(parent_actual, 0)
+            if HAS_INITIAL_STATE_INDICES:
+                prefix_idx = tl.load(initial_state_indices + i).to(tl.int64)
+            else:
+                prefix_idx = tl.load(
+                    ssm_state_indices + i * stride_indices_seq
+                ).to(tl.int64)
+            prefix_h = tl.load(
+                state + prefix_idx * stride_state_token + head_state_off,
+                mask=m_h,
+                other=0.0,
+            ).to(tl.float32)
+            parent_write_idx = tl.load(
+                ssm_state_indices + parent_safe * stride_indices_seq
+            ).to(tl.int64)
+            parent_h = tl.load(
+                state + parent_write_idx * stride_state_token + head_state_off,
+                mask=m_h,
+                other=0.0,
+            ).to(tl.float32)
+            h = tl.where(parent_actual >= 0, parent_h, prefix_h)
+"""
+    if old not in text:
+        raise RuntimeError('F_a tree-delta Triton parent anchor not found')
+    text = text.replace(old, new, 1)
+    text = text.replace(
+        """                _depths = []
+                for _i, _parent in enumerate(_parents):
+                    if _i == 0:
+                        _depths.append(0)
+                    else:
+                        _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+""",
+        """                _depths = []
+                for _parent in _parents:
+                    _depths.append(0 if int(_parent) < 0 else _depths[int(_parent)] + 1)
+""",
+    )
+    text = sentinel + '\n' + text
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a tree-delta actual-parent rows')
+LUMOFAUNIQUEBATCH4PACK
+'''
+
 _FB_BLOCK = r'''
 python3 - <<'LUMOFBPATHS'
 from pathlib import Path
@@ -8818,6 +9114,7 @@ LUMOFBCTRL
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
+            + (_FA_UNIQUE_BATCH4_PACK_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else ""))
 
 
