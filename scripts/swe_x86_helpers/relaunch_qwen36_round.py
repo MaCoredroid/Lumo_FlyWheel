@@ -3863,18 +3863,32 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                     for _rows in _depth_rows
                 )
             _actual_conv_rows = int(mixed_qkv_spec.shape[0])
-            _depth_rows = tuple(
-                tuple(int(i) for i in _rows if int(i) < _actual_conv_rows)
+            _needs_row_clip = any(
+                any(int(i) >= _actual_conv_rows for i in _rows)
                 for _rows in _depth_rows
             )
-            _depth_row_tensors = tuple(
-                torch.tensor(_rows, dtype=torch.long, device=mixed_qkv_spec.device)
-                for _rows in _depth_rows
-            )
-            _depth_query_start_tensors = tuple(
-                torch.arange(len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
-                for _rows in _depth_rows
-            )
+            if _needs_row_clip or _depth_row_tensors is None or _depth_query_start_tensors is None:
+                _depth_rows = tuple(
+                    tuple(int(i) for i in _rows if int(i) < _actual_conv_rows)
+                    for _rows in _depth_rows
+                )
+                _clip_cache = getattr(self, "_lumo_fa_conv_depth_clip_cache", None)
+                if _clip_cache is None:
+                    _clip_cache = {}
+                    self._lumo_fa_conv_depth_clip_cache = _clip_cache
+                _clip_key = (_actual_conv_rows, _depth_rows)
+                if _clip_key not in _clip_cache:
+                    _clip_cache[_clip_key] = (
+                        tuple(
+                            torch.tensor(_rows, dtype=torch.long, device=mixed_qkv_spec.device)
+                            for _rows in _depth_rows
+                        ),
+                        tuple(
+                            torch.arange(len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
+                            for _rows in _depth_rows
+                        ),
+                    )
+                _depth_row_tensors, _depth_query_start_tensors = _clip_cache[_clip_key]
             _conv_out = torch.empty_like(mixed_qkv_spec)
             for _rows, _row_idx, _sub_query_start in zip(
                 _depth_rows, _depth_row_tensors, _depth_query_start_tensors):
