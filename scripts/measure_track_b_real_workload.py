@@ -28,6 +28,8 @@ FB_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_debug.jsonl"
 FB_OVERHEAD_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_overhead_debug.jsonl"
 FB_INTERNAL_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_internal_debug.jsonl"
 FA_UNIQUE_GDN_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fa_unique_gdn_debug.jsonl"
+FA_REPLAY_COMMIT_DETAIL = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fa_activation_replay_commit_detail.jsonl"
+CUDAGRAPH_RUNTIME_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/cudagraph_runtime_debug.jsonl"
 
 
 def _now() -> str:
@@ -284,6 +286,16 @@ def _summarize_fa_unique_gdn(rows: list[dict[str, Any]]) -> dict[str, Any]:
         json.dumps(r.get("state_rows"), separators=(",", ":"))
         for r in layer_rows
     )
+    per_event_spans_us: list[int] = []
+    layer_count = len(layers) if layers else 0
+    if layer_count > 0:
+        for start in range(0, len(layer_rows), layer_count):
+            chunk = layer_rows[start:start + layer_count]
+            if len(chunk) != layer_count:
+                continue
+            ts = [float(r.get("ts", 0.0) or 0.0) for r in chunk]
+            if ts and max(ts) >= min(ts):
+                per_event_spans_us.append(int(round((max(ts) - min(ts)) * 1_000_000)))
     return {
         "events": len(layer_rows),
         "unique_layers": len(layers),
@@ -291,7 +303,62 @@ def _summarize_fa_unique_gdn(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "layer_event_max": max(layers.values()) if layers else 0,
         "parent_maps": dict(sorted(parent_shapes.items())),
         "state_row_shapes": dict(sorted(state_shapes.items())),
+        "timing": {
+            "gdn_layer_event_count": len(per_event_spans_us),
+            "gdn_layer_span_us_mean": (
+                round(sum(per_event_spans_us) / len(per_event_spans_us), 3)
+                if per_event_spans_us else None
+            ),
+            "gdn_layer_span_us_max": max(per_event_spans_us) if per_event_spans_us else None,
+        },
         "sample": layer_rows[:3],
+    }
+
+
+def _summarize_fa_replay_commit(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summaries = [r for r in rows if r.get("event") == "fa_activation_replay_commit_summary"]
+    if not summaries:
+        return {"events": 0}
+    commit_us = [int(r.get("commit_enqueue_us", 0) or 0) for r in summaries]
+    copied = [int(r.get("copied_requests", 0) or 0) for r in summaries]
+    modes = collections.Counter(str(r.get("commit_mode") or "unknown") for r in summaries)
+    return {
+        "events": len(summaries),
+        "commit_modes": dict(sorted(modes.items())),
+        "commit_enqueue_us_mean": round(sum(commit_us) / len(commit_us), 3) if commit_us else None,
+        "commit_enqueue_us_max": max(commit_us) if commit_us else None,
+        "copied_requests_total": sum(copied),
+        "copied_requests_mean": round(sum(copied) / len(copied), 3) if copied else None,
+    }
+
+
+def _summarize_cudagraph_runtime(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    events = [r for r in rows if r.get("event") == "cudagraph_runtime"]
+    if not events:
+        return {"events": 0}
+    modes = collections.Counter(str(r.get("runtime_mode") or "unknown") for r in events)
+    paddings = [int(r.get("num_paddings", 0) or 0) for r in events]
+    padded_tokens = [int(r.get("num_padded_tokens", 0) or 0) for r in events]
+    return {
+        "events": len(events),
+        "runtime_modes": dict(sorted(modes.items())),
+        "full_count": int(modes.get("CUDAGraphMode.FULL", 0)),
+        "piecewise_count": int(modes.get("CUDAGraphMode.PIECEWISE", 0)),
+        "eager_fallback_count": int(modes.get("CUDAGraphMode.NONE", 0)),
+        "num_paddings_mean": round(sum(paddings) / len(paddings), 3) if paddings else None,
+        "num_paddings_max": max(paddings) if paddings else None,
+        "num_padded_tokens": dict(sorted(collections.Counter(padded_tokens).items())),
+    }
+
+
+def _timer_stats(values: list[int | float]) -> dict[str, Any]:
+    clean = [float(v) for v in values if v is not None]
+    if not clean:
+        return {"count": 0, "mean": None, "max": None}
+    return {
+        "count": len(clean),
+        "mean": round(sum(clean) / len(clean), 3),
+        "max": round(max(clean), 3),
     }
 
 
@@ -516,6 +583,8 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
     fb_overhead_pre = _jsonl_count(FB_OVERHEAD_DEBUG)
     fb_internal_pre = _jsonl_count(FB_INTERNAL_DEBUG)
     fa_unique_gdn_pre = _jsonl_count(FA_UNIQUE_GDN_DEBUG)
+    fa_replay_commit_pre = _jsonl_count(FA_REPLAY_COMMIT_DETAIL)
+    cudagraph_runtime_pre = _jsonl_count(CUDAGRAPH_RUNTIME_DEBUG)
     max_output_cap = args.max_output_token_cap if args.max_output_token_cap > 0 else None
     warm_per_window = args.completions_per_task - args.cold_completions
     if warm_per_window < 1:
@@ -592,12 +661,22 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         _read_jsonl_range(FB_INTERNAL_DEBUG, fb_internal_pre, _jsonl_count(FB_INTERNAL_DEBUG)))
     fa_unique_gdn_summary = _summarize_fa_unique_gdn(
         _read_jsonl_range(FA_UNIQUE_GDN_DEBUG, fa_unique_gdn_pre, _jsonl_count(FA_UNIQUE_GDN_DEBUG)))
+    fa_replay_commit_summary = _summarize_fa_replay_commit(
+        _read_jsonl_range(FA_REPLAY_COMMIT_DETAIL, fa_replay_commit_pre, _jsonl_count(FA_REPLAY_COMMIT_DETAIL)))
+    cudagraph_runtime_summary = _summarize_cudagraph_runtime(
+        _read_jsonl_range(CUDAGRAPH_RUNTIME_DEBUG, cudagraph_runtime_pre, _jsonl_count(CUDAGRAPH_RUNTIME_DEBUG)))
     decode_tps = None
     if aggregate.get("available"):
         step = aggregate.get("step_consumption") if isinstance(aggregate.get("step_consumption"), dict) else {}
         decode_tps = step.get("decode_tokens_per_s")
     speedup = float(decode_tps) / args.baseline_decode_tps if decode_tps is not None else None
-    target_tps = args.baseline_decode_tps * args.target_multiplier
+    target_tps = (
+        float(args.compare_baseline_tps)
+        if args.compare_baseline_tps is not None
+        else args.baseline_decode_tps * args.target_multiplier
+    )
+    comparison_enabled = not bool(args.record_only)
+    comparison_pass = bool(decode_tps is not None and float(decode_tps) >= target_tps)
     return {
         "schema": "lumo.track_b.real_workload_first_five.v1",
         "measured_at": _now(),
@@ -622,16 +701,44 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         "baseline_decode_tps": args.baseline_decode_tps,
         "target_multiplier": args.target_multiplier,
         "target_decode_tps": target_tps,
+        "compare_baseline_tps": args.compare_baseline_tps,
+        "record_only": bool(args.record_only),
+        "comparison_enabled": comparison_enabled,
         "decode_tps": decode_tps,
         "warm_decode_tps": decode_tps,
         "speedup_vs_baseline": speedup,
-        "pass": bool(decode_tps is not None and float(decode_tps) >= target_tps),
+        "pass": True if args.record_only else comparison_pass,
+        "comparison_pass": comparison_pass,
         "aggregate_warm_metrics_consumption": aggregate,
         "spec_trace_summary": spec_trace_summary,
         "unified_debug_summary": unified_debug_summary,
         "fb_overhead_summary": fb_overhead_summary,
         "fb_internal_summary": fb_internal_summary,
         "fa_unique_gdn_summary": fa_unique_gdn_summary,
+        "fa_replay_commit_summary": fa_replay_commit_summary,
+        "cudagraph_runtime_summary": cudagraph_runtime_summary,
+        "stage_timer_summary": {
+            "unified_verify_us": _timer_stats([
+                int(r.get("verify_us", 0) or 0)
+                for r in _read_jsonl_range(FB_DEBUG, fb_debug_pre, _jsonl_count(FB_DEBUG))
+                if r.get("event") == "round_f_unified_step"
+            ]),
+            "unified_gdn_parent_gather_us": _timer_stats([
+                int(r.get("gdn_parent_gather_us", 0) or 0)
+                for r in _read_jsonl_range(FB_DEBUG, fb_debug_pre, _jsonl_count(FB_DEBUG))
+                if r.get("event") == "round_f_unified_step"
+            ]),
+            "unified_commit_us": _timer_stats([
+                int(r.get("commit_us", 0) or 0)
+                for r in _read_jsonl_range(FB_DEBUG, fb_debug_pre, _jsonl_count(FB_DEBUG))
+                if r.get("event") == "round_f_unified_step"
+            ]),
+            "state_copy_commit_enqueue_us": _timer_stats([
+                int(r.get("commit_enqueue_us", 0) or 0)
+                for r in _read_jsonl_range(FA_REPLAY_COMMIT_DETAIL, fa_replay_commit_pre, _jsonl_count(FA_REPLAY_COMMIT_DETAIL))
+                if r.get("event") == "fa_activation_replay_commit_summary"
+            ]),
+        },
         "windows": windows,
     }
 
@@ -656,6 +763,10 @@ def main() -> int:
     parser.add_argument("--request-overrides-json", default="{}")
     parser.add_argument("--baseline-decode-tps", type=float, default=7.5)
     parser.add_argument("--target-multiplier", type=float, default=5.0)
+    parser.add_argument("--compare-baseline-tps", type=float, default=None,
+                        help="Compare directly against this decode tps instead of baseline-decode-tps * target-multiplier.")
+    parser.add_argument("--record-only", action="store_true",
+                        help="Write the measurement JSON and exit 0 without enforcing a pass/fail throughput gate.")
     parser.add_argument("--reset-prefix-cache", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -669,8 +780,10 @@ def main() -> int:
         raise RuntimeError("--warm-concurrency must be >= 1")
     if args.baseline_decode_tps <= 0:
         raise RuntimeError("--baseline-decode-tps must be > 0")
-    if args.target_multiplier <= 1:
+    if args.target_multiplier <= 1 and args.compare_baseline_tps is None:
         raise RuntimeError("--target-multiplier must be > 1")
+    if args.compare_baseline_tps is not None and args.compare_baseline_tps <= 0:
+        raise RuntimeError("--compare-baseline-tps must be > 0")
     result = measure(args)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
