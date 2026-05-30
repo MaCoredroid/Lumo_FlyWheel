@@ -219,6 +219,7 @@ def resolve_kernel_runtime_activation(kernel_selection: dict[str, Any] | None) -
         "fp8_gemm_kernel",
         "torch_compile_mode",
         "cuda_graph_capture",
+        "cuda_graph_capture_sizes",
     }
     for axis in sorted(set(selection) - allowed_axes):
         unsupported.append(
@@ -246,6 +247,12 @@ def resolve_kernel_runtime_activation(kernel_selection: dict[str, Any] | None) -
         resolved,
         unsupported,
         compile_mode_applied=compile_mode_applied,
+    )
+    _apply_cuda_graph_capture_sizes(
+        selection.get("cuda_graph_capture_sizes"),
+        compilation_config,
+        resolved,
+        unsupported,
     )
     if compilation_config:
         launch_args.extend(["--compilation-config", json.dumps(compilation_config, sort_keys=True)])
@@ -433,7 +440,10 @@ def _apply_cuda_graph_capture(
     if value is None:
         resolved["cuda_graph_capture"] = "vllm-default"
         return
-    normalized = str(value)
+    if isinstance(value, bool):
+        normalized = "on" if value else "off"
+    else:
+        normalized = str(value)
     if normalized == "off":
         if compile_mode_applied:
             compilation_config["cudagraph_mode"] = "NONE"
@@ -445,13 +455,62 @@ def _apply_cuda_graph_capture(
     elif normalized == "on":
         compilation_config["cudagraph_mode"] = "FULL"
         resolved["cuda_graph_capture"] = "FULL"
+    elif normalized.lower() == "piecewise":
+        compilation_config["cudagraph_mode"] = "PIECEWISE"
+        resolved["cuda_graph_capture"] = "PIECEWISE"
+        resolved["cuda_graph_capture_activation"] = "vLLM compilation_config cudagraph_mode PIECEWISE"
     else:
         resolved["cuda_graph_capture"] = "unknown"
         unsupported.append(
             UnsupportedKernelKnob(
                 axis="cuda_graph_capture",
                 value=normalized,
-                reason="expected on/off CUDA graph selection",
+                reason="expected on/off/piecewise CUDA graph selection",
                 required_runtime_hook="map to --enforce-eager or --compilation-config cudagraph_mode",
             )
         )
+
+
+def _apply_cuda_graph_capture_sizes(
+    value: Any,
+    compilation_config: dict[str, Any],
+    resolved: dict[str, Any],
+    unsupported: list[UnsupportedKernelKnob],
+) -> None:
+    if value is None:
+        return
+    try:
+        if isinstance(value, str):
+            raw_sizes = [part.strip() for part in value.split(",")]
+            sizes = [int(part) for part in raw_sizes if part]
+        else:
+            sizes = [int(part) for part in value]
+    except Exception:
+        resolved["cuda_graph_capture_sizes"] = "invalid"
+        unsupported.append(
+            UnsupportedKernelKnob(
+                axis="cuda_graph_capture_sizes",
+                value=str(value),
+                reason="expected a list of positive integer CUDA graph capture sizes",
+                required_runtime_hook="pass vLLM compilation_config cudagraph_capture_sizes",
+            )
+        )
+        return
+    sizes = sorted(set(sizes))
+    if not sizes or sizes[0] <= 0:
+        resolved["cuda_graph_capture_sizes"] = "invalid"
+        unsupported.append(
+            UnsupportedKernelKnob(
+                axis="cuda_graph_capture_sizes",
+                value=str(value),
+                reason="capture sizes must be positive",
+                required_runtime_hook="pass vLLM compilation_config cudagraph_capture_sizes",
+            )
+        )
+        return
+    compilation_config["cudagraph_capture_sizes"] = sizes
+    compilation_config["max_cudagraph_capture_size"] = sizes[-1]
+    resolved["cuda_graph_capture_sizes"] = sizes
+    resolved["cuda_graph_capture_sizes_activation"] = (
+        "vLLM compilation_config cudagraph_capture_sizes/max_cudagraph_capture_size"
+    )
