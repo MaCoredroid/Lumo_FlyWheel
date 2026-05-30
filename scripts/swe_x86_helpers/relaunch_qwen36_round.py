@@ -2547,6 +2547,7 @@ else:
                 _parents_cpu = lumo_tree_parent_indices.detach().cpu().tolist()
                 _draft_cpu = metadata.draft_token_ids.detach().cpu().tolist()
                 _out_cpu = output_token_ids.detach().cpu().tolist()
+                _vocab_size = int(logits.shape[-1])
                 _rows = []
                 _start = 0
                 for _req_i, _n in enumerate(metadata.num_draft_tokens):
@@ -2555,7 +2556,7 @@ else:
                     _drafts = [int(x) for x in _draft_cpu[_start:_start + _n]]
                     _tokens = [
                         int(x) for x in _out_cpu[_req_i]
-                        if 0 <= int(x) < vocab_size
+                        if 0 <= int(x) < _vocab_size
                     ]
                     _cur_parent = -1
                     _final_row = 0
