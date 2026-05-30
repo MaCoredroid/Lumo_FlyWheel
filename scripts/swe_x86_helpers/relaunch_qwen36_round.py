@@ -4064,6 +4064,58 @@ else:
 LUMOFAUNIQUEBATCH4STARTUP
 '''
 
+_FA_TREE_DELTA_VALID_N_BLOCK = r'''
+python3 - <<'LUMOFATREEVALIDN'
+from pathlib import Path
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FA_TREE_DELTA_VALID_N'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a tree-delta valid-N patch already present')
+else:
+    text = text.replace(
+        '    use_qk_l2norm_in_kernel: bool,\n) -> tuple[torch.Tensor, torch.Tensor]:\n',
+        '    use_qk_l2norm_in_kernel: bool,\n    valid_n: int | None = None,\n) -> tuple[torch.Tensor, torch.Tensor]:\n',
+        1,
+    )
+    text = text.replace(
+        '    n = int(q.shape[0])\n',
+        '    n = int(q.shape[0] if valid_n is None else valid_n)\n',
+        1,
+    )
+    text = text.replace(
+        '    q = q.squeeze(0)\n    k = k.squeeze(0)\n    v = v.squeeze(0)\n    n = int(q.shape[0] if valid_n is None else valid_n)\n',
+        '    q = q.squeeze(0)\n    k = k.squeeze(0)\n    v = v.squeeze(0)\n    n = int(q.shape[0] if valid_n is None else valid_n)\n    q = q[:n]\n    k = k[:n]\n    v = v[:n]\n',
+        1,
+    )
+    text = text.replace(
+        '    use_qk_l2norm_in_kernel: bool,\n) -> tuple[torch.Tensor, None]:\n',
+        '    use_qk_l2norm_in_kernel: bool,\n    valid_n: int | None = None,\n) -> tuple[torch.Tensor, None]:\n',
+        1,
+    )
+    text = text.replace(
+        '    n = int(q.shape[1])\n',
+        '    n = int(q.shape[1] if valid_n is None else valid_n)\n',
+        1,
+    )
+    text = text.replace(
+        '    out = torch.empty_like(v)\n',
+        '    out = torch.zeros_like(v)\n',
+        1,
+    )
+    text = text.replace(
+        '                parent_indices=_parents_t,\n                use_qk_l2norm_in_kernel=True,\n            )\n',
+        '                parent_indices=_parents_t,\n                use_qk_l2norm_in_kernel=True,\n                valid_n=int(attn_metadata.num_spec_decode_tokens),\n            )\n',
+        1,
+    )
+    text = sentinel + '\n' + text
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a tree-delta valid-N patch')
+LUMOFATREEVALIDN
+'''
+
 _FB_BLOCK = r'''
 python3 - <<'LUMOFBPATHS'
 from pathlib import Path
@@ -9257,6 +9309,7 @@ LUMOFBCTRL
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_PACK_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK if fa_unique else "")
+            + (_FA_TREE_DELTA_VALID_N_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else ""))
 
 
