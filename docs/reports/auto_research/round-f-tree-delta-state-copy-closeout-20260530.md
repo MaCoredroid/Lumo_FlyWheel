@@ -12,6 +12,16 @@ This is a research deliverable, not a production replacement for E3-FULL: the be
 configuration is about 10% slower at the event level (`87.608 ms/event`) and remains below
 E3-FULL throughput.
 
+⚠️ COMPARISON CAVEAT (must resolve before trusting the speed ranking): the tree-delta number
+(`14.06`) was measured on `workload_distribution_id = swe_bench_verified_subset:swe-bench-concprobe4-verified-instances-20260522.json`
+(4 real SWE-Verified instances, ~819 prompt tokens/req), but the E3-FULL (`15.56`) and path-row K2
+(`12.35`) baselines came from the earlier matrix on a DIFFERENT workload (`632cac0c…`, ~660 prompt
+tokens/req, no recorded instance_ids). So the speed ranking is **cross-workload, not apples-to-apples**.
+The lossless correctness result (`acc 1.995` on SWE-Verified) stands on its own; the speed comparison
+must be re-established with a single frozen paired run (E3-FULL / spine tree-delta / branched tree-delta
+on the SAME SWE-Verified subset, same container/runtime) before the "beats path-row K2 / ~1.10×E3"
+claims can be trusted.
+
 Primary implementation commit:
 
 - `0e4f29cc Fix tree delta GDN rollback commit`
@@ -155,5 +165,6 @@ remaining gap is speed versus E3-FULL. The next useful speed work is not more ro
 it is reducing verifier overhead after state-copy commit, especially GDN-core capture support and
 event-level timing instrumentation for `verify_us`, `gdn_parent_gather_us`, and `commit_us`.
 
-Branch handling remains a non-shipping research path. The final branch stays on
-`round-f-tree-delta-kernel`; `main` remains parked at `aa608c35`.
+Branch handling remains a non-shipping research path. The work was merged to `main` via
+`--no-ff` merge commit `9fc08ae7` (flag-gated behind `LUMO_FA_*`, so the default serving path is
+unchanged); the source branch `round-f-tree-delta-kernel` @ `45c56c10` is preserved.
