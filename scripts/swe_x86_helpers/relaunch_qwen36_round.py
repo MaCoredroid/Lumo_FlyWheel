@@ -3043,7 +3043,6 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
             num_accepted_tokens=None,
             use_qk_l2norm_in_kernel=True,
         )
-    _LUMO_FA_REPLAY_LAYERS.clear()
 
 @CustomOp.register("chunk_gated_delta_rule")
 """
